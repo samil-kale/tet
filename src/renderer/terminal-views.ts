@@ -245,11 +245,12 @@ function createView(projectId: string, tabId: string, agentId: AgentId): Termina
       }
       return false;
     }
-    // Ctrl+C with a selection copies instead of interrupting, in every terminal type. Without
-    // a selection it keeps sending \x03 (SIGINT) for a plain shell, where that is the point of
-    // the key — but never for an agent: on win32 that byte becomes a CTRL_C_EVENT ConPTY raises
-    // at the process level, which kills a CLI with no handler for it rather than "interrupting"
-    // it. Closing the tab is the agents' equivalent action, so the key is simply swallowed there.
+    // Ctrl+C with a selection copies instead of interrupting, in every terminal type. Without a
+    // selection it keeps sending \x03 (SIGINT) for a plain shell, claude and opencode, where the
+    // running CLI reads it as an ordinary byte and clears its current prompt (or interrupts a
+    // turn) — but not for codex: on win32 that byte becomes a CTRL_C_EVENT ConPTY raises at the
+    // process level, which kills a CLI with no handler for it rather than "interrupting" it.
+    // Closing the tab is codex's equivalent action, so the key is swallowed there instead.
     if (event.type === "keydown" && event.key.toLowerCase() === "c" && isModifierHeld(event) && !event.shiftKey) {
       const selection = term.getSelection();
       if (selection) {
@@ -261,7 +262,7 @@ function createView(projectId: string, tabId: string, agentId: AgentId): Termina
         }
         return false;
       }
-      if (agentId !== "shell") {
+      if (agentId === "codex") {
         event.preventDefault();
         event.stopPropagation();
         return false;

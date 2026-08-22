@@ -983,15 +983,16 @@ one list both the capture-phase listener in `App.tsx` and the settings dialog's 
 from, so binding and label can't drift apart.
 
 **Ctrl+C is the one deliberate exception to "takes nothing an agent could have received."** With a
-selection it always copies instead of sending `\x03`. Without one, only a plain shell still gets
-`\x03` (SIGINT) — every agent swallows it instead, since closing the tab already covers what an
-agent would need it for, and what the byte does to one is not what it looks like: measured through
-this pty, a TUI in raw mode reads it as an ordinary byte and decides for itself, but the *same*
-byte reaching a process in cooked mode — one still starting, or already shutting down — becomes a
-process-level `CTRL_C_EVENT` that kills it outright. Sending it deliberately is a separate matter,
-with its own rules per agent (see "Ending a session"). Check a newly added agent against this
-rather than assuming; `agentId !== "shell"` in `attachCustomKeyEventHandler`'s Ctrl+C branch is
-what currently draws the line.
+selection it always copies instead of sending `\x03`. Without one, a plain shell, Claude Code and
+opencode get `\x03` (SIGINT) — the running CLI reads it as an ordinary byte and clears its current
+prompt or interrupts a turn, the point of the key. Codex is the exception: what the byte does to it
+is not what it looks like — measured through this pty, a TUI in raw mode reads `\x03` as an
+ordinary byte and decides for itself, but the *same* byte reaching a process in cooked mode — one
+still starting, or already shutting down — becomes a process-level `CTRL_C_EVENT` that kills it
+outright, and closing the tab is Codex's equivalent action instead. Sending it deliberately is a
+separate matter, with its own rules per agent (see "Ending a session"). Check a newly added agent
+against this rather than assuming; `agentId === "codex"` in `attachCustomKeyEventHandler`'s Ctrl+C
+branch is what currently draws the line.
 
 ## The renderer
 
