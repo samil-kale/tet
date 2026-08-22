@@ -444,6 +444,12 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
             />
           ) : !file || file.path !== path ? null : file.error ? (
             <div className="placeholder">{file.error}</div>
+          ) : file.image ? (
+            <div className="image-diff">
+              <figure>
+                <img src={file.image} alt="" />
+              </figure>
+            </div>
           ) : file.binary ? (
             <div className="placeholder">Binary file.</div>
           ) : file.tooLarge ? (

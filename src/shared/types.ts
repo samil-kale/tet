@@ -304,6 +304,8 @@ export interface FileContent {
   mtimeMs: number;
   binary: boolean;
   tooLarge: boolean;
+  /** Set instead of `content` when the file is an image git diffs would also call binary. */
+  image?: string;
   error?: string;
 }
 

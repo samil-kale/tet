@@ -848,11 +848,12 @@ function imageType(filePath: string): string | undefined {
   return IMAGE_TYPES[path.extname(filePath).slice(1).toLowerCase()];
 }
 
-function isImage(filePath: string): boolean {
+/** Also used by `Repository.readFile` (Explorer preview) to tell an image from any other binary. */
+export function isImage(filePath: string): boolean {
   return imageType(filePath) !== undefined;
 }
 
-function toDataUrl(filePath: string, content: Buffer): string | undefined {
+export function toDataUrl(filePath: string, content: Buffer): string | undefined {
   return content.length > 0 && content.length <= MAX_IMAGE_BYTES
     ? `data:${imageType(filePath)};base64,${content.toString("base64")}`
     : undefined;

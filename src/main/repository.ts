@@ -29,6 +29,7 @@ import {
 import { countActivity, logSlow } from "./event-loop-monitor";
 import { git } from "./git-client";
 import type { DiscardTargets } from "./git";
+import { isImage, toDataUrl } from "./git";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;
@@ -762,7 +763,8 @@ export class Repository {
       }
       const buffer = await fs.promises.readFile(absolute);
       const binary = buffer.includes(0);
-      return { ...base, mtimeMs: stat.mtimeMs, binary, content: binary ? "" : buffer.toString("utf8") };
+      const image = isImage(filePath) ? toDataUrl(filePath, buffer) : undefined;
+      return { ...base, mtimeMs: stat.mtimeMs, binary, image, content: binary ? "" : buffer.toString("utf8") };
     } catch (error) {
       return { ...base, error: error instanceof Error ? error.message : String(error) };
     }
