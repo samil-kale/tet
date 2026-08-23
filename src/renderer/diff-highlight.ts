@@ -1,16 +1,32 @@
 import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemedToken } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { buildShikiColors } from "./theme";
 import type { DiffLine, FileDiff } from "../shared/types";
 
 /**
  * Syntax colors for the diff, through Shiki — the same TextMate grammars and the same theme
  * VS Code itself uses, so a file reads here the way it reads in an editor.
  *
- * This is the one place colors do not come from a --vscode-* variable: a theme assigns them
- * per grammar scope, of which there are hundreds, and Shiki hands them back per token. The
- * theme below is the token half of the "Dark Modern" the rest of the UI is styled after.
+ * Per-token colors are the one thing that does not come from a --vscode-* variable: a theme
+ * assigns them per grammar scope, of which there are hundreds, and Shiki hands them back per
+ * token. The theme below is the token half of the "Dark Modern" the rest of the UI is styled
+ * after — its editor-surface colors (background, selection, widgets...) are patched with tet's
+ * own variables in `loadTheme` below, so only this name needs to change for a different theme.
  */
 export const THEME = "dark-plus";
+
+/**
+ * Loads `THEME` and patches its editor-surface colors with tet's own --vscode-* values (see
+ * theme.ts's `buildShikiColors`), so shiki's theme — and monaco's, layered on top of it in
+ * editor.ts's `applyChrome` — draw tet's chrome rather than the theme's own.
+ *
+ * The import path is spelled out rather than built from THEME: esbuild can only bundle an
+ * import whose path it can read off the call.
+ */
+async function loadTheme() {
+  const { default: theme } = await import("@shikijs/themes/dark-plus");
+  return { ...theme, colors: { ...theme.colors, ...buildShikiColors() } };
+}
 
 /**
  * The grammars tet bundles. The renderer is one file with no code splitting, so a language
@@ -150,9 +166,7 @@ const grammars = new Map<string, Promise<void>>();
  *  theme, grammars loaded lazily and kept once loaded either way. */
 export function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
-    // Spelled out rather than built from THEME: esbuild can only bundle an import whose
-    // path it can read off the call.
-    themes: [import("@shikijs/themes/dark-plus")],
+    themes: [loadTheme()],
     langs: [],
     // The JavaScript engine rather than the oniguruma one: that would pull in a wasm binary,
     // which a single-file bundle can only carry base64-encoded. "forgiving" skips the few

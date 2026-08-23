@@ -65,11 +65,13 @@ export async function ensureLanguage(monaco: Monaco, language: string | null): P
 }
 
 /**
- * Layers tet's own `--vscode-*` chrome colors on top of shiki's token colors. `defineTheme` only
- * inherits from monaco's own built-in bases (`vs-dark`, ...), not from another custom theme, so
- * "layering" means rebuilding the same rules shiki already computed and adding colors — the
- * exact translation `@shikijs/monaco` does internally, exposed as `textmateThemeToMonacoTheme`.
- * Without this the editor stays shiki's dark-plus chrome (`#1e1e1e`), not tet's (`#1f1f1f`).
+ * Turns shiki's theme into a monaco one. `defineTheme` only inherits from monaco's own built-in
+ * bases (`vs-dark`, ...), not from another custom theme, so this rebuilds the same rules shiki
+ * already computed — the exact translation `@shikijs/monaco` does internally, exposed as
+ * `textmateThemeToMonacoTheme`. The editor surface (background, selection, widgets...) comes
+ * along already patched with tet's own `--vscode-*` values, since `diff-highlight.ts`'s
+ * `loadTheme` patches shiki's theme with them before this ever reads it; `buildMonacoColors`
+ * only adds the chrome shiki has no notion of — menus, inputs, lists.
  *
  * Awaited by `ensureLanguage`, deliberately: this used to fire the import and move on, so
  * `monaco.editor.create` below could run — and paint the editor once in monaco's own colors —

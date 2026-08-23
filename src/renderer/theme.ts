@@ -71,8 +71,28 @@ export function buildXtermTheme(agentId: AgentId): ITheme {
   return theme;
 }
 
-/** monaco color id to the --vscode-* variable it reads — see editor.ts's `applyChrome`. */
-const MONACO_CSS_VARS: Record<string, string> = {
+/** Reads a map of theme color ids to --vscode-* variables into resolved values, skipping unset ones. */
+function readCssVars(vars: Record<string, string>): Record<string, string> {
+  const styles = getComputedStyle(document.documentElement);
+  const colors: Record<string, string> = {};
+  for (const [id, cssVar] of Object.entries(vars)) {
+    const value = styles.getPropertyValue(cssVar).trim();
+    if (value) {
+      colors[id] = value;
+    }
+  }
+  return colors;
+}
+
+/**
+ * VS Code color ids to the --vscode-* variable they read, for the editor surface itself
+ * (background, gutter, selection, widgets...) — the same dotted namespace shiki's own theme.colors
+ * uses. Read once here rather than per consumer: shiki's theme is patched with these at load time
+ * (see diff-highlight.ts's `highlighter`), and monaco inherits them from shiki's theme in turn (see
+ * editor.ts's `applyChrome`) — so a theme swap only ever means changing the variables, not two
+ * separate color maps.
+ */
+const EDITOR_CSS_VARS: Record<string, string> = {
   "editor.background": "--vscode-editor-background",
   "editor.foreground": "--vscode-editor-foreground",
   "editorLineNumber.foreground": "--vscode-editorLineNumber-foreground",
@@ -87,7 +107,20 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "editorIndentGuide.activeBackground1": "--vscode-editorIndentGuide-activeBackground1",
   "editorWidget.background": "--vscode-editorWidget-background",
   "editorWidget.border": "--vscode-editorWidget-border",
-  "widget.shadow": "--vscode-widget-shadow",
+  "widget.shadow": "--vscode-widget-shadow"
+};
+
+/** The editor surface's colors, read for shiki's theme — see `EDITOR_CSS_VARS`. */
+export function buildShikiColors(): Record<string, string> {
+  return readCssVars(EDITOR_CSS_VARS);
+}
+
+/**
+ * monaco color id to the --vscode-* variable it reads, for chrome shiki's theme has no notion of —
+ * menus, inputs, lists — see editor.ts's `applyChrome`. The editor surface itself is not repeated
+ * here: it comes from shiki's own theme, already patched with `EDITOR_CSS_VARS` at load time.
+ */
+const MONACO_CSS_VARS: Record<string, string> = {
   "input.background": "--vscode-input-background",
   "input.foreground": "--vscode-input-foreground",
   "input.border": "--vscode-input-border",
@@ -115,21 +148,14 @@ const MONACO_CSS_VARS: Record<string, string> = {
 };
 
 /**
- * The editor's chrome (background, gutter, selection, widgets...) as monaco color overrides,
- * read the same way `buildXtermTheme` reads xterm's — everything else (bracket match, hover
- * widget, suggest widget...) is left to monaco's own vs-dark defaults, which are VS Code's own
- * values anyway. Without this the editor stays shiki's dark-plus chrome (`#1e1e1e`, not tet's
- * `#1f1f1f`) — see editor.ts's `applyChrome`.
+ * Monaco's own chrome (menus, inputs, lists...) as color overrides, read the same way
+ * `buildXtermTheme` reads xterm's — everything else (bracket match, hover widget, suggest
+ * widget...) is left to monaco's own vs-dark defaults, which are VS Code's own values anyway.
+ * The editor surface is not part of this: monaco gets that from shiki's theme (see editor.ts's
+ * `applyChrome`), which is already patched with `EDITOR_CSS_VARS`.
  */
 export function buildMonacoColors(): Record<string, string> {
-  const styles = getComputedStyle(document.documentElement);
-  const colors: Record<string, string> = {};
-  for (const [id, cssVar] of Object.entries(MONACO_CSS_VARS)) {
-    const value = styles.getPropertyValue(cssVar).trim();
-    if (value) {
-      colors[id] = value;
-    }
-  }
+  const colors = readCssVars(MONACO_CSS_VARS);
   // No border box around an active toggle — just the background set through the map above.
   colors["inputOption.activeBorder"] = "#00000000";
   return colors;
