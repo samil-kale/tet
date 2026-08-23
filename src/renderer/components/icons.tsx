@@ -105,20 +105,50 @@ function Svg({
   );
 }
 
+/** Lucide's `plus` (lucide.dev, ISC), vendored on its own native 24-unit grid. Measured via
+ *  `getBBox`: 16 by 16, extent 16, centered at (12, 12). Stroke bumped past Lucide's own 2 to
+ *  2.3 — it leads more rows than any other icon here, so it reads a touch heavier on purpose. */
 export function PlusIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={13.58}>
-      <path d="M8 2v12M2 8h12" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(16, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(16, 24, 2.3)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12h14" />
+      <path d="M12 5v14" />
+    </svg>
   );
 }
 
-/** Drawn smaller than the rest: it closes what it sits on, and never leads a row. */
+/** Lucide's `x`, vendored the same way. Drawn smaller than the rest: it closes what it sits on,
+ *  and never leads a row — `SMALLER` widens the crop the same way it does for `Svg`'s own
+ *  `scale`, so the extent fed to `fitIcon`/`fitStroke` is the measured one divided by it: 14 by
+ *  14 (extent 14) becomes 16.55, centered at (12, 12). */
 export function CloseIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={10.22} scale={SMALLER}>
-      <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(14 / SMALLER, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(14 / SMALLER, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
   );
 }
 
@@ -138,14 +168,26 @@ export function SeverityIcon({ severity, ...props }: IconProps & { severity: Not
   );
 }
 
+/** Lucide's `git-branch`, vendored on its own native 24-unit grid. Measured via `getBBox`: 20 by
+ *  20, extent 20, centered at (12, 12). */
 export function BranchIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={12.54}>
-      <circle cx="4.5" cy="3.5" r="1.5" />
-      <circle cx="4.5" cy="12.5" r="1.5" />
-      <circle cx="11.5" cy="5.5" r="1.5" />
-      <path d="M4.5 5v6M11.5 7v.5a3 3 0 0 1-3 3H6" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M15 6a9 9 0 0 0-9 9V3" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+    </svg>
   );
 }
 
@@ -175,12 +217,25 @@ export function GitIcon(props: IconProps) {
   );
 }
 
+/** Lucide's `search`, vendored on its own native 24-unit grid. Measured via `getBBox`: 20 by 20,
+ *  extent 20, centered at (12, 12). */
 export function SearchIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={10.79} cx={8.25} cy={8.25}>
-      <circle cx="7" cy="7" r="3.5" />
-      <path d="M9.6 9.6L13 13" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m21 21-4.34-4.34" />
+      <circle cx="11" cy="11" r="8" />
+    </svg>
   );
 }
 
@@ -207,52 +262,97 @@ export function SpinnerIcon(props: IconProps) {
   );
 }
 
-/**
- * Two sparkles, the mark every tool puts on "a model worked this out for you". Filled: at this
- * size the outline of a four-pointed star is mostly its own stroke.
- */
+/** Lucide's `sparkles` (lucide.dev, ISC), vendored on its own native 24-unit grid — the mark
+ *  every tool puts on "a model worked this out for you". Measured via `getBBox`: 22 by 22,
+ *  extent 22, centered at (12, 12). Stroke thinned past Lucide's own 2 to 1.6 — the star's
+ *  points are narrow enough that the full stroke reads as a solid blob rather than an outline. */
 export function SparkleIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={13.6} cx={8.1} cy={7.6}>
-      <path d="M6.6 2.6L8.1 6.8 12.3 8.3 8.1 9.8 6.6 14 5.1 9.8 0.9 8.3 5.1 6.8z" fill="currentColor" stroke="none" />
-      <path d="M12.7 1.2L13.4 3.1 15.3 3.8 13.4 4.5 12.7 6.4 12 4.5 10.1 3.8 12 3.1z" fill="currentColor" stroke="none" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(22, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(22, 24, 1.6)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" />
+      <path d="M20 2v4" />
+      <path d="M22 4h-4" />
+      <circle cx="4" cy="20" r="2" />
+    </svg>
   );
 }
 
-/**
- * Filled, not outlined: at this size a hollow triangle reads as a stray corner. Drawn smaller
- * than the rest — a solid shape carries more weight than an outline of the same measurement.
- */
+/** Lucide's `play`, vendored on its own native 24-unit grid, outline as Lucide draws it. Drawn
+ *  smaller than the rest via `SMALLER`, same as `CloseIcon`: measured 18 by 20 (extent 18.98,
+ *  stroke included) becomes 22.43, centered at (13, 12). */
 export function PlayIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={9.6} cx={8.6} scale={SMALLER}>
-      <path d="M4.5 2.8l8.2 5.2-8.2 5.2z" fill="currentColor" stroke="none" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(18.98 / SMALLER, 13, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(18.98 / SMALLER, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
+    </svg>
   );
 }
 
-/** A tag: the label on a string that git's own icon sets draw for one. */
+/** Lucide's `tag`, vendored on its own native 24-unit grid — the label on a string that git's
+ *  own icon sets draw for one. Measured via `getBBox`: 22 by 22, extent 22, centered at (12, 12). */
 export function TagIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={12.9} cx={8.14} cy={8.24}>
-      <path d="M2.5 7.7V3a.5.5 0 0 1 .5-.5h4.7a1 1 0 0 1 .7.3l5.1 5.1a1 1 0 0 1 0 1.4l-4.4 4.4a1 1 0 0 1-1.4 0L2.8 8.4a1 1 0 0 1-.3-.7z" />
-      <circle cx="5.6" cy="5.6" r="1" fill="currentColor" stroke="none" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(22, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(22, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+      <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+    </svg>
   );
 }
 
-/**
- * A commit: a node on the line of history, VS Code's own git-commit glyph. Wide and flat, so
- * the extent is the long-side cap rather than the geometric mean (14.5 by 7.5 with stroke).
- */
+/** Lucide's `git-commit-horizontal`, vendored the same way — a node on the line of history.
+ *  Wide and flat, so the extent is the long-side cap rather than the geometric mean, same 0.87
+ *  formula: measured 20 by 8 gives extent 18.39, centered at (12, 12). */
 export function CommitIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={13.33}>
-      <circle cx="8" cy="8" r="3" />
-      <path d="M1.5 8H5" />
-      <path d="M11 8h3.5" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(18.39, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(18.39, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <line x1="3" x2="9" y1="12" y2="12" />
+      <line x1="15" x2="21" y1="12" y2="12" />
+    </svg>
   );
 }
 
@@ -266,55 +366,129 @@ export function StashIcon(props: IconProps) {
   );
 }
 
-/**
- * Throwing local changes away. A bin rather than VS Code's discard mark, which is the refresh
- * arrow turned the other way and reads as one at a glance. It also says what happens: a file
- * git does not track goes to the system trash, not away. Next to the stash box, the pair reads
- * as "put away" and "throw away".
- */
+/** Lucide's `trash`, vendored on its own native 24-unit grid. Throwing local changes away — a
+ *  bin rather than VS Code's discard mark, which is the refresh arrow turned the other way and
+ *  reads as one at a glance. It also says what happens: a file git does not track goes to the
+ *  system trash, not away. Next to the stash box, the pair reads as "put away" and "throw away".
+ *  Measured via `getBBox`: 20 by 22, geometric mean would clip the bottom, so extent is the
+ *  long-axis cap: 20.98, centered at (12, 12). */
 export function DiscardIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={12.75} cy={8.25}>
-      <path d="M2.5 4h11" />
-      <path d="M6 4V2.5h4V4" />
-      <path d="M4 4.5l.6 8.6a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9L12 4.5" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.98, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.98, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
   );
 }
 
-/** What is waiting to be pushed, and the button that pushes it. */
+/** Lucide's `arrow-up`, vendored on its own native 24-unit grid. What is waiting to be pushed,
+ *  and the button that pushes it. Measured via `getBBox`: 16 by 16, extent 16, centered at
+ *  (12, 12). */
 export function ArrowUpIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={10.81}>
-      <path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(16, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(16, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m5 12 7-7 7 7" />
+      <path d="M12 19V5" />
+    </svg>
   );
 }
 
+/** Lucide's `arrow-down`, vendored the same way. Measured via `getBBox`: 16 by 16, extent 16,
+ *  centered at (12, 12). */
 export function ArrowDownIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={10.81}>
-      <path d="M8 3v10M3.5 8.5L8 13l4.5-4.5" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(16, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(16, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
+    </svg>
   );
 }
 
-/** Fetch: the two arrows chasing each other that every git client draws for it. */
+/** Lucide's `refresh-cw`, vendored on its own native 24-unit grid — fetch: the two arrows
+ *  chasing each other that every git client draws for it. Measured via `getBBox`: 20 by 20,
+ *  extent 20, centered at (12, 12). */
 export function SyncIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={13.68}>
-      <path d="M2.5 8a5.5 5.5 0 0 1 9.4-3.9M13.5 8a5.5 5.5 0 0 1-9.4 3.9" />
-      <path d="M12 1.5v3h-3M4 14.5v-3h3" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+    </svg>
   );
 }
 
-/** Two arrows pushed apart, VS Code's own "unfold" — the lines hidden in a gap. */
+/** Lucide's `unfold-vertical`, vendored on its own native 24-unit grid, replacing a hand-traced
+ *  redraw of VS Code's own "unfold" glyph. Measured via `getBBox`: 22 by 22, extent 22, centered
+ *  at (12, 12). */
 export function UnfoldIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={11.94}>
-      <path d="M5.5 5L8 2.5 10.5 5M5.5 11l2.5 2.5L10.5 11M3 8h10" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(22, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(22, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 22v-6" />
+      <path d="M12 8V2" />
+      <path d="M4 12H2" />
+      <path d="M10 12H8" />
+      <path d="M16 12h-2" />
+      <path d="M22 12h-2" />
+      <path d="m15 19-3 3-3-3" />
+      <path d="m15 5-3-3-3 3" />
+    </svg>
   );
 }
 
@@ -362,12 +536,25 @@ export function ExclamationIcon(props: IconProps) {
   );
 }
 
-/** A session answered and nobody has looked yet — on its tab and on its project's row. */
+/** Lucide's `message-square`, vendored on its own native 24-unit grid — a session answered and
+ *  nobody has looked yet, on its tab and on its project's row. Measured via `getBBox`: 22 by 21,
+ *  extent 21.49, centered at (12, 12.5). */
 export function CommentIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={10.22} cy={7.5}>
-      <path d="M3.5 3h9v6.5H7L4.5 12V9.5h-1z" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(21.49, 12, 12.5, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(21.49, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
+    </svg>
   );
 }
 
@@ -380,18 +567,25 @@ export function RemoteIcon(props: IconProps) {
   );
 }
 
-/**
- * The settings, beside the layout picker. Six teeth rather than the eight a gear usually has: at
- * this size the flanks of eight sit less than a stroke width apart and fill in, so what is left
- * of the drawing is a disc with a bumpy edge. The outline is straight segments only, so its box
- * is exactly its vertices' span — 2.2 to 13.8 on both axes — plus one stroke width: 13.1.
- */
+/** Lucide's `settings`, vendored on its own native 24-unit grid — the settings icon beside the
+ *  layout picker. Measured via `getBBox`: 20 by 22, extent 20.91, centered at (12, 12). */
 export function GearIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={13.1}>
-      <path d="M6.23 4.03 L6.45 2.2 L9.55 2.2 L9.77 4.03 L10.56 4.48 L12.24 3.76 L13.8 6.45 L12.33 7.55 L12.33 8.45 L13.8 9.55 L12.24 12.24 L10.56 11.52 L9.77 11.97 L9.55 13.8 L6.45 13.8 L6.23 11.97 L5.44 11.52 L3.76 12.24 L2.2 9.55 L3.67 8.45 L3.67 7.55 L2.2 6.45 L3.76 3.76 L5.44 4.48Z" />
-      <circle cx="8" cy="8" r="2.2" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.91, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.91, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   );
 }
 
@@ -446,14 +640,28 @@ export function LayoutGrid2x2Icon(props: IconProps) {
   );
 }
 
-/** Browsing the repository's files — two overlapping pages, the front one folded at the corner. */
+/** Lucide's `files`, vendored on its own native 24-unit grid — browsing the repository's files,
+ *  two overlapping pages, the front one folded at the corner. Measured via `getBBox`: 20 by 22,
+ *  geometric mean would clip the bottom, so extent is the long-axis cap: 20.98, centered at
+ *  (12, 12). */
 export function FilesIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={11.99} cx={8} cy={8.5}>
-      <path d="M6 3h4l3 3v8H6z" />
-      <path d="M10 3v3h3" />
-      <path d="M4 5H3v9h6" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.98, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.98, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" />
+      <path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z" />
+      <path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" />
+    </svg>
   );
 }
 
@@ -535,24 +743,48 @@ export function CollapseAllIcon(props: IconProps) {
   );
 }
 
-/** The diff dialog's Diff/Edit toggle. */
+/** Lucide's `pencil`, vendored on its own native 24-unit grid — the diff dialog's Diff/Edit
+ *  toggle. Measured via `getBBox`: 22 by 22, extent 22, centered at (12, 12). */
 export function PencilIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={12} cx={8.25} cy={7.75}>
-      <path d="M11.5 2.5l2 2L5 13H3v-2z" />
-      <path d="M9.5 4.5l2 2" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(22, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(22, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+      <path d="m15 5 4 4" />
+    </svg>
   );
 }
 
-/** Saving the file open in the editor — a floppy disk, GitHub Desktop's own shorthand for it. */
+/** Lucide's `save`, vendored the same way — saving the file open in the editor, a floppy disk.
+ *  Measured via `getBBox`: 20 by 20, extent 20, centered at (12, 12). */
 export function SaveIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={12.25} cx={8.25} cy={8}>
-      <path d="M3 2.5h8.5l2 2V13.5H3z" />
-      <path d="M5 2.5v3.5h5V2.5" />
-      <path d="M5 13.5v-4h6v4" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+      <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" />
+      <path d="M7 3v4a1 1 0 0 0 1 1h7" />
+    </svg>
   );
 }
 
