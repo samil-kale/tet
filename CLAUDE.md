@@ -542,6 +542,15 @@ can't be reached afterwards. A change applies to projects opened after it — a 
 runtime is prepared once per project, and re-preparing it under running tabs would leave a gap in
 which no marker watcher stands — and the dialog says so.
 
+The color theme travels the same way (`AgentPaths.theme`), with one switch per agent beside it
+(`themeAgents`, the Appearance tab's checkboxes, all on by default; `pathsFor` picks the agent's
+own): whether that agent is told to draw in tet's theme — Claude Code's `theme`, Codex's
+`tui.theme=ansi`, opencode's `"theme": "system"` — or left to the look it is configured with, the
+user's own business. opencode's is a switch like the others even though off means it paints its
+own full background: a half-way "except where it looks odd" would have been tet deciding about
+looks after all. What stays either way is which way the
+background is — Codex's console colors — since that is a fact about the window, not a taste.
+
 Deliberately not in there: marks on a tab that finished out of sight or is waiting on an answer.
 Neither is a notification to turn off, but how such a session is found again (see that section).
 
@@ -1066,16 +1075,39 @@ branch is what currently draws the line.
   wrong the other way, take this back out. Only matters because of `"theme": "system"` in
   `tui-config.ts`.
 - Codex doesn't adopt the terminal's palette on its own the way opencode's `"theme": "system"`
-  does — its default is a fixed RGB syntax theme (`catppuccin-mocha`/`-latte`, picked by an OSC
-  10/11 background query this terminal never answers, so it always lands on the dark one) applied
-  to the status line and code highlighting alike, ignoring TET's ANSI palette entirely.
-  `-c tui.theme=ansi`, added in `src/agents/codex/index.ts` alongside the hooks argument, switches
-  Codex to its one bundled theme that emits plain named ANSI colors instead of RGB — verified end
-  to end: the status line's model name and cwd path render in exactly TET's configured
-  ansiYellow/ansiGreen with the override, a hardcoded tan/green without it. The config key is
-  `tui.theme`, not `tui_theme` — the latter is the Rust struct field name, but `-c`'s dotted path
-  follows the TOML layout instead (`[tui]\ntheme = "..."`, `codex-rs/config/src/types.rs`), and
-  only the dotted form actually takes effect.
+  does — its default is a fixed RGB syntax theme (`catppuccin-mocha`/`-latte`, picked by a
+  light/dark guess at the background) applied to the status line and code highlighting alike,
+  ignoring TET's ANSI palette entirely. `-c tui.theme=ansi`, added in `src/agents/codex/index.ts`
+  alongside the hooks argument, switches Codex to its one bundled theme that emits plain named
+  ANSI colors instead of RGB — verified end to end: the status line's model name and cwd path
+  render in exactly TET's configured ansiYellow/ansiGreen with the override, a hardcoded
+  tan/green without it. The config key is `tui.theme`, not `tui_theme` — the latter is the Rust
+  struct field name, but `-c`'s dotted path follows the TOML layout instead (`[tui]\ntheme =
+  "..."`, `codex-rs/config/src/types.rs`), and only the dotted form actually takes effect.
+- **Claude Code paints its own theme without looking at the terminal** — dark unless
+  `~/.claude.json` says otherwise — so on Light Modern its diff blocks were the dark theme's
+  near-black red and green. A `theme` in the `--settings` file tet already hands it
+  (`ThemeDefinition.claudeTheme`, `dark`/`light`) outranks the global one for that process
+  alone — measured: `light` changes every RGB the welcome screen is drawn with. The user's own
+  file is still never touched; what tet does override, for its own tabs, is a `dark-daltonized`
+  picked there. **Not** a custom theme in tet's own colors, though it takes one (a JSON with a
+  built-in `base` and `overrides` per named role, from a plugin's `themes/` directory passed
+  with `--plugin-dir`, selected as `custom:<plugin>:<file>`) — built, measured, and taken back
+  out: Claude Code reads every custom theme, plugin or its own directory, *after* its first
+  render and resolves a `custom:` name to `dark` until then, so Light Modern got a dark frame
+  of ~230 ms on every Claude tab. Claude's own `light` has no such frame.
+- **Codex's light/dark guess comes from the console, not the terminal, on win32.** Elsewhere it
+  queries OSC 10/11, which xterm answers with the theme; on win32 it reads
+  `GetConsoleScreenBufferInfoEx` off the ConPTY instead, whose palette is conhost's Campbell
+  default whatever xterm draws — so it blended its composer box for a black background, which
+  on Light Modern came out near-black on white (and on Dark Modern happened to land on
+  `#1f1f1f`, invisible). ConPTY does reflect OSC 4 in that table (OSC 10/11 it does not —
+  measured), so `prepareSpawn` writes a `launch.cmd` into the agent dir that prints OSC 4 for
+  entries 0 and 7 — `ThemeDefinition.terminalBackground`/`terminalForeground`, handed in through
+  `AgentPaths.theme` — and hands over with `%*`, returned as `SpawnPreparation.executable` so
+  only the terminal's process takes the detour. ConPTY forwards that OSC 4 to xterm too, so
+  `terminal-views.ts` drops every OSC 4 *set* (queries still answered): honoured, it would have
+  recolored ANSI black and white into the background and foreground.
 - Measurements are shared, not invented per view: a bar along an edge is 35px, the tab strip's
   height — title bar, both sidebar headers (`.section-header`) and the diff dialog's bar all use it.
   Same for the 22px action button and the 1px `--vscode-panel-border` between panes. Check the
@@ -1118,8 +1150,23 @@ branch is what currently draws the line.
 - Colors come from `--vscode-*` variables only (`src/renderer/vscode-theme.css`). Add a new variable
   rather than hardcoding, using VS Code's own name. Exception: the diff's syntax colors — Shiki
   assigns those per grammar scope, hundreds per theme, handed back per token, so
-  `src/renderer/diff-highlight.ts` writes them inline; its `dark-plus` is the token half of the same
-  theme the variables come from.
+  `src/renderer/diff-highlight.ts` writes them inline; its `dark-plus`/`light-plus` is the token
+  half of the same theme the variables come from. Shiki's own editor-surface colors are patched
+  with those variables at load (`buildShikiColors`), and monaco takes its theme from shiki's, so
+  the variables are the one source for all three.
+- **A theme is a value set in `vscode-theme.css`** — `:root` is Dark Modern, every other one a
+  `:root[data-theme="<id>"]` block naming only what differs — plus an entry in
+  `src/shared/themes.ts` for what the two processes need outside that stylesheet: the shiki
+  token theme, and the window's own `backgroundColor`/title-bar overlay, which main.ts paints
+  before any CSS exists. Values come from VS Code's theme files and color registry, not from
+  eyeballing. The id travels `settings.json` → `currentTheme` (`src/main/theme.ts`, which
+  answers the default `system` with Electron's `nativeTheme`) → `createWindow`'s
+  `additionalArguments` → preload's `process.argv` → `window.tet.initialTheme` → `data-theme`
+  in `main.tsx`, synchronously the whole way, so the first frame is already right; the renderer
+  and the agents only ever see a resolved id. **A change applies after a restart**, as
+  the dialog says: xterm bakes its theme into the constructor, shiki's highlighter is one
+  singleton with one theme loaded, monaco's chrome is applied once per editor, and the window
+  chrome is set at construction — a live switch would mean invalidating all four.
 - Two hover colors, not interchangeable. A *row* (list item, tree item, tab, section header) takes
   `--vscode-list-hoverBackground`. An *action button* takes the translucent
   `--vscode-toolbar-hoverBackground` wherever it sits — the list color would be invisible on an

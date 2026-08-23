@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { SYSTEM_THEME_ID } from "../shared/themes";
 import { DEFAULT_KEYBINDING_PRESET_ID } from "../shared/types";
-import type { AppSettings } from "../shared/types";
+import type { AppSettings, ThemeAgentSettings } from "../shared/types";
 
 /** What tet does before anyone has said otherwise; sbc's own defaults. */
 const DEFAULTS: AppSettings = {
@@ -10,7 +11,9 @@ const DEFAULTS: AppSettings = {
     needsYou: true,
     idleReminder: false
   },
-  editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID
+  editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
+  theme: SYSTEM_THEME_ID,
+  themeAgents: { claude: true, opencode: true, codex: true }
 };
 
 /**
@@ -35,7 +38,9 @@ export class SettingsStore {
   save(settings: AppSettings): void {
     this.settings = {
       notifications: booleans(settings.notifications),
-      editorKeybindingPreset: presetId(settings.editorKeybindingPreset)
+      editorKeybindingPreset: presetId(settings.editorKeybindingPreset),
+      theme: themeId(settings.theme),
+      themeAgents: agentFlags(settings.themeAgents)
     };
     try {
       fs.writeFileSync(this.file, JSON.stringify(this.settings, null, 2), "utf8");
@@ -51,7 +56,9 @@ export class SettingsStore {
         const value = parsed as Partial<AppSettings>;
         this.settings = {
           notifications: booleans(value.notifications),
-          editorKeybindingPreset: presetId(value.editorKeybindingPreset)
+          editorKeybindingPreset: presetId(value.editorKeybindingPreset),
+          theme: themeId(value.theme),
+          themeAgents: agentFlags(value.themeAgents)
         };
       }
     } catch {
@@ -77,4 +84,21 @@ function booleans(notifications: Partial<AppSettings["notifications"]> | undefin
  *  recognise, same as it would for an id this store had never heard of either. */
 function presetId(value: unknown): string {
   return typeof value === "string" && value ? value : DEFAULTS.editorKeybindingPreset;
+}
+
+/** The same contract for the theme: an unknown id is left standing, and every reader of it
+ *  (`currentTheme`, which also answers "system") falls back to the default on its own. */
+function themeId(value: unknown): string {
+  return typeof value === "string" && value ? value : DEFAULTS.theme;
+}
+
+/** One switch per agent, read the way the notifications are. */
+function agentFlags(value: unknown): ThemeAgentSettings {
+  const flags = (typeof value === "object" && value !== null ? value : {}) as Partial<Record<string, unknown>>;
+  const defaults = DEFAULTS.themeAgents;
+  return {
+    claude: typeof flags.claude === "boolean" ? flags.claude : defaults.claude,
+    opencode: typeof flags.opencode === "boolean" ? flags.opencode : defaults.opencode,
+    codex: typeof flags.codex === "boolean" ? flags.codex : defaults.codex
+  };
 }

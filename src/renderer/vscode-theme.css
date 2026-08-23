@@ -1,9 +1,16 @@
 /*
  * The theme layer: every color the UI uses comes from a --vscode-* custom property, the same
- * names the VS Code plugins style against. Values below are the VS Code "Dark Modern" defaults;
- * a theme loader can later overwrite them without touching a single component style.
+ * names the VS Code plugins style against. The `:root` block is VS Code's "Dark Modern", and
+ * the default; every other theme is a `:root[data-theme="<id>"]` block below it naming only
+ * what differs — an attribute selector outranks the bare `:root` for each property it
+ * declares, whatever the order, and the rest falls through to the dark value. Which block
+ * applies is decided once, in main.tsx, from the id in src/shared/themes.ts; the values come
+ * from VS Code's own theme files (extensions/theme-defaults) and color registry, not from
+ * eyeballing.
  */
 :root {
+  color-scheme: dark;
+
   --vscode-font-family: "Segoe UI", system-ui, sans-serif;
   --vscode-font-size: 13px;
   --vscode-editor-font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
@@ -103,6 +110,12 @@
   --vscode-editorIndentGuide-background1: #404040;
   --vscode-editorIndentGuide-activeBackground1: #707070;
 
+  /* xterm's own defaults for these are white, invisible on a light background — see
+     buildXtermTheme. VS Code leaves the cursor unset in Dark Modern, which is its foreground. */
+  --vscode-terminalCursor-foreground: #cccccc;
+  --vscode-terminal-selectionBackground: #264f78;
+  --vscode-terminal-inactiveSelectionBackground: #3a3d41;
+
   --vscode-terminal-ansiBlack: #000000;
   --vscode-terminal-ansiRed: #cd3131;
   --vscode-terminal-ansiGreen: #0dbc79;
@@ -119,4 +132,124 @@
   --vscode-terminal-ansiBrightMagenta: #d670d6;
   --vscode-terminal-ansiBrightCyan: #29b8db;
   --vscode-terminal-ansiBrightWhite: #e5e5e5;
+}
+
+/*
+ * VS Code's "Light Modern" (light_modern.json, with what it inherits from light_plus.json and
+ * light_vs.json; the rest from the `light:` branch of the color registry). Left out on purpose,
+ * because both themes share the value: the fonts, --vscode-toolbar-hoverBackground (tet's own,
+ * reads as a neutral tint on either ground), the error red, the button and menu-selection
+ * foregrounds, the find-match highlight, the scrollbar hover, the plain line-number color, and
+ * the two diff line backgrounds (the registry's defaultInsertColor/defaultRemoveColor serve both).
+ */
+:root[data-theme="light-modern"] {
+  color-scheme: light;
+
+  --vscode-foreground: #3b3b3b;
+  --vscode-descriptionForeground: #3b3b3b;
+  --vscode-textLink-foreground: #005fb8;
+  --vscode-textLink-activeForeground: #005fb8;
+  --vscode-focusBorder: #005fb8;
+  --vscode-sash-hoverBorder: #005fb8;
+
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #3b3b3b;
+  --vscode-terminal-background: #ffffff;
+  --vscode-terminal-foreground: #3b3b3b;
+
+  --vscode-sideBar-background: #f8f8f8;
+  --vscode-sideBarSectionHeader-foreground: #3b3b3b;
+  --vscode-titleBar-activeBackground: #f8f8f8;
+  --vscode-titleBar-activeForeground: #1e1e1e;
+
+  --vscode-panel-background: #f8f8f8;
+  --vscode-panel-border: #e5e5e5;
+
+  --vscode-tab-activeBackground: #ffffff;
+  --vscode-tab-activeForeground: #3b3b3b;
+  --vscode-tab-inactiveBackground: #f8f8f8;
+  --vscode-tab-inactiveForeground: #868686;
+  --vscode-tab-border: #e5e5e5;
+
+  --vscode-list-activeSelectionBackground: #e8e8e8;
+  --vscode-list-activeSelectionForeground: #000000;
+  --vscode-list-hoverBackground: #f2f2f2;
+
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #3b3b3b;
+  --vscode-input-border: #cecece;
+  --vscode-input-placeholderForeground: #767676;
+
+  --vscode-dropdown-background: #ffffff;
+  --vscode-dropdown-foreground: #3b3b3b;
+  --vscode-dropdown-border: #cecece;
+  --vscode-dropdown-listBackground: #ffffff;
+
+  --vscode-button-background: #005fb8;
+  --vscode-button-hoverBackground: #0258a8;
+  --vscode-button-secondaryBackground: #e5e5e5;
+  --vscode-button-secondaryForeground: #3b3b3b;
+  --vscode-button-secondaryHoverBackground: #cccccc;
+
+  --vscode-editorWidget-background: #f8f8f8;
+  /* The registry's transparent(foreground, 0.2), as is the menu separator below. */
+  --vscode-editorWidget-border: #3b3b3b33;
+  --vscode-widget-shadow: #00000029;
+
+  /* The registry points menu.background/foreground at dropdown.background/foreground. */
+  --vscode-menu-background: #ffffff;
+  --vscode-menu-foreground: #3b3b3b;
+  --vscode-menu-border: #cecece;
+  --vscode-menu-selectionBackground: #005fb8;
+  --vscode-menu-separatorBackground: #3b3b3b33;
+
+  --vscode-progressBar-background: #005fb8;
+
+  --vscode-notifications-background: #ffffff;
+  --vscode-notifications-foreground: #3b3b3b;
+  --vscode-notifications-border: #e5e5e5;
+  /* editorWarning.foreground and editorInfo.foreground, which the icon colors default to. */
+  --vscode-notificationsWarningIcon-foreground: #bf8803;
+  --vscode-notificationsInfoIcon-foreground: #0063d3;
+
+  --vscode-scrollbarSlider-background: #64646466;
+  --vscode-scrollbarSlider-activeBackground: #00000099;
+
+  /* The git extension's own contributes.colors, light branch. */
+  --vscode-gitDecoration-modifiedResourceForeground: #895503;
+  --vscode-gitDecoration-deletedResourceForeground: #ad0707;
+  --vscode-gitDecoration-untrackedResourceForeground: #007100;
+  --vscode-gitDecoration-addedResourceForeground: #587c0c;
+  --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
+
+  --vscode-editorLineNumber-activeForeground: #171184;
+  --vscode-editorCursor-foreground: #000000;
+  --vscode-editor-selectionBackground: #add6ff;
+  --vscode-editor-inactiveSelectionBackground: #e5ebf1;
+  --vscode-editor-lineHighlightBorder: #eeeeee;
+  --vscode-editor-findMatchBackground: #a8ac94;
+  --vscode-editorIndentGuide-background1: #d3d3d3;
+  --vscode-editorIndentGuide-activeBackground1: #939393;
+
+  --vscode-terminalCursor-foreground: #005fb8;
+  --vscode-terminal-selectionBackground: #add6ff;
+  --vscode-terminal-inactiveSelectionBackground: #e5ebf1;
+
+  /* terminalColorRegistry.ts's `light:` branch — the palette is not theme-independent. */
+  --vscode-terminal-ansiBlack: #000000;
+  --vscode-terminal-ansiRed: #cd3131;
+  --vscode-terminal-ansiGreen: #107c10;
+  --vscode-terminal-ansiYellow: #949800;
+  --vscode-terminal-ansiBlue: #0451a5;
+  --vscode-terminal-ansiMagenta: #bc05bc;
+  --vscode-terminal-ansiCyan: #0598bc;
+  --vscode-terminal-ansiWhite: #555555;
+  --vscode-terminal-ansiBrightBlack: #666666;
+  --vscode-terminal-ansiBrightRed: #cd3131;
+  --vscode-terminal-ansiBrightGreen: #14ce14;
+  --vscode-terminal-ansiBrightYellow: #b5ba00;
+  --vscode-terminal-ansiBrightBlue: #0451a5;
+  --vscode-terminal-ansiBrightMagenta: #bc05bc;
+  --vscode-terminal-ansiBrightCyan: #0598bc;
+  --vscode-terminal-ansiBrightWhite: #a5a5a5;
 }

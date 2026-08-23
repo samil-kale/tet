@@ -31,9 +31,20 @@ export function buildXtermTheme(agentId: AgentId): ITheme {
   const styles = getComputedStyle(document.documentElement);
   const read = (name: string): string | undefined => styles.getPropertyValue(name).trim() || undefined;
 
+  const background = read("--vscode-terminal-background") ?? read("--vscode-editor-background");
+  const foreground = read("--vscode-terminal-foreground") ?? read("--vscode-editor-foreground");
   const theme: ITheme = {
-    background: read("--vscode-terminal-background") ?? read("--vscode-editor-background"),
-    foreground: read("--vscode-terminal-foreground") ?? read("--vscode-editor-foreground"),
+    background,
+    foreground,
+    // Left to xterm, cursor and selection are white (`#ffffff`, `rgba(255, 255, 255, .3)`) —
+    // invisible on a light background. The fallbacks are VS Code's own: an unset terminal
+    // cursor is the terminal foreground, an unset terminal selection the editor's. xterm
+    // thins an opaque selection to 30% itself, as VS Code's does.
+    cursor: read("--vscode-terminalCursor-foreground") ?? foreground,
+    cursorAccent: background,
+    selectionBackground: read("--vscode-terminal-selectionBackground") ?? read("--vscode-editor-selectionBackground"),
+    selectionInactiveBackground:
+      read("--vscode-terminal-inactiveSelectionBackground") ?? read("--vscode-editor-inactiveSelectionBackground"),
     // Everything xterm draws down the lane at the right edge, made invisible — a scrollbar has
     // no business beside a TUI (see styles.css), and the ruler is only there to keep FitAddon
     // from reserving room for one (see terminal-views.ts). Color rather than CSS is what does

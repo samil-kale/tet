@@ -308,8 +308,12 @@ export async function prepareOpencodeSpawn(
     // attach reads the password from the environment; passing it as --password would put
     // the secret in the process command line, where any local process can read it. The tui
     // config is on the terminal for the other reason the plugin is on the server: the TUI is
-    // the half that draws.
-    env: { OPENCODE_SERVER_PASSWORD: server.password, ...installTuiConfig(paths.storageRoot) },
+    // the half that draws — and only when the Appearance tab says the agents draw in tet's
+    // theme; otherwise opencode paints its own, full background and all.
+    env: {
+      OPENCODE_SERVER_PASSWORD: server.password,
+      ...(paths.themeAgents ? installTuiConfig(paths.storageRoot) : {})
+    },
     dispose: () => {
       unsubscribe();
       const previous = servers.get(cwd);

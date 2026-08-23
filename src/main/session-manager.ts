@@ -16,6 +16,7 @@ import { countActivity, logSlow } from "./event-loop-monitor";
 import type { SettingsStore } from "./settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
+import { currentTheme } from "./theme";
 
 const RECONCILE_DEBOUNCE_MS = 5000;
 // A tab's CLI can persist a title (a generated summary) well after its output went idle, so
@@ -262,6 +263,9 @@ export class ProjectSessionManager {
       // Read here rather than held: an agent prepares once per project, so this is the moment
       // the current settings apply, and a change reaches the ones set up after it.
       notifications: this.settings.get().notifications,
+      theme: currentTheme(this.settings),
+      // The shell has no switch of its own — nor a look to switch — so it reads as on.
+      themeAgents: runtime.agent.id === "shell" || this.settings.get().themeAgents[runtime.agent.id],
       onSessionBusy: (sessionId, at) => this.markTurn(runtime, sessionId, true, at ?? Date.now()),
       onSessionFinished: (sessionId, at) => this.markTurn(runtime, sessionId, false, at ?? Date.now()),
       onSessionWaiting: (sessionId, at) => this.markWaiting(runtime, sessionId, at ?? Date.now())
@@ -652,7 +656,7 @@ export class ProjectSessionManager {
       : [...(preparation?.args ?? []), ...resumeArgs, ...(tab.runArgs ?? [])];
 
     const session = new TerminalSession(
-      tab.executable ?? executable,
+      tab.executable ?? preparation?.executable ?? executable,
       tab.cwd ?? this.project.path,
       preparation?.env,
       {

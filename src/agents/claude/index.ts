@@ -17,7 +17,14 @@ export const claudeAgent: AgentDefinition = {
     let args: string[] = [];
     const watchers: (() => void)[] = [];
     try {
-      args = setupClaudeHooks(paths.agentDir, cwd, "Claude", paths.notifications, paths);
+      args = setupClaudeHooks(
+        paths.agentDir,
+        cwd,
+        "Claude",
+        paths.notifications,
+        paths,
+        paths.themeAgents ? paths.theme.claudeTheme : undefined
+      );
       // A hook is a process of its own and cannot call back into tet, so each end of a turn
       // — and the point part-way through where it stops for an answer — leaves a file behind,
       // and these are what pick them up.

@@ -250,4 +250,11 @@ export interface TETApi {
   };
   /** Anything transient the main process wants said — see Notice. */
   onNotice(listener: (payload: Notice) => void): Unsubscribe;
+  /**
+   * The persisted theme id, read synchronously off `webPreferences.additionalArguments` before
+   * main.tsx's first line runs — see main.ts's `createWindow` and preload.ts. A plain value
+   * rather than a call: the renderer sets `data-theme` with it before anything is rendered, and
+   * an async read would leave a first frame in the wrong colors.
+   */
+  initialTheme: string;
 }

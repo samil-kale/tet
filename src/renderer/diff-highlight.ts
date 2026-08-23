@@ -1,5 +1,12 @@
-import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemedToken } from "shiki/core";
+import {
+  createHighlighterCore,
+  type HighlighterCore,
+  type LanguageRegistration,
+  type ThemedToken,
+  type ThemeRegistration
+} from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { resolveTheme, type ThemeDefinition } from "../shared/themes";
 import { buildShikiColors } from "./theme";
 import type { DiffLine, FileDiff } from "../shared/types";
 
@@ -9,22 +16,27 @@ import type { DiffLine, FileDiff } from "../shared/types";
  *
  * Per-token colors are the one thing that does not come from a --vscode-* variable: a theme
  * assigns them per grammar scope, of which there are hundreds, and Shiki hands them back per
- * token. The theme below is the token half of the "Dark Modern" the rest of the UI is styled
- * after — its editor-surface colors (background, selection, widgets...) are patched with tet's
- * own variables in `loadTheme` below, so only this name needs to change for a different theme.
+ * token. The theme is the token half of the one picked in Settings (Dark Modern takes its
+ * tokens from Dark+, Light Modern from Light+) — its editor-surface colors (background,
+ * selection, widgets...) are patched with tet's own variables in `loadTheme` below. Decided
+ * once per window, like the variables themselves (see main.tsx).
  */
-export const THEME = "dark-plus";
+export const THEME = resolveTheme(window.tet.initialTheme).shikiTheme;
+
+/** One import per theme, each spelled out: esbuild can only bundle an import whose path it can
+ *  read off the call — the same reason GRAMMARS below is a map rather than a template. */
+const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ default: ThemeRegistration }>> = {
+  "dark-plus": () => import("@shikijs/themes/dark-plus"),
+  "light-plus": () => import("@shikijs/themes/light-plus")
+};
 
 /**
  * Loads `THEME` and patches its editor-surface colors with tet's own --vscode-* values (see
  * theme.ts's `buildShikiColors`), so shiki's theme — and monaco's, layered on top of it in
  * editor.ts's `applyChrome` — draw tet's chrome rather than the theme's own.
- *
- * The import path is spelled out rather than built from THEME: esbuild can only bundle an
- * import whose path it can read off the call.
  */
-async function loadTheme() {
-  const { default: theme } = await import("@shikijs/themes/dark-plus");
+async function loadTheme(): Promise<ThemeRegistration> {
+  const { default: theme } = await THEME_MODULES[THEME]();
   return { ...theme, colors: { ...theme.colors, ...buildShikiColors() } };
 }
 

@@ -24,4 +24,8 @@ if (!container) {
   throw new Error("Root container not found");
 }
 
+// Which of vscode-theme.css's value sets applies, set before anything is rendered: every
+// reader of those variables (xterm, shiki, monaco) reads them once and keeps the result.
+document.documentElement.dataset.theme = window.tet.initialTheme;
+
 createRoot(container).render(<Startup />);

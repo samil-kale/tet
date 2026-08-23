@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { DEFAULT_KEYBINDING_PRESET_ID } from "../../shared/types";
+import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
+import { DEFAULT_KEYBINDING_PRESET_ID, THEMED_AGENTS } from "../../shared/types";
 import type {
   AppInfo,
   AppSettings,
@@ -7,7 +8,8 @@ import type {
   ExplorerSortOrder,
   GitActionResult,
   NotificationSettings,
-  Project
+  Project,
+  ThemedAgentId
 } from "../../shared/types";
 import { ChevronIcon } from "./icons";
 import { KEYBINDING_PRESETS } from "../keybinding-presets";
@@ -21,10 +23,11 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-type SettingsTab = "notifications" | "shortcuts" | "files" | "info";
+type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "info";
 
-/** The dialog's panes, in the order they are worth opening. */
+/** The dialog's panes, in the order they are worth opening; the first is the one it opens on. */
 const TABS: { id: SettingsTab; label: string }[] = [
+  { id: "appearance", label: "Appearance" },
   { id: "notifications", label: "Notifications" },
   { id: "shortcuts", label: "Shortcuts" },
   { id: "files", label: "Files" },
@@ -69,7 +72,7 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
  * own settings do, so there is nothing to confirm and nothing to take back.
  */
 export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {
-  const [tab, setTab] = useState<SettingsTab>("notifications");
+  const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
@@ -117,6 +120,24 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     void window.tet.settings.save(next);
   };
 
+  const applyTheme = (id: string): void => {
+    if (!settings) {
+      return;
+    }
+    const next: AppSettings = { ...settings, theme: id };
+    setSettings(next);
+    void window.tet.settings.save(next);
+  };
+
+  const applyThemeAgent = (id: ThemedAgentId, value: boolean): void => {
+    if (!settings) {
+      return;
+    }
+    const next: AppSettings = { ...settings, themeAgents: { ...settings.themeAgents, [id]: value } };
+    setSettings(next);
+    void window.tet.settings.save(next);
+  };
+
   const updateExplorerSettings = <K extends keyof ExplorerSettings>(
     key: K,
     value: ExplorerSettings[K],
@@ -152,6 +173,40 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           ))}
         </div>
         <div className="dialog-body">
+          {tab === "appearance" && (
+            <>
+              <label className="dialog-field">
+                <span>Color theme</span>
+                <div className="select-field">
+                  <select value={settings?.theme ?? SYSTEM_THEME_ID} onChange={(event) => applyTheme(event.target.value)}>
+                    <option value={SYSTEM_THEME_ID}>System</option>
+                    {THEMES.map((theme) => (
+                      <option key={theme.id} value={theme.id}>
+                        {theme.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronIcon expanded className="select-arrow" />
+                </div>
+              </label>
+              <p className="dialog-detail">Apply theme to</p>
+              {settings &&
+                THEMED_AGENTS.map(({ id, label }) => (
+                  <label key={id} className="dialog-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={settings.themeAgents[id]}
+                      onChange={(event) => applyThemeAgent(id, event.target.checked)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              {/* Not live, for the same reason the notifications below aren't: xterm, shiki and
+                  monaco each read the theme once and keep it, as does the window's own chrome;
+                  the agents are handed it when their first terminal in a project starts. */}
+              <p className="dialog-detail">Applies after tet is restarted.</p>
+            </>
+          )}
           {tab === "notifications" && (
             <>
               <p className="dialog-detail">Desktop notifications for agent activity</p>

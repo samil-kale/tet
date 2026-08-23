@@ -1264,7 +1264,7 @@ option {
   max-width: 100%;
   /* The checkerboard an image viewer puts behind transparency. */
   background:
-    repeating-conic-gradient(#2b2b2b 0% 25%, #1f1f1f 0% 50%) 50% / 16px 16px;
+    repeating-conic-gradient(var(--vscode-panel-border) 0% 25%, var(--vscode-editor-background) 0% 50%) 50% / 16px 16px;
   border: 1px solid var(--vscode-panel-border);
 }
 

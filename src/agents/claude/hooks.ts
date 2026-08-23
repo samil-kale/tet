@@ -113,7 +113,8 @@ export function setupClaudeHooks(
   cwd: string,
   displayName: string,
   notifications: NotificationSettings,
-  context: { contextFile: string; contextReadPaths: string[] }
+  context: { contextFile: string; contextReadPaths: string[] },
+  themeName: string | undefined
 ): string[] {
   const hooks: Record<string, unknown> = {
     // Two commands on the one event: the context file's contents become part of the prompt,
@@ -214,7 +215,16 @@ export function setupClaudeHooks(
   // directory, which also holds the notify scripts and this settings file.
   const permissions = { allow: context.contextReadPaths.map((file) => `Read(${file})`) };
 
+  // Claude Code paints its own theme — dark by default, or whatever `~/.claude.json` says —
+  // without looking at the terminal, so on a light background its diff blocks came out as
+  // the dark theme's near-black red and green. A `theme` in this file outranks the global
+  // one for this process alone (measured: `light` changes every RGB the welcome screen is
+  // drawn with), so the user's own file stays as it is. One of Claude's built-in themes, not
+  // a custom one in tet's colors: those it reads after its first render — from a plugin and
+  // from its own themes directory alike — and draws a dark frame in the meantime (measured at
+  // ~230 ms), which was tried and taken back out. Undefined — the Appearance tab's switch off
+  // — leaves the key out, and with it the user's own choice in charge.
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
-  fs.writeFileSync(settingsFile, JSON.stringify({ hooks, permissions }, null, 2));
+  fs.writeFileSync(settingsFile, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));
   return ["--settings", settingsFile];
 }

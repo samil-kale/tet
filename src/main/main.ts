@@ -11,6 +11,7 @@ import { ProjectStore } from "./projects";
 import { RepositoryManager } from "./repository";
 import { SessionManagerRegistry } from "./session-manager";
 import { SettingsStore } from "./settings";
+import { currentTheme } from "./theme";
 
 /** Terminal output arrives in many small chunks; one IPC message per chunk is wasteful. */
 const OUTPUT_FLUSH_MS = 8;
@@ -87,6 +88,10 @@ function openWorkspace(): void {
 }
 
 function createWindow(): void {
+  // Read here, per window: a theme picked in the settings dialog reaches the windows opened
+  // after it, the same as every other setting — the ones already up keep what they were built
+  // with (xterm, shiki and monaco each bake their colors in once).
+  const theme = currentTheme(settings);
   window = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -102,7 +107,7 @@ function createWindow(): void {
     // patch of their own for the moment before the first frame. --vscode-titleBar-
     // activeBackground and --vscode-sideBar-background are both this, which is most of the
     // window; the editor background arrives with the frame that paints it.
-    backgroundColor: "#181818",
+    backgroundColor: theme.windowBackground,
     show: false,
     // What the taskbar and the window itself show. Windows takes the .ico, whose frames are
     // each rendered at the size they are drawn at rather than resampled from one large image
@@ -116,12 +121,18 @@ function createWindow(): void {
     titleBarOverlay:
       // Height must match the .titlebar rule in the renderer, or the window controls and
       // the drag region disagree about where the title bar ends.
-      process.platform === "darwin" ? undefined : { color: "#181818", symbolColor: "#cccccc", height: 35 },
+      process.platform === "darwin"
+        ? undefined
+        : { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 },
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      spellcheck: false
+      spellcheck: false,
+      // How the renderer learns the theme before its first paint: the preload reads this off
+      // process.argv synchronously (see preload.ts), where an IPC round trip would have left
+      // the first frame in the default colors.
+      additionalArguments: [`--tet-theme=${theme.id}`]
     }
   });
 

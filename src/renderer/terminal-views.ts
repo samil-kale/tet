@@ -213,6 +213,13 @@ function createView(projectId: string, tabId: string, agentId: AgentId): Termina
     }
   });
 
+  // The palette is the theme's, not a program's to repaint: OSC 4 *sets* are dropped, queries
+  // (`n;?`) still answered. What actually sends one is ConPTY, forwarding the OSC 4 Codex's
+  // win32 launcher writes to give the *console* the theme's colors (src/agents/codex/index.ts)
+  // — honoured here, that would recolor ANSI black and white into the terminal's own
+  // background and foreground. A handler returning true stops xterm's own from running.
+  term.parser.registerOscHandler(4, (data) => !data.split(";").includes("?"));
+
   const fit = new FitAddon();
   term.loadAddon(fit);
   // CLIs that support "select to copy" report the selection back via OSC 52, which xterm

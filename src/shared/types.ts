@@ -57,7 +57,26 @@ export interface AppSettings {
   /** The Files tab's keybinding preset picker; an id out of `KEYBINDING_PRESETS`,
    *  `DEFAULT_KEYBINDING_PRESET_ID` its default. */
   editorKeybindingPreset: string;
+  /** The Appearance tab's color theme; an id out of `THEMES` (src/shared/themes.ts) or
+   *  `SYSTEM_THEME_ID`, the default, for whichever the OS is in. Applies to windows opened
+   *  after it — see `currentTheme` in src/main/theme.ts. */
+  theme: string;
+  /** Whether each agent is told to draw in that theme, or left to its own — see
+   *  `AgentPaths.themeAgents`. Either way they are told which way the background is. */
+  themeAgents: ThemeAgentSettings;
 }
+
+/** The agents with a look of their own to switch tet's theme on or off for — not the shell. */
+export type ThemedAgentId = Exclude<AgentId, "shell">;
+
+export type ThemeAgentSettings = Record<ThemedAgentId, boolean>;
+
+/** The Appearance tab's rows, in the sidebar's own agent order. */
+export const THEMED_AGENTS: { id: ThemedAgentId; label: string }[] = [
+  { id: "claude", label: "Claude" },
+  { id: "opencode", label: "OpenCode" },
+  { id: "codex", label: "Codex" }
+];
 
 /** The Files tab's keybinding-preset fallback, shared so main and renderer can't drift apart —
  *  matches `KEYBINDING_PRESETS[0].id`. */
