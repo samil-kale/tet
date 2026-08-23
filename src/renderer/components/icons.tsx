@@ -601,17 +601,19 @@ export function RemoteIcon(props: IconProps) {
 }
 
 /** Lucide's `settings`, vendored on its own native 24-unit grid — the settings icon beside the
- *  layout picker. Measured via `getBBox`: 20 by 22, extent 20.91, centered at (12, 12). */
+ *  layout picker. Measured via `getBBox`: 20 by 22, extent 20.91, centered at (12, 12). Drawn
+ *  `LARGER`: a gear is mostly teeth and gaps, and at the shared extent it read small beside the
+ *  git mark next to it. */
 export function GearIcon(props: IconProps) {
   return (
     <svg
       className={props.className}
       width="13"
       height="13"
-      viewBox={fitIcon(20.91, 12, 12, 24)}
+      viewBox={fitIcon(20.91 / LARGER, 12, 12, 24)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={fitStroke(20.91, 24, 2)}
+      strokeWidth={fitStroke(20.91 / LARGER, 24, 2)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
