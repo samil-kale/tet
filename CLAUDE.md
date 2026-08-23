@@ -1123,6 +1123,15 @@ branch is what currently draws the line.
   turn for the branch icon, sync arrows, sparkle and Claude's mark. Verified at a mean of 11.9–12.0px
   wherever shape allows; a chevron and a row of dots are capped, not stretched. Neither number is
   optional: unequal extents in a shared box is what the app looked like for months.
+- **A new icon comes from Lucide first** (lucide.dev, ISC) — its monoline strokes, round caps and
+  joins already match this file's own hand-drawn ones, so reach for it before hand-drawing
+  anything. Vendor the exact path data on the icon's own native 24-unit grid rather than rescaling
+  it into this file's 16-unit one: `fitIcon`/`fitStroke` take the grid as a parameter for exactly
+  this (see `NewFileIcon`, `PlusIcon`, `SyncIcon`, and most other icons below — the file's own hand
+  drawings are what's left of the icons Lucide had no match for, e.g. the layout presets, the
+  session marks, `GearIcon`'s six-tooth cut for this size). A hollow shape can still read badly at
+  13px even from Lucide (`PlayIcon`'s triangle, `SparkleIcon`'s star before it became `wand`) — that
+  is a legibility call to make per icon, not a reason to redraw it by hand instead.
 - Adding or redrawing an icon means re-measuring, not estimating: render it, read `getBBox()` on
   each child grown by half its stroke, write down that extent and centre.
 - **State an icon's size in CSS; never rely on the `width`/`height` the shared `<Svg>` writes as
