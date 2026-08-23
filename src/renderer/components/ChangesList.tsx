@@ -3,6 +3,13 @@ import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryStat
 import { absolutePath, revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
 import { confirm, prompt } from "./Dialog";
+import {
+  MAX_PINNED,
+  deleteCommitMessage,
+  loadCommitHistory,
+  recordCommitMessage,
+  toggleCommitPin
+} from "../commit-history";
 
 /** Runs a file action against the repository; the owner shows it running on its own bar. */
 export type FileAct = (action: () => Promise<GitActionResult>) => void;
@@ -66,9 +73,17 @@ export async function askCommitAll(project: Project, state: RepositoryState, act
       ? state.upstream === undefined
         ? `Also push ${state.head} to ${remote} and track it`
         : `Also push to ${state.upstream}`
-      : undefined
+      : undefined,
+    history: {
+      ...loadCommitHistory(project.id),
+      maxPinned: MAX_PINNED,
+      onDelete: (text) => deleteCommitMessage(project.id, text),
+      onTogglePin: (text) => toggleCommitPin(project.id, text)
+    }
   });
   if (answer) {
+    // On submit, not on success: a message whose commit then fails is one worth having again.
+    recordCommitMessage(project.id, answer.value);
     // Two actions in a row, since both were asked for here: the push is only worth doing when
     // the commit went through.
     act(async () => {

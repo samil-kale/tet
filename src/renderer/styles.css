@@ -1597,6 +1597,69 @@ option {
   padding: 5px 6px;
 }
 
+/* The prompt's history dropdown, anchored to its field. Inside the dialog's DOM on purpose:
+   the overlay is a stacking context of its own (z-index 30), so anything rendered beside it —
+   a context menu, say — would paint behind. The dialog itself never clips, so the list may
+   run past its lower edge. */
+.dialog-history-anchor {
+  position: relative;
+  display: flex;
+}
+
+.dialog-history-anchor input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dialog-history {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 1;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px 0;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: 5px;
+  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
+}
+
+.dialog-history-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  cursor: pointer;
+}
+
+/* A row, so the list hover — its pin and x are `.icon-button`s and keep the toolbar one. */
+.dialog-history-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.dialog-history-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The context menu's hairline under its own name, between the pinned and the rest. */
+.dialog-history-separator {
+  height: 0;
+  margin: 4px 0;
+  border-bottom: 1px solid var(--vscode-menu-separatorBackground);
+}
+
+/* Filled means pinned; the class beats the svg's own fill="none" attribute. */
+.dialog-history-row .icon-button.pinned svg {
+  fill: currentColor;
+}
+
 .button:disabled {
   opacity: 0.4;
   cursor: default;
