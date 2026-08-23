@@ -218,26 +218,29 @@ export function BranchIcon(props: IconProps) {
 }
 
 /**
- * The official Git logomark (git-scm.com/downloads/logos, Git-Icon-Black.svg), vendored and
- * recoloured to `currentColor` rather than redrawn — the same treatment as Claude's mark in
- * agent-icons.tsx. Measured in the file's own 78-unit viewBox with its `transform` applied: the
- * rotated square's bbox is a square of side 82.02 centred at (39, 39). Drawn `LARGER`, like
- * Claude's mark: dividing the measured extent tightens the crop, so the glyph grows inside a box
- * that stays the shared one and nothing beside it moves.
+ * Git's mark as a hollow outline (`git-alt`): a rotated square with rounded corners, drawn as
+ * one filled path with the commits and the branch cut out of it, on a 32-unit grid. Measured:
+ * the square's rounded tips sit at 2 and 30, so the bbox is a square of side 28 centred at
+ * (16, 16). Drawn a step past `LARGER`, as the official logomark before it was drawn `LARGER`:
+ * a diamond inks only half of its own bbox, so at the shared extent it reads small beside the
+ * square icons around it. Dividing the measured extent tightens the crop; the box stays the
+ * shared one and nothing beside it moves. Three pixels over the shared size is the limit — the
+ * drawing then fills the box, and anything past that clips its tips.
  */
+const GIT_SCALE = 16 / 13;
+
 export function GitIcon(props: IconProps) {
   return (
     <svg
       className={props.className}
       width="13"
       height="13"
-      viewBox={fitIcon(82.02 / LARGER, 39, 39, 78)}
+      viewBox={fitIcon(28 / GIT_SCALE, 16, 16, 32)}
       aria-hidden="true"
     >
       <path
         fill="currentColor"
-        transform="translate(10 10) rotate(-45 29 29)"
-        d="M5,58c-2.76142,0 -5,-2.23858 -5,-5v-48c0,-2.76142 2.23858,-5 5,-5h33v12.54404c-2.06553,0.94801 -3.5,3.03446 -3.5,5.45596c0,0.73514 0.13221,1.43941 0.37415,2.09031l-15.28384,15.28384c-0.6509,-0.24194 -1.35517,-0.37415 -2.09031,-0.37415c-3.31371,0 -6,2.68629 -6,6c0,3.31371 2.68629,6 6,6c3.31371,0 6,-2.68629 6,-6c0,-0.73514 -0.13221,-1.43941 -0.37415,-2.09031l14.87415,-14.87415l0,11.50851c-2.06553,0.94801 -3.5,3.03446 -3.5,5.45596c0,3.31371 2.68629,6 6,6c3.31371,0 6,-2.68629 6,-6c0,-2.42149 -1.43447,-4.50795 -3.5,-5.45596l0,-12.08808c2.06553,-0.94801 3.5,-3.03446 3.5,-5.45596c0,-2.42149 -1.43447,-4.50795 -3.5,-5.45596l0,-12.54404h10c2.76142,0 5,2.23858 5,5v48c0,2.76142 -2.23858,5 -5,5z"
+        d="M16 2c-.504 0-.996.184-1.375.563l-2.813 2.843c-.152.082-.28.2-.374.344l-8.876 8.875a1.947 1.947 0 0 0 0 2.75l12.063 12.063a1.955 1.955 0 0 0 2.75 0l12.063-12.063a1.947 1.947 0 0 0 0-2.75L17.374 2.562A1.92 1.92 0 0 0 16 2m0 2.031L27.969 16L16 27.969L4.031 16l8.282-8.281l1.75 1.75A2 2 0 0 0 14 10c0 .738.402 1.371 1 1.719v8.562c-.598.348-1 .98-1 1.719a1.999 1.999 0 1 0 4 0c0-.738-.402-1.371-1-1.719v-7.843l3.063 3.062A2 2 0 0 0 22 18a2 2 0 0 0 1.999-2a2 2 0 0 0-2.5-1.938L17.937 10.5A2 2 0 0 0 16 8a2 2 0 0 0-.53.063l-1.75-1.75z"
       />
     </svg>
   );
