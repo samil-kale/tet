@@ -414,7 +414,9 @@ anything, a pipe, redirection, `&&`, `$(...)` and `$VAR` don't work, on either p
 group one argument and are dropped; a backslash is literal, since a Windows path is full of them.
 Where the line goes on Windows is `resolveCommand`'s call (`src/main/pty.ts`): a native `.exe`
 starts as itself, a `.cmd` shim (`mvn`, `npm`) goes through `cmd.exe`, and a spaced argument survives
-both (measured, not assumed).
+both (measured, not assumed). A spaced *path* to a shim is the one thing `cmd.exe /s /c` gets wrong
+— it strips the quotes node-pty put around it — so such a path gets `call` in front (measured
+against Codex's launcher under a userData with a space in it; see the comment there).
 
 An operator surviving the split as its own word (`&&`, `|`, `>`, ...) is refused with a notice
 naming it, rather than passed to the program — `rm x && y` would ask `rm` to delete two files called

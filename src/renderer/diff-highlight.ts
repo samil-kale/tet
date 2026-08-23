@@ -174,8 +174,8 @@ let core: Promise<HighlighterCore> | undefined;
 /** One load per grammar, kept as the promise so two files of a kind don't race it. */
 const grammars = new Map<string, Promise<void>>();
 
-/** The one shiki instance, shared by the diff view and the editor (see editor.ts) — one dark-plus
- *  theme, grammars loaded lazily and kept once loaded either way. */
+/** The one shiki instance, shared by the diff view and the editor (see editor.ts) — one theme,
+ *  `THEME`, grammars loaded lazily and kept once loaded either way. */
 export function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
     themes: [loadTheme()],

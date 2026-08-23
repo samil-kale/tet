@@ -56,7 +56,15 @@ export function resolveCommand(executable: string, args: string[]): { command: s
     // Shim (.cmd/.bat/.ps1) or unresolved: route through cmd.exe to resolve and launch
     // it reliably. This avoids relying on `shell: true`, which concatenates args into
     // an unescaped command string.
-    return { command: "cmd.exe", args: ["/d", "/s", "/c", executable, ...args] };
+    //
+    // A path with a space in it (Codex's launcher under a `C:\Users\John Doe\...` userData)
+    // gets `call` in front: node-pty quotes it, and `/s` has cmd strip the first and last
+    // quote of everything after `/c` when it *starts* with one — leaving `C:\Users\John` as
+    // the command (measured). `call` makes the first character a `c`, so nothing is stripped
+    // and the quoted path is resolved as such. Only then, so the npm-shim path measured for
+    // the hooks' quoting stays exactly as it was.
+    const invoke = /\s/.test(executable) ? ["call", executable] : [executable];
+    return { command: "cmd.exe", args: ["/d", "/s", "/c", ...invoke, ...args] };
   }
   return { command: executable, args };
 }

@@ -2,10 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
- * opencode ships a palette of its own and draws its TUI in it, so its terminal looks nothing
- * like the window around it. Claude Code needs no equivalent: it paints with the ANSI colours
- * the terminal hands it, which are the `--vscode-*` ones (`src/renderer/theme.ts`).
- * `"theme": "system"` is opencode's own way of saying the same.
+ * opencode ships a palette of its own and draws its TUI in it, background included, so its
+ * terminal looks nothing like the window around it. `"theme": "system"` is its way of taking
+ * the terminal's colours instead — the `--vscode-*` ones xterm was handed
+ * (`src/renderer/theme.ts`) — and the only one: every other theme paints its own background.
+ * Claude Code and Codex are told their theme differently (see their own agent folders).
  *
  * It goes in a file of tet's own that `OPENCODE_TUI_CONFIG` points at, layered on top of
  * whatever opencode already loaded; the user's `tui.json` is never read, written or replaced.
