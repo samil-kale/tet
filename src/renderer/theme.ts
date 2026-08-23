@@ -66,7 +66,8 @@ export function buildXtermTheme(agentId: AgentId): ITheme {
   // opencode's TUI assigns blue and magenta the other way round from VS Code's terminal
   // palette, so what it draws comes out in the colour the user did not theme — swapping the
   // two in the palette it is handed puts them back. Ported from sbc-vsc-agents, where it was
-  // observed; it goes with the `"theme": "system"` in tui-config.ts, which is what makes
+  // observed, not derived — if opencode's colours ever look wrong the other way, take this back
+  // out. It goes with the `"theme": "system"` in tui-config.ts, which is what makes
   // opencode take this palette at all rather than painting in its own. Nothing else needs it,
   // so it is a conditional here rather than a callback on AgentDefinition: that interface is
   // the main process's, and the renderer is where a colour is resolved.

@@ -90,7 +90,9 @@ type Pending =
  * the app instead of like the OS.
  *
  * `confirm` is for something that cannot be undone — a question answered the same way every
- * time is not worth asking. `prompt` is for a name, and is where every rename happens.
+ * time is not worth asking. `prompt` is for a name, and is where every rename happens: naming
+ * something inline was tried and reverted, since a tab is too narrow for a name and a field
+ * committing on blur loses what was typed to a stray click.
  */
 let pending: Pending | null = null;
 const listeners = new Set<() => void>();

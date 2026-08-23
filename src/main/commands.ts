@@ -81,7 +81,8 @@ function file(root: string): string {
  * telling apart, since that is when the caller offers to fill the list itself. One that is
  * there but unreadable or shaped differently is no commands rather than none: it is a file in
  * the user's repository, and half of it being someone else's is reason neither to throw nor to
- * write over it.
+ * write over it. The key was `actions` before a rename; nothing reads that spelling, so such a
+ * file looks unconfigured and the wand fills it again.
  */
 async function read(root: string): Promise<ProjectFile | null> {
   let content: string;
@@ -323,7 +324,10 @@ export async function setSortOrder(root: string, value: ExplorerSortOrder): Prom
 /**
  * What an agent is asked when the wand is pressed. Deliberately concrete about where commands
  * hide — a model told only "find the commands" answers with what it would type in a generic
- * project of that kind rather than with what this one declares.
+ * project of that kind rather than with what this one declares. It also has to stay
+ * unambiguous about *judgement*: "prefer what's run by hand" and "list all of them" at once let
+ * a model pick either. `"shell": true` is deliberately not mentioned — such an entry only works
+ * where it was written, and what an agent writes into a repository should run everywhere.
  */
 const SUGGEST_PROMPT = [
   "List the commands this project can actually run.",
