@@ -283,13 +283,13 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
   // Not yet the user's focus: the mount effect below focuses the field itself, and the
-  // dropdown must wait for a click rather than open over the dialog unasked.
+  // dropdown must wait for their own click rather than open over the dialog unasked.
   const interactive = useRef(false);
 
   // The focus has to land in the first field, not on a button: a rename is opened to type in.
   // Once, on the way in — selecting on every render would swallow each keystroke after it.
-  // The flag comes after: `focus()` delivers its event synchronously, so the handler has
-  // already seen it unset.
+  // The flag comes after: `focus()` delivers its event synchronously, so the focus handler
+  // has already seen it unset.
   useEffect(() => {
     field.current?.focus();
     field.current?.select();
@@ -336,12 +336,19 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       type="text"
       value={value}
       maxLength={dialog.maxLength}
-      onChange={(event) => setValue(event.target.value)}
+      // The dropdown follows the field's emptiness: typing the first character closes it —
+      // the user has decided against picking, and the list would otherwise sit over the
+      // checkbox while they write — and emptying the field brings it back. A no-op for the
+      // prompts without one.
+      onChange={(event) => {
+        setValue(event.target.value);
+        setOpen(event.target.value.length === 0 && hasEntries);
+      }}
       // Mousedown rather than click, twice over: it re-opens after an Escape left the field
       // focused, and the label around this input forwards clicks on the rows below as
       // synthetic *clicks* — which must not reopen what a pick just closed.
-      onMouseDown={dialog.history && (() => hasEntries && setOpen(true))}
-      onFocus={dialog.history && (() => interactive.current && hasEntries && setOpen(true))}
+      onMouseDown={dialog.history && (() => value.length === 0 && hasEntries && setOpen(true))}
+      onFocus={dialog.history && (() => interactive.current && value.length === 0 && hasEntries && setOpen(true))}
       onBlur={dialog.history && (() => setOpen(false))}
       ref={field}
     />
