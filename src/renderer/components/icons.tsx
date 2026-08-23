@@ -511,26 +511,26 @@ export function NewFolderIcon(props: IconProps) {
   );
 }
 
-/** "Collapse Folders in Explorer": Lucide's `chevrons-up` — two stacked upward chevrons, the
- *  usual "collapse a tree" glyph (mirrors `chevrons-down` for "expand all"), replacing a
- *  hand-traced two-panes-and-a-minus that read muddier at this size than a plain chevron pair.
- *  Measured via `getBBox`: 12 by 14, extent 12.96, centered at (12, 12). */
+/** "Collapse Folders in Explorer": Lucide's `copy-minus` — a shrinking stack, read here as
+ *  "collapse everything down". Measured via `getBBox`: 22 by 22, square enough that the
+ *  geometric mean needs no cap: extent 22, centered at (12, 12). */
 export function CollapseAllIcon(props: IconProps) {
   return (
     <svg
       className={props.className}
       width="13"
       height="13"
-      viewBox={fitIcon(12.96, 12, 12, 24)}
+      viewBox={fitIcon(22, 12, 12, 24)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={fitStroke(12.96, 24, 2)}
+      strokeWidth={fitStroke(22, 24, 2)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="m17 11-5-5-5 5" />
-      <path d="m17 18-5-5-5 5" />
+      <line x1="12" x2="18" y1="15" y2="15" />
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
     </svg>
   );
 }
