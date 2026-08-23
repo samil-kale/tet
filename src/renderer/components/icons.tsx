@@ -640,9 +640,9 @@ export function LayoutGrid2x2Icon(props: IconProps) {
   );
 }
 
-/** Lucide's `files`, vendored on its own native 24-unit grid — browsing the repository's files,
- *  two overlapping pages, the front one folded at the corner. Measured via `getBBox`: 20 by 22,
- *  geometric mean would clip the bottom, so extent is the long-axis cap: 20.98, centered at
+/** Lucide's `file-braces` (lucide.dev, ISC), vendored on its own native 24-unit grid — browsing
+ *  the repository's files. Measured via `getBBox`: 18 by 22, geometric mean would clip the
+ *  bottom, so extent is the long-axis cap, same 0.87 formula as `CommitIcon`: 20.23, centered at
  *  (12, 12). */
 export function FilesIcon(props: IconProps) {
   return (
@@ -650,17 +650,18 @@ export function FilesIcon(props: IconProps) {
       className={props.className}
       width="13"
       height="13"
-      viewBox={fitIcon(20.98, 12, 12, 24)}
+      viewBox={fitIcon(20.23, 12, 12, 24)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={fitStroke(20.98, 24, 2)}
+      strokeWidth={fitStroke(20.23, 24, 2)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" />
-      <path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z" />
-      <path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" />
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1" />
+      <path d="M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1" />
     </svg>
   );
 }
