@@ -17,9 +17,10 @@ The same goes for anything that tears down a project's terminals.
 
 ## Where it came from
 
-**`sbc-vsc-agents`** (sibling directory, private) is the direct ancestor: two VS Code extensions
-docking `claude` and `opencode` into the sidebar as real terminals. Most of the terminal half of
-TET ports its `shared/`; its `CLAUDE.md` records *why* — read it before changing any of them:
+**`sbc-vsc-agents`** (private, no longer checked out here) is the direct ancestor: two VS Code
+extensions docking `claude` and `opencode` into the sidebar as real terminals. Most of TET's
+terminal half ports its `shared/`; the rationale now lives only in the code comments at these
+sites, so treat them as measured, not obvious:
 
 - session listing, resume, rename, delete, and the reconcile loop adopting a session id a CLI has
   only just persisted (`src/agents/*/sessions.ts`, `src/main/session-manager.ts`)
@@ -55,21 +56,18 @@ render. Not adopted yet: **Octokit**/**GitBeaker** for the providers.
 - one git pane for all projects; unlike terminals, it holds nothing a project loses by switching
   away
 - the diff is a **dialog** over the whole window, opened by double-clicking a changed file,
-  ctrl-clicking a path in a terminal, or the "Browse files" button, which reopens whichever file
-  the dialog last showed for that project (`localStorage`, keyed by project id under the same
-  `tet.layout.` namespace the split layout uses — see "Split view" — since which file it reopens
-  is a window fact, not a repository one). It carries the changed files down its left side — the same
-  `ChangesList` the git pane's LOCAL CHANGES is (filter, selection, context menu), with a plain
-  click and ↑/↓ switching the file, so the next diff doesn't mean closing and double-clicking
-  again. Its own LOCAL CHANGES header carries only "Discard all" (`confirmDiscard`, shared out of
-  `ChangesList.tsx` rather than duplicated) — not commit-all or stash-all, the git pane's other
-  two: both name what they do to the *repository*, which reads oddly next to a dialog otherwise
-  about one file. Gated on its own `acting` alone: unlike the git pane there is no BRANCHES section
-  beside it a fetch/pull/push could be running from while the dialog is up, since it covers the
-  whole window. The dialog takes keyboard focus while up and hands it back on close: xterm swallows
-  every key it is given, so the arrows would otherwise go to the terminal a path was
-  ctrl-clicked in. `DiffDialog` and `SettingsDialog` are deliberately not part
-  of `Dialog.tsx`: that file is for questions, built around a form with two buttons
+  ctrl-clicking a path in a terminal, or "Browse files", which reopens the file the dialog last
+  showed for that project (`localStorage` under the same `tet.layout.` namespace the split layout
+  uses — a window fact, not a repository one). Down its left side sit the changed files — the same
+  `ChangesList` as the git pane's LOCAL CHANGES (filter, selection, context menu), a plain click or
+  ↑/↓ switching the file. Its LOCAL CHANGES header carries only "Discard all" (`confirmDiscard`,
+  shared out of `ChangesList.tsx`) — not commit-all or stash-all, which name what they do to the
+  *repository* and read oddly next to a dialog about one file. Gated on its own `acting` alone:
+  covering the whole window, there is no BRANCHES section beside it an action could be running
+  from. The dialog takes keyboard focus while up and hands it back on close — xterm swallows every
+  key, so the arrows would otherwise go to the terminal the path was ctrl-clicked in. `DiffDialog`
+  and `SettingsDialog` are deliberately not part of `Dialog.tsx`: that file is for questions,
+  built around a form with two buttons
 - git commands go in an ordinary terminal tab, not a console of the pane's own
 - panes between all of that are draggable (`src/renderer/components/Sash.tsx`)
 
@@ -84,9 +82,9 @@ did you mean" for every action. `src/renderer/pane-layout.ts` holds the model an
 it; `TerminalsPane` lays the panes out; `Pane` is one of them, the strip-and-stack that
 `TerminalsPane` used to be by itself. The first pane (always top-left) carries one row of plain
 icon buttons — git toggle, browse-files, layout picker, settings, in that order — all on pane "a"
-regardless of preset, so a split layout's right edge carries none of them. The progress bar is a
-bundle of its own again, on neither: it
-follows whichever pane the slow thing is actually in — see "One progress indicator per pane".
+regardless of preset, so a split layout's right edge carries none of them. The progress bar
+belongs to neither: it follows whichever pane the slow thing is actually in — see "One progress
+indicator per pane".
 
 - **The layout lives in `App`, not in `TerminalsPane`** (`layouts: Record<projectId,
   ProjectLayout>`): preset, focused pane, which pane each tab is in, each pane's active tab. Not
@@ -150,8 +148,6 @@ follows whichever pane the slow thing is actually in — see "One progress indic
   the refit, since a focus change alone must not resize the pty. Clicking anywhere in a pane
   focuses it, in the capture phase — xterm stops mousedown from bubbling once a TUI turns on mouse
   tracking.
-- The layout preset icons in `icons.tsx` were drawn without the `getBBox` audit the file calls
-  for; re-measure them before trusting their extent.
 
 ## Nothing starts without git and an agent
 
@@ -438,8 +434,8 @@ out of whatever they moved to.
 
 Because a saved command's process ends every run, `TerminalSession` tells the two apart by exit
 code: `stopped` for a clean one (or anything TET killed), `error` only for a process that failed
-on its own. **Nothing draws the difference yet** — the tab strip marks both `.tab.inactive`.
-Worth doing, deliberately still open — don't invent the look.
+on its own. An `error` tab (like a `missing`-agent one) draws `ExclamationIcon` in the mark slot,
+in `--vscode-errorForeground`; a clean stop stays plain `.tab.inactive`.
 
 Reading a `tet.json` that's missing, unparseable or oddly shaped is simply no commands — it's
 the user's file, and half of it being someone else's isn't a reason to throw. A project with no
@@ -456,14 +452,12 @@ decides where something *new* lands.
 
 The wand beside `+` asks an agent to fill the list — the first installed one with `askArgs`, in
 `AGENTS`' own order (claude, opencode, codex), given `SUGGEST_PROMPT`. That prompt is deliberately
-concrete about where commands hide, since a model told only "find the commands" answers with what
-it'd type in a generic project of that kind. It also asks for the *start* command, the one nobody
-writes down. The reply is expected as a JSON array, read as the first bracketed run in it, since
-"answer with nothing but" still tends to arrive fenced. No cap on how many come back, but the
-prompt asks for judgement — the commands a developer types, not the lifecycle hooks and CI scripts
-a `package.json` is half full of — and that has to stay unambiguous: saying "prefer what's run by
-hand" and "list all of them" at once let a model pick either. What comes back is added without
-review — a wrong entry is one
+concrete about where commands hide (a model told only "find the commands" answers generically) and
+asks for the *start* command, the one nobody writes down. The reply is read as the first bracketed
+run in the answer — "answer with nothing but" still tends to arrive fenced. No cap, but the prompt
+asks for judgement — the commands a developer types, not the lifecycle hooks a `package.json` is
+half full of — and must stay unambiguous: "prefer what's run by hand" and "list all of them" at
+once let a model pick either. What comes back is added without review — a wrong entry is one
 right-click from deletion.
 
 One `CommandList` serves every project, so anything it starts must name the project it asked about
@@ -514,15 +508,14 @@ Explorer offers none of them either. The watcher already reports every write of 
 ## Settings
 
 One dialog for everything TET keeps about *itself* rather than a repository — the one button in
-the window belonging to neither a project nor a pane. It sits right of the layout picker, in the
-`.tab-strip-actions` of pane "a" (see "Split view"), handed down the same way as `onPresetChange` —
-beside the git toggle regardless of preset. An ordinary `.icon-button`, the same as the git toggle
-and layout picker beside it. It lived at the title bar's end once, drawn as a platform window
-control; the title bar is now the app's name and the drag region alone.
+the window belonging to neither a project nor a pane. An ordinary `.icon-button` right of the
+layout picker in pane "a"'s `.tab-strip-actions` (see "Split view"), handed down like
+`onPresetChange` — there regardless of preset. It lived at the title bar's end once, drawn as a
+platform window control; the title bar is now the app's name and the drag region alone.
 
 It asks nothing — a switch applies the moment it's flipped, like VS Code's own settings — so one
-button closes it. Tabbed (Notifications, Shortcuts, Files, Info) with the add-repository dialog's
-own strip (`.dialog-tabs`), which is why neither dialog has a `.dialog-title`: the selected tab
+button closes it. Tabbed (Appearance, Notifications, Shortcuts, Files, Info) with the
+add-repository dialog's own strip (`.dialog-tabs`), which is why neither dialog has a `.dialog-title`: the selected tab
 names what's under it. Height is fixed to the fullest tab so switching doesn't resize under the
 pointer. Shortcuts just lists `shortcuts.ts`'s own table (see "The keyboard belongs to the
 terminal") — nothing there to flip. Files carries the diff dialog's Explorer settings (the three
@@ -544,14 +537,14 @@ can't be reached afterwards. A change applies to projects opened after it — a 
 runtime is prepared once per project, and re-preparing it under running tabs would leave a gap in
 which no marker watcher stands — and the dialog says so.
 
-The color theme travels the same way (`AgentPaths.theme`), with one switch per agent beside it
+The color theme travels the same way (`AgentPaths.theme`), with one switch per agent
 (`themeAgents`, the Appearance tab's checkboxes, all on by default; `pathsFor` picks the agent's
 own): whether that agent is told to draw in tet's theme — Claude Code's `theme`, Codex's
 `tui.theme=ansi`, opencode's `"theme": "system"` — or left to the look it is configured with, the
 user's own business. opencode's is a switch like the others even though off means it paints its
-own full background: a half-way "except where it looks odd" would have been tet deciding about
-looks after all. What stays either way is which way the
-background is — Codex's console colors — since that is a fact about the window, not a taste.
+own full background — a half-way "except where it looks odd" would be tet deciding about looks
+after all. What stays either way is which way the background is (Codex's console colors): a fact
+about the window, not a taste.
 
 Deliberately not in there: marks on a tab that finished out of sight or is waiting on an answer.
 Neither is a notification to turn off, but how such a session is found again (see that section).
@@ -577,9 +570,11 @@ Nor a *question*. `src/renderer/components/Dialog.tsx` puts both kinds, built li
 function anything can call, with one `Dialogs` next to `Notices` drawing whatever's pending.
 `confirm` resolves to whether the user went through, and whether the one optional checkbox was
 ticked. `prompt` resolves to a name or null — renaming a session goes through it, focus landing
-selected in its field. One question at a time; the overlay blocks a second. Naming something inline
-was tried and reverted: a tab's too narrow for a name, and a field committing on blur loses what was
-typed to a stray click.
+selected in its field. A prompt can carry a history dropdown (`dialog.history`) — the commit
+message's, fed by `src/renderer/commit-history.ts`: the last ten submitted plus up to five pinned,
+per project in `localStorage` under `tet.dialog.`. One question at a time; the overlay blocks a
+second. Naming something inline was tried and reverted: a tab's too narrow for a name, and a field
+committing on blur loses what was typed to a stray click.
 
 The main process asks nothing — `repo:delete-branch` and `repo:discard` just do it; the question
 lives in the view offering the action, which knows the remote or the file count. Electron's native
@@ -591,19 +586,16 @@ Only ask before something irreversible. A question always answered the same way 
 ## One progress indicator per pane
 
 Not one per project, and not one shared bar for the whole window: every pane that can be slow
-carries its own `.progress-bar`, showing only what is happening in *it*, never a reason that
-belongs to another — a terminal pane's own agent starting, the git pane's own branch command or
-file action, the diff dialog's own read. What is slow is drawn where it is happening, not
-centralised out of habit; a single spot for the whole app was tried first and read as "something,
-somewhere" instead of pointing at the one thing actually running. One component serves all of them:
-`ProgressBar` (`src/renderer/components/ProgressBar.tsx`), dropped into whichever header or bar
-around it declares `position: relative` (a pane's own tab strip, a `.section-header`,
-`.diff-dialog-bar`), so every pane's bar looks identical without a rule of its own. Its bit is a
-fixed number of pixels moving at a fixed number of pixels per second — measured width, derived
-duration — not VS Code's 2%-of-the-width recipe, which made a narrow section's worm a third the
-length of a wide pane's and a third as fast once several stood side by side. Never add a second
-inside one pane — a new slow reason there is a new condition feeding the one it already has, not a
-bar beside it.
+carries its own `.progress-bar`, showing only what is happening in *it* — a single spot for the
+whole app was tried first and read as "something, somewhere" instead of pointing at the one thing
+running. One component serves all of them: `ProgressBar`
+(`src/renderer/components/ProgressBar.tsx`), dropped into whichever header or bar around it
+declares `position: relative` (a pane's tab strip, a `.section-header`, `.diff-dialog-bar`), so
+every bar looks identical without a rule of its own. Its bit is a fixed number of pixels moving at
+a fixed number of pixels per second — measured width, derived duration — not VS Code's
+2%-of-the-width recipe, which made a narrow section's worm a third the length and speed of a wide
+pane's. Never add a second bar inside one pane — a new slow reason there is a new condition
+feeding the one it already has.
 
 - **Terminal panes**: `Pane`'s `showProgress` prop — a new agent starting in it, a runtime being
   prepared, a CLI not yet past its first frame (`TerminalDescriptor.starting`, read off
@@ -645,14 +637,11 @@ project off-screen still shows what its sessions are doing:
 
 - **working**: a spinner, for as long as the turn runs.
 - **waiting on you**: a question mark. The turn's open but nothing's moving — a permission prompt,
-  an elicitation, or an `AskUserQuestion`. Unlike the bubble this is not a one-off notice: it states
-  a fact that stays true for as long as the turn stands open, so it is only hidden — not cleared —
-  while the tab is in front of the user, and comes back the moment it no longer is, still unanswered.
-  `hasBusyTab` (`App.tsx`) excludes a tab that is also waiting, and the tab's own spinner
-  (`Pane`) checks the same, so a stopped session never spins anywhere — not in the project row
-  beside its question mark, and not on the tab in front of the user, where the question mark is
-  hidden and the spinner would otherwise step in for it. A stopped session is precisely *not*
-  working, the more useful of the two truths.
+  an elicitation, or an `AskUserQuestion`. Not a one-off notice like the bubble: the fact stays
+  true while the turn stands open, so it is only hidden — not cleared — while the tab is in front
+  of the user, and comes back the moment it no longer is. `hasBusyTab` (`App.tsx`) and the tab's
+  own spinner (`Pane`) both exclude a waiting tab, so a stopped session never spins anywhere — it
+  is precisely *not* working, the more useful of the two truths.
 - **finished out of sight**: a speech bubble. One shape for one thing — a sidebar bell was tried and
   reverted, since two glyphs for the same condition read as two conditions. Goes away when the tab's
   in front of the user; a one-off notice of a turn that already ended, unlike the still-standing fact
@@ -666,11 +655,14 @@ way while its session stays in view, but is not itself the source of truth — i
 own once the tab is no longer on screen and the turn still hasn't moved.
 
 **On a tab all three take the agent icon's place** rather than a slot of their own — the tab is only
-as wide as its label. One slot means a ranking: **waiting > working > finished** — a session stopped
-on a question is precisely *not* working, the more useful of the two truths, and working outranks
+as wide as its label. One slot means a ranking: **error/missing > waiting > working > finished** — a
+tab whose agent cannot start, or whose process died on its own, outranks everything (none of the
+other three can be true for it); waiting beats working for the reason above; working outranks
 finished because a newer turn's mark still shows once it stops. In the sidebar, with no icon to
-replace, all three sit next to each other left of the close button. All are `--vscode-focusBorder`
-under one `.session-mark` rule — three states of one thing must not read as three kinds of thing.
+replace, the three turn marks sit next to each other left of the close button, all
+`--vscode-focusBorder` under one `.session-mark` rule — three states of one thing must not read as
+three kinds of thing. The error mark alone is `--vscode-errorForeground`: not a fourth turn state,
+and red is the colour Dark Modern already names for that meaning.
 
 **Whether a question is *shown* is decided in `App`**, beside the bubble's rule (`waitingTabs` next
 to `markedTabs`) and for the same reason — the main process holds the state but not which tab is on
@@ -728,23 +720,17 @@ arrival order it left the spinner running until the next turn ended.
 
 **Claude Code runs no Stop hook for a turn the user cut short**, so that end never reaches
 `finished/` — an escaped prompt or rejected tool call left the spinner running until the next turn
-ended. The net is the transcript itself, which records a `system`/`turn_duration` entry at *every*
-turn end, hook or no hook — the session listing reports it as `AgentSessionInfo.turnEndedAt`, from
-the same tail scan `custom-title` already needs, and `reconcile` is the one place it's read.
-
-That entry alone does not say *why* `finished/` stayed empty, though, and there are two reasons: an
-interrupted turn (no hook ran at all), or one whose Stop hooks ran and legitimately chose not to
-write the marker (`stop-guard.ps1`'s own `background_tasks` guard, above). Comparing `turnEndedAt`
-against `busySince` cannot tell those apart — both leave a `turn_duration` entry newer than the busy
-that started the turn — and conflating them once cleared the spinner on a session a background job
-was still visibly running in, a monitor watching a long job's own log output and turning matches
-into fresh turns. The tail scan resolves it instead: a completed turn's
-`turn_duration` has a `stop_hook_summary` as its `parentUuid` (confirmed in the transcript — an
-interrupted one has no such parent, no hook event covering an interrupt), so `turnEndedAt` is only
-even set when that parent is missing. A turn hooks ran for is left out of the listing entirely,
-whatever `stop-guard.ps1` decided — the marker mechanism is authoritative for it either way, and
-this net exists only for the turn hooks never got a chance to run for at all. It leaves no mark:
-reaching us this way means the user cut it short in that tab.
+ended. The net is the transcript itself: a `system`/`turn_duration` entry lands at *every* turn
+end, hook or no hook, reported as `AgentSessionInfo.turnEndedAt` from the same tail scan
+`custom-title` already needs; `reconcile` is the one place it's read. `finished/` can stay empty
+for two reasons — an interrupted turn (no hook ran), or Stop hooks that ran and legitimately
+withheld the marker (`stop-guard.ps1`'s `background_tasks` guard) — and comparing `turnEndedAt`
+against `busySince` cannot tell them apart; conflating them once cleared the spinner on a session
+whose background job was still visibly running. The tail scan resolves it: a completed turn's
+`turn_duration` carries a `stop_hook_summary` as its `parentUuid`, an interrupted one does not (no
+hook event covers an interrupt), so `turnEndedAt` is only set when that parent is missing. A turn
+hooks ran for is left out of the listing entirely — the marker mechanism is authoritative there —
+and this net leaves no mark: reaching us this way means the user cut the turn short in that tab.
 
 Codex has the identical gap for the identical reason — no hook fires on an interrupt either — and
 closes it the identical way: its own rollout records `task_complete`/`turn_aborted` at every turn
@@ -1036,21 +1022,19 @@ branch is what currently draws the line.
   gutter is terminal background, living on `.terminal-host` with `.xterm-viewport` forced
   transparent over it: xterm.css hardcodes that viewport to black, which showed through as a black
   gutter and a black strip under the last row while a pane was dragged taller.
-- A file dragged over a terminal frames the **pane** (`.terminal-host.drag-over`), so it's clear
-  which mounted terminal would take the drop. A `::after` overlay, not a border — a border would
-  shrink the box xterm measures, so every drag would refit and resize the pty. Only a drag carrying
-  files raises it, the only kind the drop handler acts on. A file dropped anywhere *else* is
-  swallowed in `main.tsx`: unhandled, Electron navigates the window to it and the app is gone. Files
-  only — text dragged into a field still needs to reach that field. A dropped or pasted file types
-  its path the way a hand-typed reference would arrive, through `term.paste` rather than individual
-  keystrokes so a CLI's own input mode (vim-mode commands, say) cannot misread it. One dragged in
-  from the filesystem has a real path; one dragged out of a browser, or a screenshot pasted with
-  Ctrl+V, has only content, so it is written to a temp file first (`files:write-temp`,
-  `clipboard:image-file` in `ipc.ts`) for a path to name — asynchronously, since a pasted
-  screenshot is megabytes and a synchronous write would hold up every pty's output and keystrokes
-  on the way to it. Nothing marks such a file as "already read", so `sweepTempFiles` deletes
-  anything a day old at startup rather than after each paste — the file may still be read a moment
-  later, and a session cut short must not take it with it.
+- A file dragged over a terminal frames the **pane** (`.terminal-host.drag-over`) — a `::after`
+  overlay, not a border, which would shrink the box xterm measures and refit the pty on every
+  drag. Only a drag carrying files raises it, the only kind the drop handler acts on; a file
+  dropped anywhere *else* is swallowed in `main.tsx`, since unhandled, Electron navigates the
+  window to it and the app is gone. Files only — text dragged into a field still needs to reach
+  that field. A dropped or pasted file types its path through `term.paste`, not keystrokes, so a
+  CLI's own input mode (vim-mode commands, say) cannot misread it. One from the filesystem has a
+  real path; one dragged out of a browser, or a screenshot pasted with Ctrl+V, has only content,
+  so it is written to a temp file first (`files:write-temp`, `clipboard:image-file` in `ipc.ts`) —
+  asynchronously, since a pasted screenshot is megabytes and a synchronous write would hold up
+  every pty. Nothing marks such a file as "already read", so `sweepTempFiles` deletes anything a
+  day old at startup rather than after each paste — the file may still be read a moment later, and
+  a session cut short must not take it with it.
 - **Nothing in the lane at the terminal's right edge may be left to an xterm default, and CSS isn't
   what settles it** — both elements there are xterm's own and redrawn as the buffer grows, so the
   **color given in `theme.ts`** decides — `#00000000` for each, as hex so it passes xterm's color
@@ -1154,10 +1138,10 @@ branch is what currently draws the line.
   one copies an existing rule rather than picking its own width and color — two that differ read as
   two meanings. Same for a mark that's a *shape*: every session mark sits under one `.session-mark`
   rule, drawn to the square its neighbours occupy rather than the full 2–14 box.
-- **Icons and marks are monochrome**; the only colour any takes is that blue. The changes list's
-  status letters are the one exception, colored by `gitDecoration-*`, the theme's own answer for that
-  list — the test for the next one: a colour is allowed where Dark Modern already names one for that
-  meaning, nowhere else.
+- **Icons and marks are monochrome**; the only colour any takes is that blue. Two sanctioned
+  exceptions — the changes list's status letters (`gitDecoration-*`) and the error mark
+  (`--vscode-errorForeground`) — both passing the one test: a colour is allowed where Dark Modern
+  already names one for that meaning, nowhere else.
 - Colors come from `--vscode-*` variables only (`src/renderer/vscode-theme.css`). Add a new variable
   rather than hardcoding, using VS Code's own name. Exception: the diff's syntax colors — Shiki
   assigns those per grammar scope, hundreds per theme, handed back per token, so
