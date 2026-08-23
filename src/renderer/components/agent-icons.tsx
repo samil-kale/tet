@@ -68,7 +68,7 @@ function OpencodeIcon({ className }: { className?: string }) {
  * repo and the VS Code extension carry only the plain OpenAI logo or no graphic at all — so this
  * redraws that listing's glyph in the same stroke style as `ShellIcon` rather than embedding a
  * rasterised copy. Measured, not estimated: a circle of r=6 centered at (8, 8) is the bbox this
- * is built from, so extent 13.4 (diameter plus the 1.4 stroke) and center (8, 8) both fall out of
+ * is built from, so extent 13.6 (diameter plus the 1.6 stroke) and center (8, 8) both fall out of
  * that directly — the chevron and underscore sit well inside the circle and add nothing to it.
  * Drawn `LARGER`, like Claude's mark: a plain outline circle reads smaller than the filled marks
  * beside it at the same measured extent.
@@ -79,10 +79,10 @@ function CodexIcon({ className }: { className?: string }) {
       className={className}
       width="13"
       height="13"
-      viewBox={fitIcon(13.4 / LARGER, 8, 8, 16)}
+      viewBox={fitIcon(13.6 / LARGER, 8, 8, 16)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={fitStroke(13.4 / LARGER, 16, 1.4)}
+      strokeWidth={fitStroke(13.6 / LARGER, 16, 1.6)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -104,7 +104,7 @@ function ShellIcon({ className }: { className?: string }) {
       viewBox={fitIcon(13.4, 8, 8 - 1.29, 16)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={fitStroke(13.4, 16, 1.3)}
+      strokeWidth={fitStroke(13.4, 16, 1.5)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

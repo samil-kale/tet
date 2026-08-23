@@ -457,49 +457,81 @@ export function FilesIcon(props: IconProps) {
   );
 }
 
-/** The EXPLORER header's own "New File...": the reference icon's exact path (svgrepo's
- *  "document-add"), scaled 1:1 from its 1024-unit grid down to this file's 16-unit one (divide
- *  every coordinate by 64) — the hollow page-with-fold and the solid plus are one fill, not a
- *  stroke, since that is how the reference draws its own outline (an outer contour plus an
- *  inner one of opposite winding, filled with the default nonzero rule). `Svg`'s own
- *  `fill="none" stroke="currentColor"` is for every other icon in this file; this one overrides
- *  both back, same as the reference. */
+/** The EXPLORER header's own "New File...": Lucide's `file-plus` (lucide.dev, ISC — a Feather
+ *  Icons fork drawn in the same monoline-stroke language as the rest of this file), vendored on
+ *  its own native 24-unit grid rather than rescaled into this file's 16-unit one: `fitIcon`/
+ *  `fitStroke` take the grid as a parameter for exactly this, so a vendored icon keeps its own
+ *  coordinates and still crops through the shared formula. Measured via `getBBox`, stroke
+ *  included: the page is narrow enough (18 by 22) that its geometric mean would clip the bottom,
+ *  so extent is the long-axis cap instead, same 0.87 formula as `CommitIcon`: 20.23, centered at
+ *  (12, 12). */
 export function NewFileIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={12.96} cx={8} cy={8}>
-      <path
-        fill="currentColor"
-        stroke="none"
-        d="M13 6H9V2H3v12h10V6Z M12.586 5L10 2.414V5h2.586Z M2.5 1h7.5l4 4v9.5a0.5 0.5 0 0 1-0.5 0.5H2.5a0.5 0.5 0 0 1-0.5-0.5V1.5a0.5 0.5 0 0 1 0.5-0.5Z M7.5 9V7h1v2h2v1h-2v2h-1v-2h-2v-1h2Z"
-      />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.23, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.23, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+      <path d="M9 15h6" />
+      <path d="M12 18v-6" />
+    </svg>
   );
 }
 
-/** The EXPLORER header's own "New Folder...", next to `NewFileIcon` — svgrepo's "folder-add",
- *  scaled the same way. */
+/** The EXPLORER header's own "New Folder...", next to `NewFileIcon` — Lucide's `folder-plus`,
+ *  vendored the same way. Measured via `getBBox`: 22 by 19, close enough to square that the
+ *  geometric mean needs no cap: extent 20.45, centered at (12, 11.5). */
 export function NewFolderIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={12.96} cx={8} cy={8}>
-      <path
-        fill="currentColor"
-        stroke="none"
-        d="M2 3v10h12V5H7.59L5.586 3H2Z M1.5 2h4.498l2.006 2H14.5a0.5 0.5 0 0 1 0.5 0.5v9a0.5 0.5 0 0 1-0.5 0.5H1.5a0.5 0.5 0 0 1-0.5-0.5V2.5a0.5 0.5 0 0 1 0.5-0.5Z M7.5 8.5V6.5h1v2h2v1h-2v2h-1v-2h-2v-1h2Z"
-      />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.45, 12, 11.5, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.45, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 10v6" />
+      <path d="M9 13h6" />
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </svg>
   );
 }
 
-/** "Collapse Folders in Explorer": two panes stacked diagonally, the front one shut (the
- *  minus) — traced from the reference icon's own layout (a full frame's worth of the back pane
- *  showing along the top and right, not just its corner). */
+/** "Collapse Folders in Explorer": Lucide's `chevrons-up` — two stacked upward chevrons, the
+ *  usual "collapse a tree" glyph (mirrors `chevrons-down` for "expand all"), replacing a
+ *  hand-traced two-panes-and-a-minus that read muddier at this size than a plain chevron pair.
+ *  Measured via `getBBox`: 12 by 14, extent 12.96, centered at (12, 12). */
 export function CollapseAllIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={11.4} cx={7.95} cy={8.55}>
-      <path d="M4.4 3.6H12.9V12.1" />
-      <rect x="3" y="5" width="8.5" height="8.5" rx="1.2" />
-      <path d="M3.85 9.25h6.8" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(12.96, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(12.96, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m17 11-5-5-5 5" />
+      <path d="m17 18-5-5-5 5" />
+    </svg>
   );
 }
 
