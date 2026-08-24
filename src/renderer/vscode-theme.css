@@ -238,16 +238,21 @@
   --vscode-terminal-ansiRed: #cd3131;
   --vscode-terminal-ansiGreen: #107c10;
   --vscode-terminal-ansiYellow: #949800;
-  --vscode-terminal-ansiBlue: #0451a5;
-  --vscode-terminal-ansiMagenta: #bc05bc;
+  /* Not the registry's values: opencode's own accent, drawn as ANSI blue, ends up painted from
+     this variable (buildXtermTheme swaps blue and magenta for it — see AgentDefinition's
+     swapsBlueMagenta), so this is the terminal-side half of the same orange the app chrome
+     took. Kept two shades apart from ansiMagenta, the way blue and magenta always were, rather
+     than collapsing both to one color. */
+  --vscode-terminal-ansiBlue: var(--vscode-focusBorder);
+  --vscode-terminal-ansiMagenta: var(--vscode-button-hoverBackground);
   --vscode-terminal-ansiCyan: #0598bc;
   --vscode-terminal-ansiWhite: #555555;
   --vscode-terminal-ansiBrightBlack: #666666;
   --vscode-terminal-ansiBrightRed: #cd3131;
   --vscode-terminal-ansiBrightGreen: #14ce14;
   --vscode-terminal-ansiBrightYellow: #b5ba00;
-  --vscode-terminal-ansiBrightBlue: #0451a5;
-  --vscode-terminal-ansiBrightMagenta: #bc05bc;
+  --vscode-terminal-ansiBrightBlue: var(--vscode-focusBorder);
+  --vscode-terminal-ansiBrightMagenta: var(--vscode-button-hoverBackground);
   --vscode-terminal-ansiBrightCyan: #0598bc;
   --vscode-terminal-ansiBrightWhite: #a5a5a5;
 }
