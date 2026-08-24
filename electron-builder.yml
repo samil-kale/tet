@@ -18,6 +18,9 @@ files:
 # platform's dynamic linker only opens real files.
 asarUnpack:
   - "**/node_modules/node-pty/**"
+  # The tet-ctl CLI is run by a separate process (electron as node, from a terminal) that
+  # cannot read inside the archive — see src/main/control-launcher.ts.
+  - dist/tet-ctl.js
 
 # Nothing to compile: node-pty ships prebuilt binaries for all six platform/arch pairs and is
 # built on node-addon-api, so the same file works under Electron's ABI as under Node's. This is

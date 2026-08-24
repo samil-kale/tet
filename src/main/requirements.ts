@@ -26,6 +26,13 @@ const SIMULATED_MISSING = (process.argv.find((arg) => arg.startsWith("--simulate
   .filter((entry) => entry !== "");
 
 /**
+ * The opposite, for the tests that drive the app (test/app.test.ts): a machine with git and no
+ * agent at all — a CI runner — still opens, with the shell as its one terminal. Nothing is
+ * reported differently; only the verdict is.
+ */
+const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
+
+/**
  * What has to be on the machine before the app opens: git, because the whole git side is the
  * local CLI, and one of the agents, because the terminals are what tet is for.
  *
@@ -56,7 +63,7 @@ export async function checkRequirements(): Promise<Requirements> {
     )
   ]);
   return {
-    met: installed && agents.some((agent) => agent.installed),
+    met: installed && (SHELL_SUFFICES || agents.some((agent) => agent.installed)),
     git: { ...GIT, installed },
     agents
   };

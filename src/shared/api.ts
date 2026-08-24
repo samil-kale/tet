@@ -71,6 +71,12 @@ export interface TETApi {
     remove(projectId: string): Promise<void>;
     /** Persists the order the user dragged them into, as the full list of ids. */
     reorder(projectIds: string[]): Promise<void>;
+    /**
+     * The list changed without the window asking — the control channel opened or closed a
+     * project. `added` is to be shown, `removed` forgotten, the way the window's own add and
+     * close do it.
+     */
+    onChanged(listener: (payload: { projects: Project[]; added?: string; removed?: string }) => void): Unsubscribe;
   };
   /** The configured repository-host accounts and what the remote tab asks them. */
   providers: {
@@ -210,6 +216,9 @@ export interface TETApi {
     ): Unsubscribe;
     /** Whether anything in the project is still starting up (a CLI booting, sessions listing). */
     onStartupProgress(listener: (payload: { projectId: string; show: boolean }) => void): Unsubscribe;
+    /** A tab the control channel opened, to be brought to the front — its process starts
+     *  with the first resize that drawing it sends. */
+    onShow(listener: (payload: { projectId: string; tabId: string }) => void): Unsubscribe;
     /**
      * The current value of the above. A project restored at app start bootstraps before the
      * window exists, so that first "show" is never pushed to anyone — ask for it instead.

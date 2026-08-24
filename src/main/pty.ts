@@ -14,6 +14,38 @@ export interface SpawnOptions {
    * the same name already in the environment is not what that command asked for.
    */
   envOverride?: Record<string, string>;
+  /**
+   * tet's own variables for this one process — the project and tab it belongs to, for the
+   * control channel (`TET_PROJECT_ID`, `TET_TAB_ID`). Above the machine's like `controlEnv`,
+   * see there.
+   */
+  own?: Record<string, string>;
+}
+
+/**
+ * What every pty gets from tet itself, set once from main.ts (the control channel's socket and
+ * token, and the launcher directory on PATH). Layered *above* `process.env` rather than below:
+ * tet started from one of its own shell tabs (`npm start`, while developing) inherits the
+ * outer app's values in `process.env`, and its terminals must reach the inner one.
+ *
+ * Kept here rather than written into `process.env`, so only the terminals carry it — not the
+ * opencode server, git, or anything else main.ts spawns with the machine's environment.
+ */
+let controlEnv: Record<string, string> = {};
+/** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */
+let launcherDir: string | undefined;
+
+export function setControlEnv(vars: Record<string, string>, binDir: string): void {
+  controlEnv = vars;
+  launcherDir = binDir;
+}
+
+/**
+ * The name PATH goes under in `env`, whatever case it has: win32 stores it as `Path`, and a
+ * second key of another case would be one more variable rather than a replacement.
+ */
+function pathKey(env: Record<string, string>): string {
+  return Object.keys(env).find((key) => key.toUpperCase() === "PATH") ?? "PATH";
 }
 
 const WIN32_NATIVE_EXTENSIONS = [".exe", ".com"];
@@ -69,14 +101,29 @@ export function resolveCommand(executable: string, args: string[]): { command: s
   return { command: executable, args };
 }
 
-export function spawnAgentProcess(executable: string, args: string[], options: SpawnOptions): IPty {
-  // options.env are defaults, not overrides: a variable the user already has set (e.g. their
-  // own OPENCODE_TUI_CONFIG) must win, or we'd silently replace their own configuration.
-  const env: { [key: string]: string } = {
+/**
+ * What a terminal's process is started with. options.env are defaults, not overrides: a
+ * variable the user already has set (e.g. their own OPENCODE_TUI_CONFIG) must win, or we'd
+ * silently replace their own configuration. tet's own (controlEnv, options.own) come after the
+ * machine's — see controlEnv — and a saved command's (envOverride) after everything: the user
+ * wrote those next to the command. Its own function so the layering has a test without a pty.
+ */
+export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own">): Record<string, string> {
+  const env: Record<string, string> = {
     ...options.env,
-    ...(process.env as { [key: string]: string }),
-    ...options.envOverride
+    ...(process.env as Record<string, string>),
+    ...controlEnv,
+    ...options.own
   };
+  if (launcherDir) {
+    const key = pathKey(env);
+    env[key] = env[key] ? `${launcherDir}${path.delimiter}${env[key]}` : launcherDir;
+  }
+  return Object.assign(env, options.envOverride);
+}
+
+export function spawnAgentProcess(executable: string, args: string[], options: SpawnOptions): IPty {
+  const env = buildEnv(options);
   const { command, args: resolvedArgs } = resolveCommand(executable, args);
 
   return pty.spawn(command, resolvedArgs, {

@@ -34,7 +34,7 @@ import type { AccountStore } from "../providers/accounts";
 import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, suggestQuestion, writeCommands } from "./commands";
 import { countActivity } from "./event-loop-monitor";
 import { git } from "./git-client";
-import type { ProjectStore } from "./projects";
+import { addProject, removeProject, type ProjectStore } from "./projects";
 import type { Repository, RepositoryManager } from "./repository";
 import { checkRequirements } from "./requirements";
 import type { SessionManagerRegistry } from "./session-manager";
@@ -162,18 +162,11 @@ export function registerIpc({
     }
   );
 
-  ipcMain.handle("projects:open-path", async (_event, directory: string): Promise<AddRepositoryResult> => {
-    // Typed rather than picked, the folder may not exist — and a project that does not would
-    // watch nothing and spawn nothing, with only a notice per action to say why.
-    if (!(await fs.promises.stat(directory).then((stat) => stat.isDirectory(), () => false))) {
-      return { error: `${directory} is not a folder` };
-    }
-    // Picking a subdirectory of a repository opens the repository itself: git reports every
-    // path relative to the root, and the root is what branches and status describe.
-    const project = store.add((await git.resolveRoot(directory).catch(() => undefined)) ?? directory);
-    openProject(project);
-    return { project };
-  });
+  const projectDeps = { store, repositories, sessions, openProject };
+
+  ipcMain.handle("projects:open-path", (_event, directory: string): Promise<AddRepositoryResult> =>
+    addProject(projectDeps, directory)
+  );
 
   /** Clone and create both end the same way: the new folder becomes a project like any picked one. */
   const addRepository = async (
@@ -253,13 +246,7 @@ export function registerIpc({
 
   ipcMain.handle("projects:reorder", (_event, projectIds: string[]): void => store.reorder(projectIds));
 
-  ipcMain.handle("projects:remove", (_event, projectId: string): void => {
-    // Not awaited: the project is gone from the window either way, and its sessions are given a
-    // moment to end by themselves (see TerminalSession.stop) rather than holding the removal up.
-    void sessions.close(projectId);
-    repositories.close(projectId);
-    store.remove(projectId);
-  });
+  ipcMain.handle("projects:remove", (_event, projectId: string): void => removeProject(projectDeps, projectId));
 
   ipcMain.handle("repo:state", (_event, projectId: string): RepositoryState => {
     return repositories.get(projectId)?.getState() ?? MISSING_REPOSITORY;

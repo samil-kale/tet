@@ -38,6 +38,20 @@ const gitHostConfig = {
   external: ["electron"]
 };
 
+/**
+ * The `tet-ctl` CLI an agent runs from a terminal, under tet's own electron as node (see
+ * src/main/control-launcher.ts) — plain node, nothing from electron in it.
+ */
+/** @type {import('esbuild').BuildOptions} */
+const cliConfig = {
+  ...common,
+  entryPoints: [path.join(__dirname, "src", "cli", "tet-ctl.ts")],
+  outfile: path.join(dist, "tet-ctl.js"),
+  platform: "node",
+  target: "node22",
+  format: "cjs"
+};
+
 /** @type {import('esbuild').BuildOptions} */
 const preloadConfig = {
   ...common,
@@ -76,6 +90,24 @@ const editorWorkerConfig = {
   target: "chrome130"
 };
 
+/**
+ * The tests, for node's own runner (`npm test`): the control server with its dependencies
+ * faked, driven through the built CLI — see test/control.test.ts. Bundled like the CLI, so a
+ * test imports the source the way the app does, without a loader of its own.
+ */
+/** @type {import('esbuild').BuildOptions} */
+const testConfig = {
+  ...common,
+  entryPoints: [path.join(__dirname, "test", "*.test.ts")],
+  outdir: path.join(__dirname, "dist-test"),
+  platform: "node",
+  target: "node22",
+  format: "cjs",
+  // electron for its binary's path (app.test.ts starts it), node-pty because pty.ts imports it
+  // and neither can be bundled — the first reads a file beside itself, the second is native.
+  external: ["electron", "node-pty"]
+};
+
 function copyStaticAssets() {
   fs.mkdirSync(dist, { recursive: true });
   for (const file of ["index.html", "icon.png", "icon.ico"]) {
@@ -86,7 +118,7 @@ function copyStaticAssets() {
 async function build() {
   copyStaticAssets();
 
-  const configs = [mainConfig, gitHostConfig, preloadConfig, rendererConfig, editorWorkerConfig];
+  const configs = [mainConfig, gitHostConfig, cliConfig, preloadConfig, rendererConfig, editorWorkerConfig, testConfig];
   if (watch) {
     const contexts = await Promise.all(configs.map((config) => esbuild.context(config)));
     await Promise.all(contexts.map((context) => context.watch()));

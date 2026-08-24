@@ -171,26 +171,31 @@ export class ShellContext {
   }
 
   private writeContext(): void {
-    // Nothing run yet: an empty file is what says "no context", since both delivery paths
-    // treat blank content as nothing to attach.
-    const contents =
-      this.log.chars === 0
-        ? ""
+    // The `tet-ctl` line is there from the first prompt on: nothing else tells an agent that
+    // the app around it can be asked anything (see src/main/control-server.ts). The shell
+    // paragraph only once something ran.
+    const contents = [
+      "<tet_context>",
+      "You are running inside TET. Its own settings, projects and terminal tabs are",
+      "controlled with `tet-ctl` (run `tet-ctl help`) — use it when the user asks",
+      "about TET itself, not for work on the repository.",
+      ...(this.log.chars === 0
+        ? []
         : [
-            "<tet_context>",
-            `Shell output in ${this.repositoryName} (${Math.ceil(this.log.chars / 1024)} KB), from the` +
-              ` shell tabs the user has open next to you: ${this.logFile}`,
-            "Read that file when the user asks about something they ran in a shell.",
-            "</tet_context>",
-            "This is the state of the user's workspace at the time the message was sent." +
-              " It may or may not be relevant to the request."
-          ].join("\n");
+            "",
+            `Shell output from the user's shell tabs in ${this.repositoryName}: ${this.logFile}`,
+            "Read that file when the user asks about something they ran in a shell."
+          ]),
+      "</tet_context>",
+      "This is the state of the user's workspace at the time the message was sent." +
+        " It may or may not be relevant to the request."
+    ].join("\n");
     if (contents === this.written) {
       return;
     }
     this.written = contents;
     this.writing = this.writing
-      .then(() => replaceFile(this.contextFile, contents === "" ? "" : CONTEXT_FILE_BOM + contents))
+      .then(() => replaceFile(this.contextFile, CONTEXT_FILE_BOM + contents))
       .catch((error) => {
         console.error("[tet] failed to write the context file:", error);
         // Nothing landed on disk, so the next write must not be skipped as unchanged.

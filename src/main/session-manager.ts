@@ -4,6 +4,7 @@ import { AGENTS, getAgent } from "../agents";
 
 import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../agents/agent";
 import { splitCommand } from "../shared/command";
+import { CONTROL_ENV } from "../shared/control";
 import type {
   AgentId,
   NoticeSeverity,
@@ -699,7 +700,9 @@ export class ProjectSessionManager {
       },
       agent.quitPresses ?? 0,
       args,
-      tab.env
+      tab.env,
+      // What `tet-ctl`, run inside this tab, reports as its caller — see src/shared/control.ts.
+      { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId }
     );
 
     if (!tab.sessionId) {

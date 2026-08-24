@@ -1,13 +1,21 @@
+import * as crypto from "node:crypto";
+import * as os from "node:os";
 import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
-import { prepareAgents } from "../agents";
+import { AGENTS, prepareAgents } from "../agents";
 import { AccountStore } from "../providers/accounts";
+import { CONTROL_ENV } from "../shared/control";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
+import { readCommands } from "./commands";
+import { writeLaunchers } from "./control-launcher";
+import { controlSocketPath, startControlServer } from "./control-server";
 import { countActivity, startEventLoopMonitor } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
-import { ProjectStore } from "./projects";
+import { addProject, ProjectStore, removeProject } from "./projects";
+import { setControlEnv } from "./pty";
+import { isAgentInstalled } from "./terminal-session";
 import { RepositoryManager } from "./repository";
 import { SessionManagerRegistry } from "./session-manager";
 import { SettingsStore } from "./settings";
@@ -46,6 +54,19 @@ function queueOutput(projectId: string, tabId: string, data: string): void {
     pendingOutput.set(key, { projectId, tabId, data });
   }
   flushTimer ??= setTimeout(flushOutput, OUTPUT_FLUSH_MS);
+}
+
+/**
+ * A profile of its own, for the tests that drive the real app through tet-ctl
+ * (test/app.test.ts): its own projects, settings and socket, and — the lock being per profile —
+ * a second tet beside the one being worked in. Set before anything below asks for userData.
+ * Only with it does tet take a control token from its environment instead of making one, so a
+ * test can talk to it without being one of its terminals; a normal start never reads that.
+ */
+const USER_DATA_ARG = "--user-data-dir=";
+const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
+if (userDataArg) {
+  app.setPath("userData", path.resolve(userDataArg));
 }
 
 const store = new ProjectStore(app.getPath("userData"));
@@ -193,8 +214,57 @@ if (!app.requestSingleInstanceLock()) {
     // a run that was killed left running is taken down here. See AgentDefinition.prepareApp.
     prepareAgents(app.getPath("userData"));
     sweepTempFiles();
+    // The control channel's token and address, into every terminal's environment before the
+    // first one can spawn (openWorkspace, below). The token lives in this process only — never
+    // on disk, never on a command line. See src/main/control-server.ts.
+    const controlToken =
+      (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
+    const socketPath = controlSocketPath(app.getPath("userData"));
+    // Packaged, dist/ sits in app.asar, which a process other than electron cannot read into;
+    // tet-ctl.js is unpacked beside it (electron-builder.yml).
+    const cliPath = path.join(app.isPackaged ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
+    setControlEnv(
+      { [CONTROL_ENV.socket]: socketPath, [CONTROL_ENV.token]: controlToken },
+      writeLaunchers(app.getPath("userData"), cliPath)
+    );
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
     createWindow();
+    try {
+      const projectDeps = { store, repositories, sessions, openProject };
+      controlServer = await startControlServer(
+        {
+          version: app.getVersion(),
+          pid: process.pid,
+          store,
+          settings,
+          sessions,
+          listAgents: async () =>
+            Promise.all(
+              AGENTS.map(async (agent) => ({
+                id: agent.id,
+                name: agent.displayName,
+                // The shell has no version check and is always there.
+                installed: agent.versionArgs
+                  ? await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir())
+                  : true
+              }))
+            ),
+          agentIds: AGENTS.map((agent) => agent.id),
+          addProject: (directory) => addProject(projectDeps, directory),
+          removeProject: (projectId) => removeProject(projectDeps, projectId),
+          readCommands,
+          shutdown,
+          showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
+          projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change })
+        },
+        controlToken,
+        socketPath
+      );
+    } catch (error) {
+      // Without it tet is what it was before there was one; the terminals just have nothing
+      // to reach, and tet-ctl says so.
+      console.error("[tet] control channel not started:", error);
+    }
     startAutoUpdate((severity, message, progress) => send("app:notice", { severity, message, progress }));
 
     app.on("activate", () => {
@@ -221,19 +291,37 @@ app.on("window-all-closed", () => {
 const QUIT_TEARDOWN_TIMEOUT_MS = 5000;
 
 let quitting = false;
+let controlServer: { close: () => Promise<void> } | undefined;
+
+/**
+ * The one way out, for the quit and for the control channel's restart alike: the sessions
+ * first, then everything that has nothing left to serve. `relaunch` is the only difference —
+ * electron starts the new instance once this one has exited, so the single-instance lock is
+ * free by then (see above).
+ */
+function shutdown(relaunch: boolean): void {
+  if (quitting) {
+    return;
+  }
+  quitting = true;
+  void Promise.race([
+    sessions.disposeAll(),
+    new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))
+  ]).finally(async () => {
+    repositories.disposeAll();
+    stopGitProcess();
+    await controlServer?.close();
+    if (relaunch) {
+      app.relaunch();
+    }
+    app.quit();
+  });
+}
 
 app.on("before-quit", (event) => {
   if (quitting) {
     return;
   }
-  quitting = true;
   event.preventDefault();
-  void Promise.race([
-    sessions.disposeAll(),
-    new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))
-  ]).finally(() => {
-    repositories.disposeAll();
-    stopGitProcess();
-    app.quit();
-  });
+  shutdown(false);
 });

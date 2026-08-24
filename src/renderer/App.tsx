@@ -350,25 +350,47 @@ export function App() {
     setActiveProjectId(project.id);
   }, []);
 
+  /** Everything held for a project, let go of — the project list itself is the caller's. */
+  const forgetProject = useCallback((projectId: string) => {
+    setStates((current) => forget(current, projectId));
+    setTabs((current) => forget(current, projectId));
+    setLayouts((current) => forget(current, projectId));
+    setStarting((current) => forget(current, projectId));
+    delete previousTabsRef.current[projectId];
+    delete savedLayoutsRef.current[projectId];
+    settledProjects.current.delete(projectId);
+    busyCursor.current = forget(busyCursor.current, projectId);
+    // The xterm instances live outside React and outlive the pane that mounted them, so
+    // this is where they are let go of — the one moment a project ends for good.
+    disposeProjectTerminals(projectId);
+  }, []);
+
   const closeProject = useCallback(
     async (projectId: string) => {
       await window.tet.projects.remove(projectId);
       const remaining = projects.filter((project) => project.id !== projectId);
       setProjects(remaining);
       setActiveProjectId((current) => (current === projectId ? (remaining[0]?.id ?? null) : current));
-      setStates((current) => forget(current, projectId));
-      setTabs((current) => forget(current, projectId));
-      setLayouts((current) => forget(current, projectId));
-      setStarting((current) => forget(current, projectId));
-      delete previousTabsRef.current[projectId];
-      delete savedLayoutsRef.current[projectId];
-      settledProjects.current.delete(projectId);
-      busyCursor.current = forget(busyCursor.current, projectId);
-      // The xterm instances live outside React and outlive the pane that mounted them, so
-      // this is where they are let go of — the one moment a project ends for good.
-      disposeProjectTerminals(projectId);
+      forgetProject(projectId);
     },
-    [projects]
+    [projects, forgetProject]
+  );
+
+  // The control channel opened or closed a project (tet-ctl, from a terminal): the same two
+  // paths as the dialog's add and the row's close, with the list handed over instead of asked.
+  useEffect(
+    () =>
+      window.tet.projects.onChanged(({ projects: list, added, removed }) => {
+        setProjects(list);
+        if (removed !== undefined) {
+          setActiveProjectId((current) => (current === removed ? (list[0]?.id ?? null) : current));
+          forgetProject(removed);
+        }
+        if (added !== undefined) {
+          setActiveProjectId(added);
+        }
+      }),
+    [forgetProject]
   );
 
   const reorderProjects = useCallback((ordered: Project[]) => {
@@ -476,6 +498,10 @@ export function App() {
     },
     [activateTab]
   );
+
+  // A tab the control channel opened (tet-ctl, from a terminal) — shown the way a saved
+  // command's is, since drawing it is what starts its process.
+  useEffect(() => window.tet.terminals.onShow(({ projectId, tabId }) => showTab(projectId, tabId)), [showTab]);
 
   /**
    * A project's sessions that finished a turn nobody has looked at since, oldest first — the

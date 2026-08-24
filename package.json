@@ -12,6 +12,7 @@
     "start": "npm run typecheck && npm run compile && electron .",
     "typecheck": "tsc --noEmit -p .",
     "lint": "eslint .",
+    "test": "npm run compile && node --test \"dist-test/*.test.js\"",
     "dist": "npm run compile -- --production && electron-builder"
   },
   "dependencies": {

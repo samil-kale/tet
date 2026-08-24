@@ -97,7 +97,9 @@ export class TerminalSession {
     private readonly quitPresses: number,
     private readonly args: string[] = [],
     /** A saved command's own variables, which outrank the ones inherited from the machine. */
-    private readonly envOverride?: Record<string, string>
+    private readonly envOverride?: Record<string, string>,
+    /** tet's own for this process — which project and tab it is; see SpawnOptions.own. */
+    private readonly own?: Record<string, string>
   ) {}
 
   private setStatus(status: TerminalStatus): void {
@@ -149,7 +151,8 @@ export class TerminalSession {
         cols,
         rows,
         env: this.env,
-        envOverride: this.envOverride
+        envOverride: this.envOverride,
+        own: this.own
       });
     } catch (error) {
       console.error(`[tet] failed to spawn ${this.executable}:`, error);

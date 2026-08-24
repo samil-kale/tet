@@ -1,7 +1,44 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { Project } from "../shared/types";
+import type { AddRepositoryResult, Project } from "../shared/types";
+import { git } from "./git-client";
+import type { RepositoryManager } from "./repository";
+import type { SessionManagerRegistry } from "./session-manager";
+
+/** What opening and closing a project takes — the same singletons ipc.ts holds. */
+export interface ProjectDeps {
+  store: ProjectStore;
+  repositories: RepositoryManager;
+  sessions: SessionManagerRegistry;
+  openProject: (project: Project) => void;
+}
+
+/**
+ * Opens a folder as a project. Shared by the add-repository dialog (`projects:open-path`) and
+ * the control channel, so both answer a typed path the same way: the folder may not exist —
+ * and a project that does not would watch nothing and spawn nothing, with only a notice per
+ * action to say why.
+ */
+export async function addProject({ store, openProject }: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
+  if (!(await fs.promises.stat(directory).then((stat) => stat.isDirectory(), () => false))) {
+    return { error: `${directory} is not a folder` };
+  }
+  // Picking a subdirectory of a repository opens the repository itself: git reports every
+  // path relative to the root, and the root is what branches and status describe.
+  const project = store.add((await git.resolveRoot(directory).catch(() => undefined)) ?? directory);
+  openProject(project);
+  return { project };
+}
+
+/** Closes a project: its terminals, its repository, then the stored entry. */
+export function removeProject({ store, repositories, sessions }: ProjectDeps, projectId: string): void {
+  // Not awaited: the project is gone from the window either way, and its sessions are given a
+  // moment to end by themselves (see TerminalSession.stop) rather than holding the removal up.
+  void sessions.close(projectId);
+  repositories.close(projectId);
+  store.remove(projectId);
+}
 
 /** The open repositories, persisted so the window comes back with the same project tabs. */
 export class ProjectStore {

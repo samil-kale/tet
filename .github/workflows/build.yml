@@ -29,9 +29,17 @@ jobs:
 
       - run: npm ci
 
-      # The same two gates the working copy is held to, before anything is packaged.
+      # The same three gates the working copy is held to, before anything is packaged. The
+      # tests are what exercises the control channel's socket on each platform — a named pipe
+      # here, a socket file on the other two.
       - run: npm run typecheck
       - run: npm run lint
+      # test/app.test.ts starts the real app, which wants a display; the other two runners
+      # have one.
+      - run: xvfb-run -a npm test
+        if: runner.os == 'Linux'
+      - run: npm test
+        if: runner.os != 'Linux'
 
       - run: npm run dist -- --publish always
         env:

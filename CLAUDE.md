@@ -37,7 +37,9 @@ there silently shows the wrong tab title); the modifier-gated link providers
 
 Not ported: the VS Code editor context (feeding an agent what's open or under the cursor) and the
 diagnostic quick fix — TET's own editor is a plain look-and-fix surface. What survives is the shell
-transcript (`src/main/shell-context.ts`), a capped file the agent is pointed at.
+transcript (`src/main/shell-context.ts`), a capped file the agent is pointed at. **Open**: every
+shell tab of a project writes into that one file, interleaved and unmarked — a build in one tab and
+a `git log` in another read as one stream. To be addressed.
 
 **GitHub Desktop** is the reference for the git half — crib the shapes, not the scope. **VS Code**
 is the UI reference (tab semantics, close actions, theme names, the sash) — the **classic** layout
@@ -97,7 +99,9 @@ passing (`startup:check`) is what calls `openWorkspace`. Missing something, `Sta
 installs nothing**: no command works on all three platforms, and a program installed while the
 dialog stands is still missing from this process's PATH. `--version` results are remembered
 (`isAgentInstalled`); `npm start -- --simulate=git,claude` makes the dialog reachable on a
-machine that has everything.
+machine that has everything. The tests go the other way: `--allow-shell-only` lets a runner with
+no agent open, and `--user-data-dir=<dir>` gives that run a profile of its own (and, only then,
+a control token from its environment) — `test/app.test.ts` is the one user of both.
 
 ## Git
 
@@ -436,6 +440,28 @@ only by testing the real spawn path, both commented there: the trust entry must 
 *value* of one combined `-c hooks={…}` argument, and that argument must be built from TOML
 literal strings.
 
+## The control channel: `tet-ctl`
+
+An agent can ask the app around it for things the filesystem and git can't give it — the theme,
+the project list, the terminal tabs. `src/main/control-server.ts` listens on a named pipe (win32)
+or a socket file in `userData`, one JSON line per connection, and answers with the same singletons
+`ipc.ts` holds: a second transport onto the same logic, never a second implementation
+(`addProject`/`removeProject` in `projects.ts` are shared for exactly that). The wire contract and
+the verb list are `src/shared/control.ts`; the CLI is `src/cli/tet-ctl.ts`, bundled on its own and
+run by a launcher in `userData/bin` under tet's own electron as node (a `node` on the machine is
+not a given). What reaches a terminal is decided in `spawnAgentProcess` (`pty.ts`), in layers
+**above** `process.env`: the socket, a per-run token, the launcher directory on PATH, and the tab's
+own project and tab id — above, because a tet started from one of its own shell tabs inherits the
+outer one's values. Only ptys get them; the opencode server and git do not. The agent learns the
+command from the context file (`shell-context.ts`), which is never empty for that reason.
+
+Deliberately not there: the split layout (renderer state only), git (the agent has `git`), provider
+accounts, and `quit`. `restart-app` is the one verb that ends sessions — every one in every
+project, the caller's included — and takes `--confirm`, which an agent passes only when the user
+asked. A theme change answers `restartRequired`; that is a fact for the agent to relay, never a
+reason to restart on its own. A verb that ends its caller (its tab, its project, the app) replies
+before it acts, or the CLI dies with nothing on stdout.
+
 ## Never touch the user's agent configuration
 
 Everything TET generates lives under its own `userData` and is pointed at from outside:
@@ -561,6 +587,12 @@ always copies, and its per-agent rules are above.
 - `npm run compile` — bundle main, preload and renderer
 - `npm run typecheck`
 - `npm run lint`
+- `npm test` — compile, then node's own runner over `dist-test/`. Three files: the control
+  server with its electron-side dependencies faked, driven through the built `tet-ctl`
+  (`control.test.ts`); the pure pieces around it — env layering, launcher, context file
+  (`unit.test.ts`); and the real app started on a throwaway profile and driven through `tet-ctl`
+  alone (`app.test.ts` — needs a display, `xvfb-run` on Linux). Nothing looks into the window:
+  what the renderer did shows in the main process, or it is checked by hand.
 - `npm start` — typecheck, compile, then launch (see "Do not restart the app yourself" first). The
   typecheck is there because esbuild only bundles: an unimported identifier is a global to it, and
   the app dies on load with a `ReferenceError` a `tsc` run would have named at the import.

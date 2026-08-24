@@ -31,7 +31,8 @@ const api: TETApi = {
     clone: (url, directory, name, accountId) => ipcRenderer.invoke("projects:clone", url, directory, name, accountId),
     create: (directory, name) => ipcRenderer.invoke("projects:create", directory, name),
     remove: (projectId) => ipcRenderer.invoke("projects:remove", projectId),
-    reorder: (projectIds) => ipcRenderer.invoke("projects:reorder", projectIds)
+    reorder: (projectIds) => ipcRenderer.invoke("projects:reorder", projectIds),
+    onChanged: (listener) => subscribe("projects:changed", listener)
   },
   providers: {
     accounts: () => ipcRenderer.invoke("providers:accounts"),
@@ -108,6 +109,7 @@ const api: TETApi = {
     onOutput: (listener) => subscribe("terminal:output", listener),
     onStatus: (listener) => subscribe("terminal:status", listener),
     onStartupProgress: (listener) => subscribe("terminal:startup-progress", listener),
+    onShow: (listener) => subscribe("terminal:show", listener),
     starting: (projectId) => ipcRenderer.invoke("terminal:starting", projectId)
   },
   agents: {
