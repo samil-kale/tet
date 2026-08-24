@@ -106,6 +106,61 @@ function openWorkspace(): void {
   for (const project of store.list()) {
     openProject(project);
   }
+  void startControl();
+}
+
+/** What the control channel needs from the process; set before any terminal can spawn. */
+let controlChannel: { token: string; socketPath: string } | undefined;
+let controlServer: { close: () => Promise<void> } | undefined;
+
+/**
+ * The control channel, up from the moment the workspace is: a socket that answers means every
+ * project's terminals and repository are there to be asked about. Before that there is no
+ * socket at all — no half-open state for a verb to find and nothing for tet-ctl to do but say
+ * it could not reach tet, which it waits a moment for (see src/cli/tet-ctl.ts) since the app
+ * it runs inside is by then only ever moments away.
+ */
+async function startControl(): Promise<void> {
+  if (!controlChannel) {
+    return;
+  }
+  const projectDeps = { store, repositories, sessions, openProject };
+  try {
+    controlServer = await startControlServer(
+      {
+        version: app.getVersion(),
+        pid: process.pid,
+        store,
+        settings,
+        sessions,
+        repositories,
+        listAgents: async () =>
+          Promise.all(
+            AGENTS.map(async (agent) => ({
+              id: agent.id,
+              name: agent.displayName,
+              // The shell has no version check and is always there.
+              installed: agent.versionArgs
+                ? await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir())
+                : true
+            }))
+          ),
+        agentIds: AGENTS.map((agent) => agent.id),
+        addProject: (directory) => addProject(projectDeps, directory),
+        removeProject: (projectId) => removeProject(projectDeps, projectId),
+        readCommands,
+        shutdown,
+        showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
+        projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change })
+      },
+      controlChannel.token,
+      controlChannel.socketPath
+    );
+  } catch (error) {
+    // Without it tet is what it was before there was one; the terminals just have nothing
+    // to reach, and tet-ctl says so.
+    console.error("[tet] control channel not started:", error);
+  }
 }
 
 function createWindow(): void {
@@ -227,44 +282,9 @@ if (!app.requestSingleInstanceLock()) {
       { [CONTROL_ENV.socket]: socketPath, [CONTROL_ENV.token]: controlToken },
       writeLaunchers(app.getPath("userData"), cliPath)
     );
+    controlChannel = { token: controlToken, socketPath };
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
     createWindow();
-    try {
-      const projectDeps = { store, repositories, sessions, openProject };
-      controlServer = await startControlServer(
-        {
-          version: app.getVersion(),
-          pid: process.pid,
-          store,
-          settings,
-          sessions,
-          listAgents: async () =>
-            Promise.all(
-              AGENTS.map(async (agent) => ({
-                id: agent.id,
-                name: agent.displayName,
-                // The shell has no version check and is always there.
-                installed: agent.versionArgs
-                  ? await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir())
-                  : true
-              }))
-            ),
-          agentIds: AGENTS.map((agent) => agent.id),
-          addProject: (directory) => addProject(projectDeps, directory),
-          removeProject: (projectId) => removeProject(projectDeps, projectId),
-          readCommands,
-          shutdown,
-          showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
-          projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change })
-        },
-        controlToken,
-        socketPath
-      );
-    } catch (error) {
-      // Without it tet is what it was before there was one; the terminals just have nothing
-      // to reach, and tet-ctl says so.
-      console.error("[tet] control channel not started:", error);
-    }
     startAutoUpdate((severity, message, progress) => send("app:notice", { severity, message, progress }));
 
     app.on("activate", () => {
@@ -291,7 +311,6 @@ app.on("window-all-closed", () => {
 const QUIT_TEARDOWN_TIMEOUT_MS = 5000;
 
 let quitting = false;
-let controlServer: { close: () => Promise<void> } | undefined;
 
 /**
  * The one way out, for the quit and for the control channel's restart alike: the sessions

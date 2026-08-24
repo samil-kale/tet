@@ -63,6 +63,12 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     positionals: ["theme"]
   },
   { verb: "projects-list", usage: "projects-list", summary: "The open projects (id, name, path).", positionals: [] },
+  {
+    verb: "repo-state",
+    usage: "repo-state [--project <id>]",
+    summary: "What the git pane shows for a project: branch, upstream, changed files, stashes.",
+    positionals: []
+  },
   { verb: "projects-add", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
   {
     verb: "projects-remove",

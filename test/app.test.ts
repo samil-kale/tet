@@ -8,7 +8,7 @@ import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { controlSocketPath } from "../src/main/control-server";
 import { CONTROL_ENV } from "../src/shared/control";
-import type { Project, TerminalDescriptor } from "../src/shared/types";
+import type { Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl } from "./helpers";
 
 /**
@@ -112,6 +112,74 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     await eventually("the tab gone", async () => !(await tabs()).some((entry) => entry.tabId === tab.tabId), 10_000);
   });
 
+  it("wrote the shell's output into the context file the agents read", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    const contextFile = path.join(userData, "projects", project.id, "context.md");
+    await eventually(
+      "the shell paragraph",
+      () => fs.existsSync(contextFile) && /Shell output from the user's shell tabs/.test(fs.readFileSync(contextFile, "utf8")),
+      STARTUP_MS
+    );
+    assert.match(fs.readFileSync(contextFile, "utf8"), /tet-ctl/);
+  });
+
+  it("runs a saved command in a tab that ends the way the command did", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    // node is what runs this very test, so it is on the app's PATH too.
+    fs.writeFileSync(
+      path.join(repo, "tet.json"),
+      JSON.stringify({
+        commands: [
+          { command: "node -e process.exit(3)", name: "fails" },
+          { command: "node -e 0", name: "passes" },
+          { command: "node -e 0 && node -e 0", name: "chained" }
+        ]
+      })
+    );
+    const tabs = async (): Promise<TerminalDescriptor[]> =>
+      (await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[];
+    const statusOf = async (tabId: string): Promise<string | undefined> =>
+      (await tabs()).find((entry) => entry.tabId === tabId)?.status;
+    const failing = (await ctl("tabs-run-command", "fails", "--project", project.id)).result as TerminalDescriptor;
+    assert.equal(failing.savedCommand, true);
+    await eventually("the failing command's tab in error", async () => (await statusOf(failing.tabId)) === "error", STARTUP_MS);
+    const passing = (await ctl("tabs-run-command", "passes", "--project", project.id)).result as TerminalDescriptor;
+    await eventually("the passing command's tab stopped", async () => (await statusOf(passing.tabId)) === "stopped", STARTUP_MS);
+    const chained = await ctl("tabs-run-command", "chained", "--project", project.id);
+    assert.equal(chained.status, 3, "a shell operator is refused");
+    assert.match(chained.stderr, /cannot be run without a shell/);
+    assert.equal((await ctl("tabs-run-command", "missing", "--project", project.id)).status, 3);
+  });
+
+  it("reflects a commit made in a terminal, as the git pane would", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    const state = async (): Promise<RepositoryState> =>
+      (await ctl("repo-state", "--project", project.id)).result as RepositoryState;
+    await eventually("the first read", async () => (await state()).error === undefined && (await state()).head !== "", STARTUP_MS);
+    fs.writeFileSync(path.join(repo, "README.md"), "hello\n");
+    await eventually(
+      "the new file seen",
+      async () => (await state()).changes.some((change) => change.path === "README.md" && change.status === "untracked"),
+      10_000
+    );
+    const git = (...args: string[]): void => {
+      const result = spawnSync("git", args, {
+        cwd: repo,
+        env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t.invalid" }
+      });
+      assert.equal(result.status, 0, `git ${args.join(" ")}`);
+    };
+    git("add", "README.md");
+    git("commit", "-q", "-m", "first");
+    // tet.json from the test before is still untracked; the committed file is what is gone.
+    await eventually(
+      "the commit seen",
+      async () => !(await state()).changes.some((change) => change.path === "README.md"),
+      10_000
+    );
+    assert.equal((await state()).localBranches.length, 1);
+  });
+
   it("changes the theme for the next start only", async () => {
     const set = await ctl("settings-set-theme", "light-modern");
     assert.deepEqual(set.result, { saved: true, restartRequired: true });
@@ -134,5 +202,26 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     );
     assert.deepEqual(((await ctl("projects-list")).result as Project[]).map((entry) => entry.id), [project.id]);
     assert.equal(((await ctl("settings-get")).result as { theme: string }).theme, "light-modern");
+  });
+
+  it("closes a project with a running tab, and forgets it", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    // No waiting for the project's terminals: the socket that answered `version` after the
+    // restart only exists once the workspace is open (see main.ts's startControl).
+    const created = await ctl("tabs-create", "--agent", "shell", "--project", project.id);
+    assert.equal(created.status, 0, created.stderr);
+    const tab = created.result as TerminalDescriptor;
+    await eventually(
+      "the tab running",
+      async () =>
+        ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).some(
+          (entry) => entry.tabId === tab.tabId && entry.status === "running"
+        ),
+      STARTUP_MS
+    );
+    assert.deepEqual((await ctl("projects-remove", project.id)).result, { removed: project.id });
+    assert.deepEqual((await ctl("projects-list")).result, []);
+    assert.equal((await ctl("tabs-list", "--project", project.id)).status, 3, "not found");
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(userData, "projects.json"), "utf8")), [], "persisted");
   });
 });

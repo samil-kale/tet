@@ -445,7 +445,9 @@ literal strings.
 An agent can ask the app around it for things the filesystem and git can't give it — the theme,
 the project list, the terminal tabs. `src/main/control-server.ts` listens on a named pipe (win32)
 or a socket file in `userData`, one JSON line per connection, and answers with the same singletons
-`ipc.ts` holds: a second transport onto the same logic, never a second implementation
+`ipc.ts` holds, and comes up with the workspace — a socket that answers means every project's
+terminals and repository are there, so `tet-ctl` waits a few seconds for one rather than
+finding a half-open app: a second transport onto the same logic, never a second implementation
 (`addProject`/`removeProject` in `projects.ts` are shared for exactly that). The wire contract and
 the verb list are `src/shared/control.ts`; the CLI is `src/cli/tet-ctl.ts`, bundled on its own and
 run by a launcher in `userData/bin` under tet's own electron as node (a `node` on the machine is
@@ -587,12 +589,17 @@ always copies, and its per-agent rules are above.
 - `npm run compile` — bundle main, preload and renderer
 - `npm run typecheck`
 - `npm run lint`
-- `npm test` — compile, then node's own runner over `dist-test/`. Three files: the control
-  server with its electron-side dependencies faked, driven through the built `tet-ctl`
-  (`control.test.ts`); the pure pieces around it — env layering, launcher, context file
-  (`unit.test.ts`); and the real app started on a throwaway profile and driven through `tet-ctl`
-  alone (`app.test.ts` — needs a display, `xvfb-run` on Linux). Nothing looks into the window:
-  what the renderer did shows in the main process, or it is checked by hand.
+- `npm test` — compile, then node's own runner over `dist-test/`, one file per seam: the
+  control server with its electron-side dependencies faked, driven through the built `tet-ctl`
+  (`control.test.ts`); the real app on a throwaway profile, driven through `tet-ctl` alone
+  (`app.test.ts` — needs a display, `xvfb-run` on Linux); `git.ts` against the real git in a
+  repository built up step by step (`git.test.ts`); the session providers against transcripts
+  written the way the CLIs write them (`sessions.test.ts`); `tet.json` reading and writing
+  (`commands.test.ts`); the command-line reading (`command.test.ts`); the split view's rules
+  (`pane-layout.test.ts`); and the measured pieces — Codex's hook hash, `resolveCommand`, the
+  quoting helpers, the stores, the marker watch (`pieces.test.ts`), env layering, launcher and
+  context file (`unit.test.ts`). Nothing looks into the window: what the renderer did shows in
+  the main process, or it is checked by hand.
 - `npm start` — typecheck, compile, then launch (see "Do not restart the app yourself" first). The
   typecheck is there because esbuild only bundles: an unimported identifier is a global to it, and
   the app dies on load with a `ReferenceError` a `tsc` run would have named at the import.

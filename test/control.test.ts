@@ -6,6 +6,7 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import { controlSocketPath, startControlServer } from "../src/main/control-server";
 import type { ControlDeps, ControlTerminals } from "../src/main/control-server";
 import { CONTROL_ENV, EXIT_CODES } from "../src/shared/control";
+import { EMPTY_REPOSITORY_STATE } from "../src/shared/types";
 import type { AppSettings, Project, ProjectCommand, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl as runCli } from "./helpers";
 import type { Run } from "./helpers";
@@ -79,6 +80,12 @@ function deps(): ControlDeps {
       }
     },
     sessions: { get: (id) => (projects.some((project) => project.id === id) ? terminalsOf(id) : undefined) },
+    repositories: {
+      get: (id) =>
+        projects.some((project) => project.id === id)
+          ? { getState: () => ({ ...EMPTY_REPOSITORY_STATE, head: `main-of-${id}` }) }
+          : undefined
+    },
     listAgents: async () => [{ id: "shell", name: "Shell", installed: true }],
     agentIds: ["claude", "shell"],
     addProject: async (directory) => {
@@ -219,6 +226,11 @@ describe("tet-ctl against the control server", () => {
       (run.result as TerminalDescriptor[]).map((entry) => entry.projectId),
       [PROJECT.id, PROJECT.id]
     );
+  });
+
+  it("answers the repository's state for the caller's project, or the one given", async () => {
+    assert.equal(((await tetCtl(["repo-state"])).result as { head: string }).head, "main-of-p1");
+    assert.equal(((await tetCtl(["repo-state", "--project", OTHER.id])).result as { head: string }).head, "main-of-p2");
   });
 
   it("takes --project over the caller's own", async () => {

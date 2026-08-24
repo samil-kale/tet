@@ -4,7 +4,15 @@ import * as net from "node:net";
 import { CONTROL_VERBS, HELP_VERB } from "../shared/control";
 import type { ControlErrorCode, ControlRequest, ControlResponse } from "../shared/control";
 import { SYSTEM_THEME_ID, THEMES } from "../shared/themes";
-import type { AddRepositoryResult, AgentId, AppSettings, Project, ProjectCommand, TerminalDescriptor } from "../shared/types";
+import type {
+  AddRepositoryResult,
+  AgentId,
+  AppSettings,
+  Project,
+  ProjectCommand,
+  RepositoryState,
+  TerminalDescriptor
+} from "../shared/types";
 
 /**
  * What the control channel acts on, handed over by main.ts rather than imported: nothing here
@@ -25,6 +33,9 @@ export interface ControlDeps {
   };
   sessions: {
     get(projectId: string): ControlTerminals | undefined;
+  };
+  repositories: {
+    get(projectId: string): { getState(): RepositoryState } | undefined;
   };
   /** Every agent, and whether it is installed — the requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
@@ -142,6 +153,15 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "projects-list": () => ({ result: store.list() }),
+
+    "repo-state": (args, caller) => {
+      const found = project(args, caller);
+      const repository = deps.repositories.get(found.id);
+      if (!repository) {
+        throw new ControlError("internal", `project ${found.id} has no repository`);
+      }
+      return { result: repository.getState() };
+    },
 
     "projects-add": async (args) => {
       const added = await deps.addProject(text(args, "path", "path"));
