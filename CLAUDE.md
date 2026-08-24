@@ -478,6 +478,11 @@ asked. A theme change answers `restartRequired`; that is a fact for the agent to
 reason to restart on its own. A verb that ends its caller (its tab, its project, the app) replies
 before it acts, or the CLI dies with nothing on stdout.
 
+**Direction of travel**: every setting in `settings-get` should eventually be settable through
+`tet-ctl`, not just the theme, and the control channel should grow toward letting an agent drive
+the whole app, not just a project's git state and terminals — this loosens the "deliberately not
+there" list above over time rather than fixing it permanently.
+
 ## Never touch the user's agent configuration
 
 Everything TET generates lives under its own `userData` and is pointed at from outside:
