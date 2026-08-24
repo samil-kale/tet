@@ -12,7 +12,7 @@ import type {
   Project,
   ThemedAgentId
 } from "../../shared/types";
-import { ChevronIcon } from "./icons";
+import { Dropdown } from "./Dropdown";
 import { KEYBINDING_PRESETS } from "../keybinding-presets";
 import { notify } from "./Notices";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
@@ -181,17 +181,14 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             <>
               <label className="dialog-field">
                 <span>Color theme</span>
-                <div className="select-field">
-                  <select value={settings?.theme ?? SYSTEM_THEME_ID} onChange={(event) => applyTheme(event.target.value)}>
-                    <option value={SYSTEM_THEME_ID}>System</option>
-                    {THEMES.map((theme) => (
-                      <option key={theme.id} value={theme.id}>
-                        {theme.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronIcon expanded className="select-arrow" />
-                </div>
+                <Dropdown
+                  value={settings?.theme ?? SYSTEM_THEME_ID}
+                  onChange={applyTheme}
+                  options={[
+                    { value: SYSTEM_THEME_ID, label: "System" },
+                    ...THEMES.map((theme) => ({ value: theme.id, label: theme.label }))
+                  ]}
+                />
               </label>
               <p className="dialog-detail">Apply theme to</p>
               {settings &&
@@ -282,42 +279,26 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   </label>
                   <label className="dialog-field">
                     <span>Sort order</span>
-                    <div className="select-field">
-                      <select
-                        value={explorerSettings.sortOrder}
-                        onChange={(event) =>
-                          updateExplorerSettings(
-                            "sortOrder",
-                            event.target.value as ExplorerSortOrder,
-                            window.tet.repository.setSortOrder
-                          )
-                        }
-                      >
-                        {SORT_ORDERS.map((order) => (
-                          <option key={order.id} value={order.id}>
-                            {order.label}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronIcon expanded className="select-arrow" />
-                    </div>
+                    <Dropdown
+                      value={explorerSettings.sortOrder}
+                      onChange={(order) =>
+                        updateExplorerSettings(
+                          "sortOrder",
+                          order as ExplorerSortOrder,
+                          window.tet.repository.setSortOrder
+                        )
+                      }
+                      options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
+                    />
                   </label>
                 </>
               )}
               <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
-              <div className="select-field">
-                <select
-                  value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
-                  onChange={(event) => applyPreset(event.target.value)}
-                >
-                  {KEYBINDING_PRESETS.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronIcon expanded className="select-arrow" />
-              </div>
+              <Dropdown
+                value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
+                onChange={applyPreset}
+                options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
+              />
             </>
           )}
           {tab === "info" && info && (

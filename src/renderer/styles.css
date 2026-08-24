@@ -31,6 +31,12 @@ button {
   cursor: pointer;
 }
 
+/* Monaco and xterm draw their own selection (from editor-/terminal-selectionBackground); this is
+   for the few plain-text spots that opt back into user-select, e.g. .diff-body and text inputs. */
+::selection {
+  background: var(--vscode-editor-selectionBackground);
+}
+
 /* Keyboard focus only (:focus-visible), never a mouse click — VS Code's own rule. 1px in
    --vscode-focusBorder, like every other line that points at something. */
 button:focus-visible {
@@ -42,7 +48,7 @@ button:focus-visible {
    Neither may set the font, the border or the padding on its own — the height is what they add
    up to, and two of them drifting apart is what makes a row of fields look crooked. */
 input,
-select {
+.dropdown-trigger {
   font: inherit;
   border-radius: 2px;
   outline: none;
@@ -59,32 +65,33 @@ input::placeholder {
   color: var(--vscode-input-placeholderForeground);
 }
 
-/* The colors VS Code keeps for a dropdown — all but the input's, except for the popup's own
-   background, which the option below needs. */
-select {
-  color: var(--vscode-dropdown-foreground);
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border);
-  /* Chrome draws its own arrow hard against the right border however much padding it is given,
-     so the control is left unstyled and `.select-arrow` is drawn over it instead. This is the
-     room that arrow needs; without it the longest option runs underneath it. */
-  appearance: none;
-  padding-right: 26px;
-}
-
-input:focus,
-select:focus {
+input:focus {
   border-color: var(--vscode-focusBorder);
 }
 
-/* Holds the arrow over the select's right edge. The icon takes no clicks, so the whole field
+/* `Dropdown`'s own trigger button, styled like a `<select>` — a native select's open list is
+   drawn by Chrome itself, ignoring every color and :hover rule on this page (measured, not
+   assumed), so there is no way to theme its highlighted row short of not using one. */
+.dropdown-trigger {
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Room for `.select-arrow`, drawn over this button's right edge rather than laid out beside it. */
+  padding-right: 26px;
+}
+
+/* Holds the arrow over the dropdown's right edge. The icon takes no clicks, so the whole field
    still opens the list when it is hit. */
 .select-field {
   position: relative;
   display: flex;
 }
 
-.select-field select {
+.select-field .dropdown-trigger {
   flex: 1;
   min-width: 0;
 }
@@ -96,11 +103,6 @@ select:focus {
   transform: translateY(-50%);
   pointer-events: none;
   color: var(--vscode-dropdown-foreground);
-}
-
-/* Without this the list Chrome opens is the platform's own white one under a dark field. */
-option {
-  background: var(--vscode-dropdown-listBackground);
 }
 
 /* Scrollbars, VS Code's way: no arrows, no track of their own, and a slider translucent
@@ -716,7 +718,7 @@ option {
    `z-index: 1` and 2px of negative margin into this side, so without outranking it here the
    sash's own grey line paints straight over this border. */
 .tab-strip.git-open {
-  border-left: 1px solid var(--vscode-focusBorder);
+  border-left: 2px solid var(--vscode-focusBorder);
   z-index: 2;
 }
 
@@ -888,14 +890,20 @@ option {
   cursor: default;
 }
 
-/* The new-session menu's own look — the old dropdown's spacing, kept apart from the tab
-   context menu's wider padding so that one stays untouched. */
-.new-session-menu {
-  min-width: 140px;
+/* The compact look a plain, icon-less list of choices takes — the new-session menu and
+   `Dropdown`'s own popup — kept apart from the tab context menu's wider padding (built for a
+   row of icon actions) so that one stays untouched. */
+.new-session-menu,
+.dropdown-menu {
   border-radius: 3px;
 }
 
-.new-session-menu .context-menu-item {
+.new-session-menu {
+  min-width: 140px;
+}
+
+.new-session-menu .context-menu-item,
+.dropdown-menu .context-menu-item {
   height: auto;
   padding: 5px 12px;
 }
@@ -1124,8 +1132,8 @@ option {
   min-height: 0;
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-editorWidget-border);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--vscode-widget-shadow);
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
   overflow: hidden;
   outline: none;
 }
@@ -1473,8 +1481,8 @@ option {
   font-size: 13px;
   background: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-editorWidget-border);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--vscode-widget-shadow);
+  border-radius: 5px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
 }
 
 /* The add-repository dialog's width rather than a third one of its own: a question whose
@@ -1495,7 +1503,7 @@ option {
   align-items: stretch;
   height: 35px;
   margin: -16px -16px 0;
-  border-radius: 6px 6px 0 0;
+  border-radius: 5px 5px 0 0;
   overflow: hidden;
   background: var(--vscode-tab-inactiveBackground);
   border-bottom: 1px solid var(--vscode-panel-border);
@@ -1542,6 +1550,10 @@ option {
   align-items: center;
   gap: 6px;
   cursor: pointer;
+}
+
+.dialog-checkbox input {
+  accent-color: var(--vscode-focusBorder);
 }
 
 /* Sized to the notifications tab, the fuller one, and fixed for the reason add-repository is:

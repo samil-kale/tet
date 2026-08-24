@@ -86,11 +86,6 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
   /** The projects the wand is out for; this view outlives a project switch. */
   const [suggestingIn, setSuggestingIn] = useState<string[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; command: ProjectCommand } | null>(null);
-  /**
-   * The projects the automatic lookup has already run for. A set, not one id: switching away
-   * and back would otherwise start it over, and it costs an agent run each time.
-   */
-  const autoSuggested = useRef(new Set<string>());
   /** Which project is on screen, readable from a callback that started before a switch. */
   const shown = useRef(projectId);
   /** The list as it stands now, for callbacks that were made before the last change to it. */
@@ -124,13 +119,6 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
         return;
       }
       applyCommands(saved ?? []);
-      // No tet.json at all: nobody has set this project up here, which is the one moment
-      // where looking its commands up unasked is worth the wait. A file with an empty list is
-      // someone having deleted them all, and stays empty.
-      if (saved === null && !autoSuggested.current.has(projectId)) {
-        autoSuggested.current.add(projectId);
-        void suggest(projectId);
-      }
     });
     // The file is the record, and it changes without this list: an editor, an agent in one of
     // the tabs, a checkout. Read again on every change, our own writes included — those come
@@ -248,6 +236,19 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     }
   };
 
+  /** Confirms before the wand runs, since what it finds replaces the list without review. */
+  const askSuggest = async (project: string): Promise<void> => {
+    const answer = await confirm({
+      title: "Find commands automatically",
+      message: "An agent will look through the project and suggest commands to run.",
+      detail: "The suggestions are added to the list without review — they don't always work correctly.",
+      confirmLabel: "Find commands"
+    });
+    if (answer.confirmed) {
+      void suggest(project);
+    }
+  };
+
   /**
    * The wand. The agent reads the project and names what it can run; the whole list comes
    * back, so this does not have to re-read the file. It can take minutes, long enough for the
@@ -298,9 +299,9 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
         <span className="section-header-actions">
           <button
             className="icon-button"
-            title={suggesting ? "Looking for commands..." : "Have an agent find this project's commands"}
+            title={suggesting ? "Looking for commands..." : "Automatically find commands"}
             disabled={!projectId || suggesting}
-            onClick={() => projectId && void suggest(projectId)}
+            onClick={() => projectId && void askSuggest(projectId)}
           >
             <SparkleIcon />
           </button>

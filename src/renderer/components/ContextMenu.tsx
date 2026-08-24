@@ -21,9 +21,11 @@ interface ContextMenuProps {
   onClose: () => void;
   /** Appended to "context-menu", for a caller that needs its own look on top of the shared one. */
   className?: string;
+  /** Matches the menu to a trigger's own width, e.g. `Dropdown` standing in for a `<select>`. */
+  width?: number;
 }
 
-export function ContextMenu({ x, y, entries, onClose, className }: ContextMenuProps) {
+export function ContextMenu({ x, y, entries, onClose, className, width }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
 
   // Anchored at the pointer like VS Code, then clamped so a menu opened near an edge
@@ -76,7 +78,11 @@ export function ContextMenu({ x, y, entries, onClose, className }: ContextMenuPr
   }, []);
 
   return (
-    <div ref={menu} className={`context-menu${className ? ` ${className}` : ""}`} style={{ left: x, top: y }}>
+    <div
+      ref={menu}
+      className={`context-menu${className ? ` ${className}` : ""}`}
+      style={{ left: x, top: y, ...(width !== undefined ? { width } : {}) }}
+    >
       {entries.map((entry, index) =>
         entry === SEPARATOR ? (
           <div key={index} className="context-menu-separator" />
