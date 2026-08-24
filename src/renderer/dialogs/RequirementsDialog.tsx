@@ -61,8 +61,8 @@ export function RequirementsDialog({ requirements, checking, onRecheck }: Requir
             ))}
           </div>
           <p className="dialog-detail">
-            A program installed just now is looked for again on check. One installed somewhere
-            outside its package manager's usual place may only be found once tet is restarted.
+            A program installed somewhere outside its package manager's usual place may only be
+            found once tet is restarted.
           </p>
         </div>
         <div className="dialog-buttons">
