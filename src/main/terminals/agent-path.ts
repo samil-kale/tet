@@ -10,7 +10,9 @@ import * as path from "node:path";
  * tet read `process.env.PATH`: the startup check spawns `<agent> --version` (requirements.ts →
  * checkAgentInstalled), and every terminal derives its env from `process.env` (buildEnv). So one
  * change here serves both, and nothing downstream has to know. Idempotent: a second call finds
- * nothing new and leaves PATH as it is.
+ * nothing new and leaves PATH as it is — and a call while one is still running joins it rather
+ * than starting a second shell (main.ts starts the first without awaiting it; the requirements
+ * check may arrive before it is done).
  *
  * Why it is needed at all: a program is found only in a PATH directory, and the PATH a process
  * inherits is its launcher's. Started from the dock or the Start menu — the normal case — tet
@@ -31,7 +33,16 @@ import * as path from "node:path";
  * common enough state (an installer that skipped the PATH edit) to be worth covering rather than
  * leaving the user at the requirements wall.
  */
-export async function augmentAgentPath(): Promise<void> {
+export function augmentAgentPath(): Promise<void> {
+  pending ??= augment().finally(() => {
+    pending = undefined;
+  });
+  return pending;
+}
+
+let pending: Promise<void> | undefined;
+
+async function augment(): Promise<void> {
   const key = Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
   const current = process.env[key] ?? "";
   let merged: string;
@@ -92,15 +103,14 @@ export function win32AgentDirs(env: NodeJS.ProcessEnv, npmPrefix: string | undef
  * it — the environment (`NPM_CONFIG_PREFIX`, `npm_config_prefix`) before the user's `~/.npmrc` —
  * rather than by asking npm: `npm config get prefix` through cmd.exe measured ~480 ms on a warm
  * machine, paid on every start before the window, for an answer that is the `%APPDATA%\npm`
- * default nearly always (and that default is in win32AgentDirs regardless). Undefined when
- * nothing names one. Only ever called on win32.
+ * default nearly always (and that default is in win32AgentDirs regardless). `${VAR}` in the
+ * value is expanded the way npm does it, from `env`; a variable not set stays literal, as in
+ * npm. Undefined when nothing names one. Only ever called on win32.
  */
 export function npmGlobalPrefix(env: NodeJS.ProcessEnv, npmrc: string | undefined = readUserNpmrc()): string | undefined {
   const fromEnv = env.NPM_CONFIG_PREFIX ?? env.npm_config_prefix;
-  if (fromEnv) {
-    return fromEnv;
-  }
-  return npmrc?.match(/^\s*prefix\s*=\s*(.+?)\s*$/m)?.[1];
+  const value = fromEnv || npmrc?.match(/^\s*prefix\s*=\s*(.+?)\s*$/m)?.[1];
+  return value?.replace(/\$\{([^}]+)\}/g, (match, name: string) => env[name] ?? match);
 }
 
 function readUserNpmrc(): string | undefined {

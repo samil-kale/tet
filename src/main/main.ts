@@ -265,13 +265,11 @@ if (!app.requestSingleInstanceLock()) {
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
     // Before anything reads PATH — the requirements check and every terminal both do — add where
     // agents actually install to it, so one the user put on their login shell's PATH or in npm's
-    // global bin is found even when tet was launched with the OS's barer GUI PATH. See
-    // augmentAgentPath; awaited because on macOS/Linux it asks the login shell and the check
-    // below must see the result. Run again on every re-check of the requirements (ipc.ts).
-    await augmentAgentPath();
-    // Up front rather than on the first repository: forking it costs a moment, and every
-    // project that opens below is about to ask it something.
-    startGitProcess();
+    // global bin is found even when tet was launched with the OS's barer GUI PATH. Started here
+    // and awaited only below the window: on macOS/Linux it asks the login shell, which with an
+    // nvm in the profile takes a good part of a second, and the window needs as long to load
+    // before it asks anything. The requirements re-check (ipc.ts) joins the same run.
+    const pathReady = augmentAgentPath();
     // Before a project opens, since opening one is what asks an agent for its sessions: what
     // a run that was killed left running is taken down here. See AgentDefinition.prepareApp.
     prepareAgents(app.getPath("userData"));
@@ -297,6 +295,11 @@ if (!app.requestSingleInstanceLock()) {
     controlChannel = { token: controlToken, socketPath };
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
     createWindow();
+    // The git process inherits its environment at the fork, so it waits for the PATH — but
+    // still up front rather than on the first repository: the renderer is loading meanwhile,
+    // and its first git question comes only after the requirements check passes.
+    await pathReady;
+    startGitProcess();
     startAutoUpdate((severity, message, progress) => send("app:notice", { severity, message, progress }));
 
     app.on("activate", () => {
