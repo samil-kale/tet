@@ -35,7 +35,7 @@ let controlEnv: Record<string, string> = {};
 /** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */
 let launcherDir: string | undefined;
 
-export function setControlEnv(vars: Record<string, string>, binDir: string): void {
+export function setControlEnv(vars: Record<string, string>, binDir: string | undefined): void {
   controlEnv = vars;
   launcherDir = binDir;
 }

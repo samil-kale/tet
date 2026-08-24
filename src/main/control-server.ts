@@ -259,6 +259,9 @@ function reject(code: ControlErrorCode, message: string): ControlResponse {
   return { ok: false, error: { code, message } };
 }
 
+/** How long a connection may sit without a full request line — a tet-ctl writes it at once. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 /**
  * The local server an agent's `tet-ctl` talks to — a named pipe or unix socket, one request
  * per connection (see src/shared/control.ts). Every request carries the token main.ts made
@@ -296,7 +299,13 @@ export async function startControlServer(
     }
   };
 
+  // Every open connection, so `close` can end them: `net.Server.close` waits for each one, and
+  // a client that connected and never sent its line would otherwise hold the quit open.
+  const sockets = new Set<net.Socket>();
   const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+    socket.setTimeout(REQUEST_TIMEOUT_MS, () => socket.destroy());
     socket.setEncoding("utf8");
     let buffer = "";
     let answered = false;
@@ -310,6 +319,8 @@ export async function startControlServer(
         return;
       }
       answered = true;
+      // The verb itself takes as long as it takes (`projects-add` clones).
+      socket.setTimeout(0);
       let request: ControlRequest;
       try {
         request = JSON.parse(buffer.slice(0, newline)) as ControlRequest;
@@ -340,6 +351,9 @@ export async function startControlServer(
           }
           resolve();
         });
+        for (const socket of sockets) {
+          socket.destroy();
+        }
       })
   };
 }

@@ -4,6 +4,8 @@ import { WIN_BOM } from "./os-notify";
 
 /** Collapses the burst of chunks a single command's output arrives in into one write. */
 const WRITE_DEBOUNCE_MS = 250;
+/** Under continuous output the debounce never fires; this is the longest a write is held back. */
+const WRITE_MAX_WAIT_MS = 2000;
 /**
  * The log lives in its own file rather than being inlined into every prompt, so it can hold
  * far more than an excerpt. A verbose producer still fills it without bound, so keep the
@@ -137,6 +139,8 @@ function carryFrom(data: string): number {
 export class ShellContext {
   private readonly log: CappedLogFile;
   private writeTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Set on the first append after a flush; the latest the next flush may come. */
+  private flushDeadline: number | undefined;
   /** What was last written, so an unchanged context isn't rewritten on every burst. */
   private written: string | undefined;
   /** Writes are chained rather than started concurrently — they share one temp path. */
@@ -193,11 +197,20 @@ export class ShellContext {
       this.log.append(`${this.log.chars === 0 ? "" : "\n"}=== shell tab: ${label} ===\n`);
     }
     this.log.append(text);
+    // Debounced, but no further than the deadline: a build or a `tail -f` never pauses long
+    // enough for the debounce alone, and a file that is only ever written once the output
+    // stops is one the agent can't read while the user is asking about it.
+    const now = Date.now();
+    this.flushDeadline ??= now + WRITE_MAX_WAIT_MS;
     clearTimeout(this.writeTimer);
-    this.writeTimer = setTimeout(() => {
-      this.log.flush();
-      this.writeContext();
-    }, WRITE_DEBOUNCE_MS);
+    this.writeTimer = setTimeout(
+      () => {
+        this.flushDeadline = undefined;
+        this.log.flush();
+        this.writeContext();
+      },
+      Math.min(WRITE_DEBOUNCE_MS, Math.max(0, this.flushDeadline - now))
+    );
   }
 
   private writeContext(): void {

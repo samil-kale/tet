@@ -107,7 +107,7 @@ export const claudeSessionProvider: SessionProvider = {
       if (!projectDir || stopped || projectWatcher) {
         return;
       }
-      projectWatcher = fs.watch(projectDir, (_eventType, filename) => {
+      const onEvent = (_eventType: string, filename: string | null): void => {
         // The directory itself deleted (a cleared `~/.claude/projects`) raises no error: win32
         // reports it as an unending storm of events naming the directory's own absolute path,
         // Linux as one event carrying its basename after which the watch is silently dead. Back
@@ -126,7 +126,15 @@ export const claudeSessionProvider: SessionProvider = {
         if (filename === null || filename.endsWith(".jsonl")) {
           onChange();
         }
-      });
+      };
+      try {
+        projectWatcher = fs.watch(projectDir, onEvent);
+      } catch {
+        // Gone again between the lookup and the watch, or no descriptor left for one: the
+        // listing stays polled, as it is before Claude ever ran here. Codex and opencode
+        // guard their watch the same way.
+        return;
+      }
       rootWatcher?.close();
       rootWatcher = undefined;
     };

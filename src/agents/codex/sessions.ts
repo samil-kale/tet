@@ -310,6 +310,22 @@ async function safeReaddir(dir: string): Promise<string[]> {
   }
 }
 
+/**
+ * Both caches hold an entry per rollout on the machine and are keyed by path, so a rollout
+ * deleted — by `remove`, or by Codex's own picker behind tet's back — is dropped here, at the
+ * one point every listing already knows the full set. Without this they only ever grow.
+ */
+function forgetMissing(files: string[]): void {
+  const present = new Set(files);
+  for (const cache of [metaCache, tailCache]) {
+    for (const filePath of cache.keys()) {
+      if (!present.has(filePath)) {
+        cache.delete(filePath);
+      }
+    }
+  }
+}
+
 /** win32 paths are case-insensitive; Codex itself lower-cases them for its own `cwd` matching. */
 function samePath(a: string, b: string): boolean {
   return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
@@ -319,6 +335,7 @@ export const codexSessionProvider: SessionProvider = {
   async list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
     try {
       const files = await listRolloutFiles();
+      forgetMissing(files);
       const names = await readSessionNames();
       const entries = await mapLimited(files, async (filePath): Promise<AgentSessionInfo | undefined> => {
           const meta = await readSessionMeta(filePath);

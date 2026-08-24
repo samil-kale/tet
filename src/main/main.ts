@@ -278,10 +278,15 @@ if (!app.requestSingleInstanceLock()) {
     // Packaged, dist/ sits in app.asar, which a process other than electron cannot read into;
     // tet-ctl.js is unpacked beside it (electron-builder.yml).
     const cliPath = path.join(app.isPackaged ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
-    setControlEnv(
-      { [CONTROL_ENV.socket]: socketPath, [CONTROL_ENV.token]: controlToken },
-      writeLaunchers(app.getPath("userData"), cliPath)
-    );
+    let binDir: string | undefined;
+    try {
+      binDir = writeLaunchers(app.getPath("userData"), cliPath);
+    } catch (error) {
+      // A read-only profile or a locked file must not cost the window: without the launcher
+      // the terminals merely have no `tet-ctl` on their PATH.
+      console.error("[tet] could not write the tet-ctl launcher:", error);
+    }
+    setControlEnv({ [CONTROL_ENV.socket]: socketPath, [CONTROL_ENV.token]: controlToken }, binDir);
     controlChannel = { token: controlToken, socketPath };
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
     createWindow();

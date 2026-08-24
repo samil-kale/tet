@@ -73,8 +73,11 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
   });
 
   after(async () => {
-    if (pid !== undefined) {
-      kill(pid);
+    // The pid tet reported, or — when it never answered — the electron that was spawned, so a
+    // startup that failed leaves no process behind holding the profile directory.
+    const target = pid ?? child?.pid;
+    if (target !== undefined) {
+      kill(target);
     }
     await eventually("tet gone", async () => (await alive()) === undefined, 10_000).catch(() => undefined);
     for (const dir of [userData, repo]) {

@@ -318,6 +318,11 @@ export class ProjectSessionManager {
   }
 
   private releaseIndicator(tabId?: string): void {
+    // A setup or a linger timer settling after the project closed: `dispose` cleared the
+    // per-tab counts, and a release now would take the total below the zero it crossed.
+    if (this.disposed) {
+      return;
+    }
     this.indicators -= 1;
     if (this.indicators === 0) {
       this.callbacks.onStartupProgress(this.project.id, false);
@@ -616,7 +621,6 @@ export class ProjectSessionManager {
     void this.ensurePrepared(this.runtimeFor(tab.agentId))
       .then(() => {
         const dims = this.starting.get(tabId);
-        this.starting.delete(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
           // Closed while the setup ran: what it brought back has no tab to serve, and the
           // close that would have let it go found nothing to release yet.
@@ -625,7 +629,15 @@ export class ProjectSessionManager {
         }
         this.startSession(tab).ensureStarted(dims.cols, dims.rows);
       })
-      .finally(() => this.releaseIndicator(tabId));
+      .catch((error: unknown) => {
+        this.callbacks.onNotice("error", `${tab.agentId} could not be started: ${String(error)}`);
+      })
+      .finally(() => {
+        // Whichever way the setup ended: an entry left here would make every later resize
+        // return early as "still starting", and the tab would never spawn.
+        this.starting.delete(tabId);
+        this.releaseIndicator(tabId);
+      });
   }
 
   private startSession(tab: TabState): TerminalSession {
@@ -1128,6 +1140,7 @@ export class ProjectSessionManager {
     this.tabs = [];
     this.starting.clear();
     this.tabIndicators.clear();
+    this.indicators = 0;
     this.shellContext.dispose();
     for (const runtime of this.runtimes.values()) {
       clearTimeout(runtime.reconcileTimer);
@@ -1163,7 +1176,9 @@ export class SessionManagerRegistry {
     }
     const manager = new ProjectSessionManager(project, this.storageRoot, this.settings, this.callbacks);
     this.managers.set(project.id, manager);
-    void manager.bootstrap();
+    manager.bootstrap().catch((error: unknown) => {
+      this.callbacks.onNotice("error", `${project.name} could not be opened: ${String(error)}`);
+    });
     return manager;
   }
 

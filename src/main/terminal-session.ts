@@ -254,6 +254,11 @@ export class TerminalSession {
     const rows = this.lastRows;
     const respawn = (): void => {
       this.restartQueued = false;
+      // A `stop()` that landed while the kill was underway wins: the tab is being closed, and
+      // a process spawned now would belong to nothing and never be killed.
+      if (this.stopping) {
+        return;
+      }
       this.setStatus("ready");
       this.start(cols, rows);
     };
@@ -261,7 +266,12 @@ export class TerminalSession {
       this.restartQueued = true;
       this.intentionalStop = true;
       this.process.onExit(respawn);
-      this.process.kill();
+      try {
+        this.process.kill();
+      } catch (error) {
+        // Already gone; its exit is on its way and `respawn` runs from there.
+        console.error(`[tet] failed to kill ${this.executable}:`, error);
+      }
     } else {
       respawn();
     }
