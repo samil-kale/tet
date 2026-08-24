@@ -115,15 +115,20 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     await eventually("the tab gone", async () => !(await tabs()).some((entry) => entry.tabId === tab.tabId), 10_000);
   });
 
-  it("wrote the shell's output into the context file the agents read", async () => {
+  it("writes the shell's output into the context file the agents read", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const contextFile = path.join(userData, "projects", project.id, "context.md");
+    // A shell tab of its own, kept open until the paragraph is there: the tab the test above
+    // closes has, under load, not drawn its prompt by then — and a shell that printed nothing
+    // has nothing to be written.
+    const tab = (await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TerminalDescriptor;
     await eventually(
       "the shell paragraph",
       () => fs.existsSync(contextFile) && /Shell output from the user's shell tabs/.test(fs.readFileSync(contextFile, "utf8")),
       STARTUP_MS
     );
     assert.match(fs.readFileSync(contextFile, "utf8"), /tet-ctl/);
+    assert.equal((await ctl("tabs-close", tab.tabId, "--project", project.id)).status, 0);
   });
 
   it("runs a saved command in a tab that ends the way the command did", async () => {
