@@ -500,7 +500,7 @@ export const Pane = memo(function Pane({
                 // Not merely the ranking above: a question is *hidden* on the tab in front of the
                 // user (`waitingTabIds` leaves it out), and the spinner must not step in for it —
                 // a session stopped on a question is not working, on screen or off, the same rule
-                // `hasBusyTab` applies to the project row.
+                // `App`'s `marks[].busy` applies to the project row.
                 <SpinnerIcon className="tab-icon session-mark spinning" />
               ) : markedTabIds.includes(tab.tabId) ? (
                 <CommentIcon className="tab-icon session-mark" />

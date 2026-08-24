@@ -74,7 +74,7 @@ icon buttons — git toggle, browse-files, layout picker, settings — regardles
 The cross-file facts, each reasoned at its site:
 
 - **The layout lives in `App`** (`layouts: Record<projectId, ProjectLayout>`), not in
-  `TerminalsPane`: the tab shortcuts, and `markedTabs`/`waitingTabs`/`seen`, need "the tab on
+  `TerminalsPane`: the tab shortcuts, and `markedTabs`/`seen`, need "the tab on
   screen" — one *per pane* with a split (`visibleTabIds`) — and two views applying that rule would
   be two chances to disagree. A pane asks for a selection change through `onActivateTab`.
 - **A tab belongs to exactly one pane**, assigned lazily to the focused pane on first sight
@@ -321,7 +321,7 @@ A session says whether it's *working* (spinner), *stopped for an answer* (questi
 *finished out of sight* (speech bubble) — one mechanism read at three points of the same turn,
 drawn on the tab and on its project's row. A question is a standing fact, only *hidden* while its
 tab is in front of the user and back the moment it isn't; a finished turn is a one-off notice
-cleared by looking. A stopped session never spins anywhere (`hasBusyTab`, and `Pane`'s own
+cleared by looking. A stopped session never spins anywhere (`marks[].busy`, and `Pane`'s own
 check): it is precisely *not* working. A sidebar bell for "finished" was tried and reverted — two
 glyphs for one condition read as two conditions.
 
@@ -350,7 +350,7 @@ State lives as `TerminalDescriptor.busy` / `waitingAt` / `finishedAt` per tab in
 process. Two halves keep it honest: the **main process** sets it, never asking whether it should
 (a turn reported before any tab claims its session waits in `pendingTurns` on a timer); the
 **renderer** decides what's *shown* and clears what was seen, the rule living once in
-`App.markedTabs`/`waitingTabs` so two views can't disagree. `App` holds every project's tabs for
+`App.markedTabs` so two views can't disagree. `App` holds every project's tabs for
 the same reason it holds repository states: the project list needs all of them at once.
 
 ## Ending a session
