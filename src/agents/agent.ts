@@ -248,4 +248,31 @@ export interface AgentDefinition {
    * would have had to thread, and why it is a per-agent count instead.
    */
   quitPresses?: number;
+  /**
+   * Whether a plain `\x03` kills this CLI instead of reaching it as input, so Ctrl+C without a
+   * selection is swallowed rather than sent (terminal-views.ts). Measured, not assumed: Claude
+   * Code and opencode run raw and read the byte as any other (clear the prompt, interrupt a
+   * turn), but Codex sits in cooked mode, where on win32 ConPTY raises it as a process-level
+   * CTRL_C_EVENT that kills a CLI with no handler for it rather than "interrupting" it.
+   * Closing the tab is such an agent's equivalent action.
+   */
+  plainCtrlCKills?: boolean;
+  /**
+   * Whether this agent's TUI takes the right mouse button itself through xterm's mouse
+   * reporting (Claude Code pastes, opencode copies the selection). Where it does not — the
+   * shell never turns mouse reporting on, and Codex deliberately leaves the mouse to the
+   * terminal (github.com/openai/codex#8344) — tet supplies the usual terminal convention
+   * itself: copy a selection, or paste when there is none (terminal-views.ts).
+   */
+  takesRightMouse?: boolean;
+  /**
+   * opencode's TUI assigns blue and magenta the other way round from VS Code's terminal
+   * palette, so what it draws comes out in the colour the user did not theme — the renderer
+   * swaps the two in the palette this agent's terminals are handed (buildXtermTheme in
+   * theme.ts), putting them back. Ported from sbc-vsc-agents, where it was observed, not
+   * derived — if opencode's colours ever look wrong the other way, take this back out. It goes
+   * with the `"theme": "system"` in tui-config.ts, which is what makes opencode take that
+   * palette at all rather than painting in its own.
+   */
+  swapsBlueMagenta?: boolean;
 }

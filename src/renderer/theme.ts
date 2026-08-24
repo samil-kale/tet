@@ -1,5 +1,5 @@
 import type { ITheme } from "@xterm/xterm";
-import type { AgentId } from "../shared/types";
+import type { AgentInfo } from "../shared/types";
 
 const ANSI_CSS_VARS: Record<string, string> = {
   black: "--vscode-terminal-ansiBlack",
@@ -27,7 +27,7 @@ const ANSI_CSS_VARS: Record<string, string> = {
  * One thing in it depends on the agent (see the swap below), so a terminal's theme is built per
  * terminal rather than once for the window.
  */
-export function buildXtermTheme(agentId: AgentId): ITheme {
+export function buildXtermTheme(agent: AgentInfo): ITheme {
   const styles = getComputedStyle(document.documentElement);
   const read = (name: string): string | undefined => styles.getPropertyValue(name).trim() || undefined;
 
@@ -63,18 +63,13 @@ export function buildXtermTheme(agentId: AgentId): ITheme {
     overviewRulerBorder: "#00000000"
   };
 
-  // opencode's TUI assigns blue and magenta the other way round from VS Code's terminal
-  // palette, so what it draws comes out in the colour the user did not theme — swapping the
-  // two in the palette it is handed puts them back. Ported from sbc-vsc-agents, where it was
-  // observed, not derived — if opencode's colours ever look wrong the other way, take this back
-  // out. It goes with the `"theme": "system"` in tui-config.ts, which is what makes
-  // opencode take this palette at all rather than painting in its own. Nothing else needs it,
-  // so it is a conditional here rather than a callback on AgentDefinition: that interface is
-  // the main process's, and the renderer is where a colour is resolved.
-  const ansiCssVars =
-    agentId === "opencode"
-      ? { ...ANSI_CSS_VARS, blue: ANSI_CSS_VARS.magenta, magenta: ANSI_CSS_VARS.blue }
-      : ANSI_CSS_VARS;
+  // opencode's TUI draws blue and magenta the other way round — the story, observed and not
+  // derived, is at AgentDefinition.swapsBlueMagenta, whose value travels here as a flag on
+  // AgentInfo: that interface is the main process's, and the renderer is where a colour is
+  // resolved.
+  const ansiCssVars = agent.swapsBlueMagenta
+    ? { ...ANSI_CSS_VARS, blue: ANSI_CSS_VARS.magenta, magenta: ANSI_CSS_VARS.blue }
+    : ANSI_CSS_VARS;
 
   for (const [key, cssVar] of Object.entries(ansiCssVars)) {
     (theme as Record<string, string | undefined>)[key] = read(cssVar);

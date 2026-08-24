@@ -1,12 +1,17 @@
 import { useEffect, useRef } from "react";
-import type { AgentId } from "../../shared/types";
+import type { AgentInfo } from "../../shared/types";
 import { attachTerminal, hasTerminal } from "../terminal-views";
 
 interface TerminalHostProps {
   projectId: string;
   tabId: string;
-  /** Which agent's terminal this is — one colour of the theme depends on it (see theme.ts). */
-  agentId: AgentId;
+  /**
+   * Which agent's terminal this is — the view bakes its flags in at construction (one colour
+   * of the theme among them, see theme.ts). Undefined until the pane's `agents.list()` call
+   * resolves, which is why attaching waits for it below: a view built without the flags would
+   * keep the wrong ones for its whole life.
+   */
+  agent: AgentInfo | undefined;
   /** The one on screen in its pane; the others keep their layout but stay hidden. */
   active: boolean;
   /** Whether the pane itself is on screen — the project is the one selected. */
@@ -30,14 +35,14 @@ interface TerminalHostProps {
  * unmounted container it would keep taking output into a node with no layout, which is exactly
  * what the `visibility` rule below exists to prevent for a hidden tab.
  */
-export function TerminalHost({ projectId, tabId, agentId, active, visible }: TerminalHostProps) {
+export function TerminalHost({ projectId, tabId, agent, active, visible }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (container.current && ((active && visible) || hasTerminal(projectId, tabId))) {
-      attachTerminal(projectId, tabId, agentId, container.current);
+    if (container.current && agent && ((active && visible) || hasTerminal(projectId, tabId))) {
+      attachTerminal(projectId, tabId, agent, container.current);
     }
-  }, [projectId, tabId, agentId, active, visible]);
+  }, [projectId, tabId, agent, active, visible]);
 
   // "hidden" is visibility, not display — xterm needs a laid-out element to measure itself,
   // both when it opens and when output arrives for a background tab.

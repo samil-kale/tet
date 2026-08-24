@@ -381,6 +381,8 @@ its callbacks — a new agent is a new folder, one entry in `src/agents/index.ts
 - `resolveUrlPrefix` — completes a url the agent's TUI wrapped across rows
 - `createIsSessionReady` — the per-agent guess at "the CLI drew its first real frame"
 - `quitPresses` — how many Ctrl+C bytes make it quit by itself
+- `plainCtrlCKills`, `takesRightMouse`, `swapsBlueMagenta` — measured facts the *renderer* acts
+  on; they travel to it as flags on `AgentInfo`, since the renderer can't import `src/agents/`
 
 ### Never assume the agents behave alike
 
@@ -394,9 +396,9 @@ docs, and never by reasoning from one agent to another:
   Codex and opencode quit on one, and a second byte sent to a Codex already leaving *kills* the
   shutdown it would have completed. No single interval serves all three.
 - The right mouse button: Claude Code and opencode take it themselves through mouse reporting,
-  Codex deliberately leaves it to the terminal (`terminal-views.ts`).
+  Codex deliberately leaves it to the terminal (`takesRightMouse`).
 - Colours: opencode's `"theme": "system"` adopts the terminal palette but swaps blue and magenta
-  (`buildXtermTheme` swaps them back for it alone — observed, not derived); Codex ignores the
+  (`swapsBlueMagenta`; `buildXtermTheme` swaps them back — observed, not derived); Codex ignores the
   palette entirely until `-c tui.theme=ansi`, and on win32 guesses light/dark from the console,
   not the terminal (hence `launch.cmd` and the OSC 4 handling in `src/agents/codex/index.ts`);
   Claude Code paints dark unless told otherwise, so tet passes `theme` in its `--settings` file (a
@@ -405,8 +407,8 @@ docs, and never by reasoning from one agent to another:
 - Turn signals: opencode has an event stream, Claude Code and Codex need hook processes touching
   marker files, and Codex only runs a hook it has hashed and decided to trust.
 - Ctrl+C: Claude Code and opencode read `\x03` as an ordinary byte; to a Codex in cooked mode it
-  is a process-level `CTRL_C_EVENT` that kills it, so it is never sent there (`agentId ===
-  "codex"` in `attachCustomKeyEventHandler` draws the line).
+  is a process-level `CTRL_C_EVENT` that kills it, so it is never sent there (`plainCtrlCKills`
+  draws the line).
 
 So when adding anything that touches how a CLI is driven, the default is a field on
 `AgentDefinition` with a value per agent, not one shared constant with a comment guessing at the

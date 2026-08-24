@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { SYSTEM_THEME_ID } from "../shared/themes";
-import { DEFAULT_KEYBINDING_PRESET_ID } from "../shared/types";
+import { DEFAULT_KEYBINDING_PRESET_ID, THEMED_AGENT_IDS } from "../shared/types";
 import type { AppSettings, ThemeAgentSettings } from "../shared/types";
 
 /** What tet does before anyone has said otherwise; sbc's own defaults. */
@@ -13,7 +13,7 @@ const DEFAULTS: AppSettings = {
   },
   editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
   theme: SYSTEM_THEME_ID,
-  themeAgents: { claude: true, opencode: true, codex: true }
+  themeAgents: Object.fromEntries(THEMED_AGENT_IDS.map((id) => [id, true])) as ThemeAgentSettings
 };
 
 /**
@@ -96,9 +96,10 @@ function themeId(value: unknown): string {
 function agentFlags(value: unknown): ThemeAgentSettings {
   const flags = (typeof value === "object" && value !== null ? value : {}) as Partial<Record<string, unknown>>;
   const defaults = DEFAULTS.themeAgents;
-  return {
-    claude: typeof flags.claude === "boolean" ? flags.claude : defaults.claude,
-    opencode: typeof flags.opencode === "boolean" ? flags.opencode : defaults.opencode,
-    codex: typeof flags.codex === "boolean" ? flags.codex : defaults.codex
-  };
+  return Object.fromEntries(
+    THEMED_AGENT_IDS.map((id) => {
+      const flag = flags[id];
+      return [id, typeof flag === "boolean" ? flag : defaults[id]];
+    })
+  ) as ThemeAgentSettings;
 }

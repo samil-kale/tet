@@ -47,5 +47,7 @@ export const claudeAgent: AgentDefinition = {
   // the main chunk lands.
   createIsSessionReady: () => createByteThresholdCheck(500),
   // Two: the first only offers to exit, the second takes it up.
-  quitPresses: 2
+  quitPresses: 2,
+  // Its Ink TUI handles the right click itself (it pastes).
+  takesRightMouse: true
 };

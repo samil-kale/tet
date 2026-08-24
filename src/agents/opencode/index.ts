@@ -46,5 +46,9 @@ export const opencodeAgent: AgentDefinition = {
   // redraw itself is one chunk of 0.6 KB to 7.4 KB. 800 sits between.
   createIsSessionReady: () => createByteThresholdCheck(800),
   // One: its TUI starts leaving immediately.
-  quitPresses: 1
+  quitPresses: 1,
+  // Its TUI handles the right click itself (it copies the selection).
+  takesRightMouse: true,
+  // Observed with `"theme": "system"` (tui-config.ts); see the field's own doc.
+  swapsBlueMagenta: true
 };

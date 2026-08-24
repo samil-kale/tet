@@ -549,7 +549,7 @@ export const Pane = memo(function Pane({
             key={tab.tabId}
             projectId={projectId}
             tabId={tab.tabId}
-            agentId={tab.agentId}
+            agent={agents.find((agent) => agent.id === tab.agentId)}
             active={tab.tabId === activeTabId}
             visible={visible}
           />

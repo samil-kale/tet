@@ -5,6 +5,14 @@ export interface AgentInfo {
   displayName: string;
   /** Whether this agent persists sessions; the shell does not, so its tabs are just terminals. */
   hasSessions: boolean;
+  /*
+   * The three below mirror their AgentDefinition fields, where each is measured and reasoned —
+   * the renderer acts on them (terminal-views.ts, theme.ts) but cannot import src/agents, which
+   * is the main process's, so the facts travel here as data.
+   */
+  plainCtrlCKills: boolean;
+  takesRightMouse: boolean;
+  swapsBlueMagenta: boolean;
 }
 
 /** One program tet needs on the machine, and whether the startup check found it. */
@@ -71,12 +79,9 @@ export type ThemedAgentId = Exclude<AgentId, "shell">;
 
 export type ThemeAgentSettings = Record<ThemedAgentId, boolean>;
 
-/** The Appearance tab's rows, in the sidebar's own agent order. */
-export const THEMED_AGENTS: { id: ThemedAgentId; label: string }[] = [
-  { id: "claude", label: "Claude" },
-  { id: "opencode", label: "OpenCode" },
-  { id: "codex", label: "Codex" }
-];
+/** The Appearance tab's rows, in the sidebar's own agent order. Ids only: the labels are the
+ *  `displayName`s from `agents.list()`, so an agent's name lives on its AgentDefinition alone. */
+export const THEMED_AGENT_IDS: ThemedAgentId[] = ["claude", "opencode", "codex"];
 
 /** The Files tab's keybinding-preset fallback, shared so main and renderer can't drift apart —
  *  matches `KEYBINDING_PRESETS[0].id`. */

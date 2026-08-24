@@ -48,5 +48,12 @@ export function getAgent(id: AgentId): AgentDefinition {
 }
 
 export function listAgents(): AgentInfo[] {
-  return AGENTS.map(({ id, displayName, sessions }) => ({ id, displayName, hasSessions: sessions !== undefined }));
+  return AGENTS.map((agent) => ({
+    id: agent.id,
+    displayName: agent.displayName,
+    hasSessions: agent.sessions !== undefined,
+    plainCtrlCKills: agent.plainCtrlCKills === true,
+    takesRightMouse: agent.takesRightMouse === true,
+    swapsBlueMagenta: agent.swapsBlueMagenta === true
+  }));
 }

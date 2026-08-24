@@ -1,7 +1,7 @@
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import type { AgentId } from "../shared/types";
+import type { AgentInfo } from "../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
 import type { WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
@@ -183,14 +183,14 @@ async function pasteClipboard(term: Terminal): Promise<void> {
   }
 }
 
-function createView(projectId: string, tabId: string, agentId: AgentId): TerminalView {
+function createView(projectId: string, tabId: string, agent: AgentInfo): TerminalView {
   const fontFamily =
     getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim() || "monospace";
 
   const term = new Terminal({
     fontFamily,
     fontSize: defaultFontSize(),
-    theme: buildXtermTheme(agentId),
+    theme: buildXtermTheme(agent),
     scrollback: 4000,
     // The scrollbar is hidden in CSS, but FitAddon's column math still reserves pixel width
     // for it through `options.overviewRuler?.width || 14`, leaving a dead gap on the right.
@@ -253,11 +253,9 @@ function createView(projectId: string, tabId: string, agentId: AgentId): Termina
       return false;
     }
     // Ctrl+C with a selection copies instead of interrupting, in every terminal type. Without a
-    // selection it keeps sending \x03 (SIGINT) for a plain shell, claude and opencode, where the
-    // running CLI reads it as an ordinary byte and clears its current prompt (or interrupts a
-    // turn) — but not for codex: on win32 that byte becomes a CTRL_C_EVENT ConPTY raises at the
-    // process level, which kills a CLI with no handler for it rather than "interrupting" it.
-    // Closing the tab is codex's equivalent action, so the key is swallowed there instead.
+    // selection it keeps sending \x03, which most CLIs read as an ordinary byte — except where
+    // it would kill the process outright, so the key is swallowed there instead; the measured
+    // per-agent story is at AgentDefinition.plainCtrlCKills.
     if (event.type === "keydown" && event.key.toLowerCase() === "c" && isModifierHeld(event) && !event.shiftKey) {
       const selection = term.getSelection();
       if (selection) {
@@ -269,7 +267,7 @@ function createView(projectId: string, tabId: string, agentId: AgentId): Termina
         }
         return false;
       }
-      if (agentId === "codex") {
+      if (agent.plainCtrlCKills) {
         event.preventDefault();
         event.stopPropagation();
         return false;
@@ -288,10 +286,10 @@ export function hasTerminal(projectId: string, tabId: string): boolean {
   return views.has(viewKey(projectId, tabId));
 }
 
-export function attachTerminal(projectId: string, tabId: string, agentId: AgentId, container: HTMLElement): void {
+export function attachTerminal(projectId: string, tabId: string, agent: AgentInfo, container: HTMLElement): void {
   // Only the first attach of a tab reads the agent — a tab keeps the one it was opened for,
   // and the view it created outlives every mount.
-  const view = views.get(viewKey(projectId, tabId)) ?? createView(projectId, tabId, agentId);
+  const view = views.get(viewKey(projectId, tabId)) ?? createView(projectId, tabId, agent);
   if (view.term.element?.parentElement === container) {
     return;
   }
@@ -338,12 +336,11 @@ export function attachTerminal(projectId: string, tabId: string, agentId: AgentI
   });
   container.addEventListener("contextmenu", (event) => {
     event.preventDefault();
-    if (agentId === "shell" || agentId === "codex") {
-      // A plain shell never turns on xterm's mouse reporting, so nothing reads the right click
-      // on its own — tet has to supply the usual terminal convention itself: copy a selection,
-      // or paste when there is none. Codex's TUI deliberately leaves the mouse to the terminal
-      // too (github.com/openai/codex#8344), unlike Claude Code and opencode below, so the same
-      // convention applies to it.
+    if (!agent.takesRightMouse) {
+      // Nothing reads the right click on its own here — the shell never turns on xterm's mouse
+      // reporting, and which TUIs leave the mouse to the terminal is measured at
+      // AgentDefinition.takesRightMouse — so tet supplies the usual terminal convention itself:
+      // copy a selection, or paste when there is none.
       const selection = view.term.getSelection();
       if (selection) {
         void navigator.clipboard.writeText(selection);

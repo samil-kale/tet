@@ -88,5 +88,7 @@ export const codexAgent: AgentDefinition = {
   // once that is checked.
   createIsSessionReady: () => createByteThresholdCheck(600),
   // One: a second byte would land mid-shutdown and kill it instead.
-  quitPresses: 1
+  quitPresses: 1,
+  // Cooked mode: on win32 the byte arrives as a CTRL_C_EVENT and kills it, so it is never sent.
+  plainCtrlCKills: true
 };
