@@ -12,7 +12,22 @@ permissions:
   contents: write
 
 jobs:
+  # electron-builder's GitHub publisher creates the release for a tag if it doesn't find one
+  # yet, once per artifact — a macOS build alone already races itself over the .dmg and its
+  # .blockmap, and the three platforms publish as three concurrent jobs on top of that. Creating
+  # it here first, before any of them, means every "always" step below just finds it (matching
+  # what electron-builder itself would have named it — no "v", empty notes).
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # electron-builder names a release it creates itself after the bare version, no "v" —
+        # matched here so this pre-created one reads the same way.
+        run: gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "${GITHUB_REF_NAME#v}" --notes ""
+
   build:
+    needs: prepare-release
     strategy:
       # One platform failing must not take the other two installers with it.
       fail-fast: false
