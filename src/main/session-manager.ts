@@ -665,7 +665,7 @@ export class ProjectSessionManager {
           this.callbacks.onOutput(this.project.id, tabId, data);
           // Only the shells: an agent tab's output is its own TUI redrawing itself.
           if (!agent.sessions) {
-            this.shellContext.append(data);
+            this.shellContext.append(tabId, tab.title || tabId, data);
           }
           if (isSessionReady?.(data)) {
             hideIndicator();
@@ -797,6 +797,7 @@ export class ProjectSessionManager {
     const runtime = this.runtimeFor(tab.agentId);
     const { agent, executable } = runtime;
     if (!agent.sessions) {
+      this.shellContext.close(tab.tabId);
       return;
     }
     if (!tab.sessionId && session) {

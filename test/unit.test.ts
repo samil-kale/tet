@@ -76,12 +76,29 @@ describe("the context file", () => {
     assert.match(read(), /controlled with `tet-ctl`/);
     assert.doesNotMatch(read(), /Shell output/);
 
-    context.append("npm run build\r\ndone\r\n");
+    context.append("tab-1", "build", "npm run build\r\ndone\r\n");
     await eventually("the shell paragraph", () => /Shell output/.test(read()));
     assert.match(read(), new RegExp(`shell tabs in repo: ${context.logFile.replace(/\\/g, "\\\\")}`));
     assert.doesNotMatch(read(), / KB\)/, "no size — it changes with every write");
     context.dispose();
     await eventually("the log", () => fs.existsSync(context.logFile) && /done/.test(fs.readFileSync(context.logFile, "utf8")));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("keeps each shell tab's lines whole and marks where the writer changes", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
+    const context = new ShellContext(dir, "repo");
+    context.append("tab-1", "build", "compiling");
+    context.append("tab-2", "tab-2", "abc123 first commit\r\n");
+    context.append("tab-1", "build", " main.ts\r\n");
+    context.append("tab-1", "build", "unfinished");
+    context.close("tab-1");
+    context.dispose();
+    await eventually("the log", () => fs.existsSync(context.logFile));
+    assert.equal(
+      fs.readFileSync(context.logFile, "utf8"),
+      "=== shell tab: tab-2 ===\nabc123 first commit\n\n=== shell tab: build ===\ncompiling main.ts\nunfinished"
+    );
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

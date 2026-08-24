@@ -37,9 +37,9 @@ there silently shows the wrong tab title); the modifier-gated link providers
 
 Not ported: the VS Code editor context (feeding an agent what's open or under the cursor) and the
 diagnostic quick fix — TET's own editor is a plain look-and-fix surface. What survives is the shell
-transcript (`src/main/shell-context.ts`), a capped file the agent is pointed at. **Open**: every
-shell tab of a project writes into that one file, interleaved and unmarked — a build in one tab and
-a `git log` in another read as one stream. To be addressed.
+transcript (`src/main/shell-context.ts`), a capped file the agent is pointed at. Every shell tab of
+a project writes into that one file in arrival order, so tabs interleave — but per whole line, and
+a `=== shell tab: <title> ===` header marks each change of writer.
 
 **GitHub Desktop** is the reference for the git half — crib the shapes, not the scope. **VS Code**
 is the UI reference (tab semantics, close actions, theme names, the sash) — the **classic** layout

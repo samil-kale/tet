@@ -128,6 +128,11 @@ function carryFrom(data: string): number {
  *
  * Only shell tabs feed it. An agent tab's output is its TUI redrawing itself, and handing
  * that back to the agent that produced it is noise at best.
+ *
+ * Every shell tab of a project writes into the one file, in the order the output arrived. So
+ * a build in one tab and a `git log` in another do interleave — but never mid-line (each tab
+ * keeps its own unfinished line back) and never unmarked: a header names the tab wherever the
+ * writer changes, so a reader can tell whose output a section is.
  */
 export class ShellContext {
   private readonly log: CappedLogFile;
@@ -136,8 +141,10 @@ export class ShellContext {
   private written: string | undefined;
   /** Writes are chained rather than started concurrently — they share one temp path. */
   private writing: Promise<void> = Promise.resolve();
-  /** The end of the last chunk that could not be cleaned until the next one arrives. */
-  private carry = "";
+  /** Per tab, the end of its last chunk that could not be cleaned until the next one arrives. */
+  private readonly carries = new Map<string, string>();
+  /** The tab whose output the log currently ends in; any other tab opens a new section. */
+  private lastWriter: string | undefined;
 
   constructor(
     private readonly directory: string,
@@ -158,11 +165,34 @@ export class ShellContext {
     return path.join(this.directory, "context.md");
   }
 
-  append(data: string): void {
-    const whole = this.carry + data;
+  /** `label` is what a section header calls the tab — its title, or its id where it has none. */
+  append(tabId: string, label: string, data: string): void {
+    const whole = (this.carries.get(tabId) ?? "") + data;
     const cut = carryFrom(whole);
-    this.carry = whole.slice(cut);
-    this.log.append(cleanTerminalOutput(whole.slice(0, cut)));
+    this.carries.set(tabId, whole.slice(cut));
+    this.write(tabId, label, cleanTerminalOutput(whole.slice(0, cut)));
+  }
+
+  /** A closed tab's unfinished line has no next chunk to wait for. */
+  close(tabId: string): void {
+    const carry = this.carries.get(tabId);
+    this.carries.delete(tabId);
+    if (carry) {
+      this.write(tabId, tabId, cleanTerminalOutput(carry));
+    }
+  }
+
+  private write(tabId: string, label: string, text: string): void {
+    if (text === "") {
+      return;
+    }
+    if (tabId !== this.lastWriter) {
+      this.lastWriter = tabId;
+      // On a line of its own, so a plain search finds it and it reads apart from the
+      // program output either side of it.
+      this.log.append(`${this.log.chars === 0 ? "" : "\n"}=== shell tab: ${label} ===\n`);
+    }
+    this.log.append(text);
     clearTimeout(this.writeTimer);
     this.writeTimer = setTimeout(() => {
       this.log.flush();
@@ -204,12 +234,10 @@ export class ShellContext {
   }
 
   dispose(): void {
-    clearTimeout(this.writeTimer);
-    // The line the last chunk left unfinished has no next chunk to wait for.
-    if (this.carry) {
-      this.log.append(cleanTerminalOutput(this.carry));
-      this.carry = "";
+    for (const tabId of [...this.carries.keys()]) {
+      this.close(tabId);
     }
+    clearTimeout(this.writeTimer);
     this.log.flush();
   }
 }
