@@ -14,6 +14,7 @@ import { countActivity, startEventLoopMonitor } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
+import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv } from "./terminals/pty";
 import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
@@ -262,6 +263,12 @@ if (!app.requestSingleInstanceLock()) {
     }
     Menu.setApplicationMenu(null);
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
+    // Before anything reads PATH — the requirements check and every terminal both do — add where
+    // agents actually install to it, so one the user put on their login shell's PATH or in npm's
+    // global bin is found even when tet was launched with the OS's barer GUI PATH. See
+    // augmentAgentPath; awaited because on macOS/Linux it asks the login shell and the check
+    // below must see the result.
+    await augmentAgentPath();
     // Up front rather than on the first repository: forking it costs a moment, and every
     // project that opens below is about to ask it something.
     startGitProcess();

@@ -5,6 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
+import { mergePath, parseShellPath, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ShellContext } from "../src/main/terminals/shell-context";
 import { CLI, eventually } from "./helpers";
@@ -100,5 +101,46 @@ describe("the context file", () => {
       "=== shell tab: tab-2 ===\nabc123 first commit\n\n=== shell tab: build ===\ncompiling main.ts\nunfinished"
     );
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("the agent PATH", () => {
+  it("appends only new directories, keeps order, and leaves an unchanged PATH alone", () => {
+    assert.equal(mergePath("/a:/b", ["/c", "/b"], ":"), "/a:/b:/c", "the new one added, the present one not");
+    assert.equal(mergePath("/a:/b", ["/b", "/a"], ":"), "/a:/b", "all present — the very same string");
+    assert.equal(mergePath("", ["/a"], ":"), "/a", "an empty PATH takes the addition alone, no leading delimiter");
+    assert.equal(mergePath("/a", [], ":"), "/a", "nothing to add");
+  });
+
+  it("reads the PATH the login shell printed between the markers, ignoring the noise around it", () => {
+    assert.equal(parseShellPath("motd\n__TET_PATH_START__/usr/bin:/opt/bin__TET_PATH_END__\n"), "/usr/bin:/opt/bin");
+    assert.equal(parseShellPath("a login banner with no markers"), undefined);
+  });
+
+  it("names npm's reported prefix, the manager roots from the environment, and the fixed shim dirs", () => {
+    const j = (...p: string[]): string => p.join(path.sep);
+    // Everything a manager exposes, plus what npm reported — the moved prefix included.
+    const full = win32AgentDirs(
+      { APPDATA: j("C:", "u", "AppData", "Roaming"), LOCALAPPDATA: j("C:", "u", "AppData", "Local"), USERPROFILE: j("C:", "u"), NVM_SYMLINK: j("C:", "nvm", "node"), VOLTA_HOME: j("C:", "volta"), SCOOP: j("C:", "scoop") },
+      j("D:", "npm-global")
+    );
+    assert.deepEqual(full, [
+      j("D:", "npm-global"),
+      j("C:", "u", "AppData", "Roaming", "npm"),
+      j("C:", "nvm", "node"),
+      j("C:", "volta", "bin"),
+      j("C:", "scoop", "shims"),
+      j("C:", "u", "AppData", "Local", "Microsoft", "WinGet", "Links")
+    ]);
+    // With nothing exported and no npm answer, it falls back to the managers' default roots.
+    const defaults = win32AgentDirs({ APPDATA: j("C:", "Roaming"), LOCALAPPDATA: j("C:", "Local"), USERPROFILE: j("C:", "u") }, undefined);
+    assert.deepEqual(defaults, [
+      j("C:", "Roaming", "npm"),
+      j("C:", "Local", "Volta", "bin"),
+      j("C:", "u", "scoop", "shims"),
+      j("C:", "Local", "Microsoft", "WinGet", "Links")
+    ]);
+    // A bare environment contributes only what it can name — no empty entries.
+    assert.deepEqual(win32AgentDirs({}, undefined), []);
   });
 });
