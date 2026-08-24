@@ -1,6 +1,6 @@
 /**
  * The control channel's wire contract, shared by the server in the main process
- * (`src/main/control-server.ts`) and the `tet-ctl` CLI (`src/cli/tet-ctl.ts`) the same way
+ * (`src/main/control/control-server.ts`) and the `tet-ctl` CLI (`src/cli/tet-ctl.ts`) the same way
  * `api.ts` is shared by the main process and the renderer. Nothing here imports electron or
  * node: the CLI is bundled on its own and must stay a plain script.
  *

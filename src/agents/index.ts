@@ -1,4 +1,4 @@
-import { isAgentInstalled } from "../main/terminal-session";
+import { isAgentInstalled } from "../main/terminals/terminal-session";
 import type { AgentId, AgentInfo } from "../shared/types";
 import type { AgentDefinition } from "./agent";
 import { claudeAgent } from "./claude";

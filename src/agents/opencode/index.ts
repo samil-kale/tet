@@ -1,4 +1,4 @@
-import { createByteThresholdCheck } from "../../main/session-ready";
+import { createByteThresholdCheck } from "../../main/terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { ensureServer, prepareOpencodeSpawn, runningServer, stopServer } from "./server";
 import { openServerRegistry } from "./server-registry";

@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type { IPty } from "node-pty";
-import type { TerminalStatus } from "../shared/types";
+import type { TerminalStatus } from "../../shared/types";
 import { resolveCommand, spawnAgentProcess } from "./pty";
 
 export interface SessionCallbacks {

@@ -30,7 +30,7 @@ const mainConfig = {
 /** @type {import('esbuild').BuildOptions} */
 const gitHostConfig = {
   ...common,
-  entryPoints: [path.join(__dirname, "src", "main", "git-host.ts")],
+  entryPoints: [path.join(__dirname, "src", "main", "git", "git-host.ts")],
   outfile: path.join(dist, "git-host.js"),
   platform: "node",
   target: "node22",
@@ -40,7 +40,7 @@ const gitHostConfig = {
 
 /**
  * The `tet-ctl` CLI an agent runs from a terminal, under tet's own electron as node (see
- * src/main/control-launcher.ts) — plain node, nothing from electron in it.
+ * src/main/control/control-launcher.ts) — plain node, nothing from electron in it.
  */
 /** @type {import('esbuild').BuildOptions} */
 const cliConfig = {

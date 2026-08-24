@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import * as readline from "node:readline";
-import { resolveCommand } from "../../main/pty";
+import { resolveCommand } from "../../main/terminals/pty";
 
 /**
  * `codex app-server` is a JSON-RPC-over-stdio process (JSONL, JSON-RPC 2.0 without the

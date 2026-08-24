@@ -1,6 +1,6 @@
 import { exec } from "node:child_process";
 import * as path from "node:path";
-import { buildNotifyCommand } from "../../main/os-notify";
+import { buildNotifyCommand } from "../../main/terminals/os-notify";
 import type { NotificationSettings } from "../../shared/types";
 
 /**

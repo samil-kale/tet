@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { controlSocketPath } from "../src/main/control-server";
+import { controlSocketPath } from "../src/main/control/control-server";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl } from "./helpers";

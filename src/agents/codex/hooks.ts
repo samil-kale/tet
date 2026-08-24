@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
-import { buildMarkCommand } from "../../main/marker-watch";
-import { buildNotifyCommand, buildReadFileCommand } from "../../main/os-notify";
+import { buildMarkCommand } from "../../main/terminals/marker-watch";
+import { buildNotifyCommand, buildReadFileCommand } from "../../main/terminals/os-notify";
 import type { NotificationSettings } from "../../shared/types";
 
 /**

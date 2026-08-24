@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { isSameCommand } from "../shared/command";
-import type { ExplorerRoot, ExplorerSettings, ExplorerSortOrder, ProjectCommand } from "../shared/types";
-import { resolveCommand } from "./pty";
+import { isSameCommand } from "../../shared/command";
+import type { ExplorerRoot, ExplorerSettings, ExplorerSortOrder, ProjectCommand } from "../../shared/types";
+import { resolveCommand } from "../terminals/pty";
 
 /**
  * What a project keeps about itself in its own root: shell commands — "npm run build", a deploy

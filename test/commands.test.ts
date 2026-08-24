@@ -11,7 +11,7 @@ import {
   readExplorerView,
   removeFolder,
   writeCommands
-} from "../src/main/commands";
+} from "../src/main/git/commands";
 
 /** tet.json: the user's file, read defensively and written back with nothing of theirs lost. */
 

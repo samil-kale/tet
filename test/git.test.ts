@@ -21,7 +21,7 @@ import {
   resolveRoot,
   stashDrop,
   stashPush
-} from "../src/main/git";
+} from "../src/main/git/git";
 
 /**
  * git.ts against the real git, in a repository built up step by step — every reading the git

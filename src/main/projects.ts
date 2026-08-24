@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AddRepositoryResult, Project } from "../shared/types";
-import { git } from "./git-client";
-import type { RepositoryManager } from "./repository";
-import type { SessionManagerRegistry } from "./session-manager";
+import { git } from "./git/git-client";
+import type { RepositoryManager } from "./git/repository";
+import type { SessionManagerRegistry } from "./terminals/session-manager";
 
 /** What opening and closing a project takes — the same singletons ipc.ts holds. */
 export interface ProjectDeps {

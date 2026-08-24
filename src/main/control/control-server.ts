@@ -1,9 +1,9 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
-import { CONTROL_VERBS, HELP_VERB } from "../shared/control";
-import type { ControlErrorCode, ControlRequest, ControlResponse } from "../shared/control";
-import { SYSTEM_THEME_ID, THEMES } from "../shared/themes";
+import { CONTROL_VERBS, HELP_VERB } from "../../shared/control";
+import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/control";
+import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -12,7 +12,7 @@ import type {
   ProjectCommand,
   RepositoryState,
   TerminalDescriptor
-} from "../shared/types";
+} from "../../shared/types";
 
 /**
  * What the control channel acts on, handed over by main.ts rather than imported: nothing here

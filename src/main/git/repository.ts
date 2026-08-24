@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
-import { EMPTY_REPOSITORY_STATE } from "../shared/types";
+import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type {
   CheckoutTarget,
   DiffOptions,
@@ -16,7 +16,7 @@ import type {
   Project,
   RepositoryState,
   StashCommand
-} from "../shared/types";
+} from "../../shared/types";
 import {
   addExclude,
   addFolder,
@@ -26,9 +26,9 @@ import {
   setExcludeGitIgnore,
   setSortOrder
 } from "./commands";
-import { countActivity, logSlow } from "./event-loop-monitor";
+import { countActivity, logSlow } from "../event-loop-monitor";
 import { git } from "./git-client";
-import { watchedDirectoryGone } from "./watch-dir";
+import { watchedDirectoryGone } from "../watch-dir";
 import type { DiscardTargets } from "./git";
 import { isImage, toDataUrl } from "./git";
 

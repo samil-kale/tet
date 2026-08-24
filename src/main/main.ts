@@ -7,17 +7,17 @@ import { AccountStore } from "../providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
-import { readCommands } from "./commands";
-import { writeLaunchers } from "./control-launcher";
-import { controlSocketPath, startControlServer } from "./control-server";
+import { readCommands } from "./git/commands";
+import { writeLaunchers } from "./control/control-launcher";
+import { controlSocketPath, startControlServer } from "./control/control-server";
 import { countActivity, startEventLoopMonitor } from "./event-loop-monitor";
-import { startGitProcess, stopGitProcess } from "./git-client";
+import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
-import { setControlEnv } from "./pty";
-import { isAgentInstalled } from "./terminal-session";
-import { RepositoryManager } from "./repository";
-import { SessionManagerRegistry } from "./session-manager";
+import { setControlEnv } from "./terminals/pty";
+import { isAgentInstalled } from "./terminals/terminal-session";
+import { RepositoryManager } from "./git/repository";
+import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
 import { currentTheme } from "./theme";
 
@@ -271,7 +271,7 @@ if (!app.requestSingleInstanceLock()) {
     sweepTempFiles();
     // The control channel's token and address, into every terminal's environment before the
     // first one can spawn (openWorkspace, below). The token lives in this process only — never
-    // on disk, never on a command line. See src/main/control-server.ts.
+    // on disk, never on a command line. See src/main/control/control-server.ts.
     const controlToken =
       (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
     const socketPath = controlSocketPath(app.getPath("userData"));

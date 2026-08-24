@@ -4,9 +4,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { writeLaunchers } from "../src/main/control-launcher";
-import { buildEnv, setControlEnv } from "../src/main/pty";
-import { ShellContext } from "../src/main/shell-context";
+import { writeLaunchers } from "../src/main/control/control-launcher";
+import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
+import { ShellContext } from "../src/main/terminals/shell-context";
 import { CLI, eventually } from "./helpers";
 
 /** The pieces around the control channel that need no app and no server: pure, or a file. */

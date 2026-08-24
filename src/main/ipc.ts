@@ -31,13 +31,13 @@ import type {
 } from "../shared/types";
 import { PROVIDERS } from "../providers";
 import type { AccountStore } from "../providers/accounts";
-import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, suggestQuestion, writeCommands } from "./commands";
+import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, suggestQuestion, writeCommands } from "./git/commands";
 import { countActivity } from "./event-loop-monitor";
-import { git } from "./git-client";
+import { git } from "./git/git-client";
 import { addProject, removeProject, type ProjectStore } from "./projects";
-import type { Repository, RepositoryManager } from "./repository";
+import type { Repository, RepositoryManager } from "./git/repository";
 import { checkRequirements } from "./requirements";
-import type { SessionManagerRegistry } from "./session-manager";
+import type { SessionManagerRegistry } from "./terminals/session-manager";
 import type { SettingsStore } from "./settings";
 
 /**

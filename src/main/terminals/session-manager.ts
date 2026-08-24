@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AGENTS, getAgent } from "../agents";
+import { AGENTS, getAgent } from "../../agents";
 
-import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../agents/agent";
-import { splitCommand } from "../shared/command";
-import { CONTROL_ENV } from "../shared/control";
+import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../../agents/agent";
+import { splitCommand } from "../../shared/command";
+import { CONTROL_ENV } from "../../shared/control";
 import type {
   AgentId,
   NoticeSeverity,
@@ -12,12 +12,12 @@ import type {
   ProjectCommand,
   TerminalDescriptor,
   TerminalStatus
-} from "../shared/types";
-import { countActivity, logSlow } from "./event-loop-monitor";
-import type { SettingsStore } from "./settings";
+} from "../../shared/types";
+import { countActivity, logSlow } from "../event-loop-monitor";
+import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
-import { currentTheme } from "./theme";
+import { currentTheme } from "../theme";
 
 const RECONCILE_DEBOUNCE_MS = 5000;
 // A tab's CLI can persist a title (a generated summary) well after its output went idle, so

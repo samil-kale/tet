@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { EMPTY_REPOSITORY_STATE } from "../shared/types";
+import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type {
   CheckoutTarget,
   ChangeStatus,
@@ -16,7 +16,7 @@ import type {
   RemoteInfo,
   RepositoryState,
   StashEntry
-} from "../shared/types";
+} from "../../shared/types";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 /** Rendering a whole huge diff would stall the renderer; the viewer shows a hint instead. */

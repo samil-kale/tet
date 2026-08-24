@@ -1,6 +1,6 @@
-import { createByteThresholdCheck } from "../../main/session-ready";
+import { createByteThresholdCheck } from "../../main/terminals/session-ready";
 import type { AgentDefinition } from "../agent";
-import { watchTurnMarkers } from "../../main/marker-watch";
+import { watchTurnMarkers } from "../../main/terminals/marker-watch";
 import { setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
 

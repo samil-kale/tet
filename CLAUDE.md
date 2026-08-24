@@ -27,17 +27,17 @@ The same goes for anything that tears down a project's terminals.
 extensions docking `claude` and `opencode` into the sidebar as real terminals. Most of TET's
 terminal half ports its `shared/`; the rationale now lives only in the code comments at these
 sites, so treat them as measured, not obvious: session listing/resume/rename/delete and the
-reconcile loop (`src/agents/*/sessions.ts`, `src/main/session-manager.ts`); how each agent is
+reconcile loop (`src/agents/*/sessions.ts`, `src/main/terminals/session-manager.ts`); how each agent is
 driven (Claude Code reads `<uuid>.jsonl` transcripts off disk; opencode is client/server and
 **everything** goes through the one server TET runs, `src/agents/opencode/server.ts` — never its
 CLI or its SQLite file); `extractTitle`'s precedence rules for Claude Code titles (a regression
 there silently shows the wrong tab title); the modifier-gated link providers
 (`src/renderer/links/`); OS notifications and the `background_tasks` stop guard
-(`src/main/os-notify.ts`, `src/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
+(`src/main/terminals/os-notify.ts`, `src/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
 Not ported: the VS Code editor context (feeding an agent what's open or under the cursor) and the
 diagnostic quick fix — TET's own editor is a plain look-and-fix surface. What survives is the shell
-transcript (`src/main/shell-context.ts`), a capped file the agent is pointed at. Every shell tab of
+transcript (`src/main/terminals/shell-context.ts`), a capped file the agent is pointed at. Every shell tab of
 a project writes into that one file in arrival order, so tabs interleave — but per whole line, and
 a `=== shell tab: <title> ===` header marks each change of writer.
 
@@ -105,7 +105,7 @@ a control token from its environment) — `test/app.test.ts` is the one user of 
 
 ## Git
 
-Git is never reimplemented. `src/main/git.ts` wraps the local CLI: `git()` resolves for *any* exit
+Git is never reimplemented. `src/main/git/git.ts` wraps the local CLI: `git()` resolves for *any* exit
 code — callers decide what it means — and rejects only if git itself couldn't start. Never run git
 from the renderer.
 
@@ -116,7 +116,7 @@ nothing may import electron, and everything crossing the boundary must survive a
 in-flight call; `Repository` catches that at each entry point and turns it into the shape callers
 already handle, and the client restarts the process on the next call.
 
-`Repository` (`src/main/repository.ts`) is the single source of truth for both the git pane and
+`Repository` (`src/main/git/repository.ts`) is the single source of truth for both the git pane and
 the terminals, so a branch switched in a terminal shows up in the UI on its own. It watches the
 working directory, debounces and throttles bursts, and only emits when state actually changed.
 Diffs load on file selection, never up front.
@@ -206,7 +206,7 @@ Each of these was paid for once and measured; the numbers are in the comment at 
 ## Saved commands
 
 The sidebar's lower half is a project's saved shell commands, under a `commands` key in a
-`tet.json` in the repository's own root (`src/main/commands.ts`), not TET's `userData` — they
+`tet.json` in the repository's own root (`src/main/git/commands.ts`), not TET's `userData` — they
 describe the project, so they travel and can be committed. A command is a plain string, or an
 object once it needs a `name`, `cwd` or `env` (`{"command": "npm run build", "cwd": "web"}`) —
 written the way you'd type it standing in that folder. The array's order is the screen order;
@@ -218,7 +218,7 @@ program plus arguments, started directly — the same on every machine. Pipes, r
 notice. `env` is a field for exactly this reason — no syntax writes a variable into a command that
 works everywhere — and it outranks the inherited environment. `"shell": true` hands the line to
 `AgentDefinition.runArgs` and only works where it was written. Where the line goes on Windows is
-`resolveCommand`'s call (`src/main/pty.ts`, every case measured).
+`resolveCommand`'s call (`src/main/terminals/pty.ts`, every case measured).
 
 **Running one opens a terminal tab whose process is the command**, in its own directory, ending
 when it does; `createCommandTab` is `createTab` with a program, so it shares the lazy spawn,
@@ -335,7 +335,7 @@ error mark alone is `--vscode-errorForeground`, not a fourth turn state.
 stream TET already subscribes to (`session.status`, `permission.asked`, `question.asked`); Claude
 Code and Codex through hook processes that `touch` a marker named after the session id into
 `<agentDir>/busy/`, `finished/` and `waiting/`, picked up by `watchMarkers`
-(`src/main/marker-watch.ts`, watch *plus* a timer sweep — win32 `fs.watch` misses files). The
+(`src/main/terminals/marker-watch.ts`, watch *plus* a timer sweep — win32 `fs.watch` misses files). The
 hooks register regardless of notification settings; only their toast is optional. Reusing the Stop
 hook is the point: it carries the `background_tasks` guard, so a turn that only launched a
 subagent isn't "finished". Markers found at startup are deleted unreported.
@@ -365,6 +365,10 @@ renderer off machine-wide — the story is in `terminal-session.ts`). Stopping i
 every doomed tab's stop before waiting on any.
 
 ## Agent-specific vs shared code
+
+`src/main/` is split by process boundary and by half: `git/` (the git process and everything
+that talks to it, `commands.ts` included), `terminals/` (pty, sessions, markers, notifications),
+`control/` (the `tet-ctl` channel); what stays flat is the app itself — window, ipc, settings.
 
 Each agent gets a folder under `src/agents/`, described by one `AgentDefinition`
 (`src/agents/agent.ts`). The shared terminal layer never imports an agent's own code, only calls
@@ -443,7 +447,7 @@ literal strings.
 ## The control channel: `tet-ctl`
 
 An agent can ask the app around it for things the filesystem and git can't give it — the theme,
-the project list, the terminal tabs. `src/main/control-server.ts` listens on a named pipe (win32)
+the project list, the terminal tabs. `src/main/control/control-server.ts` listens on a named pipe (win32)
 or a socket file in `userData`, one JSON line per connection, and answers with the same singletons
 `ipc.ts` holds, and comes up with the workspace — a socket that answers means every project's
 terminals and repository are there, so `tet-ctl` waits a few seconds for one rather than
@@ -489,7 +493,7 @@ fails outright. Marker files sit outside that rule: the *filename* is the whole 
 Must work on Windows, Linux and macOS. Never add OS-specific behaviour without an equivalent for
 the others.
 
-- Build paths with `path.join`; route process spawning through `resolveCommand` (`src/main/pty.ts`).
+- Build paths with `path.join`; route process spawning through `resolveCommand` (`src/main/terminals/pty.ts`).
 - Generated `.ps1` files need a UTF-8 BOM; generated `sh` scripts must be LF, whatever the
   source's line endings.
 - Anything written *into* a generated script needs literal quoting (`os-notify.ts` has the two

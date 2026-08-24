@@ -215,7 +215,7 @@ export class ShellContext {
 
   private writeContext(): void {
     // The `tet-ctl` line is there from the first prompt on: nothing else tells an agent that
-    // the app around it can be asked anything (see src/main/control-server.ts). The shell
+    // the app around it can be asked anything (see src/main/control/control-server.ts). The shell
     // paragraph only once something ran.
     const contents = [
       "<tet_context>",
