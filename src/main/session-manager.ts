@@ -981,7 +981,12 @@ export class ProjectSessionManager {
     // Only tabs whose label is unsettled need the mid-output reconcile; elsewhere the debounce
     // alone keeps the extra session listings out of a turn. A stand-in title counts as
     // unsettled — non-empty, but the agent can still replace it mid-turn.
-    if (runtime.reconcileDeadline === undefined && this.tabsOf(runtime).some(titleUnsettled)) {
+    // A plain loop, not `tabsOf(...).some(...)`: this runs on every output chunk of every agent
+    // tab, and `tabsOf` filters into a fresh array each time.
+    if (
+      runtime.reconcileDeadline === undefined &&
+      this.tabs.some((tab) => tab.agentId === runtime.agent.id && titleUnsettled(tab))
+    ) {
       runtime.reconcileDeadline = Date.now() + RECONCILE_MAX_WAIT_MS;
     }
     this.armReconcileTimer(runtime, delayMs);

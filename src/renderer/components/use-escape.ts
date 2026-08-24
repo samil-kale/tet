@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export interface UseEscapeOptions {
   /**
@@ -23,7 +23,13 @@ export interface UseEscapeOptions {
  */
 export function useEscape(onClose: () => void, options?: UseEscapeOptions): void {
   const deferWithin = options?.deferWithin;
+  // In a ref, as `ContextMenu` holds its `onClose`: a dialog may pass an inline arrow, and the
+  // diff dialog re-renders on every diff load and keystroke — not a reason to swap two
+  // document listeners each time.
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
+    const onClose = (): void => close.current();
     const isDeferred = (event: KeyboardEvent): boolean =>
       deferWithin !== undefined && event.target instanceof Element && event.target.closest(deferWithin) !== null;
 
@@ -49,5 +55,5 @@ export function useEscape(onClose: () => void, options?: UseEscapeOptions): void
       document.removeEventListener("keydown", onCapture, true);
       document.removeEventListener("keydown", onBubble);
     };
-  }, [onClose, deferWithin]);
+  }, [deferWithin]);
 }

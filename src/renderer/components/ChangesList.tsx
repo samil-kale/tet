@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
 import { absolutePath, revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
@@ -154,12 +154,16 @@ export function ChangesList({ project, changes, act, onOpenDiff, active }: Chang
   // menu acts on the selection this would move from under it. Not while an editor in the dialog
   // has the key either — its own cursor movement already claimed it (`defaultPrevented`), or
   // the key started inside it for a monaco widget that hasn't claimed it yet (find, suggest).
+  //
+  // What a keystroke reads is held in a ref, as `ContextMenu` holds its `onClose`: the listener
+  // is registered once rather than swapped on every keystroke in the filter and every push.
+  const stepState = useRef({ visible, active, open });
+  stepState.current = { visible, active, open };
   useEffect(() => {
-    if (active === undefined) {
-      return;
-    }
     const onKeyDown = (event: KeyboardEvent): void => {
+      const { visible, active, open } = stepState.current;
       if (
+        active === undefined ||
         (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
         event.defaultPrevented ||
         document.querySelector(".dialog-overlay, .context-menu") ||
@@ -177,7 +181,7 @@ export function ChangesList({ project, changes, act, onOpenDiff, active }: Chang
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  });
+  }, []);
 
   /** VS Code's list selection: plain replaces, ctrl toggles, shift takes the range. */
   const select = (event: React.MouseEvent, path: string): void => {

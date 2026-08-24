@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { AgentInfo, Project, TerminalDescriptor } from "../../shared/types";
+import type { Project, TerminalDescriptor } from "../../shared/types";
 import { disposeTerminal, setRevealHandler } from "../terminal-views";
 import { PANE_IDS, layoutStorageKey } from "../pane-layout";
 import type { PaneId, ProjectLayout, SplitPreset } from "../pane-layout";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, PERSIST_MS, Sash } from "./Sash";
 import { Pane, type PaneChrome } from "./Pane";
+import { useAgents } from "./use-agents";
 
 /**
  * A divider's position as a *share* of the room it divides, not a pixel count — `usePaneSize`'s
@@ -133,14 +134,10 @@ export const TerminalsPane = memo(function TerminalsPane({
   waitingTabIds,
   startingTabIds
 }: TerminalsPaneProps) {
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const agents = useAgents();
   /** Which pane a dragged tab is over right now, if any — what decides which dividers border it. */
   const [dragOverPane, setDragOverPane] = useState<PaneId | null>(null);
   const knownTabs = useRef<TerminalDescriptor[]>([]);
-
-  useEffect(() => {
-    void window.tet.agents.list().then(setAgents);
-  }, []);
 
   // Ctrl+clicking a changed file in a terminal opens that file's diff over everything.
   useEffect(() => setRevealHandler(project.id, (path) => onOpenDiff(project.id, path)), [project.id, onOpenDiff]);

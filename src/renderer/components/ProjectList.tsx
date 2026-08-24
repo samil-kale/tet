@@ -13,6 +13,26 @@ import { CloseIcon, CommentIcon, PlusIcon, QuestionIcon, SpinnerIcon } from "./i
  */
 const DRAG_TYPE = "application/x-tet-project";
 
+/**
+ * The sessions of one project that are marked, by tab id, oldest first: finished out of sight,
+ * waiting on an answer, and starting — the last is what lets the pane a new agent opens in show
+ * the bar itself rather than always pane "a" (see `TerminalsPane`'s `startingHere`). `busy` is
+ * whether any session is working on a turn, excluding one stopped on a question. Decided in
+ * `App`, since the tab in front of the user counts as seen and only `App` knows what's on screen.
+ */
+export interface ProjectMarks {
+  finished: string[];
+  waiting: string[];
+  starting: string[];
+  busy: boolean;
+}
+
+/** What a row says about the repository: its HEAD (a branch, or a short commit id) and first remote. */
+export interface ProjectHead {
+  head?: string;
+  remote?: RemoteInfo;
+}
+
 interface ProjectListProps {
   projects: Project[];
   activeProjectId: string | null;
@@ -21,18 +41,15 @@ interface ProjectListProps {
   /** The full list in the order the user dropped it into. */
   onReorder: (projects: Project[]) => void;
   onAdd: () => void;
-  /** The project's first remote, for the entries that open or change its url. */
-  remoteOf: (projectId: string) => RemoteInfo | undefined;
-  /** What its HEAD is at — a branch name, or the short commit id while it is detached. */
-  headOf: (projectId: string) => string | undefined;
+  /**
+   * Both by project id, and — like everything this memoized list takes — by identity only where
+   * the answer changed; `App` sees to that. Records rather than lookup callbacks: a callback
+   * closing over every project's state was remade on every push, and the memo never held.
+   */
+  heads: Record<string, ProjectHead>;
+  marks: Record<string, ProjectMarks>;
   /** Opens a shell tab in that project, which is what "open in terminal" means here. */
   onOpenTerminal: (projectId: string) => void;
-  /** Whether a session of this project finished a turn nobody has looked at yet. */
-  hasFinished: (projectId: string) => boolean;
-  /** Whether one of its sessions is working on a turn right now, excluding one stopped on a question. */
-  hasBusy: (projectId: string) => boolean;
-  /** Whether one of its sessions stopped mid-turn on a question nobody has answered. */
-  hasWaiting: (projectId: string) => boolean;
   /** Opens the first session that is working — what the spinner goes to. */
   onShowBusy: (projectId: string) => void;
   /** Opens the oldest of those; pressing the mark again moves on to the next. */
@@ -79,12 +96,9 @@ export const ProjectList = memo(function ProjectList({
   onClose,
   onReorder,
   onAdd,
-  remoteOf,
-  headOf,
+  heads,
+  marks,
   onOpenTerminal,
-  hasFinished,
-  hasBusy,
-  hasWaiting,
   onShowBusy,
   onShowFinished,
   onShowWaiting
@@ -130,7 +144,7 @@ export const ProjectList = memo(function ProjectList({
    * tree — those actions live in the git pane, where what they act on is on screen.
    */
   const menuEntries = (project: Project): ContextMenuEntry[] => {
-    const remote = remoteOf(project.id);
+    const remote = heads[project.id]?.remote;
     const web = remote?.url ? webUrl(remote.url) : null;
     return [
       { label: "Open in terminal", run: () => onOpenTerminal(project.id) },
@@ -180,14 +194,14 @@ export const ProjectList = memo(function ProjectList({
                   and drawn the same way: context for the row, not part of its name. The git pane
                   says it for the project on screen only, and an agent switching a branch in a
                   terminal is exactly what one wants to see on a project that is not. */}
-              {headOf(project.id) && <span className="project-extra">({headOf(project.id)})</span>}
+              {heads[project.id]?.head && <span className="project-extra">({heads[project.id].head})</span>}
             </span>
             {/* All three states of a project's sessions, and they can hold at once — one tab
                 stopped on a question, another working, a third waiting to be read. Each is a
                 button and each goes to a session. Unlike on a tab there is no ranking here:
                 a row has no single icon to replace, so nothing has to give way to anything.
                 A standing question comes first because it is the one costing time. */}
-            {hasWaiting(project.id) && (
+            {(marks[project.id]?.waiting.length ?? 0) > 0 && (
               <button
                 className="icon-button"
                 title="Open the session waiting for an answer"
@@ -199,7 +213,7 @@ export const ProjectList = memo(function ProjectList({
                 <QuestionIcon className="session-mark" />
               </button>
             )}
-            {hasBusy(project.id) && (
+            {marks[project.id]?.busy && (
               <button
                 className="icon-button"
                 title="Open the session that is working"
@@ -213,7 +227,7 @@ export const ProjectList = memo(function ProjectList({
             )}
             {/* A session of this project finished while its terminal was out of sight. Pressing
                 it goes there, which is also what takes it away again. */}
-            {hasFinished(project.id) && (
+            {(marks[project.id]?.finished.length ?? 0) > 0 && (
               <button
                 className="icon-button"
                 title="Open the session that finished"

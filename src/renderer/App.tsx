@@ -9,6 +9,7 @@ import { Dialogs } from "./components/Dialog";
 import { GitPane } from "./components/GitPane";
 import { Notices, notify } from "./components/Notices";
 import { ProjectList } from "./components/ProjectList";
+import type { ProjectHead, ProjectMarks } from "./components/ProjectList";
 import { SettingsDialog } from "./components/SettingsDialog";
 import {
   MIN_CONTENT_WIDTH,
@@ -79,17 +80,6 @@ const DEFAULT_LAYOUT = defaultLayout();
  */
 function layoutOf(layouts: Record<string, ProjectLayout>, projectId: string): ProjectLayout {
   return layouts[projectId] ?? loadLayout(projectId);
-}
-
-/**
- * The sessions of one project that are marked, by tab id: finished out of sight, waiting, and
- * starting — the last is what lets the pane a new agent opens in show the bar itself rather than
- * always pane "a" (see `TerminalsPane`'s `startingHere`).
- */
-interface ProjectMarks {
-  finished: string[];
-  waiting: string[];
-  starting: string[];
 }
 
 /** `next` unless `previous` already holds the same ids — then that one, identity and all. */
@@ -550,54 +540,89 @@ export function App() {
   );
 
   /**
-   * All three of the above as tab ids, once per render for every project, and by identity only
-   * where the answer changed: a pane and a project row take these as props, and a fresh array
-   * for an unchanged answer would re-render every memoized view on every push from any project.
+   * All three of the above as tab ids, plus whether a session is working (see `ProjectMarks`),
+   * once per render for every project, and by identity only where the answer changed — the
+   * record as a whole too: a pane and the project list take these as props, and a fresh array or
+   * record for an unchanged answer would re-render every memoized view on every push from any
+   * project. That is most pushes: a spinner's tick changes `tabs` and nothing here.
+   *
+   * `busy` does not leave out the tab in front of the user, unlike the two marks: a spinner says
+   * what is happening now, and it says it wherever the tab is — the reason to look at it is that
+   * the answer is not there yet. A tab stopped on a question is excluded even though `busy` is
+   * still true underneath — the turn is technically open, but the session is waiting on the
+   * user, not working, and the two marks would otherwise stand side by side on the very same
+   * session with nothing to tell them apart from.
    */
   const marksRef = useRef<Record<string, ProjectMarks>>({});
   const marks = useMemo(() => {
     const next: Record<string, ProjectMarks> = {};
+    let changed = Object.keys(marksRef.current).length !== Object.keys(tabs).length;
     for (const projectId of Object.keys(tabs)) {
       const previous = marksRef.current[projectId];
-      const finished = markedTabs(projectId).map((tab) => tab.tabId);
-      const waiting = waitingTabs(projectId).map((tab) => tab.tabId);
-      const starting = startingTabs(projectId).map((tab) => tab.tabId);
-      next[projectId] = {
-        finished: sameIds(previous?.finished, finished),
-        waiting: sameIds(previous?.waiting, waiting),
-        starting: sameIds(previous?.starting, starting)
+      const entry: ProjectMarks = {
+        finished: sameIds(previous?.finished, markedTabs(projectId).map((tab) => tab.tabId)),
+        waiting: sameIds(previous?.waiting, waitingTabs(projectId).map((tab) => tab.tabId)),
+        starting: sameIds(previous?.starting, startingTabs(projectId).map((tab) => tab.tabId)),
+        busy: (tabs[projectId] ?? []).some((tab) => tab.busy && tab.waitingAt === undefined)
       };
+      next[projectId] =
+        previous &&
+        previous.finished === entry.finished &&
+        previous.waiting === entry.waiting &&
+        previous.starting === entry.starting &&
+        previous.busy === entry.busy
+          ? previous
+          : entry;
+      changed ||= next[projectId] !== previous;
+    }
+    if (!changed) {
+      return marksRef.current;
     }
     marksRef.current = next;
     return next;
   }, [tabs, markedTabs, waitingTabs, startingTabs]);
 
   /**
-   * Whether any session of this project is working on a turn. Unlike the mark above, the tab in
-   * front of the user is *not* left out: a spinner says what is happening now, and it says it
-   * wherever the tab is — the reason to look at it is that the answer is not there yet.
-   *
-   * A tab stopped on a question is excluded even though `busy` is still true underneath — the
-   * turn is technically open, but the session is waiting on the user, not working, and the two
-   * marks would otherwise stand side by side on the very same session with nothing to tell them
-   * apart from.
+   * What the project row says about the repository — its HEAD and first remote — by identity
+   * only where that changed: `states` is a fresh record on every push from any repository, and
+   * a changed file is not something the row shows.
    */
-  const hasBusyTab = useCallback(
-    (projectId: string): boolean =>
-      (tabs[projectId] ?? []).some((tab) => tab.busy && tab.waitingAt === undefined),
-    [tabs]
-  );
+  const headsRef = useRef<Record<string, ProjectHead>>({});
+  const heads = useMemo(() => {
+    const next: Record<string, ProjectHead> = {};
+    let changed = Object.keys(headsRef.current).length !== Object.keys(states).length;
+    for (const [projectId, state] of Object.entries(states)) {
+      const previous = headsRef.current[projectId];
+      const remote = state.remotes[0];
+      next[projectId] =
+        previous &&
+        previous.head === state.head &&
+        previous.remote?.name === remote?.name &&
+        previous.remote?.url === remote?.url
+          ? previous
+          : { head: state.head, remote };
+      changed ||= next[projectId] !== previous;
+    }
+    if (!changed) {
+      return headsRef.current;
+    }
+    headsRef.current = next;
+    return next;
+  }, [states]);
 
   /**
    * The project row's spinner: the sessions that are working, one press at a time. Where the
    * mark beside it works through its list by emptying it — a session seen stops being marked —
    * watching a session does not stop it working, so this has to remember where it left off. A
    * ref rather than state: it changes what the *next* press does, and nothing on screen.
+   *
+   * These three read `tabsRef`/`marksRef` rather than depending on `tabs`: they run on a click,
+   * and a dependency would remake them — and through them the project list — on every push.
    */
   const busyCursor = useRef<Record<string, string>>({});
   const showBusy = useCallback(
     (projectId: string) => {
-      const working = (tabs[projectId] ?? []).filter((tab) => tab.busy && tab.waitingAt === undefined);
+      const working = (tabsRef.current[projectId] ?? []).filter((tab) => tab.busy && tab.waitingAt === undefined);
       if (working.length === 0) {
         return;
       }
@@ -608,29 +633,29 @@ export function App() {
       busyCursor.current[projectId] = next.tabId;
       showTab(projectId, next.tabId);
     },
-    [tabs, showTab]
+    [showTab]
   );
 
   /** The project row's mark: the session that finished first, then the next one the time after. */
   const showFinished = useCallback(
     (projectId: string) => {
-      const next = markedTabs(projectId)[0];
+      const next = marksRef.current[projectId]?.finished[0];
       if (next) {
-        showTab(projectId, next.tabId);
+        showTab(projectId, next);
       }
     },
-    [markedTabs, showTab]
+    [showTab]
   );
 
   /** The same, for the session that has been waiting on an answer the longest. */
   const showWaiting = useCallback(
     (projectId: string) => {
-      const next = waitingTabs(projectId)[0];
+      const next = marksRef.current[projectId]?.waiting[0];
       if (next) {
-        showTab(projectId, next.tabId);
+        showTab(projectId, next);
       }
     },
-    [waitingTabs, showTab]
+    [showTab]
   );
 
   /**
@@ -728,37 +753,36 @@ export function App() {
    * arriving as input to whichever terminal has focus — see "The keyboard belongs to the
    * terminal" in CLAUDE.md for why every one of `matchesShortcut`'s combinations is safe to take.
    */
+  // The actions in a ref: `showNeedsAttention` and `cycleTab` are remade on every tab push,
+  // and the listener is registered once rather than swapped many times a minute for a spinner.
+  const shortcutActions = useRef({ gitOpen, setGitOpen, showNeedsAttention, cycleTab, newShellTab });
+  shortcutActions.current = { gitOpen, setGitOpen, showNeedsAttention, cycleTab, newShellTab };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      const actions = shortcutActions.current;
+      let run: (() => void) | undefined;
       if (matchesShortcut(event, "settings")) {
-        event.preventDefault();
-        event.stopPropagation();
-        setSettingsOpen(true);
+        run = () => setSettingsOpen(true);
       } else if (matchesShortcut(event, "toggleGit")) {
-        event.preventDefault();
-        event.stopPropagation();
-        setGitOpen(!gitOpen);
+        run = () => actions.setGitOpen(!actions.gitOpen);
       } else if (matchesShortcut(event, "needsAttention")) {
-        event.preventDefault();
-        event.stopPropagation();
-        showNeedsAttention();
+        run = actions.showNeedsAttention;
       } else if (matchesShortcut(event, "nextTab")) {
-        event.preventDefault();
-        event.stopPropagation();
-        cycleTab(1);
+        run = () => actions.cycleTab(1);
       } else if (matchesShortcut(event, "previousTab")) {
-        event.preventDefault();
-        event.stopPropagation();
-        cycleTab(-1);
+        run = () => actions.cycleTab(-1);
       } else if (matchesShortcut(event, "newShellTab")) {
+        run = actions.newShellTab;
+      }
+      if (run) {
         event.preventDefault();
         event.stopPropagation();
-        newShellTab();
+        run();
       }
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [gitOpen, setGitOpen, showNeedsAttention, cycleTab, newShellTab]);
+  }, []);
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   /** The project whose file the diff dialog is showing — gone, the dialog goes with it. */
@@ -773,10 +797,6 @@ export function App() {
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const closeDiff = useCallback(() => setDiffFile(null), []);
-  const remoteOf = useCallback((projectId: string) => states[projectId]?.remotes[0], [states]);
-  const headOf = useCallback((projectId: string) => states[projectId]?.head, [states]);
-  const hasFinished = useCallback((projectId: string) => (marks[projectId]?.finished.length ?? 0) > 0, [marks]);
-  const hasWaiting = useCallback((projectId: string) => (marks[projectId]?.waiting.length ?? 0) > 0, [marks]);
   const toggleGit = useCallback(() => setGitOpen(!gitOpen), [gitOpen, setGitOpen]);
   /** No explicit path — "Browse files" itself — reopens whatever this project last showed. */
   const openDiff = useCallback((projectId: string, path?: string) => {
@@ -832,12 +852,9 @@ export function App() {
             onClose={closeProjectSync}
             onReorder={reorderProjects}
             onAdd={openAdd}
-            remoteOf={remoteOf}
-            headOf={headOf}
+            heads={heads}
+            marks={marks}
             onOpenTerminal={openTerminal}
-            hasFinished={hasFinished}
-            hasBusy={hasBusyTab}
-            hasWaiting={hasWaiting}
             onShowBusy={showBusy}
             onShowFinished={showFinished}
             onShowWaiting={showWaiting}

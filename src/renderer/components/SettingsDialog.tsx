@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
 import { DEFAULT_KEYBINDING_PRESET_ID, THEMED_AGENT_IDS } from "../../shared/types";
 import type {
-  AgentInfo,
   AppInfo,
   AppSettings,
   ExplorerSettings,
@@ -16,6 +15,7 @@ import { Dropdown } from "./Dropdown";
 import { KEYBINDING_PRESETS } from "../keybinding-presets";
 import { notify } from "./Notices";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
+import { useAgents } from "./use-agents";
 import { useEscape } from "./use-escape";
 
 interface SettingsDialogProps {
@@ -78,14 +78,13 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   /** For the Appearance tab's agent labels — the `displayName`s live on the AgentDefinitions. */
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const agents = useAgents();
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
     // Asked alongside the settings rather than when the Info tab is first opened: none of it can
     // change while the process runs, so there is nothing a later read would catch.
     void window.tet.app.info().then(setInfo);
-    void window.tet.agents.list().then(setAgents);
   }, []);
 
   // The active project's Explorer settings — read on open and again whenever its tet.json

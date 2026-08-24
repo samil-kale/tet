@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ExplorerListing, FileChange, FileContent, FileDiff, Project } from "../../shared/types";
 import { ChangesList, confirmDiscard, type FileAct } from "./ChangesList";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
@@ -200,10 +200,14 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
       }),
     [project.id]
   );
-  const changesKey = changes
-    .filter((entry) => entry.status !== "modified")
-    .map((entry) => entry.path)
-    .join("\n");
+  const changesKey = useMemo(
+    () =>
+      changes
+        .filter((entry) => entry.status !== "modified")
+        .map((entry) => entry.path)
+        .join("\n"),
+    [changes]
+  );
   useEffect(() => {
     let cancelled = false;
     setListing(true);

@@ -346,19 +346,23 @@ export const Pane = memo(function Pane({
     ];
   };
 
-  const newSessionEntries: ContextMenuEntry[] = agents.map((agent) => ({
-    label: agent.displayName,
-    icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
-    run: () => void createTab(agent.id)
-  }));
+  // Functions like `tabMenuEntries`, built only while their menu is open: a pane re-renders on
+  // every tab push, and the icons in these are elements.
+  const newSessionEntries = (): ContextMenuEntry[] =>
+    agents.map((agent) => ({
+      label: agent.displayName,
+      icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
+      run: () => void createTab(agent.id)
+    }));
 
-  const presetEntries: ContextMenuEntry[] = onPresetChange
-    ? PRESETS.map((value) => ({
-        label: PRESET_LABELS[value],
-        icon: <PresetIcon preset={value} className="tab-icon" />,
-        run: () => onPresetChange(value)
-      }))
-    : [];
+  const presetEntries = (): ContextMenuEntry[] =>
+    onPresetChange
+      ? PRESETS.map((value) => ({
+          label: PRESET_LABELS[value],
+          icon: <PresetIcon preset={value} className="tab-icon" />,
+          run: () => onPresetChange(value)
+        }))
+      : [];
 
   return (
     <div
@@ -564,7 +568,7 @@ export const Pane = memo(function Pane({
         <ContextMenu
           x={plusMenu.x}
           y={plusMenu.y}
-          entries={newSessionEntries}
+          entries={newSessionEntries()}
           onClose={() => setPlusMenu(null)}
           className="new-session-menu"
         />
@@ -573,7 +577,7 @@ export const Pane = memo(function Pane({
         <ContextMenu
           x={layoutMenu.x}
           y={layoutMenu.y}
-          entries={presetEntries}
+          entries={presetEntries()}
           onClose={() => setLayoutMenu(null)}
           className="new-session-menu"
         />
