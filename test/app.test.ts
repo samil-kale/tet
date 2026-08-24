@@ -7,6 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { controlSocketPath } from "../src/main/control/control-server";
+import { resolveRoot } from "../src/main/git/git";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl } from "./helpers";
@@ -92,7 +93,11 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     const added = await ctl("projects-add", repo);
     assert.equal(added.status, 0, added.stderr);
     const project = added.result as Project;
-    assert.equal(project.path, fs.realpathSync(repo));
+    // Against resolveRoot(repo), not fs.realpathSync/path.resolve: addProject prefers git's own
+    // resolved root over the raw directory whenever it is one (see src/main/projects.ts), and
+    // git's resolution is a fuller canonicalization than either — it expands a Windows runner's
+    // 8.3 short %TEMP% and macOS's /var -> /private/var symlink, neither of which the others do.
+    assert.equal(project.path, await resolveRoot(repo));
     assert.deepEqual(((await ctl("projects-list")).result as Project[]).map((entry) => entry.id), [project.id]);
   });
 
