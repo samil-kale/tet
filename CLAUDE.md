@@ -374,8 +374,9 @@ process boundary and by half: `git/` (the git process and everything that talks 
 settings. These borders are lint rules (`no-restricted-imports` in `eslint.config.mjs`), not prose.
 
 Each agent gets a folder under `src/main/agents/`, described by one `AgentDefinition`
-(`src/main/agents/agent.ts`). The shared terminal layer never imports an agent's own code, only calls
-its callbacks — a new agent is a new folder, one entry in `src/main/agents/index.ts`, one case in
+(`src/main/agents/agent.ts`). The shared terminal layer imports only the registry (`AGENTS`,
+`getAgent` from `src/main/agents/index.ts`) and the `AgentDefinition` type, never an agent's own
+folder; it calls the definition's callbacks — a new agent is a new folder, one entry in that index, one case in
 `AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only agent-specific thing outside
 `src/main/agents/`, since that folder belongs to the main process).
 
