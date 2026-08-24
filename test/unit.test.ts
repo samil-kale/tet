@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
-import { mergePath, parseShellPath, win32AgentDirs } from "../src/main/terminals/agent-path";
+import { mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ShellContext } from "../src/main/terminals/shell-context";
 import { CLI, eventually } from "./helpers";
@@ -110,6 +110,21 @@ describe("the agent PATH", () => {
     assert.equal(mergePath("/a:/b", ["/b", "/a"], ":"), "/a:/b", "all present — the very same string");
     assert.equal(mergePath("", ["/a"], ":"), "/a", "an empty PATH takes the addition alone, no leading delimiter");
     assert.equal(mergePath("/a", [], ":"), "/a", "nothing to add");
+    // The unix call: the shell's PATH is the base, so its node comes before the distro's.
+    assert.equal(mergePath("/nvm/bin:/usr/bin", "/usr/bin:/usr/local/bin".split(":"), ":"), "/nvm/bin:/usr/bin:/usr/local/bin");
+  });
+
+  it("asks a Bourne shell as login and interactive, and csh the one way it allows", () => {
+    assert.equal(shellInvocation("/bin/zsh")[0], "-ilc");
+    assert.match(shellInvocation("/bin/zsh")[1], /^command printf/);
+    assert.equal(shellInvocation("/bin/tcsh")[0], "-ic");
+    assert.match(shellInvocation("/bin/tcsh")[1], /^printf/);
+  });
+
+  it("reads a moved npm prefix from the environment before ~/.npmrc, and nothing from neither", () => {
+    assert.equal(npmGlobalPrefix({ NPM_CONFIG_PREFIX: "D:\\env" }, "prefix=D:\\rc"), "D:\\env");
+    assert.equal(npmGlobalPrefix({}, "registry=https://x\r\n  prefix = D:\\rc  \r\n"), "D:\\rc");
+    assert.equal(npmGlobalPrefix({}, undefined), undefined);
   });
 
   it("reads the PATH the login shell printed between the markers, ignoring the noise around it", () => {
