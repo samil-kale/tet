@@ -38,8 +38,9 @@ const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
  *
  * Nothing is answered from memory here — the dialog this feeds offers a re-check for the user who
  * installs something while it stands (the projects opened afterwards do take the answer given here,
- * see `isAgentInstalled`). What a re-check cannot see is a program installed into a folder this
- * process does not have on its PATH yet; only a restart picks that up, and the dialog says so.
+ * see `isAgentInstalled`). Each re-check first looks again for the managers' bin directories
+ * (`augmentAgentPath`); a program installed somewhere else, into a folder this process has no way
+ * to know of, is only picked up by a restart, and the dialog says so.
  */
 export async function checkRequirements(): Promise<Requirements> {
   // Somewhere every machine has and no repository owns: the checks are about the programs,

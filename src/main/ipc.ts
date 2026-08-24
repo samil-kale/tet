@@ -37,6 +37,7 @@ import { git } from "./git/git-client";
 import { addProject, removeProject, type ProjectStore } from "./projects";
 import type { Repository, RepositoryManager } from "./git/repository";
 import { checkRequirements } from "./requirements";
+import { augmentAgentPath } from "./terminals/agent-path";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 import type { SettingsStore } from "./settings";
 
@@ -118,6 +119,9 @@ export function registerIpc({
    * every re-check, and passing is what starts the app.
    */
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
+    // A manager's bin directory that did not exist at startup (the user just ran `npm i -g`)
+    // is on PATH only once looked for again — that is what makes "Check again" find it.
+    await augmentAgentPath();
     const requirements = await checkRequirements();
     if (requirements.met) {
       openWorkspace();

@@ -267,7 +267,7 @@ if (!app.requestSingleInstanceLock()) {
     // agents actually install to it, so one the user put on their login shell's PATH or in npm's
     // global bin is found even when tet was launched with the OS's barer GUI PATH. See
     // augmentAgentPath; awaited because on macOS/Linux it asks the login shell and the check
-    // below must see the result.
+    // below must see the result. Run again on every re-check of the requirements (ipc.ts).
     await augmentAgentPath();
     // Up front rather than on the first repository: forking it costs a moment, and every
     // project that opens below is about to ask it something.
