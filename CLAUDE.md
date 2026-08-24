@@ -96,12 +96,18 @@ The cross-file facts, each reasoned at its site:
 `src/main/requirements.ts` checks git and every agent with `versionArgs` before anything opens;
 passing (`startup:check`) is what calls `openWorkspace`. Missing something, `Startup` shows
 `RequirementsDialog` instead of mounting `App` — a wall, not a question (no Escape), and **it
-installs nothing**: no command works on all three platforms, and a program installed while the
-dialog stands is still missing from this process's PATH. `--version` results are remembered
+installs nothing**: no command works on all three platforms. `--version` results are remembered
 (`isAgentInstalled`); `npm start -- --simulate=git,claude` makes the dialog reachable on a
 machine that has everything. The tests go the other way: `--allow-shell-only` lets a runner with
 no agent open, and `--user-data-dir=<dir>` gives that run a profile of its own (and, only then,
 a control token from its environment) — `test/app.test.ts` is the one user of both.
+
+**`process.env.PATH` is not the one tet was launched with.** `augmentAgentPath`
+(`src/main/terminals/agent-path.ts`) rewrites it before the check and on every re-check: on
+macOS/Linux the login shell's PATH *replaces* it (an npm shim's `env node` must find nvm's node,
+not the distro's), on win32 the package managers' bin directories are appended. Everything
+spawned inherits it, which is why `startGitProcess` waits for it in `main.ts`. Measured: asking
+`npm config get prefix` costs ~480 ms, so the prefix is read from npm's config instead.
 
 ## Git
 
@@ -613,7 +619,10 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   (`pane-layout.test.ts`); and the measured pieces — Codex's hook hash, `resolveCommand`, the
   quoting helpers, the stores, the marker watch (`pieces.test.ts`), env layering, launcher and
   context file (`unit.test.ts`). Nothing looks into the window: what the renderer did shows in
-  the main process, or it is checked by hand.
+  the main process, or it is checked by hand. The Linux side is testable from Windows in WSL
+  (WSLg has a display): clone onto the Linux filesystem, `npm install` there, Electron's
+  libraries via `wsl -u root apt-get`, launch with `env -i … PATH=/usr/bin:/bin`, drive it
+  through `tet-ctl`.
 - `npm start` — typecheck, compile, then launch (see "Do not restart the app yourself" first). The
   typecheck is there because esbuild only bundles: an unimported identifier is a global to it, and
   the app dies on load with a `ReferenceError` a `tsc` run would have named at the import.

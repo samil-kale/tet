@@ -169,7 +169,18 @@ async function findProjectDir(cwd: string): Promise<string | undefined> {
   // so the same project can have differently-cased directories there.
   const ignoreCase = process.platform === "win32";
   const wanted = ignoreCase ? encoded.toLowerCase() : encoded;
-  for (const entry of await fs.promises.readdir(projectsDir)) {
+  let entries: string[];
+  try {
+    entries = await fs.promises.readdir(projectsDir);
+  } catch (error) {
+    // No projects root at all — Claude Code has never run on this machine — is the same
+    // answer as no directory for this project: no sessions, not a failure to report.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+  for (const entry of entries) {
     if ((ignoreCase ? entry.toLowerCase() : entry) === wanted) {
       return path.join(projectsDir, entry);
     }
