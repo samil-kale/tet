@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { watchTurnMarkers } from "../../main/terminals/marker-watch";
-import { createByteThresholdCheck } from "../../main/terminals/session-ready";
-import type { ThemeDefinition } from "../../shared/themes";
+import { watchTurnMarkers } from "../../terminals/marker-watch";
+import { createByteThresholdCheck } from "../../terminals/session-ready";
+import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";
 import { setupCodexHooks } from "./hooks";
 import { codexSessionProvider } from "./sessions";

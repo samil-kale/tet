@@ -3,11 +3,11 @@ import { LARGER, fitIcon, fitStroke } from "./icons";
 
 /**
  * Which icon belongs to which agent. The one piece of agent-specific knowledge outside
- * `src/agents/`, and it is here because that folder is the main process's: an `AgentDefinition`
+ * `src/main/agents/`, and it is here because that folder is the main process's: an `AgentDefinition`
  * reaches node's fs and child_process, so an icon on it would pull JSX into that bundle and
  * the agent's own setup code into this one.
  *
- * Adding an agent therefore means a folder, an entry in `src/agents/index.ts`, and a case
+ * Adding an agent therefore means a folder, an entry in `src/main/agents/index.ts`, and a case
  * below. A tab icon's size is `.tab-icon`'s to state, for these and for the git
  * toggle's own icon alike.
  */

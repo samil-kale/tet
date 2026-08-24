@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { safeStorage } from "electron";
-import type { ProviderAccount, ProviderId } from "../shared/types";
+import type { ProviderAccount, ProviderId } from "../../shared/types";
 
 /** What the file holds: the account plus its token, encrypted by the OS and base64-wrapped. */
 interface StoredAccount extends ProviderAccount {

@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
-import { buildMarkCommand } from "../../main/terminals/marker-watch";
-import { buildNotifyCommand, buildReadFileCommand } from "../../main/terminals/os-notify";
-import type { NotificationSettings } from "../../shared/types";
+import { buildMarkCommand } from "../../terminals/marker-watch";
+import { buildNotifyCommand, buildReadFileCommand } from "../../terminals/os-notify";
+import type { NotificationSettings } from "../../../shared/types";
 
 /**
  * Codex only runs a hook once it is *trusted* — a sha256 over a normalized form of its event

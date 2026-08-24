@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import * as crypto from "node:crypto";
-import { countActivity } from "../../main/event-loop-monitor";
-import { resolveCommand } from "../../main/terminals/pty";
+import { countActivity } from "../../event-loop-monitor";
+import { resolveCommand } from "../../terminals/pty";
 import type { AgentPaths, SpawnPreparation } from "../agent";
 import { installContextPlugin } from "./context-plugin";
 import {

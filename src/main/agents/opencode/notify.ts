@@ -1,7 +1,7 @@
 import { exec } from "node:child_process";
 import * as path from "node:path";
-import { buildNotifyCommand } from "../../main/terminals/os-notify";
-import type { NotificationSettings } from "../../shared/types";
+import { buildNotifyCommand } from "../../terminals/os-notify";
+import type { NotificationSettings } from "../../../shared/types";
 
 /**
  * What opencode calls a finished turn. Named here rather than spelled out twice: the toast

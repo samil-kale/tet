@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { buildMarkCommand, markerDir, markPosix, markPowershell } from "../../main/terminals/marker-watch";
-import { buildNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript } from "../../main/terminals/os-notify";
-import type { NotificationSettings } from "../../shared/types";
+import { buildMarkCommand, markerDir, markPosix, markPowershell } from "../../terminals/marker-watch";
+import { buildNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript } from "../../terminals/os-notify";
+import type { NotificationSettings } from "../../../shared/types";
 
 /**
  * Builds the UserPromptSubmit hook that records the session as working: the other end of the

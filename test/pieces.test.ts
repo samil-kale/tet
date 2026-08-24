@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { hookTrustedHash, setupCodexHooks } from "../src/agents/codex/hooks";
+import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
 import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";

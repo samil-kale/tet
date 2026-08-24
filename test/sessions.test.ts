@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { claudeSessionProvider } from "../src/agents/claude/sessions";
-import { codexSessionProvider } from "../src/agents/codex/sessions";
+import { claudeSessionProvider } from "../src/main/agents/claude/sessions";
+import { codexSessionProvider } from "../src/main/agents/codex/sessions";
 
 /**
  * The two agents whose sessions are read off disk, against transcripts written the way the

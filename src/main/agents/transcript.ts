@@ -4,7 +4,7 @@ import type * as fs from "node:fs";
  * What Claude Code's and Codex's session providers share about reading a transcript: both are
  * append-only JSONL files read from the end, since what a listing wants — the last turn's end,
  * the latest title — sits there. The entry types and the "found what I came for" test are each
- * agent's own (each `sessions.ts` under `src/agents/`); the chunked read and the title rules are not.
+ * agent's own (each `sessions.ts` under `src/main/agents/`); the chunked read and the title rules are not.
  */
 
 /** Transcript fields are untrusted JSON — a title only counts if it's a non-blank string. */

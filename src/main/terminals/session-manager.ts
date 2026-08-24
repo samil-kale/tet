@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AGENTS, getAgent } from "../../agents";
+import { AGENTS, getAgent } from "../agents";
 
-import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../../agents/agent";
+import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { CONTROL_ENV } from "../../shared/control";
 import type {

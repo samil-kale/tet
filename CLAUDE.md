@@ -27,13 +27,13 @@ The same goes for anything that tears down a project's terminals.
 extensions docking `claude` and `opencode` into the sidebar as real terminals. Most of TET's
 terminal half ports its `shared/`; the rationale now lives only in the code comments at these
 sites, so treat them as measured, not obvious: session listing/resume/rename/delete and the
-reconcile loop (`src/agents/*/sessions.ts`, `src/main/terminals/session-manager.ts`); how each agent is
+reconcile loop (`src/main/agents/*/sessions.ts`, `src/main/terminals/session-manager.ts`); how each agent is
 driven (Claude Code reads `<uuid>.jsonl` transcripts off disk; opencode is client/server and
-**everything** goes through the one server TET runs, `src/agents/opencode/server.ts` — never its
+**everything** goes through the one server TET runs, `src/main/agents/opencode/server.ts` — never its
 CLI or its SQLite file); `extractTitle`'s precedence rules for Claude Code titles (a regression
 there silently shows the wrong tab title); the modifier-gated link providers
 (`src/renderer/terminal/links/`); OS notifications and the `background_tasks` stop guard
-(`src/main/terminals/os-notify.ts`, `src/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
+(`src/main/terminals/os-notify.ts`, `src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
 Not ported: the VS Code editor context (feeding an agent what's open or under the cursor) and the
 diagnostic quick fix — TET's own editor is a plain look-and-fix surface. What survives is the shell
@@ -127,7 +127,7 @@ resolution is one the pane doesn't offer. Of what fits, we take GitHub Desktop's
 tree (branches, remotes, tags, stashes) with per-ref menus, checkout, status, per-file diff,
 discard, `.gitignore`, fetch/pull/push (push doubles as "publish", `--set-upstream`), "commit all"
 (one message asked, `add --all` then `commit` — no staging), and cloning from the add-repository
-dialog. Cloning brought GitHub and GitLab behind one `GitProvider` interface (`src/providers/`);
+dialog. Cloning brought GitHub and GitLab behind one `GitProvider` interface (`src/main/providers/`);
 providers stay out of the local git layer — once cloned, everything goes back through the CLI.
 
 Every action goes through `Repository.runAction`, one at a time per repository, refreshing after —
@@ -344,7 +344,7 @@ subagent isn't "finished". Markers found at startup are deleted unreported.
 the tab that asked, so a question clears on input that can be an answer (`answersQuestion` in
 `session-manager.ts`) or either end of a turn — one rule for all three agents. **No hook fires for
 a turn the user cut short** either; the net is each agent's own transcript (`turnEndedAt` in
-`src/agents/*/sessions.ts`, with the forensics that tell an interrupt from a withheld marker).
+`src/main/agents/*/sessions.ts`, with the forensics that tell an interrupt from a withheld marker).
 
 State lives as `TerminalDescriptor.busy` / `waitingAt` / `finishedAt` per tab in the main
 process. Two halves keep it honest: the **main process** sets it, never asking whether it should
@@ -366,15 +366,18 @@ every doomed tab's stop before waiting on any.
 
 ## Agent-specific vs shared code
 
-`src/main/` is split by process boundary and by half: `git/` (the git process and everything
-that talks to it, `commands.ts` included), `terminals/` (pty, sessions, markers, notifications),
-`control/` (the `tet-ctl` channel); what stays flat is the app itself — window, ipc, settings.
+`src/` is the process list — `main/`, `renderer/`, `preload/`, `cli/` — plus the contract between
+them, `shared/`, the only folder any of them may import from another. `src/main/` is split by
+process boundary and by half: `git/` (the git process and everything that talks to it,
+`commands.ts` included), `terminals/` (pty, sessions, markers, notifications), `control/` (the
+`tet-ctl` channel), `agents/`, `providers/`; what stays flat is the app itself — window, ipc,
+settings. These borders are lint rules (`no-restricted-imports` in `eslint.config.mjs`), not prose.
 
-Each agent gets a folder under `src/agents/`, described by one `AgentDefinition`
-(`src/agents/agent.ts`). The shared terminal layer never imports an agent's own code, only calls
-its callbacks — a new agent is a new folder, one entry in `src/agents/index.ts`, one case in
+Each agent gets a folder under `src/main/agents/`, described by one `AgentDefinition`
+(`src/main/agents/agent.ts`). The shared terminal layer never imports an agent's own code, only calls
+its callbacks — a new agent is a new folder, one entry in `src/main/agents/index.ts`, one case in
 `AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only agent-specific thing outside
-`src/agents/`, since that folder belongs to the main process).
+`src/main/agents/`, since that folder belongs to the main process).
 
 - `executable`, `args`, `env`, `versionArgs` — how to start it, and how to tell "not installed"
   from a spawn that failed for another reason
@@ -390,7 +393,7 @@ its callbacks — a new agent is a new folder, one entry in `src/agents/index.ts
 - `createIsSessionReady` — the per-agent guess at "the CLI drew its first real frame"
 - `quitPresses` — how many Ctrl+C bytes make it quit by itself
 - `plainCtrlCKills`, `takesRightMouse`, `swapsBlueMagenta` — measured facts the *renderer* acts
-  on; they travel to it as flags on `AgentInfo`, since the renderer can't import `src/agents/`
+  on; they travel to it as flags on `AgentInfo`, since the renderer can't import `src/main/agents/`
 
 ### Never assume the agents behave alike
 
@@ -408,10 +411,10 @@ docs, and never by reasoning from one agent to another:
 - Colours: opencode's `"theme": "system"` adopts the terminal palette but swaps blue and magenta
   (`swapsBlueMagenta`; `buildXtermTheme` swaps them back — observed, not derived); Codex ignores the
   palette entirely until `-c tui.theme=ansi`, and on win32 guesses light/dark from the console,
-  not the terminal (hence `launch.cmd` and the OSC 4 handling in `src/agents/codex/index.ts`);
+  not the terminal (hence `launch.cmd` and the OSC 4 handling in `src/main/agents/codex/index.ts`);
   Claude Code paints dark unless told otherwise, so tet passes `theme` in its `--settings` file (a
   custom theme in tet's own colors was built and taken back out — a ~230 ms dark frame, see
-  `src/agents/claude/hooks.ts`).
+  `src/main/agents/claude/hooks.ts`).
 - Turn signals: opencode has an event stream, Claude Code and Codex need hook processes touching
   marker files, and Codex only runs a hook it has hashed and decided to trust.
 - Ctrl+C: Claude Code and opencode read `\x03` as an ordinary byte; to a Codex in cooked mode it
@@ -432,12 +435,12 @@ write-lock race), and what a killed run left running is taken down before the fi
 recorded password). That cleanup is what `prepareApp` is for. Codex's `$CODEX_HOME` state db has
 the identical race, reproduced rather than avoided, which is why there is no persistent
 `codex app-server`: rename and delete go through a short-lived JSON-RPC call instead
-(`src/agents/codex/app-server-client.ts`), never two at once.
+(`src/main/agents/codex/app-server-client.ts`), never two at once.
 
 ### Codex's hook trust
 
 Codex only *runs* a hook whose hash it trusts; handed an unknown one, an interactive session opens
-on a blocking "Hooks need review" screen. `src/agents/codex/hooks.ts` reproduces that hash — a
+on a blocking "Hooks need review" screen. `src/main/agents/codex/hooks.ts` reproduces that hash — a
 private, unversioned serialization, so if a future release changes it the screen reappears once
 (not silent, not a crash; re-check `hooks/src/engine/discovery.rs::hook_hash`). Two things found
 only by testing the real spawn path, both commented there: the trust entry must live inside the

@@ -1,5 +1,5 @@
-import type { ThemeDefinition } from "../shared/themes";
-import type { AgentId, NotificationSettings } from "../shared/types";
+import type { ThemeDefinition } from "../../shared/themes";
+import type { AgentId, NotificationSettings } from "../../shared/types";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid; opencode: "ses_..."). */

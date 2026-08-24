@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { app, clipboard, dialog, ipcMain, shell } from "electron";
-import { AGENTS, findAskableAgent, listAgents } from "../agents";
+import { AGENTS, findAskableAgent, listAgents } from "./agents";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types";
 import type {
   AddAccountResult,
@@ -29,8 +29,8 @@ import type {
   StashCommand,
   TerminalDescriptor
 } from "../shared/types";
-import { PROVIDERS } from "../providers";
-import type { AccountStore } from "../providers/accounts";
+import { PROVIDERS } from "./providers";
+import type { AccountStore } from "./providers/accounts";
 import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, suggestQuestion, writeCommands } from "./git/commands";
 import { countActivity } from "./event-loop-monitor";
 import { git } from "./git/git-client";

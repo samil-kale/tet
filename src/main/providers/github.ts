@@ -1,4 +1,4 @@
-import type { RemoteRepository } from "../shared/types";
+import type { RemoteRepository } from "../../shared/types";
 import { getJson, getPaged, type GitProvider } from "./provider";
 
 /** github.com's API lives on its own subdomain; GitHub Enterprise serves it under /api/v3. */

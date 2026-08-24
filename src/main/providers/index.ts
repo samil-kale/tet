@@ -1,4 +1,4 @@
-import type { ProviderId } from "../shared/types";
+import type { ProviderId } from "../../shared/types";
 import { github } from "./github";
 import { gitlab } from "./gitlab";
 import type { GitProvider } from "./provider";

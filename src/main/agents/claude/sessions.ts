@@ -4,7 +4,7 @@ import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
-import { watchedDirectoryGone } from "../../main/watch-dir";
+import { watchedDirectoryGone } from "../../watch-dir";
 
 /**
  * Claude Code has no session CLI — sessions are the `<uuid>.jsonl` transcripts in

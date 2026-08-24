@@ -1,4 +1,4 @@
-import type { RemoteRepository } from "../shared/types";
+import type { RemoteRepository } from "../../shared/types";
 
 /**
  * What a repository host has to offer tet: authenticate, list repositories, and — through

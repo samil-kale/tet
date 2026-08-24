@@ -1,6 +1,6 @@
 import * as os from "node:os";
-import { AGENTS } from "../agents";
-import type { AgentDefinition } from "../agents/agent";
+import { AGENTS } from "./agents";
+import type { AgentDefinition } from "./agents/agent";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
 import { checkAgentInstalled } from "./terminals/terminal-session";

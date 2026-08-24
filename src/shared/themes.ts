@@ -9,7 +9,7 @@ export interface ThemeDefinition {
   /** The token half: Dark/Light Modern take their tokenColors from Dark+/Light+ by `include`. */
   shikiTheme: "dark-plus" | "light-plus";
   /** Claude Code's own theme for this background, set in the `--settings` file tet hands it
-   *  (see src/agents/claude/hooks.ts) — it does not look at the terminal itself. */
+   *  (see src/main/agents/claude/hooks.ts) — it does not look at the terminal itself. */
   claudeTheme: "dark" | "light";
   /** BrowserWindow's own paint color and the Windows title-bar overlay — set in main.ts before
    *  the renderer's CSS exists, so kept by hand in step with vscode-theme.css's
@@ -17,7 +17,7 @@ export interface ThemeDefinition {
   windowBackground: string;
   titleBarSymbolColor: string;
   /** The terminal's own colors, for an agent that reads them off the console rather than
-   *  the terminal (Codex on win32 — see src/agents/codex/index.ts). Kept in step with
+   *  the terminal (Codex on win32 — see src/main/agents/codex/index.ts). Kept in step with
    *  --vscode-terminal-background / -foreground the same way. */
   terminalBackground: string;
   terminalForeground: string;
