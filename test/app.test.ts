@@ -65,12 +65,20 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     spawnSync("git", ["init", "-q"], { cwd: repo });
     socketPath = controlSocketPath(userData);
     env[CONTROL_ENV.socket] = socketPath;
-    child = spawn(electronPath, [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"], {
+    const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
+    if (process.platform === "linux") {
+      // The GitHub-hosted ubuntu-latest runner ships chrome-sandbox without the setuid bit, and
+      // its AppArmor profile also blocks the unprivileged-userns fallback — Electron aborts on
+      // launch rather than run unsandboxed. Only this test's own driving of the app is affected;
+      // a real install's chrome-sandbox has normal permissions.
+      args.push("--no-sandbox");
+    }
+    child = spawn(electronPath, args, {
       env: { ...process.env, [CONTROL_ENV.token]: TOKEN, ELECTRON_RUN_AS_NODE: undefined },
       stdio: ["ignore", "ignore", "pipe"]
     });
     child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
-    await eventually(`tet answering on ${socketPath}\n${stderr}`, async () => (pid = await alive()) !== undefined, STARTUP_MS);
+    await eventually(() => `tet answering on ${socketPath}\n${stderr}`, async () => (pid = await alive()) !== undefined, STARTUP_MS);
   });
 
   after(async () => {

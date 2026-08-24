@@ -37,8 +37,16 @@ export function tetCtl(args: string[], env: Record<string, string | undefined>):
   });
 }
 
-/** Polls until `check` holds, or fails with `what` after `ms`. */
-export async function eventually(what: string, check: () => boolean | Promise<boolean>, ms = 1000): Promise<void> {
+/**
+ * Polls until `check` holds, or fails with `what` after `ms`. `what` can be a thunk so a
+ * message built from state gathered while polling (e.g. accumulated stderr) reflects that state
+ * at failure time, not whatever it was when `eventually` was first called.
+ */
+export async function eventually(
+  what: string | (() => string),
+  check: () => boolean | Promise<boolean>,
+  ms = 1000
+): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await check()) {
@@ -46,5 +54,5 @@ export async function eventually(what: string, check: () => boolean | Promise<bo
     }
     await new Promise((resolve) => setTimeout(resolve, Math.min(200, ms / 20)));
   }
-  assert.ok(await check(), `${what} — not within ${ms}ms`);
+  assert.ok(await check(), `${typeof what === "function" ? what() : what} — not within ${ms}ms`);
 }
