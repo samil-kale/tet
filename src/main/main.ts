@@ -3,7 +3,7 @@ import { app, BrowserWindow, Menu } from "electron";
 import { prepareAgents } from "../agents";
 import { AccountStore } from "../providers/accounts";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
-import { startAutoUpdate } from "./auto-update";
+import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { countActivity, startEventLoopMonitor } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
@@ -177,7 +177,13 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // Before anything else opens: a download finished last session installs right here, with
+    // nothing yet running to lose. See installPendingUpdate for why this replaces installing on
+    // quit.
+    if (await installPendingUpdate()) {
+      return;
+    }
     Menu.setApplicationMenu(null);
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
     // Up front rather than on the first repository: forking it costs a moment, and every
