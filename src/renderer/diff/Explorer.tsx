@@ -1,10 +1,10 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder, Project } from "../../shared/types";
-import { languageForPath } from "../diff-highlight";
+import { languageForPath } from "./diff-highlight";
 import { absolutePath, revealLabel } from "../platform";
-import { type FileAct } from "./ChangesList";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
-import { confirm, prompt } from "./Dialog";
+import { type FileAct } from "../git/ChangesList";
+import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { confirm, prompt } from "../ui/Dialog";
 import {
   ChevronIcon,
   CIcon,
@@ -32,7 +32,7 @@ import {
   XmlIcon,
   YamlIcon,
   type IconProps
-} from "./icons";
+} from "../ui/icons";
 
 /**
  * A file's language, marked in its twistie slot — one entry per grammar `diff-highlight.ts`

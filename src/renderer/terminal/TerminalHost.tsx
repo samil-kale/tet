@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { AgentInfo } from "../../shared/types";
-import { attachTerminal, hasTerminal } from "../terminal-views";
+import { attachTerminal, hasTerminal } from "./terminal-views";
 
 interface TerminalHostProps {
   projectId: string;

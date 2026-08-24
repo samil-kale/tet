@@ -32,7 +32,7 @@ driven (Claude Code reads `<uuid>.jsonl` transcripts off disk; opencode is clien
 **everything** goes through the one server TET runs, `src/agents/opencode/server.ts` — never its
 CLI or its SQLite file); `extractTitle`'s precedence rules for Claude Code titles (a regression
 there silently shows the wrong tab title); the modifier-gated link providers
-(`src/renderer/links/`); OS notifications and the `background_tasks` stop guard
+(`src/renderer/terminal/links/`); OS notifications and the `background_tasks` stop guard
 (`src/main/terminals/os-notify.ts`, `src/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
 Not ported: the VS Code editor context (feeding an agent what's open or under the cursor) and the
@@ -59,7 +59,7 @@ editor only; the diff itself is `DiffView`'s own unified render. Not adopted:
   all" in its header. `DiffDialog` and `SettingsDialog` are deliberately not part of `Dialog.tsx`:
   that file is for questions, built around a form with two buttons.
 - git commands go in an ordinary terminal tab, not a console of the pane's own
-- panes are draggable (`src/renderer/components/Sash.tsx`)
+- panes are draggable (`src/renderer/ui/Sash.tsx`)
 
 ## Split view
 
@@ -67,7 +67,7 @@ One project's terminals can be split into up to four panes, each with its own ta
 Code's editor groups cut down to **five fixed presets** (single, two columns, three columns, two
 columns with the right one split, 2×2), not a nestable tree: a fixed set is one `switch` in
 `TerminalsPane` instead of a generic sash composition and a "which pane did you mean" for every
-action. `src/renderer/pane-layout.ts` holds the model and every rule about it; `TerminalsPane` lays
+action. `src/renderer/terminal/pane-layout.ts` holds the model and every rule about it; `TerminalsPane` lays
 the panes out; `Pane` is one strip-and-stack. Pane "a" (always top-left) carries the one row of
 icon buttons — git toggle, browse-files, layout picker, settings — regardless of preset.
 
@@ -279,7 +279,7 @@ Neither is a notification to turn off.
 
 ## Everything the user is told is a notice
 
-`notify(severity, message)` from `src/renderer/components/Notices.tsx` is the only way to say
+`notify(severity, message)` from `src/renderer/ui/Notices.tsx` is the only way to say
 something to the user — no view keeps a message of its own, nothing is written into the pane where
 it happens. A plain function, not a prop or hook, modelled on VS Code's `window.showErrorMessage`.
 The main process uses the same channel (`app:notice`). All three severities disappear after 8
@@ -373,7 +373,7 @@ that talks to it, `commands.ts` included), `terminals/` (pty, sessions, markers,
 Each agent gets a folder under `src/agents/`, described by one `AgentDefinition`
 (`src/agents/agent.ts`). The shared terminal layer never imports an agent's own code, only calls
 its callbacks — a new agent is a new folder, one entry in `src/agents/index.ts`, one case in
-`AgentIcon` (`src/renderer/components/agent-icons.tsx`, the only agent-specific thing outside
+`AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only agent-specific thing outside
 `src/agents/`, since that folder belongs to the main process).
 
 - `executable`, `args`, `env`, `versionArgs` — how to start it, and how to tell "not installed"
@@ -515,8 +515,14 @@ always copies, and its per-agent rules are above.
 
 ## The renderer
 
+`src/renderer/` is split by surface, the way "The layout" above describes the window: `terminal/`
+(xterm, the split, the link providers), `git/` (the pane and `ChangesList`, which the diff borrows),
+`diff/` (the dialog, the editor, shiki and monaco), `sidebar/`, `dialogs/` (the ones that are not
+questions), `ui/` (what every surface uses: questions, notices, menus, icons, the sash). What stays
+flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
+
 - Terminal output goes straight to xterm, never through React state. Instances live in
-  `src/renderer/terminal-views.ts`, outside React, keyed by project *and* tab (tab ids are only
+  `src/renderer/terminal/terminal-views.ts`, outside React, keyed by project *and* tab (tab ids are only
   unique within their project). Output arrives batched, one flush for every terminal.
 - An xterm is built the first time its tab is in front of the user, not on mount — every tab of
   every project mounts at startup, and building each was most of the window's start.

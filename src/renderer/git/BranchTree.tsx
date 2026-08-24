@@ -1,8 +1,8 @@
 import { memo, useMemo, useState } from "react";
 import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry } from "../../shared/types";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
-import { confirm, prompt } from "./Dialog";
-import { ArrowDownIcon, ArrowUpIcon, BranchIcon, ChevronIcon, RemoteIcon, SearchIcon, StashIcon, TagIcon } from "./icons";
+import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { confirm, prompt } from "../ui/Dialog";
+import { ArrowDownIcon, ArrowUpIcon, BranchIcon, ChevronIcon, RemoteIcon, SearchIcon, StashIcon, TagIcon } from "../ui/icons";
 
 /**
  * How the tree starts a git command: one at a time per project, named while it runs. The

@@ -6,9 +6,9 @@ import {
   type ThemeRegistration
 } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { resolveTheme, type ThemeDefinition } from "../shared/themes";
-import { buildShikiColors } from "./theme";
-import type { DiffLine, FileDiff } from "../shared/types";
+import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
+import { buildShikiColors } from "../terminal/theme";
+import type { DiffLine, FileDiff } from "../../shared/types";
 
 /**
  * Syntax colors for the diff, through Shiki — the same TextMate grammars and the same theme

@@ -1,11 +1,11 @@
 import { memo, useState } from "react";
 import type { Project, RemoteInfo } from "../../shared/types";
 import { revealLabel } from "../platform";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
-import { prompt } from "./Dialog";
+import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { prompt } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
-import { notify } from "./Notices";
-import { CloseIcon, CommentIcon, PlusIcon, QuestionIcon, SpinnerIcon } from "./icons";
+import { notify } from "../ui/Notices";
+import { CloseIcon, CommentIcon, PlusIcon, QuestionIcon, SpinnerIcon } from "../ui/icons";
 
 /**
  * A type of our own rather than text/plain: a project dragged across a terminal must not end

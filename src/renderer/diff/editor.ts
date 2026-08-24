@@ -1,4 +1,4 @@
-import { buildMonacoColors } from "./theme";
+import { buildMonacoColors } from "../terminal/theme";
 import { highlighter, loadGrammar, THEME } from "./diff-highlight";
 import type { HighlighterCore } from "shiki/core";
 

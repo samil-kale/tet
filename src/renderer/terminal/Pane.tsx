@@ -1,11 +1,11 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { AgentId, AgentInfo, TerminalDescriptor } from "../../shared/types";
-import { fitTerminal, focusTerminal } from "../terminal-views";
-import { PANE_LABELS, PRESETS, PRESET_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "../pane-layout";
-import type { PaneId, SplitPreset } from "../pane-layout";
-import { AgentIcon } from "./agent-icons";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
-import { prompt } from "./Dialog";
+import { fitTerminal, focusTerminal } from "./terminal-views";
+import { PANE_LABELS, PRESETS, PRESET_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
+import type { PaneId, SplitPreset } from "./pane-layout";
+import { AgentIcon } from "../ui/agent-icons";
+import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { prompt } from "../ui/Dialog";
 import { TerminalHost } from "./TerminalHost";
 import {
   CloseIcon,
@@ -22,8 +22,8 @@ import {
   PlusIcon,
   QuestionIcon,
   SpinnerIcon
-} from "./icons";
-import { ProgressBar } from "./ProgressBar";
+} from "../ui/icons";
+import { ProgressBar } from "../ui/ProgressBar";
 
 /** Dragging the window edge fires dozens of observations, and every pty resize repaints the TUI. */
 const RESIZE_DEBOUNCE_MS = 100;

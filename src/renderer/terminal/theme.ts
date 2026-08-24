@@ -1,5 +1,5 @@
 import type { ITheme } from "@xterm/xterm";
-import type { AgentInfo } from "../shared/types";
+import type { AgentInfo } from "../../shared/types";
 
 const ANSI_CSS_VARS: Record<string, string> = {
   black: "--vscode-terminal-ansiBlack",

@@ -11,12 +11,12 @@ import type {
   Project,
   ThemedAgentId
 } from "../../shared/types";
-import { Dropdown } from "./Dropdown";
-import { KEYBINDING_PRESETS } from "../keybinding-presets";
-import { notify } from "./Notices";
+import { Dropdown } from "../ui/Dropdown";
+import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
+import { notify } from "../ui/Notices";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
-import { useAgents } from "./use-agents";
-import { useEscape } from "./use-escape";
+import { useAgents } from "../ui/use-agents";
+import { useEscape } from "../ui/use-escape";
 
 interface SettingsDialogProps {
   /** Whose tet.json the Files tab's Explorer settings read and write; null hides that part. */

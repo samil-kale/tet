@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { ExplorerListing, FileChange, FileContent, FileDiff, Project } from "../../shared/types";
-import { ChangesList, confirmDiscard, type FileAct } from "./ChangesList";
+import { ChangesList, confirmDiscard, type FileAct } from "../git/ChangesList";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
 import { DiffView } from "./DiffView";
 import { Explorer, type ExplorerHandle } from "./Explorer";
@@ -13,12 +13,12 @@ import {
   PencilIcon,
   SaveIcon,
   WhitespaceIcon
-} from "./icons";
-import { confirm } from "./Dialog";
-import { notify } from "./Notices";
-import { useEscape } from "./use-escape";
-import { ProgressBar } from "./ProgressBar";
-import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePaneSize } from "./Sash";
+} from "../ui/icons";
+import { confirm } from "../ui/Dialog";
+import { notify } from "../ui/Notices";
+import { useEscape } from "../ui/use-escape";
+import { ProgressBar } from "../ui/ProgressBar";
+import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePaneSize } from "../ui/Sash";
 
 interface DiffDialogProps {
   project: Project;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Requirements } from "../shared/types";
 import { App } from "./App";
-import { RequirementsDialog } from "./components/RequirementsDialog";
+import { RequirementsDialog } from "./dialogs/RequirementsDialog";
 
 /**
  * The app, once the programs it runs on are there. The check lives in the main process, which

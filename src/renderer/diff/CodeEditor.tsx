@@ -1,8 +1,8 @@
 import { useEffect, useImperativeHandle, useRef } from "react";
 import type { editor as MonacoEditor } from "monaco-editor";
-import { languageForPath } from "../diff-highlight";
-import { editorOptions, ensureLanguage, loadMonaco } from "../editor";
-import { parseKeyCombo, resolveKeybindings } from "../keybindings";
+import { languageForPath } from "./diff-highlight";
+import { editorOptions, ensureLanguage, loadMonaco } from "./editor";
+import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 
 export interface CodeEditorHandle {
   /** The model's current text, BOM preserved — see `Repository.writeFile`. */

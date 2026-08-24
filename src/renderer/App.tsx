@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types";
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
-import { AddRepositoryDialog } from "./components/AddRepositoryDialog";
-import { CommandList } from "./components/CommandList";
-import type { BranchActions } from "./components/BranchTree";
-import { DiffDialog } from "./components/DiffDialog";
-import { Dialogs } from "./components/Dialog";
-import { GitPane } from "./components/GitPane";
-import { Notices, notify } from "./components/Notices";
-import { ProjectList } from "./components/ProjectList";
-import type { ProjectHead, ProjectMarks } from "./components/ProjectList";
-import { SettingsDialog } from "./components/SettingsDialog";
+import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
+import { CommandList } from "./sidebar/CommandList";
+import type { BranchActions } from "./git/BranchTree";
+import { DiffDialog } from "./diff/DiffDialog";
+import { Dialogs } from "./ui/Dialog";
+import { GitPane } from "./git/GitPane";
+import { Notices, notify } from "./ui/Notices";
+import { ProjectList } from "./sidebar/ProjectList";
+import type { ProjectHead, ProjectMarks } from "./sidebar/ProjectList";
+import { SettingsDialog } from "./dialogs/SettingsDialog";
 import {
   MIN_CONTENT_WIDTH,
   MIN_PANE_HEIGHT,
@@ -18,10 +18,10 @@ import {
   Sash,
   usePaneSize,
   usePaneToggle
-} from "./components/Sash";
-import { TerminalsPane } from "./components/TerminalsPane";
-import { clearTerminal, disposeProjectTerminals } from "./terminal-views";
-import { PlusIcon } from "./components/icons";
+} from "./ui/Sash";
+import { TerminalsPane } from "./terminal/TerminalsPane";
+import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
+import { PlusIcon } from "./ui/icons";
 import { sameList } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import {
@@ -33,8 +33,8 @@ import {
   saveLayout,
   serializeLayout,
   visibleTabIds
-} from "./pane-layout";
-import type { PaneId, ProjectLayout, SplitPreset } from "./pane-layout";
+} from "./terminal/pane-layout";
+import type { PaneId, ProjectLayout, SplitPreset } from "./terminal/pane-layout";
 
 /** A little over `.git-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const GIT_SLIDE_MS = 180;

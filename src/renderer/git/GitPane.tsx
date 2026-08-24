@@ -2,10 +2,10 @@ import { memo, useState } from "react";
 import type { Project, RepositoryState } from "../../shared/types";
 import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommitAll, ChangesList, confirmDiscard, type FileAct } from "./ChangesList";
-import { notify } from "./Notices";
-import { MIN_PANE_HEIGHT, Sash } from "./Sash";
-import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIcon } from "./icons";
-import { ProgressBar } from "./ProgressBar";
+import { notify } from "../ui/Notices";
+import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
+import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIcon } from "../ui/icons";
+import { ProgressBar } from "../ui/ProgressBar";
 
 interface GitPaneProps {
   project: Project;

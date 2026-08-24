@@ -1,5 +1,5 @@
 import type { ILinkProvider, Terminal } from "@xterm/xterm";
-import { URL_REGEX } from "../../shared/urls";
+import { URL_REGEX } from "../../../shared/urls";
 import { createModifierGatedLinkProvider, type WrappedUrlResolver } from "./link-provider";
 
 // Not @xterm/addon-web-links directly: that addon always shows its underline/pointer

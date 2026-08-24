@@ -1,5 +1,5 @@
-import type { TerminalDescriptor } from "../shared/types";
-import { sameRecord } from "./identity";
+import type { TerminalDescriptor } from "../../shared/types";
+import { sameRecord } from "../identity";
 
 /**
  * A terminal split view, VS Code's editor groups reduced to a fixed set of presets rather than a

@@ -1,11 +1,11 @@
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
-import type { AgentInfo } from "../shared/types";
+import type { AgentInfo } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
 import type { WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
-import { isMac, isModifierHeld } from "./platform";
+import { isMac, isModifierHeld } from "../platform";
 import { buildXtermTheme } from "./theme";
 
 interface TerminalView {

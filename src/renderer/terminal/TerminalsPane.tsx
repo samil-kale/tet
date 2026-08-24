@@ -1,12 +1,12 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Project, TerminalDescriptor } from "../../shared/types";
 import { sameList } from "../identity";
-import { disposeTerminal, setRevealHandler } from "../terminal-views";
-import { PANE_IDS, layoutStorageKey } from "../pane-layout";
-import type { PaneId, ProjectLayout, SplitPreset } from "../pane-layout";
-import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "./Sash";
+import { disposeTerminal, setRevealHandler } from "./terminal-views";
+import { PANE_IDS, layoutStorageKey } from "./pane-layout";
+import type { PaneId, ProjectLayout, SplitPreset } from "./pane-layout";
+import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "../ui/Sash";
 import { Pane, type PaneChrome } from "./Pane";
-import { useAgents } from "./use-agents";
+import { useAgents } from "../ui/use-agents";
 
 /**
  * A divider's position as a *share* of the room it divides, not a pixel count — `usePaneSize`'s

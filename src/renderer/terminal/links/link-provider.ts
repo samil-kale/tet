@@ -1,6 +1,6 @@
 import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
-import { URL_BODY_CHAR } from "../../shared/urls";
-import { isModifierHeld, isModifierKey } from "../platform";
+import { URL_BODY_CHAR } from "../../../shared/urls";
+import { isModifierHeld, isModifierKey } from "../../platform";
 
 /**
  * How many rows below a cut-off url count as its continuation. A long url in a narrow terminal

@@ -1,8 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import type { ThemedToken } from "shiki/core";
 import type { DiffLine, FileDiff, ImageDiff } from "../../shared/types";
-import { highlightDiff } from "../diff-highlight";
-import { UnfoldIcon } from "./icons";
+import { highlightDiff } from "./diff-highlight";
+import { UnfoldIcon } from "../ui/icons";
 
 interface DiffViewProps {
   /** Whose diff this is; the view reads the file itself when a gap is opened. */

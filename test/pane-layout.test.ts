@@ -7,8 +7,8 @@ import {
   normalizeLayout,
   serializeLayout,
   visibleTabIds
-} from "../src/renderer/pane-layout";
-import type { ProjectLayout } from "../src/renderer/pane-layout";
+} from "../src/renderer/terminal/pane-layout";
+import type { ProjectLayout } from "../src/renderer/terminal/pane-layout";
 import type { TerminalDescriptor } from "../src/shared/types";
 
 /** The split view's rules — pure functions, the one part of the renderer that needs no window. */

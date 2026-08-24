@@ -27,7 +27,7 @@ import "monaco-editor/editor/browser/widget/codeEditor/codeEditorWidget.js";
 // even a .css request, which then 404s. A relative path reaches the file on disk directly,
 // bypassing that map (this is what "exports" restricts: bare-specifier resolution, not a
 // relative one) — the only reason these two imports look unlike the rest of monaco-core.ts.
-import "../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css";
+import "../../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css";
 import "monaco-editor/editor/contrib/comment/browser/comment.js";
 import "monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js";
 import "monaco-editor/editor/contrib/cursorUndo/browser/cursorUndo.js";
@@ -68,6 +68,6 @@ import "monaco-editor/editor/browser/coreCommands.js";
 import "monaco-editor/editor/contrib/caretOperations/browser/caretOperations.js";
 import "monaco-editor/editor/contrib/find/browser/findController.js";
 import "monaco-editor/editor/common/standaloneStrings.js";
-import "../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css";
+import "../../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css";
 
 export * from "monaco-editor/editor/editor.api.js";

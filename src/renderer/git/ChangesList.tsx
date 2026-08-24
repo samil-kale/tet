@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
 import { absolutePath, revealLabel } from "../platform";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
-import { confirm, prompt } from "./Dialog";
+import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { confirm, prompt } from "../ui/Dialog";
 import {
   MAX_PINNED,
   deleteCommitMessage,
   loadCommitHistory,
   recordCommitMessage,
   toggleCommitPin
-} from "../commit-history";
+} from "./commit-history";
 
 /** Runs a file action against the repository; the owner shows it running on its own bar. */
 export type FileAct = (action: () => Promise<GitActionResult>) => void;

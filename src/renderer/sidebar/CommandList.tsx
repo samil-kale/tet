@@ -1,11 +1,11 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
 import type { ProjectCommand } from "../../shared/types";
-import { ContextMenu, type ContextMenuEntry } from "./ContextMenu";
-import { confirm, prompt, type PromptAnswer } from "./Dialog";
+import { ContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
+import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
-import { PlayIcon, PlusIcon, SparkleIcon } from "./icons";
-import { ProgressBar } from "./ProgressBar";
+import { PlayIcon, PlusIcon, SparkleIcon } from "../ui/icons";
+import { ProgressBar } from "../ui/ProgressBar";
 
 /**
  * A type of our own, for the same reason the project list has one: a row dragged across a

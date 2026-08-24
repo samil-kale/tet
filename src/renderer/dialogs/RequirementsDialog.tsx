@@ -1,5 +1,5 @@
 import type { Requirement, Requirements } from "../../shared/types";
-import { SpinnerIcon } from "./icons";
+import { SpinnerIcon } from "../ui/icons";
 
 /** Name on the left, what the check found on the right, and where to get it when it is missing. */
 function RequirementRow({ requirement }: { requirement: Requirement }) {

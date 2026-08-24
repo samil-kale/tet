@@ -6,11 +6,11 @@ import type {
   ProviderId,
   RemoteRepository
 } from "../../shared/types";
-import { confirm } from "./Dialog";
-import { Dropdown } from "./Dropdown";
-import { CloseIcon, PlusIcon, SpinnerIcon } from "./icons";
-import { notify } from "./Notices";
-import { useEscape } from "./use-escape";
+import { confirm } from "../ui/Dialog";
+import { Dropdown } from "../ui/Dropdown";
+import { CloseIcon, PlusIcon, SpinnerIcon } from "../ui/icons";
+import { notify } from "../ui/Notices";
+import { useEscape } from "../ui/use-escape";
 
 /**
  * The four ways a repository comes in: picked off an account's list, cloned from a url, added
