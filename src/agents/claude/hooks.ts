@@ -4,8 +4,6 @@ import { buildMarkCommand, markerDir, markPosix, markPowershell } from "../../ma
 import { buildNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript } from "../../main/os-notify";
 import type { NotificationSettings } from "../../shared/types";
 
-export { watchMarkers } from "../../main/marker-watch";
-
 /**
  * Builds the UserPromptSubmit hook that records the session as working: the other end of the
  * turn from the Stop hook below, and what puts the spinner on its tab. It has no guard of its

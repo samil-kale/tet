@@ -1,9 +1,10 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Project, TerminalDescriptor } from "../../shared/types";
+import { sameList } from "../identity";
 import { disposeTerminal, setRevealHandler } from "../terminal-views";
 import { PANE_IDS, layoutStorageKey } from "../pane-layout";
 import type { PaneId, ProjectLayout, SplitPreset } from "../pane-layout";
-import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, PERSIST_MS, Sash } from "./Sash";
+import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "./Sash";
 import { Pane, type PaneChrome } from "./Pane";
 import { useAgents } from "./use-agents";
 
@@ -26,26 +27,17 @@ import { useAgents } from "./use-agents";
  * panes has no valid share to store.
  */
 function useDividerFraction(projectId: string, name: string, initial: number): [number, (fraction: number) => void] {
-  const storageKey = layoutStorageKey(projectId, `divider.${name}`);
-  const [fraction, setFraction] = useState(() => {
-    const stored = Number(localStorage.getItem(storageKey));
-    return Number.isFinite(stored) && stored > 0 && stored < 1 ? stored : initial;
-  });
-  // Stored once the drag has settled rather than per pointer move, on `usePaneSize`'s own clock
-  // and for its reason: the write is synchronous, and a drag delivers a size per move.
-  const persist = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [fraction, setFraction] = usePersistedNumber(layoutStorageKey(projectId, `divider.${name}`), (stored) =>
+    Number.isFinite(stored) && stored > 0 && stored < 1 ? stored : initial
+  );
   const set = useCallback(
     (next: number) => {
-      if (!(next > 0 && next < 1)) {
-        return;
+      if (next > 0 && next < 1) {
+        setFraction(next);
       }
-      setFraction(next);
-      clearTimeout(persist.current);
-      persist.current = setTimeout(() => localStorage.setItem(storageKey, String(next)), PERSIST_MS);
     },
-    [storageKey]
+    [setFraction]
   );
-  useEffect(() => () => clearTimeout(persist.current), []);
   return [fraction, set];
 }
 
@@ -71,14 +63,6 @@ const THIRD = 1 / 3;
 
 /** The tabs of a pane that has none — one shared instance, so an empty pane's prop is stable. */
 const NO_PANE_TABS: TerminalDescriptor[] = [];
-
-/** `next` unless `previous` already holds the same tabs — then that one, identity and all. */
-function sameTabs(previous: TerminalDescriptor[] | undefined, next: TerminalDescriptor[]): TerminalDescriptor[] {
-  if (next.length === 0) {
-    return NO_PANE_TABS;
-  }
-  return previous && previous.length === next.length && previous.every((tab, i) => tab === next[i]) ? previous : next;
-}
 
 interface TerminalsPaneProps {
   project: Project;
@@ -276,9 +260,10 @@ export const TerminalsPane = memo(function TerminalsPane({
   const paneTabs = useMemo(() => {
     const next: Partial<Record<PaneId, TerminalDescriptor[]>> = {};
     for (const paneId of PANE_IDS) {
-      next[paneId] = sameTabs(
+      next[paneId] = sameList(
         paneTabsRef.current[paneId],
-        tabs.filter((tab) => (tabPane[tab.tabId] ?? focusedPane) === paneId)
+        tabs.filter((tab) => (tabPane[tab.tabId] ?? focusedPane) === paneId),
+        NO_PANE_TABS
       );
     }
     paneTabsRef.current = next;

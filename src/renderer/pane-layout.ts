@@ -1,4 +1,5 @@
 import type { TerminalDescriptor } from "../shared/types";
+import { sameRecord } from "./identity";
 
 /**
  * A terminal split view, VS Code's editor groups reduced to a fixed set of presets rather than a
@@ -102,15 +103,6 @@ function pickActive(
   // the closed tab was the rightmost one.
   const index = previousList.findIndex((tab) => tab.tabId === wanted);
   return list[Math.min(Math.max(index, 0), list.length - 1)].tabId;
-}
-
-/** `next` unless `previous` already holds the same keys and values — then that one, identity and all. */
-function sameRecord<V>(previous: Record<string, V>, next: Record<string, V>): Record<string, V> {
-  const keys = Object.keys(next);
-  if (keys.length !== Object.keys(previous).length) {
-    return next;
-  }
-  return keys.every((key) => previous[key] === next[key]) ? previous : next;
 }
 
 /**

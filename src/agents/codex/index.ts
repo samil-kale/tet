@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { watchMarkers } from "../../main/marker-watch";
+import { watchTurnMarkers } from "../../main/marker-watch";
 import { createByteThresholdCheck } from "../../main/session-ready";
 import type { ThemeDefinition } from "../../shared/themes";
 import type { AgentDefinition } from "../agent";
@@ -68,12 +68,7 @@ export const codexAgent: AgentDefinition = {
       if (paths.themeAgents) {
         args.push("-c", "tui.theme=ansi");
       }
-      // Same shape as Claude's: a hook is a process of its own and cannot call back into
-      // tet, so each end of a turn — and the point part-way through where it stops for an
-      // answer — leaves a marker file behind, and these are what pick them up.
-      watchers.push(watchMarkers(paths.agentDir, "busy", paths.onSessionBusy));
-      watchers.push(watchMarkers(paths.agentDir, "finished", paths.onSessionFinished));
-      watchers.push(watchMarkers(paths.agentDir, "waiting", paths.onSessionWaiting));
+      watchers.push(watchTurnMarkers(paths.agentDir, paths));
     } catch (error) {
       // As with Claude, losing the hooks must not keep Codex from starting — swallowed rather
       // than rejected, since a rejection here marks the whole agent unstartable.

@@ -22,6 +22,7 @@ import {
 import { TerminalsPane } from "./components/TerminalsPane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal-views";
 import { PlusIcon } from "./components/icons";
+import { sameList } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import {
   applyPreset,
@@ -80,14 +81,6 @@ const DEFAULT_LAYOUT = defaultLayout();
  */
 function layoutOf(layouts: Record<string, ProjectLayout>, projectId: string): ProjectLayout {
   return layouts[projectId] ?? loadLayout(projectId);
-}
-
-/** `next` unless `previous` already holds the same ids — then that one, identity and all. */
-function sameIds(previous: string[] | undefined, next: string[]): string[] {
-  if (next.length === 0) {
-    return NO_IDS;
-  }
-  return previous && previous.length === next.length && previous.every((id, i) => id === next[i]) ? previous : next;
 }
 
 export function App() {
@@ -501,29 +494,18 @@ export function App() {
    * its terminal is on screen was never out of sight. Decided here rather than in the main
    * process, which holds the mark but cannot know what is on screen — and here rather than in
    * each of the two views, which would then have to agree with each other about it.
+   *
+   * The same rule, for the same reason, gives the sessions that stopped mid-turn on a question
+   * (`waitingAt`) — a question asked in the tab in front of the user was never asked out of
+   * sight — so one function answers both, and both views take it from here rather than working
+   * it out twice.
    */
   const markedTabs = useCallback(
-    (projectId: string): TerminalDescriptor[] => {
+    (projectId: string, field: "finishedAt" | "waitingAt"): TerminalDescriptor[] => {
       const onScreen = projectId === activeProjectId ? visibleTabIds(layouts[projectId] ?? DEFAULT_LAYOUT) : NO_IDS;
       return (tabs[projectId] ?? [])
-        .filter((tab) => tab.finishedAt !== undefined && !onScreen.includes(tab.tabId))
-        .sort((a, b) => (a.finishedAt ?? 0) - (b.finishedAt ?? 0));
-    },
-    [tabs, layouts, activeProjectId]
-  );
-
-  /**
-   * A project's sessions that stopped mid-turn on a question, oldest first. The same rule as
-   * `markedTabs` and for the same reason — a question asked in the tab in front of the user was
-   * never asked out of sight — so the two live next to each other and both views take the
-   * answer from here rather than working it out twice.
-   */
-  const waitingTabs = useCallback(
-    (projectId: string): TerminalDescriptor[] => {
-      const onScreen = projectId === activeProjectId ? visibleTabIds(layouts[projectId] ?? DEFAULT_LAYOUT) : NO_IDS;
-      return (tabs[projectId] ?? [])
-        .filter((tab) => tab.waitingAt !== undefined && !onScreen.includes(tab.tabId))
-        .sort((a, b) => (a.waitingAt ?? 0) - (b.waitingAt ?? 0));
+        .filter((tab) => tab[field] !== undefined && !onScreen.includes(tab.tabId))
+        .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
     },
     [tabs, layouts, activeProjectId]
   );
@@ -560,9 +542,9 @@ export function App() {
     for (const projectId of Object.keys(tabs)) {
       const previous = marksRef.current[projectId];
       const entry: ProjectMarks = {
-        finished: sameIds(previous?.finished, markedTabs(projectId).map((tab) => tab.tabId)),
-        waiting: sameIds(previous?.waiting, waitingTabs(projectId).map((tab) => tab.tabId)),
-        starting: sameIds(previous?.starting, startingTabs(projectId).map((tab) => tab.tabId)),
+        finished: sameList(previous?.finished, markedTabs(projectId, "finishedAt").map((tab) => tab.tabId), NO_IDS),
+        waiting: sameList(previous?.waiting, markedTabs(projectId, "waitingAt").map((tab) => tab.tabId), NO_IDS),
+        starting: sameList(previous?.starting, startingTabs(projectId).map((tab) => tab.tabId), NO_IDS),
         busy: (tabs[projectId] ?? []).some((tab) => tab.busy && tab.waitingAt === undefined)
       };
       next[projectId] =
@@ -580,7 +562,7 @@ export function App() {
     }
     marksRef.current = next;
     return next;
-  }, [tabs, markedTabs, waitingTabs, startingTabs]);
+  }, [tabs, markedTabs, startingTabs]);
 
   /**
    * What the project row says about the repository — its HEAD and first remote — by identity
@@ -661,7 +643,7 @@ export function App() {
   /**
    * Every tab in front of the user — one per pane — has been seen, so the mark on each goes. The
    * main process holds the mark but never learns what is on screen, which is why this is the
-   * renderer's half. Only the bubble: a standing question is hidden while on screen (`waitingTabs`)
+   * renderer's half. Only the bubble: a standing question is hidden while on screen (`markedTabs`)
    * but not cleared by being looked at, so reporting it here would be an IPC per push for nothing.
    */
   useEffect(() => {
@@ -691,19 +673,16 @@ export function App() {
    * key exists precisely so a project nobody has clicked into is not missed.
    */
   const showNeedsAttention = useCallback(() => {
-    // Through `waitingTabs`/`markedTabs`, so the "not the tab on screen" rule stays in one place.
-    const collect = (
-      of: (projectId: string) => TerminalDescriptor[],
-      field: "waitingAt" | "finishedAt"
-    ): { projectId: string; tab: TerminalDescriptor }[] =>
+    // Through `markedTabs`, so the "not the tab on screen" rule stays in one place.
+    const collect = (field: "waitingAt" | "finishedAt"): { projectId: string; tab: TerminalDescriptor }[] =>
       Object.keys(tabs)
-        .flatMap((projectId) => of(projectId).map((tab) => ({ projectId, tab })))
+        .flatMap((projectId) => markedTabs(projectId, field).map((tab) => ({ projectId, tab })))
         .sort((a, b) => (a.tab[field] ?? 0) - (b.tab[field] ?? 0));
-    const next = collect(waitingTabs, "waitingAt")[0] ?? collect(markedTabs, "finishedAt")[0];
+    const next = collect("waitingAt")[0] ?? collect("finishedAt")[0];
     if (next) {
       showTab(next.projectId, next.tab.tabId);
     }
-  }, [tabs, waitingTabs, markedTabs, showTab]);
+  }, [tabs, markedTabs, showTab]);
 
   /** Ctrl/Cmd+Shift+./, — the focused pane's own tabs, one over from where it is now. */
   const cycleTab = useCallback(

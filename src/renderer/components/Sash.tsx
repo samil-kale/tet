@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 
 /**
  * Where a dragged pane size is kept. Layout describes the window rather than any one
@@ -6,12 +6,8 @@ import { useCallback, useRef, useState, type PointerEvent } from "react";
  * every project sees the same one.
  */
 const STORAGE_PREFIX = "tet.layout.";
-/**
- * How long after the last resize a pane size is written to storage. Exported for the terminal
- * split's dividers, which keep their own kind of size (`useDividerFraction`) but settle a drag
- * on the same clock.
- */
-export const PERSIST_MS = 300;
+/** How long after the last resize a pane size is written to storage. */
+const PERSIST_MS = 300;
 
 /**
  * The floor every pane shares, per direction. A pane here is either a column beside the
@@ -49,28 +45,37 @@ export function usePaneToggle(key: string, initial: boolean): [boolean, (open: b
 }
 
 /**
- * A pane size the user can drag, restored on the next start. The floor applies to what comes
- * back as well, not only to the drag: a size stored before that floor existed would otherwise
- * disagree with the pane's own `min-*` until somebody grabbed the sash.
+ * A number the user sets by dragging, restored on the next start — a pane size here, a
+ * divider's share in the terminal split (`useDividerFraction`). `restore` turns what storage
+ * holds (`NaN` when nothing) into the value to start from. Written once the drag has settled
+ * rather than per pointer move: the write is synchronous, and a drag delivers a value per move —
+ * sixty and more a second. A write still pending on unmount is dropped. The setter is stable for
+ * the same reason as the toggle's above.
  */
-export function usePaneSize(key: string, initial: number, min: number): [number, (size: number) => void] {
-  const [size, setSize] = useState(() => {
-    const stored = Number(localStorage.getItem(STORAGE_PREFIX + key));
-    return Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial);
-  });
-  // Stored once the drag has settled rather than per pointer move: the write is synchronous,
-  // and a drag delivers a size per move — sixty and more a second. Stable for the same reason
-  // as the toggle's setter above.
+export function usePersistedNumber(storageKey: string, restore: (stored: number) => number): [number, (next: number) => void] {
+  const [value, setValue] = useState(() => restore(Number(localStorage.getItem(storageKey))));
   const persist = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const set = useCallback(
     (next: number) => {
-      setSize(next);
+      setValue(next);
       clearTimeout(persist.current);
-      persist.current = setTimeout(() => localStorage.setItem(STORAGE_PREFIX + key, String(next)), PERSIST_MS);
+      persist.current = setTimeout(() => localStorage.setItem(storageKey, String(next)), PERSIST_MS);
     },
-    [key]
+    [storageKey]
   );
-  return [size, set];
+  useEffect(() => () => clearTimeout(persist.current), []);
+  return [value, set];
+}
+
+/**
+ * A pane size the user can drag. The floor applies to what comes back as well, not only to the
+ * drag: a size stored before that floor existed would otherwise disagree with the pane's own
+ * `min-*` until somebody grabbed the sash.
+ */
+export function usePaneSize(key: string, initial: number, min: number): [number, (size: number) => void] {
+  return usePersistedNumber(STORAGE_PREFIX + key, (stored) =>
+    Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial)
+  );
 }
 
 interface SashProps {

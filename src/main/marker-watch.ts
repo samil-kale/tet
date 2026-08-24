@@ -164,3 +164,24 @@ export function watchMarkers(
     watcher?.close();
   };
 }
+
+/** What a turn's three markers report into — the agent's callbacks on `AgentPaths`. */
+export interface TurnReporter {
+  onSessionBusy: (sessionId: string, at: number) => void;
+  onSessionFinished: (sessionId: string, at: number) => void;
+  onSessionWaiting: (sessionId: string, at: number) => void;
+}
+
+/**
+ * All three kinds at once, for an agent whose hooks are processes of their own and cannot call
+ * back into tet: each end of a turn — and the point part-way through where it stops for an
+ * answer — leaves a file behind, and this is what picks them up. Returns the one stop for all.
+ */
+export function watchTurnMarkers(storageDir: string, reporter: TurnReporter): () => void {
+  const stops = [
+    watchMarkers(storageDir, "busy", reporter.onSessionBusy),
+    watchMarkers(storageDir, "finished", reporter.onSessionFinished),
+    watchMarkers(storageDir, "waiting", reporter.onSessionWaiting)
+  ];
+  return () => stops.forEach((stop) => stop());
+}

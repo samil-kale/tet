@@ -3,6 +3,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
+import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
+import { watchedDirectoryGone } from "../../main/watch-dir";
 
 /**
  * Claude Code has no session CLI — sessions are the `<uuid>.jsonl` transcripts in
@@ -108,14 +110,9 @@ export const claudeSessionProvider: SessionProvider = {
         return;
       }
       const onEvent = (_eventType: string, filename: string | null): void => {
-        // The directory itself deleted (a cleared `~/.claude/projects`) raises no error: win32
-        // reports it as an unending storm of events naming the directory's own absolute path,
-        // Linux as one event carrying its basename after which the watch is silently dead. Back
-        // to the first stage either way, which arms this again once Claude recreates it.
-        if (
-          (filename === null || path.isAbsolute(filename) || filename === path.basename(projectDir)) &&
-          !fs.existsSync(projectDir)
-        ) {
+        // The directory itself deleted (a cleared `~/.claude/projects`): back to the first
+        // stage, which arms this again once Claude recreates it.
+        if (watchedDirectoryGone(projectDir, filename)) {
           projectWatcher?.close();
           projectWatcher = undefined;
           armRootWatcher();
@@ -180,7 +177,6 @@ async function findProjectDir(cwd: string): Promise<string | undefined> {
   return undefined;
 }
 
-const TITLE_MAX_LENGTH = 60;
 const TITLE_SCAN_BYTE_LIMIT = 256 * 1024;
 
 interface ResolvedTitle {
@@ -341,11 +337,6 @@ function typedPromptText(entry: Record<string, unknown>): string | undefined {
   return nonEmptyString(message?.content);
 }
 
-/** Transcript fields are untrusted JSON — a title only counts if it's a non-blank string. */
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
-}
-
 /** What the backwards scan of a transcript answers — see scanTail. */
 interface TranscriptTail {
   /** The last `custom-title` entry, if the transcript holds one. */
@@ -487,23 +478,10 @@ async function scanTail(filePath: string, sessionId: string): Promise<Transcript
     }
     const previous = cached && cached.size < size ? cached : undefined;
     const floor = previous ? Math.max(0, previous.size - TITLE_SCAN_BYTE_LIMIT) : 0;
-    let end = size;
-    // The bytes before the first newline of the chunk above: the rest of a line this chunk
-    // ends in the middle of. Kept as bytes rather than text so a character cut in two survives.
-    let carry = Buffer.alloc(0);
-    while (end > floor && !scanComplete(tail)) {
-      const start = Math.max(floor, end - TITLE_SCAN_BYTE_LIMIT);
-      const buffer = Buffer.alloc(end - start);
-      await handle.read(buffer, 0, buffer.length, start);
-      let chunk = Buffer.concat([buffer, carry]);
-      if (start > floor) {
-        const cut = chunk.indexOf(10);
-        carry = cut === -1 ? chunk : chunk.subarray(0, cut);
-        chunk = cut === -1 ? Buffer.alloc(0) : chunk.subarray(cut + 1);
-      }
-      readTailEntries(chunk.toString("utf8").split("\n"), sessionId, tail);
-      end = start;
-    }
+    await readLinesBackwards(handle, size, floor, TITLE_SCAN_BYTE_LIMIT, (lines) => {
+      readTailEntries(lines, sessionId, tail);
+      return scanComplete(tail);
+    });
     // A turn_duration with nothing below it to check against: the whole stretch under it held
     // no summary and no earlier turn, and a summary is written right before its turn_duration,
     // so there is none - the turn was cut short. Never left pending into the cache.
@@ -532,9 +510,4 @@ async function scanTail(filePath: string, sessionId: string): Promise<Transcript
     await handle?.close();
   }
   return tail;
-}
-
-function truncateTitle(text: string): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  return normalized.length > TITLE_MAX_LENGTH ? `${normalized.slice(0, TITLE_MAX_LENGTH - 1)}…` : normalized;
 }

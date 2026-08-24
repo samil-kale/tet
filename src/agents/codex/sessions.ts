@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
+import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
 import { deleteThread, renameThread } from "./app-server-client";
 
 /**
@@ -22,7 +23,6 @@ function sessionIndexFile(): string {
   return path.join(codexHome(), "session_index.jsonl");
 }
 
-const TITLE_MAX_LENGTH = 60;
 /** Same budget as Claude's scan for the same reason: bounds a pathological single line. */
 const TAIL_SCAN_BYTE_LIMIT = 256 * 1024;
 /**
@@ -195,21 +195,10 @@ async function scanTail(filePath: string): Promise<TailInfo> {
     tail.firstPrompt = cached?.tail.firstPrompt ?? (await readFirstPrompt(handle, size));
     const previous = cached && cached.size < size ? cached : undefined;
     const floor = previous ? Math.max(0, previous.size - TAIL_SCAN_BYTE_LIMIT) : 0;
-    let end = size;
-    let carry = Buffer.alloc(0);
-    while (end > floor && tail.turnEndedAt === undefined) {
-      const start = Math.max(floor, end - TAIL_SCAN_BYTE_LIMIT);
-      const buffer = Buffer.alloc(end - start);
-      await handle.read(buffer, 0, buffer.length, start);
-      let chunk = Buffer.concat([buffer, carry]);
-      if (start > floor) {
-        const cut = chunk.indexOf(10);
-        carry = cut === -1 ? chunk : chunk.subarray(0, cut);
-        chunk = cut === -1 ? Buffer.alloc(0) : chunk.subarray(cut + 1);
-      }
-      tail.turnEndedAt = readTurnEnd(chunk.toString("utf8").split("\n"));
-      end = start;
-    }
+    await readLinesBackwards(handle, size, floor, TAIL_SCAN_BYTE_LIMIT, (lines) => {
+      tail.turnEndedAt = readTurnEnd(lines);
+      return tail.turnEndedAt !== undefined;
+    });
     tail.turnEndedAt ??= previous?.tail.turnEndedAt;
     tailCache.set(filePath, { size, tail });
   } catch (error) {
@@ -251,15 +240,6 @@ async function readSessionNames(): Promise<Map<string, string>> {
     }
   }
   return names;
-}
-
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
-}
-
-function truncateTitle(text: string): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  return normalized.length > TITLE_MAX_LENGTH ? `${normalized.slice(0, TITLE_MAX_LENGTH - 1)}…` : normalized;
 }
 
 /** Every `.jsonl` rollout under `sessions/`, three levels deep (`YYYY/MM/DD`). */

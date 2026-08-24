@@ -105,41 +105,25 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   useEscape(onClose);
 
-  const flip = (key: keyof NotificationSettings, value: boolean): void => {
+  /** Applies a change the moment it is made: shown at once, written whole (see settings.ts). */
+  const patch = (change: (current: AppSettings) => Partial<AppSettings>): void => {
     if (!settings) {
       return;
     }
-    const next: AppSettings = { ...settings, notifications: { ...settings.notifications, [key]: value } };
+    const next: AppSettings = { ...settings, ...change(settings) };
     setSettings(next);
     void window.tet.settings.save(next);
   };
 
-  const applyPreset = (id: string): void => {
-    if (!settings) {
-      return;
-    }
-    const next: AppSettings = { ...settings, editorKeybindingPreset: id };
-    setSettings(next);
-    void window.tet.settings.save(next);
-  };
+  const flip = (key: keyof NotificationSettings, value: boolean): void =>
+    patch((current) => ({ notifications: { ...current.notifications, [key]: value } }));
 
-  const applyTheme = (id: string): void => {
-    if (!settings) {
-      return;
-    }
-    const next: AppSettings = { ...settings, theme: id };
-    setSettings(next);
-    void window.tet.settings.save(next);
-  };
+  const applyPreset = (id: string): void => patch(() => ({ editorKeybindingPreset: id }));
 
-  const applyThemeAgent = (id: ThemedAgentId, value: boolean): void => {
-    if (!settings) {
-      return;
-    }
-    const next: AppSettings = { ...settings, themeAgents: { ...settings.themeAgents, [id]: value } };
-    setSettings(next);
-    void window.tet.settings.save(next);
-  };
+  const applyTheme = (id: string): void => patch(() => ({ theme: id }));
+
+  const applyThemeAgent = (id: ThemedAgentId, value: boolean): void =>
+    patch((current) => ({ themeAgents: { ...current.themeAgents, [id]: value } }));
 
   const updateExplorerSettings = <K extends keyof ExplorerSettings>(
     key: K,

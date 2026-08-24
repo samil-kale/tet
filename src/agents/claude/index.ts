@@ -1,6 +1,7 @@
 import { createByteThresholdCheck } from "../../main/session-ready";
 import type { AgentDefinition } from "../agent";
-import { setupClaudeHooks, watchMarkers } from "./hooks";
+import { watchTurnMarkers } from "../../main/marker-watch";
+import { setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
 
 export const claudeAgent: AgentDefinition = {
@@ -25,12 +26,7 @@ export const claudeAgent: AgentDefinition = {
         paths,
         paths.themeAgents ? paths.theme.claudeTheme : undefined
       );
-      // A hook is a process of its own and cannot call back into tet, so each end of a turn
-      // — and the point part-way through where it stops for an answer — leaves a file behind,
-      // and these are what pick them up.
-      watchers.push(watchMarkers(paths.agentDir, "busy", paths.onSessionBusy));
-      watchers.push(watchMarkers(paths.agentDir, "finished", paths.onSessionFinished));
-      watchers.push(watchMarkers(paths.agentDir, "waiting", paths.onSessionWaiting));
+      watchers.push(watchTurnMarkers(paths.agentDir, paths));
     } catch (error) {
       // Unlike opencode's server, these hooks are not what makes the CLI usable — losing
       // the notifications must not keep Claude from starting, so this is swallowed rather

@@ -28,6 +28,7 @@ import {
 } from "./commands";
 import { countActivity, logSlow } from "./event-loop-monitor";
 import { git } from "./git-client";
+import { watchedDirectoryGone } from "./watch-dir";
 import type { DiscardTargets } from "./git";
 import { isImage, toDataUrl } from "./git";
 
@@ -802,13 +803,8 @@ export class Repository {
         if (name && isIgnoredEvent(name)) {
           return;
         }
-        // The watched directory itself going away raises no `error`: on win32 it is reported
-        // as an unending storm of events naming the directory's own absolute path (measured at
-        // >100 000 a second, each one scheduling a refresh), and on Linux as one event carrying
-        // its basename after which the watch is silently dead. Only an event that could be
-        // that pays for the `stat`; the retry loop takes it from here and picks the directory
-        // back up when it reappears.
-        if ((!name || path.isAbsolute(name) || name === path.basename(this.project.path)) && !fs.existsSync(this.project.path)) {
+        // The retry loop takes it from here and picks the directory back up when it reappears.
+        if (watchedDirectoryGone(this.project.path, name)) {
           this.watcher?.close();
           this.watcher = undefined;
           this.retryWatching();
