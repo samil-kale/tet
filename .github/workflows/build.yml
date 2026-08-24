@@ -29,6 +29,12 @@ jobs:
 
       - run: npm ci
 
+      # electron has no postinstall download step; it fetches its binary lazily on first
+      # `require("electron")`. Left to happen inside `npm test`, several test files trigger
+      # that download at once (node --test runs them concurrently), racing to extract the same
+      # zip — ETXTBSY on Linux, a startup timeout on Windows. One serial fetch here avoids it.
+      - run: node -e "require('electron')"
+
       # The same three gates the working copy is held to, before anything is packaged. The
       # tests are what exercises the control channel's socket on each platform — a named pipe
       # here, a socket file on the other two.

@@ -194,7 +194,10 @@ describe("a repository, from init on", () => {
   it("resolves the root from a subdirectory", async () => {
     const sub = path.join(cwd, "deep", "er");
     fs.mkdirSync(sub, { recursive: true });
-    assert.equal(await resolveRoot(sub), fs.realpathSync(cwd));
+    // Against resolveRoot(cwd) itself, not fs.realpathSync(cwd): on a Windows runner whose
+    // %TEMP% is an 8.3 short name, realpathSync doesn't expand it but git's own cwd resolution
+    // does, so the two disagree on a path that still names the same directory.
+    assert.equal(await resolveRoot(sub), await resolveRoot(cwd));
     assert.equal(await resolveRoot(os.tmpdir()), undefined);
   });
 });
