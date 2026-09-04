@@ -20,11 +20,19 @@ jobs:
   prepare-release:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The notes are the version's section of CHANGELOG.md, written by hand before the tag
+        # (see "Releasing" in CLAUDE.md): everything between its "## <version>" heading and the
+        # next one. A version without a section gets empty notes, as before.
         # electron-builder names a release it creates itself after the bare version, no "v" —
         # matched here so this pre-created one reads the same way.
-        run: gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "${GITHUB_REF_NAME#v}" --notes ""
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md
 
   build:
     needs: prepare-release

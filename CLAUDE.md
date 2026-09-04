@@ -663,13 +663,16 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 
 When asked for a release, run it — no need to re-derive these steps first:
 
-```
-npm version patch   # or minor / major
-git push && git push --tags
-```
+1. Write the release's section at the top of `CHANGELOG.md` — `## <version> (<date>)`, then one
+   bullet per change a user would notice, read off `git log <last tag>..HEAD`. Say what changed
+   for the user, not what the commits say; leave out refactors, docs and fixes to unreleased
+   work. Commit it on its own (`changelog for <version>`).
+2. `npm version patch` (or `minor` / `major`), then `git push && git push --tags`.
 
-`npm version` bumps `package.json` and tags in one step. The tag push triggers
-`.github/workflows/build.yml`, which builds all three platforms and publishes to a GitHub Release;
+`npm version` bumps `package.json` and tags in one step, and refuses on a dirty tree — hence the
+changelog commit first. The tag push triggers `.github/workflows/build.yml`, which takes the
+version's section of `CHANGELOG.md` as the release notes (no section, empty notes), builds all
+three platforms and publishes to a GitHub Release;
 the repo is public so `electron-updater` (`src/main/auto-update.ts`) can read releases without a
 token. Windows and Linux (AppImage) auto-install on the next quit — never forced, since a terminal
 tab is a live agent session. macOS and the `.deb` build only get a notice linking to the release.
