@@ -470,4 +470,11 @@ export interface TerminalDescriptor {
    * Restart only when this is true.
    */
   savedCommand?: boolean;
+  /**
+   * The saved command's line as written in `tet.json`, for a tab that runs one — what the
+   * split layout remembers a command's pane under (`commandPane` in `pane-layout.ts`), so the
+   * next run of the same line lands where the last one lay. The line, not the `name`: the
+   * name is a label and may be missing.
+   */
+  command?: string;
 }

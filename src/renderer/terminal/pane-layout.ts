@@ -56,10 +56,24 @@ export interface ProjectLayout {
   tabPane: Record<string, PaneId>;
   /** Each pane's own active tab. */
   activeTab: Partial<Record<PaneId, string | null>>;
+  /**
+   * Where each saved command's tab last lay, by its command line — written when such a tab
+   * closes (`normalizeLayout`), read when the command runs again (`placeCommandTab`), and
+   * persisted with the open ones merged in (`serializeLayout`). The preset too, not the pane
+   * alone: a pane means a position only within its preset (`PANE_POSITIONS`), and a missing
+   * pane is what the preset is restored for.
+   */
+  commandPane: Record<string, CommandPlace>;
+}
+
+/** A pane of a preset — the two together name a position on screen. */
+export interface CommandPlace {
+  preset: SplitPreset;
+  pane: PaneId;
 }
 
 export function defaultLayout(): ProjectLayout {
-  return { preset: "single", focusedPane: "a", tabPane: {}, activeTab: {} };
+  return { preset: "single", focusedPane: "a", tabPane: {}, activeTab: {}, commandPane: {} };
 }
 
 /** Which pane a tab lives in, falling back to the focused pane for one never assigned yet. */
@@ -146,12 +160,30 @@ export function normalizeLayout(
     activeTab[paneId] = pickActive(listOf(tabs, paneId), listOf(previousTabs, paneId), layout.activeTab[paneId]);
   }
   const focusedPane = panes.includes(layout.focusedPane) ? layout.focusedPane : panes[0];
+  // A saved command's tab that just closed leaves its pane behind under its command line — the
+  // one moment "where it last lay" is known for a tab that is gone.
+  let commandPane = layout.commandPane;
+  for (const tab of previousTabs) {
+    if (tab.command === undefined || currentIds.has(tab.tabId)) {
+      continue;
+    }
+    const place: CommandPlace = { preset: layout.preset, pane: paneOf(layout, tab.tabId) };
+    const known = commandPane[tab.command];
+    if (known?.preset !== place.preset || known.pane !== place.pane) {
+      commandPane = { ...commandPane, [tab.command]: place };
+    }
+  }
   const nextTabPane = sameRecord(layout.tabPane, tabPane);
   const nextActiveTab = sameRecord(layout.activeTab, activeTab);
-  if (focusedPane === layout.focusedPane && nextTabPane === layout.tabPane && nextActiveTab === layout.activeTab) {
+  if (
+    focusedPane === layout.focusedPane &&
+    nextTabPane === layout.tabPane &&
+    nextActiveTab === layout.activeTab &&
+    commandPane === layout.commandPane
+  ) {
     return layout;
   }
-  return { preset: layout.preset, focusedPane, tabPane: nextTabPane, activeTab: nextActiveTab };
+  return { preset: layout.preset, focusedPane, tabPane: nextTabPane, activeTab: nextActiveTab, commandPane };
 }
 
 /**
@@ -192,7 +224,11 @@ function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, 
       activeTab[paneId] = tabId;
     }
   }
-  return normalizeLayout({ preset, focusedPane: paneFor(layout.focusedPane), tabPane, activeTab }, tabs, tabs);
+  return normalizeLayout(
+    { preset, focusedPane: paneFor(layout.focusedPane), tabPane, activeTab, commandPane: layout.commandPane },
+    tabs,
+    tabs
+  );
 }
 
 /**
@@ -463,6 +499,57 @@ export function snapTab(
 }
 
 /**
+ * Where a pane of a preset sits on screen — what "the same pane" means across presets: the
+ * letters agree except at the bottom right, which is c in split-right and d in the grid, and
+ * a full-height a or b counts as the top of its column.
+ */
+type PanePosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+const PANE_POSITIONS: Record<SplitPreset, Partial<Record<PaneId, PanePosition>>> = {
+  single: { a: "top-left" },
+  cols2: { a: "top-left", b: "top-right" },
+  "split-right": { a: "top-left", b: "top-right", c: "bottom-right" },
+  grid2x2: { a: "top-left", b: "top-right", c: "bottom-left", d: "bottom-right" }
+};
+
+function paneAt(preset: SplitPreset, position: PanePosition | undefined): PaneId | undefined {
+  return PRESET_PANES[preset].find((paneId) => PANE_POSITIONS[preset][paneId] === position);
+}
+
+/**
+ * A saved command's tab, just opened, goes where that command last lay: beside a tab of the
+ * same command that is still open, else in the recorded pane — the one at the same position
+ * in the current preset, or, where the preset has no such position, in the recorded preset,
+ * restored the way a snap lays one out (every present pane keeps its position). Placed, not
+ * moved: nothing collapses, since the tab came from nowhere. A command never run before goes
+ * where any new tab does, the focused pane.
+ */
+export function placeCommandTab(
+  layout: ProjectLayout,
+  tabId: string,
+  command: string,
+  tabs: TerminalDescriptor[]
+): ProjectLayout {
+  const open = tabs.find((tab) => tab.command === command && tab.tabId !== tabId);
+  const place = open ? { preset: layout.preset, pane: paneOf(layout, open.tabId) } : layout.commandPane[command];
+  if (!place) {
+    return moveTab(layout, tabId, paneOf(layout, tabId), tabs);
+  }
+  const position = PANE_POSITIONS[place.preset][place.pane];
+  const pane = paneAt(layout.preset, position);
+  if (pane) {
+    return moveTab(layout, tabId, pane, tabs);
+  }
+  const remap: PaneRemap = {};
+  for (const paneId of PRESET_PANES[layout.preset]) {
+    const kept = paneAt(place.preset, PANE_POSITIONS[layout.preset][paneId]);
+    if (kept !== undefined && kept !== paneId) {
+      remap[paneId] = kept;
+    }
+  }
+  return snapTab(layout, tabId, { preset: place.preset, target: place.pane, remap }, tabs);
+}
+
+/**
  * How far past a zone's boundary the pointer may stray before the zone goes out — without it
  * the preview flickers with every pixel while the pointer rests on the line between two zones.
  * Set by hand against the real drag.
@@ -525,6 +612,8 @@ interface PersistedLayout {
   preset: SplitPreset;
   focusedPane: PaneId;
   tabPane: Record<string, PaneId>;
+  /** Where each saved command last lay — the closed ones as recorded, the open ones as they are. */
+  commandPane: Record<string, CommandPlace>;
 }
 
 /**
@@ -544,7 +633,7 @@ export function loadLayout(projectId: string): ProjectLayout {
     if (typeof parsed !== "object" || parsed === null) {
       return fallback;
     }
-    const { preset, focusedPane, tabPane } = parsed as Record<string, unknown>;
+    const { preset, focusedPane, tabPane, commandPane } = parsed as Record<string, unknown>;
     if (!isSplitPreset(preset) || !isPaneId(focusedPane)) {
       return fallback;
     }
@@ -556,7 +645,16 @@ export function loadLayout(projectId: string): ProjectLayout {
         }
       }
     }
-    return { preset, focusedPane, tabPane: restored, activeTab: {} };
+    const places: Record<string, CommandPlace> = {};
+    if (commandPane !== null && typeof commandPane === "object") {
+      for (const [command, place] of Object.entries(commandPane as Record<string, unknown>)) {
+        const { preset: placePreset, pane } = (place ?? {}) as Record<string, unknown>;
+        if (isSplitPreset(placePreset) && isPaneId(pane) && PRESET_PANES[placePreset].includes(pane)) {
+          places[command] = { preset: placePreset, pane };
+        }
+      }
+    }
+    return { preset, focusedPane, tabPane: restored, activeTab: {}, commandPane: places };
   } catch {
     return fallback;
   }
@@ -569,13 +667,19 @@ export function loadLayout(projectId: string): ProjectLayout {
  */
 export function serializeLayout(layout: ProjectLayout, tabs: TerminalDescriptor[]): string {
   const tabPane: Record<string, PaneId> = {};
+  // The open command tabs' panes over the recorded ones: a run that ends with one still open
+  // has to find it where it lay, not where a closed run before it did.
+  const commandPane = { ...layout.commandPane };
   for (const tab of tabs) {
     const paneId = layout.tabPane[tab.tabId];
     if (tab.sessionId !== undefined && paneId !== undefined) {
       tabPane[tab.sessionId] = paneId;
     }
+    if (tab.command !== undefined) {
+      commandPane[tab.command] = { preset: layout.preset, pane: paneOf(layout, tab.tabId) };
+    }
   }
-  const persisted: PersistedLayout = { preset: layout.preset, focusedPane: layout.focusedPane, tabPane };
+  const persisted: PersistedLayout = { preset: layout.preset, focusedPane: layout.focusedPane, tabPane, commandPane };
   return JSON.stringify(persisted);
 }
 

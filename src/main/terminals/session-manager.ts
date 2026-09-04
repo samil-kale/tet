@@ -181,7 +181,7 @@ function answersQuestion(data: string): boolean {
 
 /** `starting` is not the tab's own: it is read off `tabIndicators` by the caller — see there. */
 function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
-  const { tabId, projectId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt } =
+  const { tabId, projectId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } =
     tab;
   return {
     tabId,
@@ -196,7 +196,8 @@ function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
     waitingAt,
     starting,
     sessionId,
-    savedCommand: isSavedCommandTab(tab)
+    savedCommand: isSavedCommandTab(tab),
+    command
   };
 }
 
@@ -551,6 +552,7 @@ export class ProjectSessionManager {
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined {
     const shared = {
       title: command.name ?? command.command,
+      command: command.command,
       // `resolve` rather than `join`, so a folder that is already absolute is left alone.
       cwd: command.cwd ? path.resolve(this.project.path, command.cwd) : undefined,
       env: command.env

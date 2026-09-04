@@ -254,7 +254,11 @@ when it does; `createCommandTab` is `createTab` with a program, so it shares the
 output batching and close path of every other tab. `TerminalSession` tells a clean end from a
 failure by exit code (`stopped` vs `error`); an `error` tab draws `ExclamationIcon` in the mark
 slot. A tab opened from outside the terminals pane is brought to front through `App.showTab`, a
-one-off write into the layout, not a prop the pane re-applies. Saved-command tabs carry no
+one-off write into the layout, not a prop the pane re-applies — for a saved command into the
+pane its line last lay in (`placeCommandTab`; `commandPane` in the persisted layout, recorded
+when such a tab closes and with the open ones at every write): the pane at the same position
+in the current preset, or the recorded preset restored like a snap where that position is
+missing, and placed rather than moved, so nothing collapses. Saved-command tabs carry no
 session marks.
 
 A `tet.json` that's missing, unparseable or oddly shaped is simply no commands — it's the user's

@@ -32,6 +32,7 @@ import {
   defaultLayout,
   loadLayout,
   paneOf,
+  placeCommandTab,
   saveLayout,
   serializeLayout,
   snapTab as snapTabLayout,
@@ -468,11 +469,24 @@ export function App() {
     []
   );
 
-  /** Shows a tab something outside its own pane opened: its project, then the tab itself. */
+  /**
+   * Shows a tab something outside its own pane opened: its project, then the tab itself. A
+   * saved command's tab goes to the pane that command last ran in (`placeCommandTab`); the
+   * command line comes with the call where the caller has the descriptor, and off the tab list
+   * for one the control channel opened — its push precedes the show.
+   */
   const showTab = useCallback(
-    (projectId: string, tabId: string) => {
+    (projectId: string, tabId: string, command?: string) => {
       setActiveProjectId(projectId);
-      activateTab(projectId, tabId);
+      const line = command ?? tabsRef.current[projectId]?.find((tab) => tab.tabId === tabId)?.command;
+      if (line === undefined) {
+        activateTab(projectId, tabId);
+        return;
+      }
+      setLayouts((current) => ({
+        ...current,
+        [projectId]: placeCommandTab(layoutOf(current, projectId), tabId, line, tabsRef.current[projectId] ?? [])
+      }));
     },
     [activateTab]
   );

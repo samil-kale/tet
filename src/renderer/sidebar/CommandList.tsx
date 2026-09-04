@@ -69,8 +69,9 @@ interface CommandListProps {
   projectId: string | null;
   /** Dragged on the sash above the list, which is why it isn't a style of its own. */
   height: number;
-  /** The tab a started command opened, so the app can bring it to the front. */
-  onOpenTab: (projectId: string, tabId: string) => void;
+  /** The tab a started command opened, so the app can bring it to the front — in the pane the
+      command last ran in, which is why the command line travels along. */
+  onOpenTab: (projectId: string, tabId: string, command?: string) => void;
 }
 
 /**
@@ -279,7 +280,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     const project = projectId;
     void window.tet.commands.run(project, command).then((tab) => {
       if (tab) {
-        onOpenTab(project, tab.tabId);
+        onOpenTab(project, tab.tabId, tab.command);
       }
     });
   };
