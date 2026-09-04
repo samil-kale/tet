@@ -28,13 +28,17 @@ import {
   applyPreset,
   defaultLayout,
   loadLayout,
+  moveTab,
   normalizeLayout,
+  occupiedPanes,
   paneOf,
   saveLayout,
   serializeLayout,
+  settleLayout,
+  snapTab as snapTabLayout,
   visibleTabIds
 } from "./terminal/pane-layout";
-import type { PaneId, ProjectLayout, SplitPreset } from "./terminal/pane-layout";
+import type { PaneId, ProjectLayout, SnapTransition, SplitPreset } from "./terminal/pane-layout";
 
 /** A little over `.git-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const GIT_SLIDE_MS = 180;
@@ -274,11 +278,14 @@ export function App() {
     setLayouts((current) => {
       let next: Record<string, ProjectLayout> | undefined;
       for (const projectId of Object.keys(tabs)) {
-        const layout = normalizeLayout(
-          layoutOf(current, projectId),
-          tabs[projectId] ?? NO_TABS,
-          previousTabs[projectId] ?? NO_TABS
-        );
+        const before = layoutOf(current, projectId);
+        const list = tabs[projectId] ?? NO_TABS;
+        const previousList = previousTabs[projectId] ?? NO_TABS;
+        const normalized = normalizeLayout(before, list, previousList);
+        // Fewer panes occupied than before this push — a pane's last tab closed — settles the
+        // split into the preset for that count; the other trigger is a move, `activateTab` below.
+        const shrunk = occupiedPanes(normalized, list).length < occupiedPanes(before, previousList).length;
+        const layout = shrunk ? settleLayout(normalized, list) : normalized;
         if (layout !== current[projectId]) {
           next ??= { ...current };
           next[projectId] = layout;
@@ -414,45 +421,27 @@ export function App() {
    * of those already knows); left out, it resolves through `paneOf` instead, for a tab shown from
    * outside any pane's own view (a project row's mark, a saved command, `showTab` below) that
    * belongs wherever it already lives, or the focused pane if it has never been shown before.
-   * Written blindly, whether or not the tab has arrived in `tabs` yet — `normalizeLayout` is what
-   * leaves a pending one alone instead of treating it as closed.
-   *
-   * Moving a pane's own active tab elsewhere would otherwise leave that pane's `activeTab` naming
-   * a tab it no longer has — nothing selected there until the user clicks something themselves.
-   * The pane that loses it falls back to whichever tab sat right before it in its own order (the
-   * one before wins over VS Code's "closed tab" rule of nearest-right-else-left, since here the
-   * tab has not closed, just left; before is the one glance back to where it a moment ago sat next
-   * to), or the first of what is left if it was that pane's own first tab, or nothing once the
-   * pane is left with no tabs of its own at all.
+   * What the move does to both panes' selections is `moveTab`'s. A move that leaves fewer panes
+   * occupied settles the split into the preset for that count (`settleLayout`) — the other
+   * trigger is a close, in the reconcile effect above.
    */
-  const activateTab = useCallback(
-    (projectId: string, tabId: string, paneId?: PaneId) => {
-      setLayouts((current) => {
-        const layout = layoutOf(current, projectId);
-        const source = paneOf(layout, tabId);
-        const target = paneId ?? source;
-        let activeTab = layout.activeTab;
-        if (target !== source && layout.activeTab[source] === tabId) {
-          const sourceTabs = (tabsRef.current[projectId] ?? []).filter(
-            (tab) => (layout.tabPane[tab.tabId] ?? layout.focusedPane) === source
-          );
-          const index = sourceTabs.findIndex((tab) => tab.tabId === tabId);
-          const remaining = sourceTabs.filter((tab) => tab.tabId !== tabId);
-          activeTab = { ...activeTab, [source]: remaining.length > 0 ? remaining[Math.max(index - 1, 0)].tabId : null };
-        }
-        return {
-          ...current,
-          [projectId]: {
-            ...layout,
-            focusedPane: target,
-            tabPane: layout.tabPane[tabId] === target ? layout.tabPane : { ...layout.tabPane, [tabId]: target },
-            activeTab: { ...activeTab, [target]: tabId }
-          }
-        };
-      });
-    },
-    []
-  );
+  const activateTab = useCallback((projectId: string, tabId: string, paneId?: PaneId) => {
+    setLayouts((current) => {
+      const layout = layoutOf(current, projectId);
+      const tabs = tabsRef.current[projectId] ?? [];
+      const moved = moveTab(layout, tabId, paneId ?? paneOf(layout, tabId), tabs);
+      const shrunk = occupiedPanes(moved, tabs).length < occupiedPanes(layout, tabs).length;
+      return { ...current, [projectId]: shrunk ? settleLayout(moved, tabs) : moved };
+    });
+  }, []);
+
+  /** A tab dropped on a snap zone: the preset switch and the move, in one write — see `snapTab`. */
+  const snapTab = useCallback((projectId: string, tabId: string, transition: SnapTransition) => {
+    setLayouts((current) => ({
+      ...current,
+      [projectId]: snapTabLayout(layoutOf(current, projectId), tabId, transition, tabsRef.current[projectId] ?? [])
+    }));
+  }, []);
 
   /** A pane taking focus without its active tab changing — clicking its terminal, not a tab. */
   const focusPane = useCallback((projectId: string, paneId: PaneId) => {
@@ -906,6 +895,7 @@ export function App() {
               onOpenDiff={openDiff}
               layout={layouts[project.id] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
+              onSnapTab={snapTab}
               onFocusPane={focusPane}
               onPresetChange={setPreset}
               onOpenSettings={openSettings}

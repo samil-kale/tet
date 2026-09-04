@@ -93,12 +93,6 @@ interface SashProps {
    */
   reverse?: boolean;
   onResize: (size: number) => void;
-  /**
-   * Drawn the way `dragging` below draws it, but driven from outside: the terminal split uses
-   * this while a tab is dragged across the grid, so the seam between panes reads as part of the
-   * same drop target they are, not a dead gap between two highlighted ones.
-   */
-  highlighted?: boolean;
 }
 
 /**
@@ -106,7 +100,7 @@ interface SashProps {
  * and lets the rest of the container absorb the difference, so of the two sides only one ever
  * carries a size of its own.
  */
-export function Sash({ orientation, size, min, minOther, reverse, onResize, highlighted }: SashProps) {
+export function Sash({ orientation, size, min, minOther, reverse, onResize }: SashProps) {
   const vertical = orientation === "vertical";
   const drag = useRef<{ origin: number; size: number; total: number } | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
@@ -168,7 +162,7 @@ export function Sash({ orientation, size, min, minOther, reverse, onResize, high
 
   return (
     <div
-      className={`sash ${orientation}${dragging ? " dragging" : ""}${highlighted ? " highlighted" : ""}`}
+      className={`sash ${orientation}${dragging ? " dragging" : ""}`}
       onPointerDown={begin}
       onPointerMove={move}
       onPointerUp={end}

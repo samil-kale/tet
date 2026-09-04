@@ -90,6 +90,19 @@ The cross-file facts, each reasoned at its site:
 - **A tab moved between panes gets a new host**, so `attachTerminal` moves the xterm element
   rather than calling `open()` again (which silently no-ops). Only the **focused** pane focuses its
   terminal; a focus change alone must never resize the pty.
+- **A tab dragged onto a snap zone lays out the preset that has a pane there** — the zones are
+  a map of the whole grid (`SNAP_ZONES`: the right half in thirds, the lower left), the same for
+  every preset; what each does per preset is `SNAP_TRANSITIONS` in `pane-layout.ts`. Panes the
+  preset adds beyond the target stay empty. A drop on a tab strip is always a plain move. The
+  preview is an overlay (`.snap-preview`); pane sizes change on the drop alone, since a resize
+  refits every pty.
+- **Fewer occupied panes settle the split into the preset for that count** (`settleLayout`,
+  Zellij's swap layouts rather than VS Code's "close empty groups"): two are cols2, one is
+  single, three out of the grid are split-right, reading order kept. Asked only when the count
+  *fell* — a move (`activateTab`) or a close (the reconcile effect), both in `App` — so a snap,
+  which only moves a tab into a new pane, never triggers it and its empty panes stay. A table of
+  "which empty pane collapses to what" was built first and taken out: it had a grid corner with
+  no preset to fall to, and told a snap's empty pane apart from an emptied one.
 
 ## Nothing starts without git and an agent
 

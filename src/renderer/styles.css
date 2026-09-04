@@ -649,8 +649,10 @@ input:focus {
 /* One project's split: 1–4 `.terminal-pane` cells side by side, `Sash`-composed by
    `TerminalsPane` per preset — see "Split view" in CLAUDE.md. Row direction, since
    every preset's first divider is a vertical one; a preset that stacks two panes wraps them in
-   its own nested column instead of changing this. */
+   its own nested column instead of changing this. Relative for `.snap-preview` below to anchor
+   to; no z-index, so no stacking context of its own. */
 .panes-grid {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -684,8 +686,8 @@ input:focus {
   flex: 1;
 }
 
-/* The pane a dragged tab would land in — only ever seen with more than one pane, since a tab
-   is only draggable once there is another pane to drop it on.
+/* The pane a dragged tab would land in — never the one it came from, and never while the
+   pointer is in a snap zone (then `.snap-preview` below says where it goes instead).
    Same technique `.terminal-host.drag-over::after` below uses for a file dragged over a
    terminal, and for the same two reasons: an overlay rather than a border on the pane itself,
    since a border shrinks the box its children measure — and unlike that one, a plain inset
@@ -698,6 +700,18 @@ input:focus {
   inset: 0;
   border: 1px solid var(--vscode-focusBorder);
   /* Above `.terminal-host`'s own layers, the same reason that rule states for itself. */
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* The pane a dragged tab would *add*, at even shares (`PANE_BOXES`), positioned by
+   `TerminalsPane` in percent of the grid. The same line as the frame above, since
+   two marks that differ read as two meanings; an overlay for the same reason too, and more so:
+   the panes must keep their sizes until the drop, or every pty under them refits mid-drag. */
+.snap-preview {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--vscode-focusBorder);
   z-index: 10;
   pointer-events: none;
 }
@@ -1490,18 +1504,11 @@ input:focus {
 }
 
 /* Only while it is actually being dragged — deliberately not on hover, which would recolor the
-   line whenever the pointer came to rest anywhere near a pane border. */
+   line whenever the pointer came to rest anywhere near a pane border. Nor while a tab is dragged
+   across the split: coloring the dividers around the target pane too was tried, and in the grid
+   lit the whole spine between the columns — only the target pane's own frame marks it now. */
 .sash.dragging::before {
   background: var(--vscode-sash-hoverBorder);
-}
-
-/* A tab is being dragged across the split — the same `--vscode-focusBorder` the panes highlight
-   with, so the seam between two highlighted panes reads as part of the same drop target rather
-   than a plain border sitting between them. Not the resize color above: that means "grab me",
-   this means "something is happening here", the same distinction the panes draw with their own
-   two states. */
-.sash.highlighted::before {
-  background: var(--vscode-focusBorder);
 }
 
 /* Shared bits ---------------------------------------------------------------------------- */

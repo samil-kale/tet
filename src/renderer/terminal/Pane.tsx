@@ -117,10 +117,24 @@ interface PaneProps {
    */
   width?: number;
   height?: number;
-  /** Whether a dragged tab is over this pane specifically — `TerminalsPane` is what compares
-      panes, since only it knows which dividers border which and needs the same answer for them. */
+  /**
+   * Whether a plain drop would land the dragged tab here — `TerminalsPane` is what decides,
+   * since only it knows which dividers border which, where the tab came from, and whether the
+   * pointer is in a snap zone instead. This pane only reports what it sees: the drag starting
+   * on one of its tabs, the pointer over it (and where), the drop, and the drag ending.
+   */
   dragOver: boolean;
-  onDragOverChange: (paneId: PaneId, over: boolean) => void;
+  onDragStart: (paneId: PaneId) => void;
+  onDragOverChange: (paneId: PaneId, position: DragPosition | null) => void;
+  onDropTab: (paneId: PaneId, tabId: string) => void;
+  onDragEnd: () => void;
+}
+
+/** Where a dragged tab is over a pane: the pointer, and whether it is over the tab strip. */
+export interface DragPosition {
+  x: number;
+  y: number;
+  overStrip: boolean;
 }
 
 export const Pane = memo(function Pane({
@@ -144,7 +158,10 @@ export const Pane = memo(function Pane({
   onOpenSettings,
   showProgress,
   dragOver,
-  onDragOverChange
+  onDragStart,
+  onDragOverChange,
+  onDropTab,
+  onDragEnd
 }: PaneProps) {
   const [plusMenu, setPlusMenu] = useState<{ x: number; y: number } | null>(null);
   const [layoutMenu, setLayoutMenu] = useState<{ x: number; y: number } | null>(null);
@@ -379,13 +396,17 @@ export const Pane = memo(function Pane({
         }
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
-        onDragOverChange(paneId, true);
+        onDragOverChange(paneId, {
+          x: event.clientX,
+          y: event.clientY,
+          overStrip: (event.target as Element).closest(".tab-strip") !== null
+        });
       }}
       onDragLeave={(event) => {
         // Fires for every tab and button inside the pane too; only leaving the pane itself
         // counts — the same rule `terminal-views.ts` applies to a file dragged over a terminal.
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          onDragOverChange(paneId, false);
+          onDragOverChange(paneId, null);
         }
       }}
       onDrop={(event) => {
@@ -393,15 +414,16 @@ export const Pane = memo(function Pane({
           return;
         }
         event.preventDefault();
-        onDragOverChange(paneId, false);
         const dragged = event.dataTransfer.getData(TAB_DRAG_TYPE);
         if (dragged) {
-          onActivate(paneId, dragged);
+          onDropTab(paneId, dragged);
+        } else {
+          onDragOverChange(paneId, null);
         }
       }}
       // A drag cancelled mid-air (Escape, or dropped somewhere that refuses it) fires neither
-      // `drop` nor `dragleave` if the pointer never left this pane — this still clears it.
-      onDragEnd={() => onDragOverChange(paneId, false)}
+      // `drop` nor `dragleave` for the pane the preview is over — this still clears it.
+      onDragEnd={onDragEnd}
     >
       <div className={`tab-strip${chrome?.gitOpen ? " git-open" : ""}`}>
         {/* Where the git tab used to be, and no longer a tab: toggling it shows a pane of its own
@@ -459,12 +481,12 @@ export const Pane = memo(function Pane({
                 }
               }}
               className={`tab${tab.tabId === activeTabId ? " active" : ""}${tab.status === "stopped" ? " inactive" : ""}`}
-              // Only once there is somewhere else to drop it: in a single pane the drag would
-              // frame the pane it started in and go nowhere.
-              draggable={siblingPanes.length > 0}
+              // Always: even the only pane has its edges to drop on (the snap zones).
+              draggable
               onDragStart={(event) => {
                 event.dataTransfer.setData(TAB_DRAG_TYPE, tab.tabId);
                 event.dataTransfer.effectAllowed = "move";
+                onDragStart(paneId);
               }}
               onClick={() => onActivate(paneId, tab.tabId)}
               onDoubleClick={() => tab.sessionId !== undefined && void askRename(tab)}
