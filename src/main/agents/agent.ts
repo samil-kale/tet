@@ -171,7 +171,7 @@ export interface AgentDefinition {
   /**
    * Args that put one question to the agent without a terminal, answered on stdout and then
    * over. The question itself arrives on stdin, so these name the mode and nothing else (see
-   * `suggestCommands` for why it is not an argument). Omitted for an agent that cannot be
+   * `askAgent` for why it is not an argument). Omitted for an agent that cannot be
    * asked anything (the shell), which is what keeps it out of the jobs that use this.
    */
   askArgs?: string[];

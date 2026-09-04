@@ -67,6 +67,14 @@ export async function askCommitAll(project: Project, state: RepositoryState, act
     detail: `Stages and commits all ${state.changes.length} changed files, untracked ones included.`,
     value: "",
     confirmLabel: "Commit",
+    // The width the saved commands ask for, for the same reason: a message shares its row with
+    // the suggest button and its history with a list of past ones, and 420px shows too little
+    // of either. Not a third width — see .dialog.wide.
+    wide: true,
+    suggestion: {
+      title: "Suggest a commit message",
+      run: () => window.tet.repository.suggestCommitMessage(project.id)
+    },
     // The same push the BRANCHES button does, offered where the commit is asked for — with
     // no remote or a detached HEAD there is nothing to offer, so no checkbox either.
     checkboxLabel: canSync

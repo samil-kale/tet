@@ -1,9 +1,8 @@
-import { execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isSameCommand } from "../../shared/command";
 import type { ExplorerRoot, ExplorerSettings, ExplorerSortOrder, ProjectCommand } from "../../shared/types";
-import { resolveCommand } from "../terminals/pty";
+import { askAgent } from "../agents/ask";
 
 /**
  * What a project keeps about itself in its own root: shell commands — "npm run build", a deploy
@@ -56,15 +55,6 @@ export interface ExplorerView {
 }
 
 const SORT_ORDERS: readonly ExplorerSortOrder[] = ["default", "mixed", "filesFirst", "type", "modified", "foldersNestsFiles"];
-
-/** How many characters of a command's or an agent's output a notice is worth. */
-const MAX_OUTPUT = 600;
-/**
- * How much a command may write before node stops buffering it. Its own default is 1MB, and
- * going over it does not truncate — node *kills* the process and reports ENOBUFS, which for a
- * build with a lot to say would look like a failure it never had. Same figure as git.ts.
- */
-const MAX_BUFFER = 64 * 1024 * 1024;
 
 /**
  * What `read` answers for a file that is there but does not parse — the one `patch` must not
@@ -382,9 +372,6 @@ const SUGGEST_PROMPT = [
   'Example: ["mvn spring-boot:run", "mvn test", {"command": "npm run build", "cwd": "web"}]'
 ].join("\n");
 
-/** An agent that neither answers nor gives up is not going to; the wand says so and stops. */
-const SUGGEST_TIMEOUT_MS = 5 * 60_000;
-
 /**
  * Pulls the JSON array out of an agent's reply. Asked for "nothing but", they still tend to
  * wrap it in a fenced block or a sentence, so the first bracketed run is what counts.
@@ -425,39 +412,7 @@ export function suggestCommands(
   args: string[],
   question: string
 ): Promise<ProjectCommand[]> {
-  const { command, args: resolved } = resolveCommand(executable, args);
-  return new Promise((resolve, reject) => {
-    let timedOut = false;
-    const child = execFile(
-      command,
-      resolved,
-      { cwd: root, maxBuffer: MAX_BUFFER, windowsHide: true, encoding: "utf8" },
-      (error, stdout, stderr) => {
-        clearTimeout(timer);
-        if (error && !stdout.includes("[")) {
-          const reason = timedOut ? "The agent did not answer in time" : stderr.trim() || error.message;
-          reject(new Error(reason.slice(0, MAX_OUTPUT)));
-          return;
-        }
-        resolve(parseSuggestions(stdout));
-      }
-    );
-    // Not execFile's own `timeout`: on win32 the CLI is a `.cmd` shim behind cmd.exe, and that
-    // only kills cmd.exe — the CLI it started keeps stdout open, and the callback above waits
-    // for it as long as it takes. taskkill takes the tree.
-    const timer = setTimeout(() => {
-      timedOut = true;
-      if (process.platform === "win32" && child.pid !== undefined) {
-        execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
-      } else {
-        child.kill();
-      }
-    }, SUGGEST_TIMEOUT_MS);
-    // A CLI that exits before reading (not installed, wrong version) closes the pipe under
-    // the write; that surfaces in the callback above, not here.
-    child.stdin?.on("error", () => undefined);
-    child.stdin?.end(question);
-  });
+  return askAgent(root, executable, args, question).then(parseSuggestions);
 }
 
 /**

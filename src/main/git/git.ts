@@ -667,6 +667,72 @@ export async function commitAll(cwd: string, message: string): Promise<GitAction
   return added.ok ? run(cwd, ["commit", "--message", message]) : added;
 }
 
+/** How many subjects are enough to read a repository's commit style off. */
+const RECENT_SUBJECTS = 20;
+/**
+ * What the diff and the untracked files together may contribute to a commit-message question.
+ * The agent reads every byte of it before it writes a word, and a subject line does not get
+ * better past the first hundred kilobytes — beyond this the tail is cut and said to be cut,
+ * which is honest input, unlike a silently half-shown diff.
+ */
+const MAX_COMMIT_CONTEXT = 128 * 1024;
+/** Enough of an untracked file to see what it is; a new lockfile must not eat the budget. */
+const MAX_UNTRACKED_CONTEXT = 16 * 1024;
+
+function capped(text: string, budget: number): string {
+  return text.length <= budget ? text : `${text.slice(0, budget).trimEnd()}\n[truncated]`;
+}
+
+/**
+ * Everything an agent needs to write a commit message without going looking for it: the recent
+ * subjects to take the repository's style from, and what `git add --all` would commit. Three
+ * invocations plus a read per untracked file — more than the refresh path may spend, but this
+ * runs when the wand is pressed, and it is what the question costs either way. Measured against
+ * this repository with `claude -p`: asked to run git itself the agent took 24s, since every
+ * status, diff and log it ran was another round trip; handed all of it, 8s, of which 5s is the
+ * CLI starting. Empty strings where there is no HEAD yet — then everything is untracked anyway.
+ */
+export async function readCommitContext(cwd: string): Promise<string> {
+  const [subjects, diff, untracked] = await Promise.all([
+    git(cwd, ["log", `-${RECENT_SUBJECTS}`, "--format=%s"]),
+    git(cwd, ["diff", "HEAD"]),
+    git(cwd, ["ls-files", "--others", "--exclude-standard", "-z"])
+  ]);
+  const sections: string[] = [];
+  if (subjects.code === 0 && subjects.stdout.trim() !== "") {
+    sections.push(`=== recent commit subjects ===\n${subjects.stdout.trim()}`);
+  }
+  let budget = MAX_COMMIT_CONTEXT;
+  const tracked = diff.code === 0 ? capped(diff.stdout, budget) : "";
+  if (tracked.trim() !== "") {
+    budget -= tracked.length;
+    sections.push(`=== diff against HEAD ===\n${tracked.trimEnd()}`);
+  }
+  const paths = untracked.code === 0 ? untracked.stdout.split("\0").filter((entry) => entry !== "") : [];
+  for (const relative of paths) {
+    if (budget <= 0) {
+      sections.push(`=== untracked: ${relative} ===\n[not read: the files above filled the budget]`);
+      continue;
+    }
+    // A buffer, not a string: an untracked binary read as text is noise the agent still pays
+    // for. Nothing here needs to render it, so a NUL byte in it is reason enough to name the
+    // file and stop.
+    const content = await fs.readFile(path.join(cwd, relative)).catch(() => undefined);
+    if (!content) {
+      sections.push(`=== untracked: ${relative} ===\n[could not be read]`);
+      continue;
+    }
+    if (content.includes(0)) {
+      sections.push(`=== untracked: ${relative} ===\n[binary, ${content.length} bytes]`);
+      continue;
+    }
+    const text = capped(content.toString("utf8"), Math.min(budget, MAX_UNTRACKED_CONTEXT));
+    budget -= text.length;
+    sections.push(`=== untracked: ${relative} ===\n${text.trimEnd()}`);
+  }
+  return sections.join("\n\n");
+}
+
 /** `--include-untracked`, so "stash all changes" covers the same files the list shows. */
 export function stashPush(cwd: string, message: string): Promise<GitActionResult> {
   return run(cwd, ["stash", "push", "--include-untracked", ...(message ? ["--message", message] : [])]);

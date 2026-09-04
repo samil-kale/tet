@@ -32,6 +32,7 @@ import type {
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
 import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, suggestQuestion, writeCommands } from "./git/commands";
+import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity } from "./event-loop-monitor";
 import { git } from "./git/git-client";
 import { addProject, removeProject, type ProjectStore } from "./projects";
@@ -317,6 +318,37 @@ export function registerIpc({
   );
   onRepository("repo:checkout-tag", (repository, name: string) => repository.checkoutTag(name));
   onRepository("repo:commit-all", (repository, message: string) => repository.commitAll(message));
+  ipcMain.handle("repo:suggest-commit-message", async (_event, projectId: string): Promise<string> => {
+    const project = store.get(projectId);
+    if (!project) {
+      return "";
+    }
+    const askable = await findAskableAgent(project.path);
+    if (!askable) {
+      const candidates = AGENTS.filter((agent) => agent.askArgs)
+        .map((agent) => agent.displayName)
+        .join(" or ");
+      send("app:notice", {
+        severity: "warning",
+        message: `${candidates} not found — install one to have it suggest a commit message.`
+      });
+      return "";
+    }
+    const { executable, agent } = askable;
+    try {
+      const context = await git.readCommitContext(project.path);
+      const message = await suggestCommitMessage(project.path, executable, agent.askArgs!, context);
+      if (message.length === 0) {
+        send("app:notice", { severity: "warning", message: "The agent did not suggest a commit message" });
+      }
+      return message;
+    } catch (error) {
+      send("app:notice", { severity: "error", message: `Could not suggest a commit message: ${String(error)}` });
+      return "";
+    } finally {
+      await agent.cleanupAsk?.(executable, project.path).catch(() => undefined);
+    }
+  });
   onRepository("repo:stash-push", (repository, message: string) => repository.stashPush(message));
   onRepository("repo:stash", (repository, command: StashCommand, ref: string) => repository.stash(command, ref));
   onRepository("repo:discard", async (repository, paths: string[]) =>

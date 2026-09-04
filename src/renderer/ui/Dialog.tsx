@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { CloseIcon, PinIcon } from "./icons";
+import { CloseIcon, PinIcon, SparkleIcon, SpinnerIcon } from "./icons";
+import { notify } from "./Notices";
 
 export interface ConfirmOptions {
   title: string;
@@ -69,6 +70,11 @@ export interface PromptOptions {
   checkboxLabel?: string;
   /** Past answers under the field, absent for the prompts that keep none. See PromptHistory. */
   history?: PromptHistory;
+  /** An optional asynchronous way to fill the answer's field, shown as a wand beside it. */
+  suggestion?: {
+    title: string;
+    run: () => Promise<string>;
+  };
 }
 
 export interface PromptAnswer {
@@ -275,6 +281,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const [value, setValue] = useState(dialog.value);
   const [extras, setExtras] = useState<string[]>(() => (dialog.extras ?? []).map((field) => field.value ?? ""));
   const [checked, setChecked] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   // Seeded once: `prompt()` froze the options into `pending`, so the caller cannot re-render
   // this dialog — its callbacks hand the lists back instead.
@@ -315,6 +322,28 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     };
   }, []);
 
+  const suggest = async (): Promise<void> => {
+    if (!dialog.suggestion || suggesting) {
+      return;
+    }
+    setSuggesting(true);
+    setOpen(false);
+    try {
+      const suggested = (await dialog.suggestion.run()).trim();
+      if (suggested.length > 0) {
+        setValue(suggested);
+        requestAnimationFrame(() => {
+          field.current?.focus();
+          field.current?.select();
+        });
+      }
+    } catch (error) {
+      notify("error", `Could not suggest a value: ${String(error)}`);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   // Optional by construction: only the answer's own field can hold the dialog back, wherever
   // `valueIndex` puts it among them.
   const fields = (dialog.extras ?? []).map((entry, index) => (
@@ -338,6 +367,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       type="text"
       value={value}
       maxLength={dialog.maxLength}
+      disabled={suggesting}
       // The dropdown follows the field's emptiness: typing the first character closes it —
       // the user has decided against picking, and the list would otherwise sit over the
       // checkbox while they write — and emptying the field brings it back. A no-op for the
@@ -355,33 +385,55 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       ref={field}
     />
   );
+  // The dropdown is positioned against this anchor, so it stays wrapped around the field alone
+  // — the suggest button beside it is laid out one level up.
+  const anchored = dialog.history ? (
+    <div className="dialog-history-anchor">
+      {input}
+      {open && hasEntries && (
+        <HistoryDropdown
+          history={dialog.history}
+          lists={lists}
+          onPick={(text) => {
+            setValue(text);
+            setOpen(false);
+          }}
+          onLists={(next) => {
+            setLists(next);
+            if (next.pinned.length + next.recent.length === 0) {
+              setOpen(false);
+            }
+          }}
+        />
+      )}
+    </div>
+  ) : (
+    input
+  );
   fields.splice(
     dialog.valueIndex ?? 0,
     0,
     <label key="value" className="dialog-field">
       <span>{dialog.label}</span>
-      {dialog.history ? (
-        <div className="dialog-history-anchor">
-          {input}
-          {open && hasEntries && (
-            <HistoryDropdown
-              history={dialog.history}
-              lists={lists}
-              onPick={(text) => {
-                setValue(text);
-                setOpen(false);
-              }}
-              onLists={(next) => {
-                setLists(next);
-                if (next.pinned.length + next.recent.length === 0) {
-                  setOpen(false);
-                }
-              }}
-            />
-          )}
+      {dialog.suggestion ? (
+        // The same pairing as a path field and its Browse button — a button standing beside the
+        // field rather than an icon leaning against its edge — but carrying only its wand, in
+        // whose exact place the spinner goes while the answer is being prepared.
+        <div className="dialog-field-row">
+          {anchored}
+          <button
+            type="button"
+            className="button secondary dialog-suggest"
+            title={dialog.suggestion.title}
+            disabled={suggesting}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void suggest()}
+          >
+            {suggesting ? <SpinnerIcon className="spinning" /> : <SparkleIcon />}
+          </button>
         </div>
       ) : (
-        input
+        anchored
       )}
     </label>
   );
@@ -390,7 +442,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     <Frame
       title={dialog.title}
       confirmLabel={dialog.confirmLabel}
-      disabled={value.trim().length === 0}
+      disabled={suggesting || value.trim().length === 0}
       wide={dialog.wide}
       onSubmit={() => dialog.answer({ value: value.trim(), extras: extras.map((entry) => entry.trim()), checked })}
       onCancel={() => dialog.answer(null)}

@@ -6,7 +6,8 @@ import { resolveOpencodeUrlPrefix } from "./session-urls";
 import { opencodeSessionProvider } from "./sessions";
 
 /** What a background question's session is called, so it can be found and removed again. */
-const ASK_TITLE = "tet: project commands";
+const ASK_TITLE = "tet: background question";
+const OLD_ASK_TITLE = "tet: project commands";
 
 export const opencodeAgent: AgentDefinition = {
   id: "opencode",
@@ -28,7 +29,7 @@ export const opencodeAgent: AgentDefinition = {
     const server = running ?? (await ensureServer(executable, cwd));
     try {
       const sessions = await opencodeSessionProvider.list(executable, cwd);
-      for (const session of sessions.filter((candidate) => candidate.title === ASK_TITLE)) {
+      for (const session of sessions.filter((candidate) => [ASK_TITLE, OLD_ASK_TITLE].includes(candidate.title))) {
         await opencodeSessionProvider.remove(executable, cwd, session.id).catch(() => undefined);
       }
     } finally {

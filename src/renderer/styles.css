@@ -1640,15 +1640,26 @@ input:focus {
   color: var(--vscode-descriptionForeground);
 }
 
+/* Aligned to the top, not the middle: the push label carries a branch and a remote name and
+   wraps in a narrow dialog, and a centred box would then sit between its two lines. */
 .dialog-checkbox {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   cursor: pointer;
 }
 
 .dialog-checkbox input {
   accent-color: var(--vscode-focusBorder);
+  /* Chrome's own box, stated rather than left implicit so the offset below is arithmetic. The
+     10 is not that box: centring the real 13 in the line put it visibly high, because a line
+     box carries the font's descender space and the letters beside it sit above its middle.
+     Centring a 10 instead drops the box the pixel and a half that costs — read off the running
+     app, so re-check it if the theme's font changes. `align-items: baseline` was the
+     number-free alternative and lands higher still. */
+  width: 13px;
+  height: 13px;
+  margin-top: calc((1lh - 10px) / 2);
 }
 
 /* Sized to the notifications tab, the fuller one, and fixed for the reason add-repository is:
@@ -1997,7 +2008,8 @@ input:focus {
   gap: 8px;
 }
 
-/* A path field's input with its Browse button beside it. */
+/* A path field's input with its Browse button beside it — and the prompt's field with its
+   suggest button, which is that same pairing rather than an action of the dialog's own. */
 .dialog-field-row {
   display: flex;
   gap: 6px;
@@ -2006,6 +2018,20 @@ input:focus {
 .dialog-field-row input {
   flex: 1;
   min-width: 0;
+}
+
+/* The history dropdown is anchored to the field alone, so the anchor takes the input's place in
+   the row and the list stops where the field does rather than running under the button. */
+.dialog-field-row .dialog-history-anchor {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Carries its wand and nothing else, so the room `.button` leaves for a label would sit around
+   it lopsided: squared off, and exactly as tall as the field it stands beside. */
+.dialog-suggest {
+  align-self: stretch;
+  padding: 0 8px;
 }
 
 /* Notices -------------------------------------------------------------------------------- */

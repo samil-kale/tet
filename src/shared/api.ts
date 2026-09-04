@@ -125,6 +125,8 @@ export interface TETApi {
     checkoutTag(projectId: string, name: string): Promise<GitActionResult>;
     /** Commits everything the changes list shows, untracked files included. */
     commitAll(projectId: string, message: string): Promise<GitActionResult>;
+    /** Has an installed agent inspect all current changes and suggest one commit subject. */
+    suggestCommitMessage(projectId: string): Promise<string>;
     /** Stashes everything the changes list shows, untracked files included. */
     stashPush(projectId: string, message: string): Promise<GitActionResult>;
     /** Applies, pops or drops one. The ref is a position — only ever a freshly read one. */
