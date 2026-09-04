@@ -28,6 +28,7 @@ import {
   activateTab as activateTabLayout,
   applyPreset,
   collapseClosed,
+  collapseEmpty,
   defaultLayout,
   loadLayout,
   paneOf,
@@ -313,9 +314,17 @@ export function App() {
   const settledProjects = useRef(new Set<string>());
   useEffect(() => {
     for (const [projectId, isStarting] of Object.entries(starting)) {
-      if (!isStarting) {
-        settledProjects.current.add(projectId);
+      if (isStarting || settledProjects.current.has(projectId)) {
+        continue;
       }
+      settledProjects.current.add(projectId);
+      // The one moment every pane of a restored layout either has its sessions or never will:
+      // what is empty now is collapsed away (`collapseEmpty`), before the layout is first written.
+      setLayouts((current) => {
+        const layout = layoutOf(current, projectId);
+        const collapsed = collapseEmpty(layout, tabsRef.current[projectId] ?? NO_TABS);
+        return collapsed === layout ? current : { ...current, [projectId]: collapsed };
+      });
     }
   }, [starting]);
   useEffect(() => {

@@ -303,33 +303,57 @@ export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId
 /**
  * `normalizeLayout` for a tab list push, plus the collapse for the tabs that *closed*: every
  * pane that held a tab of `previousTabs` and holds none of `tabs`, judged against `layout` as
- * it was before the closed tabs' entries were dropped. Several at once (a project's tabs going
- * in one push) are taken in reading order, each later one's letter translated through the
- * collapse before it; what trails is taken once at the end, when the letters have settled.
- * The normalized layout itself, identity and all, when nothing closed.
+ * it was before the closed tabs' entries were dropped. The normalized layout itself, identity
+ * and all, when nothing closed.
  */
 export function collapseClosed(
   layout: ProjectLayout,
   tabs: TerminalDescriptor[],
   previousTabs: TerminalDescriptor[]
 ): ProjectLayout {
-  const normalized = normalizeLayout(layout, tabs, previousTabs);
   const held = new Set(tabs.map((tab) => paneOf(layout, tab.tabId)));
-  let emptied = PRESET_PANES[layout.preset].filter(
+  const emptied = PRESET_PANES[layout.preset].filter(
     (paneId) => !held.has(paneId) && previousTabs.some((tab) => paneOf(layout, tab.tabId) === paneId)
   );
-  let next = normalized;
-  while (emptied.length > 0) {
-    const [paneId, ...rest] = emptied;
+  return collapsePanes(normalizeLayout(layout, tabs, previousTabs), emptied, tabs);
+}
+
+/**
+ * The collapse at startup, once a project's bootstrap has listed every agent's sessions: every
+ * pane the restored layout has nothing for counts as emptied — one whose sessions were deleted
+ * between runs, and one a snap had left empty on purpose alike. Stricter than a run, where an
+ * empty pane before an occupied one stays: a restart is where the user asked for the layout to
+ * be tidied up, and what the transitions cannot take (the grid's b or d) still stays.
+ */
+export function collapseEmpty(layout: ProjectLayout, tabs: TerminalDescriptor[]): ProjectLayout {
+  const occupied = occupiedPanes(layout, tabs);
+  return collapsePanes(
+    layout,
+    PRESET_PANES[layout.preset].filter((paneId) => !occupied.includes(paneId)),
+    tabs
+  );
+}
+
+/**
+ * Several panes emptied at once — a project's tabs going in one push, or a restored layout's
+ * at startup — taken in reading order, each later one's letter translated through the collapse
+ * before it; what trails is taken once at the end, when the letters have settled. `layout`
+ * itself, identity and all, when nothing collapsed.
+ */
+function collapsePanes(layout: ProjectLayout, emptied: PaneId[], tabs: TerminalDescriptor[]): ProjectLayout {
+  let next = layout;
+  let pending = emptied;
+  while (pending.length > 0) {
+    const [paneId, ...rest] = pending;
     const transition = COLLAPSE_TRANSITIONS[next.preset][paneId];
     if (!transition) {
-      emptied = rest;
+      pending = rest;
       continue;
     }
     next = retarget(next, transition.preset, transition.remap, tabs);
-    emptied = rest.map((id) => transition.remap[id] ?? id).filter((id) => PRESET_PANES[transition.preset].includes(id));
+    pending = rest.map((id) => transition.remap[id] ?? id).filter((id) => PRESET_PANES[transition.preset].includes(id));
   }
-  return next === normalized ? normalized : collapseTrailing(next, tabs);
+  return next === layout ? layout : collapseTrailing(next, tabs);
 }
 
 /** A box as fractions of `.panes-grid` — the unit both the snap zones and the preview use. */

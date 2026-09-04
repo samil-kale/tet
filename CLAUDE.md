@@ -106,7 +106,10 @@ The cross-file facts, each reasoned at its site:
   Emptied means its last tab moved out (`activateTab`, whether into an occupied pane or an
   empty one) or closed (`collapseClosed` in the reconcile effect), both in `App`; never a snap,
   whose emptied source pane stays on purpose, and never a pane that was never filled, so a
-  snap's empty panes stay. Two rules tried and taken out: a pane's only tab getting no zone (it
+  snap's empty panes stay — until the next start: once a project's bootstrap has listed every
+  session (`settledProjects`), *every* empty pane counts as emptied (`collapseEmpty`), a
+  session deleted between runs and a snap's leftover alike. Two rules tried and taken out: a
+  pane's only tab getting no zone (it
   turned the user's "place it there" into a move), and choosing the preset by the *count* of
   occupied panes (Zellij's swap layouts — it dropped an empty pane the user had not touched
   along with the emptied one).

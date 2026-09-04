@@ -6,6 +6,7 @@ import {
   applyPreset,
   collapseClosed,
   collapseEmptied,
+  collapseEmpty,
   defaultLayout,
   loadLayout,
   moveTab,
@@ -217,6 +218,35 @@ describe("activateTab", () => {
     // b is focused and empty: the new tab resolves there, but nothing left b.
     const emptyB = normalizeLayout({ ...split, focusedPane: "b", tabPane: { t1: "a", t2: "a", t3: "c" } }, tabs, NONE);
     assert.equal(activateTab(emptyB, "new-1", "c", tabs).preset, "split-right");
+  });
+});
+
+describe("collapseEmpty", () => {
+  const tabs = [tab("t1", 1), tab("t2", 2)];
+  const grid = (tabPane: Record<string, "a" | "b" | "c" | "d">): ProjectLayout =>
+    normalizeLayout({ preset: "grid2x2", focusedPane: "a", tabPane, activeTab: {} }, tabs, NONE);
+
+  it("takes every empty pane the transitions can take, in reading order", () => {
+    // LO and RO occupied: LU goes, then the RU that trails.
+    const cols2 = collapseEmpty(grid({ t1: "a", t2: "b" }), tabs);
+    assert.equal(cols2.preset, "cols2");
+    assert.deepEqual(cols2.tabPane, { t1: "a", t2: "b" });
+    // LO and LU occupied: RO and RU have no transition without a split-left, both stay.
+    assert.equal(collapseEmpty(grid({ t1: "a", t2: "c" }), tabs).preset, "grid2x2");
+    // Stricter than a run: an empty RO above an occupied RU goes too.
+    const split = normalizeLayout(
+      { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "c" }, activeTab: {} },
+      tabs,
+      NONE
+    );
+    const tidy = collapseEmpty(split, tabs);
+    assert.equal(tidy.preset, "cols2");
+    assert.deepEqual(tidy.tabPane, { t1: "a", t2: "b" });
+  });
+
+  it("is the same layout when nothing is empty", () => {
+    const full = normalizeLayout({ preset: "cols2", focusedPane: "a", tabPane: { t1: "a", t2: "b" }, activeTab: {} }, tabs, NONE);
+    assert.equal(collapseEmpty(full, tabs), full);
   });
 });
 
