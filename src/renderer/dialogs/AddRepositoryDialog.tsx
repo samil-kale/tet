@@ -99,7 +99,9 @@ function PathField({ label, value, pickTitle, onChange, inputRef }: PathFieldPro
     const start = value.trim() || localStorage.getItem(LAST_DIRECTORY_KEY) || undefined;
     const picked = await window.tet.projects.pickDirectory(pickTitle, start);
     if (picked) {
-      localStorage.setItem(LAST_DIRECTORY_KEY, picked);
+      // A folder that is itself a repository (the Add tab picks one directly) is not where the
+      // picker should open next time — its parent, where repositories are kept, is.
+      localStorage.setItem(LAST_DIRECTORY_KEY, await window.tet.projects.directoryToRemember(picked));
       onChange(picked);
     }
   };

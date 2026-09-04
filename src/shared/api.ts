@@ -57,6 +57,13 @@ export interface TETApi {
      */
     pickDirectory(title: string, defaultPath?: string): Promise<string | null>;
     /**
+     * Where the folder picker should open next time, given the user just picked `directory`.
+     * Normally `directory` itself — but when that is a repository's own root (the Add tab
+     * points the picker straight at one), its parent, where repositories are kept. See
+     * PathField in AddRepositoryDialog.
+     */
+    directoryToRemember(directory: string): Promise<string>;
+    /**
      * Opens the folder — or the repository it is a subdirectory of — as a project. A folder
      * that is not there is an error, the way a failed clone is.
      */

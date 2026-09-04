@@ -166,6 +166,23 @@ export function registerIpc({
     }
   );
 
+  ipcMain.handle(
+    "projects:directory-to-remember",
+    async (_event, directory: string): Promise<string> => {
+      // The Add tab points the picker at a repository directly, so remembering that folder
+      // would open the next picker inside a repository rather than where they are kept. Only
+      // when the picked folder is a root itself — a subdirectory of one is not "a repository".
+      const root = await git.resolveRoot(directory).catch(() => undefined);
+      if (root !== undefined && path.relative(root, directory) === "") {
+        const parent = path.dirname(directory);
+        if (parent !== directory) {
+          return parent;
+        }
+      }
+      return directory;
+    }
+  );
+
   const projectDeps = { store, repositories, sessions, openProject };
 
   ipcMain.handle("projects:open-path", (_event, directory: string): Promise<AddRepositoryResult> =>

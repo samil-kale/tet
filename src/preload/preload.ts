@@ -27,6 +27,7 @@ const api: TETApi = {
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),
     pickDirectory: (title, defaultPath) => ipcRenderer.invoke("projects:pick-directory", title, defaultPath),
+    directoryToRemember: (directory) => ipcRenderer.invoke("projects:directory-to-remember", directory),
     open: (directory) => ipcRenderer.invoke("projects:open-path", directory),
     clone: (url, directory, name, accountId) => ipcRenderer.invoke("projects:clone", url, directory, name, accountId),
     create: (directory, name) => ipcRenderer.invoke("projects:create", directory, name),
