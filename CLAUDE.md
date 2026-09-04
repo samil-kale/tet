@@ -64,7 +64,7 @@ editor only; the diff itself is `DiffView`'s own unified render. Not adopted:
 ## Split view
 
 One project's terminals can be split into up to four panes, each with its own tab strip — VS
-Code's editor groups cut down to **five fixed presets** (single, two columns, three columns, two
+Code's editor groups cut down to **four fixed presets** (single, two columns, two
 columns with the right one split, 2×2), not a nestable tree: a fixed set is one `switch` in
 `TerminalsPane` instead of a generic sash composition and a "which pane did you mean" for every
 action. `src/renderer/terminal/pane-layout.ts` holds the model and every rule about it; `TerminalsPane` lays
@@ -91,18 +91,25 @@ The cross-file facts, each reasoned at its site:
   rather than calling `open()` again (which silently no-ops). Only the **focused** pane focuses its
   terminal; a focus change alone must never resize the pty.
 - **A tab dragged onto a snap zone lays out the preset that has a pane there** — the zones are
-  a map of the whole grid (`SNAP_ZONES`: the right half in thirds, the lower left), the same for
-  every preset; what each does per preset is `SNAP_TRANSITIONS` in `pane-layout.ts`. Panes the
-  preset adds beyond the target stay empty. A drop on a tab strip is always a plain move. The
-  preview is an overlay (`.snap-preview`); pane sizes change on the drop alone, since a resize
-  refits every pty.
-- **Fewer occupied panes settle the split into the preset for that count** (`settleLayout`,
-  Zellij's swap layouts rather than VS Code's "close empty groups"): two are cols2, one is
-  single, three out of the grid are split-right, reading order kept. Asked only when the count
-  *fell* — a move (`activateTab`) or a close (the reconcile effect), both in `App` — so a snap,
-  which only moves a tab into a new pane, never triggers it and its empty panes stay. A table of
-  "which empty pane collapses to what" was built first and taken out: it had a grid corner with
-  no preset to fall to, and told a snap's empty pane apart from an emptied one.
+  a map of the whole grid (`SNAP_ZONES`: the right quarter in thirds, the lower left quarter),
+  the same for every preset; what each does per preset is `SNAP_TRANSITIONS` in
+  `pane-layout.ts`. Panes the preset adds beyond the target stay empty. Where the preset already
+  has that pane, the zone is the pane itself — the tab lands there, and unlike a plain drop
+  nothing collapses: a zone drop *places* a tab and leaves what it empties standing, a plain
+  drop (outside every zone, or on a tab strip) *moves* it and tidies up (below). The preview is
+  an overlay (`.snap-preview`); pane sizes change on the drop alone, since a resize refits every
+  pty.
+- **An *emptied* pane collapses away, and with it every empty pane at the end of the reading
+  order** (`COLLAPSE_TRANSITIONS`, `collapseTrailing`; VS Code's "close empty groups"): every
+  other pane keeps its place, empty or not — an empty pane *before* an occupied one stays; two
+  left is cols2, and grid2x2 with b or d empty stays, having no "split-left" to fall to.
+  Emptied means its last tab moved out (`activateTab`, whether into an occupied pane or an
+  empty one) or closed (`collapseClosed` in the reconcile effect), both in `App`; never a snap,
+  whose emptied source pane stays on purpose, and never a pane that was never filled, so a
+  snap's empty panes stay. Two rules tried and taken out: a pane's only tab getting no zone (it
+  turned the user's "place it there" into a move), and choosing the preset by the *count* of
+  occupied panes (Zellij's swap layouts — it dropped an empty pane the user had not touched
+  along with the emptied one).
 
 ## Nothing starts without git and an agent
 

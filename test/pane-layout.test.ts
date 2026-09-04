@@ -2,14 +2,15 @@ import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   SNAP_TRANSITIONS,
+  activateTab,
   applyPreset,
+  collapseClosed,
+  collapseEmptied,
   defaultLayout,
   loadLayout,
   moveTab,
   normalizeLayout,
-  occupiedPanes,
   serializeLayout,
-  settleLayout,
   snapTab,
   snapZoneAt,
   visibleTabIds
@@ -108,69 +109,149 @@ describe("moveTab", () => {
   });
 });
 
-describe("settleLayout", () => {
+describe("collapseEmptied", () => {
   const tabs = [tab("t1", 1), tab("t2", 2), tab("t3", 3)];
+  const grid = normalizeLayout(
+    { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "b", t2: "c", t3: "d" }, activeTab: {} },
+    tabs,
+    NONE
+  );
 
-  it("counts occupied panes in reading order", () => {
-    const grid: ProjectLayout = { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "b", t2: "d" }, activeTab: {} };
-    assert.deepEqual(occupiedPanes(grid, tabs.slice(0, 2)), ["b", "d"]);
-    assert.deepEqual(occupiedPanes(grid, NONE), []);
+  it("hands a grid's remaining panes to split-right, each keeping its place", () => {
+    const fromA = collapseEmptied(grid, "a", tabs);
+    assert.equal(fromA.preset, "split-right");
+    assert.deepEqual(fromA.tabPane, { t1: "b", t2: "a", t3: "c" });
+    assert.deepEqual(fromA.activeTab, { a: "t2", b: "t1", c: "t3" });
+    assert.equal(fromA.focusedPane, "c", "focus follows its pane");
+    const fromC = collapseEmptied({ ...grid, tabPane: { t1: "a", t2: "b", t3: "d" } }, "c", tabs);
+    assert.deepEqual(fromC.tabPane, { t1: "a", t2: "b", t3: "c" });
   });
 
-  it("is the preset for the count: one is single, two are cols2, whatever they were", () => {
-    const split = normalizeLayout(
-      { preset: "split-right", focusedPane: "c", tabPane: { t1: "b", t2: "c", t3: "c" }, activeTab: { c: "t2" } },
+  it("keeps an empty pane the user did not touch", () => {
+    // a and c occupied, b and d empty; c's tab moved into d, so c is what was emptied.
+    const moved = normalizeLayout(
+      { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "a", t2: "d" }, activeTab: {} },
+      tabs.slice(0, 2),
+      NONE
+    );
+    const next = collapseEmptied(moved, "c", tabs.slice(0, 2));
+    assert.equal(next.preset, "split-right");
+    assert.deepEqual(next.tabPane, { t1: "a", t2: "c" });
+    assert.deepEqual(next.activeTab, { a: "t1", b: null, c: "t2" }, "b stays, empty");
+  });
+
+  it("takes the empty panes at the end of the reading order along, never one before an occupied", () => {
+    // LO, RO, LU occupied, RU empty; LU's tab moved up into RO, so LU is what was emptied.
+    const moved = normalizeLayout(
+      { preset: "grid2x2", focusedPane: "b", tabPane: { t1: "a", t2: "b", t3: "b" }, activeTab: {} },
       tabs,
       NONE
     );
-    const cols2 = settleLayout(split, tabs);
-    assert.equal(cols2.preset, "cols2");
-    assert.deepEqual(cols2.tabPane, { t1: "a", t2: "b", t3: "b" });
-    assert.deepEqual(cols2.activeTab, { a: "t1", b: "t2" }, "selections went along");
-    assert.equal(cols2.focusedPane, "b", "focus followed its pane");
-    const onlyD = normalizeLayout(
-      { preset: "grid2x2", focusedPane: "a", tabPane: { t1: "d", t2: "d", t3: "d" }, activeTab: {} },
+    const next = collapseEmptied(moved, "c", tabs);
+    assert.equal(next.preset, "cols2", "the empty RU under the occupied RO went too");
+    assert.deepEqual(next.tabPane, { t1: "a", t2: "b", t3: "b" });
+    // LO and LU occupied, RO and RU empty; LU's tab moved up into LO: the right column goes.
+    const up = normalizeLayout(
+      { preset: "grid2x2", focusedPane: "a", tabPane: { t1: "a", t2: "a", t3: "a" }, activeTab: {} },
       tabs,
       NONE
     );
-    const single = settleLayout(onlyD, tabs);
+    const single = collapseEmptied(up, "c", tabs);
     assert.equal(single.preset, "single");
     assert.deepEqual(single.tabPane, { t1: "a", t2: "a", t3: "a" });
+    // The same grid with the tab moved down into RU instead: the empty RO before it stays.
+    const down = normalizeLayout(
+      { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "a", t2: "d", t3: "d" }, activeTab: {} },
+      tabs,
+      NONE
+    );
+    const kept = collapseEmptied(down, "c", tabs);
+    assert.equal(kept.preset, "split-right");
+    assert.deepEqual(kept.activeTab, { a: "t1", b: null, c: "t3" });
+  });
+
+  it("stays a grid with b or d empty, having no split-left preset to fall to", () => {
+    assert.equal(collapseEmptied(grid, "b", tabs), grid);
+    assert.equal(collapseEmptied(grid, "d", tabs), grid);
+  });
+
+  it("falls to cols2 from three panes and to single from two, in reading order", () => {
+    const split = normalizeLayout(
+      { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {} },
+      tabs,
+      NONE
+    );
+    assert.deepEqual(collapseEmptied(split, "a", tabs).tabPane, { t1: "a", t2: "a", t3: "b" });
+    assert.equal(collapseEmptied(split, "b", tabs).preset, "cols2");
+    assert.deepEqual(collapseEmptied(split, "b", tabs).tabPane, { t1: "a", t2: "b", t3: "b" });
+    assert.equal(collapseEmptied(split, "c", tabs).preset, "cols2");
+    const cols2 = normalizeLayout(
+      { preset: "cols2", focusedPane: "b", tabPane: { t1: "b", t2: "b", t3: "b" }, activeTab: { b: "t2" } },
+      tabs,
+      NONE
+    );
+    const single = collapseEmptied(cols2, "a", tabs);
+    assert.equal(single.preset, "single");
+    assert.deepEqual(single.tabPane, { t1: "a", t2: "a", t3: "a" });
+    assert.deepEqual(single.activeTab, { a: "t2" });
     assert.equal(single.focusedPane, "a");
-    assert.equal(settleLayout(normalizeLayout({ ...defaultLayout(), preset: "cols2" }, NONE, NONE), NONE).preset, "single");
+  });
+});
+
+describe("activateTab", () => {
+  const tabs = [tab("t1", 1), tab("t2", 2), tab("t3", 3)];
+  const split = normalizeLayout(
+    { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {} },
+    tabs,
+    NONE
+  );
+
+  it("collapses the pane the move emptied, and only then", () => {
+    const next = activateTab(split, "t3", "b", tabs);
+    assert.equal(next.preset, "cols2");
+    assert.deepEqual(next.tabPane, { t1: "a", t2: "b", t3: "b" });
+    assert.equal(activateTab(split, "t3", "c", tabs).preset, "split-right", "a plain activation");
   });
 
-  it("makes three panes of the grid a split-right, in reading order, whichever corner is empty", () => {
-    const grid = normalizeLayout(
-      { preset: "grid2x2", focusedPane: "a", tabPane: { t1: "a", t2: "c", t3: "d" }, activeTab: {} },
-      tabs,
-      NONE
-    );
-    const split = settleLayout(grid, tabs);
-    assert.equal(split.preset, "split-right");
-    assert.deepEqual(split.tabPane, { t1: "a", t2: "b", t3: "c" });
-    const bEmpty = settleLayout({ ...grid, tabPane: { t1: "a", t2: "b", t3: "d" } }, tabs);
-    assert.deepEqual(bEmpty.tabPane, { t1: "a", t2: "b", t3: "c" });
+  it("does not take a tab activated ahead of its push for one that emptied the focused pane", () => {
+    // b is focused and empty: the new tab resolves there, but nothing left b.
+    const emptyB = normalizeLayout({ ...split, focusedPane: "b", tabPane: { t1: "a", t2: "a", t3: "c" } }, tabs, NONE);
+    assert.equal(activateTab(emptyB, "new-1", "c", tabs).preset, "split-right");
+  });
+});
+
+describe("collapseClosed", () => {
+  const tabs = [tab("t1", 1), tab("t2", 2), tab("t3", 3)];
+  const split = normalizeLayout(
+    { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {} },
+    tabs,
+    NONE
+  );
+
+  it("collapses the pane whose last tab closed", () => {
+    const remaining = [tab("t1", 1), tab("t3", 3)];
+    const next = collapseClosed(split, remaining, tabs);
+    assert.equal(next.preset, "cols2");
+    assert.deepEqual(next.tabPane, { t1: "a", t3: "b" });
+    assert.equal(next.focusedPane, "b");
   });
 
-  it("leaves a layout alone that already is the preset for its count", () => {
-    const cols3 = normalizeLayout(
-      { preset: "cols3", focusedPane: "c", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {} },
-      tabs,
-      NONE
-    );
-    assert.equal(settleLayout(cols3, tabs), cols3);
-    const cols2 = normalizeLayout({ preset: "cols2", focusedPane: "a", tabPane: { t1: "a", t2: "b" }, activeTab: {} }, tabs, NONE);
-    assert.equal(settleLayout(cols2, tabs), cols2);
+  it("leaves a pane alone that never had a tab, or still has one", () => {
+    const withMore = [...tabs, tab("t4", 4)];
+    assert.deepEqual(collapseClosed(split, withMore, tabs), normalizeLayout(split, withMore, tabs), "a tab opened");
+    const restored: ProjectLayout = { ...defaultLayout(), preset: "cols2", tabPane: { later: "b" } };
+    const first = [tab("t1")];
+    assert.equal(collapseClosed(restored, first, NONE).preset, "cols2", "b is still waiting for its listing");
+    const closedOne = [tab("t1", 1), tab("t2", 2)];
+    const stillC: ProjectLayout = { ...split, tabPane: { t1: "a", t2: "c", t3: "c" } };
+    assert.equal(collapseClosed(stillC, closedOne, tabs).preset, "split-right", "c kept a tab");
   });
 
-  it("keeps the reading order of the occupied panes when they move down a preset", () => {
-    const cols3 = normalizeLayout(
-      { preset: "cols3", focusedPane: "c", tabPane: { t1: "b", t2: "c", t3: "c" }, activeTab: {} },
-      tabs,
-      NONE
-    );
-    assert.deepEqual(settleLayout(cols3, tabs).tabPane, { t1: "a", t2: "b", t3: "b" });
+  it("takes several emptied panes in one push, translating letters as it goes", () => {
+    const only = [tab("t2", 2)];
+    const next = collapseClosed(split, only, tabs);
+    assert.equal(next.preset, "single");
+    assert.deepEqual(next.tabPane, { t2: "a" });
   });
 });
 
@@ -203,18 +284,31 @@ describe("snapTab", () => {
     assert.deepEqual(bottomLeft.activeTab, { a: "t2", b: null, c: "t3", d: null });
   });
 
-  it("does not settle a source pane the snap emptied", () => {
+  it("places a tab into a pane the preset already has, leaving what it emptied standing", () => {
+    const split = normalizeLayout(
+      { preset: "split-right", focusedPane: "b", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {} },
+      tabs.slice(0, 3),
+      NONE
+    );
+    const next = snapTab(split, "t2", SNAP_TRANSITIONS["split-right"]["bottom-right"]!, tabs.slice(0, 3));
+    assert.equal(next.preset, "split-right");
+    assert.deepEqual(next.tabPane, { t1: "a", t2: "c", t3: "c" });
+    assert.deepEqual(next.activeTab, { a: "t1", b: null, c: "t2" }, "b stays, empty");
+    assert.equal(next.focusedPane, "c");
+  });
+
+  it("does not collapse a source pane the snap emptied", () => {
     const onlyTab = normalizeLayout({ ...defaultLayout(), tabPane: { t1: "a" } }, [tab("t1")], NONE);
     const next = snapTab(onlyTab, "t1", SNAP_TRANSITIONS.single.right!, [tab("t1")]);
     assert.equal(next.preset, "cols2");
     assert.deepEqual(next.activeTab, { a: null, b: "t1" });
   });
 
-  it("adds a third column, or a pane below b, from two", () => {
-    const cols3 = snapTab(cols2, "t4", SNAP_TRANSITIONS.cols2.right!, tabs);
-    assert.equal(cols3.preset, "cols3");
-    assert.deepEqual(cols3.tabPane, { t1: "a", t2: "a", t3: "b", t4: "c" });
-    assert.deepEqual(cols3.activeTab, { a: "t2", b: "t3", c: "t4" });
+  it("places into the right column, or adds a pane below b, from two", () => {
+    const right = snapTab(cols2, "t1", SNAP_TRANSITIONS.cols2.right!, tabs);
+    assert.equal(right.preset, "cols2", "the right column is already there");
+    assert.deepEqual(right.tabPane, { t1: "b", t2: "a", t3: "b", t4: "b" });
+    assert.deepEqual(right.activeTab, { a: "t2", b: "t1" });
     const split = snapTab(cols2, "t1", SNAP_TRANSITIONS.cols2["bottom-right"]!, tabs);
     assert.equal(split.preset, "split-right");
     assert.deepEqual(split.tabPane, { t1: "c", t2: "a", t3: "b", t4: "b" });
@@ -261,8 +355,9 @@ describe("snapZoneAt", () => {
     assert.equal(snapZoneAt("single", { x: 0.2, y: 0.9 }, null)?.transition.preset, "grid2x2");
     assert.equal(snapZoneAt("single", { x: 0.2, y: 0.2 }, null), null, "top left is pane a");
     assert.equal(snapZoneAt("single", { x: 0.6, y: 0.5 }, null), null, "the middle is a plain drop");
-    assert.equal(snapZoneAt("cols3", { x: 0.8, y: 0.5 }, null), null, "nothing left to add");
-    assert.equal(snapZoneAt("split-right", { x: 0.8, y: 0.5 }, null), null);
+    assert.deepEqual(snapZoneAt("cols2", { x: 0.8, y: 0.5 }, null)?.transition, { preset: "cols2", target: "b", remap: {} });
+    assert.equal(snapZoneAt("split-right", { x: 0.8, y: 0.5 }, null), null, "no full-height right pane");
+    assert.equal(snapZoneAt("split-right", { x: 0.8, y: 0.9 }, null)?.transition.target, "c", "the pane itself");
     assert.equal(snapZoneAt("split-right", { x: 0.2, y: 0.8 }, null)?.zone, "bottom-left");
   });
 

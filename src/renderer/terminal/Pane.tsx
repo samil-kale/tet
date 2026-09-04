@@ -15,7 +15,6 @@ import {
   GearIcon,
   GitIcon,
   LayoutCols2Icon,
-  LayoutCols3Icon,
   LayoutGrid2x2Icon,
   LayoutSingleIcon,
   LayoutSplitRightIcon,
@@ -37,8 +36,6 @@ function PresetIcon({ preset, className }: { preset: SplitPreset; className?: st
       return <LayoutSingleIcon className={className} />;
     case "cols2":
       return <LayoutCols2Icon className={className} />;
-    case "cols3":
-      return <LayoutCols3Icon className={className} />;
     case "split-right":
       return <LayoutSplitRightIcon className={className} />;
     case "grid2x2":
@@ -481,7 +478,7 @@ export const Pane = memo(function Pane({
                 }
               }}
               className={`tab${tab.tabId === activeTabId ? " active" : ""}${tab.status === "stopped" ? " inactive" : ""}`}
-              // Always: even the only pane has its edges to drop on (the snap zones).
+              // Always: even the only pane has the snap zones to drop on.
               draggable
               onDragStart={(event) => {
                 event.dataTransfer.setData(TAB_DRAG_TYPE, tab.tabId);

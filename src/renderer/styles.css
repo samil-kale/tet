@@ -687,7 +687,7 @@ input:focus {
 }
 
 /* The pane a dragged tab would land in — never the one it came from, and never while the
-   pointer is in a snap zone (then `.snap-preview` below says where it goes instead).
+   drop would switch the preset (then `.snap-preview` below says where it goes instead).
    Same technique `.terminal-host.drag-over::after` below uses for a file dragged over a
    terminal, and for the same two reasons: an overlay rather than a border on the pane itself,
    since a border shrinks the box its children measure — and unlike that one, a plain inset

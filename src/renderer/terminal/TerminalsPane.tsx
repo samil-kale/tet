@@ -59,7 +59,6 @@ function pixelsFor(fraction: number, min: number, minOther: number, containerSiz
 
 /** Every divider's own default share — what an even split is, and what "single" resets back to. */
 const HALF = 1 / 2;
-const THIRD = 1 / 3;
 
 /** The tabs of a pane that has none — one shared instance, so an empty pane's prop is stable. */
 const NO_PANE_TABS: TerminalDescriptor[] = [];
@@ -138,9 +137,9 @@ export const TerminalsPane = memo(function TerminalsPane({
 }: TerminalsPaneProps) {
   const agents = useAgents();
   /**
-   * Where a dragged tab is right now: the pane under it, and — when the pointer is close to one
-   * of that pane's snapping edges — the preset the drop would switch to, with the preview box
-   * drawn for it. Mirrored in a ref for the drop handler, which needs the answer synchronously
+   * Where a dragged tab is right now: the pane under it, and — when the pointer is in one of
+   * the snap zones — what the drop would do there, with the preview box drawn for a preset
+   * switch. Mirrored in a ref for the drop handler, which needs the answer synchronously
    * without becoming a new callback on every change. What the tab came from is a ref alone: it
    * is set on `dragstart`, before any render this state causes.
    */
@@ -172,9 +171,6 @@ export const TerminalsPane = memo(function TerminalsPane({
   // hooks cannot follow which preset happens to be active. Only the ones the current preset
   // actually renders a Sash for ever change or get read.
   const [cols2Fraction, setCols2Fraction] = useDividerFraction(project.id, "cols2", HALF);
-  const [cols3AFraction, setCols3AFraction] = useDividerFraction(project.id, "cols3-a", THIRD);
-  // Of what is left once "a" has its third — half of it, so all three come out even.
-  const [cols3BFraction, setCols3BFraction] = useDividerFraction(project.id, "cols3-b", HALF);
   const [splitRightColFraction, setSplitRightColFraction] = useDividerFraction(project.id, "split-right-col", HALF);
   const [splitRightRowFraction, setSplitRightRowFraction] = useDividerFraction(project.id, "split-right-row", HALF);
   const [gridColFraction, setGridColFraction] = useDividerFraction(project.id, "grid2x2-col", HALF);
@@ -233,8 +229,6 @@ export const TerminalsPane = memo(function TerminalsPane({
    */
   const resetDividerFractions = useCallback(() => {
     setCols2Fraction(HALF);
-    setCols3AFraction(THIRD);
-    setCols3BFraction(HALF);
     setSplitRightColFraction(HALF);
     setSplitRightRowFraction(HALF);
     setGridColFraction(HALF);
@@ -242,8 +236,6 @@ export const TerminalsPane = memo(function TerminalsPane({
     setGridRowBFraction(HALF);
   }, [
     setCols2Fraction,
-    setCols3AFraction,
-    setCols3BFraction,
     setSplitRightColFraction,
     setSplitRightRowFraction,
     setGridColFraction,
@@ -252,7 +244,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   ]);
 
   // On the preset actually arriving at "single", wherever the switch came from: the picker, or a
-  // pane emptied and the split settled (`settleLayout`, decided in `App`). An effect rather
+  // pane emptied and collapsed away (`collapseEmptied`, decided in `App`). An effect rather
   // than a call beside the picker, so both take the same path; after the render is soon enough,
   // since "single" draws no sash that could show the old share.
   const previousPreset = useRef(layout.preset);
@@ -322,7 +314,12 @@ export const TerminalsPane = memo(function TerminalsPane({
       if (current?.paneId === paneId && current.zone === zone) {
         return;
       }
-      const preview = hit ? (PANE_BOXES[hit.transition.preset][hit.transition.target] ?? null) : null;
+      // A zone whose pane the preset already has draws that pane's own frame (below) rather
+      // than a box at even shares that may sit beside the real dividers.
+      const preview =
+        hit && hit.transition.preset !== presetRef.current
+          ? (PANE_BOXES[hit.transition.preset][hit.transition.target] ?? null)
+          : null;
       setDragTarget({ paneId, zone, transition: hit?.transition ?? null, preview });
     },
     [setDragTarget]
@@ -383,13 +380,19 @@ export const TerminalsPane = memo(function TerminalsPane({
     return next;
   }, [paneTabs, startingTabIds]);
 
-  // The pane a plain drop would land in — not the one the tab came from (a drop there does
-  // nothing, and in a single pane the frame would be the whole window), and not while a snap
-  // zone is what the drop means: then the preview says where the tab goes, not the pane.
-  const dragOverPane =
-    dragTarget !== null && dragTarget.zone === null && dragTarget.paneId !== dragSource.current
-      ? dragTarget.paneId
-      : null;
+  // The pane the drop would land in: the one under the pointer for a plain drop, the zone's
+  // own pane for a zone the preset already has. Not the one the tab came from (a drop there
+  // does nothing, and in a single pane the frame would be the whole window), and not while a
+  // zone would switch the preset: then the preview says where the tab goes, not a pane.
+  const framedPane =
+    dragTarget === null
+      ? null
+      : dragTarget.transition === null
+        ? dragTarget.paneId
+        : dragTarget.transition.preset === layout.preset
+          ? dragTarget.transition.target
+          : null;
+  const dragOverPane = framedPane !== null && framedPane !== dragSource.current ? framedPane : null;
 
   const renderPane = (paneId: PaneId, size: { width?: number; height?: number }, first: boolean) => (
     <Pane
@@ -437,8 +440,8 @@ export const TerminalsPane = memo(function TerminalsPane({
       size={pixels}
       min={min}
       // Sash clamps against its own container, the whole grid, while `containerSize` may be only
-      // the room left of it (cols3's second divider shares what "a" left) — the rest of the grid
-      // is "other" too, or dragging back from that edge first works off an overshoot.
+      // the room left of it — the rest of the grid is "other" too, or dragging back from that
+      // edge first works off an overshoot.
       minOther={minOther + ((orientation === "vertical" ? gridSize?.width : gridSize?.height) ?? 0) - (containerSize ?? 0)}
       // A drag reports itself in pixels — turned back into a fraction of the same room
       // `pixelsFor` measured it against, and through the same bounds, so the two never disagree
@@ -464,21 +467,6 @@ export const TerminalsPane = memo(function TerminalsPane({
             {renderPane("a", { width: a }, true)}
             {divider("vertical", a, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setCols2Fraction)}
             {renderPane("b", {}, false)}
-          </>
-        );
-      }
-      case "cols3": {
-        const a = pixelsFor(cols3AFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH * 2, width);
-        // "b"'s own fraction is of whatever is left once "a" has taken its share.
-        const remaining = width === null ? null : width - a;
-        const b = pixelsFor(cols3BFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, remaining);
-        return (
-          <>
-            {renderPane("a", { width: a }, true)}
-            {divider("vertical", a, MIN_PANE_WIDTH, MIN_PANE_WIDTH * 2, width, setCols3AFraction)}
-            {renderPane("b", { width: b }, false)}
-            {divider("vertical", b, MIN_PANE_WIDTH, MIN_PANE_WIDTH, remaining, setCols3BFraction)}
-            {renderPane("c", {}, false)}
           </>
         );
       }

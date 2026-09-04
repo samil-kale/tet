@@ -648,15 +648,6 @@ export function LayoutCols2Icon(props: IconProps) {
   );
 }
 
-export function LayoutCols3Icon(props: IconProps) {
-  return (
-    <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
-      <path d="M5.83 3v10M10.17 3v10" />
-    </Svg>
-  );
-}
-
 export function LayoutSplitRightIcon(props: IconProps) {
   return (
     <Svg {...props} extent={13.33} cx={8} cy={8}>

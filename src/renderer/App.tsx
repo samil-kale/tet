@@ -25,16 +25,14 @@ import { PlusIcon } from "./ui/icons";
 import { sameList } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import {
+  activateTab as activateTabLayout,
   applyPreset,
+  collapseClosed,
   defaultLayout,
   loadLayout,
-  moveTab,
-  normalizeLayout,
-  occupiedPanes,
   paneOf,
   saveLayout,
   serializeLayout,
-  settleLayout,
   snapTab as snapTabLayout,
   visibleTabIds
 } from "./terminal/pane-layout";
@@ -278,14 +276,13 @@ export function App() {
     setLayouts((current) => {
       let next: Record<string, ProjectLayout> | undefined;
       for (const projectId of Object.keys(tabs)) {
-        const before = layoutOf(current, projectId);
-        const list = tabs[projectId] ?? NO_TABS;
-        const previousList = previousTabs[projectId] ?? NO_TABS;
-        const normalized = normalizeLayout(before, list, previousList);
-        // Fewer panes occupied than before this push — a pane's last tab closed — settles the
-        // split into the preset for that count; the other trigger is a move, `activateTab` below.
-        const shrunk = occupiedPanes(normalized, list).length < occupiedPanes(before, previousList).length;
-        const layout = shrunk ? settleLayout(normalized, list) : normalized;
+        // `normalizeLayout`, plus a pane whose last tab just closed going with it — the close
+        // trigger of the collapse; the move trigger is `activateTab` below.
+        const layout = collapseClosed(
+          layoutOf(current, projectId),
+          tabs[projectId] ?? NO_TABS,
+          previousTabs[projectId] ?? NO_TABS
+        );
         if (layout !== current[projectId]) {
           next ??= { ...current };
           next[projectId] = layout;
@@ -421,17 +418,17 @@ export function App() {
    * of those already knows); left out, it resolves through `paneOf` instead, for a tab shown from
    * outside any pane's own view (a project row's mark, a saved command, `showTab` below) that
    * belongs wherever it already lives, or the focused pane if it has never been shown before.
-   * What the move does to both panes' selections is `moveTab`'s. A move that leaves fewer panes
-   * occupied settles the split into the preset for that count (`settleLayout`) — the other
-   * trigger is a close, in the reconcile effect above.
+   * What the move does to the two panes, and the collapse when it takes the last tab out of its
+   * pane, is the model's `activateTab`; the other collapse trigger is a close, in the reconcile
+   * effect above. A snap (`snapTab` below) is deliberately neither.
    */
   const activateTab = useCallback((projectId: string, tabId: string, paneId?: PaneId) => {
     setLayouts((current) => {
       const layout = layoutOf(current, projectId);
-      const tabs = tabsRef.current[projectId] ?? [];
-      const moved = moveTab(layout, tabId, paneId ?? paneOf(layout, tabId), tabs);
-      const shrunk = occupiedPanes(moved, tabs).length < occupiedPanes(layout, tabs).length;
-      return { ...current, [projectId]: shrunk ? settleLayout(moved, tabs) : moved };
+      return {
+        ...current,
+        [projectId]: activateTabLayout(layout, tabId, paneId ?? paneOf(layout, tabId), tabsRef.current[projectId] ?? [])
+      };
     });
   }, []);
 

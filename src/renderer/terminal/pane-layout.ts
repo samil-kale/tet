@@ -9,9 +9,9 @@ import { sameRecord } from "../identity";
 export type PaneId = "a" | "b" | "c" | "d";
 export const PANE_IDS: readonly PaneId[] = ["a", "b", "c", "d"];
 
-export type SplitPreset = "single" | "cols2" | "cols3" | "split-right" | "grid2x2";
+export type SplitPreset = "single" | "cols2" | "split-right" | "grid2x2";
 /** Every preset, in the order the layout menu lists them. */
-export const PRESETS: readonly SplitPreset[] = ["single", "cols2", "cols3", "split-right", "grid2x2"];
+export const PRESETS: readonly SplitPreset[] = ["single", "cols2", "split-right", "grid2x2"];
 
 export function isPaneId(value: unknown): value is PaneId {
   return PANE_IDS.includes(value as PaneId);
@@ -28,7 +28,6 @@ export const TAB_DRAG_TYPE = "application/x-tet-terminal-tab";
 export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
   single: ["a"],
   cols2: ["a", "b"],
-  cols3: ["a", "b", "c"],
   "split-right": ["a", "b", "c"],
   grid2x2: ["a", "b", "c", "d"]
 };
@@ -36,7 +35,6 @@ export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
 export const PRESET_LABELS: Record<SplitPreset, string> = {
   single: "Single",
   cols2: "Two Columns",
-  cols3: "Three Columns",
   "split-right": "Two Columns, Right Split",
   grid2x2: "Grid (2x2)"
 };
@@ -45,7 +43,6 @@ export const PRESET_LABELS: Record<SplitPreset, string> = {
 export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> = {
   single: {},
   cols2: { a: "Left", b: "Right" },
-  cols3: { a: "Left", b: "Middle", c: "Right" },
   "split-right": { a: "Left", b: "Top Right", c: "Bottom Right" },
   grid2x2: { a: "Top Left", b: "Top Right", c: "Bottom Left", d: "Bottom Right" }
 };
@@ -230,45 +227,109 @@ export function moveTab(layout: ProjectLayout, tabId: string, target: PaneId, ta
 }
 
 /** The panes holding at least one of `tabs`, in the preset's reading order. */
-export function occupiedPanes(layout: ProjectLayout, tabs: TerminalDescriptor[]): PaneId[] {
+function occupiedPanes(layout: ProjectLayout, tabs: TerminalDescriptor[]): PaneId[] {
   const held = new Set(tabs.map((tab) => paneOf(layout, tab.tabId)));
   return PRESET_PANES[layout.preset].filter((paneId) => held.has(paneId));
 }
 
 /**
- * The preset a layout settles into once a move or a close has left it with fewer occupied
- * panes — Zellij's swap layouts rather than VS Code's "close empty groups": the *number* of
- * occupied panes picks the preset, not which pane went empty. Two are cols2 and one is single,
- * whatever they were before; three out of the grid become split-right, since no row of the
- * grid can hold three; occupied panes keep their reading order. So there is no table of
- * "which empty pane collapses to what", no grid corner with no preset to fall to, and no
- * difference between a pane that was never filled and one that was emptied.
+ * What a preset falls to once one of its panes has been *emptied* — its last tab moved
+ * elsewhere or closed: that pane goes, every other keeps its place, empty or not. Two panes
+ * left is cols2, the one two-pane preset, whichever way they were arranged; grid2x2 with b or d
+ * empty has no "split-left" preset to fall to and stays. A pane that was never filled is not
+ * emptied: the empty panes a snap lays out stay until the user has put something there and
+ * taken it away again.
  *
- * Only ever asked when that number *fell* (`App`'s two triggers: a move, a tab list push).
- * That is what keeps a snap out of it without an exception of its own: a snap moves one tab into
- * a new pane, so the count never falls, and the empty panes it lays out stay until a later move
- * or close actually shrinks what is occupied. The picker stays out too — a preset the user just
- * chose is not up for settling, whatever it holds.
+ * Choosing the preset by the *number* of occupied panes instead (Zellij's swap layouts) was
+ * tried and taken out: moving a tab from the grid's c into its empty d left two occupied panes
+ * and so made cols2 of it, dropping the empty b the user had not touched — only the emptied
+ * pane goes, plus what `collapseTrailing` takes along.
  */
-export function settleLayout(layout: ProjectLayout, tabs: TerminalDescriptor[]): ProjectLayout {
-  const occupied = occupiedPanes(layout, tabs);
-  const preset: SplitPreset =
-    occupied.length <= 1
-      ? "single"
-      : occupied.length === 2
-        ? "cols2"
-        : occupied.length === 3 && layout.preset === "grid2x2"
-          ? "split-right"
-          : layout.preset;
-  const panes = PRESET_PANES[preset];
-  if (preset === layout.preset && occupied.every((paneId, index) => paneId === panes[index])) {
-    return layout;
+export const COLLAPSE_TRANSITIONS: Record<SplitPreset, Partial<Record<PaneId, { preset: SplitPreset; remap: PaneRemap }>>> = {
+  single: {},
+  cols2: { a: { preset: "single", remap: { b: "a" } }, b: { preset: "single", remap: {} } },
+  "split-right": {
+    a: { preset: "cols2", remap: { b: "a", c: "b" } },
+    b: { preset: "cols2", remap: { c: "b" } },
+    c: { preset: "cols2", remap: {} }
+  },
+  grid2x2: {
+    a: { preset: "split-right", remap: { c: "a", d: "c" } },
+    c: { preset: "split-right", remap: { d: "c" } }
   }
-  const remap: PaneRemap = {};
-  occupied.forEach((paneId, index) => {
-    remap[paneId] = panes[index];
-  });
-  return retarget(layout, preset, remap, tabs);
+};
+
+/**
+ * What goes along with a collapse: every empty pane at the *end* of the reading order (LO, RO,
+ * LU, RU), the occupied ones taking the room. Moving LU's last tab up into RO leaves LU and an
+ * empty RU behind, and the user reads the bottom row as gone, not as a pane to keep; with RO
+ * and RU both empty the whole right column goes. An empty pane *before* an occupied one stays:
+ * LU's tab moved into RU keeps the empty RO, so the tab stays bottom right where it was put.
+ * Run after the emptied pane itself has gone, and again after each removal, since taking LU
+ * out of the grid is what brings RO and RU into a split-right where the rule can act on them.
+ */
+function collapseTrailing(layout: ProjectLayout, tabs: TerminalDescriptor[]): ProjectLayout {
+  let next = layout;
+  for (;;) {
+    const last = PRESET_PANES[next.preset].at(-1)!;
+    if (occupiedPanes(next, tabs).includes(last) || !COLLAPSE_TRANSITIONS[next.preset][last]) {
+      return next;
+    }
+    const transition = COLLAPSE_TRANSITIONS[next.preset][last]!;
+    next = retarget(next, transition.preset, transition.remap, tabs);
+  }
+}
+
+/** The whole collapse for one emptied pane: its own transition, then whatever trails. */
+export function collapseEmptied(layout: ProjectLayout, emptied: PaneId, tabs: TerminalDescriptor[]): ProjectLayout {
+  const transition = COLLAPSE_TRANSITIONS[layout.preset][emptied];
+  return transition ? collapseTrailing(retarget(layout, transition.preset, transition.remap, tabs), tabs) : layout;
+}
+
+/**
+ * `moveTab`, plus the collapse when the move took the last tab out of its pane — whether into
+ * an occupied pane or an empty one. "Emptied" is judged against `tabs`, not against the pane
+ * the tab resolves to: a tab activated ahead of its own push resolves through `paneOf` to the
+ * focused pane, which may well be empty without this move having emptied it. What a snap does
+ * instead is `snapTab`: the same move, and no collapse.
+ */
+export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: TerminalDescriptor[]): ProjectLayout {
+  const source = paneOf(layout, tabId);
+  const moved = moveTab(layout, tabId, target, tabs);
+  const emptied = occupiedPanes(layout, tabs).includes(source) && !occupiedPanes(moved, tabs).includes(source);
+  return emptied ? collapseEmptied(moved, source, tabs) : moved;
+}
+
+/**
+ * `normalizeLayout` for a tab list push, plus the collapse for the tabs that *closed*: every
+ * pane that held a tab of `previousTabs` and holds none of `tabs`, judged against `layout` as
+ * it was before the closed tabs' entries were dropped. Several at once (a project's tabs going
+ * in one push) are taken in reading order, each later one's letter translated through the
+ * collapse before it; what trails is taken once at the end, when the letters have settled.
+ * The normalized layout itself, identity and all, when nothing closed.
+ */
+export function collapseClosed(
+  layout: ProjectLayout,
+  tabs: TerminalDescriptor[],
+  previousTabs: TerminalDescriptor[]
+): ProjectLayout {
+  const normalized = normalizeLayout(layout, tabs, previousTabs);
+  const held = new Set(tabs.map((tab) => paneOf(layout, tab.tabId)));
+  let emptied = PRESET_PANES[layout.preset].filter(
+    (paneId) => !held.has(paneId) && previousTabs.some((tab) => paneOf(layout, tab.tabId) === paneId)
+  );
+  let next = normalized;
+  while (emptied.length > 0) {
+    const [paneId, ...rest] = emptied;
+    const transition = COLLAPSE_TRANSITIONS[next.preset][paneId];
+    if (!transition) {
+      emptied = rest;
+      continue;
+    }
+    next = retarget(next, transition.preset, transition.remap, tabs);
+    emptied = rest.map((id) => transition.remap[id] ?? id).filter((id) => PRESET_PANES[transition.preset].includes(id));
+  }
+  return next === normalized ? normalized : collapseTrailing(next, tabs);
 }
 
 /** A box as fractions of `.panes-grid` — the unit both the snap zones and the preview use. */
@@ -297,11 +358,15 @@ export const SNAP_ZONES: Record<SnapZone, FractionBox> = {
 };
 
 /**
- * The preset switch a zone proposes: the tab lands in `target`, existing panes are renamed by
- * `remap`, everything else keeps its letter. The preset is the smallest one with a pane at that
+ * What a zone does: the tab lands in `target`, existing panes are renamed by `remap`,
+ * everything else keeps its letter. The preset is the smallest one with a pane at that
  * position — panes it adds beyond the target stay empty (single dropped bottom-right is a
- * split-right with nothing top-right yet). The one zone that moves tabs already there is
- * cols2's top-right: b already sits there, so its tabs make room by going below.
+ * split-right with nothing top-right yet). Where the preset already has that pane, the zone is
+ * the pane itself, and the difference to dropping there outside the zone is what the source
+ * pane does: a zone drop *places* a tab, and whatever it leaves empty stays (`snapTab` never
+ * collapses); a plain drop *moves* it, and an emptied pane goes (`collapseEmptied`). The one
+ * zone that moves tabs already there is cols2's top-right: b already sits there, so its tabs
+ * make room by going below.
  */
 export interface SnapTransition {
   preset: SplitPreset;
@@ -317,15 +382,21 @@ export const SNAP_TRANSITIONS: Record<SplitPreset, Partial<Record<SnapZone, Snap
     "bottom-left": { preset: "grid2x2", target: "c", remap: {} }
   },
   cols2: {
-    right: { preset: "cols3", target: "c", remap: {} },
+    right: { preset: "cols2", target: "b", remap: {} },
     "top-right": { preset: "split-right", target: "b", remap: { b: "c" } },
     "bottom-right": { preset: "split-right", target: "c", remap: {} },
     "bottom-left": { preset: "grid2x2", target: "c", remap: {} }
   },
-  // Three columns and the grid have nowhere left to add a pane.
-  cols3: {},
-  "split-right": { "bottom-left": { preset: "grid2x2", target: "c", remap: { c: "d" } } },
-  grid2x2: {}
+  "split-right": {
+    "top-right": { preset: "split-right", target: "b", remap: {} },
+    "bottom-right": { preset: "split-right", target: "c", remap: {} },
+    "bottom-left": { preset: "grid2x2", target: "c", remap: { c: "d" } }
+  },
+  grid2x2: {
+    "top-right": { preset: "grid2x2", target: "b", remap: {} },
+    "bottom-right": { preset: "grid2x2", target: "d", remap: {} },
+    "bottom-left": { preset: "grid2x2", target: "c", remap: {} }
+  }
 };
 
 /**
@@ -338,11 +409,6 @@ export const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, FractionBox>
   cols2: {
     a: { left: 0, top: 0, width: 1 / 2, height: 1 },
     b: { left: 1 / 2, top: 0, width: 1 / 2, height: 1 }
-  },
-  cols3: {
-    a: { left: 0, top: 0, width: 1 / 3, height: 1 },
-    b: { left: 1 / 3, top: 0, width: 1 / 3, height: 1 },
-    c: { left: 2 / 3, top: 0, width: 1 / 3, height: 1 }
   },
   "split-right": {
     a: { left: 0, top: 0, width: 1 / 2, height: 1 },
@@ -360,8 +426,8 @@ export const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, FractionBox>
 /**
  * A tab dropped on a snap zone: the preset switch and the move into the new pane as one layout
  * for one state write, so the tab never sits in the focused pane for a render in between, and
- * nothing is persisted twice. Never settled (`settleLayout`): the count of occupied panes does
- * not fall here, so the empty panes it lays out stay — the user asked for this layout.
+ * nothing is persisted twice. No collapse, unlike `activateTab`: the source pane it may leave
+ * empty stays, and so do the panes the preset adds — the user asked for this layout.
  */
 export function snapTab(
   layout: ProjectLayout,
