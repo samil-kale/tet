@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.3.7 (2026-09-05)
+
+- Linux installers are back: the release build's test that kept 0.3.6's AppImage and `.deb`
+  from being published no longer depends on what the build machine's shell prints at startup.
+  Otherwise the same as 0.3.6.
+- Release notes come from this changelog.
+
 ## 0.3.6 (2026-09-05)
 
 - Split view: drag a tab onto a snap zone at the edge of the terminals to split them into up to
