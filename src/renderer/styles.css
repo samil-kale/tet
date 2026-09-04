@@ -1248,8 +1248,16 @@ input:focus {
   color: var(--vscode-button-background);
 }
 
-/* Two-up, side by side, each version as large as it fits without stretching. */
+/* Column: the mode row (only for a modified image) over the comparison itself. */
 .image-diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Two-up, side by side, each version as large as it fits without stretching. */
+.image-diff-pair {
   display: flex;
   gap: 16px;
   flex: 1;
@@ -1259,7 +1267,7 @@ input:focus {
   padding: 16px;
 }
 
-.image-diff figure {
+.image-diff-pair figure {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1268,7 +1276,37 @@ input:focus {
   min-width: 0;
 }
 
-.image-diff img {
+/* Natural size, not `max-width: 100%` like the two-up view: the images have to stay the same
+   scale for one laid over the other to line up, and the box scrolls when they are large. The
+   checkerboard sits on the box, not the images — on the faded top image it would show through
+   as a haze rather than reading as transparency. */
+.image-diff-stack {
+  position: relative;
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+}
+
+.image-diff-stack::before {
+  content: "";
+  position: absolute;
+  inset: 16px;
+  background:
+    repeating-conic-gradient(var(--vscode-panel-border) 0% 25%, var(--vscode-editor-background) 0% 50%) 50% / 16px 16px;
+}
+
+.image-diff-stack img {
+  display: block;
+  position: relative;
+}
+
+.image-diff-stack img + img {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+}
+
+.image-diff-pair img {
   max-width: 100%;
   /* The checkerboard an image viewer puts behind transparency. */
   background:
@@ -1279,6 +1317,63 @@ input:focus {
 .image-diff figcaption {
   font-size: 13px;
   color: var(--vscode-descriptionForeground);
+}
+
+/* Picks the comparison layout; the active one carries the same 1px focusBorder underline as an
+   active tab. */
+.image-diff-modes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: 13px;
+}
+
+.image-diff-mode {
+  padding: 4px 8px;
+  border-radius: 3px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.image-diff-mode:hover {
+  color: var(--vscode-foreground);
+  background: var(--vscode-toolbar-hoverBackground);
+}
+
+.image-diff-mode.active {
+  color: var(--vscode-foreground);
+  box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
+}
+
+/* The onion-skin fade. A range input has no other use in the app, so its track and thumb are
+   built here from the tokens the rest of the dialog already uses. */
+.image-diff-blend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.image-diff-blend input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 3px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: var(--vscode-scrollbarSlider-background);
+}
+
+.image-diff-blend input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--vscode-foreground);
+  cursor: pointer;
 }
 
 .diff-body {

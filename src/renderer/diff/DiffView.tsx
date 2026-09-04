@@ -58,24 +58,70 @@ function gapBefore(lines: readonly DiffLine[], index: number): { from: number; t
 }
 
 function ImageView({ image }: { image: ImageDiff }) {
+  const [overlay, setOverlay] = useState(false);
+  // 0 shows the old version, 100 the new one, the middle the onion-skin GitHub Desktop's image
+  // diff has. Kept here rather than lifted to the dialog: it means nothing while the view is
+  // two-up, and nothing outside this component reads it.
+  const [blend, setBlend] = useState(50);
+
   if (!image.before && !image.after) {
     return <div className="placeholder">Image too large to show.</div>;
   }
-  // GitHub Desktop's two-up view: the committed version beside the current one, and only the
-  // one that exists when the file was added or deleted.
+
+  // Only a modified image has two versions to lay over each other; an add or a delete has one,
+  // and then there is nothing to pick between.
+  const both = Boolean(image.before && image.after);
+  const showOverlay = both && overlay;
+
   return (
     <div className="image-diff">
-      {image.before && (
-        <figure>
-          <img src={image.before} alt="" />
-          <figcaption>Before</figcaption>
-        </figure>
+      {both && (
+        <div className="image-diff-modes">
+          <button className={`image-diff-mode${overlay ? "" : " active"}`} onClick={() => setOverlay(false)}>
+            Side by side
+          </button>
+          <button className={`image-diff-mode${overlay ? " active" : ""}`} onClick={() => setOverlay(true)}>
+            Overlay
+          </button>
+          {showOverlay && (
+            <label className="image-diff-blend">
+              Before
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={blend}
+                onChange={(event) => setBlend(event.currentTarget.valueAsNumber)}
+              />
+              After
+            </label>
+          )}
+        </div>
       )}
-      {image.after && (
-        <figure>
-          <img src={image.after} alt="" />
-          <figcaption>After</figcaption>
-        </figure>
+      {showOverlay ? (
+        // Both versions in one box, aligned top-left so a size change between them reads as the
+        // images not covering each other rather than as a blur.
+        <div className="image-diff-stack">
+          <img src={image.before} alt="" />
+          <img src={image.after} alt="" style={{ opacity: blend / 100 }} />
+        </div>
+      ) : (
+        // GitHub Desktop's two-up view: the committed version beside the current one, and only
+        // the one that exists when the file was added or deleted.
+        <div className="image-diff-pair">
+          {image.before && (
+            <figure>
+              <img src={image.before} alt="" />
+              <figcaption>Before</figcaption>
+            </figure>
+          )}
+          {image.after && (
+            <figure>
+              <img src={image.after} alt="" />
+              <figcaption>After</figcaption>
+            </figure>
+          )}
+        </div>
       )}
     </div>
   );
