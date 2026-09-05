@@ -574,9 +574,10 @@ export function App() {
   }, [tabs, markedTabs, startingTabs]);
 
   /**
-   * What the project row says about the repository — its HEAD and first remote — by identity
-   * only where that changed: `states` is a fresh record on every push from any repository, and
-   * a changed file is not something the row shows.
+   * What the project row says about the repository — its HEAD, first remote and whether it has
+   * uncommitted changes — by identity only where that changed: `states` is a fresh record on
+   * every push from any repository, and `changes` is already part of every refresh (`readStatus`),
+   * so this costs no git call of its own.
    */
   const headsRef = useRef<Record<string, ProjectHead>>({});
   const heads = useMemo(() => {
@@ -585,13 +586,15 @@ export function App() {
     for (const [projectId, state] of Object.entries(states)) {
       const previous = headsRef.current[projectId];
       const remote = state.remotes[0];
+      const dirty = state.changes.length > 0;
       next[projectId] =
         previous &&
         previous.head === state.head &&
         previous.remote?.name === remote?.name &&
-        previous.remote?.url === remote?.url
+        previous.remote?.url === remote?.url &&
+        previous.dirty === dirty
           ? previous
-          : { head: state.head, remote };
+          : { head: state.head, remote, dirty };
       changed ||= next[projectId] !== previous;
     }
     if (!changed) {

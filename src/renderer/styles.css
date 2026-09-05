@@ -455,6 +455,15 @@ input:focus {
   color: var(--vscode-descriptionForeground);
 }
 
+/* Uncommitted changes on a project not on screen. */
+.project-dirty {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vscode-focusBorder);
+}
+
 /* Branch tree ----------------------------------------------------------------------------- */
 
 .branch-tree {

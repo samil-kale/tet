@@ -27,10 +27,12 @@ export interface ProjectMarks {
   busy: boolean;
 }
 
-/** What a row says about the repository: its HEAD (a branch, or a short commit id) and first remote. */
+/** What a row says about the repository: its HEAD (a branch, or a short commit id), first remote,
+ *  and whether it has uncommitted changes. */
 export interface ProjectHead {
   head?: string;
   remote?: RemoteInfo;
+  dirty?: boolean;
 }
 
 interface ProjectListProps {
@@ -195,6 +197,12 @@ export const ProjectList = memo(function ProjectList({
                   says it for the project on screen only, and an agent switching a branch in a
                   terminal is exactly what one wants to see on a project that is not. */}
               {heads[project.id]?.head && <span className="project-extra">({heads[project.id].head})</span>}
+              {/* Uncommitted changes, read off the same status every refresh already loads
+                  (`state.changes`) — no extra git call. The modified-file color, not a new one:
+                  the same fact the changes list marks each such file with, just rolled up. */}
+              {heads[project.id]?.dirty && (
+                <span className="project-dirty" title="Has uncommitted changes" />
+              )}
             </span>
             {/* All three states of a project's sessions, and they can hold at once — one tab
                 stopped on a question, another working, a third waiting to be read. Each is a
