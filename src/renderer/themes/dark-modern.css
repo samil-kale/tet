@@ -1,0 +1,131 @@
+/*
+ * The theme layer: every color the UI uses comes from a --vscode-* custom property, the same
+ * names the VS Code plugins style against. One file per theme in this folder, each declaring
+ * the *complete* list — nothing falls through from another theme, so every value a theme shows
+ * is one somebody decided (pieces.test.ts holds the lists equal). Which block applies is decided
+ * once, in main.tsx, from the id in src/shared/themes.ts; this one, VS Code's "Dark Modern", is
+ * also the bare `:root` so an unknown id still gets a whole theme. The values come from VS
+ * Code's own theme files (extensions/theme-defaults) and color registry, not from eyeballing.
+ * The fonts are not a theme's — they sit in styles.css.
+ */
+:root,
+:root[data-theme="dark-modern"] {
+  color-scheme: dark;
+
+  --vscode-foreground: #cccccc;
+  --vscode-descriptionForeground: #9d9d9d;
+  --vscode-errorForeground: #f85149;
+  --vscode-textLink-foreground: #4daafc;
+  --vscode-textLink-activeForeground: #4daafc;
+  --vscode-focusBorder: #0078d4;
+  --vscode-sash-hoverBorder: #0078d4;
+
+  --vscode-editor-background: #1f1f1f;
+  --vscode-editor-foreground: #cccccc;
+  --vscode-terminal-background: #1f1f1f;
+  --vscode-terminal-foreground: #cccccc;
+
+  --vscode-sideBar-background: #181818;
+  --vscode-sideBarSectionHeader-foreground: #cccccc;
+  --vscode-titleBar-activeBackground: #181818;
+  --vscode-titleBar-activeForeground: #cccccc;
+
+  --vscode-panel-background: #181818;
+  --vscode-panel-border: #2b2b2b;
+
+  --vscode-tab-activeBackground: #1f1f1f;
+  --vscode-tab-activeForeground: #ffffff;
+  --vscode-tab-inactiveBackground: #181818;
+  --vscode-tab-inactiveForeground: #9d9d9d;
+  --vscode-tab-border: #2b2b2b;
+
+  /* Translucent on purpose: an action button sits on list rows, on the blue of a selected
+     one and on plain bars, and this is the one hover that reads on all of them. */
+  --vscode-toolbar-hoverBackground: #5a5d5e50;
+
+  --vscode-list-activeSelectionBackground: #04395e;
+  --vscode-list-activeSelectionForeground: #ffffff;
+  --vscode-list-hoverBackground: #2a2d2e;
+
+  --vscode-input-background: #313131;
+  --vscode-input-foreground: #cccccc;
+  --vscode-input-border: #3c3c3c;
+  --vscode-input-placeholderForeground: #989898;
+
+  --vscode-dropdown-background: #313131;
+  --vscode-dropdown-foreground: #cccccc;
+  --vscode-dropdown-border: #3c3c3c;
+
+  --vscode-button-background: #0078d4;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #026ec1;
+  --vscode-button-secondaryBackground: #313131;
+  --vscode-button-secondaryForeground: #cccccc;
+  --vscode-button-secondaryHoverBackground: #3c3c3c;
+
+  --vscode-editorWidget-background: #202020;
+  --vscode-editorWidget-border: #454545;
+  --vscode-widget-shadow: #0000005c;
+
+  --vscode-menu-background: #1f1f1f;
+  --vscode-menu-foreground: #cccccc;
+  --vscode-menu-border: #454545;
+  --vscode-menu-selectionBackground: #0078d4;
+  --vscode-menu-selectionForeground: #ffffff;
+  --vscode-menu-separatorBackground: #454545;
+
+  --vscode-progressBar-background: #0078d4;
+
+  --vscode-notifications-background: #1f1f1f;
+  --vscode-notifications-foreground: #cccccc;
+  --vscode-notifications-border: #2b2b2b;
+  --vscode-notificationsErrorIcon-foreground: #f85149;
+  --vscode-notificationsWarningIcon-foreground: #cca700;
+  --vscode-notificationsInfoIcon-foreground: #3794ff;
+
+  --vscode-scrollbarSlider-background: #79797966;
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-scrollbarSlider-activeBackground: #bfbfbf66;
+
+  --vscode-gitDecoration-modifiedResourceForeground: #e2c08d;
+  --vscode-gitDecoration-deletedResourceForeground: #c74e39;
+  --vscode-gitDecoration-untrackedResourceForeground: #73c991;
+  --vscode-gitDecoration-addedResourceForeground: #81b88b;
+  --vscode-gitDecoration-conflictingResourceForeground: #e4676b;
+
+  --vscode-diffEditor-insertedLineBackground: #2ea04326;
+  --vscode-diffEditor-removedLineBackground: #f8514926;
+  --vscode-editorLineNumber-foreground: #6e7681;
+  --vscode-editorLineNumber-activeForeground: #cccccc;
+  --vscode-editorCursor-foreground: #aeafad;
+  --vscode-editor-selectionBackground: #264f78;
+  --vscode-editor-inactiveSelectionBackground: #3a3d41;
+  --vscode-editor-lineHighlightBorder: #282828;
+  --vscode-editor-findMatchBackground: #9e6a03;
+  --vscode-editor-findMatchHighlightBackground: #ea5c0055;
+  --vscode-editorIndentGuide-background1: #404040;
+  --vscode-editorIndentGuide-activeBackground1: #707070;
+
+  /* xterm's own defaults for these are white, invisible on a light background — see
+     buildXtermTheme. VS Code leaves the cursor unset in Dark Modern, which is its foreground. */
+  --vscode-terminalCursor-foreground: #cccccc;
+  --vscode-terminal-selectionBackground: #264f78;
+  --vscode-terminal-inactiveSelectionBackground: #3a3d41;
+
+  --vscode-terminal-ansiBlack: #000000;
+  --vscode-terminal-ansiRed: #cd3131;
+  --vscode-terminal-ansiGreen: #0dbc79;
+  --vscode-terminal-ansiYellow: #e5e510;
+  --vscode-terminal-ansiBlue: #2472c8;
+  --vscode-terminal-ansiMagenta: #bc3fbc;
+  --vscode-terminal-ansiCyan: #11a8cd;
+  --vscode-terminal-ansiWhite: #e5e5e5;
+  --vscode-terminal-ansiBrightBlack: #666666;
+  --vscode-terminal-ansiBrightRed: #f14c4c;
+  --vscode-terminal-ansiBrightGreen: #23d18b;
+  --vscode-terminal-ansiBrightYellow: #f5f543;
+  --vscode-terminal-ansiBrightBlue: #3b8eea;
+  --vscode-terminal-ansiBrightMagenta: #d670d6;
+  --vscode-terminal-ansiBrightCyan: #29b8db;
+  --vscode-terminal-ansiBrightWhite: #e5e5e5;
+}

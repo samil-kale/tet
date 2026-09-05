@@ -606,15 +606,17 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   exceptions — the changes list's status letters (`gitDecoration-*`) and the error mark
   (`--vscode-errorForeground`) — both passing the one test: a colour is allowed where Dark Modern
   already names one for that meaning, nowhere else.
-- Colors come from `--vscode-*` variables only (`src/renderer/vscode-theme.css`); add a new
-  variable under VS Code's own name rather than hardcoding. Exception: the diff's syntax colors,
+- Colors come from `--vscode-*` variables only (`src/renderer/themes/`); add a new variable
+  under VS Code's own name rather than hardcoding. Exception: the diff's syntax colors,
   which Shiki hands back per token (`diff-highlight.ts`). Shiki's editor-surface colors are
   patched with those variables at load (`buildShikiColors`) and monaco takes its theme from
   shiki's, so the variables are the one source for all three.
-- **A theme is a value set in `vscode-theme.css`** — `:root` is Dark Modern, every other a
-  `:root[data-theme="<id>"]` block naming only what differs — plus an entry in
-  `src/shared/themes.ts` for what lives outside the stylesheet (shiki theme, window chrome,
-  per-agent hints). Values come from VS Code's theme files, not from eyeballing. The id travels
+- **A theme is one stylesheet in `src/renderer/themes/<id>.css`** — a `:root[data-theme="<id>"]`
+  block naming the **complete** variable list, so nothing falls through from another theme
+  unseen (`pieces.test.ts` holds the lists equal; Dark Modern doubles as the bare `:root`) — plus
+  an entry in `src/shared/themes.ts` for what lives outside the stylesheet (shiki theme, window
+  chrome, per-agent hints). Values come from VS Code's theme files, not from eyeballing; a theme
+  sampled from a reference says so and where. The fonts are `styles.css`'s, not a theme's. The id travels
   `settings.json` → `currentTheme` → `additionalArguments` → preload → `data-theme` in
   `main.tsx`, synchronously, so the first frame is right. **A change applies after a restart**:
   xterm, shiki, monaco and the window chrome all bake it in at construction.

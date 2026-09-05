@@ -1,7 +1,8 @@
 /**
- * The color themes the settings dialog offers. One entry is one value set in
- * vscode-theme.css (`:root[data-theme="<id>"]`) plus what the two processes need before that
- * stylesheet exists or outside of it — hence shared, unlike the renderer-only keybinding presets.
+ * The color themes the settings dialog offers. One entry is one stylesheet in
+ * src/renderer/themes/<id>.css (`:root[data-theme="<id>"]`) plus what the two processes need
+ * before that stylesheet exists or outside of it — hence shared, unlike the renderer-only
+ * keybinding presets. pieces.test.ts checks the two halves agree.
  */
 export interface ThemeDefinition {
   id: string;
@@ -12,7 +13,7 @@ export interface ThemeDefinition {
    *  (see src/main/agents/claude/hooks.ts) — it does not look at the terminal itself. */
   claudeTheme: "dark" | "light";
   /** BrowserWindow's own paint color and the Windows title-bar overlay — set in main.ts before
-   *  the renderer's CSS exists, so kept by hand in step with vscode-theme.css's
+   *  the renderer's CSS exists, so kept by hand in step with the stylesheet's
    *  --vscode-titleBar-activeBackground / -activeForeground for this theme. */
   windowBackground: string;
   titleBarSymbolColor: string;

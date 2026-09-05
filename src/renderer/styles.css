@@ -2,6 +2,14 @@
   box-sizing: border-box;
 }
 
+/* The fonts are the app's, not a theme's — the same under every value set in themes/, so they
+   live here rather than three times over there. */
+:root {
+  --vscode-font-family: "Segoe UI", system-ui, sans-serif;
+  --vscode-font-size: 13px;
+  --vscode-editor-font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+}
+
 html,
 body,
 #root {

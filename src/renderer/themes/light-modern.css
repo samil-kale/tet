@@ -1,0 +1,137 @@
+/*
+ * VS Code's "Light Modern" (light_modern.json, with what it inherits from light_plus.json and
+ * light_vs.json; the rest from the `light:` branch of the color registry). See dark-modern.css
+ * for the layer itself. A handful of values are Dark Modern's rather than the light files',
+ * on purpose, and say so where they stand: they read the same on either ground.
+ */
+:root[data-theme="light-modern"] {
+  color-scheme: light;
+
+  --vscode-foreground: #3b3b3b;
+  --vscode-descriptionForeground: #3b3b3b;
+  /* Dark Modern's red, kept: the one error color the marks and notices share. */
+  --vscode-errorForeground: #f85149;
+  --vscode-textLink-foreground: #ca5010;
+  --vscode-textLink-activeForeground: #ca5010;
+  --vscode-focusBorder: #ca5010;
+  --vscode-sash-hoverBorder: #ca5010;
+
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #3b3b3b;
+  --vscode-terminal-background: #ffffff;
+  --vscode-terminal-foreground: #3b3b3b;
+
+  --vscode-sideBar-background: #f8f8f8;
+  --vscode-sideBarSectionHeader-foreground: #3b3b3b;
+  --vscode-titleBar-activeBackground: #f8f8f8;
+  --vscode-titleBar-activeForeground: #1e1e1e;
+
+  --vscode-panel-background: #f8f8f8;
+  --vscode-panel-border: #e5e5e5;
+
+  --vscode-tab-activeBackground: #ffffff;
+  --vscode-tab-activeForeground: #3b3b3b;
+  --vscode-tab-inactiveBackground: #f8f8f8;
+  --vscode-tab-inactiveForeground: #868686;
+  --vscode-tab-border: #e5e5e5;
+
+  /* tet's own, the same as Dark Modern's: a translucent grey that reads as a neutral tint on
+     either ground — see the note there. */
+  --vscode-toolbar-hoverBackground: #5a5d5e50;
+
+  --vscode-list-activeSelectionBackground: #e8e8e8;
+  --vscode-list-activeSelectionForeground: #000000;
+  --vscode-list-hoverBackground: #f2f2f2;
+
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #3b3b3b;
+  --vscode-input-border: #cecece;
+  --vscode-input-placeholderForeground: #767676;
+
+  --vscode-dropdown-background: #ffffff;
+  --vscode-dropdown-foreground: #3b3b3b;
+  --vscode-dropdown-border: #cecece;
+
+  --vscode-button-background: #ca5010;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #b6480e;
+  --vscode-button-secondaryBackground: #e5e5e5;
+  --vscode-button-secondaryForeground: #3b3b3b;
+  --vscode-button-secondaryHoverBackground: #cccccc;
+
+  --vscode-editorWidget-background: #f8f8f8;
+  /* The registry's transparent(foreground, 0.2), as is the menu separator below. */
+  --vscode-editorWidget-border: #3b3b3b33;
+  --vscode-widget-shadow: #00000029;
+
+  /* The registry points menu.background/foreground at dropdown.background/foreground. */
+  --vscode-menu-background: #ffffff;
+  --vscode-menu-foreground: #3b3b3b;
+  --vscode-menu-border: #cecece;
+  --vscode-menu-selectionBackground: #ca5010;
+  --vscode-menu-selectionForeground: #ffffff;
+  --vscode-menu-separatorBackground: #3b3b3b33;
+
+  --vscode-progressBar-background: #ca5010;
+
+  --vscode-notifications-background: #ffffff;
+  --vscode-notifications-foreground: #3b3b3b;
+  --vscode-notifications-border: #e5e5e5;
+  /* The error icon is Dark Modern's red (errorForeground above); the other two are
+     editorWarning.foreground and editorInfo.foreground, which the icon colors default to. */
+  --vscode-notificationsErrorIcon-foreground: #f85149;
+  --vscode-notificationsWarningIcon-foreground: #bf8803;
+  --vscode-notificationsInfoIcon-foreground: #0063d3;
+
+  --vscode-scrollbarSlider-background: #64646466;
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-scrollbarSlider-activeBackground: #00000099;
+
+  /* The git extension's own contributes.colors, light branch. */
+  --vscode-gitDecoration-modifiedResourceForeground: #895503;
+  --vscode-gitDecoration-deletedResourceForeground: #ad0707;
+  --vscode-gitDecoration-untrackedResourceForeground: #007100;
+  --vscode-gitDecoration-addedResourceForeground: #587c0c;
+  --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
+
+  /* The registry's defaultInsertColor/defaultRemoveColor serve both grounds. */
+  --vscode-diffEditor-insertedLineBackground: #2ea04326;
+  --vscode-diffEditor-removedLineBackground: #f8514926;
+  --vscode-editorLineNumber-foreground: #6e7681;
+  --vscode-editorLineNumber-activeForeground: #171184;
+  --vscode-editorCursor-foreground: #000000;
+  --vscode-editor-selectionBackground: #f3d0ab;
+  --vscode-editor-inactiveSelectionBackground: #f0e9e0;
+  --vscode-editor-lineHighlightBorder: #eeeeee;
+  --vscode-editor-findMatchBackground: #a8ac94;
+  --vscode-editor-findMatchHighlightBackground: #ea5c0055;
+  --vscode-editorIndentGuide-background1: #d3d3d3;
+  --vscode-editorIndentGuide-activeBackground1: #939393;
+
+  --vscode-terminalCursor-foreground: #ca5010;
+  --vscode-terminal-selectionBackground: #f3d0ab;
+  --vscode-terminal-inactiveSelectionBackground: #f0e9e0;
+
+  /* terminalColorRegistry.ts's `light:` branch — the palette is not theme-independent. */
+  --vscode-terminal-ansiBlack: #000000;
+  --vscode-terminal-ansiRed: #cd3131;
+  --vscode-terminal-ansiGreen: #107c10;
+  --vscode-terminal-ansiYellow: #949800;
+  /* Not the registry's values: opencode's own accent, drawn as ANSI blue, ends up painted from
+     this variable (buildXtermTheme swaps blue and magenta for it — see AgentDefinition's
+     swapsBlueMagenta), so this is the terminal-side half of the same orange the app chrome
+     took. Kept two shades apart from ansiMagenta, the way blue and magenta always were, rather
+     than collapsing both to one color. */
+  --vscode-terminal-ansiBlue: var(--vscode-focusBorder);
+  --vscode-terminal-ansiMagenta: var(--vscode-button-hoverBackground);
+  --vscode-terminal-ansiCyan: #0598bc;
+  --vscode-terminal-ansiWhite: #555555;
+  --vscode-terminal-ansiBrightBlack: #666666;
+  --vscode-terminal-ansiBrightRed: #cd3131;
+  --vscode-terminal-ansiBrightGreen: #14ce14;
+  --vscode-terminal-ansiBrightYellow: #b5ba00;
+  --vscode-terminal-ansiBrightBlue: var(--vscode-focusBorder);
+  --vscode-terminal-ansiBrightMagenta: var(--vscode-button-hoverBackground);
+  --vscode-terminal-ansiBrightCyan: #0598bc;
+  --vscode-terminal-ansiBrightWhite: #a5a5a5;
+}

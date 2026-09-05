@@ -9,6 +9,7 @@ import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/o
 import { ProjectStore } from "../src/main/projects";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
+import { THEMES } from "../src/shared/themes";
 import { DEFAULT_KEYBINDING_PRESET_ID } from "../src/shared/types";
 import { eventually } from "./helpers";
 
@@ -134,5 +135,45 @@ describe("the marker watch", () => {
     assert.ok(seen[0][1] >= before, "dated by its mtime");
     assert.ok(!fs.existsSync(path.join(dir, "abc-123")), "taken away once reported");
     stop();
+  });
+});
+
+describe("the color themes", () => {
+  const dir = path.join(__dirname, "..", "src", "renderer", "themes");
+  const sheets = new Map(THEMES.map((theme) => [theme.id, fs.readFileSync(path.join(dir, `${theme.id}.css`), "utf8")]));
+  const declared = (css: string): string[] => [...css.matchAll(/^\s+(color-scheme|--vscode-[\w-]+):/gm)].map((m) => m[1]);
+  const valueOf = (css: string, name: string): string | undefined => css.match(new RegExp(`${name}:([^;]+);`))?.[1].trim();
+
+  it("has one stylesheet per entry in THEMES, and none besides", () => {
+    const files = fs.readdirSync(dir).filter((name) => name.endsWith(".css")).sort();
+    assert.deepEqual(files, THEMES.map((theme) => `${theme.id}.css`).sort());
+    for (const [id, css] of sheets) {
+      assert.ok(css.includes(`:root[data-theme="${id}"]`), `${id}.css declares its own block`);
+    }
+  });
+
+  // Nothing falls through from another theme: a variable added to one stylesheet and forgotten
+  // in another would otherwise show that other theme a value nobody chose for it.
+  it("declares the complete variable list in every stylesheet, each variable once", () => {
+    const [reference, ...others] = [...sheets];
+    const expected = declared(reference[1]).sort();
+    assert.equal(new Set(expected).size, expected.length, `${reference[0]}.css declares nothing twice`);
+    for (const [id, css] of others) {
+      const names = declared(css);
+      assert.equal(new Set(names).size, names.length, `${id}.css declares nothing twice`);
+      assert.deepEqual(names.sort(), expected, `${id}.css against ${reference[0]}.css`);
+    }
+  });
+
+  // The definition's copies of four stylesheet values, for the two processes that need them
+  // before or outside the renderer's CSS — kept by hand, so checked here.
+  it("keeps each definition's window and terminal colors in step with its stylesheet", () => {
+    for (const theme of THEMES) {
+      const css = sheets.get(theme.id)!;
+      assert.equal(valueOf(css, "--vscode-titleBar-activeBackground"), theme.windowBackground, theme.id);
+      assert.equal(valueOf(css, "--vscode-titleBar-activeForeground"), theme.titleBarSymbolColor, theme.id);
+      assert.equal(valueOf(css, "--vscode-terminal-background"), theme.terminalBackground, theme.id);
+      assert.equal(valueOf(css, "--vscode-terminal-foreground"), theme.terminalForeground, theme.id);
+    }
   });
 });

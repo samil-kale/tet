@@ -1,5 +1,7 @@
 import { createRoot } from "react-dom/client";
-import "./vscode-theme.css";
+import "./themes/dark-modern.css";
+import "./themes/dark-slate.css";
+import "./themes/light-modern.css";
 import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import { Startup } from "./Startup";
@@ -24,7 +26,7 @@ if (!container) {
   throw new Error("Root container not found");
 }
 
-// Which of vscode-theme.css's value sets applies, set before anything is rendered: every
+// Which of themes/'s value sets applies, set before anything is rendered: every
 // reader of those variables (xterm, shiki, monaco) reads them once and keeps the result.
 document.documentElement.dataset.theme = window.tet.initialTheme;
 
