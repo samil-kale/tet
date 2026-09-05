@@ -224,6 +224,12 @@ export class ProjectSessionManager {
   private readonly deletingSessionIds = new Set<string>();
   /** Tabs already removed from the UI that still need their persisted session claimed for deletion. */
   private readonly detachedTabs: TabState[] = [];
+  /**
+   * How many `closeTabs` calls are still tearing down — the renderer fires them without
+   * waiting, so two can overlap, and a runtime must not be released while the other one's
+   * tab is still claiming its session (see releaseIdleRuntime).
+   */
+  private closing = 0;
   private newTabCounter = 0;
   /** The project was closed; nothing that was still in flight may start anything back up. */
   private disposed = false;
@@ -509,9 +515,14 @@ export class ProjectSessionManager {
    * it — but only if its own preparation says that is allowed (see releaseWhenIdle). The
    * watcher goes too: for opencode it is a subscription on the very server being stopped and
    * would bring it straight back up. ensurePrepared restores both.
+   *
+   * Never while a close is still underway, whoever asks: a closed tab is spliced out of `tabs`
+   * up front, but claiming its session for deletion is a reconcile that a released runtime
+   * skips — so a release landing between the two would leave that session behind, back as a
+   * tab on the next start. The last close to finish releases instead.
    */
   private releaseIdleRuntime(runtime: AgentRuntime): void {
-    if (!runtime.preparation?.releaseWhenIdle || this.tabsOf(runtime).length > 0) {
+    if (!runtime.preparation?.releaseWhenIdle || this.tabsOf(runtime).length > 0 || this.closing > 0) {
       return;
     }
     runtime.stopWatching?.();
@@ -785,11 +796,17 @@ export class ProjectSessionManager {
     for (const tab of tabs) {
       void this.sessions.get(tab.tabId)?.stop();
     }
-    for (const tab of tabs) {
-      await this.destroyTab(tab, indices.get(tab.tabId) ?? this.tabs.length);
+    this.closing++;
+    try {
+      for (const tab of tabs) {
+        await this.destroyTab(tab, indices.get(tab.tabId) ?? this.tabs.length);
+      }
+    } finally {
+      this.closing--;
     }
     // Closing a tab deleted its session too, so this may have been the last thing keeping the
-    // agent's setup up — the same state the project was in when it had nothing to show.
+    // agent's setup up — the same state the project was in when it had nothing to show. An
+    // overlapping close still tearing down leaves this to itself (releaseIdleRuntime).
     for (const runtime of this.runtimes.values()) {
       this.releaseIdleRuntime(runtime);
     }
@@ -1052,9 +1069,14 @@ export class ProjectSessionManager {
       ...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined),
       ...this.deletingSessionIds
     ]);
-    const unclaimed = infos.filter((info) => !claimed.has(info.id));
+    // Oldest first, so the `find` below is the *nearest* session created after a tab's spawn
+    // — sorted here rather than trusted to the provider, since the matching rule lives here.
+    const unclaimed = infos.filter((info) => !claimed.has(info.id)).sort((a, b) => a.createdAt - b.createdAt);
     let changed = false;
 
+    // Newest tab first, each taking the nearest session created after it was spawned: two
+    // tabs spawned close together sort out this way as long as their CLIs persist in spawn
+    // order. Nothing more is knowable — a listing carries no cwd or pid to tell them apart.
     const pendingTabs = [...ownTabs, ...this.detachedTabs.filter((tab) => tab.agentId === agent.id)]
       .filter((tab) => !tab.sessionId && tab.spawnedAt !== undefined)
       .sort((a, b) => (b.spawnedAt ?? 0) - (a.spawnedAt ?? 0));

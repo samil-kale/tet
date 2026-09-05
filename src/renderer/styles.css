@@ -889,7 +889,7 @@ input:focus {
   color: var(--vscode-menu-foreground);
   border: 1px solid var(--vscode-menu-border);
   border-radius: 5px;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
 }
 
 .context-menu-item {
@@ -1131,7 +1131,9 @@ input:focus {
    left the title bar half-dimmed, a visible seam. The dialog's own clearance from the title bar
    is `padding-top` instead, and it has to be at least the title bar's 35px: anything less lets
    its bar reach under the platform's window controls, which the overlay can't draw above no
-   matter its z-index — they're the browser chrome, not page content. */
+   matter its z-index — they're the browser chrome, not page content.
+   The dim is a fixed black, not a theme variable, as `.dialog-overlay`'s is: VS Code names no
+   color for it either (its modal block hardcodes one), and a scrim is the same on any theme. */
 .diff-dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1156,7 +1158,7 @@ input:focus {
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: 5px;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
   overflow: hidden;
   outline: none;
 }
@@ -1571,7 +1573,8 @@ input:focus {
 /* Dialog --------------------------------------------------------------------------------- */
 
 /* Covers the window while a question stands, so nothing behind it can be clicked or dragged
-   into a second one. */
+   into a second one. The dim is a fixed black rather than a theme variable — see
+   `.diff-dialog-overlay`. */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1593,7 +1596,7 @@ input:focus {
   background: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: 5px;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
 }
 
 /* The add-repository dialog's width rather than a third one of its own: a question whose
@@ -2086,7 +2089,7 @@ input:focus {
   background: var(--vscode-notifications-background);
   border: 1px solid var(--vscode-notifications-border);
   border-radius: 4px;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 40%);
+  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
 }
 
 /* Only the icon carries the severity's color — a whole message in red is harder to read than

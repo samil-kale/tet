@@ -461,6 +461,20 @@ const AUTH_FAILURES = [/could not read (?:Username|Password)/i, /Authentication 
 const sshCommands = new Map<string, Promise<string>>();
 
 /**
+ * Drops what the two caches above remember about one working directory. Called when its
+ * project closes: this process lives as long as the app, so without it every repository ever
+ * opened would stay in here.
+ */
+export function forget(cwd: string): void {
+  sshCommands.delete(cwd);
+  for (const key of trackCounts.keys()) {
+    if (key.startsWith(`${cwd}\0`)) {
+      trackCounts.delete(key);
+    }
+  }
+}
+
+/**
  * `NETWORK_ENV` plus an ssh that never asks — `-oBatchMode=yes` keeps a host key ssh has never
  * seen from turning into a question nobody can answer. Only where the user has not chosen an
  * ssh of their own: `GIT_SSH_COMMAND` outranks both `GIT_SSH` and `core.sshCommand`, so setting

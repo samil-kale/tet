@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-import { buildMarkCommand } from "../../terminals/marker-watch";
+import { buildBusyCommand, buildMarkCommand, buildWaitingCommand } from "../../terminals/marker-watch";
 import { buildNotifyCommand, buildReadFileCommand } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
@@ -130,15 +130,6 @@ function buildHooksArg(entries: HookEntry[]): string {
 }
 
 /**
- * Builds the command line for the UserPromptSubmit hook: marks the session busy, the other end
- * of the turn from Stop below. No guard of its own — a prompt was submitted, so the agent is
- * busy, full stop.
- */
-function buildBusyCommand(storageDir: string): string {
-  return buildMarkCommand(storageDir, "busy", "busy", undefined);
-}
-
-/**
  * Builds the Stop hook's command line: marks the session finished, then notifies where
  * notifications are on. Unlike Claude Code, Codex has no `background_tasks` payload to guard
  * against — a turn that merely spawns a subagent and returns is reported through the separate
@@ -147,17 +138,6 @@ function buildBusyCommand(storageDir: string): string {
  */
 function buildStopCommand(storageDir: string, notifyCommand: string | undefined): string {
   return buildMarkCommand(storageDir, "stop", "finished", notifyCommand);
-}
-
-/**
- * Builds a hook command that marks the session waiting on the user, then notifies where
- * notifications are on. Built for both PermissionRequest (an approval is about to be asked) and
- * PreToolUse matched to `request_user_input` (a question tool is about to run) — same shape as
- * Claude Code's Notification/PreToolUse split, since the two situations want different toast
- * wording. `id` names the script file, since the two callers must not share one.
- */
-function buildWaitingCommand(storageDir: string, id: string, notifyCommand: string | undefined): string {
-  return buildMarkCommand(storageDir, id, "waiting", notifyCommand);
 }
 
 /**
@@ -188,6 +168,9 @@ export function setupCodexHooks(
     : undefined;
   const stopCommand = buildStopCommand(storageDir, finishedNotify);
 
+  // Waiting is registered for both PermissionRequest (an approval is about to be asked) and
+  // PreToolUse matched to `request_user_input` (a question tool is about to run) — the same
+  // shape as Claude Code's Notification/PreToolUse split.
   const permissionNotify = notifications.needsYou
     ? buildNotifyCommand(storageDir, "needs-you", `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`)
     : undefined;

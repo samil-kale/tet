@@ -217,7 +217,9 @@ export interface AgentDefinition {
    * known; the renderer then keeps the fragment as it is.
    *
    * Called only when the user holds the modifier over such a url, at most once per fragment,
-   * so an implementation may go over HTTP — but must not throw.
+   * so an implementation may go over HTTP, and may reject: the one caller
+   * (`ProjectSessionManager.resolveUrlPrefix`) reads a rejection as "nothing known", so no
+   * implementation has to catch for itself.
    */
   resolveUrlPrefix?: (executable: string, cwd: string, sessionId: string, prefix: string) => Promise<string | undefined>;
   /**

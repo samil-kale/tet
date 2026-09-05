@@ -867,6 +867,9 @@ export class Repository {
     clearInterval(this.autoFetchTimer);
     this.watcher?.close();
     this.watcher = undefined;
+    // The git process remembers per-directory answers; on quit it is stopped right after this,
+    // which rejects the call — nothing to do about that.
+    void git.forget(this.project.path).catch(() => undefined);
   }
 }
 

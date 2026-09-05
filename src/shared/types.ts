@@ -51,7 +51,10 @@ export interface NotificationSettings {
   finished: boolean;
   /** The agent is blocked mid-turn on a permission prompt, an elicitation, or a question. */
   needsYou: boolean;
-  /** The agent has been idle waiting for the next prompt — usually redundant with `finished`. */
+  /**
+   * The agent has been idle waiting for the next prompt — usually redundant with `finished`.
+   * Only Claude Code raises an event for it; the other agents ignore the switch.
+   */
   idleReminder: boolean;
 }
 

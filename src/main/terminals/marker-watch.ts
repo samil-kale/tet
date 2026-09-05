@@ -90,6 +90,31 @@ exit 0
 }
 
 /**
+ * The prompt-submitted hook's command: marks the session busy, the other end of the turn from
+ * the agent's Stop hook. No guard of its own — a prompt was submitted, so the agent is busy,
+ * full stop. Shared by every marker agent: what differs between them is the Stop end (Claude
+ * Code's `background_tasks` guard), never this one.
+ */
+export function buildBusyCommand(storageDir: string): string {
+  return buildMarkCommand(storageDir, "busy", "busy", undefined);
+}
+
+/**
+ * An approval/question hook's command: marks the session waiting on the user, then notifies
+ * where notifications are on. The marker is what puts the mark on the tab, and that mark is not
+ * a notification the user can turn off — it is how a session blocked out of sight is found
+ * again; only the toast is optional. It carries no turn state: the turn is still open, and
+ * `waiting` says where it stopped, not that it ended.
+ *
+ * Every agent registers it twice — once for a permission prompt, once for a question tool — so
+ * `id` names the script file: the two callers want different toast wording, and a shared file
+ * would have the second overwrite the first.
+ */
+export function buildWaitingCommand(storageDir: string, id: string, notifyCommand: string | undefined): string {
+  return buildMarkCommand(storageDir, id, "waiting", notifyCommand);
+}
+
+/**
  * The tet half of a hook-driven agent's markers: reports every session marked with `kind`
  * and takes the marker away again. From then on the state lives in the tab, so a file left lying
  * around would report the same turn again on the next start.

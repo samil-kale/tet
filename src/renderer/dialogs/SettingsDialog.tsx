@@ -39,7 +39,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
 const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
   { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
-  { key: "idleReminder", label: "Still waiting — no new prompt for a while" }
+  { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only)" }
 ];
 
 /**

@@ -1,22 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { buildMarkCommand, markerDir, markPosix, markPowershell } from "../../terminals/marker-watch";
+import { buildBusyCommand, buildWaitingCommand, markerDir, markPosix, markPowershell } from "../../terminals/marker-watch";
 import { buildNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
-
-/**
- * Builds the UserPromptSubmit hook that records the session as working: the other end of the
- * turn from the Stop hook below, and what puts the spinner on its tab. It has no guard of its
- * own — a prompt was submitted, so the agent is busy, full stop.
- *
- * It shares UserPromptSubmit with the command that prints the context file, whose stdout is
- * appended to the prompt, so this one has to stay **silent**; and it must exit 0 whatever
- * happens, since a non-zero UserPromptSubmit hook can hold the prompt back — both of which
- * `buildMarkCommand` guarantees.
- */
-function buildBusyCommand(storageDir: string): string {
-  return buildMarkCommand(storageDir, "busy", "busy", undefined);
-}
 
 /**
  * Builds the Stop hook: it records that the session finished a turn — a file named after its
@@ -82,25 +68,6 @@ ${notifyCommand ?? ""}
 }
 
 /**
- * Builds a hook command that records the session as waiting on the user, and then notifies
- * where notifications are on. Built exactly like the Stop command and for the same reason: the
- * marker is what puts the mark on the tab, and that mark is not a notification the user can
- * turn off — it is how a session blocked out of sight is found again. Only the toast is
- * optional.
- *
- * No guard of its own, unlike Stop's `background_tasks` check: Claude Code raises these events
- * only when it has actually stopped for an answer, so there is no "it merely looks stopped"
- * case to rule out. It carries no turn state either — the turn is still open, and `waiting`
- * says where it stopped, not that it ended.
- *
- * `id` names the script file, because the two callers want different toast wording and a
- * shared file would have the second overwrite the first.
- */
-function buildWaitingCommand(storageDir: string, id: string, notifyCommand: string | undefined): string {
-  return buildMarkCommand(storageDir, id, "waiting", notifyCommand);
-}
-
-/**
  * Generates the settings file that registers Claude Code's hooks, and returns the arguments
  * that point the CLI at it. Everything is scoped to that per-repository file and passed with
  * `--settings`, which Claude Code layers on top of its own configuration — the user's
@@ -118,7 +85,8 @@ export function setupClaudeHooks(
     // Two commands on the one event: the context file's contents become part of the prompt,
     // and the marker says the session has started working. Order matters only in that the
     // second must print nothing — everything a UserPromptSubmit hook writes is appended to
-    // the prompt itself.
+    // the prompt itself — and it must exit 0 whatever happens, since a non-zero
+    // UserPromptSubmit hook can hold the prompt back; `buildMarkCommand` guarantees both.
     UserPromptSubmit: [
       {
         hooks: [
@@ -142,7 +110,9 @@ export function setupClaudeHooks(
   // marks the tab whatever the settings say, and only the toast inside it is optional. The
   // matcher is the pair of Notification events that mean Claude Code is actually blocked —
   // `idle_prompt` is deliberately not among them, since that one fires *after* a turn ended and
-  // is already what the bubble stands for.
+  // is already what the bubble stands for. No guard of its own, unlike Stop's
+  // `background_tasks` check: Claude Code raises these events only when it has actually stopped
+  // for an answer, so there is no "it merely looks stopped" case to rule out.
   const notificationHooks: { matcher: string; hooks: { type: string; command: string }[] }[] = [
     {
       matcher: "permission_prompt|elicitation_dialog",
@@ -165,6 +135,8 @@ export function setupClaudeHooks(
       ]
     }
   ];
+  // Claude Code only: it is the one agent whose events name the idle case, and nothing
+  // equivalent is wired for Codex or opencode — the switch's label in Settings says so.
   if (notifications.idleReminder) {
     notificationHooks.push({
       matcher: "idle_prompt",
