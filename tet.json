@@ -10,7 +10,7 @@
   "commands": [
     {
       "command": "npm run compile",
-      "name": "rpm compile"
+      "name": "npm compile"
     },
     "npm start",
     "npm run watch",
