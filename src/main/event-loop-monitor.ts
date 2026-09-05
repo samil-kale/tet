@@ -16,6 +16,12 @@ const REPORT_MS = 60_000;
  * it, worth a line naming the block itself rather than leaving it to the "ran last" guess.
  */
 const SLOW_MS = 100;
+/**
+ * The log is appended across sessions, so a stall can still be looked up days after the run
+ * that produced it; once past this size it is rotated to `<file>.1`, replacing the previous
+ * generation, so at most two files of this size ever exist.
+ */
+const MAX_LOG_BYTES = 1_000_000;
 
 /**
  * The main process's continuous work, in the places it happens. Nothing here is a guess about
@@ -65,7 +71,16 @@ export function logSlow(activity: Activity, ms: number): void {
  */
 export function startEventLoopMonitor(logFile: string): void {
   try {
-    fs.writeFileSync(logFile, `# tet event loop, from ${new Date().toISOString()}\n`);
+    let size = 0;
+    try {
+      size = fs.statSync(logFile).size;
+    } catch {
+      // No log yet.
+    }
+    if (size >= MAX_LOG_BYTES) {
+      fs.renameSync(logFile, `${logFile}.1`);
+    }
+    fs.appendFileSync(logFile, `# tet event loop, from ${new Date().toISOString()}\n`);
   } catch (error) {
     console.error("[tet] could not open the event loop log:", error);
     return;
