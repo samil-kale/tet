@@ -491,17 +491,15 @@ from one of its own shell tabs inherits the outer one's values. Only ptys get th
 server and git do not. The agent learns the command from the context file (`shell-context.ts`),
 which is never empty for that reason.
 
-Deliberately not there: the split layout (renderer state only), git (the agent has `git`), provider
-accounts, and `quit`. `restart-app` is the one verb that ends sessions — every one in every
-project, the caller's included — and takes `--confirm`, which an agent passes only when the user
-asked. A theme change answers `restartRequired`; that is a fact for the agent to relay, never a
-reason to restart on its own. A verb that ends its caller (its tab, its project, the app) replies
-before it acts, or the CLI dies with nothing on stdout.
+`restart-app` is the one verb that ends sessions — every one in every project, the caller's
+included — and takes `--confirm`, which an agent passes only when the user asked. A theme change
+answers `restartRequired`; that is a fact for the agent to relay, never a reason to restart on its
+own. A verb that ends its caller (its tab, its project, the app) replies before it acts, or the CLI
+dies with nothing on stdout.
 
 **Direction of travel**: every setting in `settings-get` should eventually be settable through
-`tet-ctl`, not just the theme, and the control channel should grow toward letting an agent drive
-the whole app, not just a project's git state and terminals — this loosens the "deliberately not
-there" list above over time rather than fixing it permanently.
+`tet-ctl`, and the control channel should grow toward letting an agent drive the whole app, not
+just a project's git state and terminals.
 
 ## Never touch the user's agent configuration
 
