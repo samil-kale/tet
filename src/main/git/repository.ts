@@ -40,7 +40,7 @@ const COMMANDS_FILE = "tet.json";
  * Least time between two finished refreshes. A working tree under continuous change would
  * otherwise keep one running back to back, and every git process a refresh starts is
  * main-process time that a keystroke on its way to a terminal waits for. Measured on a
- * machine with instrumented process creation: ~350ms per git start, two per refresh.
+ * machine with instrumented process creation: the git start itself is the cost, two per refresh.
  */
 const REFRESH_MIN_INTERVAL_MS = 2000;
 /**
@@ -142,8 +142,8 @@ export class Repository {
   }
 
   async start(): Promise<void> {
-    // All three at once: each is a git start (~350ms measured), and back to back that was a
-    // second before the pane showed anything. readState on a folder that is no repository
+    // All three at once: each is a git start (measured as the cost), and back to back that was a
+    // visible wait before the pane showed anything. readState on a folder that is no repository
     // answers with an error, which is thrown away with everything else read there.
     const [isGit, urls, read] = await Promise.all([
       git.isRepository(this.project.path).catch(() => false),

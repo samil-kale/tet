@@ -243,7 +243,7 @@ export interface AgentDefinition {
    * Per agent because they genuinely differ, measured through this same pty rather than
    * assumed: Claude Code wants two, and drops its "press again to exit" offer after about a
    * second, so the second byte has to arrive well inside that. Codex and opencode start
-   * shutting down on the first one (~400ms and ~150ms to exit) — and a byte sent to a Codex
+   * shutting down on the first one — and a byte sent to a Codex
    * already on its way out lands after it has given up raw mode, where ConPTY turns it into a
    * process-level CTRL_C_EVENT and kills the very shutdown we were waiting for. That left no
    * single interval that is right for all three: this is what one number to rule them all

@@ -295,8 +295,8 @@ function toChangeStatus(code: string): ChangeStatus {
 async function readStatus(cwd: string): Promise<HeadState & { changes: FileChange[] }> {
   // --no-optional-locks: without it `git status` takes the index lock to write its refreshed
   // stat cache back, the watcher reports that write as a change, and the refresh it schedules
-  // runs this again — forever. Measured: 50 filesystem events per run without the flag, 0 with
-  // it, same runtime. It costs a stale index being re-stated by every status instead of read
+  // runs this again — forever. Measured: a burst of filesystem events per run without the flag,
+  // none with it, same runtime. It costs a stale index being re-stated by every status instead of read
   // from the cache once.
   // core.quotePath=false keeps non-ASCII paths readable instead of octal-escaped.
   const result = await git(cwd, [
@@ -702,9 +702,10 @@ function capped(text: string, budget: number): string {
  * subjects to take the repository's style from, and what `git add --all` would commit. Three
  * invocations plus a read per untracked file — more than the refresh path may spend, but this
  * runs when the wand is pressed, and it is what the question costs either way. Measured against
- * this repository with `claude -p`: asked to run git itself the agent took 24s, since every
- * status, diff and log it ran was another round trip; handed all of it, 8s, of which 5s is the
- * CLI starting. Empty strings where there is no HEAD yet — then everything is untracked anyway.
+ * this repository with `claude -p`: asked to run git itself the agent took several times as
+ * long, since every status, diff and log it ran was another round trip; handed all of it, most
+ * of what remains is the CLI starting. Empty strings where there is no HEAD yet — then
+ * everything is untracked anyway.
  */
 export async function readCommitContext(cwd: string): Promise<string> {
   const [subjects, diff, untracked] = await Promise.all([

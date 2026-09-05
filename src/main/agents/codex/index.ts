@@ -12,11 +12,11 @@ import { codexSessionProvider } from "./sessions";
  * and that is what it does elsewhere) but the *console*: `GetConsoleScreenBufferInfoEx` on
  * the ConPTY between us, whose own palette is conhost's Campbell default whatever xterm
  * draws — black behind light gray. Codex blends its composer and user-message boxes from
- * that, so on a light theme they came out near-black (`#292929`, measured) on white.
+ * that, so on a light theme they came out near-black on white (measured).
  *
  * What ConPTY *does* reflect in that table is OSC 4 — set entry 0 (the default background's
  * index) and 7 (the foreground's) and Codex reads the theme's colors back (measured: the
- * box goes from `rgb(41,41,41)` to `rgb(244,244,244)`). OSC 10/11 change nothing there. The
+ * box turns light with the theme). OSC 10/11 change nothing there. The
  * sequence has to be written by a process inside the pty, hence a generated launcher: a
  * `.cmd` that prints it (`<nul set /p` — `echo` would add a line) and hands over to Codex
  * with `%*`, the same `cmd.exe /d /s /c` path an npm `codex.cmd` shim took. ConPTY forwards

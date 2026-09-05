@@ -5,12 +5,12 @@ import { resolveCommand } from "../../terminals/pty";
 /**
  * `codex app-server` is a JSON-RPC-over-stdio process (JSONL, JSON-RPC 2.0 without the
  * `jsonrpc` field), not a persistently running server — tet starts one, sends exactly one
- * request, and tears it down. Timed against a real install: ~300-500 ms end to end, almost all
- * of it the process's own startup (config/discovery), the request itself answering in single-
- * digit milliseconds — acceptable for the rare, user-triggered actions this is for (rename,
- * delete). Stays one-shot rather than a server tet keeps running: the same `$CODEX_HOME` SQLite state
- * every repository's Codex shares does not tolerate concurrent first-time startup (measured: 2
- * of 6 parallel cold starts against a fresh `CODEX_HOME` failed outright).
+ * request, and tears it down. Timed against a real install: nearly all of the round trip is the
+ * process's own startup (config/discovery), the request itself answering at once — acceptable
+ * for the rare, user-triggered actions this is for (rename, delete). Stays one-shot rather than
+ * a server tet keeps running: the same `$CODEX_HOME` SQLite state every repository's Codex
+ * shares does not tolerate concurrent first-time startup (measured: parallel cold starts against
+ * a fresh `CODEX_HOME` failed outright).
  */
 const REQUEST_TIMEOUT_MS = 15_000;
 

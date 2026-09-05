@@ -191,8 +191,8 @@ export function setupClaudeHooks(
   // one for this process alone (measured: `light` changes every RGB the welcome screen is
   // drawn with), so the user's own file stays as it is. One of Claude's built-in themes, not
   // a custom one in tet's colors: those it reads after its first render — from a plugin and
-  // from its own themes directory alike — and draws a dark frame in the meantime (measured at
-  // ~230 ms), which was tried and taken back out. Undefined — the Appearance tab's switch off
+  // from its own themes directory alike — and draws a dark frame in the meantime, long enough
+  // to see (measured), which was tried and taken back out. Undefined — the Appearance tab's switch off
   // — leaves the key out, and with it the user's own choice in charge.
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.writeFileSync(settingsFile, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));

@@ -27,7 +27,7 @@ function sessionIndexFile(): string {
 const TAIL_SCAN_BYTE_LIMIT = 256 * 1024;
 /**
  * A rollout's `session_meta` line is always first, but not small: since 0.14x it carries the whole
- * base instructions (~22 KB measured), and an 8 KB budget cut every one of them short — no Codex
+ * base instructions (measured), and the small budget then in place cut every one of them short — no Codex
  * session was ever listed. Only the first line is read either way; this bounds a pathological one.
  */
 const META_SCAN_BYTE_LIMIT = TAIL_SCAN_BYTE_LIMIT;

@@ -176,7 +176,7 @@ export function watchMarkers(
     console.error(`[tet] could not watch ${kind} markers in ${dir}:`, error);
   }
   // The watcher alone is not enough, and this was measured rather than feared: a marker sat in
-  // `finished/` for seven minutes while the process that should have picked it up was running
+  // `finished/` for minutes while the process that should have picked it up was running
   // and healthy — the next write drained it along with the fresh one. On win32 fs.watch can
   // fire before the new name is in the directory listing, and nothing fires a second time, so
   // one lost event strands a turn *forever*: the spinner never stops and the mark never lands.

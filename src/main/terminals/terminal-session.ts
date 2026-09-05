@@ -23,12 +23,13 @@ export interface SessionCallbacks {
  * CTRL_C_EVENT that kills without running anything. Hence exactly the count the agent asked for
  * and no more, and a straight kill for one that asked for none.
  */
-/** Between two Ctrl+C bytes. Only long enough that the first is read as its own keypress — 80ms
- *  still was, measured — since the offer the second answers is withdrawn after about a second. */
+/** Between two Ctrl+C bytes. Only long enough that the first is read as its own keypress — a
+ *  much shorter gap still was, measured — since the offer the second answers is withdrawn after
+ *  about a second. */
 const CTRL_C_GAP_MS = 250;
-/** After the last one. Measured through this same pty: opencode is gone in ~150ms, Codex in
- *  ~400ms, Claude Code in ~650ms. A session that read Ctrl+C as "interrupt the turn" instead
- *  never leaves at all, and waiting past this only delays the kill it actually needs. */
+/** After the last one. Measured through this same pty: all three agents are gone well inside
+ *  this. A session that read Ctrl+C as "interrupt the turn" instead never leaves at all, and
+ *  waiting past this only delays the kill it actually needs. */
 const GRACEFUL_EXIT_MS = 2000;
 /** After the kill, so stopping cannot hang on a pty that never reports its exit. */
 const FORCE_KILL_MS = 1000;

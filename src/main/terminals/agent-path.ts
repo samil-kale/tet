@@ -101,8 +101,8 @@ export function win32AgentDirs(env: NodeJS.ProcessEnv, npmPrefix: string | undef
 /**
  * A global prefix the user moved with `npm config set prefix`, read from where npm itself reads
  * it — the environment (`NPM_CONFIG_PREFIX`, `npm_config_prefix`) before the user's `~/.npmrc` —
- * rather than by asking npm: `npm config get prefix` through cmd.exe measured ~480 ms on a warm
- * machine, paid on every start before the window, for an answer that is the `%APPDATA%\npm`
+ * rather than by asking npm: `npm config get prefix` through cmd.exe measured as a noticeable
+ * part of every start, paid before the window, for an answer that is the `%APPDATA%\npm`
  * default nearly always (and that default is in win32AgentDirs regardless). `${VAR}` in the
  * value is expanded the way npm does it, from `env`; a variable not set stays literal, as in
  * npm. Undefined when nothing names one. Only ever called on win32.

@@ -24,7 +24,7 @@ const EVENT_RETRY_MS = 2000;
  * event stream, and the terminal's own TUI.
  *
  * Talking to opencode any other way means a second, unrelated instance sharing only the
- * database file. Measured: every `session list` boots one (~1.2s, versus ~12ms over HTTP), a
+ * database file. Measured: every `session list` boots one (a process start, where HTTP is a request), a
  * read writes to the database, and events never cross the process boundary — a change made in
  * the terminal's TUI stays invisible to us.
  */
@@ -60,7 +60,7 @@ export class OpencodeServer {
 
   /**
    * One server comes up at a time, however many projects ask at once. Every `opencode serve` on
-   * this machine opens the same SQLite database, and four of them booting inside the same 40ms
+   * this machine opens the same SQLite database, and several booting at the same moment
    * is what the loser reports as "database is locked" before it exits with code 1 — observed
    * with four repositories restored at startup. Waiting for the one before to report its url is
    * enough: by then it is past the setup that holds the write lock.

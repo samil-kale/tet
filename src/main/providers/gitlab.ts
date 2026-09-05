@@ -32,8 +32,8 @@ export const gitlab: GitProvider = {
     //
     // simple=true is what makes the listing bearable: the full record carries permissions,
     // statistics, the owner and a block of _links, and none of the four fields below are in
-    // there. Measured against an instance answering 285 projects, per page of 100: 522kB and
-    // 4.3s without it, 99kB and 1.2s with it.
+    // there. Measured against a real instance, per page: several times the bytes and the wait
+    // without it.
     const url = `${apiBase(host)}/projects?membership=true&per_page=100&order_by=last_activity_at&simple=true`;
     const entries = (await getPaged(url, headers(token))) as GitLabProject[];
     return entries.map(

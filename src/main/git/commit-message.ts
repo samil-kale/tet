@@ -2,7 +2,7 @@ import { askAgent } from "../agents/ask";
 
 /**
  * The question, with everything it needs already in it. Telling the agent to go and look was
- * the first version and cost three times as long — see `readCommitContext` for the numbers.
+ * the first version and cost several times as long — see `readCommitContext`.
  * Nothing here asks it to run a command, so it answers in one round trip.
  */
 const COMMIT_MESSAGE_PROMPT = [

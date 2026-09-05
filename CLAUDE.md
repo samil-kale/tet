@@ -3,17 +3,17 @@
 ## What this is
 
 TET is a git workspace for coding agents: Electron + React + xterm.js, several repositories
-open at once, each with its own git pane and its own set of agent and shell terminals.
+open at once, each with its own git pane and its own agent and shell terminals.
 
 Git is there for navigation and control of the repository state. **The actual work happens in the
 terminals**, so anything git can't do in two clicks belongs in an agent or a shell, not in a new
 dialog.
 
 **Before adding anything here, apply one test: does an agent need this *before* knowing which
-file to open?** Rules of conduct, cross-file invariants, what was built and deliberately taken
-out, and what was measured about the CLIs pass. A reason that fits one file does not — it goes
-into the comment at that site, and at most a one-line pointer goes here. This file is meant to
-stay around its current size; adding means cutting or moving something else.
+file to open?** Rules of conduct, cross-file invariants, and what was measured about the CLIs
+pass. A reason that fits one file does not — it goes
+into the comment at that site, with at most a one-line pointer here. This file is meant to stay
+around its current size; adding means cutting or moving something else.
 
 ## Do not restart the app yourself
 
@@ -21,24 +21,22 @@ Agents run *inside* TET, as terminal tabs. Killing the Electron process kills th
 are running in, mid-turn. Build and typecheck freely, but ask the user to restart and report back.
 The same goes for anything that tears down a project's terminals.
 
-## Where it came from
+## Measured, not obvious
 
-**`sbc-vsc-agents`** (private, no longer checked out here) is the direct ancestor: two VS Code
-extensions docking `claude` and `opencode` into the sidebar as real terminals. Most of TET's
-terminal half ports its `shared/`; the rationale now lives only in the code comments at these
-sites, so treat them as measured, not obvious: session listing/resume/rename/delete and the
-reconcile loop (`src/main/agents/*/sessions.ts`, `src/main/terminals/session-manager.ts`); how each agent is
-driven (Claude Code reads `<uuid>.jsonl` transcripts off disk; opencode is client/server and
-**everything** goes through the one server TET runs, `src/main/agents/opencode/server.ts` — never its
-CLI or its SQLite file); `extractTitle`'s precedence rules for Claude Code titles (a regression
+The rationale for these lives only in the code comments at their sites, so treat them as
+measured, not obvious: session listing/resume/rename/delete and the reconcile loop
+(`src/main/agents/*/sessions.ts`, `src/main/terminals/session-manager.ts`); how each agent is driven
+(Claude Code reads `<uuid>.jsonl` transcripts off disk; opencode is client/server and
+**everything** goes through the one server TET runs, `src/main/agents/opencode/server.ts` — never
+its CLI or its SQLite file); `extractTitle`'s precedence rules for Claude Code titles (a regression
 there silently shows the wrong tab title); the modifier-gated link providers
 (`src/renderer/terminal/links/`); OS notifications and the `background_tasks` stop guard
 (`src/main/terminals/os-notify.ts`, `src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
-Not ported: the VS Code editor context (feeding an agent what's open or under the cursor) and the
-diagnostic quick fix — TET's own editor is a plain look-and-fix surface. What survives is the shell
-transcript (`src/main/terminals/shell-context.ts`), a capped file the agent is pointed at. Every shell tab of
-a project writes into that one file in arrival order, so tabs interleave — but per whole line, and
+An agent gets no editor context (what's open or under the cursor) and no quick fix — TET's own
+editor is a plain look-and-fix surface. What it gets is the shell transcript
+(`src/main/terminals/shell-context.ts`), a capped file the agent is pointed at. Every shell tab of a
+project writes into that one file in arrival order, so tabs interleave — but per whole line, and
 a `=== shell tab: <title> ===` header marks each change of writer.
 
 **GitHub Desktop** is the reference for the git half — crib the shapes, not the scope. **VS Code**
@@ -54,65 +52,57 @@ editor only; the diff itself is `DiffView`'s own unified render. Not adopted:
   branches over changed files, nothing else — and stays out until pressed again (`usePaneToggle`),
   so a terminal and the repository stay on screen together. One git pane for all projects.
 - the diff is a **dialog** over the whole window (double-click a changed file, ctrl-click a path
-  in a terminal, or "Browse files", which reopens the file last shown for that project). It carries
-  the same `ChangesList` as the git pane's LOCAL CHANGES down its left side, with only "Discard
-  all" in its header. `DiffDialog` and `SettingsDialog` are deliberately not part of `Dialog.tsx`:
-  that file is for questions, built around a form with two buttons.
+  in a terminal, or "Browse files", which reopens the file last shown for that project). Its left
+  side is the same `ChangesList` as the git pane's LOCAL CHANGES, with only "Discard all" in its
+  header. `DiffDialog` and `SettingsDialog` are deliberately not part of `Dialog.tsx`: that file is
+  for questions, built around a form with two buttons.
 - git commands go in an ordinary terminal tab, not a console of the pane's own
 - panes are draggable (`src/renderer/ui/Sash.tsx`)
 
 ## Split view
 
 One project's terminals can be split into up to four panes, each with its own tab strip — VS
-Code's editor groups cut down to **four fixed presets** (single, two columns, two
-columns with the right one split, 2×2), not a nestable tree: a fixed set is one `switch` in
-`TerminalsPane` instead of a generic sash composition and a "which pane did you mean" for every
-action. `src/renderer/terminal/pane-layout.ts` holds the model and every rule about it; `TerminalsPane` lays
+Code's editor groups cut down to **four fixed presets** (single, two columns, two columns with the
+right one split, 2×2), not a nestable tree: a fixed set is one `switch` in `TerminalsPane` instead
+of a generic sash composition and a "which pane did you mean" for every action.
+`src/renderer/terminal/pane-layout.ts` holds the model and every rule about it; `TerminalsPane` lays
 the panes out; `Pane` is one strip-and-stack. Pane "a" (always top-left) carries the one row of
 icon buttons — git toggle, browse-files, layout picker, settings — regardless of preset.
 
 The cross-file facts, each reasoned at its site:
 
 - **The layout lives in `App`** (`layouts: Record<projectId, ProjectLayout>`), not in
-  `TerminalsPane`: the tab shortcuts, and `markedTabs`/`seen`, need "the tab on
-  screen" — one *per pane* with a split (`visibleTabIds`) — and two views applying that rule would
-  be two chances to disagree. A pane asks for a selection change through `onActivateTab`.
+  `TerminalsPane`: the tab shortcuts and `markedTabs`/`seen` need "the tab on screen" — one *per
+  pane* with a split (`visibleTabIds`) — and two views applying that rule would be two chances to
+  disagree. A pane asks for a selection change through `onActivateTab`.
 - **A tab belongs to exactly one pane**, assigned lazily to the focused pane on first sight
   (`normalizeLayout`, the one place a layout is reconciled with the tab list). One xterm per tab
   (`terminal-views`), so the same tab in two panes is deliberately not a thing.
 - **Dividers are fractions** of `.panes-grid`'s live measurement (`useDividerFraction`), never
   pixels; "single" is the one preset that resets them.
 - **Persistence**: preset, focused pane, divider shares, and tab→pane keyed by **session id**
-  (`serializeLayout`). Not persisted on purpose: each pane's active tab, and any focus frame (tried
-  and taken out — the only frame is the drag-over one). Two timing rules learned the hard way, both
-  commented in `App.tsx`: the layout is loaded on *first sight* of a project (`layoutOf`), and
+  (`serializeLayout`). Not persisted on purpose: each pane's active tab, and any focus frame — the
+  only frame is the drag-over one. Two timing rules, both commented in `App.tsx`: the layout is
+  loaded on *first sight* of a project (`layoutOf`), and
   nothing is written until its bootstrap has once reported not starting (`settledProjects`).
 - **A tab moved between panes gets a new host**, so `attachTerminal` moves the xterm element
   rather than calling `open()` again (which silently no-ops). Only the **focused** pane focuses its
   terminal; a focus change alone must never resize the pty.
-- **A tab dragged onto a snap zone lays out the preset that has a pane there** — the zones are
-  a map of the whole grid (`SNAP_ZONES`: the right quarter in thirds, the lower left quarter),
-  the same for every preset; what each does per preset is `SNAP_TRANSITIONS` in
-  `pane-layout.ts`. Panes the preset adds beyond the target stay empty. Where the preset already
-  has that pane, the zone is the pane itself — the tab lands there, and unlike a plain drop
-  nothing collapses: a zone drop *places* a tab and leaves what it empties standing, a plain
-  drop (outside every zone, or on a tab strip) *moves* it and tidies up (below). The preview is
-  an overlay (`.snap-preview`); pane sizes change on the drop alone, since a resize refits every
-  pty.
+- **A tab dragged onto a snap zone lays out the preset that has a pane there.** The zones are a
+  map of the whole grid (`SNAP_ZONES`: the right quarter in thirds, the lower left quarter), the
+  same for every preset; what each does per preset is `SNAP_TRANSITIONS`. Panes the preset adds
+  beyond the target stay empty; where the preset already has that pane, the zone is the pane
+  itself. A zone drop *places* a tab and leaves what it empties standing; a plain drop (outside
+  every zone, or on a tab strip) *moves* it and tidies up (below). The preview is an overlay
+  (`.snap-preview`); pane sizes change on the drop alone, since a resize refits every pty.
 - **An *emptied* pane collapses away, and with it every empty pane at the end of the reading
-  order** (`COLLAPSE_TRANSITIONS`, `collapseTrailing`; VS Code's "close empty groups"): every
-  other pane keeps its place, empty or not — an empty pane *before* an occupied one stays; two
-  left is cols2, and grid2x2 with b or d empty stays, having no "split-left" to fall to.
-  Emptied means its last tab moved out (`activateTab`, whether into an occupied pane or an
-  empty one) or closed (`collapseClosed` in the reconcile effect), both in `App`; never a snap,
-  whose emptied source pane stays on purpose, and never a pane that was never filled, so a
-  snap's empty panes stay — until the next start: once a project's bootstrap has listed every
-  session (`settledProjects`), *every* empty pane counts as emptied (`collapseEmpty`), a
-  session deleted between runs and a snap's leftover alike. Two rules tried and taken out: a
-  pane's only tab getting no zone (it
-  turned the user's "place it there" into a move), and choosing the preset by the *count* of
-  occupied panes (Zellij's swap layouts — it dropped an empty pane the user had not touched
-  along with the emptied one).
+  order** (`COLLAPSE_TRANSITIONS`, `collapseTrailing`; VS Code's "close empty groups"). Every other
+  pane keeps its place: an empty pane *before* an occupied one stays; two left is cols2; grid2x2
+  with b or d empty stays, having no "split-left" to fall to. Emptied means its last tab moved out
+  (`activateTab`) or closed (`collapseClosed` in the reconcile effect), both in `App` — never a
+  snap, whose emptied source stays on purpose, and never a pane that was never filled. That holds
+  until the next start: once a project's bootstrap has listed every session (`settledProjects`),
+  *every* empty pane counts as emptied (`collapseEmpty`).
 
 ## Nothing starts without git and an agent
 
@@ -129,8 +119,7 @@ a control token from its environment) — `test/app.test.ts` is the one user of 
 (`src/main/terminals/agent-path.ts`) rewrites it before the check and on every re-check: on
 macOS/Linux the login shell's PATH *replaces* it (an npm shim's `env node` must find nvm's node,
 not the distro's), on win32 the package managers' bin directories are appended. Everything
-spawned inherits it, which is why `startGitProcess` waits for it in `main.ts`. Measured: asking
-`npm config get prefix` costs ~480 ms, so the prefix is read from npm's config instead.
+spawned inherits it, which is why `startGitProcess` waits for it in `main.ts`.
 
 ## Git
 
@@ -156,15 +145,17 @@ resolution is one the pane doesn't offer. Of what fits, we take GitHub Desktop's
 tree (branches, remotes, tags, stashes) with per-ref menus, checkout, status, per-file diff,
 discard, `.gitignore`, fetch/pull/push (push doubles as "publish", `--set-upstream`), "commit all"
 (one message asked, `add --all` then `commit` — no staging), and cloning from the add-repository
-dialog. Cloning brought GitHub and GitLab behind one `GitProvider` interface (`src/main/providers/`);
-providers stay out of the local git layer — once cloned, everything goes back through the CLI.
+dialog. The commit prompt's suggest button asks the first installed agent with `askArgs` for the
+message (`src/main/git/commit-message.ts`, the wand's `askAgent`), handing it the diff and recent
+subjects up front rather than letting it look. Cloning brought GitHub and GitLab behind one
+`GitProvider` interface (`src/main/providers/`); providers stay out of the local git layer — once
+cloned, everything goes back through the CLI.
 
 Every action goes through `Repository.runAction`, one at a time per repository, refreshing after —
-two actions would race for the same index lock. Discarding and ignoring go through it too. The
-renderer mirrors this in `App`'s `branchAction`; `BranchActions.run` is the one way in — a view
-asks its own question first (it knows the remote, the branch, the file count), then hands over a
-label and the call. Each repository also auto-fetches every ten minutes, silently on failure,
-without taking the action slot.
+two actions would race for the same index lock. The renderer mirrors this in `App`'s
+`branchAction`; `BranchActions.run` is the one way in — a view asks its own question first (it
+knows the remote, the branch, the file count), then hands over a label and the call. Each
+repository also auto-fetches every ten minutes, silently on failure, without taking the action slot.
 
 The project row carries repository-wide entries (open in terminal, show in file manager, copy
 path, view on host, change remote url, close) — nothing touches the working tree there; those
@@ -185,7 +176,8 @@ deliberately *not* matched, are in the comments there.
 A diff is read with `--ignore-all-space` only while the dialog's whitespace toggle is on, and
 synthesised for an untracked file. Unfolding a gap asks `repo:file-lines` for exactly those lines
 from the working tree — git isn't run again. An image is not "Binary file.": `readDiff` hands
-both versions to the renderer as data URLs; SVG stays text.
+both versions to the renderer as data URLs, shown side by side or as an onion-skin overlay; SVG
+stays text.
 
 The diff dialog doubles as a plain code editor (`CodeEditor.tsx`, one Monaco model for the
 dialog's whole time on that file — a look-and-fix surface, not a multi-file session).
@@ -206,10 +198,10 @@ server, and no format command exists as a result.
 
 ### What the git view deliberately does not do
 
-Built at some point and taken back out, so don't re-add without being asked: a commit UI with
-per-file/per-line staging (what stayed is "commit all"); history, graph, cherry-pick, revert,
-squash, reorder; bisect, submodules; conflict resolution beyond aborting; side-by-side diff;
-discarding single lines; pull with rebase and force push (taken out with the old branch bar). A
+Deliberately not there, so don't add without being asked: a commit UI with per-file/per-line
+staging (there is "commit all"); history, graph, cherry-pick, revert,
+squash, reorder; bisect, submodules; conflict resolution beyond aborting; side-by-side text diff;
+discarding single lines; pull with rebase and force push. A
 git command needing a list, a message or a per-line decision is exactly what an agent should be
 asked to do, where the answer, the conflict and the fix are all visible.
 
@@ -318,8 +310,8 @@ it happens. A plain function, not a prop or hook, modelled on VS Code's `window.
 The main process uses the same channel (`app:notice`). All three severities disappear after 8
 seconds or on click; an identical message already standing is dropped, not stacked.
 
-Not a notice: a status — a tab colored for an uninstalled agent, the progress bar, the head next
-to a project's name. Those are conditions a view draws for as long as they hold.
+Not a notice: a status — a tab colored for an uninstalled agent, the progress bar, the head and
+dirty dot next to a project's name. Those are conditions a view draws for as long as they hold.
 
 Nor a *question*. `Dialog.tsx` puts both kinds the same way: a plain function anything can call,
 one `Dialogs` drawing whatever's pending, one question at a time. `confirm` resolves to whether
@@ -333,8 +325,7 @@ answered the same way isn't worth asking.
 ## One progress indicator per pane
 
 Every pane that can be slow carries its own `.progress-bar` showing only what is happening in
-*it* — a single spot for the whole app was tried first and read as "something, somewhere". One
-component serves all (`ProgressBar.tsx`), dropped into whichever header declares `position:
+*it* — a single spot for the whole app reads as "something, somewhere". One component serves all (`ProgressBar.tsx`), dropped into whichever header declares `position:
 relative`. **Never add a second bar inside one pane** — a new slow reason there is a new condition
 feeding the one it already has. Today: each terminal pane (`Pane`'s `showProgress`, from
 `TerminalDescriptor.starting`; the bootstrap listing, with no tab to point at, falls to pane "a"),
@@ -354,9 +345,9 @@ A session says whether it's *working* (spinner), *stopped for an answer* (questi
 *finished out of sight* (speech bubble) — one mechanism read at three points of the same turn,
 drawn on the tab and on its project's row. A question is a standing fact, only *hidden* while its
 tab is in front of the user and back the moment it isn't; a finished turn is a one-off notice
-cleared by looking. A stopped session never spins anywhere (`marks[].busy`, and `Pane`'s own
-check): it is precisely *not* working. A sidebar bell for "finished" was tried and reverted — two
-glyphs for one condition read as two conditions.
+cleared by looking. A stopped session never spins anywhere (`ProjectMarks.busy`, and `Pane`'s own
+check): it is precisely *not* working. One glyph per condition — two for one read as two
+conditions.
 
 **On a tab all marks take the agent icon's place**, ranked **error/missing > waiting > working >
 finished** (reasoned in `Pane.tsx`). In the project row the three turn marks are buttons stepping
@@ -392,10 +383,9 @@ A session is **asked to quit before it is killed** (`TerminalSession.stop`): the
 own convention expects (`AgentDefinition.quitPresses`), then a kill for what's still running.
 `stop` resolves once the process is actually gone — `destroyTab` deletes what the CLI persisted
 right after. A hard kill never lets a CLI run its exit handlers, and Claude Code keeps something
-there that matters (a `~/.claude.json` record that, left armed twice, turns its fullscreen
-renderer off machine-wide — the story is in `terminal-session.ts`). Stopping is asynchronous, so
-`before-quit` holds the quit back and asks again once the sessions are gone; `closeTabs` starts
-every doomed tab's stop before waiting on any.
+there that matters (the `~/.claude.json` story is in `terminal-session.ts`). Stopping is
+asynchronous, so `before-quit` holds the quit back and asks again once the sessions are gone;
+`closeTabs` starts every doomed tab's stop before waiting on any.
 
 ## Agent-specific vs shared code
 
@@ -404,7 +394,8 @@ them, `shared/`, the only folder any of them may import from another. `src/main/
 process boundary and by half: `git/` (the git process and everything that talks to it,
 `commands.ts` included), `terminals/` (pty, sessions, markers, notifications), `control/` (the
 `tet-ctl` channel), `agents/`, `providers/`; what stays flat is the app itself — window, ipc,
-settings. These borders are lint rules (`no-restricted-imports` in `eslint.config.mjs`), not prose.
+settings. The process borders are lint rules (`no-restricted-imports` in `eslint.config.mjs`),
+not prose.
 
 Each agent gets a folder under `src/main/agents/`, described by one `AgentDefinition`
 (`src/main/agents/agent.ts`). The shared terminal layer imports only the registry (`AGENTS`,
@@ -416,7 +407,8 @@ folder; it calls the definition's callbacks — a new agent is a new folder, one
 - `executable`, `args`, `env`, `versionArgs` — how to start it, and how to tell "not installed"
   from a spawn that failed for another reason
 - `askArgs` — one question answered on stdout, no terminal; a background question must not leave
-  a session behind (each agent has its own way, commented in its `index.ts`)
+  a session behind (`cleanupAsk` for an agent that persists one either way; each agent's way is
+  commented in its `index.ts`)
 - `runArgs` — one command run *in* a terminal; only the shell has it
 - `sessions` — listing, resume args, rename, delete, optional `watch`
 - `prepareApp` — run once before any project opens, for what a killed run left behind
@@ -436,8 +428,8 @@ question has been put to all of them, the answers differed — and the differenc
 found by **measuring the real binary through this same pty**, never by reading its source or its
 docs, and never by reasoning from one agent to another:
 
-- `createIsSessionReady`'s byte thresholds: 500 / 800 / 600, one per agent, all tuned by hand.
-- `quitPresses`: Claude Code wants two Ctrl+C and withdraws the offer after about a second;
+- `createIsSessionReady`'s byte thresholds: one per agent, all tuned by hand.
+- `quitPresses`: Claude Code wants two Ctrl+C and soon withdraws the offer;
   Codex and opencode quit on one, and a second byte sent to a Codex already leaving *kills* the
   shutdown it would have completed. No single interval serves all three.
 - The right mouse button: Claude Code and opencode take it themselves through mouse reporting,
@@ -446,9 +438,9 @@ docs, and never by reasoning from one agent to another:
   (`swapsBlueMagenta`; `buildXtermTheme` swaps them back — observed, not derived); Codex ignores the
   palette entirely until `-c tui.theme=ansi`, and on win32 guesses light/dark from the console,
   not the terminal (hence `launch.cmd` and the OSC 4 handling in `src/main/agents/codex/index.ts`);
-  Claude Code paints dark unless told otherwise, so tet passes `theme` in its `--settings` file (a
-  custom theme in tet's own colors was built and taken back out — a ~230 ms dark frame, see
-  `src/main/agents/claude/hooks.ts`).
+  Claude Code paints dark unless told otherwise, so tet passes `theme` in its `--settings` file
+  (one of its built-in themes, never a custom one in tet's colors — it draws a dark frame while
+  a custom theme loads, see `src/main/agents/claude/hooks.ts`).
 - Turn signals: opencode has an event stream, Claude Code and Codex need hook processes touching
   marker files, and Codex only runs a hook it has hashed and decided to trust.
 - Ctrl+C: Claude Code and opencode read `\x03` as an ordinary byte; to a Codex in cooked mode it
@@ -484,19 +476,20 @@ literal strings.
 ## The control channel: `tet-ctl`
 
 An agent can ask the app around it for things the filesystem and git can't give it — the theme,
-the project list, the terminal tabs. `src/main/control/control-server.ts` listens on a named pipe (win32)
-or a socket file in `userData`, one JSON line per connection, and answers with the same singletons
-`ipc.ts` holds, and comes up with the workspace — a socket that answers means every project's
-terminals and repository are there, so `tet-ctl` waits a few seconds for one rather than
-finding a half-open app: a second transport onto the same logic, never a second implementation
-(`addProject`/`removeProject` in `projects.ts` are shared for exactly that). The wire contract and
-the verb list are `src/shared/control.ts`; the CLI is `src/cli/tet-ctl.ts`, bundled on its own and
-run by a launcher in `userData/bin` under tet's own electron as node (a `node` on the machine is
-not a given). What reaches a terminal is decided in `spawnAgentProcess` (`pty.ts`), in layers
-**above** `process.env`: the socket, a per-run token, the launcher directory on PATH, and the tab's
-own project and tab id — above, because a tet started from one of its own shell tabs inherits the
-outer one's values. Only ptys get them; the opencode server and git do not. The agent learns the
-command from the context file (`shell-context.ts`), which is never empty for that reason.
+the project list, the terminal tabs. `src/main/control/control-server.ts` listens on a loopback
+TCP port derived from `userData` and probed for being free (`findControlPort`, reasoned there),
+one JSON line per connection, and answers with the same singletons `ipc.ts` holds. It comes up
+with the workspace — a port that answers means every project's terminals and repository are
+there — so `tet-ctl` waits a few seconds for one rather than finding a half-open app. A second
+transport onto the same logic, never a second implementation (`addProject`/`removeProject` in
+`projects.ts` are shared for exactly that). The wire contract and the verb list are
+`src/shared/control.ts`; the CLI is `src/cli/tet-ctl.ts`, bundled on its own and run by a launcher
+in `userData/bin` under tet's own electron as node. What reaches a terminal is decided in
+`spawnAgentProcess` (`pty.ts`), in layers **above** `process.env`: the port, a per-run token, the
+launcher directory on PATH, and the tab's own project and tab id — above, because a tet started
+from one of its own shell tabs inherits the outer one's values. Only ptys get them; the opencode
+server and git do not. The agent learns the command from the context file (`shell-context.ts`),
+which is never empty for that reason.
 
 Deliberately not there: the split layout (renderer state only), git (the agent has `git`), provider
 accounts, and `quit`. `restart-app` is the one verb that ends sessions — every one in every
@@ -539,8 +532,7 @@ the others.
 - Generated `.ps1` files need a UTF-8 BOM; generated `sh` scripts must be LF, whatever the
   source's line endings.
 - Anything written *into* a generated script needs literal quoting (`os-notify.ts` has the two
-  helpers): a repo folder or user name may hold a `$`, and the interpolating forms once printed
-  half a repository's name in a toast.
+  helpers): a repo folder or user name may hold a `$`.
 - Claude Code's hook shell on win32 varies (PowerShell, cmd.exe, Git Bash all observed). Avoid
   shell builtins and nested quoting; invoke a plain exe with `-File "<script>.ps1"`.
 
@@ -576,8 +568,8 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 - A merely hidden terminal keeps its layout (`visibility`, not `display`) — xterm needs a laid-out
   element to measure itself. A pane using `display: none` needs refitting on return.
 - **The element xterm mounts into is `.terminal-host`, never `.terminal`** — xterm gives its own
-  element the class `terminal`, so a rule named for the plain word lands on both (a doubled gutter
-  for months). xterm's own classes are `xterm`, `xterm-viewport`, `xterm-screen` and `terminal`.
+  element the class `terminal`, so a rule named for the plain word lands on both. xterm's own
+  classes are `xterm`, `xterm-viewport`, `xterm-screen` and `terminal`.
 - A file dragged over a terminal frames the pane with a `::after` overlay, never a border — a
   border would shrink the box xterm measures and refit the pty. A file dropped anywhere *else* is
   swallowed in `main.tsx`, or Electron navigates the window to it. Dropped and pasted files type
@@ -586,8 +578,8 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 - **Nothing at the terminal's right edge may be left to an xterm default, and CSS isn't what
   settles it** — the scrollbar and overview ruler are xterm's own, so `theme.ts`'s colors decide.
 - Resizing reflows xterm and notifies the pty together, only once dragging settles
-  (`RESIZE_DEBOUNCE_MS`) — an immediate local reflow was tried and reverted, since ConPTY corrupts
-  a CLI's redraw when a resize lands mid-way (an upstream bug VS Code hits too).
+  (`RESIZE_DEBOUNCE_MS`) — never an immediate local reflow, since ConPTY corrupts a CLI's redraw
+  when a resize lands mid-way (an upstream bug VS Code hits too).
 - `provideLinks` runs on **every render** while the pointer's over the terminal, and an agent TUI
   repaints constantly. Nothing expensive, no logging, in that path.
 - A terminal's xterm theme is built **per terminal**, not once for the window (`buildXtermTheme`,
@@ -599,8 +591,8 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   the other is how much of its grid the path covers — every icon declares the `extent` it was
   **measured** at (`getBBox` on each child grown by half its stroke), and `Svg` crops the viewBox
   so all cover `TARGET_EXTENT`. Extents are tuned to the *geometric mean*, not the longer side.
-  Neither number is optional: unequal extents in a shared box is what the app looked like for
-  months. State an icon's size in CSS, never rely on the `width`/`height` attributes.
+  Neither number is optional. State an icon's size in CSS, never rely on the `width`/`height`
+  attributes.
 - **A new icon comes from Lucide first** (lucide.dev, ISC), vendored on its native 24-unit grid
   (`fitIcon`/`fitStroke` take the grid) — the hand drawings in `icons.tsx` are what's left of the
   icons Lucide had no match for. A hollow shape can still read badly at 13px; that is a per-icon
@@ -631,10 +623,6 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 - Two hover colors, not interchangeable: a *row* takes `--vscode-list-hoverBackground`, an
   *action button* the translucent `--vscode-toolbar-hoverBackground` wherever it sits. A selected
   row keeps its selection color while hovered.
-- The renderer is one bundle, so every Shiki grammar in `diff-highlight.ts`'s list ships — a list
-  of what a repository plausibly holds, not all two hundred. Imported lazily.
-- `.pane-hidden` is last in `styles.css` on purpose: it overrides the `display` the panes set on
-  themselves, all single-class selectors too.
 
 ## npm scripts
 
@@ -648,13 +636,13 @@ flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   repository built up step by step (`git.test.ts`); the session providers against transcripts
   written the way the CLIs write them (`sessions.test.ts`); `tet.json` reading and writing
   (`commands.test.ts`); the command-line reading (`command.test.ts`); the split view's rules
-  (`pane-layout.test.ts`); and the measured pieces — Codex's hook hash, `resolveCommand`, the
-  quoting helpers, the stores, the marker watch (`pieces.test.ts`), env layering, launcher and
-  context file (`unit.test.ts`). Nothing looks into the window: what the renderer did shows in
-  the main process, or it is checked by hand. The Linux side is testable from Windows in WSL
-  (WSLg has a display): clone onto the Linux filesystem, `npm install` there, Electron's
-  libraries via `wsl -u root apt-get`, launch with `env -i … PATH=/usr/bin:/bin`, drive it
-  through `tet-ctl`.
+  (`pane-layout.test.ts`); the background question and the commit message read off its answer
+  (`ask.test.ts`); and the measured pieces — Codex's hook hash, `resolveCommand`, the quoting
+  helpers, the stores, the marker watch (`pieces.test.ts`), env layering, launcher and context
+  file (`unit.test.ts`). Nothing looks into the window: what the renderer did shows in the main
+  process, or it is checked by hand. The Linux side is testable from Windows in WSL (WSLg has a
+  display): clone onto the Linux filesystem, `npm install` there, Electron's libraries via
+  `wsl -u root apt-get`, launch with `env -i … PATH=/usr/bin:/bin`, drive it through `tet-ctl`.
 - `npm start` — typecheck, compile, then launch (see "Do not restart the app yourself" first). The
   typecheck is there because esbuild only bundles: an unimported identifier is a global to it, and
   the app dies on load with a `ReferenceError` a `tsc` run would have named at the import.
