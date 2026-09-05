@@ -9,7 +9,7 @@ import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
 import { writeLaunchers } from "./control/control-launcher";
-import { controlSocketPath, startControlServer } from "./control/control-server";
+import { findControlPort, startControlServer } from "./control/control-server";
 import { countActivity, startEventLoopMonitor } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
@@ -111,7 +111,7 @@ function openWorkspace(): void {
 }
 
 /** What the control channel needs from the process; set before any terminal can spawn. */
-let controlChannel: { token: string; socketPath: string } | undefined;
+let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
 /**
@@ -155,7 +155,7 @@ async function startControl(): Promise<void> {
         projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change })
       },
       controlChannel.token,
-      controlChannel.socketPath
+      controlChannel.port
     );
   } catch (error) {
     // Without it tet is what it was before there was one; the terminals just have nothing
@@ -279,7 +279,7 @@ if (!app.requestSingleInstanceLock()) {
     // on disk, never on a command line. See src/main/control/control-server.ts.
     const controlToken =
       (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
-    const socketPath = controlSocketPath(app.getPath("userData"));
+    const port = await findControlPort(app.getPath("userData"));
     // Packaged, dist/ sits in app.asar, which a process other than electron cannot read into;
     // tet-ctl.js is unpacked beside it (electron-builder.yml).
     const cliPath = path.join(app.isPackaged ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
@@ -291,8 +291,8 @@ if (!app.requestSingleInstanceLock()) {
       // the terminals merely have no `tet-ctl` on their PATH.
       console.error("[tet] could not write the tet-ctl launcher:", error);
     }
-    setControlEnv({ [CONTROL_ENV.socket]: socketPath, [CONTROL_ENV.token]: controlToken }, binDir);
-    controlChannel = { token: controlToken, socketPath };
+    setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: controlToken }, binDir);
+    controlChannel = { token: controlToken, port };
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
     createWindow();
     // The git process inherits its environment at the fork, so it waits for the PATH — but

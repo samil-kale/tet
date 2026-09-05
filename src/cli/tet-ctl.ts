@@ -68,9 +68,9 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown> } 
   return { verb, args };
 }
 
-function send(socketPath: string, request: ControlRequest): Promise<ControlResponse> {
+function send(port: number, request: ControlRequest): Promise<ControlResponse> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(socketPath);
+    const socket = net.connect(port, "127.0.0.1");
     socket.setEncoding("utf8");
     let buffer = "";
     socket.once("connect", () => socket.write(JSON.stringify(request) + "\n"));
@@ -94,22 +94,22 @@ function send(socketPath: string, request: ControlRequest): Promise<ControlRespo
 }
 
 /**
- * How long a socket nobody answers on is tried again before it counts as absent. The socket
- * comes up with the workspace (see main.ts's startControl), a moment after the terminal this
- * runs in did — and after `restart-app`, the new tet is that same moment away.
+ * How long a port nobody answers on is tried again before it counts as absent. The server comes
+ * up with the workspace (see main.ts's startControl), a moment after the terminal this runs in
+ * did — and after `restart-app`, the new tet is that same moment away.
  */
 const CONNECT_RETRY_MS = 5000;
 const CONNECT_RETRY_GAP_MS = 250;
 
 /** `send`, retried while nothing listens yet; any other failure is answered at once. */
-async function sendWhenUp(socketPath: string, request: ControlRequest): Promise<ControlResponse> {
+async function sendWhenUp(port: number, request: ControlRequest): Promise<ControlResponse> {
   const deadline = Date.now() + CONNECT_RETRY_MS;
   for (;;) {
     try {
-      return await send(socketPath, request);
+      return await send(port, request);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if ((code !== "ECONNREFUSED" && code !== "ENOENT") || Date.now() >= deadline) {
+      if (code !== "ECONNREFUSED" || Date.now() >= deadline) {
         throw error;
       }
       await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_GAP_MS));
@@ -123,10 +123,10 @@ async function main(): Promise<void> {
     process.stdout.write(usage() + "\n");
     return;
   }
-  const socketPath = process.env[CONTROL_ENV.socket];
+  const portVar = process.env[CONTROL_ENV.port];
   const token = process.env[CONTROL_ENV.token];
-  if (!socketPath || !token) {
-    fail("not inside a TET terminal (TET_CONTROL_SOCKET is not set)", EXIT_CODES.internal);
+  if (!portVar || !token) {
+    fail("not inside a TET terminal (TET_CONTROL_PORT is not set)", EXIT_CODES.internal);
   }
   const request: ControlRequest = {
     token,
@@ -136,7 +136,7 @@ async function main(): Promise<void> {
   };
   let response: ControlResponse;
   try {
-    response = await sendWhenUp(socketPath, request);
+    response = await sendWhenUp(Number(portVar), request);
   } catch (error) {
     fail(`could not reach TET: ${error instanceof Error ? error.message : String(error)}`, EXIT_CODES.internal);
   }

@@ -10,7 +10,7 @@
 
 /** The environment every pty tet spawns carries; the CLI reads its whole configuration off it. */
 export const CONTROL_ENV = {
-  socket: "TET_CONTROL_SOCKET",
+  port: "TET_CONTROL_PORT",
   token: "TET_CONTROL_TOKEN",
   projectId: "TET_PROJECT_ID",
   tabId: "TET_TAB_ID"

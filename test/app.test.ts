@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { controlSocketPath } from "../src/main/control/control-server";
+import { findControlPort } from "../src/main/control/control-server";
 import { resolveRoot } from "../src/main/git/git";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
@@ -28,13 +28,12 @@ const STARTUP_MS = 60_000;
 
 let userData: string;
 let repo: string;
-let socketPath: string;
 let child: ChildProcess | undefined;
 let stderr = "";
 /** The instance answering right now — a different process after restart-app. */
 let pid: number | undefined;
 
-const env = { [CONTROL_ENV.socket]: "", [CONTROL_ENV.token]: TOKEN };
+const env = { [CONTROL_ENV.port]: "", [CONTROL_ENV.token]: TOKEN };
 
 async function ctl(...args: string[]) {
   return tetCtl(args, env);
@@ -63,8 +62,8 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     userData = fs.mkdtempSync(path.join(os.tmpdir(), "tet-app-"));
     repo = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repo-"));
     spawnSync("git", ["init", "-q"], { cwd: repo });
-    socketPath = controlSocketPath(userData);
-    env[CONTROL_ENV.socket] = socketPath;
+    const port = await findControlPort(userData);
+    env[CONTROL_ENV.port] = String(port);
     const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
     if (process.platform === "linux") {
       // The GitHub-hosted ubuntu-latest runner ships chrome-sandbox without the setuid bit, and
@@ -78,7 +77,7 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
       stdio: ["ignore", "ignore", "pipe"]
     });
     child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
-    await eventually(() => `tet answering on ${socketPath}\n${stderr}`, async () => (pid = await alive()) !== undefined, STARTUP_MS);
+    await eventually(() => `tet answering on port ${port}\n${stderr}`, async () => (pid = await alive()) !== undefined, STARTUP_MS);
   });
 
   after(async () => {

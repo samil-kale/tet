@@ -1,5 +1,4 @@
 import * as crypto from "node:crypto";
-import * as fs from "node:fs";
 import * as net from "node:net";
 import { CONTROL_VERBS, HELP_VERB } from "../../shared/control";
 import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/control";
@@ -90,15 +89,43 @@ function text(args: Record<string, unknown>, name: string, what: string): string
   return value;
 }
 
-/** Where the socket listens: a named pipe on win32, a file in userData elsewhere. */
-export function controlSocketPath(userDataPath: string): string {
-  if (process.platform === "win32") {
-    // Per install and per user: a dev checkout and the installed app, or two Windows accounts,
-    // each get a pipe of their own rather than the first one's.
-    const hash = crypto.createHash("sha1").update(userDataPath).digest("hex").slice(0, 12);
-    return `\\\\.\\pipe\\tet-control-${hash}`;
+const DYNAMIC_PORT_START = 49152;
+const DYNAMIC_PORT_RANGE = 65535 - DYNAMIC_PORT_START;
+
+/** Where userData alone would put the port, before checking it is actually free. */
+function hashPort(userDataPath: string): number {
+  const hash = crypto.createHash("sha1").update(userDataPath).digest("hex");
+  return DYNAMIC_PORT_START + (parseInt(hash.slice(0, 8), 16) % DYNAMIC_PORT_RANGE);
+}
+
+function canBind(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once("error", () => resolve(false));
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve(true)));
+  });
+}
+
+/**
+ * The port the control server will listen on: derived from userData, the same on every platform
+ * — so a dev checkout and the installed app, or two Windows accounts, each land on a port of
+ * their own rather than the first one's. Bound and released again here, rather than trusted
+ * outright, because Windows carves pieces out of the dynamic range for Hyper-V/WSL/Docker's own
+ * NAT (`netsh int ipv4 show excludedportrange`) — a bind into one of those fails with `EACCES`,
+ * not `EADDRINUSE`, and the exclusion is static enough that probing now and reusing the same
+ * port at the real bind (see startControlServer) is reliable. Probed rather than left to the OS
+ * to assign, because the port has to be in every terminal's environment (setControlEnv) before
+ * the server actually starts (see main.ts's startControl, gated on the workspace opening).
+ */
+export async function findControlPort(userDataPath: string): Promise<number> {
+  const start = hashPort(userDataPath);
+  for (let offset = 0; offset < DYNAMIC_PORT_RANGE; offset += 1) {
+    const port = DYNAMIC_PORT_START + ((start - DYNAMIC_PORT_START + offset) % DYNAMIC_PORT_RANGE);
+    if (await canBind(port)) {
+      return port;
+    }
   }
-  return `${userDataPath}/control.sock`;
+  throw new Error("no free loopback port in the dynamic range");
 }
 
 function verbs(deps: ControlDeps): Record<string, Handler> {
@@ -263,15 +290,15 @@ function reject(code: ControlErrorCode, message: string): ControlResponse {
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * The local server an agent's `tet-ctl` talks to — a named pipe or unix socket, one request
- * per connection (see src/shared/control.ts). Every request carries the token main.ts made
- * for this run; anything else is answered `unauthorized` and dropped, so a process that is not
- * inside one of tet's own terminals has nothing to say here.
+ * The local server an agent's `tet-ctl` talks to — a TCP socket on 127.0.0.1, one request per
+ * connection (see src/shared/control.ts). Every request carries the token main.ts made for this
+ * run; anything else is answered `unauthorized` and dropped, so a process that is not inside one
+ * of tet's own terminals has nothing to say here.
  */
 export async function startControlServer(
   deps: ControlDeps,
   token: string,
-  socketPath: string
+  port: number
 ): Promise<{ close: () => Promise<void> }> {
   const handlers = verbs(deps);
   const expected = Buffer.from(token);
@@ -340,17 +367,16 @@ export async function startControlServer(
     socket.on("error", () => undefined);
   });
 
-  await listen(server, socketPath);
+  // A TCP port, unlike a unix socket file, leaves nothing behind for a killed run to hand over:
+  // the OS reclaims it the moment the process is gone, so EADDRINUSE here only ever means
+  // another tet is genuinely listening on it — the single-instance lock makes that one about to
+  // quit anyway (see main.ts). Nothing to recover, so bind once and let that error surface.
+  await bind(server, port);
 
   return {
     close: () =>
       new Promise((resolve) => {
-        server.close(() => {
-          if (process.platform !== "win32") {
-            fs.rmSync(socketPath, { force: true });
-          }
-          resolve();
-        });
+        server.close(() => resolve());
         for (const socket of sockets) {
           socket.destroy();
         }
@@ -358,44 +384,12 @@ export async function startControlServer(
   };
 }
 
-/**
- * Binds, and on unix takes over a socket file a killed run left behind: `listen` refuses one
- * whether or not anything is behind it, so a connection attempt is what tells the two apart.
- * A live one is left alone — the single-instance lock makes that a second tet that is about
- * to quit anyway (see main.ts).
- */
-async function listen(server: net.Server, socketPath: string): Promise<void> {
-  try {
-    await bind(server, socketPath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE" || process.platform === "win32") {
-      throw error;
-    }
-    if (await answers(socketPath)) {
-      throw error;
-    }
-    fs.rmSync(socketPath, { force: true });
-    await bind(server, socketPath);
-  }
-}
-
-function bind(server: net.Server, socketPath: string): Promise<void> {
+function bind(server: net.Server, port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(socketPath, () => {
+    server.listen(port, "127.0.0.1", () => {
       server.off("error", reject);
       resolve();
     });
-  });
-}
-
-function answers(socketPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const probe = net.connect(socketPath);
-    probe.once("connect", () => {
-      probe.destroy();
-      resolve(true);
-    });
-    probe.once("error", () => resolve(false));
   });
 }

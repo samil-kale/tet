@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
-import { controlSocketPath, startControlServer } from "../src/main/control/control-server";
+import { findControlPort, startControlServer } from "../src/main/control/control-server";
 import type { ControlDeps, ControlTerminals } from "../src/main/control/control-server";
 import { CONTROL_ENV, EXIT_CODES } from "../src/shared/control";
 import { EMPTY_REPOSITORY_STATE } from "../src/shared/types";
@@ -12,7 +12,7 @@ import { eventually, tetCtl as runCli } from "./helpers";
 import type { Run } from "./helpers";
 
 /**
- * The control channel end to end below the app: the real server on a real pipe or socket, the
+ * The control channel end to end below the app: the real server on a real loopback TCP port, the
  * real CLI as the child process an agent would run, and everything that needs electron faked
  * behind ControlDeps. Bundled into dist-test/ by esbuild.js; `npm test` runs it.
  */
@@ -41,7 +41,7 @@ interface Calls {
 }
 
 let tempDir: string;
-let socketPath: string;
+let port: number;
 let server: { close: () => Promise<void> };
 let settings: AppSettings;
 let calls: Calls;
@@ -111,7 +111,7 @@ function deps(): ControlDeps {
 /** The CLI as run from the caller's own tab of PROJECT; `env` overrides that. */
 function tetCtl(args: string[], env: Record<string, string | undefined> = {}): Promise<Run> {
   return runCli(args, {
-    [CONTROL_ENV.socket]: socketPath,
+    [CONTROL_ENV.port]: String(port),
     [CONTROL_ENV.token]: TOKEN,
     [CONTROL_ENV.projectId]: PROJECT.id,
     [CONTROL_ENV.tabId]: OWN_TAB,
@@ -122,7 +122,7 @@ function tetCtl(args: string[], env: Record<string, string | undefined> = {}): P
 describe("tet-ctl against the control server", () => {
   before(async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-control-"));
-    socketPath = controlSocketPath(tempDir);
+    port = await findControlPort(tempDir);
     calls = {
       shown: [],
       closed: [],
@@ -134,7 +134,7 @@ describe("tet-ctl against the control server", () => {
       changed: [],
       shutdown: []
     };
-    server = await startControlServer(deps(), TOKEN, socketPath);
+    server = await startControlServer(deps(), TOKEN, port);
   });
 
   after(async () => {
@@ -155,14 +155,14 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("answers help by itself, with every verb", async () => {
-    const run = await tetCtl(["help"], { [CONTROL_ENV.socket]: undefined });
+    const run = await tetCtl(["help"], { [CONTROL_ENV.port]: undefined });
     assert.equal(run.status, EXIT_CODES.ok);
     assert.match(run.stdout, /settings-set-theme <theme-id>/);
     assert.match(run.stdout, /restart-app --confirm/);
   });
 
   it("says where it is when not inside a tet terminal", async () => {
-    const run = await tetCtl(["version"], { [CONTROL_ENV.socket]: undefined });
+    const run = await tetCtl(["version"], { [CONTROL_ENV.port]: undefined });
     assert.equal(run.status, EXIT_CODES.internal);
     assert.match(run.stderr, /not inside a TET terminal/);
   });
@@ -183,7 +183,7 @@ describe("tet-ctl against the control server", () => {
     // Not through the CLI, which will not send it: the wire itself.
     const net = await import("node:net");
     const line = await new Promise<string>((resolve) => {
-      const socket = net.connect(socketPath, () =>
+      const socket = net.connect(port, "127.0.0.1", () =>
         socket.write(JSON.stringify({ token: TOKEN, verb: "help", args: {}, caller: {} }) + "\n")
       );
       let data = "";
@@ -339,19 +339,5 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["restart-app", "--confirm"])).result, { restarting: true });
     await eventually("what the answer was followed by", () => calls.shutdown.length === 1);
     assert.deepEqual(calls.shutdown, [true]);
-  });
-});
-
-describe("the socket file", { skip: process.platform === "win32" && "named pipes leave nothing behind" }, () => {
-  it("is taken over from a run that died, and freed on close", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-stale-"));
-    const stale = controlSocketPath(dir);
-    // A file nobody listens on, the way an unclean exit leaves one.
-    fs.writeFileSync(stale, "");
-    const taken = await startControlServer(deps(), TOKEN, stale);
-    assert.ok(fs.statSync(stale).isSocket());
-    await taken.close();
-    assert.ok(!fs.existsSync(stale));
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 });
