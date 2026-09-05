@@ -68,13 +68,14 @@ function notifyProgress(severity: NoticeSeverity, message: string, progress: num
     publish([...shown, { id: progressNoticeId, severity, message, progress: clamped }]);
   }
   if (clamped >= 100) {
-    const id = progressNoticeId;
-    progressNoticeId = null;
-    setTimeout(() => dismissNotice(id!), PROGRESS_DONE_MS);
+    setTimeout(() => dismissNotice(progressNoticeId!), PROGRESS_DONE_MS);
   }
 }
 
 function dismissNotice(id: number): void {
+  if (id === progressNoticeId) {
+    progressNoticeId = null;
+  }
   publish(shown.filter((notice) => notice.id !== id));
 }
 
