@@ -627,14 +627,15 @@ export function GearIcon(props: IconProps) {
 /**
  * The five split-layout presets: a rounded frame plus whatever dividers a preset adds — the same
  * shape as the reference mockup's own preview tiles. All five share one frame and one `extent`,
- * so they read as one family. Run through the `getBBox` audit: the frame measures 14.5 by 11.5
- * with its stroke, and — wide and flat like `CommitIcon` — takes the long-side cap rather than
- * the geometric mean, same formula, same result shape: 13.33.
+ * so they read as one family. Run through the `getBBox` audit: the frame measures 14.5 by 13.5
+ * with its stroke, and — still wider than tall like `CommitIcon` — takes the long-side cap
+ * rather than the geometric mean, same formula, same result shape: 13.33 (the width, unchanged,
+ * is still the longer side, so the cap didn't move when the frame grew taller).
  */
 export function LayoutSingleIcon(props: IconProps) {
   return (
     <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
+      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
     </Svg>
   );
 }
@@ -642,8 +643,8 @@ export function LayoutSingleIcon(props: IconProps) {
 export function LayoutCols2Icon(props: IconProps) {
   return (
     <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
-      <path d="M8 3v10" />
+      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
+      <path d="M8 2v12" />
     </Svg>
   );
 }
@@ -651,8 +652,8 @@ export function LayoutCols2Icon(props: IconProps) {
 export function LayoutSplitRightIcon(props: IconProps) {
   return (
     <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
-      <path d="M8 3v10M8 8h6.5" />
+      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
+      <path d="M8 2v12M8 8h6.5" />
     </Svg>
   );
 }
@@ -660,8 +661,8 @@ export function LayoutSplitRightIcon(props: IconProps) {
 export function LayoutGrid2x2Icon(props: IconProps) {
   return (
     <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="3" width="13" height="10" rx="1.5" />
-      <path d="M8 3v10M1.5 8h13" />
+      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
+      <path d="M8 2v12M1.5 8h13" />
     </Svg>
   );
 }
