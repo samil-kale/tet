@@ -167,15 +167,16 @@ export const TerminalsPane = memo(function TerminalsPane({
     }
   }, [tabs, project.id]);
 
-  // Every possible divider's own share of its container — declared unconditionally, since
-  // hooks cannot follow which preset happens to be active. Only the ones the current preset
+  // One share per divider *line*, not per preset: the column line is the same line whether it
+  // has one pane or two on its right, and the right column's row line is where it is whether
+  // the left column is split or not. Every split preset that has a line reads the same stored
+  // share, so switching presets adds or removes a sash and moves nothing already on screen —
+  // one share each was what made a pane jump on every switch. Declared unconditionally, since
+  // hooks cannot follow which preset happens to be active; only the ones the current preset
   // actually renders a Sash for ever change or get read.
-  const [cols2Fraction, setCols2Fraction] = useDividerFraction(project.id, "cols2", HALF);
-  const [splitRightColFraction, setSplitRightColFraction] = useDividerFraction(project.id, "split-right-col", HALF);
-  const [splitRightRowFraction, setSplitRightRowFraction] = useDividerFraction(project.id, "split-right-row", HALF);
-  const [gridColFraction, setGridColFraction] = useDividerFraction(project.id, "grid2x2-col", HALF);
-  const [gridRowAFraction, setGridRowAFraction] = useDividerFraction(project.id, "grid2x2-row-a", HALF);
-  const [gridRowBFraction, setGridRowBFraction] = useDividerFraction(project.id, "grid2x2-row-b", HALF);
+  const [colFraction, setColFraction] = useDividerFraction(project.id, "col", HALF);
+  const [leftRowFraction, setLeftRowFraction] = useDividerFraction(project.id, "row-left", HALF);
+  const [rightRowFraction, setRightRowFraction] = useDividerFraction(project.id, "row-right", HALF);
 
   const gridRef = useRef<HTMLDivElement>(null);
   /**
@@ -225,23 +226,13 @@ export const TerminalsPane = memo(function TerminalsPane({
    * one preset that never renders a `Sash` at all, so it is the natural "start over" point: a
    * user who wants a clean 50/50 next time they split closes the split first, rather than this
    * needing a reset action of its own. Switching between two *split* presets leaves every
-   * divider alone — each already keeps its own share independently.
+   * divider alone — the lines they share stay where they are.
    */
   const resetDividerFractions = useCallback(() => {
-    setCols2Fraction(HALF);
-    setSplitRightColFraction(HALF);
-    setSplitRightRowFraction(HALF);
-    setGridColFraction(HALF);
-    setGridRowAFraction(HALF);
-    setGridRowBFraction(HALF);
-  }, [
-    setCols2Fraction,
-    setSplitRightColFraction,
-    setSplitRightRowFraction,
-    setGridColFraction,
-    setGridRowAFraction,
-    setGridRowBFraction
-  ]);
+    setColFraction(HALF);
+    setLeftRowFraction(HALF);
+    setRightRowFraction(HALF);
+  }, [setColFraction, setLeftRowFraction, setRightRowFraction]);
 
   // On the preset actually arriving at "single", wherever the switch came from: the picker, or a
   // pane emptied and collapsed away (`collapseEmptied`, decided in `App`). An effect rather
@@ -461,61 +452,47 @@ export const TerminalsPane = memo(function TerminalsPane({
       case "single":
         return renderPane("a", {}, true);
       case "cols2": {
-        const a = pixelsFor(cols2Fraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
+        const a = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
         return (
           <>
             {renderPane("a", { width: a }, true)}
-            {divider("vertical", a, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setCols2Fraction)}
+            {divider("vertical", a, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
             {renderPane("b", {}, false)}
           </>
         );
       }
       case "split-right": {
-        const a = pixelsFor(splitRightColFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
+        const a = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
         // The right column takes the grid's full height, so "b" is a fraction of that directly.
-        const b = pixelsFor(splitRightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+        const b = pixelsFor(rightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
         return (
           <>
             {renderPane("a", { width: a }, true)}
-            {divider(
-              "vertical",
-              a,
-              MIN_PANE_WIDTH,
-              MIN_PANE_WIDTH,
-              width,
-              setSplitRightColFraction
-            )}
+            {divider("vertical", a, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
             <div className="panes-column fill">
               {renderPane("b", { height: b }, false)}
-              {divider("horizontal", b, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setSplitRightRowFraction)}
+              {divider("horizontal", b, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
               {renderPane("c", {}, false)}
             </div>
           </>
         );
       }
       case "grid2x2": {
-        const col = pixelsFor(gridColFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
+        const col = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
         // Both columns run the grid's full height, so each is a fraction of that directly.
-        const left = pixelsFor(gridRowAFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
-        const right = pixelsFor(gridRowBFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+        const left = pixelsFor(leftRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+        const right = pixelsFor(rightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
         return (
           <>
             <div className="panes-column" style={{ width: col }}>
               {renderPane("a", { height: left }, true)}
-              {divider("horizontal", left, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setGridRowAFraction)}
+              {divider("horizontal", left, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setLeftRowFraction)}
               {renderPane("c", {}, false)}
             </div>
-            {divider(
-              "vertical",
-              col,
-              MIN_PANE_WIDTH,
-              MIN_PANE_WIDTH,
-              width,
-              setGridColFraction
-            )}
+            {divider("vertical", col, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
             <div className="panes-column fill">
               {renderPane("b", { height: right }, false)}
-              {divider("horizontal", right, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setGridRowBFraction)}
+              {divider("horizontal", right, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
               {renderPane("d", {}, false)}
             </div>
           </>
