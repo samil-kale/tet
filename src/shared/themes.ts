@@ -35,6 +35,16 @@ export const THEMES: ThemeDefinition[] = [
     terminalForeground: "#cccccc"
   },
   {
+    id: "dark-slate",
+    label: "Dark Slate",
+    shikiTheme: "dark-plus",
+    claudeTheme: "dark",
+    windowBackground: "#14171c",
+    titleBarSymbolColor: "#dde2e9",
+    terminalBackground: "#1b1f27",
+    terminalForeground: "#dde2e9"
+  },
+  {
     id: "light-modern",
     label: "Light",
     shikiTheme: "light-plus",

@@ -256,3 +256,120 @@
   --vscode-terminal-ansiBrightCyan: #0598bc;
   --vscode-terminal-ansiBrightWhite: #a5a5a5;
 }
+
+/*
+ * "Dark Slate": a cooler, blue-grey dark theme. Not one of VS Code's — the values were sampled
+ * off a reference screenshot (a dashboard with #14171c chrome, #1b1f27 cards, #58a6f0 accents),
+ * so unlike the two Modern themes the source is pixels, not a theme file. Two groups of values
+ * that screenshot had no sample of are derived rather than sampled, and say so below: the
+ * yellow and magenta (chosen to sit at the same saturation as the sampled red, green and blue)
+ * and the bright ANSI variants (the normal ones, lightened). The primary button is the
+ * screenshot's own: a light button with dark text, not a filled accent.
+ */
+:root[data-theme="dark-slate"] {
+  --vscode-foreground: #dde2e9;
+  --vscode-descriptionForeground: #a8b0bd;
+  --vscode-errorForeground: #db5761;
+  --vscode-textLink-foreground: #58a6f0;
+  --vscode-textLink-activeForeground: #58a6f0;
+  --vscode-focusBorder: #58a6f0;
+  --vscode-sash-hoverBorder: #58a6f0;
+
+  --vscode-editor-background: #1b1f27;
+  --vscode-editor-foreground: #dde2e9;
+  --vscode-terminal-background: #1b1f27;
+  --vscode-terminal-foreground: #dde2e9;
+
+  --vscode-sideBar-background: #14171c;
+  --vscode-sideBarSectionHeader-foreground: #dde2e9;
+  --vscode-titleBar-activeBackground: #14171c;
+  --vscode-titleBar-activeForeground: #dde2e9;
+
+  --vscode-panel-background: #14171c;
+  --vscode-panel-border: #24272c;
+
+  --vscode-tab-activeBackground: #1b1f27;
+  --vscode-tab-activeForeground: #dde2e9;
+  --vscode-tab-inactiveBackground: #14171c;
+  --vscode-tab-inactiveForeground: #7b8391;
+  --vscode-tab-border: #24272c;
+
+  /* The screenshot selects a row with a neutral lift, not a blue; the blue-tinted #273a50 is
+     its badge background and serves as the text selection below. */
+  --vscode-list-activeSelectionBackground: #232830;
+  --vscode-list-activeSelectionForeground: #dde2e9;
+  --vscode-list-hoverBackground: #1f232b;
+
+  --vscode-input-background: #14171c;
+  --vscode-input-foreground: #dde2e9;
+  --vscode-input-border: #2a2d35;
+  --vscode-input-placeholderForeground: #7b8391;
+
+  --vscode-dropdown-background: #14171c;
+  --vscode-dropdown-foreground: #dde2e9;
+  --vscode-dropdown-border: #2a2d35;
+
+  --vscode-button-background: #dde2e9;
+  --vscode-button-foreground: #14171c;
+  --vscode-button-hoverBackground: #eef1f5;
+  --vscode-button-secondaryBackground: #232830;
+  --vscode-button-secondaryForeground: #dde2e9;
+  --vscode-button-secondaryHoverBackground: #2a2f39;
+
+  --vscode-editorWidget-background: #1b1f27;
+  --vscode-editorWidget-border: #2a2d35;
+
+  --vscode-menu-background: #1b1f27;
+  --vscode-menu-foreground: #dde2e9;
+  --vscode-menu-border: #2a2d35;
+  --vscode-menu-selectionBackground: #273a50;
+  --vscode-menu-selectionForeground: #dde2e9;
+  --vscode-menu-separatorBackground: #2a2d35;
+
+  --vscode-progressBar-background: #58a6f0;
+
+  --vscode-notifications-background: #1b1f27;
+  --vscode-notifications-foreground: #dde2e9;
+  --vscode-notifications-border: #2a2d35;
+  --vscode-notificationsErrorIcon-foreground: #db5761;
+  --vscode-notificationsWarningIcon-foreground: #d9b45c;
+  --vscode-notificationsInfoIcon-foreground: #58a6f0;
+
+  --vscode-gitDecoration-modifiedResourceForeground: #d9b45c;
+  --vscode-gitDecoration-deletedResourceForeground: #db5761;
+  --vscode-gitDecoration-untrackedResourceForeground: #82b65d;
+  --vscode-gitDecoration-addedResourceForeground: #82b65d;
+  --vscode-gitDecoration-conflictingResourceForeground: #db5761;
+
+  --vscode-diffEditor-insertedLineBackground: #82b65d26;
+  --vscode-diffEditor-removedLineBackground: #db576126;
+  --vscode-editorLineNumber-foreground: #5a626f;
+  --vscode-editorLineNumber-activeForeground: #dde2e9;
+  --vscode-editorCursor-foreground: #dde2e9;
+  --vscode-editor-selectionBackground: #273a50;
+  --vscode-editor-inactiveSelectionBackground: #232830;
+  --vscode-editor-lineHighlightBorder: #232830;
+  --vscode-editorIndentGuide-background1: #2a2d35;
+  --vscode-editorIndentGuide-activeBackground1: #5a626f;
+
+  --vscode-terminalCursor-foreground: #dde2e9;
+  --vscode-terminal-selectionBackground: #273a50;
+  --vscode-terminal-inactiveSelectionBackground: #232830;
+
+  /* Red, green, blue and cyan are the screenshot's; yellow and magenta derived (above). */
+  --vscode-terminal-ansiRed: #db5761;
+  --vscode-terminal-ansiGreen: #82b65d;
+  --vscode-terminal-ansiYellow: #d9b45c;
+  --vscode-terminal-ansiBlue: #58a6f0;
+  --vscode-terminal-ansiMagenta: #c58ae6;
+  --vscode-terminal-ansiCyan: #5dcfbc;
+  --vscode-terminal-ansiWhite: #dde2e9;
+  --vscode-terminal-ansiBrightBlack: #5a626f;
+  --vscode-terminal-ansiBrightRed: #e57079;
+  --vscode-terminal-ansiBrightGreen: #96c973;
+  --vscode-terminal-ansiBrightYellow: #e5c56f;
+  --vscode-terminal-ansiBrightBlue: #7ab8f5;
+  --vscode-terminal-ansiBrightMagenta: #d4a3ee;
+  --vscode-terminal-ansiBrightCyan: #7ddccb;
+  --vscode-terminal-ansiBrightWhite: #ffffff;
+}

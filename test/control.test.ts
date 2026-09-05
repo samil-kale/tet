@@ -202,7 +202,7 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["list-themes"]);
     assert.equal(run.status, EXIT_CODES.ok);
     const ids = (run.result as { id: string }[]).map((theme) => theme.id);
-    assert.deepEqual(ids, ["system", "dark-modern", "light-modern"]);
+    assert.deepEqual(ids, ["system", "dark-modern", "dark-slate", "light-modern"]);
   });
 
   it("sets a known theme and says a restart is needed, without restarting", async () => {

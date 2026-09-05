@@ -165,5 +165,9 @@ export function buildMonacoColors(): Record<string, string> {
   const colors = readCssVars(MONACO_CSS_VARS);
   // No border box around an active toggle — just the background set through the map above.
   colors["inputOption.activeBorder"] = "#00000000";
+  // Monaco paints a shadow along the top edge once the editor is scrolled (its `.shadow.top`
+  // decoration, vs-dark's default being black). Nothing else in the app marks "scrolled"
+  // that way — not xterm, not the diff view — so the editor doesn't either.
+  colors["scrollbar.shadow"] = "#00000000";
   return colors;
 }
