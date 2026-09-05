@@ -460,28 +460,43 @@ export const SNAP_TRANSITIONS: Record<SplitPreset, Partial<Record<SnapZone, Snap
 };
 
 /**
- * Each pane's box at even shares — what the preview draws for the pane a drop would add. A
- * hint, not a measurement: the real dividers may sit elsewhere, and the drop lays the panes
- * out for real.
+ * Where the three divider lines sit, as shares of `.panes-grid`: the column line of its width,
+ * each column's row line of its height. One share per *line*, not per preset — `TerminalsPane`
+ * sizes every preset's panes from these same three, so a preset switch moves no line.
  */
-export const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, FractionBox>>> = {
-  single: { a: { left: 0, top: 0, width: 1, height: 1 } },
+export interface DividerShares {
+  col: number;
+  rowLeft: number;
+  rowRight: number;
+}
+
+/**
+ * Each pane's box given where the lines are — what the preview draws for the pane a drop
+ * would add. Fed the shares the panes are actually laid out at, it is that pane's real box
+ * after the drop, not a hint at even shares beside the real dividers.
+ */
+const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, (shares: DividerShares) => FractionBox>>> = {
+  single: { a: () => ({ left: 0, top: 0, width: 1, height: 1 }) },
   cols2: {
-    a: { left: 0, top: 0, width: 1 / 2, height: 1 },
-    b: { left: 1 / 2, top: 0, width: 1 / 2, height: 1 }
+    a: ({ col }) => ({ left: 0, top: 0, width: col, height: 1 }),
+    b: ({ col }) => ({ left: col, top: 0, width: 1 - col, height: 1 })
   },
   "split-right": {
-    a: { left: 0, top: 0, width: 1 / 2, height: 1 },
-    b: { left: 1 / 2, top: 0, width: 1 / 2, height: 1 / 2 },
-    c: { left: 1 / 2, top: 1 / 2, width: 1 / 2, height: 1 / 2 }
+    a: ({ col }) => ({ left: 0, top: 0, width: col, height: 1 }),
+    b: ({ col, rowRight }) => ({ left: col, top: 0, width: 1 - col, height: rowRight }),
+    c: ({ col, rowRight }) => ({ left: col, top: rowRight, width: 1 - col, height: 1 - rowRight })
   },
   grid2x2: {
-    a: { left: 0, top: 0, width: 1 / 2, height: 1 / 2 },
-    b: { left: 1 / 2, top: 0, width: 1 / 2, height: 1 / 2 },
-    c: { left: 0, top: 1 / 2, width: 1 / 2, height: 1 / 2 },
-    d: { left: 1 / 2, top: 1 / 2, width: 1 / 2, height: 1 / 2 }
+    a: ({ col, rowLeft }) => ({ left: 0, top: 0, width: col, height: rowLeft }),
+    b: ({ col, rowRight }) => ({ left: col, top: 0, width: 1 - col, height: rowRight }),
+    c: ({ col, rowLeft }) => ({ left: 0, top: rowLeft, width: col, height: 1 - rowLeft }),
+    d: ({ col, rowRight }) => ({ left: col, top: rowRight, width: 1 - col, height: 1 - rowRight })
   }
 };
+
+export function paneBox(preset: SplitPreset, paneId: PaneId, shares: DividerShares): FractionBox | null {
+  return PANE_BOXES[preset][paneId]?.(shares) ?? null;
+}
 
 /**
  * A tab dropped on a snap zone: the preset switch and the move into the new pane as one layout

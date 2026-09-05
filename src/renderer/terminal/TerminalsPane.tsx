@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { Project, TerminalDescriptor } from "../../shared/types";
 import { sameList } from "../identity";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
-import { PANE_BOXES, PANE_IDS, layoutStorageKey, snapZoneAt } from "./pane-layout";
+import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone, SplitPreset } from "./pane-layout";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
@@ -68,8 +68,6 @@ interface DragTarget {
   paneId: PaneId;
   zone: SnapZone | null;
   transition: SnapTransition | null;
-  /** The pane the drop would add, as fractions of `.panes-grid` — where the preview is drawn. */
-  preview: FractionBox | null;
 }
 
 /** A fraction box as the inline style of an absolutely positioned child of `.panes-grid`. */
@@ -138,8 +136,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   const agents = useAgents();
   /**
    * Where a dragged tab is right now: the pane under it, and — when the pointer is in one of
-   * the snap zones — what the drop would do there, with the preview box drawn for a preset
-   * switch. Mirrored in a ref for the drop handler, which needs the answer synchronously
+   * the snap zones — what the drop would do there (the preview box for a preset switch is
+   * derived at render, from the same sizes the panes get — see `snapPreview` below). Mirrored
+   * in a ref for the drop handler, which needs the answer synchronously
    * without becoming a new callback on every change. What the tab came from is a ref alone: it
    * is set on `dragstart`, before any render this state causes.
    */
@@ -305,13 +304,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       if (current?.paneId === paneId && current.zone === zone) {
         return;
       }
-      // A zone whose pane the preset already has draws that pane's own frame (below) rather
-      // than a box at even shares that may sit beside the real dividers.
-      const preview =
-        hit && hit.transition.preset !== presetRef.current
-          ? (PANE_BOXES[hit.transition.preset][hit.transition.target] ?? null)
-          : null;
-      setDragTarget({ paneId, zone, transition: hit?.transition ?? null, preview });
+      setDragTarget({ paneId, zone, transition: hit?.transition ?? null });
     },
     [setDragTarget]
   );
@@ -445,59 +438,72 @@ export const TerminalsPane = memo(function TerminalsPane({
     />
   );
 
+  // Where the three divider lines are, in pixels of the grid — computed once, whatever the
+  // preset, since the preview below needs the line a preset switch would keep as much as
+  // `renderGrid` needs the ones the current preset draws. The column line is the same for every
+  // split preset, and both columns run the grid's full height, so each row line is a share of
+  // that directly.
+  const width = gridSize?.width ?? null;
+  const height = gridSize?.height ?? null;
+  const colPixels = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
+  const leftRowPixels = pixelsFor(leftRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+  const rightRowPixels = pixelsFor(rightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+
+  // The box of the pane a zone drop would add — the one it *will* have, since the drop keeps
+  // every line where it is: the clamped pixels the panes are laid out at, back as shares of
+  // the grid, not the stored fractions (a share stored against a wider room is clamped on the
+  // way to the screen, and the preview has to agree with what the drop then shows). Only for a
+  // zone that switches the preset; a zone whose pane the preset already has frames that pane
+  // itself (`dragOverPane` above).
+  const snapPreview =
+    dragTarget?.transition && dragTarget.transition.preset !== layout.preset && gridSize !== null
+      ? paneBox(dragTarget.transition.preset, dragTarget.transition.target, {
+          col: colPixels / gridSize.width,
+          rowLeft: leftRowPixels / gridSize.height,
+          rowRight: rightRowPixels / gridSize.height
+        })
+      : null;
+
   const renderGrid = () => {
-    const width = gridSize?.width ?? null;
-    const height = gridSize?.height ?? null;
     switch (layout.preset) {
       case "single":
         return renderPane("a", {}, true);
-      case "cols2": {
-        const a = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
+      case "cols2":
         return (
           <>
-            {renderPane("a", { width: a }, true)}
-            {divider("vertical", a, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
+            {renderPane("a", { width: colPixels }, true)}
+            {divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
             {renderPane("b", {}, false)}
           </>
         );
-      }
-      case "split-right": {
-        const a = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
-        // The right column takes the grid's full height, so "b" is a fraction of that directly.
-        const b = pixelsFor(rightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+      case "split-right":
         return (
           <>
-            {renderPane("a", { width: a }, true)}
-            {divider("vertical", a, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
+            {renderPane("a", { width: colPixels }, true)}
+            {divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
             <div className="panes-column fill">
-              {renderPane("b", { height: b }, false)}
-              {divider("horizontal", b, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
+              {renderPane("b", { height: rightRowPixels }, false)}
+              {divider("horizontal", rightRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
               {renderPane("c", {}, false)}
             </div>
           </>
         );
-      }
-      case "grid2x2": {
-        const col = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
-        // Both columns run the grid's full height, so each is a fraction of that directly.
-        const left = pixelsFor(leftRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
-        const right = pixelsFor(rightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+      case "grid2x2":
         return (
           <>
-            <div className="panes-column" style={{ width: col }}>
-              {renderPane("a", { height: left }, true)}
-              {divider("horizontal", left, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setLeftRowFraction)}
+            <div className="panes-column" style={{ width: colPixels }}>
+              {renderPane("a", { height: leftRowPixels }, true)}
+              {divider("horizontal", leftRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setLeftRowFraction)}
               {renderPane("c", {}, false)}
             </div>
-            {divider("vertical", col, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
+            {divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
             <div className="panes-column fill">
-              {renderPane("b", { height: right }, false)}
-              {divider("horizontal", right, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
+              {renderPane("b", { height: rightRowPixels }, false)}
+              {divider("horizontal", rightRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
               {renderPane("d", {}, false)}
             </div>
           </>
         );
-      }
     }
   };
 
@@ -507,7 +513,7 @@ export const TerminalsPane = memo(function TerminalsPane({
         {renderGrid()}
         {/* An overlay and nothing more: the panes keep their sizes until the drop, since any
             resize refits every pty under it, mid-drag — see `fitTerminal`. */}
-        {dragTarget?.preview && <div className="snap-preview" style={percentStyle(dragTarget.preview)} />}
+        {snapPreview && <div className="snap-preview" style={percentStyle(snapPreview)} />}
       </div>
     </div>
   );
