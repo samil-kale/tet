@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { app, clipboard, dialog, ipcMain, shell } from "electron";
 import { AGENTS, findAskableAgent, listAgents } from "./agents";
+import { effectivePrompt } from "../shared/prompts";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types";
 import type {
   AddAccountResult,
@@ -31,7 +32,7 @@ import type {
 } from "../shared/types";
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
-import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, suggestQuestion, writeCommands } from "./git/commands";
+import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, writeCommands } from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity } from "./event-loop-monitor";
 import { git } from "./git/git-client";
@@ -337,7 +338,8 @@ export function registerIpc({
     const { executable, agent } = askable;
     try {
       const context = await git.readCommitContext(project.path);
-      const message = await suggestCommitMessage(project.path, executable, agent.askArgs!, context);
+      const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
+      const message = await suggestCommitMessage(project.path, executable, agent.askArgs!, prompt, context);
       if (message.length === 0) {
         send("app:notice", { severity: "warning", message: "The agent did not suggest a commit message" });
       }
@@ -476,7 +478,8 @@ export function registerIpc({
     }
     const { executable, agent } = askable;
     try {
-      const found = await suggestCommands(project.path, executable, agent.askArgs!, suggestQuestion());
+      const prompt = effectivePrompt(settings.get().prompts, "commands");
+      const found = await suggestCommands(project.path, executable, agent.askArgs!, prompt);
       const existing = (await readCommands(project.path)) ?? [];
       const merged = mergeCommands(existing, found);
       const added = merged.length - existing.length;

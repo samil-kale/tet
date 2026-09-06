@@ -56,6 +56,7 @@ button:focus-visible {
    Neither may set the font, the border or the padding on its own — the height is what they add
    up to, and two of them drifting apart is what makes a row of fields look crooked. */
 input,
+textarea,
 .dropdown-trigger {
   font: inherit;
   border-radius: 2px;
@@ -63,7 +64,8 @@ input,
   padding: 3px 6px;
 }
 
-input {
+input,
+textarea {
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border);
@@ -73,7 +75,8 @@ input::placeholder {
   color: var(--vscode-input-placeholderForeground);
 }
 
-input:focus {
+input:focus,
+textarea:focus {
   border-color: var(--vscode-focusBorder);
 }
 
@@ -1689,16 +1692,42 @@ input:focus {
   margin-top: calc((1lh - 10px) / 2);
 }
 
-/* Sized to the notifications tab, the fuller one, and fixed for the reason add-repository is:
-   switching tabs must not resize the dialog under the pointer. */
+/* Fixed for the reason add-repository is: switching tabs must not resize the dialog under the
+   pointer. Taller than the fullest tab of switches needs, for the Prompts tab: its text box
+   takes whatever is left, and a question of fifty lines wants the room. */
 .settings-dialog {
-  height: 300px;
+  height: 420px;
 }
 
 .settings-dialog .dialog-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* The Prompts tab: the picker and the reset beside each other, the text box taking the rest
+   of the body. Not resizable — the dialog is fixed, so the box scrolls instead. */
+.settings-prompt-header {
+  display: flex;
+  gap: 8px;
+}
+
+/* The picker takes what the reset button leaves: a label naming a button and its place needs
+   the width, and the button keeps its own. */
+.settings-prompt-header .select-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-prompt-header .button {
+  flex: none;
+}
+
+.settings-prompt {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  padding: 5px 6px;
 }
 
 /* The Info and Shortcuts tabs, laid out the same way. */

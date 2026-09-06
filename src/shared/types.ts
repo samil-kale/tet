@@ -75,7 +75,20 @@ export interface AppSettings {
   /** Whether each agent is told to draw in that theme, or left to its own — see
    *  `AgentPaths.themeAgents`. Either way they are told which way the background is. */
   themeAgents: ThemeAgentSettings;
+  /** The Prompts tab's texts for the two background questions; an empty string is tet's own
+   *  (`DEFAULT_PROMPTS` in src/shared/prompts.ts), so a default improved in a later version
+   *  still reaches a user who never edited it. */
+  prompts: PromptSettings;
 }
+
+/** The two questions tet asks an agent in the background: the commit message's, the wand's. */
+export type PromptId = "commitMessage" | "commands";
+
+export type PromptSettings = Record<PromptId, string>;
+
+/** The Prompts tab's picker, in the order the buttons sit on screen: the git pane's wand, then
+ *  the sidebar's. */
+export const PROMPT_IDS: PromptId[] = ["commitMessage", "commands"];
 
 /** The agents with a look of their own to switch tet's theme on or off for — not the shell. */
 export type ThemedAgentId = Exclude<AgentId, "shell">;

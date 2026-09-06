@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
-import { DEFAULT_KEYBINDING_PRESET_ID, THEMED_AGENT_IDS } from "../../shared/types";
+import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, THEMED_AGENT_IDS } from "../../shared/types";
 import type {
   AppInfo,
   AppSettings,
@@ -9,6 +10,7 @@ import type {
   GitActionResult,
   NotificationSettings,
   Project,
+  PromptId,
   ThemedAgentId
 } from "../../shared/types";
 import { Dropdown } from "../ui/Dropdown";
@@ -24,7 +26,7 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "info";
+type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "info";
 
 /** The dialog's panes, in the order they are worth opening; the first is the one it opens on. */
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -32,8 +34,15 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "notifications", label: "Notifications" },
   { id: "shortcuts", label: "Shortcuts" },
   { id: "files", label: "Files" },
+  { id: "prompts", label: "Prompts" },
   { id: "info", label: "Info" }
 ];
+
+/** The Prompts tab's picker, one label per question. */
+const PROMPT_LABELS: Record<PromptId, string> = {
+  commitMessage: "Commit message",
+  commands: "Find commands"
+};
 
 /** One switch per line, in the order they matter: the turn ended, it is stuck, it is idle. */
 const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
@@ -77,6 +86,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
+  const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
   /** For the Appearance tab's agent labels — the `displayName`s live on the AgentDefinitions. */
   const agents = useAgents();
 
@@ -124,6 +134,11 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   const applyThemeAgent = (id: ThemedAgentId, value: boolean): void =>
     patch((current) => ({ themeAgents: { ...current.themeAgents, [id]: value } }));
+
+  /** Tet's own text is stored as "" (the store does the same, see settings.ts — here as well
+   *  because the dialog's copy is never read back, and the reset button reads off it). */
+  const applyPrompt = (id: PromptId, text: string): void =>
+    patch((current) => ({ prompts: { ...current.prompts, [id]: text === DEFAULT_PROMPTS[id] ? "" : text } }));
 
   const updateExplorerSettings = <K extends keyof ExplorerSettings>(
     key: K,
@@ -281,6 +296,34 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
                 onChange={applyPreset}
                 options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
+              />
+            </>
+          )}
+          {tab === "prompts" && settings && (
+            <>
+              <div className="settings-prompt-header">
+                <Dropdown
+                  value={promptId}
+                  onChange={(id) => setPromptId(id as PromptId)}
+                  options={PROMPT_IDS.map((id) => ({ value: id, label: PROMPT_LABELS[id] }))}
+                />
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={settings.prompts[promptId] === ""}
+                  onClick={() => applyPrompt(promptId, "")}
+                >
+                  Reset to default
+                </button>
+              </div>
+              {/* Always the text the agent will get, never a placeholder: the default is what a
+                  user edits from, so it has to be in the box. Live — read when the wand is
+                  pressed, unlike everything else in this dialog. */}
+              <textarea
+                className="settings-prompt"
+                spellCheck={false}
+                value={effectivePrompt(settings.prompts, promptId)}
+                onChange={(event) => applyPrompt(promptId, event.target.value)}
               />
             </>
           )}

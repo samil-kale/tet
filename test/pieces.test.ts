@@ -9,6 +9,7 @@ import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/o
 import { ProjectStore } from "../src/main/projects";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
+import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
 import { THEMES } from "../src/shared/themes";
 import { DEFAULT_KEYBINDING_PRESET_ID } from "../src/shared/types";
 import { eventually } from "./helpers";
@@ -83,13 +84,22 @@ describe("the stores", () => {
     assert.equal(new SettingsStore(dir).get().theme, "system");
     fs.writeFileSync(
       file,
-      JSON.stringify({ notifications: { finished: false, needsYou: "yes" }, theme: "solarized", themeAgents: { claude: false, codex: "x" }, editorKeybindingPreset: "" })
+      JSON.stringify({
+        notifications: { finished: false, needsYou: "yes" },
+        theme: "solarized",
+        themeAgents: { claude: false, codex: "x" },
+        editorKeybindingPreset: "",
+        prompts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: 7 }
+      })
     );
     const settings = new SettingsStore(dir).get();
     assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: false });
     assert.equal(settings.theme, "solarized", "an unknown id is left standing for the readers to fall back from");
     assert.deepEqual(settings.themeAgents, { claude: false, opencode: true, codex: true });
     assert.equal(settings.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
+    assert.deepEqual(settings.prompts, { commitMessage: "", commands: "" }, "tet's own text spelled out is stored as none");
+    assert.equal(effectivePrompt(settings.prompts, "commands"), DEFAULT_PROMPTS.commands);
+    assert.equal(effectivePrompt({ ...settings.prompts, commands: "just list them" }, "commands"), "just list them");
     const store = new SettingsStore(dir);
     store.save({ ...settings, theme: "light-modern" });
     assert.equal(new SettingsStore(dir).get().theme, "light-modern", "written whole and read back");

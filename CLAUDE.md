@@ -256,7 +256,7 @@ session marks.
 A `tet.json` that's missing, unparseable or oddly shaped is simply no commands — it's the user's
 file. A project with no `tet.json` **at all** gets its commands looked up unasked, at most once
 per project per session. The wand beside `+` asks the first installed agent with `askArgs` (in
-`AGENTS`' order) with `SUGGEST_PROMPT`; the reply is read as the first bracketed JSON array and
+`AGENTS`' order) with the commands prompt; the reply is read as the first bracketed JSON array and
 added without review — a wrong entry is one right-click from deletion. One `CommandList` serves
 every project, so a wand result is keyed to the project it asked about.
 
@@ -287,9 +287,9 @@ re-lists whoever wrote the file.
 One dialog for everything TET keeps about *itself* rather than a repository, opened from the one
 button belonging to neither a project nor a pane (pane "a"'s strip). It asks nothing — a switch
 applies the moment it's flipped — so one button closes it. Tabbed (Appearance, Notifications,
-Shortcuts, Files, Info) with the add-repository dialog's `.dialog-tabs`, which is why neither has
-a `.dialog-title`. Values live in `settings.json` in `userData` (`src/main/settings.ts`), written
-whole and read back defensively.
+Shortcuts, Files, Prompts, Info) with the add-repository dialog's `.dialog-tabs`, which is why
+neither has a `.dialog-title`. Values live in `settings.json` in `userData` (`src/main/settings.ts`),
+written whole and read back defensively.
 
 **A setting reaches an agent through `AgentPaths`**, handed over at `prepareSpawn` rather than
 imported, so the persisted copy stays the only one. That is the honest limit of a switch: an agent
@@ -297,7 +297,9 @@ gets its setup once per project and can't be reached afterwards, so a change app
 opened after it — and the dialog says so. The color theme travels the same way, with one switch
 per agent (`themeAgents`) for whether that agent is told to draw in tet's theme or left to its
 own; which way the *background* is stays either way, since that is a fact about the window, not a
-taste.
+taste. The two background questions (the commit message's, the wand's) are the exception: their
+texts live in `src/shared/prompts.ts` so the dialog can show them, an empty setting means tet's
+own, and `ipc.ts` reads them at the moment of asking — the one setting that is live.
 
 Deliberately not in there: the session marks (finished out of sight, waiting on an answer).
 Neither is a notification to turn off.
@@ -497,9 +499,12 @@ answers `restartRequired`; that is a fact for the agent to relay, never a reason
 own. A verb that ends its caller (its tab, its project, the app) replies before it acts, or the CLI
 dies with nothing on stdout.
 
-**Direction of travel**: every setting in `settings-get` should eventually be settable through
-`tet-ctl`, and the control channel should grow toward letting an agent drive the whole app, not
-just a project's git state and terminals.
+**Direction of travel**: every setting in `settings-get` is to be settable through `tet-ctl`
+(`settings-set-theme`, `settings-set-prompt` so far), and the control channel should grow toward
+letting an agent drive the whole app, not just a project's git state and terminals. So a new or
+extended setting comes with an offer to add its verb: the same `ControlVerb` entry, handler and
+`control.test.ts` case the existing ones have — offered, since the user decides what an agent may
+change.
 
 ## Never touch the user's agent configuration
 

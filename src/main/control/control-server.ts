@@ -3,6 +3,7 @@ import * as net from "node:net";
 import { CONTROL_VERBS, HELP_VERB } from "../../shared/control";
 import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/control";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
+import { PROMPT_IDS } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -177,6 +178,19 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       // the theme in at construction (see createWindow). The flag is for the agent to relay,
       // not to act on: restart-app is the user's call.
       return { result: { saved: true, restartRequired: true } };
+    },
+
+    "settings-set-prompt": (args) => {
+      const id = text(args, "id", "prompt id");
+      if (!PROMPT_IDS.some((candidate) => candidate === id)) {
+        throw new ControlError("bad_args", `unknown prompt: ${id} (one of ${PROMPT_IDS.join(", ")})`);
+      }
+      // No text is the reset, same as the dialog's button: the store keeps "" for tet's own
+      // (see settings.ts), and ipc.ts reads it at the moment of asking, so nothing to restart.
+      const value = args.text;
+      const current = settings.get();
+      settings.save({ ...current, prompts: { ...current.prompts, [id]: typeof value === "string" ? value : "" } });
+      return { result: { saved: true } };
     },
 
     "projects-list": () => ({ result: store.list() }),

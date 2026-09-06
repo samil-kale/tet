@@ -62,6 +62,12 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary: "Set the color theme. Applies after TET is restarted — tell the user, do not restart for them.",
     positionals: ["theme"]
   },
+  {
+    verb: "settings-set-prompt",
+    usage: "settings-set-prompt <commitMessage|commands> [text]",
+    summary: "Set the text of a background question; no text puts TET's own back. Applies to the next press.",
+    positionals: ["id", "text"]
+  },
   { verb: "projects-list", usage: "projects-list", summary: "The open projects (id, name, path).", positionals: [] },
   {
     verb: "repo-state",
