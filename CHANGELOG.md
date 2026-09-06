@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.3.9 (2026-09-06)
+
+- A new "Dark Slate" theme, a blue-grey take on the dark palette, in Settings → Appearance.
+- Split view: switching between presets keeps the dividers where they are, only adding or
+  removing a sash. The snap preview shown while dragging a tab now lands exactly where the
+  dropped pane will.
+- The diff dialog's editor no longer draws a shadow along a scrolled edge.
+
 ## 0.3.8 (2026-09-05)
 
 - A project row shows a dot next to its name while the repository has uncommitted changes.
