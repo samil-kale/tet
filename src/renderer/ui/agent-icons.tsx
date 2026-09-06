@@ -94,6 +94,42 @@ function CodexIcon({ className }: { className?: string }) {
   );
 }
 
+/**
+ * pi's mark is a 4×4 grid of cells (a "p" with a square hole, the "i" a detached square), and at
+ * TARGET_EXTENT — 10.4px in the 13px box — a cell is 2.6px: every edge on a fraction, the whole
+ * thing a blur. `crispEdges` snaps each edge to a pixel, and at exactly 10px the snapping comes
+ * out even, cells of 2, 3, 2 and 3 with the hole a square 2×2 — the same height as Claude's mark
+ * beside it. At 8px (cells of 2) it read too small, at 11px too heavy. Verified by rendering the
+ * sizes at 13px and reading the pixels, not by eye.
+ */
+const PI_PIXEL_CELLS = 10 / 10.4;
+
+/**
+ * pi's own mark (pi.dev/logo-auto.svg) on its native 800 grid, fill only. Measured off the path:
+ * both axes run 165.29–634.72, so the extent is 469.43 square about (400, 400) — the geometric
+ * mean and the longer side are the same number here.
+ */
+function PiIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(469.43 / PI_PIXEL_CELLS, 400, 400, 800)}
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+    >
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+      />
+      <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
+    </svg>
+  );
+}
+
 /** No upstream icon exists for the plain shell, so this is the familiar prompt glyph. */
 function ShellIcon({ className }: { className?: string }) {
   return (
@@ -124,6 +160,8 @@ export function AgentIcon({ agentId, className }: AgentIconProps) {
       return <OpencodeIcon className={className} />;
     case "codex":
       return <CodexIcon className={className} />;
+    case "pi":
+      return <PiIcon className={className} />;
     case "shell":
       return <ShellIcon className={className} />;
   }

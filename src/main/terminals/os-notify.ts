@@ -4,6 +4,12 @@ import * as path from "node:path";
 /** PowerShell 5.1 decodes BOM-less files as ANSI, so generated .ps1 files need this. */
 export const WIN_BOM = "﻿";
 
+/** What starts a generated script without a shell in between — see scriptInvocation. */
+export interface ScriptInvocation {
+  command: string;
+  args: string[];
+}
+
 /**
  * Builds a shell command that shows a native OS notification through each platform's built-in
  * notifier — no extra dependency, no registry writes, no installs. Notification-only, no click
@@ -12,16 +18,41 @@ export const WIN_BOM = "﻿";
  * file, so two events do not overwrite each other's.
  */
 export function buildNotifyCommand(storageDir: string, id: string, title: string, body: string): string {
+  const scriptFile = writeNotifyScript(storageDir, id, title, body);
   if (process.platform === "win32") {
-    return buildWindowsCommand(storageDir, id, title, body);
+    return `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`;
   }
-  if (process.platform === "darwin") {
-    return buildMacCommand(storageDir, id, title, body);
-  }
-  return buildLinuxCommand(storageDir, id, title, body);
+  return `sh "${scriptFile}"`;
 }
 
-function buildWindowsCommand(storageDir: string, id: string, title: string, body: string): string {
+/**
+ * The script behind buildNotifyCommand, on its own: written and its path returned, for an agent
+ * that starts it from inside its own process (pi's extension, through child_process) rather
+ * than handing a command line to a hook shell.
+ */
+export function writeNotifyScript(storageDir: string, id: string, title: string, body: string): string {
+  if (process.platform === "win32") {
+    return writeWindowsScript(storageDir, id, title, body);
+  }
+  if (process.platform === "darwin") {
+    return writeMacScript(storageDir, id, title, body);
+  }
+  return writeLinuxScript(storageDir, id, title, body);
+}
+
+/**
+ * How such a script is started as a plain spawn — the same interpreter and flags the command
+ * line above names, as an argument list. `-File` rather than `-Command`, so the path is never
+ * re-parsed by PowerShell. Measured through pi's extension on win32 as exactly this shape.
+ */
+export function scriptInvocation(scriptFile: string): ScriptInvocation {
+  if (process.platform === "win32") {
+    return { command: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptFile] };
+  }
+  return { command: "sh", args: [scriptFile] };
+}
+
+function writeWindowsScript(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = path.join(storageDir, `notify-${id}.ps1`);
   // Well-known AUMID Windows registers by default for its own PowerShell Start Menu
   // shortcut. Reusing it never creates a registry entry, but it does attribute the toast to
@@ -59,10 +90,10 @@ try {
 } catch {}
 `
   );
-  return `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`;
+  return scriptFile;
 }
 
-function buildMacCommand(storageDir: string, id: string, title: string, body: string): string {
+function writeMacScript(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = path.join(storageDir, `notify-${id}.sh`);
   // Route the values through env vars read via AppleScript's `system attribute` instead of
   // interpolating them into the -e string directly, so no AppleScript string-literal
@@ -74,10 +105,10 @@ TET_TITLE=${shellSingleQuote(title)} TET_BODY=${shellSingleQuote(body)} osascrip
 exit 0
 `
   );
-  return `sh "${scriptFile}"`;
+  return scriptFile;
 }
 
-function buildLinuxCommand(storageDir: string, id: string, title: string, body: string): string {
+function writeLinuxScript(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = path.join(storageDir, `notify-${id}.sh`);
   // Guarded with `command -v`: notify-send ships with most desktop distros but not
   // minimal/headless ones, and a missing binary must fail silently, not surface as a hook
@@ -89,7 +120,7 @@ command -v notify-send >/dev/null 2>&1 && notify-send ${shellSingleQuote(title)}
 exit 0
 `
   );
-  return `sh "${scriptFile}"`;
+  return scriptFile;
 }
 
 /** sh chokes on CRLF (`then\r`, `fi\r`), whatever line endings the source file was stored with. */

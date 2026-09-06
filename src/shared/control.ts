@@ -90,7 +90,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   },
   {
     verb: "tabs-create",
-    usage: "tabs-create --agent <claude|opencode|codex|shell> [--project <id>]",
+    usage: "tabs-create --agent <claude|opencode|codex|pi|shell> [--project <id>]",
     summary: "Open a new terminal tab for that agent.",
     positionals: []
   },

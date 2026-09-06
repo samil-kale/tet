@@ -1,9 +1,12 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
+import { renderPiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
 import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
@@ -95,7 +98,7 @@ describe("the stores", () => {
     const settings = new SettingsStore(dir).get();
     assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: false });
     assert.equal(settings.theme, "solarized", "an unknown id is left standing for the readers to fall back from");
-    assert.deepEqual(settings.themeAgents, { claude: false, opencode: true, codex: true });
+    assert.deepEqual(settings.themeAgents, { claude: false, opencode: true, codex: true, pi: true });
     assert.equal(settings.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
     assert.deepEqual(settings.prompts, { commitMessage: "", commands: "" }, "tet's own text spelled out is stored as none");
     assert.equal(effectivePrompt(settings.prompts, "commands"), DEFAULT_PROMPTS.commands);
@@ -145,6 +148,52 @@ describe("the marker watch", () => {
     assert.ok(seen[0][1] >= before, "dated by its mtime");
     assert.ok(!fs.existsSync(path.join(dir, "abc-123")), "taken away once reported");
     stop();
+  });
+});
+
+describe("pi's extension", () => {
+  // Every path tet generates has the user's own name in it, and any of these characters could be
+  // in that; pi exits outright on an extension that does not compile.
+  const nasty = "C:\\Users\\it's $x `y\\ctx.md";
+
+  it("compiles as TypeScript whatever the paths hold", () => {
+    const source = renderPiExtension({
+      contextFile: nasty,
+      markers: { busy: nasty + "/busy", finished: nasty + "/finished", waiting: nasty + "/waiting" },
+      notify: { finished: { command: "powershell", args: ["-NoProfile", "-File", nasty] }, waiting: undefined }
+    });
+    assert.doesNotThrow(() => esbuild.transformSync(source, { loader: "ts" }));
+    assert.ok(source.includes(JSON.stringify(nasty)), "baked in as a JS literal, never spliced raw");
+  });
+
+  it("marks busy, finished and waiting by session id and appends the context file to the prompt", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-ext-"));
+    const contextFile = path.join(dir, "context.md");
+    const markers = { busy: path.join(dir, "busy"), finished: path.join(dir, "finished"), waiting: path.join(dir, "waiting") };
+    const source = renderPiExtension({ contextFile, markers, notify: {} });
+    const compiled = path.join(dir, "tet.js");
+    fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
+    const handlers: Record<string, (event: unknown, ctx: unknown) => unknown> = {};
+    (createRequire(__filename)(compiled) as { default: (pi: unknown) => void }).default({
+      on: (event: string, handler: (event: unknown, ctx: unknown) => unknown) => {
+        handlers[event] = handler;
+      }
+    });
+    const ctx = { sessionManager: { getSessionId: () => "0000-aaaa" } };
+
+    fs.writeFileSync(contextFile, "\uFEFFhello\n");
+    assert.deepEqual(handlers.before_agent_start({ systemPrompt: "base" }, ctx), { systemPrompt: "base\n\nhello" });
+    fs.writeFileSync(contextFile, "  \n");
+    assert.equal(handlers.before_agent_start({ systemPrompt: "base" }, ctx), undefined, "blank means nothing to say");
+
+    handlers.agent_start({}, ctx);
+    handlers.agent_settled({}, ctx);
+    handlers.ui_prompt_start({}, ctx);
+    for (const kind of ["busy", "finished", "waiting"] as const) {
+      assert.ok(fs.existsSync(path.join(markers[kind], "0000-aaaa")), `${kind} marker named after the session`);
+    }
+    handlers.agent_start({}, { sessionManager: { getSessionId: () => "../escape" } });
+    assert.deepEqual(fs.readdirSync(markers.busy), ["0000-aaaa"], "only a session id becomes a filename");
   });
 });
 

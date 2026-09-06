@@ -24,7 +24,7 @@ export const claudeAgent: AgentDefinition = {
         "Claude",
         paths.notifications,
         paths,
-        paths.themeAgents ? paths.theme.claudeTheme : undefined
+        paths.themeAgents ? paths.theme.kind : undefined
       );
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
     } catch (error) {

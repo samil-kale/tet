@@ -66,7 +66,7 @@ And the best part: the git diff is one click away to look over and check.
 
 ### Real terminals, several agents
 
-**Claude Code**, **opencode** and **Codex CLI** run as first-class terminal tabs; not a
+**Claude Code**, **opencode**, **Codex CLI** and **pi** run as first-class terminal tabs; not a
 wrapper, the actual CLI in a real pty. TET reads each agent's own session state and shows, on the
 tab and on the project row, whether a turn is **working**, **stopped for an answer**, or
 **finished while you were looking elsewhere**. List, resume, rename and delete past sessions from
@@ -131,7 +131,7 @@ npm start
 ### Requirements
 
 TET needs **`git`** on your `PATH`, plus **at least one supported agent**: Claude Code,
-opencode or Codex CLI. It checks on startup and tells you exactly what's missing.
+opencode, Codex CLI or pi. It checks on startup and tells you exactly what's missing.
 
 ---
 
@@ -142,7 +142,7 @@ CLI in its own process so typing in a terminal stays smooth.
 
 The agents are the real CLIs in a real pty; nothing is read off the terminal output. Each one
 reports its turns through its own mechanism. 
-**Your own Claude Code, Codex and opencode configuration is never read or written.**
+**Your own Claude Code, Codex, opencode and pi configuration is never read or written.**
 
 ## Contributing
 

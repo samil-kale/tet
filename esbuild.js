@@ -23,7 +23,7 @@ const mainConfig = {
   target: "node22",
   format: "cjs",
   // electron is provided by the runtime; node-pty is a native addon and cannot be bundled.
-  external: ["electron", "node-pty"]
+  external: ["electron", "node-pty", "esbuild"]
 };
 
 /** The git CLI wrapper, which runs in a utilityProcess of its own — see CLAUDE.md. */
@@ -105,7 +105,9 @@ const testConfig = {
   format: "cjs",
   // electron for its binary's path (app.test.ts starts it), node-pty because pty.ts imports it
   // and neither can be bundled — the first reads a file beside itself, the second is native.
-  external: ["electron", "node-pty"]
+  // esbuild finds its own binary relative to its package; pieces.test.ts compiles pi's
+  // generated extension with it.
+  external: ["electron", "node-pty", "esbuild"]
 };
 
 function copyStaticAssets() {

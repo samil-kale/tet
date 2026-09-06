@@ -5,9 +5,10 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSessionProvider } from "../src/main/agents/codex/sessions";
+import { encodeCwd, piSessionProvider } from "../src/main/agents/pi/sessions";
 
 /**
- * The two agents whose sessions are read off disk, against transcripts written the way the
+ * The three agents whose sessions are read off disk, against transcripts written the way the
  * CLIs write them. The title rules and the turn forensics are what CLAUDE.md warns about: a
  * regression there shows the wrong title, or a spinner that never stops, with nothing to
  * catch it but this.
@@ -215,5 +216,104 @@ describe("Codex's rollouts", () => {
   it("lists nothing where Codex has never run", async () => {
     process.env.CODEX_HOME = path.join(os.tmpdir(), "tet-codex-never");
     assert.deepEqual(await codexSessionProvider.list("codex", cwd), []);
+  });
+});
+
+describe("pi's transcripts", () => {
+  const cwd = process.platform === "win32" ? "C:\\work\\Repo One" : "/work/repo one";
+  const fileName = (id: string, at = AT): string => `${at.replace(/[:.]/g, "-")}_${id}.jsonl`;
+
+  /** A config dir of its own per case: the provider caches by path, and every case is new. */
+  function transcripts(files: Record<string, unknown[]>, dirName = encodeCwd(cwd)): string {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-"));
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    const sessionDir = path.join(agentDir, "sessions", dirName);
+    fs.mkdirSync(sessionDir, { recursive: true });
+    for (const [id, entries] of Object.entries(files)) {
+      fs.writeFileSync(path.join(sessionDir, fileName(id)), entries.map(line).join(""));
+    }
+    return sessionDir;
+  }
+
+  const header = (id: string, at = AT): unknown => ({ type: "session", version: 3, id, timestamp: at, cwd });
+  const modelChange = { type: "model_change", id: "m1", parentId: null, timestamp: AT, provider: "x", modelId: "y" };
+  const user = (content: unknown, id = "u1", at = AT): unknown => ({
+    type: "message",
+    id,
+    parentId: "m1",
+    timestamp: at,
+    message: { role: "user", content, timestamp: ms(at) }
+  });
+  const assistant = (stopReason: string, at = AT, id = "a1"): unknown => ({
+    type: "message",
+    id,
+    parentId: "u1",
+    timestamp: at,
+    message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason, timestamp: ms(at) }
+  });
+  const toolResult = { type: "message", id: "t1", parentId: "a1", timestamp: AT, message: { role: "toolResult", content: [{ type: "text", text: "user output" }] } };
+  const info = (name: string, id: string): unknown => ({ type: "session_info", id, parentId: "a1", timestamp: LATER, name });
+
+  it("titles a session by the last session_info in file order, else by the first prompt", async () => {
+    transcripts({
+      s1: [header("s1"), modelChange, user("Fix the build"), assistant("stop"), info("First", "n1"), info("Second", "n2")],
+      s2: [header("s2", LATER), modelChange, toolResult, user([{ type: "image", data: "…" }, { type: "text", text: "From blocks" }]), assistant("stop")],
+      s3: [header("s3", LATER), modelChange, user("Fix the tests"), assistant("stop"), info("Mine", "n1"), info("  ", "n2")]
+    });
+    const sessions = await piSessionProvider.list("pi", cwd);
+    assert.deepEqual(
+      sessions.map((s) => [s.id, s.title, s.createdAt, s.provisionalTitle]),
+      [
+        ["s1", "Second", ms(AT), undefined],
+        ["s2", "From blocks", ms(LATER), undefined],
+        ["s3", "Fix the tests", ms(LATER), undefined]
+      ],
+      "the header's timestamp is the created time, a blank last session_info is pi's own clear"
+    );
+  });
+
+  it("takes the last assistant message as the turn's end, an aborted one included", async () => {
+    transcripts({
+      s1: [header("s1"), modelChange, user("p"), assistant("stop", AT), user("q", "u2"), assistant("aborted", LATER, "a2")],
+      s2: [header("s2", LATER), modelChange, user("p")]
+    });
+    const sessions = await piSessionProvider.list("pi", cwd);
+    assert.deepEqual(sessions.map((s) => [s.id, s.turnEndedAt]), [["s1", ms(LATER)], ["s2", undefined]]);
+  });
+
+  it("renames by appending a session_info parented to the last entry, and removes by deleting the file", async () => {
+    const dir = transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] });
+    await piSessionProvider.rename("pi", cwd, "s1", "  Renamed  ");
+    assert.equal((await piSessionProvider.list("pi", cwd))[0].title, "Renamed");
+    const lines = fs.readFileSync(path.join(dir, fileName("s1")), "utf8").trim().split("\n");
+    const appended = JSON.parse(lines[lines.length - 1]) as Record<string, unknown>;
+    assert.equal(appended.type, "session_info");
+    assert.equal(appended.name, "Renamed");
+    assert.equal(appended.parentId, "a1");
+    assert.match(String(appended.id), /^[0-9a-f]{8}$/);
+    assert.ok(!["m1", "u1", "a1"].includes(String(appended.id)));
+    await assert.rejects(piSessionProvider.rename("pi", cwd, "s1", "  "), /non-empty/);
+    await piSessionProvider.remove("pi", cwd, "s1");
+    assert.deepEqual(fs.readdirSync(dir), []);
+    await assert.rejects(piSessionProvider.remove("pi", cwd, "s1"), /not found/);
+  });
+
+  it("skips a .jsonl that is no pi transcript, and reads past a broken line", async () => {
+    transcripts({
+      other: [{ type: "message", id: "x" }],
+      s1: [header("s1"), "{ not json", user("Still listed"), assistant("stop")]
+    });
+    const sessions = await piSessionProvider.list("pi", cwd);
+    assert.deepEqual(sessions.map((s) => [s.id, s.title]), [["s1", "Still listed"]]);
+  });
+
+  it("finds the directory whatever case pi was spawned with", { skip: process.platform !== "win32" && "win32 only" }, async () => {
+    transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] }, encodeCwd(cwd).toLowerCase());
+    assert.equal((await piSessionProvider.list("pi", cwd))[0]?.id, "s1");
+  });
+
+  it("lists nothing where pi has never run", async () => {
+    process.env.PI_CODING_AGENT_DIR = path.join(os.tmpdir(), "tet-pi-never");
+    assert.deepEqual(await piSessionProvider.list("pi", cwd), []);
   });
 });

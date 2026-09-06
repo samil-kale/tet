@@ -1,4 +1,4 @@
-export type AgentId = "claude" | "opencode" | "codex" | "shell";
+export type AgentId = "claude" | "opencode" | "codex" | "pi" | "shell";
 
 export interface AgentInfo {
   id: AgentId;
@@ -97,7 +97,7 @@ export type ThemeAgentSettings = Record<ThemedAgentId, boolean>;
 
 /** The Appearance tab's rows, in the sidebar's own agent order. Ids only: the labels are the
  *  `displayName`s from `agents.list()`, so an agent's name lives on its AgentDefinition alone. */
-export const THEMED_AGENT_IDS: ThemedAgentId[] = ["claude", "opencode", "codex"];
+export const THEMED_AGENT_IDS: ThemedAgentId[] = ["claude", "opencode", "codex", "pi"];
 
 /** The Files tab's keybinding-preset fallback, shared so main and renderer can't drift apart —
  *  matches `KEYBINDING_PRESETS[0].id`. */

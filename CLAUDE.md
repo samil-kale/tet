@@ -360,7 +360,8 @@ error mark alone is `--vscode-errorForeground`, not a fourth turn state.
 `AgentPaths.onSessionBusy` / `onSessionWaiting` / `onSessionFinished`: opencode on the event
 stream TET already subscribes to (`session.status`, `permission.asked`, `question.asked`); Claude
 Code and Codex through hook processes that `touch` a marker named after the session id into
-`<agentDir>/busy/`, `finished/` and `waiting/`, picked up by `watchMarkers`
+`<agentDir>/busy/`, `finished/` and `waiting/`, and pi through a generated `-e` extension writing
+the same markers from inside its process — all picked up by `watchMarkers`
 (`src/main/terminals/marker-watch.ts`, watch *plus* a timer sweep — win32 `fs.watch` misses files). The
 hooks register regardless of notification settings; only their toast is optional. Reusing the Stop
 hook is the point: it carries the `background_tasks` guard, so a turn that only launched a
@@ -368,7 +369,7 @@ subagent isn't "finished". Markers found at startup are deleted unreported.
 
 **No agent reports that a question was answered**, and none needs to: the answer is typed into
 the tab that asked, so a question clears on input that can be an answer (`answersQuestion` in
-`session-manager.ts`) or either end of a turn — one rule for all three agents. **No hook fires for
+`session-manager.ts`) or either end of a turn — one rule for all four agents. **No hook fires for
 a turn the user cut short** either; the net is each agent's own transcript (`turnEndedAt` in
 `src/main/agents/*/sessions.ts`, with the forensics that tell an interrupt from a withheld marker).
 
@@ -425,27 +426,31 @@ folder; it calls the definition's callbacks — a new agent is a new folder, one
 
 ### Never assume the agents behave alike
 
-They are three separate products that happen to sit in the same kind of tab. Every time the same
+They are four separate products that happen to sit in the same kind of tab. Every time the same
 question has been put to all of them, the answers differed — and the differences were only ever
 found by **measuring the real binary through this same pty**, never by reading its source or its
 docs, and never by reasoning from one agent to another:
 
-- `createIsSessionReady`'s byte thresholds: one per agent, all tuned by hand.
-- `quitPresses`: Claude Code wants two Ctrl+C and soon withdraws the offer;
+- `createIsSessionReady`'s byte thresholds: one per agent, all tuned by hand — pi's stays under
+  its project-trust dialog, which holds the output at ~1.4 KB until answered.
+- `quitPresses`: Claude Code and pi want two Ctrl+C (pi within 500 ms) and soon withdraw the offer;
   Codex and opencode quit on one, and a second byte sent to a Codex already leaving *kills* the
   shutdown it would have completed. No single interval serves all three.
 - The right mouse button: Claude Code and opencode take it themselves through mouse reporting,
-  Codex deliberately leaves it to the terminal (`takesRightMouse`).
+  Codex deliberately leaves it to the terminal (`takesRightMouse`), and pi turns on no mouse
+  reporting at all.
 - Colours: opencode's `"theme": "system"` adopts the terminal palette but swaps blue and magenta
   (`swapsBlueMagenta`; `buildXtermTheme` swaps them back — observed, not derived); Codex ignores the
   palette entirely until `-c tui.theme=ansi`, and on win32 guesses light/dark from the console,
   not the terminal (hence `launch.cmd` and the OSC 4 handling in `src/main/agents/codex/index.ts`);
   Claude Code paints dark unless told otherwise, so tet passes `theme` in its `--settings` file
   (one of its built-in themes, never a custom one in tet's colors — it draws a dark frame while
-  a custom theme loads, see `src/main/agents/claude/hooks.ts`).
+  a custom theme loads, see `src/main/agents/claude/hooks.ts`); pi paints truecolor only and
+  takes `--use-theme dark|light` for one run.
 - Turn signals: opencode has an event stream, Claude Code and Codex need hook processes touching
-  marker files, and Codex only runs a hook it has hashed and decided to trust.
-- Ctrl+C: Claude Code and opencode read `\x03` as an ordinary byte; to a Codex in cooked mode it
+  marker files, Codex only runs a hook it has hashed and decided to trust, and pi loads a
+  TypeScript extension and exits outright when it fails to load.
+- Ctrl+C: Claude Code, opencode and pi read `\x03` as an ordinary byte; to a Codex in cooked mode it
   is a process-level `CTRL_C_EVENT` that kills it, so it is never sent there (`plainCtrlCKills`
   draws the line).
 
@@ -519,6 +524,8 @@ Everything TET generates lives under its own `userData` and is pointed at from o
   carries nothing but `"theme": "system"` (`tui-config.ts`), layered over the user's own.
 - Codex: `-c key=value` overrides for that one process only — verified nothing is written back.
   `~/.codex/config.toml` and `~/.codex/hooks.json` are never read, written or replaced.
+- pi: a generated extension under `userData` passed as `-e`, `--use-theme` for that one process;
+  `PI_CODING_AGENT_DIR` is never set — it would move the user's sessions and auth.
 
 ## Files other processes read
 

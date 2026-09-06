@@ -147,7 +147,7 @@ describe("tet-ctl against the control server", () => {
       notifications: { finished: true, needsYou: true, idleReminder: false },
       editorKeybindingPreset: "tet",
       theme: "system",
-      themeAgents: { claude: true, opencode: true, codex: true },
+      themeAgents: { claude: true, opencode: true, codex: true, pi: true },
       prompts: { commitMessage: "", commands: "" }
     };
     for (const list of Object.values(calls)) {

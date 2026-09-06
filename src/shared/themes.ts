@@ -9,9 +9,11 @@ export interface ThemeDefinition {
   label: string;
   /** The token half: Dark/Light Modern take their tokenColors from Dark+/Light+ by `include`. */
   shikiTheme: "dark-plus" | "light-plus";
-  /** Claude Code's own theme for this background, set in the `--settings` file tet hands it
-   *  (see src/main/agents/claude/hooks.ts) — it does not look at the terminal itself. */
-  claudeTheme: "dark" | "light";
+  /** Which way the background is — VS Code's theme `type`. What an agent that paints its own
+   *  frame rather than reading the terminal's colors is told when the Appearance switch is on:
+   *  Claude Code's `theme` in the `--settings` file tet hands it (src/main/agents/claude/hooks.ts)
+   *  and pi's `--use-theme` (src/main/agents/pi) both name their built-in themes after it. */
+  kind: "dark" | "light";
   /** BrowserWindow's own paint color and the Windows title-bar overlay — set in main.ts before
    *  the renderer's CSS exists, so kept by hand in step with the stylesheet's
    *  --vscode-titleBar-activeBackground / -activeForeground for this theme. */
@@ -29,7 +31,7 @@ export const THEMES: ThemeDefinition[] = [
     id: "dark-modern",
     label: "Dark",
     shikiTheme: "dark-plus",
-    claudeTheme: "dark",
+    kind: "dark",
     windowBackground: "#181818",
     titleBarSymbolColor: "#cccccc",
     terminalBackground: "#1f1f1f",
@@ -39,7 +41,7 @@ export const THEMES: ThemeDefinition[] = [
     id: "dark-slate",
     label: "Dark Slate",
     shikiTheme: "dark-plus",
-    claudeTheme: "dark",
+    kind: "dark",
     windowBackground: "#14171c",
     titleBarSymbolColor: "#dde2e9",
     terminalBackground: "#1b1f27",
@@ -49,7 +51,7 @@ export const THEMES: ThemeDefinition[] = [
     id: "light-modern",
     label: "Light",
     shikiTheme: "light-plus",
-    claudeTheme: "light",
+    kind: "light",
     windowBackground: "#f8f8f8",
     titleBarSymbolColor: "#1e1e1e",
     terminalBackground: "#ffffff",
