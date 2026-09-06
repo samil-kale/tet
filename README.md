@@ -26,14 +26,6 @@
 
 ---
 
-<!--
-  ASSETS TO ADD (drop into docs/, keep the filenames):
-  - docs/split.png     a project split into panes, each with its own tab strip.
-  - docs/git-pane.png  the git toggle slid out: branch tree over changed files.
-  - docs/diff.png      the diff dialog over the window.
-  - docs/notify.png    project rows with working / waiting / finished marks.
--->
-
 <p align="center">
   <img src="docs/tet.gif" alt="TET; terminals and git for several projects at once" width="860" />
 </p>
@@ -78,42 +70,31 @@ And the best part: the git diff is one click away to look over and check.
 wrapper, the actual CLI in a real pty. TET reads each agent's own session state and shows, on the
 tab and on the project row, whether a turn is **working**, **stopped for an answer**, or
 **finished while you were looking elsewhere**. List, resume, rename and delete past sessions from
-the tab's menu. Drag files or images straight onto a terminal; ctrl-click a path in the output to
+the tab's menu. Drag files or images straight onto a terminal. Ctrl-click a path in the output to
 open it.
 
 ### Multiple terminals, one glance
 
-Split a project's terminals into up to four panes; five fixed presets (single, columns,
-2&times;2 &hellip;), each pane with its own tab strip. See the agent, the dev server and a shell
-at once instead of cycling tabs.
-
-<!-- <p align="center"><img src="docs/split.png" width="820" alt="Split view"></p> -->
+Split a project's terminals into up to four panes. Drag a tab onto a
+snap zone at the edge of the terminals to split them, and a pane whose last tab leaves collapses
+away again. See the agent, the dev server and a shell at once instead of cycling tabs.
 
 ### The git pane
 
-A toggle in the tab strip slides out a pane between navigation and terminals; the branch
-tree (branches, remotes, tags, stashes) over the files the agent changed; and stays out
-until you press it again, so a terminal and the repository stay on screen together. Checkout,
-fetch/pull/push, commit-all, discard (to the trash, not `rm`), `.gitignore` from a right-click.
-Clone from GitHub or GitLab in the add-repository dialog.
-
-<!-- <p align="center"><img src="docs/git-pane.png" width="360" alt="Git pane"></p> -->
+A toggle in the tab strip slides out a pane between navigation and terminals, so a terminal and 
+the repository stay on screen together. Checkout, fetch/pull/push, commit-all, discard, 
+`.gitignore` from a right-click. Clone from GitHub or GitLab in the add-repository dialog.
 
 ### A diff dialog that's also an editor
 
 Double-click a changed file, or ctrl-click a path in a terminal, for a full-window diff. Images
-diff as images; whitespace toggles off; unfold context on demand. The same view doubles as a
+diff as images; unfold context on demand. The same view doubles as a
 plain code editor (Monaco) for a quick look-and-fix without leaving TET.
-
-<!-- <p align="center"><img src="docs/diff.png" width="820" alt="Diff dialog"></p> -->
 
 ### Notifications you can act on
 
-Desktop notifications when a turn ends or needs input, with a guard so a turn that only launched a
-subagent doesn't count as done. Alongside them, an always-visible read of what's **waiting** and
-what **finished out of sight**, on every project row.
-
-<!-- <p align="center"><img src="docs/notify.png" width="820" alt="Turn marks"></p> -->
+Desktop notifications when a turn ends or needs input. Alongside them, an always-visible 
+read of what's **waiting** and what **finished out of sight**, on every project row.
 
 ### Saved commands per project
 
@@ -121,10 +102,12 @@ The sidebar's lower half is a project's saved shell commands, kept in a `tet.jso
 repository root; so they travel with the repo and can be committed. Run one and it opens a
 terminal tab whose process *is* the command.
 
-### Themes
+### An agent can drive TET
 
-VS Code's Dark Modern palette by default, plus more themes; each agent can be told to draw in
-TET's theme or left to its own.
+Every terminal tab gets `tet-ctl` on its `PATH`, a small CLI that talks to the app around it:
+list the open projects and their git state, open or close a project, list, create, rename and
+close terminal tabs, run a saved command, read or change TET's settings. Each tab also gets a
+context file pointing at it, so an agent knows the command without being told.
 
 ---
 
@@ -145,26 +128,21 @@ npm install
 npm start
 ```
 
-Other scripts: `npm run compile`, `npm run typecheck`, `npm run lint`, `npm test`.
-
 ### Requirements
 
-TET needs **`git`** on your `PATH`, plus **at least one supported agent**; Claude Code,
-opencode or Codex CLI; or just a shell. It checks on startup and tells you exactly what's
-missing.
+TET needs **`git`** on your `PATH`, plus **at least one supported agent**: Claude Code,
+opencode or Codex CLI. It checks on startup and tells you exactly what's missing.
 
 ---
 
 ## How it works
 
 TET is Electron + React + xterm.js. Git is never reimplemented; it wraps the local `git`
-CLI in its own process so typing in a terminal stays smooth. Each agent is described by one
-definition and lives in its own folder; the three are treated as three separate products that
-happen to share a kind of tab, because every time the same question was put to all of them, the
-answers differed.
+CLI in its own process so typing in a terminal stays smooth.
 
-The design decisions, and the things that were built and deliberately taken back out, are written
-down in **[CLAUDE.md](CLAUDE.md)**.
+The agents are the real CLIs in a real pty; nothing is read off the terminal output. Each one
+reports its turns through its own mechanism. 
+**Your own Claude Code, Codex and opencode configuration is never read or written.**
 
 ## Contributing
 
