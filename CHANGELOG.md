@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.3.10 (2026-09-06)
+
+- pi (pi.dev) joins Claude Code, opencode and Codex as a fourth agent: a terminal tab of its
+  own, past sessions listed, resumed, renamed and deleted from the tab's menu, the working /
+  waiting / finished marks on tab and project row, desktop notifications, and tet's theme
+  applied for the run when the Appearance tab says so.
+- The two questions tet asks an agent in the background (the commit message's, the saved
+  commands wand's) are editable in a new Settings → Prompts tab, and through
+  `tet-ctl settings-set-prompt`. A question left untouched keeps following tet's own text as it
+  improves.
+
 ## 0.3.9 (2026-09-06)
 
 - A new "Dark Slate" theme, a blue-grey take on the dark palette, in Settings → Appearance.
