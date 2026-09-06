@@ -17,7 +17,7 @@ import { piSessionProvider } from "./sessions";
  */
 export const piAgent: AgentDefinition = {
   id: "pi",
-  displayName: "pi",
+  displayName: "Pi",
   executable: () => "pi",
   // On win32 the npm install is a `pi.cmd` shim in %APPDATA%\npm, which resolveCommand already
   // routes through cmd.exe like Claude's and Codex's.
@@ -32,7 +32,7 @@ export const piAgent: AgentDefinition = {
     const args: string[] = [];
     const watchers: (() => void)[] = [];
     try {
-      const extension = writePiExtension(paths.agentDir, path.basename(cwd), "pi", paths.notifications, paths.contextFile);
+      const extension = writePiExtension(paths.agentDir, path.basename(cwd), "Pi", paths.notifications, paths.contextFile);
       args.push("-e", extension);
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
     } catch (error) {
