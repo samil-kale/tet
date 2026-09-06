@@ -19,10 +19,9 @@ export interface ScriptInvocation {
  */
 export function buildNotifyCommand(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = writeNotifyScript(storageDir, id, title, body);
-  if (process.platform === "win32") {
-    return `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`;
-  }
-  return `sh "${scriptFile}"`;
+  // The same invocation as a command line: only the path, the last argument, can hold a space.
+  const { command, args } = scriptInvocation(scriptFile);
+  return [command, ...args.slice(0, -1), `"${scriptFile}"`].join(" ");
 }
 
 /**

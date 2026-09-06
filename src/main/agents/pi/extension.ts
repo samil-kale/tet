@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { markerDir } from "../../terminals/marker-watch";
+import { markerDir, SESSION_ID_CHARS } from "../../terminals/marker-watch";
 import { scriptInvocation, writeNotifyScript, type ScriptInvocation } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
@@ -84,10 +84,11 @@ const MARKERS = ${JSON.stringify(options.markers)};
 const NOTIFY: { finished: Invocation | null; waiting: Invocation | null } = ${JSON.stringify(notify)};
 
 // The marker's filename is the whole message, so only a session id may ever become one — the
-// same guard the shell hooks apply. Rewriting an existing marker is harmless: the file is
-// empty, there is nothing in it to lose, and its mtime is what tet reads as the time.
+// same guard the shell hooks apply, from the same list of characters. Rewriting an existing
+// marker is harmless: the file is empty, there is nothing in it to lose, and its mtime is
+// what tet reads as the time.
 function mark(dir: string, id: unknown): void {
-  if (typeof id !== "string" || !/^[0-9a-fA-F-]+$/.test(id)) {
+  if (typeof id !== "string" || !/^[${SESSION_ID_CHARS}]+$/.test(id)) {
     return;
   }
   try {

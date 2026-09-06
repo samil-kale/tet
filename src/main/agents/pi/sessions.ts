@@ -4,8 +4,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
-import { watchedDirectoryGone } from "../../watch-dir";
+import { findEncodedDir, nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
+import { watchTranscriptDir } from "../../watch-dir";
 
 /**
  * pi keeps one JSONL transcript per session under its own config directory, named
@@ -122,64 +122,9 @@ export const piSessionProvider: SessionProvider = {
     scanCache.delete(filePath);
   },
 
-  /**
-   * Two-stage, the way Claude's is: the session directory doesn't exist until pi first writes
-   * a transcript there, and fs.watch throws ENOENT on a missing one, so until then the sessions
-   * root is watched for it appearing. Non-recursive — pi writes nothing below it.
-   */
+  /** The session directory exists only once pi has written a transcript here — see watchTranscriptDir. */
   watch(_executable: string, cwd: string, onChange: () => void): () => void {
-    let dirWatcher: fs.FSWatcher | undefined;
-    let rootWatcher: fs.FSWatcher | undefined;
-    let stopped = false;
-
-    const armDirWatcher = async (): Promise<void> => {
-      if (stopped || dirWatcher) {
-        return;
-      }
-      const dir = await findSessionDir(cwd).catch(() => undefined);
-      if (!dir || stopped || dirWatcher) {
-        return;
-      }
-      const onEvent = (_eventType: string, filename: string | null): void => {
-        if (watchedDirectoryGone(dir, filename)) {
-          dirWatcher?.close();
-          dirWatcher = undefined;
-          armRootWatcher();
-          return;
-        }
-        if (filename === null || filename.endsWith(".jsonl")) {
-          onChange();
-        }
-      };
-      try {
-        dirWatcher = fs.watch(dir, onEvent);
-      } catch {
-        // Gone again between the lookup and the watch: the listing stays polled, as before pi
-        // ever ran here.
-        return;
-      }
-      rootWatcher?.close();
-      rootWatcher = undefined;
-    };
-
-    const armRootWatcher = (): void => {
-      if (stopped || dirWatcher || rootWatcher) {
-        return;
-      }
-      try {
-        rootWatcher = fs.watch(sessionsRoot(), () => void armDirWatcher());
-      } catch {
-        // pi has never run on this machine — nothing to watch, listing stays polled.
-      }
-    };
-
-    void armDirWatcher().then(armRootWatcher);
-
-    return () => {
-      stopped = true;
-      dirWatcher?.close();
-      rootWatcher?.close();
-    };
+    return watchTranscriptDir(sessionsRoot, () => findSessionDir(cwd), (filename) => filename.endsWith(".jsonl"), onChange);
   }
 };
 
@@ -206,29 +151,11 @@ export function encodeCwd(cwd: string): string {
 /**
  * Where this repository's transcripts are, or undefined where pi has never run in it. Measured
  * on win32: the drive letter's case follows whatever pi was spawned with (`c:\…` gives
- * `--c--Users…`) while the folder names come back canonical, so the match is case-insensitive
- * there — the same rule as Claude's findProjectDir.
+ * `--c--Users…`) while the folder names come back canonical — the case-insensitive match in
+ * findEncodedDir is what covers that.
  */
-async function findSessionDir(cwd: string): Promise<string | undefined> {
-  const root = sessionsRoot();
-  const encoded = encodeCwd(cwd);
-  const ignoreCase = process.platform === "win32";
-  const wanted = ignoreCase ? encoded.toLowerCase() : encoded;
-  let entries: string[];
-  try {
-    entries = await fs.promises.readdir(root);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
-  for (const entry of entries) {
-    if ((ignoreCase ? entry.toLowerCase() : entry) === wanted) {
-      return path.join(root, entry);
-    }
-  }
-  return undefined;
+function findSessionDir(cwd: string): Promise<string | undefined> {
+  return findEncodedDir(sessionsRoot(), encodeCwd(cwd));
 }
 
 /**

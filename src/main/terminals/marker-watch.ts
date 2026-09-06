@@ -20,6 +20,13 @@ export type Marker = "busy" | "finished" | "waiting";
  */
 const MARKER_SWEEP_MS = 2000;
 
+/**
+ * The characters a session id may consist of — every agent's ids are uuids or hex — and so
+ * the only ones that may ever reach a marker's filename. Written once here, spelled into each
+ * guard below and into pi's generated extension, so nothing but a session id becomes a path.
+ */
+export const SESSION_ID_CHARS = "0-9a-fA-F-";
+
 export function markerDir(storageDir: string, kind: Marker): string {
   return path.join(storageDir, kind);
 }
@@ -35,14 +42,14 @@ export function markPowershell(dir: string): string {
   # a filename here. -Force so a session that reaches this twice overwrites its own marker
   # rather than erroring - the file is empty, there is nothing in it to lose.
   $id = [string]$json.session_id
-  if ($id -match '^[0-9a-fA-F-]+$') {
+  if ($id -match '^[${SESSION_ID_CHARS}]+$') {
     New-Item -ItemType File -Force -Path (Join-Path ${powershellSingleQuote(dir)} $id) -ErrorAction SilentlyContinue | Out-Null
   }`;
 }
 
 export function markPosix(dir: string): string {
   return `# Only the uuid characters are captured, so nothing else can ever become a filename below.
-id=$(printf '%s' "$json" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\\([0-9a-fA-F-]*\\)".*/\\1/p')
+id=$(printf '%s' "$json" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\\([${SESSION_ID_CHARS}]*\\)".*/\\1/p')
 # touch rather than a ">" redirection: ":" is a special built-in, and POSIX has a failed
 # redirection on one of those end the whole shell - which would take whatever follows with it
 # the one time the directory is missing.

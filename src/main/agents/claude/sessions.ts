@@ -3,8 +3,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
-import { watchedDirectoryGone } from "../../watch-dir";
+import { findEncodedDir, nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
+import { watchTranscriptDir } from "../../watch-dir";
 
 /**
  * Claude Code has no session CLI — sessions are the `<uuid>.jsonl` transcripts in
@@ -85,75 +85,11 @@ export const claudeSessionProvider: SessionProvider = {
   },
 
   /**
-   * Watches the project's transcripts. Non-recursive on purpose: a write inside a session's
-   * own `subagents/` subdirectory then doesn't fire at all, and the directory entries that do
-   * fire are filtered out by extension.
-   *
-   * Two-stage because the project directory doesn't exist until Claude first writes a
-   * transcript there, and fs.watch throws ENOENT on a missing one: until then, watch the
-   * projects root (which does report the new directory appearing) and arm the real watcher
-   * once it shows up.
+   * The project directory doesn't exist until Claude first writes a transcript there, and a
+   * session's own `subagents/` subdirectory must not count — watchTranscriptDir covers both.
    */
   watch(_executable: string, cwd: string, onChange: () => void): () => void {
-    let projectWatcher: fs.FSWatcher | undefined;
-    let rootWatcher: fs.FSWatcher | undefined;
-    let stopped = false;
-
-    const armProjectWatcher = async (): Promise<void> => {
-      if (stopped || projectWatcher) {
-        return;
-      }
-      // Rejects when the projects root itself is absent (Claude never ran here) — that's
-      // the normal starting state for a fresh install, not a failure worth reporting.
-      const projectDir = await findProjectDir(cwd).catch(() => undefined);
-      if (!projectDir || stopped || projectWatcher) {
-        return;
-      }
-      const onEvent = (_eventType: string, filename: string | null): void => {
-        // The directory itself deleted (a cleared `~/.claude/projects`): back to the first
-        // stage, which arms this again once Claude recreates it.
-        if (watchedDirectoryGone(projectDir, filename)) {
-          projectWatcher?.close();
-          projectWatcher = undefined;
-          armRootWatcher();
-          return;
-        }
-        // A null filename means "something here changed" on platforms that don't report
-        // it — reconciling then is the safe read.
-        if (filename === null || filename.endsWith(".jsonl")) {
-          onChange();
-        }
-      };
-      try {
-        projectWatcher = fs.watch(projectDir, onEvent);
-      } catch {
-        // Gone again between the lookup and the watch, or no descriptor left for one: the
-        // listing stays polled, as it is before Claude ever ran here. Codex and opencode
-        // guard their watch the same way.
-        return;
-      }
-      rootWatcher?.close();
-      rootWatcher = undefined;
-    };
-
-    const armRootWatcher = (): void => {
-      if (stopped || projectWatcher || rootWatcher) {
-        return;
-      }
-      try {
-        rootWatcher = fs.watch(projectsRoot(), () => void armProjectWatcher());
-      } catch {
-        // Claude has never run on this machine — nothing to watch, listing stays polled.
-      }
-    };
-
-    void armProjectWatcher().then(armRootWatcher);
-
-    return () => {
-      stopped = true;
-      projectWatcher?.close();
-      rootWatcher?.close();
-    };
+    return watchTranscriptDir(projectsRoot, () => findProjectDir(cwd), (filename) => filename.endsWith(".jsonl"), onChange);
   }
 };
 
@@ -162,30 +98,8 @@ function projectsRoot(): string {
   return path.join(configDir, "projects");
 }
 
-async function findProjectDir(cwd: string): Promise<string | undefined> {
-  const projectsDir = projectsRoot();
-  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, "-");
-  // Windows paths are case-insensitive and the CLI preserves whatever casing it saw,
-  // so the same project can have differently-cased directories there.
-  const ignoreCase = process.platform === "win32";
-  const wanted = ignoreCase ? encoded.toLowerCase() : encoded;
-  let entries: string[];
-  try {
-    entries = await fs.promises.readdir(projectsDir);
-  } catch (error) {
-    // No projects root at all — Claude Code has never run on this machine — is the same
-    // answer as no directory for this project: no sessions, not a failure to report.
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
-  for (const entry of entries) {
-    if ((ignoreCase ? entry.toLowerCase() : entry) === wanted) {
-      return path.join(projectsDir, entry);
-    }
-  }
-  return undefined;
+function findProjectDir(cwd: string): Promise<string | undefined> {
+  return findEncodedDir(projectsRoot(), cwd.replace(/[^a-zA-Z0-9]/g, "-"));
 }
 
 const TITLE_SCAN_BYTE_LIMIT = 256 * 1024;
