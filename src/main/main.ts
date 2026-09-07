@@ -10,7 +10,7 @@ import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
 import { writeLaunchers } from "./control/control-launcher";
 import { findControlPort, startControlServer } from "./control/control-server";
-import { countActivity, startEventLoopMonitor } from "./event-loop-monitor";
+import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
@@ -105,8 +105,9 @@ function openWorkspace(): void {
   }
   workspaceOpen = true;
   for (const project of store.list()) {
-    openProject(project);
+    timeStartup(`open ${project.name}`, () => openProject(project));
   }
+  markStartup("control");
   void startControl();
 }
 
@@ -294,12 +295,13 @@ if (!app.requestSingleInstanceLock()) {
     setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: controlToken }, binDir);
     controlChannel = { token: controlToken, port };
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
-    createWindow();
+    timeStartup("window", createWindow);
     // The git process inherits its environment at the fork, so it waits for the PATH — but
     // still up front rather than on the first repository: the renderer is loading meanwhile,
     // and its first git question comes only after the requirements check passes.
     await pathReady;
-    startGitProcess();
+    timeStartup("git-process", startGitProcess);
+    markStartup("auto-update");
     startAutoUpdate((severity, message, progress) => send("app:notice", { severity, message, progress }));
 
     app.on("activate", () => {

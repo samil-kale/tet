@@ -34,7 +34,7 @@ import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
 import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, writeCommands } from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
-import { countActivity } from "./event-loop-monitor";
+import { countActivity, markStartup, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
 import { addProject, removeProject, type ProjectStore } from "./projects";
 import type { Repository, RepositoryManager } from "./git/repository";
@@ -123,7 +123,9 @@ export function registerIpc({
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
     // A manager's bin directory that did not exist at startup (the user just ran `npm i -g`)
     // is on PATH only once looked for again — that is what makes "Check again" find it.
+    markStartup("path");
     await augmentAgentPath();
+    markStartup("requirements");
     const requirements = await checkRequirements();
     if (requirements.met) {
       openWorkspace();
@@ -145,6 +147,12 @@ export function registerIpc({
       os: `${process.platform} ${process.arch}`
     })
   );
+
+  ipcMain.on("app:long-task", (_event, ms: number, context: string) => {
+    if (typeof ms === "number" && Number.isFinite(ms)) {
+      reportRendererTask(ms, typeof context === "string" ? context : "");
+    }
+  });
 
   ipcMain.handle("settings:get", (): AppSettings => settings.get());
 

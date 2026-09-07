@@ -18,7 +18,8 @@ const api: TETApi = {
     quit: () => ipcRenderer.send("startup:quit")
   },
   app: {
-    info: () => ipcRenderer.invoke("app:info")
+    info: () => ipcRenderer.invoke("app:info"),
+    reportLongTask: (ms, context) => ipcRenderer.send("app:long-task", ms, context)
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

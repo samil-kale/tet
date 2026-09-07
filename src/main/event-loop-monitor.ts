@@ -27,7 +27,7 @@ const MAX_LOG_BYTES = 1_000_000;
  * The main process's continuous work, in the places it happens. Nothing here is a guess about
  * cost — the point is to find out which of them the loop is actually sitting in.
  */
-export type Activity = "output" | "input" | "sse" | "reconcile" | "git" | "emit";
+export type Activity = "output" | "input" | "sse" | "reconcile" | "git" | "emit" | "startup";
 
 const counts = new Map<Activity, number>();
 /**
@@ -36,10 +36,49 @@ const counts = new Map<Activity, number>();
  * need, since it times the block directly.
  */
 let lastActivity: Activity | undefined;
+/**
+ * Which stretch of "startup" ran last: the one activity that is a sequence of different things
+ * (the window, the requirements check, each project's open, the git process, each agent's
+ * setup and first listing), every one of them run once and none of them counted elsewhere —
+ * so a stall before the first output or refresh, which the tally alone can only call
+ * "nothing", is put to the stretch it fell in. Also what the "after" of a stall says.
+ */
+let startupPhase: string | undefined;
 
 export function countActivity(activity: Activity): void {
   counts.set(activity, (counts.get(activity) ?? 0) + 1);
   lastActivity = activity;
+}
+
+/** Enters a stretch of startup — what a stall from here on is attributed to, until the next. */
+export function markStartup(phase: string): void {
+  countActivity("startup");
+  startupPhase = phase;
+}
+
+/**
+ * A stretch of startup that runs synchronously, timed as `logSlow` times a block: what it
+ * returns is what `run` returns. For the async ones, `markStartup` alone — their blocking part,
+ * if any, shows up as a stall "after" them.
+ */
+export function timeStartup<T>(phase: string, run: () => T): T {
+  markStartup(phase);
+  const start = performance.now();
+  try {
+    return run();
+  } finally {
+    const ms = performance.now() - start;
+    if (ms >= SLOW_MS) {
+      append?.(`startup:${phase} took ${Math.round(ms)}ms`);
+    }
+  }
+}
+
+function lastLabel(): string {
+  if (lastActivity === undefined) {
+    return "nothing";
+  }
+  return lastActivity === "startup" && startupPhase ? `startup:${startupPhase}` : lastActivity;
 }
 
 function tally(): string {
@@ -48,6 +87,26 @@ function tally(): string {
 }
 
 let append: ((line: string) => void) | undefined;
+
+/**
+ * The renderer's half of the same question. A keystroke's lag is either process: the sampler
+ * above cannot see xterm parsing a busy TUI's repaint or React re-rendering the git pane, so
+ * the renderer reports its own long tasks (Chromium's Long Tasks API, main.tsx) into this log,
+ * tallied into the same summary and, past the same threshold, given a line of their own.
+ * Reported rather than sampled: a task the API names is one that actually ran.
+ */
+let rendererTasks = 0;
+let rendererMs = 0;
+let rendererWorst = 0;
+
+export function reportRendererTask(ms: number, context: string): void {
+  rendererTasks += 1;
+  rendererMs += ms;
+  rendererWorst = Math.max(rendererWorst, ms);
+  if (ms >= LOUD_STALL_MS) {
+    append?.(`renderer blocked ${Math.round(ms)}ms (${context}) | ${tally()}`);
+  }
+}
 
 /**
  * Names a block of work directly instead of leaving it to a stall sample's "ran last" guess —
@@ -94,7 +153,7 @@ export function startEventLoopMonitor(logFile: string): void {
   let stalls = 0;
   let stalledMs = 0;
   let worst = 0;
-  let worstAfter: Activity | undefined;
+  let worstAfter: string | undefined;
 
   const timer = setInterval(() => {
     const now = Date.now();
@@ -106,25 +165,30 @@ export function startEventLoopMonitor(logFile: string): void {
       stalledMs += lag;
       if (lag > worst) {
         worst = lag;
-        worstAfter = lastActivity;
+        worstAfter = lastLabel();
       }
       if (lag >= LOUD_STALL_MS) {
-        append?.(`loop blocked ${lag}ms after ${lastActivity ?? "nothing"} | ${tally()}`);
+        append?.(`loop blocked ${lag}ms after ${lastLabel()} | ${tally()}`);
       }
     }
 
     if (now >= reportAt) {
       reportAt = now + REPORT_MS;
-      if (stalls > 0) {
+      if (stalls > 0 || rendererTasks > 0) {
         append?.(
           `loop: ${stalls} stalls in ${REPORT_MS / 1000}s, ${stalledMs}ms lost,` +
-            ` worst ${worst}ms after ${worstAfter ?? "nothing"} | ${tally()}`
+            ` worst ${worst}ms after ${worstAfter ?? "nothing"}` +
+            ` | renderer: ${rendererTasks} long tasks, ${Math.round(rendererMs)}ms, worst ${Math.round(rendererWorst)}ms` +
+            ` | ${tally()}`
         );
       }
       stalls = 0;
       stalledMs = 0;
       worst = 0;
       worstAfter = undefined;
+      rendererTasks = 0;
+      rendererMs = 0;
+      rendererWorst = 0;
       counts.clear();
     }
   }, SAMPLE_MS);

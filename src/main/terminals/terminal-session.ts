@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import type { IPty } from "node-pty";
 import type { TerminalStatus } from "../../shared/types";
 import { resolveCommand, spawnAgentProcess } from "./pty";
+import { timeStartup } from "../event-loop-monitor";
 
 export interface SessionCallbacks {
   onOutput: (data: string) => void;
@@ -147,14 +148,18 @@ export class TerminalSession {
     }
 
     try {
-      this.process = spawnAgentProcess(this.executable, this.args, {
-        cwd: this.cwd,
-        cols,
-        rows,
-        env: this.env,
-        envOverride: this.envOverride,
-        own: this.own
-      });
+      // Timed: node-pty's spawn is a synchronous CreateProcess/fork, and a tab's first spawn is
+      // part of every start — later ones are one more measured block each, which is fine.
+      this.process = timeStartup(`spawn ${this.executable}`, () =>
+        spawnAgentProcess(this.executable, this.args, {
+          cwd: this.cwd,
+          cols,
+          rows,
+          env: this.env,
+          envOverride: this.envOverride,
+          own: this.own
+        })
+      );
     } catch (error) {
       console.error(`[tet] failed to spawn ${this.executable}:`, error);
       this.callbacks.onOutput(`\r\n[tet] failed to spawn ${this.executable}:\r\n${String(error)}\r\n`);

@@ -42,6 +42,11 @@ export interface TETApi {
   /** What tet is rather than what it is set to; the settings dialog's Info tab shows it. */
   app: {
     info(): Promise<AppInfo>;
+    /**
+     * A task that held the renderer's thread — into the main process's event loop log, with a
+     * line of context on what the renderer was doing just before.
+     */
+    reportLongTask(ms: number, context: string): void;
   };
   /** What the settings dialog reads and writes; there is one set of them for the whole app. */
   settings: {

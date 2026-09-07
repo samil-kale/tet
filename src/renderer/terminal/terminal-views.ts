@@ -32,11 +32,41 @@ function viewKey(projectId: string, tabId: string): string {
   return `${projectId} ${tabId}`;
 }
 
+/**
+ * What the output path has done since the last `takeOutputStats`: how many writes, into how
+ * many distinct terminals, and how many of those were hidden tabs — a hidden tab's xterm
+ * parses and (with the DOM renderer) draws every batch the same as a visible one. Read by the
+ * long-task report in main.tsx, so a `renderer blocked` line in event-loop.log says whether
+ * several sessions were writing at the time, and whether out of sight. Counting only: this
+ * runs for every batch, and nothing in it may cost more than the write it counts.
+ */
+let outputWrites = 0;
+const writingTabs = new Set<string>();
+const writingHiddenTabs = new Set<string>();
+
+export function takeOutputStats(): { writes: number; tabs: number; hidden: number } {
+  const stats = { writes: outputWrites, tabs: writingTabs.size, hidden: writingHiddenTabs.size };
+  outputWrites = 0;
+  writingTabs.clear();
+  writingHiddenTabs.clear();
+  return stats;
+}
+
 // One batch per flush, in the order the main process collected it — a terminal that produced
 // nothing in that window is simply not in it.
 window.tet.terminals.onOutput((batch) => {
   for (const { projectId, tabId, data } of batch) {
-    views.get(viewKey(projectId, tabId))?.term.write(data);
+    const key = viewKey(projectId, tabId);
+    const view = views.get(key);
+    if (!view) {
+      continue;
+    }
+    outputWrites += 1;
+    writingTabs.add(key);
+    if (view.term.element?.parentElement?.classList.contains("hidden")) {
+      writingHiddenTabs.add(key);
+    }
+    view.term.write(data);
   }
 });
 

@@ -13,7 +13,7 @@ import type {
   TerminalDescriptor,
   TerminalStatus
 } from "../../shared/types";
-import { countActivity, logSlow } from "../event-loop-monitor";
+import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -423,6 +423,7 @@ export class ProjectSessionManager {
       return;
     }
 
+    markStartup(`list ${agent.id}`);
     const infos = await agent.sessions.list(executable, cwd);
     // Closed while listing: nothing to post to, and the watcher started below would be one
     // `dispose` has already run past.
@@ -477,6 +478,7 @@ export class ProjectSessionManager {
       return !runtime.prepareFailed;
     }
     try {
+      markStartup(`prepare ${agent.id}`);
       const preparation = await agent.prepareSpawn(executable, this.project.path, this.pathsFor(runtime));
       // The project may have been closed while that ran — opencode's server boot takes seconds
       // — and `dispose` has already been past `runtime.preparation`, so what arrives now would
