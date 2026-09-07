@@ -186,7 +186,6 @@ export const ProjectList = memo(function ProjectList({
             {...rowProps(index)}
             onContextMenu={(event) => {
               event.preventDefault();
-              onSelect(project.id);
               setMenu({ x: event.clientX, y: event.clientY, project });
             }}
           >
