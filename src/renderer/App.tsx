@@ -6,6 +6,7 @@ import { CommandList } from "./sidebar/CommandList";
 import type { BranchActions } from "./git/BranchTree";
 import { DiffDialog } from "./diff/DiffDialog";
 import { Dialogs } from "./ui/Dialog";
+import { EnableSbxDialog } from "./dialogs/EnableSbxDialog";
 import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
@@ -191,6 +192,8 @@ export function App() {
   const [addOpen, setAddOpen] = useState(false);
   /** Whether the settings are up; they belong to the window, not to a project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** The project the "Enable sbx" dialog is up for, and whether sbx was found, if any. */
+  const [enableSbxState, setEnableSbxState] = useState<{ project: Project; installed: boolean } | null>(null);
 
   useEffect(() => {
     const unsubscribers = [
@@ -787,6 +790,18 @@ export function App() {
   const closeAdd = useCallback(() => setAddOpen(false), []);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  /** Checks sbx first, exactly once per click — the dialog itself says so when it's missing. */
+  const enableSbx = useCallback(
+    (projectId: string) => {
+      const project = projects.find((candidate) => candidate.id === projectId);
+      if (!project) {
+        return;
+      }
+      void window.tet.sbx.checkInstalled().then((installed) => setEnableSbxState({ project, installed }));
+    },
+    [projects]
+  );
+  const closeEnableSbx = useCallback(() => setEnableSbxState(null), []);
   const closeDiff = useCallback(() => setDiffFile(null), []);
   const toggleGit = useCallback(() => setGitOpen(!gitOpen), [gitOpen, setGitOpen]);
   /** No explicit path — "Browse files" itself — reopens whatever this project last showed. */
@@ -849,6 +864,7 @@ export function App() {
             onShowBusy={showBusy}
             onShowFinished={showFinished}
             onShowWaiting={showWaiting}
+            onEnableSbx={enableSbx}
           />
           <Sash
             orientation="horizontal"
@@ -957,6 +973,9 @@ export function App() {
       {addOpen && <AddRepositoryDialog onAdded={projectAdded} onClose={closeAdd} />}
 
       {settingsOpen && <SettingsDialog activeProject={activeProject} onClose={closeSettings} />}
+      {enableSbxState && (
+        <EnableSbxDialog project={enableSbxState.project} installed={enableSbxState.installed} onClose={closeEnableSbx} />
+      )}
 
       <Notices />
       <Dialogs />

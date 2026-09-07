@@ -30,6 +30,7 @@ import type {
   StashCommand,
   TerminalDescriptor
 } from "../shared/types";
+import { checkSbxInstalled } from "./sbx";
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
 import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, writeCommands } from "./git/commands";
@@ -147,6 +148,8 @@ export function registerIpc({
       os: `${process.platform} ${process.arch}`
     })
   );
+
+  ipcMain.handle("sbx:check-installed", () => checkSbxInstalled());
 
   ipcMain.on("app:long-task", (_event, ms: number, context: string) => {
     if (typeof ms === "number" && Number.isFinite(ms)) {

@@ -21,6 +21,9 @@ const api: TETApi = {
     info: () => ipcRenderer.invoke("app:info"),
     reportLongTask: (ms, context) => ipcRenderer.send("app:long-task", ms, context)
   },
+  sbx: {
+    checkInstalled: () => ipcRenderer.invoke("sbx:check-installed")
+  },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
     save: (settings) => ipcRenderer.invoke("settings:save", settings)

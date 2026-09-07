@@ -48,6 +48,11 @@ export interface TETApi {
      */
     reportLongTask(ms: number, context: string): void;
   };
+  /** Docker Sandboxes, opt-in per project — see the project row's "Enable sbx" entry. */
+  sbx: {
+    /** Cached like an agent's own `--version` check; never part of `Requirements.met`. */
+    checkInstalled(): Promise<boolean>;
+  };
   /** What the settings dialog reads and writes; there is one set of them for the whole app. */
   settings: {
     get(): Promise<AppSettings>;
