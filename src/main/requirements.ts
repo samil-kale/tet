@@ -33,6 +33,17 @@ const SIMULATED_MISSING = (process.argv.find((arg) => arg.startsWith("--simulate
 const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
 
 /**
+ * Checking an agent spawns it (`checkAgentInstalled`), and on win32 most go through cmd.exe —
+ * its own process creation blocks the event loop for as long as Windows (and any antivirus
+ * scanning the shim) takes to answer. Dispatched in the same tick, four such blocks merge into
+ * one multi-second freeze right at startup (measured in event-loop.log); a tick of daylight
+ * between each keeps them as separate, shorter ones instead.
+ */
+function yieldToLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/**
  * What has to be on the machine before the app opens: git, because the whole git side is the
  * local CLI, and one of the agents, because the terminals are what tet is for.
  *
@@ -47,22 +58,26 @@ export async function checkRequirements(): Promise<Requirements> {
   // not about a project.
   const cwd = os.tmpdir();
   const installable = AGENTS.filter((agent): agent is InstallableAgent => agent.versionArgs !== undefined);
-  const [installed, agents] = await Promise.all([
-    // A git process that could not be started answers the question by rejecting.
-    SIMULATED_MISSING.includes(GIT.command) ? false : git.isAvailable().catch(() => false),
-    Promise.all(
-      installable.map(async (agent): Promise<Requirement> => {
-        const command = agent.executable();
-        return {
-          name: agent.displayName,
-          command,
-          installed:
-            !SIMULATED_MISSING.includes(command) && (await checkAgentInstalled(command, agent.versionArgs, cwd)),
-          url: agent.installUrl ?? ""
-        };
-      })
-    )
-  ]);
+
+  // Runs in its own utility process (git-client.ts), so it never blocks this one — started
+  // alongside the agent checks below rather than awaited first.
+  const gitInstalled = SIMULATED_MISSING.includes(GIT.command) ? Promise.resolve(false) : git.isAvailable().catch(() => false);
+
+  const agentChecks: Promise<Requirement>[] = [];
+  for (const agent of installable) {
+    const command = agent.executable();
+    agentChecks.push(
+      (async (): Promise<Requirement> => ({
+        name: agent.displayName,
+        command,
+        installed: !SIMULATED_MISSING.includes(command) && (await checkAgentInstalled(command, agent.versionArgs, cwd)),
+        url: agent.installUrl ?? ""
+      }))()
+    );
+    await yieldToLoop();
+  }
+
+  const [installed, agents] = await Promise.all([gitInstalled, Promise.all(agentChecks)]);
   return {
     met: installed && (SHELL_SUFFICES || agents.some((agent) => agent.installed)),
     git: { ...GIT, installed },
