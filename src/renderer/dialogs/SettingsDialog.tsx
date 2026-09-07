@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
-import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, THEMED_AGENT_IDS } from "../../shared/types";
+import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../../shared/types";
 import type {
   AppInfo,
   AppSettings,
@@ -10,14 +10,12 @@ import type {
   GitActionResult,
   NotificationSettings,
   Project,
-  PromptId,
-  ThemedAgentId
+  PromptId
 } from "../../shared/types";
 import { Dropdown } from "../ui/Dropdown";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { notify } from "../ui/Notices";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
-import { useAgents } from "../ui/use-agents";
 import { useEscape } from "../ui/use-escape";
 
 interface SettingsDialogProps {
@@ -87,8 +85,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
-  /** For the Appearance tab's agent labels — the `displayName`s live on the AgentDefinitions. */
-  const agents = useAgents();
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
@@ -131,9 +127,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyPreset = (id: string): void => patch(() => ({ editorKeybindingPreset: id }));
 
   const applyTheme = (id: string): void => patch(() => ({ theme: id }));
-
-  const applyThemeAgent = (id: ThemedAgentId, value: boolean): void =>
-    patch((current) => ({ themeAgents: { ...current.themeAgents, [id]: value } }));
 
   /** Tet's own text is stored as "" (the store does the same, see settings.ts — here as well
    *  because the dialog's copy is never read back, and the reset button reads off it). */
@@ -188,18 +181,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   ]}
                 />
               </label>
-              <p className="dialog-detail">Apply theme to</p>
-              {settings &&
-                THEMED_AGENT_IDS.map((id) => (
-                  <label key={id} className="dialog-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={settings.themeAgents[id]}
-                      onChange={(event) => applyThemeAgent(id, event.target.checked)}
-                    />
-                    <span>{agents.find((agent) => agent.id === id)?.displayName ?? id}</span>
-                  </label>
-                ))}
               {/* Not live, for the same reason the notifications below aren't: xterm, shiki and
                   monaco each read the theme once and keep it, as does the window's own chrome;
                   the agents are handed it when their first terminal in a project starts. */}

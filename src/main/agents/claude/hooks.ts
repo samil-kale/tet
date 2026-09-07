@@ -79,7 +79,7 @@ export function setupClaudeHooks(
   displayName: string,
   notifications: NotificationSettings,
   context: { contextFile: string; contextReadPaths: string[] },
-  themeName: string | undefined
+  themeName: string
 ): string[] {
   const hooks: Record<string, unknown> = {
     // Two commands on the one event: the context file's contents become part of the prompt,
@@ -192,8 +192,7 @@ export function setupClaudeHooks(
   // drawn with), so the user's own file stays as it is. One of Claude's built-in themes, not
   // a custom one in tet's colors: those it reads after its first render — from a plugin and
   // from its own themes directory alike — and draws a dark frame in the meantime, long enough
-  // to see (measured), which was tried and taken back out. Undefined — the Appearance tab's switch off
-  // — leaves the key out, and with it the user's own choice in charge.
+  // to see (measured), which was tried and taken back out.
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.writeFileSync(settingsFile, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));
   return ["--settings", settingsFile];

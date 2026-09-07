@@ -294,10 +294,9 @@ written whole and read back defensively.
 **A setting reaches an agent through `AgentPaths`**, handed over at `prepareSpawn` rather than
 imported, so the persisted copy stays the only one. That is the honest limit of a switch: an agent
 gets its setup once per project and can't be reached afterwards, so a change applies to projects
-opened after it — and the dialog says so. The color theme travels the same way, with one switch
-per agent (`themeAgents`) for whether that agent is told to draw in tet's theme or left to its
-own; which way the *background* is stays either way, since that is a fact about the window, not a
-taste. The two background questions (the commit message's, the wand's) are the exception: their
+opened after it — and the dialog says so. The color theme travels the same way, and every agent
+is told to draw in it (Claude Code's `theme`, opencode's `"theme": "system"`, pi's `--use-theme`,
+Codex's console colors) — there is no per-agent switch. The two background questions (the commit message's, the wand's) are the exception: their
 texts live in `src/shared/prompts.ts` so the dialog can show them, an empty setting means tet's
 own, and `ipc.ts` reads them at the moment of asking — the one setting that is live.
 
@@ -440,9 +439,9 @@ docs, and never by reasoning from one agent to another:
   Codex deliberately leaves it to the terminal (`takesRightMouse`), and pi turns on no mouse
   reporting at all.
 - Colours: opencode's `"theme": "system"` adopts the terminal palette but swaps blue and magenta
-  (`swapsBlueMagenta`; `buildXtermTheme` swaps them back — observed, not derived); Codex ignores the
-  palette entirely until `-c tui.theme=ansi`, and on win32 guesses light/dark from the console,
-  not the terminal (hence `launch.cmd` and the OSC 4 handling in `src/main/agents/codex/index.ts`);
+  (`swapsBlueMagenta`; `buildXtermTheme` swaps them back — observed, not derived); Codex picks its
+  own light/dark theme from the terminal's colors, which on win32 it reads from the console, not
+  the terminal (hence `launch.cmd` and the OSC 4 handling in `src/main/agents/codex/index.ts`);
   Claude Code paints dark unless told otherwise, so tet passes `theme` in its `--settings` file
   (one of its built-in themes, never a custom one in tet's colors — it draws a dark frame while
   a custom theme loads, see `src/main/agents/claude/hooks.ts`); pi paints truecolor only and

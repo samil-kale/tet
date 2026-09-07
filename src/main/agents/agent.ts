@@ -87,14 +87,6 @@ export interface AgentPaths {
    */
   theme: ThemeDefinition;
   /**
-   * Whether to have *this* agent draw in that theme — Claude Code's `theme`, Codex's
-   * `tui.theme=ansi`, opencode's `"theme": "system"` — or to leave its looks to it and the
-   * user's own configuration; one switch per agent in the Appearance tab. Off, the agent is
-   * still told which way the background is (Codex's console colors): that is a fact about the
-   * window, not a choice about its looks.
-   */
-  themeAgents: boolean;
-  /**
    * The two ends of a turn, reported as the agent itself sees them — never guessed from the
    * terminal's output. `busy` puts the spinner on the tab, `finished` takes it off again and
    * leaves the mark behind; see "Both ends of a turn" in CLAUDE.md.

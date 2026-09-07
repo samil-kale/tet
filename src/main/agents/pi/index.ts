@@ -45,10 +45,7 @@ export const piAgent: AgentDefinition = {
     }
     // pi's built-in themes are named after the background's kind, `dark` and `light`, and
     // `--use-theme` sets one for this run only — its settings.json stays untouched (measured).
-    // Left out when the Appearance tab says to leave this agent's looks alone.
-    if (paths.themeAgents) {
-      args.push("--use-theme", paths.theme.kind);
-    }
+    args.push("--use-theme", paths.theme.kind);
     // A fresh session's first busy marker waits in session-manager's pendingTurns until pi
     // writes the transcript, which it does only with the first assistant message; a first
     // answer taking longer than that queue's TTL loses its spinner, the finished mark still

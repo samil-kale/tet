@@ -90,7 +90,6 @@ describe("the stores", () => {
       JSON.stringify({
         notifications: { finished: false, needsYou: "yes" },
         theme: "solarized",
-        themeAgents: { claude: false, codex: "x" },
         editorKeybindingPreset: "",
         prompts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: 7 }
       })
@@ -98,7 +97,6 @@ describe("the stores", () => {
     const settings = new SettingsStore(dir).get();
     assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: false });
     assert.equal(settings.theme, "solarized", "an unknown id is left standing for the readers to fall back from");
-    assert.deepEqual(settings.themeAgents, { claude: false, opencode: true, codex: true, pi: true });
     assert.equal(settings.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
     assert.deepEqual(settings.prompts, { commitMessage: "", commands: "" }, "tet's own text spelled out is stored as none");
     assert.equal(effectivePrompt(settings.prompts, "commands"), DEFAULT_PROMPTS.commands);

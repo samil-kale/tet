@@ -272,8 +272,6 @@ export class ProjectSessionManager {
       // the current settings apply, and a change reaches the ones set up after it.
       notifications: this.settings.get().notifications,
       theme: currentTheme(this.settings),
-      // The shell has no switch of its own — nor a look to switch — so it reads as on.
-      themeAgents: runtime.agent.id === "shell" || this.settings.get().themeAgents[runtime.agent.id],
       onSessionBusy: (sessionId, at) => this.markTurn(runtime, sessionId, true, at ?? Date.now()),
       onSessionFinished: (sessionId, at) => this.markTurn(runtime, sessionId, false, at ?? Date.now()),
       onSessionWaiting: (sessionId, at) => this.markWaiting(runtime, sessionId, at ?? Date.now())

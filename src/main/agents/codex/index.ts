@@ -55,19 +55,6 @@ export const codexAgent: AgentDefinition = {
     }
     try {
       args = setupCodexHooks(paths.agentDir, "Codex", paths.notifications, path.basename(cwd), paths.contextFile);
-      // Codex's own syntax-theme accents (status line, code highlighting) default to a fixed
-      // RGB theme (catppuccin) picked by a light/dark guess, ignoring the terminal's own ANSI
-      // palette entirely. "ansi" is the one bundled theme that emits plain named ANSI colors
-      // instead — verified end to end: with this override, the status line's model name and cwd
-      // path render in exactly tet's configured ansiYellow/ansiGreen instead of a hardcoded
-      // catppuccin tan/green. The key is `tui.theme`, not `tui_theme` — that's the Rust struct
-      // field name, but `-c`'s dotted path follows the TOML layout (`[tui]\ntheme = "..."`,
-      // `codex-rs/config/src/types.rs`), and only the dotted form actually takes effect.
-      // Left out when the Appearance tab says to leave the agents alone — the launcher above
-      // stays, since which way the background is isn't a matter of taste.
-      if (paths.themeAgents) {
-        args.push("-c", "tui.theme=ansi");
-      }
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
     } catch (error) {
       // As with Claude, losing the hooks must not keep Codex from starting — swallowed rather

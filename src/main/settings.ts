@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { SYSTEM_THEME_ID } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
-import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, THEMED_AGENT_IDS } from "../shared/types";
-import type { AppSettings, PromptSettings, ThemeAgentSettings } from "../shared/types";
+import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../shared/types";
+import type { AppSettings, PromptSettings } from "../shared/types";
 
 /** What tet does before anyone has said otherwise; sbc's own defaults. */
 const DEFAULTS: AppSettings = {
@@ -14,7 +14,6 @@ const DEFAULTS: AppSettings = {
   },
   editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
   theme: SYSTEM_THEME_ID,
-  themeAgents: Object.fromEntries(THEMED_AGENT_IDS.map((id) => [id, true])) as ThemeAgentSettings,
   prompts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptSettings
 };
 
@@ -42,7 +41,6 @@ export class SettingsStore {
       notifications: booleans(settings.notifications),
       editorKeybindingPreset: presetId(settings.editorKeybindingPreset),
       theme: themeId(settings.theme),
-      themeAgents: agentFlags(settings.themeAgents),
       prompts: promptTexts(settings.prompts)
     };
     try {
@@ -61,7 +59,6 @@ export class SettingsStore {
           notifications: booleans(value.notifications),
           editorKeybindingPreset: presetId(value.editorKeybindingPreset),
           theme: themeId(value.theme),
-          themeAgents: agentFlags(value.themeAgents),
           prompts: promptTexts(value.prompts)
         };
       }
@@ -94,18 +91,6 @@ function presetId(value: unknown): string {
  *  (`currentTheme`, which also answers "system") falls back to the default on its own. */
 function themeId(value: unknown): string {
   return typeof value === "string" && value ? value : DEFAULTS.theme;
-}
-
-/** One switch per agent, read the way the notifications are. */
-function agentFlags(value: unknown): ThemeAgentSettings {
-  const flags = (typeof value === "object" && value !== null ? value : {}) as Partial<Record<string, unknown>>;
-  const defaults = DEFAULTS.themeAgents;
-  return Object.fromEntries(
-    THEMED_AGENT_IDS.map((id) => {
-      const flag = flags[id];
-      return [id, typeof flag === "boolean" ? flag : defaults[id]];
-    })
-  ) as ThemeAgentSettings;
 }
 
 /**
