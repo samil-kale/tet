@@ -1,6 +1,5 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { isSameCommand } from "../../shared/command";
 import type {
   ExplorerRoot,
   ExplorerSettings,
@@ -11,7 +10,6 @@ import type {
   SbxPort,
   SbxProjectConfig
 } from "../../shared/types";
-import { askAgent } from "../agents/ask";
 
 /**
  * What a project keeps about itself in its own root: shell commands — "npm run build", a deploy
@@ -79,12 +77,11 @@ function file(root: string): string {
 }
 
 /**
- * The file's contents, or **null** when there is no tet.json at all — the one case worth
- * telling apart, since that is when the caller offers to fill the list itself. One that is
- * there but unreadable or shaped differently is no commands rather than none: it is a file in
- * the user's repository, and half of it being someone else's is reason neither to throw nor to
- * write over it. The key was `actions` before a rename; nothing reads that spelling, so such a
- * file looks unconfigured and the wand fills it again.
+ * The file's contents, or **null** when there is no tet.json at all. One that is there but
+ * unreadable or shaped differently is no commands rather than none: it is a file in the user's
+ * repository, and half of it being someone else's is reason neither to throw nor to write over
+ * it. The distinction stays inside this module so writes may create a missing file but refuse
+ * to replace a broken one.
  */
 async function read(root: string): Promise<ProjectFile | null> {
   let content: string;
@@ -156,12 +153,9 @@ function toCommand(entry: StoredCommand): ProjectCommand | undefined {
 }
 
 
-export async function readCommands(root: string): Promise<ProjectCommand[] | null> {
+export async function readCommands(root: string): Promise<ProjectCommand[]> {
   const content = await read(root);
-  if (content === null) {
-    return null;
-  }
-  if (!Array.isArray(content.commands)) {
+  if (!content || !Array.isArray(content.commands)) {
     return [];
   }
   return content.commands.map(toCommand).filter((command): command is ProjectCommand => command !== undefined);
@@ -404,84 +398,4 @@ export async function writeSbxConfig(root: string, config: SbxProjectConfig): Pr
   const others = toSbxFolders(sbxSection(content).folders).filter((folder) => !appliesHere(folder));
   const mine = config.folders.map((folder): StoredSbxFolder => (folder.path.startsWith("~") ? folder : { ...folder, os: process.platform }));
   await write(root, { ...content, sbx: { enabled: config.enabled, ports: config.ports, folders: [...others, ...mine] } });
-}
-
-
-/**
- * Pulls the JSON array out of an agent's reply. Asked for "nothing but", they still tend to
- * wrap it in a fenced block or a sentence, so the first bracketed run is what counts.
- */
-function parseSuggestions(reply: string): ProjectCommand[] {
-  const start = reply.indexOf("[");
-  const end = reply.lastIndexOf("]");
-  if (start < 0 || end <= start) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(reply.slice(start, end + 1)) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    // The same two spellings the file takes: a bare string, or a command with a directory.
-    return (parsed as StoredCommand[])
-      .map(toCommand)
-      .filter((command): command is ProjectCommand => command !== undefined);
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Asks an agent what this project can run, and answers with the commands it named. Runs
- * without a terminal — the wand is a button in the sidebar, not a session — so the agent gets
- * one question and one shot at replying. The question is the settings' (`effectivePrompt`),
- * handed in by the caller that has them.
- *
- * The question goes in on stdin, never as an argument: an npm-installed CLI is a `.cmd` shim
- * on win32, which `resolveCommand` routes through cmd.exe, and cmd.exe neither honours the
- * `\"` node escapes a quote with nor carries an argument past a newline — the prompt arrived
- * cut off at its first line, and a line holding quotes and `&&` was run rather than passed.
- */
-export function suggestCommands(
-  root: string,
-  executable: string,
-  args: string[],
-  question: string
-): Promise<ProjectCommand[]> {
-  return askAgent(root, executable, args, question).then(parseSuggestions);
-}
-
-/**
- * What a command is run with — "npm" out of "npm run build", "mvn" out of "mvn -q test". The
- * first word is enough: it is what makes two commands belong together in the list.
- */
-function tool(command: string): string {
-  return command.trim().split(/\s+/)[0] ?? "";
-}
-
-/**
- * Adds commands to a list, each one behind the last that runs the same tool — so the maven
- * ones end up together, the npm ones together, without reordering what is already there. The
- * order of the array is the order on screen, and the user's own dragging outranks this: it
- * only ever decides where something *new* lands.
- */
-export function mergeCommands(existing: ProjectCommand[], found: ProjectCommand[]): ProjectCommand[] {
-  const merged = [...existing];
-  for (const command of found) {
-    if (merged.some((entry) => isSameCommand(entry, command))) {
-      continue;
-    }
-    let last = -1;
-    for (let index = 0; index < merged.length; index++) {
-      if (tool(merged[index].command) === tool(command.command)) {
-        last = index;
-      }
-    }
-    if (last < 0) {
-      merged.push(command);
-    } else {
-      merged.splice(last + 1, 0, command);
-    }
-  }
-  return merged;
 }

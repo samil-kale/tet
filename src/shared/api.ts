@@ -205,8 +205,7 @@ export interface TETApi {
    * the repository, not to tet's storage, so they follow it around.
    */
   commands: {
-    /** Null when the project has no tet.json yet — as opposed to one with an empty list. */
-    list(projectId: string): Promise<ProjectCommand[] | null>;
+    list(projectId: string): Promise<ProjectCommand[]>;
     /** Writes the whole list; adding, removing and reordering all go through here. */
     save(projectId: string, commands: ProjectCommand[]): Promise<void>;
     /**
@@ -215,11 +214,6 @@ export interface TETApi {
      * with.
      */
     run(projectId: string, command: ProjectCommand): Promise<TerminalDescriptor | null>;
-    /**
-     * Has an installed agent read the project and name the commands it can run, adds what is
-     * new to the list, and resolves to the whole list. Reports what happened as a notice.
-     */
-    suggest(projectId: string): Promise<ProjectCommand[]>;
     /** Fires when a project's tet.json changed on disk, whoever wrote it. */
     onChanged(listener: (payload: { projectId: string }) => void): Unsubscribe;
   };

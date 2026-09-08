@@ -164,16 +164,16 @@ describe("the stores", () => {
         notifications: { finished: false, needsYou: "yes" },
         theme: "solarized",
         editorKeybindingPreset: "",
-        prompts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: 7 }
+        prompts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }
       })
     );
     const settings = new SettingsStore(dir).get();
     assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: false });
     assert.equal(settings.theme, "solarized", "an unknown id is left standing for the readers to fall back from");
     assert.equal(settings.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
-    assert.deepEqual(settings.prompts, { commitMessage: "", commands: "" }, "tet's own text spelled out is stored as none");
-    assert.equal(effectivePrompt(settings.prompts, "commands"), DEFAULT_PROMPTS.commands);
-    assert.equal(effectivePrompt({ ...settings.prompts, commands: "just list them" }, "commands"), "just list them");
+    assert.deepEqual(settings.prompts, { commitMessage: "" }, "tet's own text spelled out is stored as none");
+    assert.equal(effectivePrompt(settings.prompts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
+    assert.equal(effectivePrompt({ commitMessage: "write a subject" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
     store.save({ ...settings, theme: "light-modern" });
     assert.equal(new SettingsStore(dir).get().theme, "light-modern", "written whole and read back");

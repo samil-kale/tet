@@ -105,7 +105,6 @@ const api: TETApi = {
     list: (projectId) => ipcRenderer.invoke("commands:list", projectId),
     save: (projectId, commands) => ipcRenderer.invoke("commands:save", projectId, commands),
     run: (projectId, command) => ipcRenderer.invoke("commands:run", projectId, command),
-    suggest: (projectId) => ipcRenderer.invoke("commands:suggest", projectId),
     onChanged: (listener) => subscribe("commands:changed", listener)
   },
   terminals: {

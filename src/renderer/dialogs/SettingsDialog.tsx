@@ -39,8 +39,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
 
 /** The Prompts tab's picker, one label per question. */
 const PROMPT_LABELS: Record<PromptId, string> = {
-  commitMessage: "Commit message",
-  commands: "Find commands"
+  commitMessage: "Commit message"
 };
 
 /** One switch per line, in the order they matter: the turn ended, it is stuck, it is idle. */
@@ -292,8 +291,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             </button>
           </div>
           {/* Always the text the agent will get, never a placeholder: the default is what a
-              user edits from, so it has to be in the box. Live — read when the wand is
-              pressed, unlike everything else in this dialog. */}
+              user edits from, so it has to be in the box. Live — read when the commit-message
+              suggestion is requested, unlike everything else in this dialog. */}
           <textarea
             className="settings-prompt"
             spellCheck={false}

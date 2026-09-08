@@ -152,7 +152,7 @@ describe("tet-ctl against the control server", () => {
       notifications: { finished: true, needsYou: true, idleReminder: false },
       editorKeybindingPreset: "tet",
       theme: "system",
-      prompts: { commitMessage: "", commands: "" }
+      prompts: { commitMessage: "" }
     };
     for (const list of Object.values(calls)) {
       list.length = 0;
@@ -230,16 +230,15 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("sets a prompt's text, puts tet's own back without one, and refuses an unknown id", async () => {
-    const set = await tetCtl(["settings-set-prompt", "commands", "just list them"]);
+    const set = await tetCtl(["settings-set-prompt", "commitMessage", "write a subject"]);
     assert.deepEqual(set.result, { saved: true });
-    assert.equal(settings.prompts.commands, "just list them");
-    assert.equal(settings.prompts.commitMessage, "");
-    const reset = await tetCtl(["settings-set-prompt", "commands"]);
+    assert.equal(settings.prompts.commitMessage, "write a subject");
+    const reset = await tetCtl(["settings-set-prompt", "commitMessage"]);
     assert.equal(reset.status, EXIT_CODES.ok);
-    assert.equal(settings.prompts.commands, "");
-    const unknown = await tetCtl(["settings-set-prompt", "wand", "x"]);
+    assert.equal(settings.prompts.commitMessage, "");
+    const unknown = await tetCtl(["settings-set-prompt", "commands", "x"]);
     assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown prompt: wand/);
+    assert.match(unknown.stderr, /unknown prompt: commands/);
   });
 
   it("acts on the caller's own project when none is given", async () => {

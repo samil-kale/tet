@@ -44,7 +44,7 @@ export interface ControlDeps {
   agentIds: readonly string[];
   addProject(directory: string): Promise<AddRepositoryResult>;
   removeProject(projectId: string): void;
-  readCommands(root: string): Promise<ProjectCommand[] | null>;
+  readCommands(root: string): Promise<ProjectCommand[]>;
   /** Ends every session and quits, relaunching first when asked — main.ts's teardown. */
   shutdown(relaunch: boolean): void;
   /** Brings a tab to the front — its process starts with the first resize that draws it. */
@@ -255,7 +255,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "tabs-run-command": async (args, caller) => {
       const found = project(args, caller);
       const name = text(args, "name", "command name");
-      const commands = (await deps.readCommands(found.path)) ?? [];
+      const commands = await deps.readCommands(found.path);
       // By the name the row shows or by the line itself — an agent reading tet.json may hold either.
       const command = commands.find((candidate) => candidate.name === name || candidate.command === name);
       if (!command) {

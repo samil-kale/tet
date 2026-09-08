@@ -6,7 +6,6 @@ import { beforeEach, describe, it } from "node:test";
 import {
   addExclude,
   addFolder,
-  mergeCommands,
   readCommands,
   readExplorerView,
   readSbxConfig,
@@ -27,8 +26,8 @@ beforeEach(() => {
 });
 
 describe("readCommands", () => {
-  it("tells no file apart from a file with no commands", async () => {
-    assert.equal(await readCommands(root), null);
+  it("reads a missing file or a file with no commands as an empty list", async () => {
+    assert.deepEqual(await readCommands(root), []);
     put("{}");
     assert.deepEqual(await readCommands(root), []);
     put('{"actions": ["old key"]}');
@@ -72,22 +71,6 @@ describe("writeCommands", () => {
       other: true,
       commands: ["a", { command: "b", cwd: "web" }, { command: "c", name: "see" }]
     });
-  });
-});
-
-describe("mergeCommands", () => {
-  it("puts a new command behind the last one of the same tool, skipping what is there", () => {
-    const existing = [{ command: "npm run build" }, { command: "mvn test" }, { command: "npm test" }];
-    const merged = mergeCommands(existing, [
-      { command: "npm test" },
-      { command: "mvn package" },
-      { command: "cargo run" },
-      { command: "npm start" }
-    ]);
-    assert.deepEqual(
-      merged.map((entry) => entry.command),
-      ["npm run build", "mvn test", "mvn package", "npm test", "npm start", "cargo run"]
-    );
   });
 });
 

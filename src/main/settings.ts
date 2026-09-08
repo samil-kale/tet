@@ -94,7 +94,7 @@ function themeId(value: unknown): string {
 }
 
 /**
- * One text per question. Not a string is the default; so is tet's own text spelled out in
+ * One text for the question. Not a string is the default; so is tet's own text spelled out in
  * full — stored as "" instead, so the file only ever holds what the user changed and a default
  * improved in a later version still reaches them (`effectivePrompt` fills it back in).
  */

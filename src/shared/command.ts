@@ -52,8 +52,8 @@ export function splitCommand(command: string): string[] {
 /**
  * Whether two saved commands are the same one: the same line, in the same folder, with the same
  * variables — while the same line run differently (another folder, another profile) is a
- * command of its own. One rule for both places that deduplicate, the `+` dialog and the wand's
- * merge. Environments are compared sorted, so the same variables in a different order match.
+ * command of its own. Environments are compared sorted, so the same variables in a different
+ * order match.
  */
 export function isSameCommand(one: ProjectCommand, other: ProjectCommand): boolean {
   const envKey = (entry: ProjectCommand): string => JSON.stringify(Object.entries(entry.env ?? {}).sort());

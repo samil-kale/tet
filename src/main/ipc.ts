@@ -46,10 +46,8 @@ import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
 import {
   DEFAULT_EXPLORER_VIEW,
-  mergeCommands,
   readCommands,
   readSbxConfig,
-  suggestCommands,
   writeCommands
 } from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
@@ -489,7 +487,7 @@ export function registerIpc({
     }
   );
 
-  ipcMain.handle("commands:list", async (_event, projectId: string): Promise<ProjectCommand[] | null> => {
+  ipcMain.handle("commands:list", async (_event, projectId: string): Promise<ProjectCommand[]> => {
     const project = store.get(projectId);
     return project ? readCommands(project.path) : [];
   });
@@ -515,54 +513,6 @@ export function registerIpc({
       return sessions.get(projectId)?.createCommandTab(command) ?? null;
     }
   );
-
-  /**
-   * The wand: asks whichever agent is installed what this project can run, and adds what it
-   * names to the list. Its answer goes straight in rather than through a review step —
-   * whatever it gets wrong is one right-click away from being deleted.
-   */
-  ipcMain.handle("commands:suggest", async (_event, projectId: string): Promise<ProjectCommand[]> => {
-    const project = store.get(projectId);
-    if (!project) {
-      return [];
-    }
-    const askable = await findAskableAgent(project.path);
-    if (!askable) {
-      // Named from the agents themselves rather than spelled out here: which of them can be
-      // asked a question is theirs to say, and a third one must not need this line edited.
-      const candidates = AGENTS.filter((agent) => agent.askArgs)
-        .map((agent) => agent.displayName)
-        .join(" or ");
-      send("app:notice", {
-        severity: "warning",
-        message: `${candidates} not found — install one to have it find the commands for you.`
-      });
-      return [];
-    }
-    const { executable, agent } = askable;
-    try {
-      const prompt = effectivePrompt(settings.get().prompts, "commands");
-      const found = await suggestCommands(project.path, executable, agent.askArgs!, prompt);
-      const existing = (await readCommands(project.path)) ?? [];
-      const merged = mergeCommands(existing, found);
-      const added = merged.length - existing.length;
-      if (added > 0) {
-        await writeCommands(project.path, merged);
-      }
-      send("app:notice", {
-        severity: "info",
-        message: added > 0 ? `Added ${added} commands` : "No new commands found"
-      });
-      return merged;
-    } catch (error) {
-      send("app:notice", { severity: "error", message: `Could not read the project: ${String(error)}` });
-      return [];
-    } finally {
-      // Whether it answered or not, it may have persisted a session on the way — and one
-      // nobody opened has no business showing up as a tab after the next restart.
-      await agent.cleanupAsk?.(executable, project.path).catch(() => undefined);
-    }
-  });
 
   ipcMain.handle("terminal:list", (_event, projectId: string): TerminalDescriptor[] => {
     return sessions.get(projectId)?.snapshot() ?? [];

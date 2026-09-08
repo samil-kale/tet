@@ -4,8 +4,7 @@ import type { ProjectCommand } from "../../shared/types";
 import { ContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
-import { PlayIcon, PlusIcon, SparkleIcon } from "../ui/icons";
-import { ProgressBar } from "../ui/ProgressBar";
+import { PlayIcon, PlusIcon } from "../ui/icons";
 
 /**
  * A type of our own, for the same reason the project list has one: a row dragged across a
@@ -84,11 +83,7 @@ interface CommandListProps {
  */
 export const CommandList = memo(function CommandList({ projectId, height, onOpenTab }: CommandListProps) {
   const [commands, setCommands] = useState<ProjectCommand[]>([]);
-  /** The projects the wand is out for; this view outlives a project switch. */
-  const [suggestingIn, setSuggestingIn] = useState<string[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; command: ProjectCommand } | null>(null);
-  /** Which project is on screen, readable from a callback that started before a switch. */
-  const shown = useRef(projectId);
   /** The list as it stands now, for callbacks that were made before the last change to it. */
   const latest = useRef<ProjectCommand[]>([]);
 
@@ -103,12 +98,6 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     onMove: (from, to) => save(reorder(commands, from, to))
   });
 
-  const suggesting = projectId !== null && suggestingIn.includes(projectId);
-
-  useEffect(() => {
-    shown.current = projectId;
-  }, [projectId]);
-
   useEffect(() => {
     if (!projectId) {
       applyCommands([]);
@@ -119,19 +108,18 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       if (cancelled) {
         return;
       }
-      applyCommands(saved ?? []);
+      applyCommands(saved);
     });
     // The file is the record, and it changes without this list: an editor, an agent in one of
     // the tabs, a checkout. Read again on every change, our own writes included — those come
-    // back as what is already shown. No lookup for a file gone missing here: the unasked agent
-    // run is for a project seen for the first time, not for a delete.
+    // back as what is already shown.
     const unsubscribe = window.tet.commands.onChanged((payload) => {
       if (payload.projectId !== projectId) {
         return;
       }
       void window.tet.commands.list(projectId).then((saved) => {
         if (!cancelled) {
-          applyCommands(saved ?? []);
+          applyCommands(saved);
         }
       });
     });
@@ -143,9 +131,9 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
 
   /**
    * Every change to the list goes through here, and `latest` is what it is computed from
-   * rather than the `commands` a callback closed over: a dialog is awaited, and the wand can
-   * finish while one stands open — adding a command off the pre-dialog list would then write
-   * the found ones straight back out of the file.
+   * rather than the `commands` a callback closed over: a dialog is awaited, and the file can
+   * change while one stands open — adding a command off the pre-dialog list would then write
+   * the old ones straight back out of the file.
    */
   const applyCommands = (next: ProjectCommand[]): void => {
     latest.current = next;
@@ -186,7 +174,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
    * Where the command sits in the latest list. By identity when it can be — a re-read of the
    * file (250ms after every save of our own, or an agent touching tet.json) replaces every
    * object while a dialog stands, and the row is then found by what it says instead. -1 once
-   * it is gone altogether: the wand can replace the list wholesale.
+   * it is gone altogether.
    */
   const indexOf = (command: ProjectCommand): number => {
     const exact = latest.current.indexOf(command);
@@ -237,41 +225,6 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     }
   };
 
-  /** Confirms before the wand runs, since what it finds replaces the list without review. */
-  const askSuggest = async (project: string): Promise<void> => {
-    const answer = await confirm({
-      title: "Find commands automatically",
-      message: "An agent will look through the project and suggest commands to run.",
-      detail: "The suggestions are added to the list without review — they don't always work correctly.",
-      confirmLabel: "Find commands"
-    });
-    if (answer.confirmed) {
-      void suggest(project);
-    }
-  };
-
-  /**
-   * The wand. The agent reads the project and names what it can run; the whole list comes
-   * back, so this does not have to re-read the file. It can take minutes, long enough for the
-   * user to have moved on — the result then belongs to a project this view no longer shows,
-   * and only to the file it was already written to. Putting it on screen anyway would show one
-   * project's commands under another's name, and the next drag would save them there.
-   */
-  const suggest = async (project: string): Promise<void> => {
-    if (suggestingIn.includes(project)) {
-      return;
-    }
-    setSuggestingIn((current) => [...current, project]);
-    try {
-      const found = await window.tet.commands.suggest(project);
-      if (shown.current === project) {
-        applyCommands(found);
-      }
-    } finally {
-      setSuggestingIn((current) => current.filter((entry) => entry !== project));
-    }
-  };
-
   /** Opens the tab the command runs in and switches to it; the tab is where it is watched. */
   const run = (command: ProjectCommand): void => {
     if (!projectId) {
@@ -298,20 +251,10 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
           COMMANDS <span className="count-badge">({commands.length})</span>
         </span>
         <span className="section-header-actions">
-          <button
-            className="icon-button"
-            title={suggesting ? "Looking for commands..." : "Automatically find commands"}
-            disabled={!projectId || suggesting}
-            onClick={() => projectId && void askSuggest(projectId)}
-          >
-            <SparkleIcon />
-          </button>
           <button className="icon-button" title="New command" disabled={!projectId} onClick={() => void askAdd()}>
             <PlusIcon />
           </button>
         </span>
-        {/* This pane's own bar — an agent reading the repository for its commands. */}
-        {suggesting && <ProgressBar />}
       </div>
       <div className="command-list" {...listProps}>
         {commands.map((command, index) => (

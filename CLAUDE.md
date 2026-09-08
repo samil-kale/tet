@@ -256,11 +256,8 @@ missing, and placed rather than moved, so nothing collapses. Saved-command tabs 
 session marks.
 
 A `tet.json` that's missing, unparseable or oddly shaped is simply no commands — it's the user's
-file. A project with no `tet.json` **at all** gets its commands looked up unasked, at most once
-per project per session. The wand beside `+` asks the first installed agent with `askArgs` (in
-`AGENTS`' order) with the commands prompt; the reply is read as the first bracketed JSON array and
-added without review — a wrong entry is one right-click from deletion. One `CommandList` serves
-every project, so a wand result is keyed to the project it asked about.
+file. One `CommandList` serves every project; rows are added manually with `+` and can be edited,
+deleted or reordered from the list.
 
 ## Explorer
 
@@ -298,9 +295,9 @@ imported, so the persisted copy stays the only one. That is the honest limit of 
 gets its setup once per project and can't be reached afterwards, so a change applies to projects
 opened after it — and the dialog says so. The color theme travels the same way, and every agent
 is told to draw in it (Claude Code's `theme`, opencode's `"theme": "system"`, pi's `--use-theme`,
-Codex's console colors) — there is no per-agent switch. The two background questions (the commit message's, the wand's) are the exception: their
-texts live in `src/shared/prompts.ts` so the dialog can show them, an empty setting means tet's
-own, and `ipc.ts` reads them at the moment of asking — the one setting that is live.
+Codex's console colors) — there is no per-agent switch. The background commit-message question is
+the exception: its text lives in `src/shared/prompts.ts` so the dialog can show it, an empty setting
+means tet's own, and `ipc.ts` reads it at the moment of asking — the one setting that is live.
 
 Deliberately not in there: the session marks (finished out of sight, waiting on an answer).
 Neither is a notification to turn off.
@@ -333,8 +330,7 @@ relative`. **Never add a second bar inside one pane** — a new slow reason ther
 feeding the one it already has. Today: each terminal pane (`Pane`'s `showProgress`, from
 `TerminalDescriptor.starting`; the bootstrap listing, with no tab to point at, falls to pane "a"),
 the git pane's two sections (`branch.busy` under BRANCHES, `acting` under LOCAL CHANGES — two
-headers, two kinds of action), the diff dialog (`DiffView`'s `onBusy`) and its changes list, and
-the command list's wand.
+headers, two kinds of action), the diff dialog (`DiffView`'s `onBusy`) and its changes list.
 
 **A spinner in place of an icon is not a second one of these.** The bar is about the pane; a
 spinner is about the one thing the icon stands for, and takes its place rather than a slot beside

@@ -72,14 +72,14 @@ export interface AppSettings {
    *  `SYSTEM_THEME_ID`, the default, for whichever the OS is in. Applies to windows opened
    *  after it — see `currentTheme` in src/main/theme.ts. */
   theme: string;
-  /** The Prompts tab's texts for the two background questions; an empty string is tet's own
+  /** The Prompts tab's text for the background question; an empty string is tet's own
    *  (`DEFAULT_PROMPTS` in src/shared/prompts.ts), so a default improved in a later version
    *  still reaches a user who never edited it. */
   prompts: PromptSettings;
 }
 
-/** The two questions tet asks an agent in the background: the commit message's, the wand's. */
-export type PromptId = "commitMessage" | "commands";
+/** The question tet asks an agent in the background. */
+export type PromptId = "commitMessage";
 
 export type PromptSettings = Record<PromptId, string>;
 
@@ -123,9 +123,8 @@ export interface SbxSaveRequest extends SbxProjectConfig {
   tokens: Record<SbxAgentId, string>;
 }
 
-/** The Prompts tab's picker, in the order the buttons sit on screen: the git pane's wand, then
- *  the sidebar's. */
-export const PROMPT_IDS: PromptId[] = ["commitMessage", "commands"];
+/** The Prompts tab's picker. */
+export const PROMPT_IDS: PromptId[] = ["commitMessage"];
 
 /** The Files tab's keybinding-preset fallback, shared so main and renderer can't drift apart —
  *  matches `KEYBINDING_PRESETS[0].id`. */
