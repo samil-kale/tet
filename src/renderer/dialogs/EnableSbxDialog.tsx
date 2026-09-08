@@ -70,6 +70,9 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
   };
   useEscape(close);
   const [enabled, setEnabled] = useState(false);
+  /** Org-managed filesystem policy: nothing can be mounted from here, so the checkbox stays off
+   *  and disabled and there are no fields to fill — see sbx.ts's checkSbxGoverned. */
+  const [governed, setGoverned] = useState(false);
   const [state, setState] = useState<FieldsState>(hydrateState(undefined));
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
@@ -137,13 +140,20 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
         return;
       }
     }
+    const filesystemGoverned = await window.tet.sbx.checkFilesystemGoverned();
+    if (!live.current) {
+      return;
+    }
     // The dialog's own saved state — read once setup is done, so Save always writes on top of
     // what is actually on disk rather than the blank defaults this component mounted with.
     const config = await window.tet.sbx.getConfig(project.id);
     if (!live.current) {
       return;
     }
-    setEnabled(config.enabled);
+    setGoverned(filesystemGoverned);
+    // A colleague's "enabled" in tet.json does not apply here — see session-manager.ts's
+    // resolveSbxRun, which starts such a project's agents on the host.
+    setEnabled(config.enabled && !filesystemGoverned);
     setState(hydrateState(config));
     setPhase({ kind: "ready" });
   };
@@ -198,7 +208,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
               </button>
             </>
           )}
-          {phase.kind === "ready" && (
+          {phase.kind === "ready" && !governed && (
             <button type="button" className="button" disabled={saving} onClick={() => void save()}>
               Save
             </button>
@@ -220,36 +230,46 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
       )}
       {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
       {phase.kind === "ready" && (
-        <>
-          <label className="dialog-checkbox">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(event) => setEnabled(event.target.checked)}
-            />
-            <span>
-              <strong>Enable SBX sandboxing for this project</strong>
+        <label className="dialog-checkbox">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={governed}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
+          <span>
+            <strong>Enable SBX sandboxing for this project</strong>
+            {governed ? (
+              <p className="dialog-detail">
+                Your organization manages SBX's filesystem policy, so no folder can be allowed from
+                this machine — not even the agent's own settings or tet's data. SBX sandboxing is
+                unavailable in tet until your administrator delegates filesystem rules to local
+                control.
+              </p>
+            ) : (
               <p className="dialog-detail">
                 Claude and Codex tabs in {project.name} run in their own isolated Docker sandbox
                 instead of directly on this machine. OpenCode (its server runs on the host) and
                 pi (no SBX kit) stay outside.
               </p>
-            </span>
-          </label>
-          {/* The one part that scrolls — see the CSS: the checkbox above stays put. */}
-          <div className="enable-sbx-fields-scroll">
-            <EnableSbxFields
-              state={state}
-              onTokenChange={setToken}
-              onAddPort={addPort}
-              onRemovePort={removePort}
-              onUpdatePort={updatePort}
-              onAddFolder={() => void addFolder()}
-              onRemoveFolder={removeFolder}
-              onSetFolderAccess={setFolderAccess}
-            />
-          </div>
-        </>
+            )}
+          </span>
+        </label>
+      )}
+      {phase.kind === "ready" && !governed && (
+        // The one part that scrolls — see the CSS: the checkbox above stays put.
+        <div className="enable-sbx-fields-scroll">
+          <EnableSbxFields
+            state={state}
+            onTokenChange={setToken}
+            onAddPort={addPort}
+            onRemovePort={removePort}
+            onUpdatePort={updatePort}
+            onAddFolder={() => void addFolder()}
+            onRemoveFolder={removeFolder}
+            onSetFolderAccess={setFolderAccess}
+          />
+        </div>
       )}
     </DialogFrame>
   );

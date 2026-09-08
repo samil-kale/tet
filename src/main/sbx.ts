@@ -237,19 +237,35 @@ function normalizeFolder(folderPath: string): string {
   return path.isAbsolute(expanded) ? path.resolve(expanded) : expanded;
 }
 
-/** Cached for the process's lifetime: whether org governance is active does not change while
- *  tet runs, and `sbx policy ls` is one more process to spawn on every sandboxed session start. */
-let governanceChecked: Promise<boolean> | undefined;
+/** The two policy kinds tet has to know are org-managed or not — see checkSbxGoverned. */
+type PolicyType = "filesystem" | "network";
+
+/** Cached for the process's lifetime, per kind: whether org governance is active does not
+ *  change while tet runs, and `sbx policy ls` is one more process to spawn on every sandboxed
+ *  session start. */
+const governed = new Map<PolicyType, Promise<boolean>>();
 
 /**
- * Whether this account is under org-managed governance — `sbx policy ls`'s SOURCE column reads
- * "local" for an ungoverned account (verified live, 2026-09-08); the plan's earlier research
- * (docker/docs) says a governed one reads "Managed by <org>" instead. Not verified against an
- * actual governed account in this session — no such account was available to test with.
+ * Whether this account's policy of one kind is org-managed — `sbx policy ls`'s SOURCE column
+ * reads "local" for an ungoverned account (verified live, 2026-09-08); the plan's research
+ * (docker/docs) says a governed one reads "Managed by <org>" instead, and that an admin can
+ * delegate a kind back to local control, which is why this asks per kind. Not verified against
+ * an actual governed account — none was available to test with.
+ *
+ * "filesystem" governed means no local mount can be allowed — not the agent's own config
+ * directory, not tet's data folders (see SbxFixedPaths), let alone the user's — so sbx
+ * sandboxing is off for tet as a whole: the dialog says so instead of its fields, and a project
+ * that has it enabled in tet.json starts its agents on the host (session-manager.ts's
+ * resolveSbxRun). "network" governed only costs the control channel inside a sandbox
+ * (ensureControlNetworkAllowed).
  */
-function checkSbxGovernance(): Promise<boolean> {
-  governanceChecked ??= runSbx(["policy", "ls"]).then((result) => /managed by/i.test(result.stdout));
-  return governanceChecked;
+export function checkSbxGoverned(type: PolicyType): Promise<boolean> {
+  let pending = governed.get(type);
+  if (!pending) {
+    pending = runSbx(["policy", "ls", "--type", type]).then((result) => /managed by/i.test(result.stdout));
+    governed.set(type, pending);
+  }
+  return pending;
 }
 
 /** Cached per app run: once the rule is there, it stays there — no reason to ask `sbx` again. */
@@ -272,7 +288,7 @@ let networkAllowed: Promise<void> | undefined;
  * host address nothing agreed to expose.
  */
 async function ensureControlNetworkAllowed(): Promise<boolean> {
-  if (!control || (await checkSbxGovernance())) {
+  if (!control || (await checkSbxGoverned("network"))) {
     return false;
   }
   const resource = `localhost:${control.port}`;

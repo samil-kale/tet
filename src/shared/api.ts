@@ -62,6 +62,9 @@ export interface TETApi {
     checkPolicyInitialized(): Promise<boolean>;
     /** Sets it to "balanced", Docker's own recommended default. */
     initPolicy(): Promise<boolean>;
+    /** Whether an organization manages the filesystem policy — then no folder can be allowed
+     *  from this machine and sbx sandboxing is off for tet (see sbx.ts's checkSbxGoverned). */
+    checkFilesystemGoverned(): Promise<boolean>;
     /** Kills whichever of `login`/`initPolicy` is currently running — the Cancel button. */
     cancelSetup(): void;
     /** What the dialog's fields reopen with — read fresh from tet.json, never a token. */

@@ -16,7 +16,7 @@ import type {
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig } from "../git/commands";
-import { prepareSbxRun, sandboxName, sandboxPaths, type SbxFixedPaths } from "../sbx";
+import { checkSbxGoverned, prepareSbxRun, sandboxName, sandboxPaths, type SbxFixedPaths } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -236,6 +236,8 @@ export class ProjectSessionManager {
   private newTabCounter = 0;
   /** The project was closed; nothing that was still in flight may start anything back up. */
   private disposed = false;
+  /** Said once per project, not once per tab — see resolveSbxRun. */
+  private sbxGovernedSaid = false;
   /**
    * How many things in this project are still starting — the progress bar is shared across
    * the project's tabs, so it stays up as long as at least one of them hasn't settled.
@@ -673,6 +675,19 @@ export class ProjectSessionManager {
     }
     const config = await readSbxConfig(this.project.path);
     if (!config.enabled) {
+      return null;
+    }
+    // tet.json travels with the repository, so "enabled" may come from a colleague whose
+    // account is not governed — here it is, and no mount could be allowed (see sbx.ts's
+    // checkSbxGoverned): the agent runs on the host as if sbx were off, said once.
+    if (await checkSbxGoverned("filesystem")) {
+      if (!this.sbxGovernedSaid) {
+        this.sbxGovernedSaid = true;
+        this.callbacks.onNotice(
+          "warning",
+          `SBX sandboxing is off for ${this.project.name}: your organization manages SBX's filesystem policy, so its agents run on this machine directly.`
+        );
+      }
       return null;
     }
     const runtime = this.runtimeFor(tab.agentId);
