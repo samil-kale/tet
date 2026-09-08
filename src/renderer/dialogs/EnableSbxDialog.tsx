@@ -5,9 +5,6 @@ import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
 
-/** Docker's own install page — the "Get it" button, same as RequirementsDialog's per program. */
-const SBX_INSTALL_URL = "https://docs.docker.com/ai/sandboxes/install/";
-
 interface EnableSbxDialogProps {
   project: Project;
   onClose: () => void;
@@ -199,14 +196,9 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
             Cancel
           </button>
           {phase.kind === "not-installed" && (
-            <>
-              <button type="button" className="button secondary" onClick={() => void window.tet.shell.openUrl(SBX_INSTALL_URL)}>
-                Get it
-              </button>
-              <button type="button" className="button" onClick={() => void setup()}>
-                Check again
-              </button>
-            </>
+            <button type="button" className="button" onClick={() => void setup()}>
+              Check again
+            </button>
           )}
           {phase.kind === "ready" && !governed && (
             <button type="button" className="button" disabled={saving} onClick={() => void save()}>
@@ -218,11 +210,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
     >
       {phase.kind === "checking" && <p className="dialog-detail">Checking SBX…</p>}
       {phase.kind === "not-installed" && (
-        <p className="dialog-detail">
-          Docker Sandboxes (SBX) is not installed. Install it, then check again — a program
-          installed somewhere outside its package manager's usual place may only be found once
-          tet is restarted.
-        </p>
+        <p className="dialog-detail">Docker Sandboxes (SBX) is not installed. Install it, then check again.</p>
       )}
       {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to SBX…</p>}
       {phase.kind === "initializing-policy" && (

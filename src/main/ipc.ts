@@ -190,10 +190,10 @@ export function registerIpc({
     try {
       const removed = await saveSbxConfig(project.path, project.id, request, (agentId) => manager.sandboxPaths(agentId));
       for (const agentId of removed) {
-        send("app:notice", {
-          severity: "info",
-          message: `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
-        });
+        const message = request.enabled
+          ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
+          : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
+        send("app:notice", { severity: "info", message });
       }
       return { ok: true };
     } catch (error) {

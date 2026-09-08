@@ -15,8 +15,17 @@ import type {
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
-import { readSbxConfig } from "../git/commands";
-import { checkSbxGoverned, prepareSbxRun, sandboxName, sandboxPaths, type SbxFixedPaths } from "../sbx";
+import { readSbxConfig, writeSbxConfig } from "../git/commands";
+import {
+  checkSbxGoverned,
+  checkSbxInstalled,
+  checkSbxLoggedIn,
+  checkSbxPolicyInitialized,
+  prepareSbxRun,
+  sandboxName,
+  sandboxPaths,
+  type SbxFixedPaths
+} from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -184,8 +193,7 @@ function answersQuestion(data: string): boolean {
 
 /** `starting` is not the tab's own: it is read off `tabIndicators` by the caller — see there. */
 function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
-  const { tabId, projectId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } =
-    tab;
+  const { tabId, projectId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } = tab;
   return {
     tabId,
     projectId,
@@ -681,6 +689,16 @@ export class ProjectSessionManager {
    * session that predates this tab's sandbox, not only ones that predate SBX itself (a sandbox
    * rebuild after an Allowed-folders change orphans every session that was already sandboxed too).
    * Only a tab spawning for the very first time, with no `sessionId` yet, is sandboxed.
+   *
+   * Sbx not being ready — not installed, not signed in, or its network policy never
+   * initialized — turns sandboxing off outright for the project (writes `enabled: false`), not
+   * just skipped for this one spawn: without this, `sbx run` would run its own interactive setup
+   * right there in the tab (a device-code sign-in prompt, an arrow-key policy picker), which a
+   * plain agent tab has no business showing (measured live, 2026-09-08, after sbx was
+   * uninstalled and reinstalled: the full "not authenticated… sign in… network policy" flow
+   * printed into the tab, only to still fail once the sandbox itself needed rebuilding). The
+   * enable-sbx dialog's own setup already runs these same three checks before ever offering
+   * Save; a tab reaching them unprepared means the dialog was skipped, or things changed since.
    */
   private async resolveSbxRun(tab: TabState): Promise<string[] | null> {
     if (tab.executable || (tab.agentId !== "claude" && tab.agentId !== "codex")) {
@@ -688,6 +706,21 @@ export class ProjectSessionManager {
     }
     const config = await readSbxConfig(this.project.path);
     if (!config.enabled) {
+      return null;
+    }
+    const notReady = !(await checkSbxInstalled())
+      ? "SBX is not installed (or no longer on PATH)"
+      : !(await checkSbxLoggedIn())
+        ? "SBX is not signed in to Docker"
+        : !(await checkSbxPolicyInitialized())
+          ? "SBX's network policy is not set up"
+          : undefined;
+    if (notReady) {
+      await writeSbxConfig(this.project.path, { ...config, enabled: false });
+      this.callbacks.onNotice(
+        "warning",
+        `SBX sandboxing was turned off for ${this.project.name}: ${notReady}. Future tabs start on this machine directly until it's fixed and re-enabled.`
+      );
       return null;
     }
     // tet.json travels with the repository, so "enabled" may come from a colleague whose
@@ -723,7 +756,8 @@ export class ProjectSessionManager {
       config,
       sandboxName(this.project.id, tab.agentId),
       sandboxPaths(paths),
-      [...hookArgs, ...(tab.runArgs ?? [])]
+      [...hookArgs, ...(tab.runArgs ?? [])],
+      (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
     );
     if (missing.length > 0) {
       this.callbacks.onNotice(

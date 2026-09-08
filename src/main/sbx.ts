@@ -28,6 +28,19 @@ interface RunOptions {
   stdin?: string;
   /** Whether `cancelSbxSetup` may kill this one — see `currentChild`. */
   cancellable?: boolean;
+  /**
+   * Forwards this call's own console output live, as it arrives — `resolveSbxRun`'s setup
+   * (create, mounts, launcher) runs several of these before the tab's own agent process exists,
+   * yet the tab's terminal view is already attached and showing (TerminalHost attaches on first
+   * sight, not on the pty's first byte), so this is forwarded straight to it exactly like real
+   * pty output, through the same generic per-tab `onOutput` channel every other tab's output
+   * already uses (`queueOutput` in main.ts takes only ids and a string, never a process). Given a
+   * callback, stderr is captured too (normally dropped) and both streams are forwarded in arrival
+   * order, `\n` turned into `\r\n` — sbx's own output never carries a bare `\r` (verified live,
+   * 2026-09-08, byte for byte), so xterm (no `convertEol`) would otherwise stair-step every line
+   * one column further than the last.
+   */
+  onData?: (chunk: string) => void;
 }
 
 interface RunResult {
@@ -38,20 +51,26 @@ interface RunResult {
 
 /** Every `sbx` invocation: a plain program plus arguments through `resolveCommand`, no shell,
  *  run from the temp directory so the working directory never reads as a workspace. stderr is
- *  dropped — every caller decides by exit code or by stdout's JSON. */
+ *  dropped unless `onData` wants it forwarded — every caller otherwise decides by exit code or by
+ *  stdout's JSON. */
 function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve) => {
     const resolved = resolveCommand("sbx", args);
     const child = spawn(resolved.command, resolved.args, {
       cwd: os.tmpdir(),
       windowsHide: true,
-      stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "ignore"]
+      stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", options.onData ? "pipe" : "ignore"]
     });
     if (options.cancellable) {
       currentChild = child;
     }
     let stdout = "";
-    child.stdout?.on("data", (chunk: Buffer) => (stdout += chunk.toString()));
+    const forward = (chunk: Buffer): void => options.onData?.(chunk.toString().replace(/\n/g, "\r\n"));
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      forward(chunk);
+    });
+    child.stderr?.on("data", forward);
     let settled = false;
     const finish = (result: RunResult) => {
       if (!settled) {
@@ -467,7 +486,12 @@ function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, K
  * mount` also refuses a stopped sandbox ("409 Conflict"), hence the cheap `exec` first — the same
  * auto-start `ensureSandboxLauncher`'s own `sbx exec` already relies on.
  */
-async function ensureKnowledgeMounted(agentId: SbxAgentId, name: string, knowledge: SbxKnowledgeConfig): Promise<void> {
+async function ensureKnowledgeMounted(
+  agentId: SbxAgentId,
+  name: string,
+  knowledge: SbxKnowledgeConfig,
+  onData?: (chunk: string) => void
+): Promise<void> {
   const paths = knowledgePaths(agentId);
   const kinds = Object.keys(knowledge) as (keyof SbxKnowledgeConfig)[];
   // `:ro`/no suffix — the same sbx default (`:rw` when omitted), verified in `sbx mount --help`.
@@ -478,10 +502,10 @@ async function ensureKnowledgeMounted(agentId: SbxAgentId, name: string, knowled
   if (present.length === 0) {
     return;
   }
-  await runSbx(["exec", "-i", name, "true"]);
+  await runSbx(["exec", "-i", name, "true"], { onData });
   for (const { entry, access } of present) {
     const suffix = access === "Read" ? ":ro" : "";
-    await runSbx(["mount", name, `${entry.host}:${entry.target}${suffix}`]);
+    await runSbx(["mount", name, `${entry.host}:${entry.target}${suffix}`], { onData });
   }
 }
 
@@ -495,7 +519,7 @@ async function ensureKnowledgeMounted(agentId: SbxAgentId, name: string, knowled
  * plain re-mount here never hits sbx's "already mounted read-write; cannot also mount read-only"
  * conflict (verified live, 2026-09-08).
  */
-async function ensureFoldersMounted(name: string, folders: SbxFolder[]): Promise<string[]> {
+async function ensureFoldersMounted(name: string, folders: SbxFolder[], onData?: (chunk: string) => void): Promise<string[]> {
   const missing: string[] = [];
   const present = folders.filter((folder) => {
     if (isDirectory(normalizeFolder(folder.path))) {
@@ -505,9 +529,9 @@ async function ensureFoldersMounted(name: string, folders: SbxFolder[]): Promise
     return false;
   });
   if (present.length > 0) {
-    await runSbx(["exec", "-i", name, "true"]);
+    await runSbx(["exec", "-i", name, "true"], { onData });
     for (const folder of present) {
-      await runSbx(["mount", name, folderMountSpecs(folder).mount]);
+      await runSbx(["mount", name, folderMountSpecs(folder).mount], { onData });
     }
   }
   return missing;
@@ -598,22 +622,30 @@ const launcherWritten = new Set<string>();
 /**
  * Makes sure a sandbox exists with exactly `workspaces` — tet's own fixed paths only now that
  * Allowed folders are a live mount (see computeWorkspaces), so this practically never disagrees
- * once a project's sandbox exists. One that exists with a *different* set is still an error, not
- * a rebuild: sbx itself refuses to add or change workspaces on an existing sandbox, and rebuilding
- * here — `sbx rm` under a session of the same project and agent that may be mid-turn in another
- * tab — is what saveSbxConfig does instead. The message reaches the user as the tab's "could not
- * be started" notice.
+ * once a project's sandbox exists. One that exists with a *different* set is rebuilt rather than
+ * reused: `computeWorkspaces` cannot change within one running instance of tet (its inputs —
+ * project id, agent id, storageRoot — are all already fixed), so a mismatch can only mean this
+ * sandbox is left over from a *previous* run (an older tet version's path scheme, or one this
+ * session's own bug produced) — nothing currently open in this process is actually attached to
+ * it, since attaching to it is exactly what this same check would have refused. Safe to remove
+ * outright.
  */
-async function ensureSandboxExists(agentId: SbxAgentId, workspaces: string[], name: string): Promise<boolean> {
+async function ensureSandboxExists(
+  agentId: SbxAgentId,
+  workspaces: string[],
+  name: string,
+  onData?: (chunk: string) => void
+): Promise<void> {
   const existing = await getSandboxWorkspaces(name);
   if (existing === undefined) {
-    await runSbx(["create", agentId, ...workspaces, "--name", name]);
-    return true;
+    await runSbx(["create", agentId, ...workspaces, "--name", name], { onData });
+    return;
   }
   if (!sameWorkspaceSet(existing, workspaces)) {
-    throw new Error("its SBX sandbox no longer matches tet's own paths — save the SBX configuration again to rebuild it");
+    await runSbx(["rm", name, "--force"], { onData });
+    launcherWritten.delete(name);
+    await runSbx(["create", agentId, ...workspaces, "--name", name], { onData });
   }
-  return false;
 }
 
 /** Set once from main.ts, the moment it has both: the `tet-ctl` bundle it writes the host's own
@@ -635,7 +667,7 @@ export function configureSandboxes(cliPath: string, port: number): void {
  * shebang — node is already on every template's PATH (bundled for the agent CLIs themselves).
  * Assumes the sandbox already exists — callers run this after ensureSandboxExists.
  */
-async function ensureSandboxLauncher(name: string): Promise<void> {
+async function ensureSandboxLauncher(name: string, onData?: (chunk: string) => void): Promise<void> {
   if (!control || launcherWritten.has(name)) {
     return;
   }
@@ -645,7 +677,7 @@ async function ensureSandboxLauncher(name: string): Promise<void> {
   }
   const written = await runSbx(
     ["exec", "-i", name, "sh", "-c", "mkdir -p ~/.local/bin && cat > ~/.local/bin/tet-ctl && chmod +x ~/.local/bin/tet-ctl"],
-    { stdin: `#!/usr/bin/env node\n${bundle}` }
+    { stdin: `#!/usr/bin/env node\n${bundle}`, onData }
   );
   if (written.ok) {
     launcherWritten.add(name);
@@ -658,7 +690,9 @@ async function ensureSandboxLauncher(name: string): Promise<void> {
  * passed on for the caller to say), published ports, and (when network policy allows it, see
  * ensureControlNetworkAllowed) the control-channel env and `tet-ctl` launcher. Creates the
  * sandbox first if it is missing (ensureSandboxExists) — `sbx run` would too, but the launcher
- * has to be written into it before `sbx run` starts the agent.
+ * has to be written into it before `sbx run` starts the agent. `onData`, when given, is every
+ * step's own console output, forwarded live to the tab that is about to run in this sandbox —
+ * see `RunOptions.onData` for why this needs no pty of its own to reach it.
  */
 export async function prepareSbxRun(
   agentId: SbxAgentId,
@@ -666,21 +700,26 @@ export async function prepareSbxRun(
   config: SbxProjectConfig,
   name: string,
   fixed: SbxFixedPaths,
-  agentArgs: string[]
+  agentArgs: string[],
+  onData?: (chunk: string) => void
 ): Promise<{ args: string[]; missing: string[] }> {
   const workspaces = computeWorkspaces(projectPath, fixed);
-  const created = await ensureSandboxExists(agentId, workspaces, name);
+  await ensureSandboxExists(agentId, workspaces, name, onData);
   // Best-effort, same reasoning as the launcher below: no skills/plugins in the sandbox is no
   // worse than today, so a failure here must not block the agent itself from starting. A no-op
   // when nothing is enabled or nothing enabled exists on this host.
-  await ensureKnowledgeMounted(agentId, name, config.knowledge);
-  const missing = await ensureFoldersMounted(name, config.folders);
+  await ensureKnowledgeMounted(agentId, name, config.knowledge, onData);
+  const missing = await ensureFoldersMounted(name, config.folders, onData);
   // sbx run refuses explicit workspace positionals on a sandbox that already exists — even when
   // they are exactly what it already has (verified live, 2026-09-08: "sandbox 'x' already
-  // exists and can't be given new workspaces", reproduced with the identical, matching set).
-  // Passed only when this call is what created the sandbox a moment ago; a reattach gets just
-  // the agent (for sbx's own verification, per its --help) and --name, reading its own spec.
-  const args = created ? ["run", agentId, ...workspaces, "--name", name] : ["run", agentId, "--name", name];
+  // exists and can't be given new workspaces"). ensureSandboxExists above is always its own,
+  // separate `sbx create` call, so by the time this `sbx run` executes the sandbox always
+  // already exists — whether it did before this function ran or was just created a moment ago —
+  // and workspaces are therefore never passed here, not even right after creating it (a real
+  // reproduction, not a hypothetical: the "just created" case hit this exact error before this
+  // comment was written to say so). The agent positional is for sbx's own verification, per its
+  // --help; `--name` is what actually finds the sandbox.
+  const args = ["run", agentId, "--name", name];
   for (const port of config.ports) {
     args.push("-p", `${port.host}:${port.container}`);
   }
@@ -699,17 +738,19 @@ export async function prepareSbxRun(
     );
     // Best-effort: the launcher missing is no worse than today (no tet-ctl in the sandbox at
     // all), so a failure here must not block the agent itself from starting.
-    await ensureSandboxLauncher(name);
+    await ensureSandboxLauncher(name, onData);
   }
   args.push("--", ...agentArgs);
   return { args, missing };
 }
 
 /**
- * The dialog's Save button: writes tet.json (ports/folders), then for every existing sandbox of
- * the project, either rebuilds it (its *fixed* paths no longer match — never actually seen in
- * practice, see computeWorkspaces) or, the normal case, narrows its live folder grants to match
- * (revokeStaleFolders) and applies whatever ports changed (applyPortChanges) — neither is a
+ * The dialog's Save button: writes tet.json (ports/folders), then, if sandboxing is off now,
+ * removes every sandbox the project has — there is no more "off but still there" for a sandbox
+ * once its agent can't be sent to it again. If it's still on, every existing sandbox either gets
+ * rebuilt (its *fixed* paths no longer match — never actually seen in practice, see
+ * computeWorkspaces) or, the normal case, has its live folder grants narrowed to match
+ * (revokeStaleFolders) and whatever ports changed applied (applyPortChanges) — neither is a
  * create-time workspace or `-p` any more, so an edit no longer forces a rebuild (see
  * computeWorkspaces', folderMountSpecs' and applyPortChanges' own comments for why). Returns
  * which agents' sandboxes were *removed*, for the caller to say so: a session of that agent still
@@ -727,7 +768,15 @@ export async function saveSbxConfig(
   const config = { ...request, folders: request.folders.map((folder) => ({ ...folder, path: contractHome(folder.path) })) };
   await writeSbxConfig(projectPath, config);
   if (!config.enabled) {
-    return [];
+    const removed: SbxAgentId[] = [];
+    for (const agentId of SBX_AGENT_IDS) {
+      const name = sandboxName(projectId, agentId);
+      if ((await getSandboxWorkspaces(name)) !== undefined && (await runSbx(["rm", name, "--force"])).ok) {
+        launcherWritten.delete(name);
+        removed.push(agentId);
+      }
+    }
+    return removed;
   }
   const removed: SbxAgentId[] = [];
   for (const agentId of SBX_AGENT_IDS) {
