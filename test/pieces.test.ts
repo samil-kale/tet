@@ -49,6 +49,23 @@ describe("Codex's hook trust", () => {
     assert.match(hooks, /:user_prompt_submit:0:1'=\{trusted_hash=/, "the second handler is trusted on its own");
     assert.ok(!args.some((arg) => arg.startsWith("hooks.")), "one value, never key paths");
   });
+
+  it("returns one JSON value from the Stop hook and silences notification output", () => {
+    for (const posix of [false, true]) {
+      const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-codex-stop-"));
+      setupCodexHooks(
+        storageDir,
+        "Codex",
+        { finished: true, needsYou: true, idleReminder: false },
+        "repo",
+        path.join(storageDir, "context.md"),
+        { posix, embed: (value) => value }
+      );
+      const script = fs.readFileSync(path.join(storageDir, posix ? "stop.sh" : "stop.ps1"), "utf8");
+      assert.match(script, posix ? />\/dev\/null/ : /\| Out-Null/);
+      assert.match(script, posix ? /printf '%s\\n' '\{\}'/ : /Out\.WriteLine\('\{\}'\)/);
+    }
+  });
 });
 
 describe("resolveCommand", () => {

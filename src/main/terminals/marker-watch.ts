@@ -63,20 +63,24 @@ fi`;
  * The hook command shared by every marker hook without a guard of its own: read the JSON
  * payload off stdin, touch a file named after its session id in the `kind` directory, then run
  * `notifyCommand` if one was given. Always exits 0 — a hook on UserPromptSubmit that fails can
- * hold the prompt back, and none of these has anything to report by exit code. `id` names the
- * script file, since two hooks of one agent must not share one.
+ * hold the prompt back, and none of these has anything to report by exit code. Where `stdout`
+ * is supplied, the notification's own result is hidden so that value is the script's complete
+ * output. `id` names the script file, since two hooks of one agent must not share one.
  */
 export function buildMarkCommand(
   storageDir: string,
   id: string,
   kind: Marker,
   notifyCommand: string | undefined,
-  target: HookTarget
+  target: HookTarget,
+  stdout?: string
 ): string {
   const marks = markerDir(storageDir, kind);
   fs.mkdirSync(marks, { recursive: true });
   if (!target.posix) {
     const scriptFile = path.join(storageDir, `${id}.ps1`);
+    const notify = notifyCommand ? `${notifyCommand}${stdout === undefined ? "" : " | Out-Null"}` : "";
+    const output = stdout === undefined ? "" : `[Console]::Out.WriteLine(${powershellSingleQuote(stdout)})`;
     fs.writeFileSync(
       scriptFile,
       WIN_BOM +
@@ -84,19 +88,23 @@ export function buildMarkCommand(
   $json = [Console]::In.ReadToEnd() | ConvertFrom-Json
 ${markPowershell(target.embed(marks))}
 } catch {}
-${notifyCommand ?? ""}
+${notify}
+${output}
 exit 0
 `
     );
     return `powershell -NoProfile -ExecutionPolicy Bypass -File "${target.embed(scriptFile)}"`;
   }
   const scriptFile = path.join(storageDir, `${id}.sh`);
+  const notify = notifyCommand ? `${notifyCommand}${stdout === undefined ? "" : " >/dev/null"}` : "";
+  const output = stdout === undefined ? "" : `printf '%s\\n' ${shellSingleQuote(stdout)}`;
   writePosixScript(
     scriptFile,
     `#!/bin/sh
 json=$(cat)
 ${markPosix(target.embed(marks))}
-${notifyCommand ?? ""}
+${notify}
+${output}
 exit 0
 `
   );

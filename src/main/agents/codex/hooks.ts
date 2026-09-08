@@ -141,7 +141,10 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  * actually over.
  */
 function buildStopCommand(storageDir: string, notifyCommand: string | undefined, target: HookTarget): string {
-  return buildMarkCommand(storageDir, "stop", "finished", notifyCommand, target);
+  // Stop is stricter than the other hook events: a successful command must write one JSON
+  // value to stdout. Keep tet-ctl's own result out of that channel and return an empty object;
+  // the marker and optional notification are side effects, not feedback for Codex.
+  return buildMarkCommand(storageDir, "stop", "finished", notifyCommand, target, "{}");
 }
 
 /**
