@@ -55,7 +55,9 @@ editor only; the diff itself is `DiffView`'s own unified render. Not adopted:
   in a terminal, or "Browse files", which reopens the file last shown for that project). Its left
   side is the same `ChangesList` as the git pane's LOCAL CHANGES, with only "Discard all" in its
   header. `DiffDialog` and `SettingsDialog` are deliberately not part of `Dialog.tsx`: that file is
-  for questions, built around a form with two buttons.
+  for questions, built around a form with two buttons. Every card dialog — the questions and
+  everything under `dialogs/` — is drawn in `DialogFrame` (`src/renderer/ui/DialogFrame.tsx`),
+  headed by either a title bar or a tab strip; the diff dialog alone has a frame of its own.
 - git commands go in an ordinary terminal tab, not a console of the pane's own
 - panes are draggable (`src/renderer/ui/Sash.tsx`)
 
@@ -287,8 +289,8 @@ re-lists whoever wrote the file.
 One dialog for everything TET keeps about *itself* rather than a repository, opened from the one
 button belonging to neither a project nor a pane (pane "a"'s strip). It asks nothing — a switch
 applies the moment it's flipped — so one button closes it. Tabbed (Appearance, Notifications,
-Shortcuts, Files, Prompts, Info) with the add-repository dialog's `.dialog-tabs`, which is why
-neither has a `.dialog-title`. Values live in `settings.json` in `userData` (`src/main/settings.ts`),
+Shortcuts, Files, Prompts, Info) with the add-repository dialog's tab strip in place of a title,
+`DialogFrame`'s other header. Values live in `settings.json` in `userData` (`src/main/settings.ts`),
 written whole and read back defensively.
 
 **A setting reaches an agent through `AgentPaths`**, handed over at `prepareSpawn` rather than

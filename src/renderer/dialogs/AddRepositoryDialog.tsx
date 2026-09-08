@@ -7,6 +7,7 @@ import type {
   RemoteRepository
 } from "../../shared/types";
 import { confirm } from "../ui/Dialog";
+import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { CloseIcon, PlusIcon, SpinnerIcon } from "../ui/icons";
 import { notify } from "../ui/Notices";
@@ -658,96 +659,16 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   };
 
   return (
-    <div className="dialog-overlay">
-      <form
-        className="dialog add-repository-dialog"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (ready && !busy) {
-            void submit();
-          }
-        }}
-      >
-        <div className="dialog-tabs">
-          {MODES.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={mode === entry.id ? "dialog-tab active" : "dialog-tab"}
-              onClick={() => switchMode(entry.id)}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
-        <div className="dialog-body">
-          {mode === "remote" && <RemoteTab onClone={cloneFromRemote} />}
-          {mode === "clone" && (
-            <>
-              <label className="dialog-field">
-                <span>Repository URL</span>
-                <input
-                  type="text"
-                  value={url}
-                  placeholder="https://github.com/owner/repository.git"
-                  onChange={(event) => {
-                    setUrl(event.target.value);
-                    // Edited by hand, so the account the remote tab picked no longer applies —
-                    // its token must not be offered to whatever host this now names. The block
-                    // goes with it: it was put up for a clone of the url that stood before.
-                    setAccountId(null);
-                    setAuthAccounts(null);
-                    setToken("");
-                  }}
-                  ref={firstField}
-                />
-              </label>
-              <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={setDirectory} />
-              <label className="dialog-field">
-                <span>Folder name</span>
-                <input type="text" value={folderName} onChange={(event) => setName(event.target.value)} />
-              </label>
-              {authAccounts !== null && (
-                <CloneAuth
-                  accounts={authAccounts}
-                  mode={authWith}
-                  onMode={setAuthMode}
-                  accountId={accountId}
-                  onAccount={setAccountId}
-                  provider={tokenProvider}
-                  onProvider={setTokenProvider}
-                  token={token}
-                  onToken={setToken}
-                />
-              )}
-            </>
-          )}
-          {mode === "add" && (
-            <PathField
-              label="Repository path"
-              value={directory}
-              pickTitle="Add repository"
-              onChange={setDirectory}
-              inputRef={firstField}
-            />
-          )}
-          {mode === "create" && (
-            <>
-              <PathField
-                label="Destination"
-                value={directory}
-                pickTitle="Create in"
-                onChange={setDirectory}
-                inputRef={firstField}
-              />
-              <label className="dialog-field">
-                <span>Folder name</span>
-                <input type="text" value={folderName} onChange={(event) => setName(event.target.value)} />
-              </label>
-            </>
-          )}
-        </div>
-        <div className="dialog-buttons">
+    <DialogFrame
+      header={{ tabs: MODES, active: mode, onSelect: switchMode }}
+      className="add-repository-dialog"
+      onSubmit={() => {
+        if (ready && !busy) {
+          void submit();
+        }
+      }}
+      buttons={
+        <>
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
@@ -757,8 +678,74 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
               <span>{MODES.find((entry) => entry.id === mode)?.label}</span>
             </button>
           )}
-        </div>
-      </form>
-    </div>
+        </>
+      }
+    >
+      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} />}
+      {mode === "clone" && (
+        <>
+          <label className="dialog-field">
+            <span>Repository URL</span>
+            <input
+              type="text"
+              value={url}
+              placeholder="https://github.com/owner/repository.git"
+              onChange={(event) => {
+                setUrl(event.target.value);
+                // Edited by hand, so the account the remote tab picked no longer applies —
+                // its token must not be offered to whatever host this now names. The block
+                // goes with it: it was put up for a clone of the url that stood before.
+                setAccountId(null);
+                setAuthAccounts(null);
+                setToken("");
+              }}
+              ref={firstField}
+            />
+          </label>
+          <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={setDirectory} />
+          <label className="dialog-field">
+            <span>Folder name</span>
+            <input type="text" value={folderName} onChange={(event) => setName(event.target.value)} />
+          </label>
+          {authAccounts !== null && (
+            <CloneAuth
+              accounts={authAccounts}
+              mode={authWith}
+              onMode={setAuthMode}
+              accountId={accountId}
+              onAccount={setAccountId}
+              provider={tokenProvider}
+              onProvider={setTokenProvider}
+              token={token}
+              onToken={setToken}
+            />
+          )}
+        </>
+      )}
+      {mode === "add" && (
+        <PathField
+          label="Repository path"
+          value={directory}
+          pickTitle="Add repository"
+          onChange={setDirectory}
+          inputRef={firstField}
+        />
+      )}
+      {mode === "create" && (
+        <>
+          <PathField
+            label="Destination"
+            value={directory}
+            pickTitle="Create in"
+            onChange={setDirectory}
+            inputRef={firstField}
+          />
+          <label className="dialog-field">
+            <span>Folder name</span>
+            <input type="text" value={folderName} onChange={(event) => setName(event.target.value)} />
+          </label>
+        </>
+      )}
+    </DialogFrame>
   );
 }

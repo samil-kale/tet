@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { DialogFrame } from "./DialogFrame";
 import { CloseIcon, PinIcon, SparkleIcon, SpinnerIcon } from "./icons";
 import { notify } from "./Notices";
 
@@ -166,29 +167,28 @@ interface FrameProps {
 
 function Frame({ title, confirmLabel, disabled, wide, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
   return (
-    <div className="dialog-overlay">
-      {/* A form, so Enter answers from wherever the focus sits — the field or the checkbox. */}
-      <form
-        className={wide ? "dialog wide" : "dialog"}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!disabled) {
-            onSubmit();
-          }
-        }}
-      >
-        <div className="dialog-title">{title}</div>
-        <div className="dialog-body">{children}</div>
-        <div className="dialog-buttons">
+    <DialogFrame
+      header={{ title, onClose: onCancel }}
+      className={wide ? "wide" : undefined}
+      // A form, so Enter answers from wherever the focus sits — the field or the checkbox.
+      onSubmit={() => {
+        if (!disabled) {
+          onSubmit();
+        }
+      }}
+      buttons={
+        <>
           <button type="button" className="button secondary" onClick={onCancel}>
             Cancel
           </button>
           <button type="submit" className="button" disabled={disabled} autoFocus={focusSubmit}>
             {confirmLabel}
           </button>
-        </div>
-      </form>
-    </div>
+        </>
+      }
+    >
+      {children}
+    </DialogFrame>
   );
 }
 

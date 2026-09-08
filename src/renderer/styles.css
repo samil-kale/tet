@@ -1617,13 +1617,15 @@ textarea:focus {
   width: 560px;
 }
 
-/* A dialog with more than one pane heads itself with these instead of a title, shaped like the
-   terminal tabs so choosing one reads like choosing a tab anywhere else. Pulled to the dialog's
-   edges: a tab strip runs the full width of what it heads, and the dialog's own padding stays
-   for what is below — which is why this has to be the dialog's first child. Add repository and
-   the settings both use it; a second strip differing by a few pixels would read as a different
-   kind of thing. */
+/* Every card dialog is headed by one of two things, both drawn by `DialogFrame`: a title bar or,
+   for a dialog with more than one pane, a tab strip shaped like the terminal tabs so choosing one
+   reads like choosing a tab anywhere else. Both are pulled to the dialog's edges: a bar runs the
+   full width of what it heads, and the dialog's own padding stays for what is below — which is
+   why the header is the dialog's first child. Add repository and the settings take the strip; a
+   second one differing by a few pixels would read as a different kind of thing. `position:
+   relative` is what lets the dialog's `.progress-bar` anchor to the header's bottom edge. */
 .dialog-tabs {
+  position: relative;
   display: flex;
   align-items: stretch;
   height: 35px;
@@ -1648,18 +1650,12 @@ textarea:focus {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
-.dialog-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-/* Enable-sbx's own title bar — same shape as .diff-dialog-bar, since this dialog is a custom
-   one (not Dialog.tsx's question Frame) and shows its progress the same way. Unlike
+/* The title bar — same shape as .diff-dialog-bar, and shows progress the same way. Unlike
    .diff-dialog-bar's own unpadded container, this one sits inside .dialog's 16px padding — the
    negative margin cancels that on three sides so the bar is flush with the card like a real
    title bar, and the top corners get .dialog's own radius back since they no longer come from
    the padding keeping the bar inset from them. */
-.enable-sbx-bar {
+.dialog-bar {
   position: relative;
   display: flex;
   align-items: center;
@@ -1673,7 +1669,7 @@ textarea:focus {
   border-radius: 5px 5px 0 0;
 }
 
-.enable-sbx-title {
+.dialog-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1756,7 +1752,7 @@ textarea:focus {
 /* The master enable checkbox at the top of the dialog body, set off from the fields below it by
    space alone rather than a rule. */
 .enable-sbx-dialog .dialog-checkbox {
-  padding-bottom: 16px;
+  padding-bottom: 20px;
 }
 
 .enable-sbx-dialog .dialog-checkbox .dialog-detail {
@@ -1769,10 +1765,15 @@ textarea:focus {
   max-height: calc(100vh - 32px);
 }
 
-/* The one part that scrolls: everything below the master checkbox, a sibling of .dialog-body
-   rather than inside it so the checkbox stays put. flex/min-height is what lets it shrink below
-   its content's natural height once .dialog hits its max-height instead of pushing the dialog
-   taller. */
+/* The body takes what the header and buttons leave, so the scrollbox below can shrink into it. */
+.enable-sbx-dialog .dialog-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* The one part that scrolls: everything below the master checkbox, which stays put. flex/min-height
+   is what lets it shrink below its content's natural height once .dialog hits its max-height
+   instead of pushing the dialog taller. */
 .enable-sbx-fields-scroll {
   flex: 1;
   min-height: 0;

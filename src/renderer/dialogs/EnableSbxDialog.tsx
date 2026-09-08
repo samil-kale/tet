@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Project, SbxAgentId, SbxProjectConfig, SbxSaveRequest } from "../../shared/types";
 import { EnableSbxFields, type FieldsState, type FolderRow, type PortRow } from "./EnableSbxFields";
-import { CloseIcon } from "../ui/icons";
+import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
-import { ProgressBar } from "../ui/ProgressBar";
 import { useEscape } from "../ui/use-escape";
 
 /** Docker's own install page — the "Get it" button, same as RequirementsDialog's per program. */
@@ -52,9 +51,8 @@ function hydrateState(saved: SbxProjectConfig | undefined): FieldsState {
  * background if needed (`sbx login` opens the OAuth page in the browser itself), check the
  * machine-wide network policy, initialize it (to "balanced") if needed — see the plan for why
  * that one is a background default rather than a per-project dialog choice. Each step shows in
- * the title bar's own progress bar (`.enable-sbx-bar`, the same shape as the diff dialog's
- * `.diff-dialog-bar` — see "One progress indicator per pane" in CLAUDE.md) so the click is never
- * followed by nothing happening. Installing is not a step: the same rule as RequirementsDialog,
+ * the title bar's progress bar (`DialogFrame`'s `busy` — see "One progress indicator per pane"
+ * in CLAUDE.md) so the click is never followed by nothing happening. Installing is not a step: the same rule as RequirementsDialog,
  * no command works on all three platforms, so a missing sbx gets Docker's install page and a
  * "Check again".
  *
@@ -174,64 +172,12 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
 
   return (
-    <div className="dialog-overlay">
-      <div className={phase.kind === "ready" ? "dialog wide enable-sbx-dialog" : "dialog enable-sbx-dialog"}>
-        <div className="enable-sbx-bar">
-          <span className="enable-sbx-title">Enable sbx — {project.name}</span>
-          <button className="icon-button" title="Close" onClick={close}>
-            <CloseIcon />
-          </button>
-          {busy && <ProgressBar />}
-        </div>
-        <div className="dialog-body">
-          {phase.kind === "checking" && <p className="dialog-detail">Checking sbx…</p>}
-          {phase.kind === "not-installed" && (
-            <p className="dialog-detail">
-              Docker Sandboxes (sbx) is not installed. Install it, then check again — a program
-              installed somewhere outside its package manager's usual place may only be found once
-              tet is restarted.
-            </p>
-          )}
-          {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to sbx…</p>}
-          {phase.kind === "initializing-policy" && (
-            <p className="dialog-detail">Setting up sbx's network policy…</p>
-          )}
-          {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
-          {phase.kind === "ready" && (
-            <label className="dialog-checkbox">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(event) => setEnabled(event.target.checked)}
-              />
-              <span>
-                <strong>Enable sbx sandboxing for this project</strong>
-                <p className="dialog-detail">
-                  Claude and Codex tabs in {project.name} run in their own isolated Docker sandbox
-                  instead of directly on this machine. OpenCode (its server runs on the host) and
-                  pi (no sbx kit) stay outside.
-                </p>
-              </span>
-            </label>
-          )}
-        </div>
-        {phase.kind === "ready" && (
-          // A sibling of .dialog-body rather than inside it — see the CSS: this is the one part
-          // that scrolls, and the checkbox above stays put.
-          <div className="enable-sbx-fields-scroll">
-            <EnableSbxFields
-              state={state}
-              onTokenChange={setToken}
-              onAddPort={addPort}
-              onRemovePort={removePort}
-              onUpdatePort={updatePort}
-              onAddFolder={addFolder}
-              onRemoveFolder={removeFolder}
-              onUpdateFolder={updateFolder}
-            />
-          </div>
-        )}
-        <div className="dialog-buttons">
+    <DialogFrame
+      header={{ title: `Enable sbx — ${project.name}`, onClose: close }}
+      className={phase.kind === "ready" ? "wide enable-sbx-dialog" : "enable-sbx-dialog"}
+      busy={busy}
+      buttons={
+        <>
           <button type="button" className="button secondary" onClick={close}>
             Cancel
           </button>
@@ -250,8 +196,54 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
               Save
             </button>
           )}
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      {phase.kind === "checking" && <p className="dialog-detail">Checking sbx…</p>}
+      {phase.kind === "not-installed" && (
+        <p className="dialog-detail">
+          Docker Sandboxes (sbx) is not installed. Install it, then check again — a program
+          installed somewhere outside its package manager's usual place may only be found once
+          tet is restarted.
+        </p>
+      )}
+      {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to sbx…</p>}
+      {phase.kind === "initializing-policy" && (
+        <p className="dialog-detail">Setting up sbx's network policy…</p>
+      )}
+      {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
+      {phase.kind === "ready" && (
+        <>
+          <label className="dialog-checkbox">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(event) => setEnabled(event.target.checked)}
+            />
+            <span>
+              <strong>Enable sbx sandboxing for this project</strong>
+              <p className="dialog-detail">
+                Claude and Codex tabs in {project.name} run in their own isolated Docker sandbox
+                instead of directly on this machine. OpenCode (its server runs on the host) and
+                pi (no sbx kit) stay outside.
+              </p>
+            </span>
+          </label>
+          {/* The one part that scrolls — see the CSS: the checkbox above stays put. */}
+          <div className="enable-sbx-fields-scroll">
+            <EnableSbxFields
+              state={state}
+              onTokenChange={setToken}
+              onAddPort={addPort}
+              onRemovePort={removePort}
+              onUpdatePort={updatePort}
+              onAddFolder={addFolder}
+              onRemoveFolder={removeFolder}
+              onUpdateFolder={updateFolder}
+            />
+          </div>
+        </>
+      )}
+    </DialogFrame>
   );
 }

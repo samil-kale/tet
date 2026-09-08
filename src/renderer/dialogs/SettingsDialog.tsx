@@ -12,6 +12,7 @@ import type {
   Project,
   PromptId
 } from "../../shared/types";
+import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { notify } from "../ui/Notices";
@@ -150,181 +151,167 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   };
 
   return (
-    <div className="dialog-overlay">
-      <div className="dialog wide settings-dialog">
-        {/* The tabs head the dialog instead of a title, as in the add-repository dialog: the
-            selected one names what is below it, and "Settings" is what the button that opened
-            this says. */}
-        <div className="dialog-tabs">
-          {TABS.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={tab === entry.id ? "dialog-tab active" : "dialog-tab"}
-              onClick={() => setTab(entry.id)}
-            >
-              {entry.label}
-            </button>
+    // The tabs head the dialog instead of a title, as in the add-repository dialog: the selected
+    // one names what is below it, and "Settings" is what the button that opened this says.
+    <DialogFrame
+      header={{ tabs: TABS, active: tab, onSelect: setTab }}
+      className="wide settings-dialog"
+      buttons={
+        <button type="button" className="button" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
+      {tab === "appearance" && (
+        <>
+          <label className="dialog-field">
+            <span>Color theme</span>
+            <Dropdown
+              value={settings?.theme ?? SYSTEM_THEME_ID}
+              onChange={applyTheme}
+              options={[
+                { value: SYSTEM_THEME_ID, label: "System" },
+                ...THEMES.map((theme) => ({ value: theme.id, label: theme.label }))
+              ]}
+            />
+          </label>
+          {/* Not live, for the same reason the notifications below aren't: xterm, shiki and
+              monaco each read the theme once and keep it, as does the window's own chrome;
+              the agents are handed it when their first terminal in a project starts. */}
+          <p className="dialog-detail">Applies after tet is restarted.</p>
+        </>
+      )}
+      {tab === "notifications" && (
+        <>
+          <p className="dialog-detail">Desktop notifications for agent activity</p>
+          {settings &&
+            SWITCHES.map(({ key, label }) => (
+              <label key={key} className="dialog-checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.notifications[key]}
+                  onChange={(event) => flip(key, event.target.checked)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          {/* Said out loud because it is not what a switch usually promises: an agent is handed
+              its notification setup once per project, when its first terminal there starts —
+              Claude Code as the settings file it reads once, opencode as what its event stream
+              is wired to — and neither can be reached afterwards. */}
+          <p className="dialog-detail">
+            Handed to an agent when its first terminal in a project starts - a change reaches
+            already-open projects only after tet is restarted.
+          </p>
+        </>
+      )}
+      {tab === "shortcuts" && (
+        <div className="settings-shortcuts">
+          {SHORTCUTS.map(({ id, description }) => (
+            <div key={id} className="settings-shortcut-row">
+              <span>{shortcutLabel(id)}</span>
+              <span>{description}</span>
+            </div>
           ))}
         </div>
-        <div className="dialog-body">
-          {tab === "appearance" && (
+      )}
+      {tab === "files" && (
+        <>
+          <p className="dialog-detail">
+            {activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree - open a project to edit it"}
+          </p>
+          {activeProject && explorerSettings && (
             <>
+              <label className="dialog-checkbox">
+                <input
+                  type="checkbox"
+                  checked={explorerSettings.excludeGitIgnore}
+                  onChange={(event) =>
+                    updateExplorerSettings(
+                      "excludeGitIgnore",
+                      event.target.checked,
+                      window.tet.repository.setExcludeGitIgnore
+                    )
+                  }
+                />
+                <span>Hide what git ignores too</span>
+              </label>
+              <label className="dialog-checkbox">
+                <input
+                  type="checkbox"
+                  checked={explorerSettings.compactFolders}
+                  onChange={(event) =>
+                    updateExplorerSettings(
+                      "compactFolders",
+                      event.target.checked,
+                      window.tet.repository.setCompactFolders
+                    )
+                  }
+                />
+                <span>Compact folders that only contain another folder into one row</span>
+              </label>
               <label className="dialog-field">
-                <span>Color theme</span>
+                <span>Sort order</span>
                 <Dropdown
-                  value={settings?.theme ?? SYSTEM_THEME_ID}
-                  onChange={applyTheme}
-                  options={[
-                    { value: SYSTEM_THEME_ID, label: "System" },
-                    ...THEMES.map((theme) => ({ value: theme.id, label: theme.label }))
-                  ]}
+                  value={explorerSettings.sortOrder}
+                  onChange={(order) =>
+                    updateExplorerSettings(
+                      "sortOrder",
+                      order as ExplorerSortOrder,
+                      window.tet.repository.setSortOrder
+                    )
+                  }
+                  options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
                 />
               </label>
-              {/* Not live, for the same reason the notifications below aren't: xterm, shiki and
-                  monaco each read the theme once and keep it, as does the window's own chrome;
-                  the agents are handed it when their first terminal in a project starts. */}
-              <p className="dialog-detail">Applies after tet is restarted.</p>
             </>
           )}
-          {tab === "notifications" && (
-            <>
-              <p className="dialog-detail">Desktop notifications for agent activity</p>
-              {settings &&
-                SWITCHES.map(({ key, label }) => (
-                  <label key={key} className="dialog-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={settings.notifications[key]}
-                      onChange={(event) => flip(key, event.target.checked)}
-                    />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              {/* Said out loud because it is not what a switch usually promises: an agent is handed
-                  its notification setup once per project, when its first terminal there starts —
-                  Claude Code as the settings file it reads once, opencode as what its event stream
-                  is wired to — and neither can be reached afterwards. */}
-              <p className="dialog-detail">
-                Handed to an agent when its first terminal in a project starts - a change reaches
-                already-open projects only after tet is restarted.
-              </p>
-            </>
-          )}
-          {tab === "shortcuts" && (
-            <div className="settings-shortcuts">
-              {SHORTCUTS.map(({ id, description }) => (
-                <div key={id} className="settings-shortcut-row">
-                  <span>{shortcutLabel(id)}</span>
-                  <span>{description}</span>
-                </div>
-              ))}
+          <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
+          <Dropdown
+            value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
+            onChange={applyPreset}
+            options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
+          />
+        </>
+      )}
+      {tab === "prompts" && settings && (
+        <>
+          <div className="settings-prompt-header">
+            <Dropdown
+              value={promptId}
+              onChange={(id) => setPromptId(id as PromptId)}
+              options={PROMPT_IDS.map((id) => ({ value: id, label: PROMPT_LABELS[id] }))}
+            />
+            <button
+              type="button"
+              className="button secondary"
+              disabled={settings.prompts[promptId] === ""}
+              onClick={() => applyPrompt(promptId, "")}
+            >
+              Reset to default
+            </button>
+          </div>
+          {/* Always the text the agent will get, never a placeholder: the default is what a
+              user edits from, so it has to be in the box. Live — read when the wand is
+              pressed, unlike everything else in this dialog. */}
+          <textarea
+            className="settings-prompt"
+            spellCheck={false}
+            value={effectivePrompt(settings.prompts, promptId)}
+            onChange={(event) => applyPrompt(promptId, event.target.value)}
+          />
+        </>
+      )}
+      {tab === "info" && info && (
+        <div className="settings-info">
+          {INFO_ROWS.map(({ key, label }) => (
+            <div key={key} className="settings-info-row">
+              <span>{label}</span>
+              <span>{info[key]}</span>
             </div>
-          )}
-          {tab === "files" && (
-            <>
-              <p className="dialog-detail">
-                {activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree - open a project to edit it"}
-              </p>
-              {activeProject && explorerSettings && (
-                <>
-                  <label className="dialog-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={explorerSettings.excludeGitIgnore}
-                      onChange={(event) =>
-                        updateExplorerSettings(
-                          "excludeGitIgnore",
-                          event.target.checked,
-                          window.tet.repository.setExcludeGitIgnore
-                        )
-                      }
-                    />
-                    <span>Hide what git ignores too</span>
-                  </label>
-                  <label className="dialog-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={explorerSettings.compactFolders}
-                      onChange={(event) =>
-                        updateExplorerSettings(
-                          "compactFolders",
-                          event.target.checked,
-                          window.tet.repository.setCompactFolders
-                        )
-                      }
-                    />
-                    <span>Compact folders that only contain another folder into one row</span>
-                  </label>
-                  <label className="dialog-field">
-                    <span>Sort order</span>
-                    <Dropdown
-                      value={explorerSettings.sortOrder}
-                      onChange={(order) =>
-                        updateExplorerSettings(
-                          "sortOrder",
-                          order as ExplorerSortOrder,
-                          window.tet.repository.setSortOrder
-                        )
-                      }
-                      options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
-                    />
-                  </label>
-                </>
-              )}
-              <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
-              <Dropdown
-                value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
-                onChange={applyPreset}
-                options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
-              />
-            </>
-          )}
-          {tab === "prompts" && settings && (
-            <>
-              <div className="settings-prompt-header">
-                <Dropdown
-                  value={promptId}
-                  onChange={(id) => setPromptId(id as PromptId)}
-                  options={PROMPT_IDS.map((id) => ({ value: id, label: PROMPT_LABELS[id] }))}
-                />
-                <button
-                  type="button"
-                  className="button secondary"
-                  disabled={settings.prompts[promptId] === ""}
-                  onClick={() => applyPrompt(promptId, "")}
-                >
-                  Reset to default
-                </button>
-              </div>
-              {/* Always the text the agent will get, never a placeholder: the default is what a
-                  user edits from, so it has to be in the box. Live — read when the wand is
-                  pressed, unlike everything else in this dialog. */}
-              <textarea
-                className="settings-prompt"
-                spellCheck={false}
-                value={effectivePrompt(settings.prompts, promptId)}
-                onChange={(event) => applyPrompt(promptId, event.target.value)}
-              />
-            </>
-          )}
-          {tab === "info" && info && (
-            <div className="settings-info">
-              {INFO_ROWS.map(({ key, label }) => (
-                <div key={key} className="settings-info-row">
-                  <span>{label}</span>
-                  <span>{info[key]}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
-        <div className="dialog-buttons">
-          <button type="button" className="button" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </DialogFrame>
   );
 }

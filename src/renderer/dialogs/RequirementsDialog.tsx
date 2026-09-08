@@ -1,4 +1,5 @@
 import type { Requirement, Requirements } from "../../shared/types";
+import { DialogFrame } from "../ui/DialogFrame";
 import { SpinnerIcon } from "../ui/icons";
 
 /** Name on the left, what the check found on the right, and where to get it when it is missing. */
@@ -43,29 +44,11 @@ interface RequirementsDialogProps {
  */
 export function RequirementsDialog({ requirements, checking, onRecheck }: RequirementsDialogProps) {
   return (
-    <div className="dialog-overlay">
-      <div className="dialog">
-        <div className="dialog-title">TET cannot start</div>
-        <div className="dialog-body">
-          <p className="dialog-message">
-            Git runs the whole git side, and an agent is what the terminals are for. Install what is
-            missing, then check again.
-          </p>
-          <div className="requirement-list">
-            <RequirementRow requirement={requirements.git} />
-          </div>
-          <p className="dialog-detail">At least one of these:</p>
-          <div className="requirement-list">
-            {requirements.agents.map((agent) => (
-              <RequirementRow key={agent.name} requirement={agent} />
-            ))}
-          </div>
-          <p className="dialog-detail">
-            A program installed somewhere outside its package manager's usual place may only be
-            found once tet is restarted.
-          </p>
-        </div>
-        <div className="dialog-buttons">
+    <DialogFrame
+      // No close button: nothing stands behind this yet, so there is nothing to go back to.
+      header={{ title: "TET cannot start" }}
+      buttons={
+        <>
           <button type="button" className="button secondary" onClick={() => window.tet.startup.quit()}>
             Quit
           </button>
@@ -73,8 +56,26 @@ export function RequirementsDialog({ requirements, checking, onRecheck }: Requir
             {checking && <SpinnerIcon className="spinning" />}
             <span>Check again</span>
           </button>
-        </div>
+        </>
+      }
+    >
+      <p className="dialog-message">
+        Git runs the whole git side, and an agent is what the terminals are for. Install what is
+        missing, then check again.
+      </p>
+      <div className="requirement-list">
+        <RequirementRow requirement={requirements.git} />
       </div>
-    </div>
+      <p className="dialog-detail">At least one of these:</p>
+      <div className="requirement-list">
+        {requirements.agents.map((agent) => (
+          <RequirementRow key={agent.name} requirement={agent} />
+        ))}
+      </div>
+      <p className="dialog-detail">
+        A program installed somewhere outside its package manager's usual place may only be
+        found once tet is restarted.
+      </p>
+    </DialogFrame>
   );
 }
