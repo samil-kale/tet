@@ -1791,7 +1791,6 @@ textarea:focus {
 /* No fixed height: the dialog grows with its content. Capped to the window so it cannot run off
    top or bottom. */
 .enable-sbx-dialog.wide {
-  min-height: 530px;
   max-height: calc(100vh - 32px);
 }
 

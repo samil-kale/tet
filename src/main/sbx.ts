@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
-import type { SbxAgentConfig, SbxAgentId, SbxFolder, SbxProjectConfig, SbxSaveRequest } from "../shared/types";
+import type { SbxAgentConfig, SbxAgentId, SbxFixedPaths, SbxFolder, SbxProjectConfig, SbxSaveRequest } from "../shared/types";
 import { writeSbxConfig } from "./git/commands";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/os-notify";
@@ -296,6 +296,13 @@ export function computeWorkspaces(agentId: SbxAgentId, projectPath: string, conf
   const configDir = expandHome(`~/.${agentId}`);
   const userFolders = config.folders.filter((folder) => normalizeFolder(folder.path) !== configDir).map(folderArg);
   return [...new Set([projectPath, configDir, ...userFolders, paths.agentDir, `${path.dirname(paths.contextFile)}:ro`])];
+}
+
+/** The two host paths above that computeWorkspaces mounts unconditionally, resolved for the
+ *  dialog's own fixed "Allowed folders" rows — see SbxFixedPaths. Display-only: the dialog never
+ *  sends these back, computeWorkspaces mounts them on its own regardless of what tet.json holds. */
+export function fixedWorkspacePaths(paths: SandboxPaths): SbxFixedPaths {
+  return { agentDir: paths.agentDir, contextDir: path.dirname(paths.contextFile) };
 }
 
 /** `sbx ls --json`'s workspaces for one sandbox, or undefined if it does not exist. */

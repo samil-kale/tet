@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Project, SbxAgentConfig, SbxAgentId, SbxAgentSave, SbxSaveRequest } from "../../shared/types";
+import type { Project, SbxAgentConfig, SbxAgentId, SbxAgentSave, SbxFixedPaths, SbxSaveRequest } from "../../shared/types";
 import { AGENT_SPECS, EnableSbxFields, type AgentSpec, type AgentState, type FolderRow, type PortRow } from "./EnableSbxFields";
 import { CloseIcon } from "../ui/icons";
 import { notify } from "../ui/Notices";
@@ -27,6 +27,10 @@ type Phase =
   | { kind: "ready" }
   | { kind: "failed"; message: string };
 
+/** Placeholder for the initial render, before `sbx:get-config` has answered — the fixed rows
+ *  built from this are never shown, since the fields only render once phase.kind is "ready". */
+const EMPTY_FIXED_PATHS: SbxFixedPaths = { agentDir: "", contextDir: "" };
+
 let nextRowId = 0;
 /** Local-only id for a port/folder row's React key — never sent anywhere. */
 function newRowId(): string {
@@ -34,24 +38,31 @@ function newRowId(): string {
   return `row-${nextRowId}`;
 }
 
-function builtinFolder(spec: AgentSpec): FolderRow {
-  return { id: newRowId(), path: spec.defaultFolder, access: "Read+Write", builtin: true };
+/** The rows computeWorkspaces mounts unconditionally, never from tet.json: the agent's own config
+ *  directory, then the two SbxFixedPaths (see there for what each is and why it's shown). */
+function fixedFolders(spec: AgentSpec, fixedPaths: SbxFixedPaths): FolderRow[] {
+  return [
+    { id: newRowId(), path: spec.defaultFolder, access: "Read+Write", builtin: true },
+    { id: newRowId(), path: fixedPaths.agentDir, access: "Read+Write", builtin: true },
+    { id: newRowId(), path: fixedPaths.contextDir, access: "Read", builtin: true }
+  ];
 }
 
 /**
  * `sbx:get-config`'s answer (or nothing yet), turned into this dialog's own row shape: each row
- * gets a local id for its React key, and the builtin config-directory row always comes first —
- * never from tet.json, which `toSaveAgent` keeps it out of, but a file written by hand may still
- * hold it, so a saved row with that path is dropped rather than shown twice.
+ * gets a local id for its React key, and the builtin rows always come first — never from
+ * tet.json, which `toSaveAgent` keeps them out of, but a file written by hand may still hold one
+ * of their paths, so a saved row matching any of them is dropped rather than shown twice.
  */
-function hydrateAgentState(spec: AgentSpec, saved: SbxAgentConfig | undefined): AgentState {
+function hydrateAgentState(spec: AgentSpec, saved: SbxAgentConfig | undefined, fixedPaths: SbxFixedPaths): AgentState {
+  const builtinPaths = new Set([spec.defaultFolder, fixedPaths.agentDir, fixedPaths.contextDir]);
   const folders = (saved?.folders ?? [])
-    .filter((folder) => folder.path !== spec.defaultFolder)
+    .filter((folder) => !builtinPaths.has(folder.path))
     .map((folder) => ({ id: newRowId(), path: folder.path, access: folder.access, builtin: false }));
   return {
     token: "",
     ports: (saved?.ports ?? []).map((port) => ({ id: newRowId(), host: port.host, container: port.container })),
-    folders: [builtinFolder(spec), ...folders]
+    folders: [...fixedFolders(spec, fixedPaths), ...folders]
   };
 }
 
@@ -93,8 +104,8 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
   const [enabled, setEnabled] = useState(false);
   const [tab, setTab] = useState<SbxAgentId>("claude");
   const [state, setState] = useState<Record<SbxAgentId, AgentState>>({
-    claude: hydrateAgentState(AGENT_SPECS.claude, undefined),
-    codex: hydrateAgentState(AGENT_SPECS.codex, undefined)
+    claude: hydrateAgentState(AGENT_SPECS.claude, undefined, EMPTY_FIXED_PATHS),
+    codex: hydrateAgentState(AGENT_SPECS.codex, undefined, EMPTY_FIXED_PATHS)
   });
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
@@ -171,8 +182,8 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
     }
     setEnabled(config.enabled);
     setState({
-      claude: hydrateAgentState(AGENT_SPECS.claude, config.agents.claude),
-      codex: hydrateAgentState(AGENT_SPECS.codex, config.agents.codex)
+      claude: hydrateAgentState(AGENT_SPECS.claude, config.agents.claude, config.fixedPaths.claude),
+      codex: hydrateAgentState(AGENT_SPECS.codex, config.agents.codex, config.fixedPaths.codex)
     });
     setPhase({ kind: "ready" });
   };
@@ -247,7 +258,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
             </label>
           )}
         </div>
-        {phase.kind === "ready" && enabled && (
+        {phase.kind === "ready" && (
           <>
             {/* Outside .dialog-body on purpose — see the CSS: a sibling here, rather than nested
                 inside the scrolling body below, is what keeps the tabs from ever scrolling out

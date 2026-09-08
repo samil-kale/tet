@@ -27,6 +27,9 @@ import type {
   ProjectCommand,
   RepositoryState,
   Requirements,
+  SbxAgentId,
+  SbxDialogConfig,
+  SbxFixedPaths,
   SbxProjectConfig,
   SbxSaveRequest,
   StashCommand,
@@ -37,6 +40,7 @@ import {
   checkSbxInstalled,
   checkSbxLoggedIn,
   checkSbxPolicyInitialized,
+  fixedWorkspacePaths,
   initSbxPolicy,
   runSbxLogin,
   saveSbxConfig
@@ -173,10 +177,19 @@ export function registerIpc({
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
-  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached. */
-  ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
+  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached.
+   *  fixedPaths is never persisted: computed on the spot from the project's own SessionManager,
+   *  the same source save-config's rebuild check already uses. */
+  ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxDialogConfig> => {
     const project = store.get(projectId);
-    return project ? readSbxConfig(project.path) : { enabled: false, agents: {} };
+    const manager = project ? sessions.get(projectId) : undefined;
+    const config: SbxProjectConfig = project ? await readSbxConfig(project.path) : { enabled: false, agents: {} };
+    const emptyPaths: SbxFixedPaths = { agentDir: "", contextDir: "" };
+    const agentIds: SbxAgentId[] = ["claude", "codex"];
+    const fixedPaths = Object.fromEntries(
+      agentIds.map((agentId) => [agentId, manager ? fixedWorkspacePaths(manager.agentPaths(agentId)) : emptyPaths])
+    ) as Record<SbxAgentId, SbxFixedPaths>;
+    return { ...config, fixedPaths };
   });
   /** The dialog's Save button — writes tet.json and pushes any entered token to `sbx secret set`;
    *  see sbx.ts's saveSbxConfig for why a token never reaches tet.json itself, and for the

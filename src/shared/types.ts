@@ -117,6 +117,23 @@ export interface SbxProjectConfig {
   agents: Partial<Record<SbxAgentId, SbxAgentConfig>>;
 }
 
+/** The two host paths sbx.ts's computeWorkspaces mounts unconditionally for every sandboxed agent
+ *  tab, alongside the agent's own config directory (AgentSpec.defaultFolder in the dialog):
+ *  `agentDir` (TET's own generated hook settings/markers, read-write) and the directory holding
+ *  the shell-context file (read-only, only ever `cat`). Sent by `sbx:get-config` purely for
+ *  display — a fixed "Allowed folders" row, the same "shown so the user knows it is there"
+ *  reasoning as the config directory row — never persisted to tet.json. */
+export interface SbxFixedPaths {
+  agentDir: string;
+  contextDir: string;
+}
+
+/** `sbx:get-config`'s actual answer: the persisted SbxProjectConfig plus the fixed paths above,
+ *  computed fresh by the main process on every open rather than stored. */
+export interface SbxDialogConfig extends SbxProjectConfig {
+  fixedPaths: Record<SbxAgentId, SbxFixedPaths>;
+}
+
 /** What the dialog's Save button sends over IPC — `SbxAgentConfig` plus the token field, which
  *  the main process forwards to `sbx secret set` and never persists. An empty token leaves
  *  whatever secret is already set for that service alone. */

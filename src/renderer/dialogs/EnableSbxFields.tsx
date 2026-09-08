@@ -148,7 +148,7 @@ export function EnableSbxFields({
               {folder.builtin ? (
                 // Plain text rather than a Dropdown: the row can't actually make that choice
                 // (see FolderRow.builtin), so it must not claim to.
-                <span className="sbx-folder-access-fixed">Read+Write</span>
+                <span className="sbx-folder-access-fixed">{folder.access}</span>
               ) : (
                 <Dropdown
                   value={folder.access}
