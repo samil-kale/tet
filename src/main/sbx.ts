@@ -185,13 +185,14 @@ export function sandboxName(projectId: string, agentId: SbxAgentId): string {
   return `tet-${agentId}-${hash}`;
 }
 
-/** `~` the way a user may type an "Allowed folders" row — expanded before it ever reaches
- *  `sbx`, which is not a shell and would otherwise pass the tilde through literally. */
+/** `~` the way tet.json holds a folder under the home (contractHome's `~` and `~/…`) — expanded
+ *  before it ever reaches `sbx`, which is not a shell and would otherwise pass the tilde
+ *  through literally. */
 function expandHome(folderPath: string): string {
   if (folderPath === "~") {
     return os.homedir();
   }
-  return folderPath.startsWith("~/") || folderPath.startsWith("~\\") ? path.join(os.homedir(), folderPath.slice(2)) : folderPath;
+  return folderPath.startsWith("~/") ? path.join(os.homedir(), folderPath.slice(2)) : folderPath;
 }
 
 /**
@@ -408,7 +409,7 @@ async function ensureSandboxExists(agentId: SbxAgentId, workspaces: string[], na
   if (existing === undefined) {
     await runSbx(["create", agentId, ...workspaces, "--name", name]);
   } else if (!sameWorkspaceSet(existing, workspaces)) {
-    throw new Error("its sbx sandbox has other folders than the configuration — save the sbx configuration again to rebuild it");
+    throw new Error("its SBX sandbox has other folders than the configuration — save the SBX configuration again to rebuild it");
   }
 }
 

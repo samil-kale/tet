@@ -1721,10 +1721,9 @@ textarea:focus {
   margin-left: auto;
 }
 
-/* Same explicit height for both: the folder path's monospace font otherwise renders a shorter
-   line box than the port fields' default UI font, leaving the two rows visibly uneven. */
-.sbx-port-input,
-.sbx-folder-path {
+/* Same explicit height as the folder row's text and dropdown (26px, below), so the two kinds of
+   row read level. */
+.sbx-port-input {
   height: 26px;
 }
 
@@ -1737,9 +1736,16 @@ textarea:focus {
   color: var(--vscode-descriptionForeground);
 }
 
+/* Plain text, not an input: the path comes from the native folder picker and is only shown.
+   Line-height pins the text to the row's own 26px; a long path is cut with an ellipsis and
+   carried whole in the title. */
 .sbx-folder-path {
   flex: 1;
   min-width: 0;
+  line-height: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--vscode-editor-font-family, monospace);
 }
 

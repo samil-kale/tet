@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { Project, SbxAgentId, SbxProjectConfig, SbxSaveRequest } from "../../shared/types";
-import { EnableSbxFields, type FieldsState, type FolderRow, type PortRow } from "./EnableSbxFields";
+import type { Project, SbxAccess, SbxAgentId, SbxProjectConfig, SbxSaveRequest } from "../../shared/types";
+import { EnableSbxFields, type FieldsState, type PortRow } from "./EnableSbxFields";
 import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
@@ -84,10 +84,17 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
   const removePort = (id: string): void => patch({ ports: state.ports.filter((port) => port.id !== id) });
   const updatePort = (id: string, change: Partial<PortRow>): void =>
     patch({ ports: state.ports.map((port) => (port.id === id ? { ...port, ...change } : port)) });
-  const addFolder = (): void => patch({ folders: [...state.folders, { id: newRowId(), path: "", access: "Read+Write" }] });
+  /** The native folder picker, the way the add-repository dialog asks for a directory — a
+   *  cancelled pick adds nothing, and a picked path is not typed over afterwards. */
+  const addFolder = async (): Promise<void> => {
+    const picked = await window.tet.projects.pickDirectory("Allow a folder in the sandbox");
+    if (picked && live.current) {
+      setState((current) => ({ ...current, folders: [...current.folders, { id: newRowId(), path: picked, access: "Read+Write" }] }));
+    }
+  };
   const removeFolder = (id: string): void => patch({ folders: state.folders.filter((folder) => folder.id !== id) });
-  const updateFolder = (id: string, change: Partial<FolderRow>): void =>
-    patch({ folders: state.folders.map((folder) => (folder.id === id ? { ...folder, ...change } : folder)) });
+  const setFolderAccess = (id: string, access: SbxAccess): void =>
+    patch({ folders: state.folders.map((folder) => (folder.id === id ? { ...folder, access } : folder)) });
 
   /** Installed → signed in → policy → saved config. Run on mount and by "Check again". */
   const setup = async (): Promise<void> => {
@@ -111,7 +118,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
         return;
       }
       if (!succeeded) {
-        setPhase({ kind: "failed", message: "sbx login failed." });
+        setPhase({ kind: "failed", message: "SBX login failed." });
         return;
       }
     }
@@ -126,7 +133,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
         return;
       }
       if (!succeeded) {
-        setPhase({ kind: "failed", message: "Could not set up sbx's network policy." });
+        setPhase({ kind: "failed", message: "Could not set up SBX's network policy." });
         return;
       }
     }
@@ -154,7 +161,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
       enabled,
       tokens: state.tokens,
       ports: state.ports.filter((port) => port.host.trim() && port.container.trim()).map(({ host, container }) => ({ host, container })),
-      folders: state.folders.filter((folder) => folder.path.trim()).map(({ path, access }) => ({ path, access }))
+      folders: state.folders.map(({ path, access }) => ({ path, access }))
     };
     const result = await window.tet.sbx.saveConfig(project.id, request);
     if (!live.current) {
@@ -162,10 +169,10 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
     }
     setSaving(false);
     if (!result.ok) {
-      notify("error", result.error ?? "Could not save the sbx configuration");
+      notify("error", result.error ?? "Could not save the SBX configuration");
       return;
     }
-    notify("info", `sbx configuration saved for ${project.name}.`);
+    notify("info", `SBX configuration saved for ${project.name}.`);
     close();
   };
 
@@ -173,7 +180,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
 
   return (
     <DialogFrame
-      header={{ title: `Enable sbx — ${project.name}`, onClose: close }}
+      header={{ title: `Enable SBX — ${project.name}`, onClose: close }}
       className={phase.kind === "ready" ? "wide enable-sbx-dialog" : "enable-sbx-dialog"}
       busy={busy}
       buttons={
@@ -199,17 +206,17 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
         </>
       }
     >
-      {phase.kind === "checking" && <p className="dialog-detail">Checking sbx…</p>}
+      {phase.kind === "checking" && <p className="dialog-detail">Checking SBX…</p>}
       {phase.kind === "not-installed" && (
         <p className="dialog-detail">
-          Docker Sandboxes (sbx) is not installed. Install it, then check again — a program
+          Docker Sandboxes (SBX) is not installed. Install it, then check again — a program
           installed somewhere outside its package manager's usual place may only be found once
           tet is restarted.
         </p>
       )}
-      {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to sbx…</p>}
+      {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to SBX…</p>}
       {phase.kind === "initializing-policy" && (
-        <p className="dialog-detail">Setting up sbx's network policy…</p>
+        <p className="dialog-detail">Setting up SBX's network policy…</p>
       )}
       {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
       {phase.kind === "ready" && (
@@ -221,11 +228,11 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
               onChange={(event) => setEnabled(event.target.checked)}
             />
             <span>
-              <strong>Enable sbx sandboxing for this project</strong>
+              <strong>Enable SBX sandboxing for this project</strong>
               <p className="dialog-detail">
                 Claude and Codex tabs in {project.name} run in their own isolated Docker sandbox
                 instead of directly on this machine. OpenCode (its server runs on the host) and
-                pi (no sbx kit) stay outside.
+                pi (no SBX kit) stay outside.
               </p>
             </span>
           </label>
@@ -237,9 +244,9 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
               onAddPort={addPort}
               onRemovePort={removePort}
               onUpdatePort={updatePort}
-              onAddFolder={addFolder}
+              onAddFolder={() => void addFolder()}
               onRemoveFolder={removeFolder}
-              onUpdateFolder={updateFolder}
+              onSetFolderAccess={setFolderAccess}
             />
           </div>
         </>

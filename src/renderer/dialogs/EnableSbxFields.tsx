@@ -53,7 +53,9 @@ interface EnableSbxFieldsProps {
   onUpdatePort: (id: string, change: Partial<PortRow>) => void;
   onAddFolder: () => void;
   onRemoveFolder: (id: string) => void;
-  onUpdateFolder: (id: string, change: Partial<FolderRow>) => void;
+  /** The one thing a folder row can change after being picked — the path itself is what the
+   *  native picker returned, shown but not typed over. */
+  onSetFolderAccess: (id: string, access: SbxAccess) => void;
 }
 
 /**
@@ -72,7 +74,7 @@ export function EnableSbxFields({
   onUpdatePort,
   onAddFolder,
   onRemoveFolder,
-  onUpdateFolder
+  onSetFolderAccess
 }: EnableSbxFieldsProps) {
   return (
     <>
@@ -129,17 +131,13 @@ export function EnableSbxFields({
           {state.folders.length === 0 && <p className="dialog-detail">No folders shared yet</p>}
           {state.folders.map((folder) => (
             <div key={folder.id} className="sbx-folder-row">
-              <input
-                className="sbx-folder-path"
-                type="text"
-                value={folder.path}
-                placeholder="~/path/to/folder"
-                onChange={(event) => onUpdateFolder(folder.id, { path: event.target.value })}
-              />
+              <span className="sbx-folder-path" title={folder.path}>
+                {folder.path}
+              </span>
               <Dropdown
                 value={folder.access}
                 options={ACCESS_OPTIONS}
-                onChange={(value) => onUpdateFolder(folder.id, { access: value as SbxAccess })}
+                onChange={(value) => onSetFolderAccess(folder.id, value as SbxAccess)}
               />
               <button className="icon-button" title="Remove folder" onClick={() => onRemoveFolder(folder.id)}>
                 <CloseIcon />

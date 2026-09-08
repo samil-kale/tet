@@ -165,7 +165,7 @@ export const ProjectList = memo(function ProjectList({
         run: remote ? () => void askRemoteUrl(project, remote) : undefined
       },
       SEPARATOR,
-      { label: "Enable sbx", run: () => onEnableSbx(project.id) },
+      { label: "Enable SBX", run: () => onEnableSbx(project.id) },
       SEPARATOR,
       { label: "Close repository", run: () => onClose(project.id) }
     ];
