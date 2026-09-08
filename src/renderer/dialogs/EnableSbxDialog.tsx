@@ -180,7 +180,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
 
   return (
     <DialogFrame
-      header={{ title: `Enable SBX — ${project.name}`, onClose: close }}
+      header={{ title: `Enable SBX - ${project.name}`, onClose: close }}
       className={phase.kind === "ready" ? "wide enable-sbx-dialog" : "enable-sbx-dialog"}
       busy={busy}
       buttons={
