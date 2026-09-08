@@ -95,15 +95,15 @@ function send(host: string, port: number, request: ControlRequest): Promise<Cont
           buffer += chunk;
         });
         res.on("end", () => {
-          const body = buffer.trim();
-          if (!body) {
+          const answer = buffer.trim();
+          if (!answer) {
             reject(new Error("TET closed the connection without answering"));
             return;
           }
           try {
-            resolve(JSON.parse(body) as ControlResponse);
+            resolve(JSON.parse(answer) as ControlResponse);
           } catch {
-            reject(new Error(`not an answer: ${body}`));
+            reject(new Error(`not an answer: ${answer}`));
           }
         });
       }

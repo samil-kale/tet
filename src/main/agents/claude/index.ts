@@ -1,18 +1,9 @@
-import * as path from "node:path";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
-import { sandboxTarget } from "../../terminals/os-notify";
+import { sandboxHookDir, sandboxTarget } from "../../terminals/os-notify";
 import { setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
-
-/** Where a sandboxed session's own hook scripts/settings live — a subdirectory of the same
- *  agentDir a host session uses, so the two never overwrite each other's tet-hooks-settings.json
- *  (a host one is posix/win32-specific and path-literal; a sandboxed one is always posix with
- *  container-translated paths) while still sitting inside the one folder sbx.ts mounts whole. */
-function sandboxHookDir(agentDir: string): string {
-  return path.join(agentDir, "sandbox");
-}
 
 export const claudeAgent: AgentDefinition = {
   id: "claude",
@@ -37,9 +28,6 @@ export const claudeAgent: AgentDefinition = {
         paths.theme.kind
       );
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
-      // A sandboxed tab's own markers land under the same agentDir's "sandbox" subfolder (see
-      // sandboxHookDir) rather than colliding with the host hook files above — watched
-      // separately so either kind of tab's turn is picked up by the one runtime this is.
       watchers.push(watchTurnMarkers(sandboxHookDir(paths.agentDir), paths));
     } catch (error) {
       // Unlike opencode's server, these hooks are not what makes the CLI usable — losing

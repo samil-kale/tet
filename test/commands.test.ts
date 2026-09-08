@@ -177,31 +177,36 @@ describe("the tree's own edits", () => {
 });
 
 describe("readSbxConfig", () => {
-  it("is disabled with no agents for a project with no tet.json at all", async () => {
-    assert.deepEqual(await readSbxConfig(root), { enabled: false, agents: {} });
+  it("is disabled and empty for a project with no tet.json at all", async () => {
+    assert.deepEqual(await readSbxConfig(root), { enabled: false, ports: [], folders: [] });
   });
 
-  it("round-trips what writeSbxConfig wrote, keeping a saved command alongside it", async () => {
-    put(JSON.stringify({ commands: ["keep"] }));
-    await writeSbxConfig(root, {
+  it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's folders alongside it", async () => {
+    const otherOs = process.platform === "win32" ? "linux" : "win32";
+    const theirs = { path: "/their/data", access: "Read", os: otherOs };
+    const stale = [
+      { path: "~/stale", access: "Read" },
+      { path: "/stale/absolute", access: "Read", os: process.platform }
+    ];
+    put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, ports: [], folders: [theirs, ...stale] } }));
+    const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
+    const config = {
       enabled: true,
-      agents: {
-        claude: {
-          ports: [{ host: "3000", container: "3000" }],
-          folders: [{ path: "~/.claude", access: "Read+Write" }]
-        }
-      }
-    });
-    assert.deepEqual(await readSbxConfig(root), {
-      enabled: true,
-      agents: {
-        claude: {
-          ports: [{ host: "3000", container: "3000" }],
-          folders: [{ path: "~/.claude", access: "Read+Write" }]
-        }
-      }
-    });
-    assert.deepEqual((stored() as { commands: unknown }).commands, ["keep"], "the saved command survives");
+      ports: [{ host: "3000", container: "3000" }],
+      folders: [
+        { path: "~/data", access: "Read+Write" as const },
+        { path: elsewhere, access: "Read" as const }
+      ]
+    };
+    await writeSbxConfig(root, config);
+    assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
+    const file = stored() as { commands: unknown; sbx: { folders: unknown } };
+    assert.deepEqual(file.commands, ["keep"], "the saved command survives");
+    assert.deepEqual(
+      file.sbx.folders,
+      [theirs, { path: "~/data", access: "Read+Write" }, { path: elsewhere, access: "Read", os: process.platform }],
+      "the other OS's row survives; a ~ row is everyone's, an absolute one this platform's; the stale ones are replaced"
+    );
   });
 
   it("drops a malformed row rather than throwing, and never carries a token", async () => {
@@ -209,25 +214,20 @@ describe("readSbxConfig", () => {
       JSON.stringify({
         sbx: {
           enabled: true,
-          agents: {
-            claude: {
-              ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
-              folders: [{ path: "" }, { path: "~/.claude", access: "not-a-real-access" }],
-              token: "sk-ant-should-not-be-read"
-            },
-            pi: { ports: [], folders: [] }
-          }
+          ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
+          folders: [
+            { path: "", os: process.platform },
+            { path: "~/data", access: "not-a-real-access", os: process.platform },
+            { path: "/elsewhere", access: "Read", os: process.platform === "win32" ? "linux" : "win32" }
+          ],
+          tokens: { claude: "sk-ant-should-not-be-read" }
         }
       })
     );
     assert.deepEqual(await readSbxConfig(root), {
       enabled: true,
-      agents: {
-        claude: {
-          ports: [{ host: "3000", container: "3000" }],
-          folders: [{ path: "~/.claude", access: "Read+Write" }]
-        }
-      }
+      ports: [{ host: "3000", container: "3000" }],
+      folders: [{ path: "~/data", access: "Read+Write" }]
     });
   });
 });

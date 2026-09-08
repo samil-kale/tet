@@ -1,15 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import type { Project, SbxAgentConfig, SbxAgentId, SbxAgentSave, SbxFixedPaths, SbxSaveRequest } from "../../shared/types";
-import { AGENT_SPECS, EnableSbxFields, type AgentSpec, type AgentState, type FolderRow, type PortRow } from "./EnableSbxFields";
+import type { Project, SbxAgentId, SbxProjectConfig, SbxSaveRequest } from "../../shared/types";
+import { EnableSbxFields, type FieldsState, type FolderRow, type PortRow } from "./EnableSbxFields";
 import { CloseIcon } from "../ui/icons";
 import { notify } from "../ui/Notices";
 import { ProgressBar } from "../ui/ProgressBar";
 import { useEscape } from "../ui/use-escape";
-
-const TABS: { id: SbxAgentId; label: string }[] = [
-  { id: "claude", label: "Claude" },
-  { id: "codex", label: "Codex" }
-];
 
 /** Docker's own install page — the "Get it" button, same as RequirementsDialog's per program. */
 const SBX_INSTALL_URL = "https://docs.docker.com/ai/sandboxes/install/";
@@ -27,10 +22,6 @@ type Phase =
   | { kind: "ready" }
   | { kind: "failed"; message: string };
 
-/** Placeholder for the initial render, before `sbx:get-config` has answered — the fixed rows
- *  built from this are never shown, since the fields only render once phase.kind is "ready". */
-const EMPTY_FIXED_PATHS: SbxFixedPaths = { agentDir: "", contextDir: "" };
-
 let nextRowId = 0;
 /** Local-only id for a port/folder row's React key — never sent anywhere. */
 function newRowId(): string {
@@ -38,39 +29,18 @@ function newRowId(): string {
   return `row-${nextRowId}`;
 }
 
-/** The rows computeWorkspaces mounts unconditionally, never from tet.json: the agent's own config
- *  directory, then the two SbxFixedPaths (see there for what each is and why it's shown). */
-function fixedFolders(spec: AgentSpec, fixedPaths: SbxFixedPaths): FolderRow[] {
-  return [
-    { id: newRowId(), path: spec.defaultFolder, access: "Read+Write", builtin: true },
-    { id: newRowId(), path: fixedPaths.agentDir, access: "Read+Write", builtin: true },
-    { id: newRowId(), path: fixedPaths.contextDir, access: "Read", builtin: true }
-  ];
-}
-
 /**
  * `sbx:get-config`'s answer (or nothing yet), turned into this dialog's own row shape: each row
- * gets a local id for its React key, and the builtin rows always come first — never from
- * tet.json, which `toSaveAgent` keeps them out of, but a file written by hand may still hold one
- * of their paths, so a saved row matching any of them is dropped rather than shown twice.
+ * gets a local id for its React key; the tokens always start blank, since they are never read
+ * back. Only the user's own folders — each agent's config directory and tet's own directories
+ * are mounted whatever this list says (sbx.ts's computeWorkspaces) and deliberately not shown
+ * as rows: nothing about them is the user's to change.
  */
-function hydrateAgentState(spec: AgentSpec, saved: SbxAgentConfig | undefined, fixedPaths: SbxFixedPaths): AgentState {
-  const builtinPaths = new Set([spec.defaultFolder, fixedPaths.agentDir, fixedPaths.contextDir]);
-  const folders = (saved?.folders ?? [])
-    .filter((folder) => !builtinPaths.has(folder.path))
-    .map((folder) => ({ id: newRowId(), path: folder.path, access: folder.access, builtin: false }));
+function hydrateState(saved: SbxProjectConfig | undefined): FieldsState {
   return {
-    token: "",
+    tokens: { claude: "", codex: "" },
     ports: (saved?.ports ?? []).map((port) => ({ id: newRowId(), host: port.host, container: port.container })),
-    folders: [...fixedFolders(spec, fixedPaths), ...folders]
-  };
-}
-
-function toSaveAgent(state: AgentState): SbxAgentSave {
-  return {
-    token: state.token,
-    ports: state.ports.filter((port) => port.host.trim() && port.container.trim()).map(({ host, container }) => ({ host, container })),
-    folders: state.folders.filter((folder) => !folder.builtin && folder.path.trim()).map(({ path, access }) => ({ path, access }))
+    folders: (saved?.folders ?? []).map((folder) => ({ id: newRowId(), path: folder.path, access: folder.access }))
   };
 }
 
@@ -88,10 +58,10 @@ function toSaveAgent(state: AgentState): SbxAgentSave {
  * no command works on all three platforms, so a missing sbx gets Docker's install page and a
  * "Check again".
  *
- * Token/ports/folders live here, not in EnableSbxFields, for the same reason the tab bar does:
- * Save (the footer button, once ready) needs to read the current values to build the request it
- * sends to `sbx:save-config` — session-manager.ts's `resolveSbxRun` is what actually acts on
- * what gets saved, the next time a claude/codex tab in this project spawns.
+ * Tokens/ports/folders live here, not in EnableSbxFields: Save (the footer button, once ready)
+ * needs to read the current values to build the request it sends to `sbx:save-config` —
+ * session-manager.ts's `resolveSbxRun` is what actually acts on what gets saved, the next time
+ * a claude/codex tab in this project spawns.
  */
 export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
   // One way out, whichever of × / Escape / Cancel triggers it: `cancelSbxSetup` is a no-op when
@@ -102,36 +72,24 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
   };
   useEscape(close);
   const [enabled, setEnabled] = useState(false);
-  const [tab, setTab] = useState<SbxAgentId>("claude");
-  const [state, setState] = useState<Record<SbxAgentId, AgentState>>({
-    claude: hydrateAgentState(AGENT_SPECS.claude, undefined, EMPTY_FIXED_PATHS),
-    codex: hydrateAgentState(AGENT_SPECS.codex, undefined, EMPTY_FIXED_PATHS)
-  });
+  const [state, setState] = useState<FieldsState>(hydrateState(undefined));
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   // So a step that resolves after the dialog closed doesn't set state on an unmounted component.
   const live = useRef(true);
   useEffect(() => () => void (live.current = false), []);
 
-  const patch = (agent: SbxAgentId, change: Partial<AgentState>): void =>
-    setState((current) => ({ ...current, [agent]: { ...current[agent], ...change } }));
+  const patch = (change: Partial<FieldsState>): void => setState((current) => ({ ...current, ...change }));
 
-  const addPort = (agent: SbxAgentId): void =>
-    patch(agent, { ports: [...state[agent].ports, { id: newRowId(), host: "", container: "" }] });
-  const removePort = (agent: SbxAgentId, id: string): void =>
-    patch(agent, { ports: state[agent].ports.filter((port) => port.id !== id) });
-  const updatePort = (agent: SbxAgentId, id: string, change: Partial<PortRow>): void =>
-    patch(agent, { ports: state[agent].ports.map((port) => (port.id === id ? { ...port, ...change } : port)) });
-  const addFolder = (agent: SbxAgentId): void =>
-    patch(agent, {
-      folders: [...state[agent].folders, { id: newRowId(), path: "", access: "Read+Write", builtin: false }]
-    });
-  const removeFolder = (agent: SbxAgentId, id: string): void =>
-    patch(agent, { folders: state[agent].folders.filter((folder) => folder.id !== id) });
-  const updateFolder = (agent: SbxAgentId, id: string, change: Partial<FolderRow>): void =>
-    patch(agent, {
-      folders: state[agent].folders.map((folder) => (folder.id === id ? { ...folder, ...change } : folder))
-    });
+  const setToken = (agent: SbxAgentId, value: string): void => patch({ tokens: { ...state.tokens, [agent]: value } });
+  const addPort = (): void => patch({ ports: [...state.ports, { id: newRowId(), host: "", container: "" }] });
+  const removePort = (id: string): void => patch({ ports: state.ports.filter((port) => port.id !== id) });
+  const updatePort = (id: string, change: Partial<PortRow>): void =>
+    patch({ ports: state.ports.map((port) => (port.id === id ? { ...port, ...change } : port)) });
+  const addFolder = (): void => patch({ folders: [...state.folders, { id: newRowId(), path: "", access: "Read+Write" }] });
+  const removeFolder = (id: string): void => patch({ folders: state.folders.filter((folder) => folder.id !== id) });
+  const updateFolder = (id: string, change: Partial<FolderRow>): void =>
+    patch({ folders: state.folders.map((folder) => (folder.id === id ? { ...folder, ...change } : folder)) });
 
   /** Installed → signed in → policy → saved config. Run on mount and by "Check again". */
   const setup = async (): Promise<void> => {
@@ -181,10 +139,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
       return;
     }
     setEnabled(config.enabled);
-    setState({
-      claude: hydrateAgentState(AGENT_SPECS.claude, config.agents.claude, config.fixedPaths.claude),
-      codex: hydrateAgentState(AGENT_SPECS.codex, config.agents.codex, config.fixedPaths.codex)
-    });
+    setState(hydrateState(config));
     setPhase({ kind: "ready" });
   };
 
@@ -199,7 +154,9 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
     setSaving(true);
     const request: SbxSaveRequest = {
       enabled,
-      agents: { claude: toSaveAgent(state.claude), codex: toSaveAgent(state.codex) }
+      tokens: state.tokens,
+      ports: state.ports.filter((port) => port.host.trim() && port.container.trim()).map(({ host, container }) => ({ host, container })),
+      folders: state.folders.filter((folder) => folder.path.trim()).map(({ path, access }) => ({ path, access }))
     };
     const result = await window.tet.sbx.saveConfig(project.id, request);
     if (!live.current) {
@@ -259,36 +216,20 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
           )}
         </div>
         {phase.kind === "ready" && (
-          <>
-            {/* Outside .dialog-body on purpose — see the CSS: a sibling here, rather than nested
-                inside the scrolling body below, is what keeps the tabs from ever scrolling out
-                of view, and from opening a horizontal scrollbar on the body that contains them. */}
-            <div className="dialog-tabs">
-              {TABS.map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={id === tab ? "dialog-tab active" : "dialog-tab"}
-                  onClick={() => setTab(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="enable-sbx-fields-scroll">
-              <EnableSbxFields
-                agent={tab}
-                agentState={state[tab]}
-                onTokenChange={(value) => patch(tab, { token: value })}
-                onAddPort={() => addPort(tab)}
-                onRemovePort={(id) => removePort(tab, id)}
-                onUpdatePort={(id, change) => updatePort(tab, id, change)}
-                onAddFolder={() => addFolder(tab)}
-                onRemoveFolder={(id) => removeFolder(tab, id)}
-                onUpdateFolder={(id, change) => updateFolder(tab, id, change)}
-              />
-            </div>
-          </>
+          // A sibling of .dialog-body rather than inside it — see the CSS: this is the one part
+          // that scrolls, and the checkbox above stays put.
+          <div className="enable-sbx-fields-scroll">
+            <EnableSbxFields
+              state={state}
+              onTokenChange={setToken}
+              onAddPort={addPort}
+              onRemovePort={removePort}
+              onUpdatePort={updatePort}
+              onAddFolder={addFolder}
+              onRemoveFolder={removeFolder}
+              onUpdateFolder={updateFolder}
+            />
+          </div>
         )}
         <div className="dialog-buttons">
           <button type="button" className="button secondary" onClick={close}>

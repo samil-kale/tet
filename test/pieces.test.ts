@@ -10,7 +10,7 @@ import { renderPiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
 import { powershellSingleQuote, shellSingleQuote, toContainerPath } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
-import { computeWorkspaces, folderArg, sandboxName } from "../src/main/sbx";
+import { computeWorkspaces, contractHome, folderArg, sandboxName, sandboxPaths } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
@@ -99,32 +99,49 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(folderArg({ path: repo, access: "Read+Write" }), repo);
   });
 
+  it("stores a folder under the home as ~/…, and anything else as typed", () => {
+    const home = os.homedir();
+    assert.equal(contractHome(path.join(home, "data", "sub") + path.sep), "~/data/sub");
+    assert.equal(contractHome(` ${home} `), "~");
+    assert.equal(contractHome("~/already"), "~/already");
+    // Not the temp dir: on win32 that sits under the home too.
+    const elsewhere = path.join(path.parse(home).root, "elsewhere");
+    assert.equal(contractHome(elsewhere), elsewhere);
+    assert.equal(contractHome("relative/path"), "relative/path");
+  });
+
   it("normalizes a typed path the way sbx lists it back, so the set compares equal on the next spawn", () => {
     const data = path.join(os.tmpdir(), "data");
     assert.equal(folderArg({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "Read" }), `${data}:ro`);
     assert.equal(folderArg({ path: "~/data/", access: "Read+Write" }), path.join(os.homedir(), "data"));
   });
 
-  it("mounts the project, the config dir, tet's own dirs, and the user's folders — each once", () => {
-    const paths = {
+  it("mounts the project, the config dir, tet's own dirs, and the user's folders — each once, and only those that exist", () => {
+    const fixed = sandboxPaths("claude", {
       agentDir: path.join(os.tmpdir(), "agents", "claude", "p"),
       contextFile: path.join(os.tmpdir(), "ctx", "context.md")
-    };
-    const repo = path.join(os.tmpdir(), "repo");
-    const data = path.join(os.tmpdir(), "data");
+    });
+    assert.equal(fixed.configDir, path.join(os.homedir(), ".claude"));
+    assert.equal(fixed.contextDir, path.join(os.tmpdir(), "ctx"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-"));
+    const repo = path.join(root, "repo");
+    const data = path.join(root, "data");
+    fs.mkdirSync(repo);
+    fs.mkdirSync(data);
+    const file = path.join(root, "file.txt");
+    fs.writeFileSync(file, "");
     const folders = [
       { path: "~/.claude/", access: "Read" as const },
       { path: data, access: "Read" as const },
       { path: data, access: "Read" as const },
-      { path: `${repo}${path.sep}`, access: "Read+Write" as const }
+      { path: `${repo}${path.sep}`, access: "Read+Write" as const },
+      { path: path.join(root, "gone"), access: "Read" as const },
+      { path: file, access: "Read" as const }
     ];
-    assert.deepEqual(computeWorkspaces("claude", repo, { ports: [], folders }, paths), [
-      repo,
-      path.join(os.homedir(), ".claude"),
-      `${data}:ro`,
-      paths.agentDir,
-      `${path.join(os.tmpdir(), "ctx")}:ro`
-    ]);
+    assert.deepEqual(computeWorkspaces(repo, folders, fixed), {
+      workspaces: [repo, fixed.configDir, `${data}:ro`, fixed.agentDir, `${fixed.contextDir}:ro`],
+      missing: [path.join(root, "gone"), file]
+    });
   });
 });
 

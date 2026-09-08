@@ -1753,18 +1753,7 @@ textarea:focus {
   height: 26px;
 }
 
-/* The builtin folder row's stand-in for the Dropdown above — plain text, since that row's access
-   is always Read+Write regardless of what it says (see sbx.ts's buildSbxRunArgs). */
-.sbx-folder-access-fixed {
-  height: 26px;
-  display: flex;
-  align-items: center;
-  padding: 0 6px;
-  color: var(--vscode-descriptionForeground);
-  white-space: nowrap;
-}
-
-/* The master enable checkbox at the top of the dialog body, set off from the tabs below it by
+/* The master enable checkbox at the top of the dialog body, set off from the fields below it by
    space alone rather than a rule. */
 .enable-sbx-dialog .dialog-checkbox {
   padding-bottom: 16px;
@@ -1774,29 +1763,15 @@ textarea:focus {
   margin-top: 3px;
 }
 
-/* Unlike SettingsDialog, .dialog-tabs here isn't the dialog's first child — the master checkbox
-   (in .dialog-body, above it) comes first — so only its top margin is reset (the dialog's own
-   flex gap spaces it from the checkbox instead); left and right stay flush with .dialog's own
-   edges, same as everywhere else .dialog-tabs is used, so the strip still runs edge to edge. No
-   top corners to round here, unlike the first-child case. A sibling of .dialog-body and of
-   .enable-sbx-fields-scroll below, not nested in either: nesting it in the one that scrolls
-   would both carry the tabs off along with that scroll and, since a negative margin here
-   deliberately overflows its container's padding box, hand that container a horizontal
-   scrollbar too (measured live). Sitting outside any scroll area, it simply always stays put. */
-.enable-sbx-dialog .dialog-tabs {
-  margin: 0 -16px;
-  border-radius: 0;
-}
-
 /* No fixed height: the dialog grows with its content. Capped to the window so it cannot run off
    top or bottom. */
 .enable-sbx-dialog.wide {
   max-height: calc(100vh - 32px);
 }
 
-/* The one part that scrolls: everything below the tabs (see above for why the tabs themselves
-   are a sibling, not the parent, of this). flex/min-height is what lets it shrink below its
-   content's natural height once .dialog hits its max-height instead of pushing the dialog
+/* The one part that scrolls: everything below the master checkbox, a sibling of .dialog-body
+   rather than inside it so the checkbox stays put. flex/min-height is what lets it shrink below
+   its content's natural height once .dialog hits its max-height instead of pushing the dialog
    taller. */
 .enable-sbx-fields-scroll {
   flex: 1;
@@ -1805,8 +1780,6 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  /* Room above the first section's own border so it doesn't sit flush against the tabs. */
-  padding-top: 4px;
 }
 
 /* "Port forwarding" and "Allowed folders" each start with a rule of their own, on top of the

@@ -1,18 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
-import { sandboxTarget } from "../../terminals/os-notify";
+import { sandboxHookDir, sandboxTarget } from "../../terminals/os-notify";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";
 import { setupCodexHooks } from "./hooks";
 import { codexSessionProvider } from "./sessions";
-
-/** Same reasoning as claude/index.ts's own sandboxHookDir: a sandboxed session's hook state
- *  lives in its own subfolder of agentDir so it never collides with the host's. */
-function sandboxHookDir(agentDir: string): string {
-  return path.join(agentDir, "sandbox");
-}
 
 /**
  * On win32 Codex does not ask the terminal for its colors (OSC 10/11 — xterm answers those,
@@ -63,8 +57,6 @@ export const codexAgent: AgentDefinition = {
     try {
       args = setupCodexHooks(paths.agentDir, "Codex", paths.notifications, path.basename(cwd), paths.contextFile);
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
-      // A sandboxed tab's own markers land under agentDir's "sandbox" subfolder — see
-      // claude/index.ts's identical comment on its own sandboxHookDir.
       watchers.push(watchTurnMarkers(sandboxHookDir(paths.agentDir), paths));
     } catch (error) {
       // As with Claude, losing the hooks must not keep Codex from starting — swallowed rather

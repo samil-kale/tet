@@ -27,9 +27,6 @@ import type {
   ProjectCommand,
   RepositoryState,
   Requirements,
-  SbxAgentId,
-  SbxDialogConfig,
-  SbxFixedPaths,
   SbxProjectConfig,
   SbxSaveRequest,
   StashCommand,
@@ -40,7 +37,6 @@ import {
   checkSbxInstalled,
   checkSbxLoggedIn,
   checkSbxPolicyInitialized,
-  fixedWorkspacePaths,
   initSbxPolicy,
   runSbxLogin,
   saveSbxConfig
@@ -177,19 +173,10 @@ export function registerIpc({
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
-  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached.
-   *  fixedPaths is never persisted: computed on the spot from the project's own SessionManager,
-   *  the same source save-config's rebuild check already uses. */
-  ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxDialogConfig> => {
+  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached. */
+  ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
-    const manager = project ? sessions.get(projectId) : undefined;
-    const config: SbxProjectConfig = project ? await readSbxConfig(project.path) : { enabled: false, agents: {} };
-    const emptyPaths: SbxFixedPaths = { agentDir: "", contextDir: "" };
-    const agentIds: SbxAgentId[] = ["claude", "codex"];
-    const fixedPaths = Object.fromEntries(
-      agentIds.map((agentId) => [agentId, manager ? fixedWorkspacePaths(manager.agentPaths(agentId)) : emptyPaths])
-    ) as Record<SbxAgentId, SbxFixedPaths>;
-    return { ...config, fixedPaths };
+    return project ? readSbxConfig(project.path) : { enabled: false, ports: [], folders: [] };
   });
   /** The dialog's Save button — writes tet.json and pushes any entered token to `sbx secret set`;
    *  see sbx.ts's saveSbxConfig for why a token never reaches tet.json itself, and for the
@@ -201,7 +188,7 @@ export function registerIpc({
       return { ok: false, error: "Project not found" };
     }
     try {
-      const removed = await saveSbxConfig(project.path, project.id, request, (agentId) => manager.agentPaths(agentId));
+      const removed = await saveSbxConfig(project.path, project.id, request, (agentId) => manager.sandboxPaths(agentId));
       for (const agentId of removed) {
         send("app:notice", {
           severity: "info",

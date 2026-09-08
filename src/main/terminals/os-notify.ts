@@ -43,6 +43,16 @@ export function sandboxTarget(): HookTarget {
   return { posix: true, embed: toContainerPath };
 }
 
+/** Where a sandboxed session's own hook scripts, settings and markers live — a subdirectory of
+ *  the same agentDir a host session uses, so the two never overwrite each other's files (a host
+ *  one is posix/win32-specific and path-literal; a sandboxed one is always posix with
+ *  container-translated paths) while still sitting inside the one folder sbx.ts mounts whole.
+ *  Each agent's prepareSpawn watches this for markers next to agentDir itself, so either kind
+ *  of tab's turn is picked up by the one runtime. */
+export function sandboxHookDir(agentDir: string): string {
+  return path.join(agentDir, "sandbox");
+}
+
 /** What starts a generated script without a shell in between — see scriptInvocation. */
 export interface ScriptInvocation {
   command: string;
