@@ -6,7 +6,7 @@ import { CommandList } from "./sidebar/CommandList";
 import type { BranchActions } from "./git/BranchTree";
 import { DiffDialog } from "./diff/DiffDialog";
 import { Dialogs } from "./ui/Dialog";
-import { EnableSbxDialog } from "./dialogs/EnableSbxDialog";
+import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
@@ -193,7 +193,7 @@ export function App() {
   /** Whether the settings are up; they belong to the window, not to a project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** The project the "Enable sbx" dialog is up for, if any; the dialog runs every check itself. */
-  const [enableSbxProject, setEnableSbxProject] = useState<Project | null>(null);
+  const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
 
   useEffect(() => {
     const unsubscribers = [
@@ -790,11 +790,11 @@ export function App() {
   const closeAdd = useCallback(() => setAddOpen(false), []);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
-  const enableSbx = useCallback(
-    (projectId: string) => setEnableSbxProject(projects.find((candidate) => candidate.id === projectId) ?? null),
+  const openSbxSettings = useCallback(
+    (projectId: string) => setSbxSettingsProject(projects.find((candidate) => candidate.id === projectId) ?? null),
     [projects]
   );
-  const closeEnableSbx = useCallback(() => setEnableSbxProject(null), []);
+  const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
   const closeDiff = useCallback(() => setDiffFile(null), []);
   const toggleGit = useCallback(() => setGitOpen(!gitOpen), [gitOpen, setGitOpen]);
   /** No explicit path — "Browse files" itself — reopens whatever this project last showed. */
@@ -857,7 +857,7 @@ export function App() {
             onShowBusy={showBusy}
             onShowFinished={showFinished}
             onShowWaiting={showWaiting}
-            onEnableSbx={enableSbx}
+            onSbxSettings={openSbxSettings}
           />
           <Sash
             orientation="horizontal"
@@ -966,7 +966,7 @@ export function App() {
       {addOpen && <AddRepositoryDialog onAdded={projectAdded} onClose={closeAdd} />}
 
       {settingsOpen && <SettingsDialog activeProject={activeProject} onClose={closeSettings} />}
-      {enableSbxProject && <EnableSbxDialog project={enableSbxProject} onClose={closeEnableSbx} />}
+      {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
 
       <Notices />
       <Dialogs />

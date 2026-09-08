@@ -8,9 +8,10 @@ import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { renderPiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
-import { powershellSingleQuote, shellSingleQuote, toContainerPath } from "../src/main/terminals/os-notify";
+import { toContainerPath } from "../src/main/terminals/hook-target";
+import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
-import { computeWorkspaces, contractHome, folderMountSpecs, sandboxName, sandboxPaths } from "../src/main/sbx";
+import { computeWorkspaces, contractHome, folderMountSpecs, sandboxName } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
@@ -139,13 +140,14 @@ describe("sbx sandbox naming and mounts", () => {
   });
 
   it("mounts the project and tet's own dirs — Allowed folders are a live sbx mount, not a workspace", () => {
-    const fixed = sandboxPaths({
-      agentDir: path.join(os.tmpdir(), "agents", "claude", "p"),
-      contextFile: path.join(os.tmpdir(), "ctx", "context.md")
-    });
-    assert.equal(fixed.contextDir, path.join(os.tmpdir(), "ctx"));
+    const agentDir = path.join(os.tmpdir(), "agents", "claude", "p");
+    const contextDir = path.join(os.tmpdir(), "ctx");
     const repo = path.join(os.tmpdir(), "tet-sbx-repo");
-    assert.deepEqual(computeWorkspaces(repo, fixed), [repo, fixed.agentDir, `${fixed.contextDir}:ro`]);
+    assert.deepEqual(computeWorkspaces(repo, { agentDir, contextFile: path.join(contextDir, "context.md") }), [
+      repo,
+      agentDir,
+      `${contextDir}:ro`
+    ]);
   });
 });
 

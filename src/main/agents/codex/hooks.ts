@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import { buildBusyCommand, buildMarkCommand, buildWaitingCommand } from "../../terminals/marker-watch";
-import { buildHookNotifyCommand, buildReadFileCommand, hostTarget } from "../../terminals/os-notify";
-import type { HookTarget } from "../../terminals/os-notify";
+import { hostTarget, type HookTarget } from "../../terminals/hook-target";
+import { buildHookNotifyCommand, buildReadFileCommand } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
 /**

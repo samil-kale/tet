@@ -5,6 +5,7 @@ import { AGENTS, getAgent } from "../agents";
 import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { CONTROL_ENV } from "../../shared/control";
+import { isSbxAgent } from "../../shared/types";
 import type {
   AgentId,
   NoticeSeverity,
@@ -16,16 +17,7 @@ import type {
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig, writeSbxConfig } from "../git/commands";
-import {
-  checkSbxGoverned,
-  checkSbxInstalled,
-  checkSbxLoggedIn,
-  checkSbxPolicyInitialized,
-  prepareSbxRun,
-  sandboxName,
-  sandboxPaths,
-  type SbxFixedPaths
-} from "../sbx";
+import { checkSbxGoverned, prepareSbxRun, sbxNotReady, type SandboxPaths } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -675,7 +667,7 @@ export class ProjectSessionManager {
    * fresh read on every spawn costs nothing worth avoiding, and it is the same "no cache, read at
    * the moment it matters" choice `readCommands` already makes for saved commands.
    *
-   * Only claude/codex — the two agents the enable-sbx dialog has real fields for — and only a
+   * Only claude/codex — the two agents the sbx-settings dialog has real fields for — and only a
    * plain agent tab, never a saved command's: a saved command is not "this agent's process" in
    * the first place (see startSession), so wrapping it in a sandbox would run the wrong thing.
    *
@@ -697,24 +689,18 @@ export class ProjectSessionManager {
    * plain agent tab has no business showing (measured live, 2026-09-08, after sbx was
    * uninstalled and reinstalled: the full "not authenticated… sign in… network policy" flow
    * printed into the tab, only to still fail once the sandbox itself needed rebuilding). The
-   * enable-sbx dialog's own setup already runs these same three checks before ever offering
+   * sbx-settings dialog's own setup already runs these same three checks before ever offering
    * Save; a tab reaching them unprepared means the dialog was skipped, or things changed since.
    */
   private async resolveSbxRun(tab: TabState): Promise<string[] | null> {
-    if (tab.executable || (tab.agentId !== "claude" && tab.agentId !== "codex")) {
+    if (tab.executable || !isSbxAgent(tab.agentId)) {
       return null;
     }
     const config = await readSbxConfig(this.project.path);
     if (!config.enabled) {
       return null;
     }
-    const notReady = !(await checkSbxInstalled())
-      ? "SBX is not installed (or no longer on PATH)"
-      : !(await checkSbxLoggedIn())
-        ? "SBX is not signed in to Docker"
-        : !(await checkSbxPolicyInitialized())
-          ? "SBX's network policy is not set up"
-          : undefined;
+    const notReady = await sbxNotReady();
     if (notReady) {
       await writeSbxConfig(this.project.path, { ...config, enabled: false });
       this.callbacks.onNotice(
@@ -750,15 +736,15 @@ export class ProjectSessionManager {
     }
     const paths = this.pathsFor(runtime);
     const hookArgs = agent.prepareSandboxSpawn?.(this.project.path, paths) ?? [];
-    const { args, missing } = await prepareSbxRun(
-      tab.agentId,
-      this.project.path,
+    const { args, missing } = await prepareSbxRun({
+      agentId: tab.agentId,
+      projectId: this.project.id,
+      projectPath: this.project.path,
       config,
-      sandboxName(this.project.id, tab.agentId),
-      sandboxPaths(paths),
-      [...hookArgs, ...(tab.runArgs ?? [])],
-      (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
-    );
+      paths,
+      agentArgs: [...hookArgs, ...(tab.runArgs ?? [])],
+      onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
+    });
     if (missing.length > 0) {
       this.callbacks.onNotice(
         "warning",
@@ -768,12 +754,11 @@ export class ProjectSessionManager {
     return args;
   }
 
-  /** The paths a sandbox of this agent mounts no matter what, for ipc.ts's `sbx:save-config`:
+  /** The paths a sandbox of this agent is built around, for ipc.ts's `sbx:save-config`:
    *  saveSbxConfig compares an existing sandbox against them (see sbx.ts's computeWorkspaces).
-   *  The one way out for these, since sbx.ts itself must stay agent-layer-agnostic and
-   *  AgentPaths is the terminal layer's own. */
-  sandboxPaths(agentId: SbxAgentId): SbxFixedPaths {
-    return sandboxPaths(this.pathsFor(this.runtimeFor(agentId)));
+   *  The one way out for these, since AgentPaths is the terminal layer's own. */
+  sandboxPaths(agentId: SbxAgentId): SandboxPaths {
+    return this.pathsFor(this.runtimeFor(agentId));
   }
 
   private startSession(tab: TabState, sbxArgs: string[] | null): TerminalSession {

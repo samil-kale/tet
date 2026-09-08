@@ -58,8 +58,8 @@ interface ProjectListProps {
   onShowFinished: (projectId: string) => void;
   /** The same, for the session that has been waiting on an answer the longest. */
   onShowWaiting: (projectId: string) => void;
-  /** "Enable sbx" — checks sbx is installed before opening its dialog; see App's `enableSbx`. */
-  onEnableSbx: (projectId: string) => void;
+  /** "SBX Settings" — opens the project's sbx-settings dialog, which runs every check itself. */
+  onSbxSettings: (projectId: string) => void;
 }
 
 /**
@@ -106,7 +106,7 @@ export const ProjectList = memo(function ProjectList({
   onShowBusy,
   onShowFinished,
   onShowWaiting,
-  onEnableSbx
+  onSbxSettings
 }: ProjectListProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
 
@@ -165,7 +165,7 @@ export const ProjectList = memo(function ProjectList({
         run: remote ? () => void askRemoteUrl(project, remote) : undefined
       },
       SEPARATOR,
-      { label: "Enable SBX", run: () => onEnableSbx(project.id) },
+      { label: "SBX Settings", run: () => onSbxSettings(project.id) },
       SEPARATOR,
       { label: "Close repository", run: () => onClose(project.id) }
     ];

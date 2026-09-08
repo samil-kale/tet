@@ -1688,7 +1688,7 @@ textarea:focus {
 /* Every field label bold in this dialog only — scoped rather than changing .dialog-field's own
    span everywhere, which every other dialog's fields also use. The direct-child selector is what
    keeps this off .sbx-arrow's "→", nested deeper inside the same .dialog-field. */
-.enable-sbx-dialog .dialog-field > span {
+.sbx-settings-dialog .dialog-field > span {
   font-weight: 600;
 }
 
@@ -1711,17 +1711,12 @@ textarea:focus {
   margin-top: 5px;
 }
 
-/* One kind's checkbox, and its access dropdown once checked, level with the folder row's own
-   26px trigger (.sbx-folder-row .dropdown-trigger) below. */
+/* One kind's checkbox, and its access dropdown once checked, level with the folder row below. */
 .sbx-knowledge-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 26px;
-}
-
-.sbx-knowledge-row .dropdown-trigger {
   height: 26px;
 }
 
@@ -1746,11 +1741,8 @@ textarea:focus {
 /* Same explicit height as the folder row's text and dropdown (26px, below), so the two kinds of
    row read level. */
 .sbx-port-input {
-  height: 26px;
-}
-
-.sbx-port-input {
   width: 70px;
+  height: 26px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1771,32 +1763,34 @@ textarea:focus {
   font-family: var(--vscode-editor-font-family, monospace);
 }
 
-/* The Read/Write dropdown next to it is a button (.dropdown-trigger, padding: 3px 6px), shorter
-   by default than an input's own padding — pinned to the same 26px so the row reads level. */
-.sbx-folder-row .dropdown-trigger {
+/* The Read/Write dropdown in a folder or knowledge row is a button (.dropdown-trigger, padding:
+   3px 6px), shorter by default than an input's own padding — pinned to the same 26px so every
+   row reads level. */
+.sbx-folder-row .dropdown-trigger,
+.sbx-knowledge-row .dropdown-trigger {
   height: 26px;
 }
 
 /* The master enable checkbox at the top of the dialog body, set off from the fields below it by
    space alone rather than a rule. A direct child only — the knowledge checkbox inside
-   EnableSbxFields is a .dialog-checkbox too, but sits inside .enable-sbx-fields-scroll and gets
+   SbxSettingsFields is a .dialog-checkbox too, but sits inside .sbx-settings-fields-scroll and gets
    its spacing from .sbx-section like the other two sections, not from this. */
-.enable-sbx-dialog > .dialog-body > .dialog-checkbox {
+.sbx-settings-dialog > .dialog-body > .dialog-checkbox {
   padding-bottom: 20px;
 }
 
-.enable-sbx-dialog > .dialog-body > .dialog-checkbox .dialog-detail {
+.sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail {
   margin-top: 3px;
 }
 
 /* No fixed height: the dialog grows with its content. Capped to the window so it cannot run off
    top or bottom. */
-.enable-sbx-dialog.wide {
+.sbx-settings-dialog.wide {
   max-height: calc(100vh - 32px);
 }
 
 /* The body takes what the header and buttons leave, so the scrollbox below can shrink into it. */
-.enable-sbx-dialog .dialog-body {
+.sbx-settings-dialog .dialog-body {
   flex: 1;
   min-height: 0;
 }
@@ -1804,7 +1798,7 @@ textarea:focus {
 /* The one part that scrolls: everything below the master checkbox, which stays put. flex/min-height
    is what lets it shrink below its content's natural height once .dialog hits its max-height
    instead of pushing the dialog taller. */
-.enable-sbx-fields-scroll {
+.sbx-settings-fields-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;

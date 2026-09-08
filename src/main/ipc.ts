@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { app, clipboard, dialog, ipcMain, shell } from "electron";
 import { AGENTS, findAskableAgent, getAgent, listAgents } from "./agents";
 import { effectivePrompt } from "../shared/prompts";
-import { EMPTY_REPOSITORY_STATE } from "../shared/types";
+import { EMPTY_REPOSITORY_STATE, EMPTY_SBX_CONFIG } from "../shared/types";
 import type {
   AddAccountResult,
   AddRepositoryResult,
@@ -43,12 +43,7 @@ import {
 } from "./sbx";
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
-import {
-  DEFAULT_EXPLORER_VIEW,
-  readCommands,
-  readSbxConfig,
-  writeCommands
-} from "./git/commands";
+import { DEFAULT_EXPLORER_VIEW, readCommands, readSbxConfig, writeCommands } from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
@@ -175,9 +170,7 @@ export function registerIpc({
   /** What the dialog reopens with — read fresh, like a project's saved commands, never cached. */
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
-    return project
-      ? readSbxConfig(project.path)
-      : { enabled: false, knowledge: { skills: false, plugins: false, instructions: false }, ports: [], folders: [] };
+    return project ? readSbxConfig(project.path) : EMPTY_SBX_CONFIG;
   });
   /** The dialog's Save button — writes tet.json; see sbx.ts's saveSbxConfig for the sandbox
    *  removal each notice below is about. */

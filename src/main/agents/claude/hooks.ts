@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { buildBusyCommand, buildWaitingCommand, markerDir, markPosix, markPowershell } from "../../terminals/marker-watch";
-import { buildHookNotifyCommand, buildReadFileCommand, hostTarget, WIN_BOM, writePosixScript } from "../../terminals/os-notify";
-import type { HookTarget } from "../../terminals/os-notify";
+import { hostTarget, type HookTarget } from "../../terminals/hook-target";
+import { buildHookNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
 /**

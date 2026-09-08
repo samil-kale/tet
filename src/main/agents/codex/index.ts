@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
-import { sandboxHookDir, sandboxTarget } from "../../terminals/os-notify";
+import { sandboxHookDir, sandboxTarget } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";

@@ -36,8 +36,8 @@ interface ProjectFile {
   commands?: StoredCommand[];
   folders?: unknown;
   settings?: unknown;
-  /** The enable-sbx dialog's Save button — see readSbxConfig/writeSbxConfig. Never a token: that
-   *  goes straight to `sbx secret set` and is never written here. */
+  /** The sbx-settings dialog's Save button — see readSbxConfig/writeSbxConfig. Never a credential:
+   *  each sandboxed agent signs in inside its own sandbox. */
   sbx?: unknown;
 }
 
@@ -400,7 +400,7 @@ function toStoredKnowledge(knowledge: SbxKnowledgeConfig): Record<keyof SbxKnowl
 }
 
 /**
- * The enable-sbx dialog's persisted state — read the same defensively-anything-goes way as the
+ * The sbx-settings dialog's persisted state — read the same defensively-anything-goes way as the
  * rest of tet.json. Never holds a token: each sandboxed agent signs in with its own `/login`
  * inside the sandbox, nothing tet stores ever needs to.
  */

@@ -357,12 +357,15 @@ error mark alone is `--vscode-errorForeground`, not a fourth turn state.
 `AgentPaths.onSessionBusy` / `onSessionWaiting` / `onSessionFinished`: opencode on the event
 stream TET already subscribes to (`session.status`, `permission.asked`, `question.asked`); Claude
 Code and Codex through hook processes that `touch` a marker named after the session id into
-`<agentDir>/busy/`, `finished/` and `waiting/`, and pi through a generated `-e` extension writing
-the same markers from inside its process — all picked up by `watchMarkers`
-(`src/main/terminals/marker-watch.ts`, watch *plus* a timer sweep — win32 `fs.watch` misses files). The
-hooks register regardless of notification settings; only their toast is optional. Reusing the Stop
-hook is the point: it carries the `background_tasks` guard, so a turn that only launched a
-subagent isn't "finished". Markers found at startup are deleted unreported.
+`<agentDir>/busy/`, `finished/` and `waiting/` (a sandboxed tab's under `<agentDir>/sandbox/`,
+watched alongside), and pi through a generated `-e` extension writing the same markers from
+inside its process — all picked up by `watchMarkers` (`src/main/terminals/marker-watch.ts`, watch
+*plus* a timer sweep — win32 `fs.watch` misses files). The hooks register regardless of
+notification settings; only their toast is optional, and for Claude Code and Codex it is
+`tet-ctl notify` — the main process shows it, since a sandboxed hook has no desktop session
+(`showDesktopNotification` in `main.ts`). Reusing the Stop hook is the point: it carries the
+`background_tasks` guard, so a turn that only launched a subagent isn't "finished". Markers found
+at startup are deleted unreported.
 
 **No agent reports that a question was answered**, and none needs to: the answer is typed into
 the tab that asked, so a question clears on input that can be an answer (`answersQuestion` in
@@ -491,11 +494,13 @@ literal strings.
 An agent can ask the app around it for things the filesystem and git can't give it — the theme,
 the project list, the terminal tabs. `src/main/control/control-server.ts` listens on a loopback
 TCP port derived from `userData` and probed for being free (`findControlPort`, reasoned there),
-one JSON line per connection, and answers with the same singletons `ipc.ts` holds. It comes up
-with the workspace — a port that answers means every project's terminals and repository are
-there — so `tet-ctl` waits a few seconds for one rather than finding a half-open app. A second
-transport onto the same logic, never a second implementation (`addProject`/`removeProject` in
-`projects.ts` are shared for exactly that). The wire contract and the verb list are
+one HTTP POST per connection — HTTP, not a raw socket, because sbx's proxy to the host is
+HTTP-only (measured, see `send` in `tet-ctl.ts`) — and answers with the same singletons `ipc.ts`
+holds. It comes up with the workspace — a port that answers means every project's terminals and
+repository are there — so `tet-ctl` waits a few seconds for one rather than finding a half-open
+app. A second transport onto the same logic, never a second implementation
+(`addProject`/`removeProject` in `projects.ts` are shared for exactly that). The wire contract
+and the verb list are
 `src/shared/control.ts`; the CLI is `src/cli/tet-ctl.ts`, bundled on its own and run by a launcher
 in `userData/bin` under tet's own electron as node. What reaches a terminal is decided in
 `spawnAgentProcess` (`pty.ts`), in layers **above** `process.env`: the port, a per-run token, the
@@ -516,6 +521,31 @@ letting an agent drive the whole app, not just a project's git state and termina
 extended setting comes with an offer to add its verb: the same `ControlVerb` entry, handler and
 `control.test.ts` case the existing ones have — offered, since the user decides what an agent may
 change.
+
+## sbx: an agent tab inside a Docker sandbox
+
+Opt-in per project through the project row's "SBX Settings", for Claude Code and Codex only
+(`SbxAgentId`: opencode's server is on the host, pi has no sbx kit). `src/main/sbx.ts` drives
+the `sbx` CLI the way `git.ts` drives git — every call a plain spawn, never a shell — and every
+fact in it about sbx was measured against the real binary (sandbox names, mount grammar, what
+survives a stop, the first-run wizard); its comments are the record. The config is the `sbx`
+key of the repository's own `tet.json` (`readSbxConfig` in `commands.ts`: ports, allowed folders
+stored `~/…` or per platform, and which of the agent's skills/plugins/instructions to mount);
+the tab-time decision is `resolveSbxRun` in `session-manager.ts`, which turns sandboxing back
+off for the project when sbx is not ready, and only ever sandboxes a tab that has no session yet.
+
+The cross-file rules:
+
+- **A hook is generated for where it runs**, not for `process.platform`: `HookTarget`
+  (`src/main/terminals/hook-target.ts`) says whether the shell is POSIX and how a host path reads
+  inside the sandbox (`C:\Users\x` → `/c/Users/x`). Each agent's `prepareSandboxSpawn` writes
+  its sandbox hooks under `<agentDir>/sandbox/`, beside the host ones, and both are watched.
+- **The sandbox never sees the agent's own config directory** — its sign-in is its own.
+  `agentDir` and the context file's directory are the fixed workspaces; everything else is a
+  live `sbx mount` re-applied on every spawn, since a bind mount does not survive a stop.
+- **`tet-ctl` inside a sandbox** is the same bundle written into the sandbox's `~/.local/bin`,
+  reaching the control server at `host.docker.internal` (`TET_CONTROL_HOST`) through an
+  `sbx policy allow` for `localhost:<port>`; under org-managed policy none of that is passed in.
 
 ## Never touch the user's agent configuration
 

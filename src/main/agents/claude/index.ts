@@ -1,7 +1,7 @@
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
-import { sandboxHookDir, sandboxTarget } from "../../terminals/os-notify";
+import { sandboxHookDir, sandboxTarget } from "../../terminals/hook-target";
 import { setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
 

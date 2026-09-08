@@ -83,13 +83,18 @@ export type PromptId = "commitMessage";
 
 export type PromptSettings = Record<PromptId, string>;
 
-/** The two agents the enable-sbx dialog has real fields for — see the plan for why opencode/pi
- *  are blocked. Kept as its own union rather than a subset check against `AgentId` everywhere
- *  the sandbox config is read. */
+/** The two agents that run in an sbx sandbox: the ones Docker ships a sandbox kit for whose
+ *  process is the tab's own. opencode is client/server with its server on the host (see
+ *  src/main/agents/opencode/server.ts), and pi has no sbx kit at all. Kept as its own union
+ *  rather than a subset check against `AgentId` everywhere the sandbox config is read. */
 export type SbxAgentId = "claude" | "codex";
 
-/** The same two as a list, for everything that walks them — the dialog's key fields, the secrets at Save. */
+/** The same two as a list, for everything that walks them — sbx.ts's save path, the dialog's text. */
 export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex"];
+
+export function isSbxAgent(agentId: string): agentId is SbxAgentId {
+  return (SBX_AGENT_IDS as readonly string[]).includes(agentId);
+}
 
 /** One port row: forwards `host` on the machine to `container` inside the sandbox. Both stay
  *  strings — they are typed input, validated only at `sbx run` time. */
@@ -120,7 +125,7 @@ export interface SbxKnowledgeConfig {
   instructions: SbxAccess | false;
 }
 
-/** The enable-sbx dialog's saved state, per project — read back into the dialog on open, written
+/** The sbx-settings dialog's saved state, per project — read back into the dialog on open, written
  *  by its Save button. One set of ports, folders and knowledge for every sandboxed tab of the
  *  project, whichever agent it runs. Authentication is never part of it: each sandboxed agent
  *  signs in with its own `/login` inside the sandbox, not through tet. */
@@ -130,6 +135,14 @@ export interface SbxProjectConfig {
   ports: SbxPort[];
   folders: SbxFolder[];
 }
+
+/** A project with no `sbx` section in its tet.json, and what the dialog mounts with. */
+export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
+  enabled: false,
+  knowledge: { skills: false, plugins: false, instructions: false },
+  ports: [],
+  folders: []
+};
 
 /** The Prompts tab's picker. */
 export const PROMPT_IDS: PromptId[] = ["commitMessage"];
