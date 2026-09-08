@@ -34,31 +34,18 @@
 
 ## Why
 
-I'm a developer with more than 15 years of experience, and I have worked in IDEs that whole
-time. My favourite would change every few years, and I always had a close bond with whichever
-IDE I considered the best fit for me at the moment.
+I've spent more than 15 years working in IDEs, usually with a clear favourite. But as coding
+agents became part of my workflow, I spent less time editing code directly and more time moving
+between agent sessions. The editor became a place to review the result, mostly through the git
+diff.
 
-Bit by bit, though, I noticed that I was doing more and more of the actual work inside the
-agent (Claude, opencode or Codex), and only looked at the git diff once a feature was done to
-see what had changed and whether those changes matched what I wanted. That shifted the way I
-work quite far from how I used to go about it. Where I once spent most of my time in the code
-editor, it was now individual Claude sessions I had to click through and, of course, the
-checking glance at git.
+That created a different set of problems. Which session just finished? Which one is waiting for
+an answer? Which project should I review next?
 
-New problems came with that: which session in which project has just finished, which prompt
-needs my attention, where is the git diff I'm supposed to look at now.
-
-With TET I wanted a fresh start, one where the agents are at the centre, rounded out with the
-features that are a bit awkward in a plain terminal, like drag and drop for files and images.
-
-With TET you always know which session in which project has just finished and which one needs
-attention.
-
-TET is not a plain multiplexer that just shows several consoles side by side. The agents are
-integrated and come with a carefully built notification system as well as features that make
-the work easier or extend it (image and file drag and drop, for one).
-
-And the best part: the git diff is one click away to look over and check.
+TET is built around that workflow. It keeps agents, terminals and repository state visible in
+one place, tells you when a session needs attention, and keeps the diff one click away. It also
+handles the small things that are awkward in a plain terminal, such as dropping files and images
+straight into an agent session.
 
 ---
 
@@ -66,48 +53,56 @@ And the best part: the git diff is one click away to look over and check.
 
 ### Real terminals, several agents
 
-**Claude Code**, **opencode**, **Codex CLI** and **pi** run as first-class terminal tabs; not a
-wrapper, the actual CLI in a real pty. TET reads each agent's own session state and shows, on the
-tab and on the project row, whether a turn is **working**, **stopped for an answer**, or
-**finished while you were looking elsewhere**. List, resume, rename and delete past sessions from
-the tab's menu. Drag files or images straight onto a terminal. Ctrl-click a path in the output to
-open it.
+**Claude Code**, **opencode**, **Codex CLI** and **pi** run as first-class terminal tabs. These are
+the actual CLIs in real ptys, not wrapped chat interfaces. TET uses each agent's own session state
+to show whether a turn is **working**, **waiting for an answer**, or **finished out of sight**.
+You can list, resume, rename and delete previous sessions from the tab menu, drop files or images
+onto a terminal, and Ctrl-click paths in the output to open them.
 
 ### Multiple terminals, one glance
 
-Split a project's terminals into up to four panes. Drag a tab onto a
-snap zone at the edge of the terminals to split them, and a pane whose last tab leaves collapses
-away again. See the agent, the dev server and a shell at once instead of cycling tabs.
+Split a project's terminals into up to four panes. Drag a tab to a snap zone to create a split;
+empty panes collapse automatically. Keep an agent, a development server and a shell visible at
+the same time instead of cycling through tabs.
 
 ### The git pane
 
-A toggle in the tab strip slides out a pane between navigation and terminals, so a terminal and 
-the repository stay on screen together. Checkout, fetch/pull/push, commit-all, discard, 
-`.gitignore` from a right-click. Clone from GitHub or GitLab in the add-repository dialog.
+Open the git pane from the tab strip to keep the repository and a terminal on screen together.
+Check out branches, fetch, pull, push, commit all changes, discard files and update `.gitignore`
+without leaving the workspace. You can also clone repositories from GitHub or GitLab.
 
 ### A diff dialog that's also an editor
 
-Double-click a changed file, or ctrl-click a path in a terminal, for a full-window diff. Images
-diff as images; unfold context on demand. The same view doubles as a
-plain code editor (Monaco) for a quick look-and-fix without leaving TET.
+Double-click a changed file or Ctrl-click a path in a terminal to open it in a full-window diff.
+Image changes are shown visually, and hidden context can be expanded on demand. The same view
+includes a lightweight Monaco editor for quick fixes without leaving TET.
 
 ### Notifications you can act on
 
-Desktop notifications when a turn ends or needs input. Alongside them, an always-visible 
-read of what's **waiting** and what **finished out of sight**, on every project row.
+Get a desktop notification when a turn finishes or needs input. Project rows keep the same state
+visible inside TET, so you can immediately find sessions that are **waiting** or **finished out
+of sight**.
 
 ### Saved commands per project
 
-The sidebar's lower half is a project's saved shell commands, kept in a `tet.json` in the
-repository root; so they travel with the repo and can be committed. Run one and it opens a
-terminal tab whose process *is* the command.
+Save project-specific commands in the sidebar and run them in their own terminal tabs. Commands
+are stored in `tet.json` at the repository root, so they can travel with the project and be
+committed.
 
 ### An agent can drive TET
 
-Every terminal tab gets `tet-ctl` on its `PATH`, a small CLI that talks to the app around it:
-list the open projects and their git state, open or close a project, list, create, rename and
-close terminal tabs, run a saved command, read or change TET's settings. Each tab also gets a
-context file pointing at it, so an agent knows the command without being told.
+Every terminal tab has access to `tet-ctl`, a small CLI for controlling the surrounding app. An
+agent can inspect open projects and their git state, manage projects and terminal tabs, run saved
+commands, and read or change TET's settings. It also receives the path to the project's shell
+context, so recent terminal output does not have to be copied into the prompt.
+
+### Sandboxed agents
+
+Enable a Docker sandbox for any project from **SBX Settings**. **Claude Code** and **Codex** then
+run inside the container while keeping the same tabs, turn tracking and notifications. You
+control which folders are available and can include your skills, plugins and instruction files.
+Authentication stays inside the sandbox, so no agent credentials or trust settings are shared
+with the host.
 
 ---
 
@@ -115,9 +110,9 @@ context file pointing at it, so an agent knows the command without being told.
 
 ### Download
 
-**[Grab the latest release](https://github.com/samil-kale/tet/releases/latest)** for Windows,
-Linux (AppImage / `.deb`) or macOS. Windows and the AppImage update themselves on the next quit;
-they never force it, since a terminal tab is a live agent session.
+**[Download the latest release](https://github.com/samil-kale/tet/releases/latest)** for Windows,
+Linux (AppImage or `.deb`) or macOS. Windows and AppImage builds install updates when you quit the
+app. Updates are never forced while terminal sessions are running.
 
 ### Build from source
 
@@ -130,24 +125,24 @@ npm start
 
 ### Requirements
 
-TET needs **`git`** on your `PATH`, plus **at least one supported agent**: Claude Code,
-opencode, Codex CLI or pi. It checks on startup and tells you exactly what's missing.
+TET requires **`git`** on your `PATH` and **at least one supported agent**: Claude Code,
+opencode, Codex CLI or pi. A startup check tells you if anything is missing.
 
 ---
 
 ## How it works
 
-TET is Electron + React + xterm.js. Git is never reimplemented; it wraps the local `git`
-CLI in its own process so typing in a terminal stays smooth.
+TET is built with Electron, React and xterm.js. It uses your local `git` CLI in a separate process
+instead of reimplementing git, so repository operations do not interfere with terminal input.
 
-The agents are the real CLIs in a real pty; nothing is read off the terminal output. Each one
-reports its turns through its own mechanism. 
-**Your own Claude Code, Codex, opencode and pi configuration is never read or written.**
+Agents run as their real CLIs in real ptys. TET does not infer their state from terminal output;
+each agent reports its turns through its own integration.
+**Your Claude Code, Codex, opencode and pi configuration is never read or modified.**
 
 ## Contributing
 
-Issues and pull requests welcome. Run `npm run typecheck`, `npm run lint` and `npm test` before
-opening one. On Linux the app tests need a display (`xvfb-run`).
+Issues and pull requests are welcome. Before opening a pull request, run `npm run typecheck`,
+`npm run lint` and `npm test`. App tests on Linux require a display such as `xvfb-run`.
 
 ## License
 
