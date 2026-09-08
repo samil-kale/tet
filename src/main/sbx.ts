@@ -670,6 +670,8 @@ export interface SbxRunRequest {
   /** The agent's own command line inside the sandbox — hook and resume arguments, after `sbx
    *  run`'s own "--". */
   agentArgs: string[];
+  /** `AgentDefinition.sandboxEnv` — "KEY=VALUE" entries for `sbx run -e`, ahead of "--". */
+  env?: string[];
   /** Every setup step's own console output, forwarded live to the tab that is about to run in
    *  this sandbox — see `RunOptions.onData` for why this needs no pty of its own to reach it. */
   onData?: OnData;
@@ -685,6 +687,7 @@ export interface SbxRunRequest {
  */
 export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: string[]; missing: string[] }> {
   const { agentId, config, onData } = request;
+  const env = request.env ?? [];
   const name = sandboxName(request.projectId, agentId);
   await ensureSandboxExists(agentId, computeWorkspaces(request.projectPath, request.paths), name, onData);
   // Best-effort, same reasoning as the launcher below: no skills or folders in the sandbox is no
@@ -709,7 +712,14 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // reproduction, not a hypothetical: the "just created" case hit this exact error before this
   // comment was written to say so). The agent positional is for sbx's own verification, per its
   // --help; `--name` is what actually finds the sandbox.
-  const args = ["run", agentId, "--name", name, ...config.ports.flatMap((port) => ["-p", portKey(port)])];
+  const args = [
+    "run",
+    agentId,
+    "--name",
+    name,
+    ...config.ports.flatMap((port) => ["-p", portKey(port)]),
+    ...env.flatMap((entry) => ["-e", entry])
+  ];
   if (await ensureControlNetworkAllowed()) {
     const passThrough = [CONTROL_ENV.port, CONTROL_ENV.token, CONTROL_ENV.projectId, CONTROL_ENV.tabId];
     args.push(...passThrough.flatMap((variable) => ["-e", variable]), "-e", `${CONTROL_ENV.host}=host.docker.internal`);

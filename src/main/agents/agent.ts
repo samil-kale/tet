@@ -212,12 +212,24 @@ export interface AgentDefinition {
    * that actually has a desktop session, never by the sandbox.
    *
    * Returns just the extra CLI arguments appended after `sbx run`'s own "--" — unlike
-   * SpawnPreparation there is no executable/env to override, since the sandbox's own bundled
-   * agent binary is what runs. `cwd` is the project's own path, for a notify message's
-   * repository name. Synchronous: unlike prepareSpawn, nothing here waits on external setup.
-   * Omitted by an agent with no sbx kit at all (opencode, pi) or that needs no hooks (the shell).
+   * SpawnPreparation there is no executable to override, since the sandbox's own bundled
+   * agent binary is what runs (see `sandboxEnv` for the one thing it can still set). `cwd` is
+   * the project's own path, for a notify message's repository name. Synchronous: unlike
+   * prepareSpawn, nothing here waits on external setup. Omitted by an agent with no sbx kit at
+   * all (opencode, pi) or that needs no hooks (the shell).
    */
   prepareSandboxSpawn?: (cwd: string, paths: AgentPaths) => string[];
+  /**
+   * "KEY=VALUE" entries passed as `sbx run -e` — for a fact that only differs inside the
+   * sandbox. Claude Code's own fullscreen-by-default rollout reads feature flags from
+   * `statsig.anthropic.com`, which the sandbox's own kit policy does not allow (verified live,
+   * 2026-09-08: `sbx policy ls --type network` lists it for the global default-ai-services rule
+   * but not for the per-sandbox `kit:` one) — so a sandboxed session never gets the flag and
+   * falls back to the classic renderer even on a host that would start fullscreen.
+   * `CLAUDE_CODE_NO_FLICKER=1` forces fullscreen regardless of feature flags (Claude Code's own
+   * docs, code.claude.com/docs/en/fullscreen).
+   */
+  sandboxEnv?: string[];
   /**
    * Completes a url the agent's TUI wrapped across rows, from the agent's own record of what
    * it printed — in the buffer such a row cannot be told apart from one that merely ends in a

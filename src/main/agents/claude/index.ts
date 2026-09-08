@@ -45,6 +45,9 @@ export const claudeAgent: AgentDefinition = {
       return [];
     }
   },
+  // See AgentDefinition.sandboxEnv: the sandbox can't reach the feature-flag service that
+  // decides fullscreen-by-default on the host, so it is forced on instead.
+  sandboxEnv: ["CLAUDE_CODE_NO_FLICKER=1"],
   // Tuned empirically: Claude Code doesn't draw an early splash before its real UI, so a plain
   // byte count does — 500 sits comfortably above its startup handshake (well under
   // 150 bytes) and below its main UI redraw, which arrives as a single ~850-byte chunk. A

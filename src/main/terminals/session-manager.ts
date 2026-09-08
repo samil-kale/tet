@@ -743,6 +743,7 @@ export class ProjectSessionManager {
       config,
       paths,
       agentArgs: [...hookArgs, ...(tab.runArgs ?? [])],
+      env: agent.sandboxEnv,
       onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
     });
     if (missing.length > 0) {
