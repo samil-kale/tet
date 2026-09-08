@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Project, SbxAccess, SbxAgentId, SbxProjectConfig, SbxSaveRequest } from "../../shared/types";
+import type { Project, SbxAccess, SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types";
 import { EnableSbxFields, type FieldsState, type PortRow } from "./EnableSbxFields";
 import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
@@ -30,14 +30,13 @@ function newRowId(): string {
 
 /**
  * `sbx:get-config`'s answer (or nothing yet), turned into this dialog's own row shape: each row
- * gets a local id for its React key; the tokens always start blank, since they are never read
- * back. Only the user's own folders — each agent's config directory and tet's own directories
- * are mounted whatever this list says (sbx.ts's computeWorkspaces) and deliberately not shown
- * as rows: nothing about them is the user's to change.
+ * gets a local id for its React key. Only the user's own folders — each agent's config directory
+ * and tet's own directories are mounted whatever this list says (sbx.ts's computeWorkspaces) and
+ * deliberately not shown as rows: nothing about them is the user's to change.
  */
 function hydrateState(saved: SbxProjectConfig | undefined): FieldsState {
   return {
-    tokens: { claude: "", codex: "" },
+    knowledge: saved?.knowledge ?? { skills: false, plugins: false, instructions: false },
     ports: (saved?.ports ?? []).map((port) => ({ id: newRowId(), host: port.host, container: port.container })),
     folders: (saved?.folders ?? []).map((folder) => ({ id: newRowId(), path: folder.path, access: folder.access }))
   };
@@ -56,10 +55,11 @@ function hydrateState(saved: SbxProjectConfig | undefined): FieldsState {
  * no command works on all three platforms, so a missing sbx gets Docker's install page and a
  * "Check again".
  *
- * Tokens/ports/folders live here, not in EnableSbxFields: Save (the footer button, once ready)
- * needs to read the current values to build the request it sends to `sbx:save-config` —
+ * Ports/folders live here, not in EnableSbxFields: Save (the footer button, once ready) needs to
+ * read the current values to build the request it sends to `sbx:save-config` —
  * session-manager.ts's `resolveSbxRun` is what actually acts on what gets saved, the next time
- * a claude/codex tab in this project spawns.
+ * a claude/codex tab in this project spawns. Each sandboxed agent authenticates with its own
+ * `/login` once inside the sandbox — tet never asks for or stores a credential for it.
  */
 export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
   // One way out, whichever of × / Escape / Cancel triggers it: `cancelSbxSetup` is a no-op when
@@ -82,7 +82,8 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
 
   const patch = (change: Partial<FieldsState>): void => setState((current) => ({ ...current, ...change }));
 
-  const setToken = (agent: SbxAgentId, value: string): void => patch({ tokens: { ...state.tokens, [agent]: value } });
+  const setKnowledge = (kind: keyof SbxKnowledgeConfig, value: SbxAccess | false): void =>
+    patch({ knowledge: { ...state.knowledge, [kind]: value } });
   const addPort = (): void => patch({ ports: [...state.ports, { id: newRowId(), host: "", container: "" }] });
   const removePort = (id: string): void => patch({ ports: state.ports.filter((port) => port.id !== id) });
   const updatePort = (id: string, change: Partial<PortRow>): void =>
@@ -163,13 +164,12 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
     // Once, on mount — "Check again" runs it by hand.
   }, []);
 
-  /** Writes tet.json and pushes any entered token to `sbx secret set` — see sbx.ts's
-   *  saveSbxConfig for why the token itself never reaches tet.json. */
+  /** Writes tet.json — see sbx.ts's saveSbxConfig for the sandbox removal Save can trigger. */
   const save = async (): Promise<void> => {
     setSaving(true);
-    const request: SbxSaveRequest = {
+    const request: SbxProjectConfig = {
       enabled,
-      tokens: state.tokens,
+      knowledge: state.knowledge,
       ports: state.ports.filter((port) => port.host.trim() && port.container.trim()).map(({ host, container }) => ({ host, container })),
       folders: state.folders.map(({ path, access }) => ({ path, access }))
     };
@@ -261,7 +261,7 @@ export function EnableSbxDialog({ project, onClose }: EnableSbxDialogProps) {
         <div className="enable-sbx-fields-scroll">
           <EnableSbxFields
             state={state}
-            onTokenChange={setToken}
+            onSetKnowledge={setKnowledge}
             onAddPort={addPort}
             onRemovePort={removePort}
             onUpdatePort={updatePort}

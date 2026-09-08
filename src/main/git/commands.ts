@@ -7,6 +7,7 @@ import type {
   ProjectCommand,
   SbxAccess,
   SbxFolder,
+  SbxKnowledgeConfig,
   SbxPort,
   SbxProjectConfig
 } from "../../shared/types";
@@ -379,17 +380,36 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
   return typeof content.sbx === "object" && content.sbx !== null ? (content.sbx as Record<string, unknown>) : {};
 }
 
+/** `knowledge`'s on-disk access codes — short because there is one of these per kind per agent
+ *  rather than per user-picked row the way a folder's `access` is. */
+const KNOWLEDGE_ACCESS_CODE: Record<SbxAccess, "r" | "rw"> = { Read: "r", "Read+Write": "rw" };
+const KNOWLEDGE_ACCESS_FROM_CODE: Partial<Record<string, SbxAccess>> = { r: "Read", rw: "Read+Write" };
+
+/** A malformed or missing `knowledge` object reads as every kind off — never partially on from a
+ *  field that happens to be truthy by accident. */
+function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
+  const record = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  const toAccess = (field: unknown): SbxAccess | false =>
+    (typeof field === "string" ? KNOWLEDGE_ACCESS_FROM_CODE[field] : undefined) ?? false;
+  return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
+}
+
+function toStoredKnowledge(knowledge: SbxKnowledgeConfig): Record<keyof SbxKnowledgeConfig, "r" | "rw" | false> {
+  const toCode = (access: SbxAccess | false): "r" | "rw" | false => (access ? KNOWLEDGE_ACCESS_CODE[access] : false);
+  return { skills: toCode(knowledge.skills), plugins: toCode(knowledge.plugins), instructions: toCode(knowledge.instructions) };
+}
+
 /**
  * The enable-sbx dialog's persisted state — read the same defensively-anything-goes way as the
- * rest of tet.json. Never holds a token: the dialog's Save button sends one over IPC, which goes
- * straight to `sbx secret set` (see sbx.ts's saveSbxConfig) and is never written here.
+ * rest of tet.json. Never holds a token: each sandboxed agent signs in with its own `/login`
+ * inside the sandbox, nothing tet stores ever needs to.
  */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const folders = toSbxFolders(sbx.folders)
     .filter(appliesHere)
     .map(({ path: folderPath, access }) => ({ path: folderPath, access }));
-  return { enabled: sbx.enabled === true, ports: toSbxPorts(sbx.ports), folders };
+  return { enabled: sbx.enabled === true, knowledge: toSbxKnowledge(sbx.knowledge), ports: toSbxPorts(sbx.ports), folders };
 }
 
 /** Writes the rows that apply here in place of the previous ones — see StoredSbxFolder. */
@@ -397,5 +417,8 @@ export async function writeSbxConfig(root: string, config: SbxProjectConfig): Pr
   const content = await readForPatch(root);
   const others = toSbxFolders(sbxSection(content).folders).filter((folder) => !appliesHere(folder));
   const mine = config.folders.map((folder): StoredSbxFolder => (folder.path.startsWith("~") ? folder : { ...folder, os: process.platform }));
-  await write(root, { ...content, sbx: { enabled: config.enabled, ports: config.ports, folders: [...others, ...mine] } });
+  await write(root, {
+    ...content,
+    sbx: { enabled: config.enabled, knowledge: toStoredKnowledge(config.knowledge), ports: config.ports, folders: [...others, ...mine] }
+  });
 }

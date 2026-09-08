@@ -28,7 +28,6 @@ import type {
   RepositoryState,
   Requirements,
   SbxProjectConfig,
-  SbxSaveRequest,
   StashCommand,
   TerminalDescriptor
 } from "../shared/types";
@@ -176,12 +175,13 @@ export function registerIpc({
   /** What the dialog reopens with — read fresh, like a project's saved commands, never cached. */
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
-    return project ? readSbxConfig(project.path) : { enabled: false, ports: [], folders: [] };
+    return project
+      ? readSbxConfig(project.path)
+      : { enabled: false, knowledge: { skills: false, plugins: false, instructions: false }, ports: [], folders: [] };
   });
-  /** The dialog's Save button — writes tet.json and pushes any entered token to `sbx secret set`;
-   *  see sbx.ts's saveSbxConfig for why a token never reaches tet.json itself, and for the
-   *  sandbox removal each notice below is about. */
-  ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxSaveRequest): Promise<GitActionResult> => {
+  /** The dialog's Save button — writes tet.json; see sbx.ts's saveSbxConfig for the sandbox
+   *  removal each notice below is about. */
+  ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxProjectConfig): Promise<GitActionResult> => {
     const project = store.get(projectId);
     const manager = sessions.get(projectId);
     if (!project || !manager) {
@@ -192,7 +192,7 @@ export function registerIpc({
       for (const agentId of removed) {
         send("app:notice", {
           severity: "info",
-          message: `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt with the new folders when its next tab starts.`
+          message: `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
         });
       }
       return { ok: true };

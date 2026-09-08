@@ -161,7 +161,12 @@ describe("the tree's own edits", () => {
 
 describe("readSbxConfig", () => {
   it("is disabled and empty for a project with no tet.json at all", async () => {
-    assert.deepEqual(await readSbxConfig(root), { enabled: false, ports: [], folders: [] });
+    assert.deepEqual(await readSbxConfig(root), {
+      enabled: false,
+      knowledge: { skills: false, plugins: false, instructions: false },
+      ports: [],
+      folders: []
+    });
   });
 
   it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's folders alongside it", async () => {
@@ -175,6 +180,7 @@ describe("readSbxConfig", () => {
     const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
     const config = {
       enabled: true,
+      knowledge: { skills: "Read+Write" as const, plugins: false as const, instructions: "Read" as const },
       ports: [{ host: "3000", container: "3000" }],
       folders: [
         { path: "~/data", access: "Read+Write" as const },
@@ -183,7 +189,12 @@ describe("readSbxConfig", () => {
     };
     await writeSbxConfig(root, config);
     assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
-    const file = stored() as { commands: unknown; sbx: { folders: unknown } };
+    const file = stored() as { commands: unknown; sbx: { knowledge: unknown; folders: unknown } };
+    assert.deepEqual(
+      file.sbx.knowledge,
+      { skills: "rw", plugins: false, instructions: "r" },
+      "knowledge is written alongside enabled, as sbx's own r/rw codes"
+    );
     assert.deepEqual(file.commands, ["keep"], "the saved command survives");
     assert.deepEqual(
       file.sbx.folders,
@@ -197,6 +208,7 @@ describe("readSbxConfig", () => {
       JSON.stringify({
         sbx: {
           enabled: true,
+          knowledge: { skills: "not-a-real-access", plugins: true, instructions: "r" },
           ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
           folders: [
             { path: "", os: process.platform },
@@ -209,6 +221,7 @@ describe("readSbxConfig", () => {
     );
     assert.deepEqual(await readSbxConfig(root), {
       enabled: true,
+      knowledge: { skills: false, plugins: false, instructions: "Read" },
       ports: [{ host: "3000", container: "3000" }],
       folders: [{ path: "~/data", access: "Read+Write" }]
     });

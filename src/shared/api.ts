@@ -23,7 +23,6 @@ import type {
   RepositoryState,
   Requirements,
   SbxProjectConfig,
-  SbxSaveRequest,
   StashCommand,
   TerminalDescriptor,
   TerminalOutput,
@@ -67,11 +66,11 @@ export interface TETApi {
     checkFilesystemGoverned(): Promise<boolean>;
     /** Kills whichever of `login`/`initPolicy` is currently running — the Cancel button. */
     cancelSetup(): void;
-    /** What the dialog's fields reopen with — read fresh from tet.json, never a token. */
+    /** What the dialog's fields reopen with — read fresh from tet.json. */
     getConfig(projectId: string): Promise<SbxProjectConfig>;
-    /** The dialog's Save button — ports/folders to tet.json, any entered token to `sbx secret set`;
-     *  a sandbox whose folders changed is removed, said as a notice from the main process. */
-    saveConfig(projectId: string, request: SbxSaveRequest): Promise<GitActionResult>;
+    /** The dialog's Save button — writes ports/folders to tet.json; a sandbox whose folders
+     *  changed is removed, said as a notice from the main process. */
+    saveConfig(projectId: string, request: SbxProjectConfig): Promise<GitActionResult>;
   };
   /** What the settings dialog reads and writes; there is one set of them for the whole app. */
   settings: {

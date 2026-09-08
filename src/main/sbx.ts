@@ -6,11 +6,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
-import type { SbxAgentId, SbxFolder, SbxProjectConfig, SbxSaveRequest } from "../shared/types";
-import { writeSbxConfig } from "./git/commands";
+import type { SbxAccess, SbxAgentId, SbxFolder, SbxKnowledgeConfig, SbxPort, SbxProjectConfig } from "../shared/types";
+import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { augmentAgentPath } from "./terminals/agent-path";
-import { toContainerPath } from "./terminals/os-notify";
 import { checkAgentInstalled } from "./terminals/terminal-session";
+import { toContainerPath } from "./terminals/os-notify";
 import { resolveCommand } from "./terminals/pty";
 
 /**
@@ -93,7 +93,53 @@ export function cancelSbxSetup(): void {
  */
 export async function checkSbxInstalled(): Promise<boolean> {
   await augmentAgentPath();
-  return checkAgentInstalled("sbx", ["version"], os.tmpdir());
+  const installed = await checkAgentInstalled("sbx", ["version"], os.tmpdir());
+  if (installed) {
+    await suppressSbxFirstRunWizard();
+  }
+  return installed;
+}
+
+/**
+ * sbx shows a one-time "detected configuration" wizard on the very first real interactive
+ * `sbx run` a machine ever does — not from tet's own non-interactive `sbx create`/`exec`/`mount`
+ * calls, only from a genuine pty attach, which is exactly what a tet terminal tab is. Found live,
+ * 2026-09-08: it showed up unannounced inside a real tab, and its own skills-store import
+ * (mistaken by the user for a Claude Code prompt) happened to coincide with the "already exists
+ * and can't be given new workspaces" bug prepareSbxRun now avoids on its own — the two turned
+ * out unrelated, but the wizard appearing inside a live agent tab at all is a surprise tet
+ * should not hand the user.
+ *
+ * Gated by a plain marker file — verified live: once
+ * `%LOCALAPPDATA%\DockerSandboxes\sandboxes\config\first-run-import.json` exists, the wizard
+ * never shows again, and *any* valid JSON satisfies it (a bare `{}` suppressed it exactly like
+ * sbx's own real `{"offeredAt": …}`). Never overwrites a file already there — a real offer the
+ * user already answered stays exactly as sbx left it. Costs the wizard's own one-time offers:
+ * agent secrets (tet moved off `sbx secret set` for Claude/Codex, not missed), skills (tet's own
+ * `ensureKnowledgeMounted` is live and per-agent, better than the wizard's one-time, agent-
+ * agnostic copy) — and MCP servers, which *is* a real loss: `sbx mcp` has no import command at
+ * all, so a user who wants their host MCP servers in a sandbox now has to run `sbx setup` or
+ * `sbx mcp add` by hand. Undocumented, private sbx state, Windows-only verified — macOS/Linux
+ * paths are unknown, so this is a no-op there for now (TODO once verified); best-effort even on
+ * Windows, since a failure to write it must not stop the installed-check it rides on.
+ */
+async function suppressSbxFirstRunWizard(): Promise<void> {
+  if (process.platform !== "win32" || !process.env.LOCALAPPDATA) {
+    return;
+  }
+  const markerFile = path.join(process.env.LOCALAPPDATA, "DockerSandboxes", "sandboxes", "config", "first-run-import.json");
+  try {
+    await fs.access(markerFile);
+    return;
+  } catch {
+    // Not there yet — fall through and create it.
+  }
+  try {
+    await fs.mkdir(path.dirname(markerFile), { recursive: true });
+    await fs.writeFile(markerFile, "{}");
+  } catch {
+    // Best-effort: worst case the wizard still shows once, same as today.
+  }
 }
 
 /**
@@ -147,34 +193,6 @@ export async function initSbxPolicy(): Promise<boolean> {
 }
 
 /**
- * `sbx secret set`'s built-in service names (`sbx secret set --help`, 2026-09-08: "Available
- * services: anthropic, cursor, droid, github, google, groq, mistral, nebius, openai, openrouter,
- * xai") for the two agents the dialog has real fields for. Both verified live: a sandboxed
- * Claude/Codex started without credentials names exactly this service in its own prompt. Set
- * globally, not `--sandbox`-scoped: "Service secrets apply globally by default … available to
- * all sandboxes" (the same help text), and a per-project key was never asked for — scoping
- * would need the sandbox to exist at Save time, which is what made Save half a spawn.
- */
-const SANDBOX_SERVICE: Record<SbxAgentId, string> = {
-  claude: "anthropic",
-  codex: "openai"
-};
-
-/**
- * Environment variable that redirects this agent's config/session directory — set to the same
- * path SbxFixedPaths.configDir mounts, so the sandboxed CLI
- * reads and writes the *same* files tet's own host-side session listing already watches, instead
- * of a fresh, invisible directory inside the container. Codex's `$CODEX_HOME` is verified live
- * (2026-09-08: `codex doctor` inside the sandbox reports the host's own auth file); Claude's
- * `CLAUDE_CONFIG_DIR` is documented but not verified against a real sbx sandbox — if session
- * listing/resume silently stops working for sandboxed Claude tabs, check this first.
- */
-const CONFIG_DIR_ENV: Record<SbxAgentId, string> = {
-  claude: "CLAUDE_CONFIG_DIR",
-  codex: "CODEX_HOME"
-};
-
-/**
  * A deterministic sandbox name per (project, agent) — `sbx create --name` only allows letters,
  * numbers, hyphens and periods, so the project id (a uuid on every platform) is hashed rather
  * than used as-is. Stable across restarts: the same pair always resolves to the same sandbox, so
@@ -219,15 +237,25 @@ export function contractHome(folderPath: string): string {
 }
 
 /**
- * One `sbx create`/`sbx run` positional for an allowed-folder row — `:ro` is sbx's own suffix
- * for read-only, the only mode it has besides read-write. Normalized the way sbx stores it
- * (verified live, 2026-09-08: `C:/x/` is listed back as `C:\x`, case kept) — the typed form
- * has to compare equal to `sbx ls`'s, or ensureSandboxExists would see a changed set and refuse
- * every single spawn.
+ * The `sbx mount`/`sbx umount` MOUNT_SPEC for one allowed-folder row — a live bind mount, not a
+ * `sbx create` workspace positional (see computeWorkspaces' own comment for why folders moved off
+ * that list). `sbx mount`'s own spec grammar is `HOST[:CTR_TARGET[:ro|rw]]`, and a bare two-part
+ * `HOST:ro` parses as `HOST:CTR_TARGET="ro"` there (verified live, 2026-09-08: "CTR_TARGET 'ro'
+ * must be absolute") — unlike `sbx create`'s positional, where the same suffix means read-only at
+ * the same path. So Read+Write, which needs no suffix at all, mounts with the bare host path
+ * (sbx maps it to the same path inside on its own); Read needs the explicit three-part form, and
+ * repeating the *host* path as CTR_TARGET breaks the parser on Windows (two drive-letter colons
+ * in one spec) — `toContainerPath` gives the one form that works, matching what sbx itself
+ * reported back for a real mount. `unmount` drops the `:ro`/`:rw` — `sbx umount`'s own syntax is
+ * `HOST[:CTR_TARGET]`, and an explicit-target mount must be revoked with that same target.
  */
-export function folderArg(folder: SbxFolder): string {
-  const normalized = normalizeFolder(folder.path);
-  return folder.access === "Read" ? `${normalized}:ro` : normalized;
+export function folderMountSpecs(folder: SbxFolder): { mount: string; unmount: string } {
+  const host = normalizeFolder(folder.path);
+  if (folder.access === "Read+Write") {
+    return { mount: host, unmount: host };
+  }
+  const target = toContainerPath(host);
+  return { mount: `${host}:${target}:ro`, unmount: `${host}:${target}` };
 }
 
 /** A typed folder path as sbx will list it back: `~` expanded, separators native, no trailing
@@ -311,36 +339,29 @@ async function ensureControlNetworkAllowed(): Promise<boolean> {
 }
 
 /**
- * The three host paths every sandbox of this agent mounts whatever tet.json holds — never
- * through the dialog's "Allowed folders", which is the user's own list and shows none of them:
- * the agent's own config directory (`~/.claude`, `~/.codex` — read-write, what its
- * CONFIG_DIR_ENV points at), `agentDir` (tet's own generated hook settings and markers,
- * read-write) and the directory holding the shell-context file (read-only, only ever `cat`).
+ * The two host paths every sandbox mounts whatever tet.json holds — never through the dialog's
+ * "Allowed folders", which is the user's own list and shows neither: `agentDir` (tet's own
+ * generated hook settings and markers, read-write) and the directory holding the shell-context
+ * file (read-only, only ever `cat`).
+ *
+ * Deliberately *not* the agent's own config directory (`~/.claude`, `~/.codex`): mounted with
+ * `CLAUDE_CONFIG_DIR`/`CODEX_HOME` pointed at it, the sandboxed CLI is signed in as the host —
+ * measured live, 2026-09-08: Claude answered over the host's OAuth credentials at once, and a
+ * `/login` inside would replace the host's — so the sandbox keeps its own config directory and
+ * its own sign-in. The price, for now, is that the host's skills, plugins and sessions are not
+ * in the sandbox; mounting those subfolders alone is the next step (see the plan).
  */
 export interface SbxFixedPaths {
-  configDir: string;
   agentDir: string;
   contextDir: string;
 }
 
 /**
  * The fixed paths above from the terminal layer's own paths for this agent. Structural input
- * rather than `AgentPaths` itself so sbx.ts stays agent-layer-agnostic, the way it already is
- * about SANDBOX_SERVICE.
+ * rather than `AgentPaths` itself so sbx.ts stays agent-layer-agnostic.
  */
-export function sandboxPaths(agentId: SbxAgentId, paths: { agentDir: string; contextFile: string }): SbxFixedPaths {
-  return {
-    configDir: path.join(os.homedir(), `.${agentId}`),
-    agentDir: paths.agentDir,
-    contextDir: path.dirname(paths.contextFile)
-  };
-}
-
-export interface Workspaces {
-  /** Every `sbx create`/`sbx run` workspace positional, in order. */
-  workspaces: string[];
-  /** The configured folders left out for not being a directory on this machine, as typed. */
-  missing: string[];
+export function sandboxPaths(paths: { agentDir: string; contextFile: string }): SbxFixedPaths {
+  return { agentDir: paths.agentDir, contextDir: path.dirname(paths.contextFile) };
 }
 
 function isDirectory(folderPath: string): boolean {
@@ -352,41 +373,203 @@ function isDirectory(folderPath: string): boolean {
 }
 
 /**
- * Every `sbx create`/`sbx run` workspace positional for one agent tab, computed once and shared
- * by both callers: `sbx create`/`run` refuses to add a workspace to a sandbox that already
- * exists with a different set ("sandbox 'x' already exists and can't be given new workspaces" —
- * verified live, 2026-09-08), so what `saveSbxConfig` compares an existing sandbox against and
- * what `prepareSbxRun` then runs with must be the exact same list — which is also why a folder
- * that does not exist is left out *here*, for both, rather than at the spawn alone: handed to
- * sbx it asks "The selected workspace does not exist. Would you like to create it? (y/N)"
- * (measured live, 2026-09-08) — `sbx create` with no stdin cancels on that, `sbx run` in the tab
- * blocks the agent's start on it. Left out, the sandbox comes up without it; the spawn says so.
- *
- * The three `fixed` paths are mounted unconditionally — never through `folders`, which is the
- * user's own list and must not be able to break any of them. A row for the config
- * directory (read-only, even) may still be typed into the dialog or written into tet.json by
- * hand, so it is dropped by path rather than mounted twice; every other exact duplicate is
- * dropped too, since sbx lists a repeated workspace once and sending it twice would read as a
- * changed set on every spawn.
+ * Every `sbx create`/`sbx run` workspace positional for one agent tab — tet's own fixed paths
+ * only, never the user's "Allowed folders": those are a live `sbx mount`/`umount` now (see
+ * folderMountSpecs and ensureFoldersMounted), not a create-time positional, because `sbx
+ * create`/`run` refuses to add a workspace to a sandbox that already exists with a different set
+ * ("sandbox 'x' already exists and can't be given new workspaces" — verified live, 2026-09-08),
+ * which used to mean any Allowed-folders edit had to destroy and rebuild the whole sandbox. The
+ * two `fixed` paths still go through this list — they never change once a project's sandbox
+ * exists, so the mismatch this guards against in practice never fires for them.
  */
-export function computeWorkspaces(projectPath: string, folders: SbxFolder[], fixed: SbxFixedPaths): Workspaces {
-  const userFolders: string[] = [];
-  const missing: string[] = [];
-  for (const folder of folders) {
-    const normalized = normalizeFolder(folder.path);
-    if (normalized === fixed.configDir) {
-      continue;
-    }
-    if (!isDirectory(normalized)) {
-      missing.push(folder.path);
-      continue;
-    }
-    userFolders.push(folderArg(folder));
+export function computeWorkspaces(projectPath: string, fixed: SbxFixedPaths): string[] {
+  return [projectPath, fixed.agentDir, `${fixed.contextDir}:ro`];
+}
+
+/** Every sandbox template's non-root user, and its home — verified live, 2026-09-08, for both
+ *  a Claude and a Codex sandbox (`$HOME` and `whoami`). `sbx mount`'s target must be an absolute
+ *  path (its own `--help`): it is not passed through a shell, so `~` never expands there. */
+const SANDBOX_HOME = "/home/agent";
+
+function exists(candidate: string): boolean {
+  try {
+    statSync(candidate);
+    return true;
+  } catch {
+    return false;
   }
+}
+
+/**
+ * This agent's shareable, non-identity knowledge on the host — skills, plugins, and its own
+ * instructions file — brought into a sandbox when tet.json's `knowledge` is on. Never the config
+ * directory itself or anything beyond this fixed list — see SbxFixedPaths' own comment for why
+ * identity (auth, sessions) stays out regardless.
+ *
+ * All paths measured live, 2026-09-08, against a real install: Claude's `~/.claude/skills`,
+ * `~/.claude/plugins` (its actual plugin code, not just metadata) and `~/.claude/CLAUDE.md`;
+ * Codex's `~/.codex/skills` (**not** a shared `~/.agents/skills` — that path does not exist on a
+ * real install, an earlier assumption in the plan was wrong) and `~/.codex/plugins` (confirmed
+ * by installing and removing a real plugin: its code lands under
+ * `plugins/cache/<marketplace>/<plugin>/<hash>`, so the whole directory is the unit to mount,
+ * same as Claude's). Codex's own instructions file is `~/.codex/AGENTS.md` — preferring
+ * `AGENTS.override.md` when present is Codex's own documented load order (OpenAI's docs), not
+ * itself verified live here, since neither file exists on the machine this was measured on.
+ * A host path that does not exist yet (no skills installed, no instructions file written) is
+ * simply left out.
+ */
+interface KnowledgeEntry {
+  host: string;
+  target: string;
+}
+
+/** One agent's shareable, non-identity host paths, one list per `SbxKnowledgeConfig` kind — see
+ *  its own comment in shared/types.ts for why each is its own switch. Codex's skills come from
+ *  *two* real, independent locations it both actually reads — verified live, 2026-09-08, via
+ *  Codex's own "failed to load skill" log lines naming both paths for two deliberately-broken
+ *  test skills, one at each: `~/.codex/skills` and `~/.agents/skills` (the latter is what
+ *  OpenAI's own docs call the "personal skills folder", the former is what a live folder listing
+ *  on a real install showed populated — both real, neither alone is the whole story). Claude has
+ *  only the one, `~/.claude/skills`. */
+function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, KnowledgeEntry[]> {
+  const home = os.homedir();
+  if (agentId === "claude") {
+    return {
+      skills: [{ host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
+      plugins: [{ host: path.join(home, ".claude", "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
+      instructions: [{ host: path.join(home, ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }]
+    };
+  }
+  const instructionsHost = [path.join(home, ".codex", "AGENTS.override.md"), path.join(home, ".codex", "AGENTS.md")].find(exists);
   return {
-    workspaces: [...new Set([projectPath, fixed.configDir, ...userFolders, fixed.agentDir, `${fixed.contextDir}:ro`])],
-    missing
+    skills: [
+      { host: path.join(home, ".codex", "skills"), target: `${SANDBOX_HOME}/.codex/skills` },
+      { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
+    ],
+    plugins: [{ host: path.join(home, ".codex", "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
+    instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
   };
+}
+
+/**
+ * Brings this agent's enabled knowledge kinds into a sandbox that already exists
+ * (ensureSandboxExists ran first) — `sbx mount HOST:TARGET[:ro]` (v0.39.0, verified live
+ * 2026-09-08): a real runtime bind mount at an arbitrary container path, not a symlink, since sbx
+ * cannot follow one that points outside its own workspace (Docker's own sbx-quickstart guide) —
+ * this is what makes a single, curated path (a folder or a plain file, both measured working)
+ * land exactly where the agent looks for it, without copying anything.
+ *
+ * Re-applied on *every* start rather than once per sandbox: unlike a file written into the
+ * sandbox's own disk (ensureSandboxLauncher's tet-ctl), a runtime bind mount does not survive a
+ * stop/restart — measured live, the target was empty again afterward — and a sandbox can be
+ * stopped from outside tet (a plain `sbx stop`), so there is no reliable moment to cache "already
+ * mounted" against. The command is its own idempotency check when it is not needed again. `sbx
+ * mount` also refuses a stopped sandbox ("409 Conflict"), hence the cheap `exec` first — the same
+ * auto-start `ensureSandboxLauncher`'s own `sbx exec` already relies on.
+ */
+async function ensureKnowledgeMounted(agentId: SbxAgentId, name: string, knowledge: SbxKnowledgeConfig): Promise<void> {
+  const paths = knowledgePaths(agentId);
+  const kinds = Object.keys(knowledge) as (keyof SbxKnowledgeConfig)[];
+  // `:ro`/no suffix — the same sbx default (`:rw` when omitted), verified in `sbx mount --help`.
+  const present = kinds
+    .filter((kind) => knowledge[kind])
+    .flatMap((kind) => paths[kind].map((entry) => ({ entry, access: knowledge[kind] as SbxAccess })))
+    .filter(({ entry }) => exists(entry.host));
+  if (present.length === 0) {
+    return;
+  }
+  await runSbx(["exec", "-i", name, "true"]);
+  for (const { entry, access } of present) {
+    const suffix = access === "Read" ? ":ro" : "";
+    await runSbx(["mount", name, `${entry.host}:${entry.target}${suffix}`]);
+  }
+}
+
+/**
+ * Mounts every configured Allowed folder that exists on this machine into a sandbox that already
+ * exists — the live `sbx mount` counterpart to the create-time workspaces above, run on every
+ * spawn the same way ensureKnowledgeMounted is (a bind mount does not survive a stop/restart).
+ * Idempotent when nothing changed since the last spawn (sbx's own guarantee); an access change
+ * or a removed folder is narrowed immediately at Save instead (see revokeStaleFolders) — so by
+ * the time this runs, the previous mount of that path either matches or is already gone, and a
+ * plain re-mount here never hits sbx's "already mounted read-write; cannot also mount read-only"
+ * conflict (verified live, 2026-09-08).
+ */
+async function ensureFoldersMounted(name: string, folders: SbxFolder[]): Promise<string[]> {
+  const missing: string[] = [];
+  const present = folders.filter((folder) => {
+    if (isDirectory(normalizeFolder(folder.path))) {
+      return true;
+    }
+    missing.push(folder.path);
+    return false;
+  });
+  if (present.length > 0) {
+    await runSbx(["exec", "-i", name, "true"]);
+    for (const folder of present) {
+      await runSbx(["mount", name, folderMountSpecs(folder).mount]);
+    }
+  }
+  return missing;
+}
+
+/**
+ * Narrows a running sandbox's folder grants the moment the user changes them, rather than
+ * leaving the old one in force until whoever has that tab open next restarts it: a folder
+ * dropped from Allowed folders, or downgraded from Read+Write to Read, must stop being
+ * (over-)accessible *now*. Needed because the grant a `sbx mount` makes survives a sandbox
+ * stop/restart even though the live bind does not (verified live, 2026-09-08: mounting the same
+ * host path again with a different access after a restart still hit the "already mounted"
+ * conflict) — so nothing here can rely on a later mount to self-correct it. Best-effort: a
+ * sandbox that was never created, or is not currently running, has no live grant to narrow, and
+ * the failed `exec` is the same signal either way.
+ */
+async function revokeStaleFolders(name: string, previous: SbxFolder[], current: SbxFolder[]): Promise<void> {
+  const stale = previous.filter((old) => {
+    const match = current.find((next) => normalizeFolder(next.path) === normalizeFolder(old.path));
+    return !match || match.access !== old.access;
+  });
+  if (stale.length === 0) {
+    return;
+  }
+  if (!(await runSbx(["exec", "-i", name, "true"])).ok) {
+    return;
+  }
+  for (const folder of stale) {
+    await runSbx(["umount", name, folderMountSpecs(folder).unmount]);
+  }
+}
+
+function portKey(port: SbxPort): string {
+  return `${port.host}:${port.container}`;
+}
+
+/**
+ * Publishes/unpublishes exactly the ports that changed since the last save, on a sandbox that
+ * already exists. Unlike a folder's bind mount, a published port survives a sandbox stop/restart
+ * (verified live, 2026-09-08: still listed after `sbx stop` + a fresh start) — `sbx run`'s own
+ * `-p` still handles a *newly created* sandbox's first port set (prepareSbxRun), and this only
+ * has to run once, here, rather than on every spawn. And unlike a mount, re-publishing an
+ * already-published port is not a no-op — it errors outright ("already published", verified live)
+ * — so only the actual delta may be sent, never the whole current list.
+ */
+async function applyPortChanges(name: string, previous: SbxPort[], current: SbxPort[]): Promise<void> {
+  const previousKeys = new Set(previous.map(portKey));
+  const currentKeys = new Set(current.map(portKey));
+  const removed = previous.filter((port) => !currentKeys.has(portKey(port)));
+  const added = current.filter((port) => !previousKeys.has(portKey(port)));
+  if (removed.length === 0 && added.length === 0) {
+    return;
+  }
+  if (!(await runSbx(["exec", "-i", name, "true"])).ok) {
+    return;
+  }
+  for (const port of removed) {
+    await runSbx(["ports", name, "--unpublish", portKey(port)]);
+  }
+  for (const port of added) {
+    await runSbx(["ports", name, "--publish", portKey(port)]);
+  }
 }
 
 /** `sbx ls --json`'s workspaces for one sandbox, or undefined if it does not exist. */
@@ -413,20 +596,24 @@ function sameWorkspaceSet(a: string[], b: string[]): boolean {
 const launcherWritten = new Set<string>();
 
 /**
- * Makes sure a sandbox exists with exactly `workspaces`, creating it if it is not there yet.
- * One that exists with a *different* set is an error, not a rebuild: sbx itself refuses to add
- * or change workspaces on an existing sandbox (see computeWorkspaces), and rebuilding here —
- * `sbx rm` under a session of the same project and agent that may be mid-turn in another tab —
- * is what saveSbxConfig does instead, at the one moment the user changed the folders and
- * expects it. The message reaches the user as the tab's "could not be started" notice.
+ * Makes sure a sandbox exists with exactly `workspaces` — tet's own fixed paths only now that
+ * Allowed folders are a live mount (see computeWorkspaces), so this practically never disagrees
+ * once a project's sandbox exists. One that exists with a *different* set is still an error, not
+ * a rebuild: sbx itself refuses to add or change workspaces on an existing sandbox, and rebuilding
+ * here — `sbx rm` under a session of the same project and agent that may be mid-turn in another
+ * tab — is what saveSbxConfig does instead. The message reaches the user as the tab's "could not
+ * be started" notice.
  */
-async function ensureSandboxExists(agentId: SbxAgentId, workspaces: string[], name: string): Promise<void> {
+async function ensureSandboxExists(agentId: SbxAgentId, workspaces: string[], name: string): Promise<boolean> {
   const existing = await getSandboxWorkspaces(name);
   if (existing === undefined) {
     await runSbx(["create", agentId, ...workspaces, "--name", name]);
-  } else if (!sameWorkspaceSet(existing, workspaces)) {
-    throw new Error("its SBX sandbox has other folders than the configuration — save the SBX configuration again to rebuild it");
+    return true;
   }
+  if (!sameWorkspaceSet(existing, workspaces)) {
+    throw new Error("its SBX sandbox no longer matches tet's own paths — save the SBX configuration again to rebuild it");
+  }
+  return false;
 }
 
 /** Set once from main.ts, the moment it has both: the `tet-ctl` bundle it writes the host's own
@@ -466,12 +653,12 @@ async function ensureSandboxLauncher(name: string): Promise<void> {
 }
 
 /**
- * Readies one agent tab's sandbox and returns the full `sbx run` argument list for it —
- * workspaces (see computeWorkspaces, whose `missing` is passed on for the caller to say),
- * published ports, and (when network policy allows it, see ensureControlNetworkAllowed) the
- * control-channel env and `tet-ctl` launcher. Creates the sandbox first if it is missing
- * (ensureSandboxExists) — `sbx run` would too, but the launcher has to be written into it
- * before `sbx run` starts the agent.
+ * Readies one agent tab's sandbox and returns the full `sbx run` argument list for it — fixed
+ * workspaces (computeWorkspaces), live-mounted knowledge and Allowed folders (whose `missing` is
+ * passed on for the caller to say), published ports, and (when network policy allows it, see
+ * ensureControlNetworkAllowed) the control-channel env and `tet-ctl` launcher. Creates the
+ * sandbox first if it is missing (ensureSandboxExists) — `sbx run` would too, but the launcher
+ * has to be written into it before `sbx run` starts the agent.
  */
 export async function prepareSbxRun(
   agentId: SbxAgentId,
@@ -481,13 +668,22 @@ export async function prepareSbxRun(
   fixed: SbxFixedPaths,
   agentArgs: string[]
 ): Promise<{ args: string[]; missing: string[] }> {
-  const { workspaces, missing } = computeWorkspaces(projectPath, config.folders, fixed);
-  await ensureSandboxExists(agentId, workspaces, name);
-  const args = ["run", agentId, ...workspaces, "--name", name];
+  const workspaces = computeWorkspaces(projectPath, fixed);
+  const created = await ensureSandboxExists(agentId, workspaces, name);
+  // Best-effort, same reasoning as the launcher below: no skills/plugins in the sandbox is no
+  // worse than today, so a failure here must not block the agent itself from starting. A no-op
+  // when nothing is enabled or nothing enabled exists on this host.
+  await ensureKnowledgeMounted(agentId, name, config.knowledge);
+  const missing = await ensureFoldersMounted(name, config.folders);
+  // sbx run refuses explicit workspace positionals on a sandbox that already exists — even when
+  // they are exactly what it already has (verified live, 2026-09-08: "sandbox 'x' already
+  // exists and can't be given new workspaces", reproduced with the identical, matching set).
+  // Passed only when this call is what created the sandbox a moment ago; a reattach gets just
+  // the agent (for sbx's own verification, per its --help) and --name, reading its own spec.
+  const args = created ? ["run", agentId, ...workspaces, "--name", name] : ["run", agentId, "--name", name];
   for (const port of config.ports) {
     args.push("-p", `${port.host}:${port.container}`);
   }
-  args.push("-e", `${CONFIG_DIR_ENV[agentId]}=${toContainerPath(fixed.configDir)}`);
   if (await ensureControlNetworkAllowed()) {
     args.push(
       "-e",
@@ -510,40 +706,44 @@ export async function prepareSbxRun(
 }
 
 /**
- * The dialog's Save button: writes tet.json (ports/folders, never a token — see SbxSaveRequest),
- * removes every existing sandbox of the project whose folders no longer match when sandboxing is
- * on — sbx refuses to change an existing sandbox's workspaces (see computeWorkspaces), so the
- * next tab of that agent creates it afresh; only the sandbox's own container state (installed
- * packages, running processes) is lost, the project and the allowed folders are bind mounts —
- * and stores every non-blank token as that agent's global service secret. Returns which agents'
- * sandboxes were removed, for the caller to say so: a session of that agent still running in a
- * tab just lost its sandbox under it, at the one moment the user changed the folders. `getPaths`
- * is session-manager.ts's own `sandboxPaths`, handed in rather than imported so sbx.ts never
- * reaches into the terminal layer's state directly.
+ * The dialog's Save button: writes tet.json (ports/folders), then for every existing sandbox of
+ * the project, either rebuilds it (its *fixed* paths no longer match — never actually seen in
+ * practice, see computeWorkspaces) or, the normal case, narrows its live folder grants to match
+ * (revokeStaleFolders) and applies whatever ports changed (applyPortChanges) — neither is a
+ * create-time workspace or `-p` any more, so an edit no longer forces a rebuild (see
+ * computeWorkspaces', folderMountSpecs' and applyPortChanges' own comments for why). Returns
+ * which agents' sandboxes were *removed*, for the caller to say so: a session of that agent still
+ * running in a tab just lost its sandbox under it. `getPaths` is session-manager.ts's own
+ * `sandboxPaths`, handed in rather than imported so sbx.ts never reaches into the terminal layer's
+ * state directly.
  */
 export async function saveSbxConfig(
   projectPath: string,
   projectId: string,
-  request: SbxSaveRequest,
+  request: SbxProjectConfig,
   getPaths: (agentId: SbxAgentId) => SbxFixedPaths
 ): Promise<SbxAgentId[]> {
-  const { tokens, ...config } = request;
-  config.folders = config.folders.map((folder) => ({ ...folder, path: contractHome(folder.path) }));
+  const previous = await readSbxConfig(projectPath);
+  const config = { ...request, folders: request.folders.map((folder) => ({ ...folder, path: contractHome(folder.path) })) };
   await writeSbxConfig(projectPath, config);
+  if (!config.enabled) {
+    return [];
+  }
   const removed: SbxAgentId[] = [];
   for (const agentId of SBX_AGENT_IDS) {
     const name = sandboxName(projectId, agentId);
-    if (config.enabled) {
-      const existing = await getSandboxWorkspaces(name);
-      if (existing !== undefined && !sameWorkspaceSet(existing, computeWorkspaces(projectPath, config.folders, getPaths(agentId)).workspaces)) {
-        await runSbx(["rm", name, "--force"]);
-        launcherWritten.delete(name);
-        removed.push(agentId);
-      }
+    const existing = await getSandboxWorkspaces(name);
+    if (existing === undefined) {
+      continue;
     }
-    if (tokens[agentId].trim()) {
-      await runSbx(["secret", "set", SANDBOX_SERVICE[agentId]], { stdin: `${tokens[agentId]}\n` });
+    if (!sameWorkspaceSet(existing, computeWorkspaces(projectPath, getPaths(agentId)))) {
+      await runSbx(["rm", name, "--force"]);
+      launcherWritten.delete(name);
+      removed.push(agentId);
+      continue;
     }
+    await revokeStaleFolders(name, previous.folders, config.folders);
+    await applyPortChanges(name, previous.ports, config.ports);
   }
   return removed;
 }

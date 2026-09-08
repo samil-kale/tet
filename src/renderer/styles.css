@@ -1692,8 +1692,8 @@ textarea:focus {
   font-weight: 600;
 }
 
-/* Its own scrollbox rather than growing the dialog: the token field, section labels and "+ Add"
-   buttons stay put no matter how many ports or folders are added. */
+/* Its own scrollbox rather than growing the dialog: the section labels and "+ Add" buttons stay
+   put no matter how many ports or folders are added. */
 .sbx-rows {
   display: flex;
   flex-direction: column;
@@ -1701,6 +1701,28 @@ textarea:focus {
   margin-top: 5px;
   max-height: 160px;
   overflow-y: auto;
+}
+
+/* The three knowledge checkboxes, stacked — a fixed count, so no scrollbox like .sbx-rows'. */
+.sbx-knowledge-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+/* One kind's checkbox, and its access dropdown once checked, level with the folder row's own
+   26px trigger (.sbx-folder-row .dropdown-trigger) below. */
+.sbx-knowledge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 26px;
+}
+
+.sbx-knowledge-row .dropdown-trigger {
+  height: 26px;
 }
 
 .sbx-port-row,
@@ -1756,12 +1778,14 @@ textarea:focus {
 }
 
 /* The master enable checkbox at the top of the dialog body, set off from the fields below it by
-   space alone rather than a rule. */
-.enable-sbx-dialog .dialog-checkbox {
+   space alone rather than a rule. A direct child only — the knowledge checkbox inside
+   EnableSbxFields is a .dialog-checkbox too, but sits inside .enable-sbx-fields-scroll and gets
+   its spacing from .sbx-section like the other two sections, not from this. */
+.enable-sbx-dialog > .dialog-body > .dialog-checkbox {
   padding-bottom: 20px;
 }
 
-.enable-sbx-dialog .dialog-checkbox .dialog-detail {
+.enable-sbx-dialog > .dialog-body > .dialog-checkbox .dialog-detail {
   margin-top: 3px;
 }
 
@@ -1790,8 +1814,8 @@ textarea:focus {
 }
 
 /* "Port forwarding" and "Allowed folders" each start with a rule of their own, on top of the
-   gap above — a token field or a "+ Add" button ending a block read as glued to the label right
-   below them without it. */
+   gap above — the knowledge checkbox or a "+ Add" button ending a block read as glued to the
+   label right below them without it. */
 .sbx-section {
   padding-top: 14px;
   border-top: 1px solid var(--vscode-panel-border);

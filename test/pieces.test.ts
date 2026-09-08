@@ -10,7 +10,7 @@ import { renderPiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
 import { powershellSingleQuote, shellSingleQuote, toContainerPath } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
-import { computeWorkspaces, contractHome, folderArg, sandboxName, sandboxPaths } from "../src/main/sbx";
+import { computeWorkspaces, contractHome, folderMountSpecs, sandboxName, sandboxPaths } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
@@ -110,10 +110,14 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(toContainerPath("/Users/saka/project"), "/Users/saka/project");
   });
 
-  it("appends sbx's own :ro suffix for Read, nothing for Read+Write", () => {
+  it("mounts Read+Write bare (sbx maps it to the same path itself), Read with an explicit :ro target", () => {
     const repo = path.join(os.tmpdir(), "repo");
-    assert.equal(folderArg({ path: repo, access: "Read" }), `${repo}:ro`);
-    assert.equal(folderArg({ path: repo, access: "Read+Write" }), repo);
+    assert.deepEqual(folderMountSpecs({ path: repo, access: "Read+Write" }), { mount: repo, unmount: repo });
+    const target = toContainerPath(repo);
+    assert.deepEqual(folderMountSpecs({ path: repo, access: "Read" }), {
+      mount: `${repo}:${target}:ro`,
+      unmount: `${repo}:${target}`
+    });
   });
 
   it("stores a folder under the home as ~/…, and anything else as typed", () => {
@@ -127,38 +131,21 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(contractHome("relative/path"), "relative/path");
   });
 
-  it("normalizes a typed path the way sbx lists it back, so the set compares equal on the next spawn", () => {
+  it("normalizes a typed folder path (trimmed, ~ expanded) before building its mount spec", () => {
     const data = path.join(os.tmpdir(), "data");
-    assert.equal(folderArg({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "Read" }), `${data}:ro`);
-    assert.equal(folderArg({ path: "~/data/", access: "Read+Write" }), path.join(os.homedir(), "data"));
+    assert.equal(folderMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "Read+Write" }).mount, data);
+    const home = path.join(os.homedir(), "data");
+    assert.equal(folderMountSpecs({ path: "~/data/", access: "Read+Write" }).mount, home);
   });
 
-  it("mounts the project, the config dir, tet's own dirs, and the user's folders — each once, and only those that exist", () => {
-    const fixed = sandboxPaths("claude", {
+  it("mounts the project and tet's own dirs — Allowed folders are a live sbx mount, not a workspace", () => {
+    const fixed = sandboxPaths({
       agentDir: path.join(os.tmpdir(), "agents", "claude", "p"),
       contextFile: path.join(os.tmpdir(), "ctx", "context.md")
     });
-    assert.equal(fixed.configDir, path.join(os.homedir(), ".claude"));
     assert.equal(fixed.contextDir, path.join(os.tmpdir(), "ctx"));
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-"));
-    const repo = path.join(root, "repo");
-    const data = path.join(root, "data");
-    fs.mkdirSync(repo);
-    fs.mkdirSync(data);
-    const file = path.join(root, "file.txt");
-    fs.writeFileSync(file, "");
-    const folders = [
-      { path: "~/.claude/", access: "Read" as const },
-      { path: data, access: "Read" as const },
-      { path: data, access: "Read" as const },
-      { path: `${repo}${path.sep}`, access: "Read+Write" as const },
-      { path: path.join(root, "gone"), access: "Read" as const },
-      { path: file, access: "Read" as const }
-    ];
-    assert.deepEqual(computeWorkspaces(repo, folders, fixed), {
-      workspaces: [repo, fixed.configDir, `${data}:ro`, fixed.agentDir, `${fixed.contextDir}:ro`],
-      missing: [path.join(root, "gone"), file]
-    });
+    const repo = path.join(os.tmpdir(), "tet-sbx-repo");
+    assert.deepEqual(computeWorkspaces(repo, fixed), [repo, fixed.agentDir, `${fixed.contextDir}:ro`]);
   });
 });
 

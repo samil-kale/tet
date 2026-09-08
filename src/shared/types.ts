@@ -106,21 +106,29 @@ export interface SbxFolder {
   access: SbxAccess;
 }
 
-/** The enable-sbx dialog's saved state, per project — read back into the dialog on open, written
- *  by its Save button. One set of ports and folders for every sandboxed tab of the project,
- *  whichever agent it runs. Never a token: that goes straight to `sbx secret set` over stdin at
- *  Save time and is never written to disk. */
-export interface SbxProjectConfig {
-  enabled: boolean;
-  ports: SbxPort[];
-  folders: SbxFolder[];
+/** Which of an agent's shareable, non-identity host knowledge to bring into its sandbox, and
+ *  with which access — see sbx.ts's knowledgePaths for exactly which paths each is, per agent.
+ *  `false` is off; `SbxAccess` is the same Read/Read+Write choice "Allowed folders" rows get, so
+ *  an agent that edits its own skills or plugins from inside the sandbox can write them back.
+ *  One switch per kind rather than a row per folder, the way "Allowed folders" is the user's own
+ *  list; agent-agnostic (applies to both Claude and Codex tabs the same way), since each agent's
+ *  own actual paths are sbx.ts's concern, not the dialog's. */
+export interface SbxKnowledgeConfig {
+  skills: SbxAccess | false;
+  plugins: SbxAccess | false;
+  /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex. */
+  instructions: SbxAccess | false;
 }
 
-/** What the dialog's Save button sends over IPC — the config plus one API key per agent, the one
- *  thing that stays per agent (`sbx secret set` is per service), which the main process forwards
- *  there and never persists. An empty token leaves whatever secret is already set alone. */
-export interface SbxSaveRequest extends SbxProjectConfig {
-  tokens: Record<SbxAgentId, string>;
+/** The enable-sbx dialog's saved state, per project — read back into the dialog on open, written
+ *  by its Save button. One set of ports, folders and knowledge for every sandboxed tab of the
+ *  project, whichever agent it runs. Authentication is never part of it: each sandboxed agent
+ *  signs in with its own `/login` inside the sandbox, not through tet. */
+export interface SbxProjectConfig {
+  enabled: boolean;
+  knowledge: SbxKnowledgeConfig;
+  ports: SbxPort[];
+  folders: SbxFolder[];
 }
 
 /** The Prompts tab's picker. */

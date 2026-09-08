@@ -450,6 +450,15 @@ docs, and never by reasoning from one agent to another:
 - Ctrl+C: Claude Code, opencode and pi read `\x03` as an ordinary byte; to a Codex in cooked mode it
   is a process-level `CTRL_C_EVENT` that kills it, so it is never sent there (`plainCtrlCKills`
   draws the line).
+- Resize redraw: Codex reprints its whole scrollback on any real pty resize — even a same-width,
+  taller-by-two-rows one — because it never enters its own alternate screen, which would make a
+  resize cheap by not touching real scrollback at all. Its `alternate_screen = "always"` config
+  is meant to force exactly that, but the shipped binary never sends `EnterAlternateScreen`
+  regardless of it (confirmed by capturing the raw pty bytes of a real resume session against
+  the current config; matches a report on a different OS, openai/codex#24552). This is a bug in
+  the Codex binary, not in how tet spawns it — there is no flag, env var or config route around
+  it, and per-agent resize suppression only trades one visible symptom for another (a background
+  tab silently doing the same full redraw). Wait for an upstream fix rather than reintroducing one.
 
 So when adding anything that touches how a CLI is driven, the default is a field on
 `AgentDefinition` with a value per agent, not one shared constant with a comment guessing at the

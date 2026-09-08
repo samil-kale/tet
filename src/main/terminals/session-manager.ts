@@ -238,6 +238,8 @@ export class ProjectSessionManager {
   private disposed = false;
   /** Said once per project, not once per tab — see resolveSbxRun. */
   private sbxGovernedSaid = false;
+  /** Said once per project, not once per tab — see resolveSbxRun's own-session-id fallback. */
+  private sbxPreexistingSaid = false;
   /**
    * How many things in this project are still starting — the progress bar is shared across
    * the project's tabs, so it stays up as long as at least one of them hasn't settled.
@@ -668,6 +670,17 @@ export class ProjectSessionManager {
    * Only claude/codex — the two agents the enable-sbx dialog has real fields for — and only a
    * plain agent tab, never a saved command's: a saved command is not "this agent's process" in
    * the first place (see startSession), so wrapping it in a sandbox would run the wrong thing.
+   *
+   * A tab that already has a `sessionId` also stays on the host, sandbox or not: a sandboxed
+   * session's transcript lives only inside its container (sbx.ts's SbxFixedPaths — the agent's
+   * own config directory, where it would sit, is deliberately never mounted), invisible to the
+   * reconcile loop's host filesystem listing above, which is the only thing that ever assigns a
+   * tab's `sessionId` in the first place. So a `sessionId` that exists at all was necessarily
+   * read off the host, and `--resume`ing it inside a sandbox that has never seen it fails outright
+   * ("No conversation found with session ID: …", measured live, 2026-09-08) — reproducible for any
+   * session that predates this tab's sandbox, not only ones that predate SBX itself (a sandbox
+   * rebuild after an Allowed-folders change orphans every session that was already sandboxed too).
+   * Only a tab spawning for the very first time, with no `sessionId` yet, is sandboxed.
    */
   private async resolveSbxRun(tab: TabState): Promise<string[] | null> {
     if (tab.executable || (tab.agentId !== "claude" && tab.agentId !== "codex")) {
@@ -692,7 +705,16 @@ export class ProjectSessionManager {
     }
     const runtime = this.runtimeFor(tab.agentId);
     const { agent } = runtime;
-    const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
+    if (tab.sessionId) {
+      if (!this.sbxPreexistingSaid) {
+        this.sbxPreexistingSaid = true;
+        this.callbacks.onNotice(
+          "info",
+          `${agent.displayName} tabs from before SBX was enabled for ${this.project.name} keep running on this machine; only new tabs run in its sandbox.`
+        );
+      }
+      return null;
+    }
     const paths = this.pathsFor(runtime);
     const hookArgs = agent.prepareSandboxSpawn?.(this.project.path, paths) ?? [];
     const { args, missing } = await prepareSbxRun(
@@ -700,8 +722,8 @@ export class ProjectSessionManager {
       this.project.path,
       config,
       sandboxName(this.project.id, tab.agentId),
-      sandboxPaths(tab.agentId, paths),
-      [...hookArgs, ...resumeArgs, ...(tab.runArgs ?? [])]
+      sandboxPaths(paths),
+      [...hookArgs, ...(tab.runArgs ?? [])]
     );
     if (missing.length > 0) {
       this.callbacks.onNotice(
@@ -717,7 +739,7 @@ export class ProjectSessionManager {
    *  The one way out for these, since sbx.ts itself must stay agent-layer-agnostic and
    *  AgentPaths is the terminal layer's own. */
   sandboxPaths(agentId: SbxAgentId): SbxFixedPaths {
-    return sandboxPaths(agentId, this.pathsFor(this.runtimeFor(agentId)));
+    return sandboxPaths(this.pathsFor(this.runtimeFor(agentId)));
   }
 
   private startSession(tab: TabState, sbxArgs: string[] | null): TerminalSession {
