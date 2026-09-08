@@ -13,7 +13,15 @@ export const CONTROL_ENV = {
   port: "TET_CONTROL_PORT",
   token: "TET_CONTROL_TOKEN",
   projectId: "TET_PROJECT_ID",
-  tabId: "TET_TAB_ID"
+  tabId: "TET_TAB_ID",
+  /**
+   * Unset for every ordinary pty, which is what makes tet-ctl.ts fall back to "127.0.0.1" —
+   * a plain host process reaches the control server over loopback. Only an sbx-wrapped session
+   * carries this, set to "host.docker.internal": the sandbox is its own kernel with its own
+   * loopback, and that is the address Docker Sandboxes documents for reaching the host. See
+   * sbx.ts's ensureControlNetworkAllowed for the policy-allow this also requires.
+   */
+  host: "TET_CONTROL_HOST"
 } as const;
 
 export type ControlErrorCode = "unauthorized" | "unknown_verb" | "bad_args" | "not_found" | "internal";
@@ -117,6 +125,12 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "restart-app --confirm",
     summary: "Restart TET. Ends every terminal in every project, this one included — only when the user asked for it.",
     positionals: []
+  },
+  {
+    verb: "notify",
+    usage: "notify <title> <body>",
+    summary: "Show a desktop notification from TET's own process — used by Claude/Codex hooks so a sandboxed one shows a real toast too.",
+    positionals: ["title", "body"]
   }
 ];
 

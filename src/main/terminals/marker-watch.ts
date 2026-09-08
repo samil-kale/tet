@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { powershellSingleQuote, shellSingleQuote, WIN_BOM, writePosixScript } from "./os-notify";
+import type { HookTarget } from "./os-notify";
 
 /**
  * Where a hook drops its markers, and where tet watches for them, shared by every agent
@@ -65,35 +66,41 @@ fi`;
  * hold the prompt back, and none of these has anything to report by exit code. `id` names the
  * script file, since two hooks of one agent must not share one.
  */
-export function buildMarkCommand(storageDir: string, id: string, kind: Marker, notifyCommand: string | undefined): string {
+export function buildMarkCommand(
+  storageDir: string,
+  id: string,
+  kind: Marker,
+  notifyCommand: string | undefined,
+  target: HookTarget
+): string {
   const marks = markerDir(storageDir, kind);
   fs.mkdirSync(marks, { recursive: true });
-  if (process.platform === "win32") {
+  if (!target.posix) {
     const scriptFile = path.join(storageDir, `${id}.ps1`);
     fs.writeFileSync(
       scriptFile,
       WIN_BOM +
         `try {
   $json = [Console]::In.ReadToEnd() | ConvertFrom-Json
-${markPowershell(marks)}
+${markPowershell(target.embed(marks))}
 } catch {}
 ${notifyCommand ?? ""}
 exit 0
 `
     );
-    return `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`;
+    return `powershell -NoProfile -ExecutionPolicy Bypass -File "${target.embed(scriptFile)}"`;
   }
   const scriptFile = path.join(storageDir, `${id}.sh`);
   writePosixScript(
     scriptFile,
     `#!/bin/sh
 json=$(cat)
-${markPosix(marks)}
+${markPosix(target.embed(marks))}
 ${notifyCommand ?? ""}
 exit 0
 `
   );
-  return `sh "${scriptFile}"`;
+  return `sh "${target.embed(scriptFile)}"`;
 }
 
 /**
@@ -102,8 +109,8 @@ exit 0
  * full stop. Shared by every marker agent: what differs between them is the Stop end (Claude
  * Code's `background_tasks` guard), never this one.
  */
-export function buildBusyCommand(storageDir: string): string {
-  return buildMarkCommand(storageDir, "busy", "busy", undefined);
+export function buildBusyCommand(storageDir: string, target: HookTarget): string {
+  return buildMarkCommand(storageDir, "busy", "busy", undefined, target);
 }
 
 /**
@@ -117,8 +124,13 @@ export function buildBusyCommand(storageDir: string): string {
  * `id` names the script file: the two callers want different toast wording, and a shared file
  * would have the second overwrite the first.
  */
-export function buildWaitingCommand(storageDir: string, id: string, notifyCommand: string | undefined): string {
-  return buildMarkCommand(storageDir, id, "waiting", notifyCommand);
+export function buildWaitingCommand(
+  storageDir: string,
+  id: string,
+  notifyCommand: string | undefined,
+  target: HookTarget
+): string {
+  return buildMarkCommand(storageDir, id, "waiting", notifyCommand, target);
 }
 
 /**
@@ -175,6 +187,11 @@ export function watchMarkers(
   queueDrain(false);
   let watcher: fs.FSWatcher | undefined;
   try {
+    // The hooks that would create `dir` (buildMarkCommand) only run for a tab that actually
+    // starts — a sandboxed one may never spawn, and watchTurnMarkers still watches its own
+    // marker dir unconditionally from every prepareSpawn (see claude/index.ts and
+    // codex/index.ts). Idempotent either way: a host tab's setupXHooks already created this.
+    fs.mkdirSync(dir, { recursive: true });
     watcher = fs.watch(dir, () => queueDrain(true));
     // Unhandled, an `error` (the directory removed underneath it, on win32) takes the main
     // process down; the sweep below carries on without the watcher.

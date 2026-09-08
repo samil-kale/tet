@@ -1,4 +1,4 @@
-import * as net from "node:net";
+import * as http from "node:http";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
 import type { ControlRequest, ControlResponse } from "../shared/control";
 
@@ -68,28 +68,48 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown> } 
   return { verb, args };
 }
 
-function send(port: number, request: ControlRequest): Promise<ControlResponse> {
+/**
+ * HTTP rather than a raw socket — the one transport that reaches the server both from a plain
+ * host terminal and from inside an sbx sandbox. sbx's own docs (docker/docs' sandboxes/workflows/
+ * development.md, read live 2026-09-08): a sandbox reaches `host.docker.internal` through sbx's
+ * own proxy, and that proxy is HTTP-only — a raw TCP echo server behind it accepted the connect
+ * but never saw a byte of what was written, verified live against a real sandbox, while a plain
+ * `curl http://host.docker.internal:<port>` reached the same host process immediately. One
+ * request per connection either way (`Connection: close`), matching the server's own model.
+ */
+function send(host: string, port: number, request: ControlRequest): Promise<ControlResponse> {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(port, "127.0.0.1");
-    socket.setEncoding("utf8");
-    let buffer = "";
-    socket.once("connect", () => socket.write(JSON.stringify(request) + "\n"));
-    socket.on("data", (chunk: string) => {
-      buffer += chunk;
-    });
-    socket.once("error", reject);
-    socket.once("close", () => {
-      const line = buffer.split("\n")[0];
-      if (!line) {
-        reject(new Error("TET closed the connection without answering"));
-        return;
+    const body = JSON.stringify(request);
+    const req = http.request(
+      {
+        host,
+        port,
+        method: "POST",
+        path: "/",
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), Connection: "close" }
+      },
+      (res) => {
+        res.setEncoding("utf8");
+        let buffer = "";
+        res.on("data", (chunk: string) => {
+          buffer += chunk;
+        });
+        res.on("end", () => {
+          const body = buffer.trim();
+          if (!body) {
+            reject(new Error("TET closed the connection without answering"));
+            return;
+          }
+          try {
+            resolve(JSON.parse(body) as ControlResponse);
+          } catch {
+            reject(new Error(`not an answer: ${body}`));
+          }
+        });
       }
-      try {
-        resolve(JSON.parse(line) as ControlResponse);
-      } catch {
-        reject(new Error(`not an answer: ${line}`));
-      }
-    });
+    );
+    req.once("error", reject);
+    req.end(body);
   });
 }
 
@@ -102,11 +122,11 @@ const CONNECT_RETRY_MS = 5000;
 const CONNECT_RETRY_GAP_MS = 250;
 
 /** `send`, retried while nothing listens yet; any other failure is answered at once. */
-async function sendWhenUp(port: number, request: ControlRequest): Promise<ControlResponse> {
+async function sendWhenUp(host: string, port: number, request: ControlRequest): Promise<ControlResponse> {
   const deadline = Date.now() + CONNECT_RETRY_MS;
   for (;;) {
     try {
-      return await send(port, request);
+      return await send(host, port, request);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "ECONNREFUSED" || Date.now() >= deadline) {
@@ -136,7 +156,7 @@ async function main(): Promise<void> {
   };
   let response: ControlResponse;
   try {
-    response = await sendWhenUp(Number(portVar), request);
+    response = await sendWhenUp(process.env[CONTROL_ENV.host] || "127.0.0.1", Number(portVar), request);
   } catch (error) {
     fail(`could not reach TET: ${error instanceof Error ? error.message : String(error)}`, EXIT_CODES.internal);
   }

@@ -22,7 +22,14 @@ const api: TETApi = {
     reportLongTask: (ms, context) => ipcRenderer.send("app:long-task", ms, context)
   },
   sbx: {
-    checkInstalled: () => ipcRenderer.invoke("sbx:check-installed")
+    checkInstalled: () => ipcRenderer.invoke("sbx:check-installed"),
+    checkLoggedIn: () => ipcRenderer.invoke("sbx:check-logged-in"),
+    login: () => ipcRenderer.invoke("sbx:login"),
+    checkPolicyInitialized: () => ipcRenderer.invoke("sbx:check-policy-initialized"),
+    initPolicy: () => ipcRenderer.invoke("sbx:init-policy"),
+    cancelSetup: () => ipcRenderer.send("sbx:cancel-setup"),
+    getConfig: (projectId) => ipcRenderer.invoke("sbx:get-config", projectId),
+    saveConfig: (projectId, request) => ipcRenderer.invoke("sbx:save-config", projectId, request)
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

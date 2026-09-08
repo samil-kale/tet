@@ -22,6 +22,8 @@ import type {
   ProviderId,
   RepositoryState,
   Requirements,
+  SbxProjectConfig,
+  SbxSaveRequest,
   StashCommand,
   TerminalDescriptor,
   TerminalOutput,
@@ -50,8 +52,23 @@ export interface TETApi {
   };
   /** Docker Sandboxes, opt-in per project — see the project row's "Enable sbx" entry. */
   sbx: {
-    /** Cached like an agent's own `--version` check; never part of `Requirements.met`. */
+    /** Never cached, PATH re-read first — the dialog's "Check again"; never part of `Requirements.met`. */
     checkInstalled(): Promise<boolean>;
+    /** Never cached — signing in or out happens outside tet at any time. */
+    checkLoggedIn(): Promise<boolean>;
+    /** Opens the OAuth page in the user's browser and waits for it; no terminal of its own. */
+    login(): Promise<boolean>;
+    /** Whether the machine-wide network policy has ever been set — never cached. */
+    checkPolicyInitialized(): Promise<boolean>;
+    /** Sets it to "balanced", Docker's own recommended default. */
+    initPolicy(): Promise<boolean>;
+    /** Kills whichever of `login`/`initPolicy` is currently running — the Cancel button. */
+    cancelSetup(): void;
+    /** What the dialog's fields reopen with — read fresh from tet.json, never a token. */
+    getConfig(projectId: string): Promise<SbxProjectConfig>;
+    /** The dialog's Save button — ports/folders to tet.json, any entered token to `sbx secret set`;
+     *  a sandbox whose folders changed is removed, said as a notice from the main process. */
+    saveConfig(projectId: string, request: SbxSaveRequest): Promise<GitActionResult>;
   };
   /** What the settings dialog reads and writes; there is one set of them for the whole app. */
   settings: {

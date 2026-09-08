@@ -1,7 +1,18 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { isSameCommand } from "../../shared/command";
-import type { ExplorerRoot, ExplorerSettings, ExplorerSortOrder, ProjectCommand } from "../../shared/types";
+import type {
+  ExplorerRoot,
+  ExplorerSettings,
+  ExplorerSortOrder,
+  ProjectCommand,
+  SbxAccess,
+  SbxAgentConfig,
+  SbxAgentId,
+  SbxFolder,
+  SbxPort,
+  SbxProjectConfig
+} from "../../shared/types";
 import { askAgent } from "../agents/ask";
 
 /**
@@ -28,6 +39,9 @@ interface ProjectFile {
   commands?: StoredCommand[];
   folders?: unknown;
   settings?: unknown;
+  /** The enable-sbx dialog's Save button — see readSbxConfig/writeSbxConfig. Never a token: that
+   *  goes straight to `sbx secret set` and is never written here. */
+  sbx?: unknown;
 }
 
 /** The four view settings' keys, spelled the way VS Code itself does inside `settings`. */
@@ -308,6 +322,81 @@ export async function setCompactFolders(root: string, value: boolean): Promise<v
 
 export async function setSortOrder(root: string, value: ExplorerSortOrder): Promise<void> {
   await patchSetting(root, KEY_SORT_ORDER, value);
+}
+
+const SBX_ACCESS: readonly SbxAccess[] = ["Read", "Read+Write"];
+
+function toSbxPorts(value: unknown): SbxPort[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const ports: SbxPort[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const { host, container } = entry as { host?: unknown; container?: unknown };
+    if (typeof host === "string" && typeof container === "string" && host.trim() && container.trim()) {
+      ports.push({ host, container });
+    }
+  }
+  return ports;
+}
+
+function toSbxFolders(value: unknown): SbxFolder[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const folders: SbxFolder[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const { path: folderPath, access } = entry as { path?: unknown; access?: unknown };
+    if (typeof folderPath === "string" && folderPath.trim()) {
+      folders.push({ path: folderPath, access: SBX_ACCESS.find((candidate) => candidate === access) ?? "Read+Write" });
+    }
+  }
+  return folders;
+}
+
+function toSbxAgentConfig(value: unknown): SbxAgentConfig | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  const { ports, folders } = value as { ports?: unknown; folders?: unknown };
+  return { ports: toSbxPorts(ports), folders: toSbxFolders(folders) };
+}
+
+const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex"];
+
+function toSbxAgents(value: unknown): Partial<Record<SbxAgentId, SbxAgentConfig>> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+  const agents: Partial<Record<SbxAgentId, SbxAgentConfig>> = {};
+  for (const id of SBX_AGENT_IDS) {
+    const config = toSbxAgentConfig((value as Record<string, unknown>)[id]);
+    if (config) {
+      agents[id] = config;
+    }
+  }
+  return agents;
+}
+
+/**
+ * The enable-sbx dialog's persisted state — read the same defensively-anything-goes way as the
+ * rest of tet.json. Never holds a token: the dialog's Save button sends one over IPC, which goes
+ * straight to `sbx secret set` (see sbx.ts's saveSbxConfig) and is never written here.
+ */
+export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
+  const content = (await read(root)) ?? {};
+  const sbx = typeof content.sbx === "object" && content.sbx !== null ? (content.sbx as Record<string, unknown>) : {};
+  return { enabled: sbx.enabled === true, agents: toSbxAgents(sbx.agents) };
+}
+
+export async function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<void> {
+  await patch(root, { sbx: config });
 }
 
 

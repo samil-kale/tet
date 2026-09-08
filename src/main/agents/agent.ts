@@ -202,6 +202,23 @@ export interface AgentDefinition {
    */
   prepareSpawn?: (executable: string, cwd: string, paths: AgentPaths) => Promise<SpawnPreparation>;
   /**
+   * The sbx-sandbox equivalent of prepareSpawn's hook wiring — same turn-tracking (see "Both
+   * ends of a turn" in CLAUDE.md), generated as if for a POSIX host regardless of what
+   * `process.platform` actually is (a sandbox is Linux whatever host it runs on) and with every
+   * embedded path translated into the sandbox's own view of it (`sandboxTarget()` in
+   * os-notify.ts). Desktop notifications work the same as on the host: the hook calls
+   * `tet-ctl notify`, which reaches this process over the control channel — see
+   * os-notify.ts's buildHookNotifyCommand — so the toast itself is always shown by the process
+   * that actually has a desktop session, never by the sandbox.
+   *
+   * Returns just the extra CLI arguments appended after `sbx run`'s own "--" — unlike
+   * SpawnPreparation there is no executable/env to override, since the sandbox's own bundled
+   * agent binary is what runs. `cwd` is the project's own path, for a notify message's
+   * repository name. Synchronous: unlike prepareSpawn, nothing here waits on external setup.
+   * Omitted by an agent with no sbx kit at all (opencode, pi) or that needs no hooks (the shell).
+   */
+  prepareSandboxSpawn?: (cwd: string, paths: AgentPaths) => string[];
+  /**
    * Completes a url the agent's TUI wrapped across rows, from the agent's own record of what
    * it printed — in the buffer such a row cannot be told apart from one that merely ends in a
    * url (opencode breaks a long token at the last "." that fits, so not even the right edge

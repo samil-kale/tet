@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { app, clipboard, dialog, ipcMain, shell } from "electron";
-import { AGENTS, findAskableAgent, listAgents } from "./agents";
+import { AGENTS, findAskableAgent, getAgent, listAgents } from "./agents";
 import { effectivePrompt } from "../shared/prompts";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types";
 import type {
@@ -27,13 +27,30 @@ import type {
   ProjectCommand,
   RepositoryState,
   Requirements,
+  SbxProjectConfig,
+  SbxSaveRequest,
   StashCommand,
   TerminalDescriptor
 } from "../shared/types";
-import { checkSbxInstalled } from "./sbx";
+import {
+  cancelSbxSetup,
+  checkSbxInstalled,
+  checkSbxLoggedIn,
+  checkSbxPolicyInitialized,
+  initSbxPolicy,
+  runSbxLogin,
+  saveSbxConfig
+} from "./sbx";
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
-import { DEFAULT_EXPLORER_VIEW, mergeCommands, readCommands, suggestCommands, writeCommands } from "./git/commands";
+import {
+  DEFAULT_EXPLORER_VIEW,
+  mergeCommands,
+  readCommands,
+  readSbxConfig,
+  suggestCommands,
+  writeCommands
+} from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
@@ -150,6 +167,39 @@ export function registerIpc({
   );
 
   ipcMain.handle("sbx:check-installed", () => checkSbxInstalled());
+  ipcMain.handle("sbx:check-logged-in", () => checkSbxLoggedIn());
+  ipcMain.handle("sbx:login", () => runSbxLogin());
+  ipcMain.handle("sbx:check-policy-initialized", () => checkSbxPolicyInitialized());
+  ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
+  ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
+
+  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached. */
+  ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
+    const project = store.get(projectId);
+    return project ? readSbxConfig(project.path) : { enabled: false, agents: {} };
+  });
+  /** The dialog's Save button — writes tet.json and pushes any entered token to `sbx secret set`;
+   *  see sbx.ts's saveSbxConfig for why a token never reaches tet.json itself, and for the
+   *  sandbox removal each notice below is about. */
+  ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxSaveRequest): Promise<GitActionResult> => {
+    const project = store.get(projectId);
+    const manager = sessions.get(projectId);
+    if (!project || !manager) {
+      return { ok: false, error: "Project not found" };
+    }
+    try {
+      const removed = await saveSbxConfig(project.path, project.id, request, (agentId) => manager.agentPaths(agentId));
+      for (const agentId of removed) {
+        send("app:notice", {
+          severity: "info",
+          message: `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt with the new folders when its next tab starts.`
+        });
+      }
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
 
   ipcMain.on("app:long-task", (_event, ms: number, context: string) => {
     if (typeof ms === "number" && Number.isFinite(ms)) {

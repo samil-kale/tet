@@ -4,6 +4,45 @@ import * as path from "node:path";
 /** PowerShell 5.1 decodes BOM-less files as ANSI, so generated .ps1 files need this. */
 export const WIN_BOM = "﻿";
 
+/**
+ * A host path the way sbx mounts it inside a sandbox — verified live, 2026-09-08: a Windows
+ * path is exposed as a Linux path with the drive letter lower-cased as its own top segment
+ * (`C:\Users\x` → `/c/Users/x`); macOS and Linux hosts already use the same path inside and out
+ * (`sbx create shell --help`: "mounted inside the sandbox at the same path as on the host").
+ */
+export function toContainerPath(hostPath: string): string {
+  if (process.platform !== "win32") {
+    return hostPath;
+  }
+  const match = /^([A-Za-z]):[\\/](.*)$/.exec(hostPath);
+  if (!match) {
+    return hostPath;
+  }
+  return `/${match[1].toLowerCase()}/${match[2].replace(/\\/g, "/")}`;
+}
+
+/**
+ * What a hook-generating function needs to know about where its command will actually run —
+ * shared by marker-watch.ts, os-notify.ts's own buildReadFileCommand, and each agent's
+ * hooks.ts, so "is this for a sandbox" is one concept passed around rather than a
+ * `process.platform` check repeated (and gotten wrong) in each.
+ */
+export interface HookTarget {
+  /** False only for a Windows host — a sandbox is always Linux, whatever host it runs on, so a
+   *  hook generated for one must take the POSIX branch even when `process.platform` is win32. */
+  posix: boolean;
+  /** A host path exactly as this target's own shell will see it — identity outside a sandbox. */
+  embed(hostPath: string): string;
+}
+
+export function hostTarget(): HookTarget {
+  return { posix: process.platform !== "win32", embed: (hostPath) => hostPath };
+}
+
+export function sandboxTarget(): HookTarget {
+  return { posix: true, embed: toContainerPath };
+}
+
 /** What starts a generated script without a shell in between — see scriptInvocation. */
 export interface ScriptInvocation {
   command: string;
@@ -16,12 +55,31 @@ export interface ScriptInvocation {
  * action: making a toast act on a click requires registering an app identity, which would mean
  * writing to the registry. `id` must be unique per call site — it names the generated script
  * file, so two events do not overwrite each other's.
+ *
+ * For opencode's and pi's own notify paths only, which run directly on the host process itself
+ * with no sandbox to consider — see buildHookNotifyCommand for the Claude/Codex hooks, which do.
  */
 export function buildNotifyCommand(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = writeNotifyScript(storageDir, id, title, body);
   // The same invocation as a command line: only the path, the last argument, can hold a space.
   const { command, args } = scriptInvocation(scriptFile);
   return [command, ...args.slice(0, -1), `"${scriptFile}"`].join(" ");
+}
+
+/**
+ * The one way a Claude/Codex hook shows a toast, host or sandboxed alike: `tet-ctl notify`,
+ * never a script invoked directly. Only the process actually holding the desktop session can
+ * show a real notification, and for a sandboxed hook that is never the sandbox itself — but
+ * `tet-ctl` already reaches the host over the control channel (see control-server.ts's own
+ * `notify` verb, which does what `buildNotifyCommand` above does directly, on the host's behalf).
+ * Routing every hook through the same relay, host tabs included, means there is exactly one
+ * mechanism to reason about instead of a host/sandbox split repeated at every call site — the
+ * cost is that a Stop/Waiting toast now depends on the control server being reachable, same as
+ * any other tet-ctl call already does.
+ */
+export function buildHookNotifyCommand(target: HookTarget, title: string, body: string): string {
+  const quote = target.posix ? shellSingleQuote : powershellSingleQuote;
+  return `tet-ctl notify ${quote(title)} ${quote(body)}`;
 }
 
 /**
@@ -137,9 +195,14 @@ export function writePosixScript(file: string, contents: string): void {
  * Bash were all observed for Claude Code's own hooks — so builtins like `type` are unreliable. An
  * explicit `powershell -File` invocation is parsed identically by all three.
  */
-export function buildReadFileCommand(storageDir: string, scriptName: string, targetFile: string): string {
-  if (process.platform !== "win32") {
-    return `cat ${shellSingleQuote(targetFile)}`;
+export function buildReadFileCommand(
+  storageDir: string,
+  scriptName: string,
+  targetFile: string,
+  target: HookTarget
+): string {
+  if (target.posix) {
+    return `cat ${shellSingleQuote(target.embed(targetFile))}`;
   }
   const scriptFile = path.join(storageDir, `${scriptName}.ps1`);
   // Quoted the literal way in both shells: every path we generate has the user's own name in
@@ -147,9 +210,9 @@ export function buildReadFileCommand(storageDir: string, scriptName: string, tar
   fs.writeFileSync(
     scriptFile,
     WIN_BOM +
-      `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\nGet-Content -Raw ${powershellSingleQuote(targetFile)}\n`
+      `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\nGet-Content -Raw ${powershellSingleQuote(target.embed(targetFile))}\n`
   );
-  return `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`;
+  return `powershell -NoProfile -ExecutionPolicy Bypass -File "${target.embed(scriptFile)}"`;
 }
 
 function escapeXml(value: string): string {

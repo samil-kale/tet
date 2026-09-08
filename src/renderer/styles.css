@@ -1653,6 +1653,186 @@ textarea:focus {
   font-weight: 600;
 }
 
+/* Enable-sbx's own title bar — same shape as .diff-dialog-bar, since this dialog is a custom
+   one (not Dialog.tsx's question Frame) and shows its progress the same way. Unlike
+   .diff-dialog-bar's own unpadded container, this one sits inside .dialog's 16px padding — the
+   negative margin cancels that on three sides so the bar is flush with the card like a real
+   title bar, and the top corners get .dialog's own radius back since they no longer come from
+   the padding keeping the bar inset from them. */
+.enable-sbx-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 35px;
+  margin: -16px -16px 0;
+  padding: 0 6px 0 12px;
+  background: var(--vscode-panel-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  border-radius: 5px 5px 0 0;
+}
+
+.enable-sbx-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* A section header for a multi-row field (Port forwarding, Allowed folders) — same color as
+   .dialog-field's own label span, for a field that isn't a single label/input pair. */
+.dialog-field-label {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Every field label bold in this dialog only — scoped rather than changing .dialog-field's own
+   span everywhere, which every other dialog's fields also use. The direct-child selector is what
+   keeps this off .sbx-arrow's "→", nested deeper inside the same .dialog-field. */
+.enable-sbx-dialog .dialog-field > span {
+  font-weight: 600;
+}
+
+/* Its own scrollbox rather than growing the dialog: the token field, section labels and "+ Add"
+   buttons stay put no matter how many ports or folders are added. */
+.sbx-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 5px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.sbx-port-row,
+.sbx-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--vscode-panel-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  padding: 4px 4px 4px 8px;
+}
+
+/* The folder row's remove button sits flush right on its own, pushed there by the path field's
+   own flex: 1. The two fixed-width port fields leave no such stretch to push against, so this
+   does the same job explicitly. */
+.sbx-port-row .icon-button {
+  margin-left: auto;
+}
+
+/* Same explicit height for both: the folder path's monospace font otherwise renders a shorter
+   line box than the port fields' default UI font, leaving the two rows visibly uneven. */
+.sbx-port-input,
+.sbx-folder-path {
+  height: 26px;
+}
+
+.sbx-port-input {
+  width: 70px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sbx-arrow {
+  color: var(--vscode-descriptionForeground);
+}
+
+.sbx-folder-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* The Read/Write dropdown next to it is a button (.dropdown-trigger, padding: 3px 6px), shorter
+   by default than an input's own padding — pinned to the same 26px so the row reads level. */
+.sbx-folder-row .dropdown-trigger {
+  height: 26px;
+}
+
+/* The builtin folder row's stand-in for the Dropdown above — plain text, since that row's access
+   is always Read+Write regardless of what it says (see sbx.ts's buildSbxRunArgs). */
+.sbx-folder-access-fixed {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+/* The master enable checkbox at the top of the dialog body, set off from the tabs below it by
+   space alone rather than a rule. */
+.enable-sbx-dialog .dialog-checkbox {
+  padding-bottom: 16px;
+}
+
+.enable-sbx-dialog .dialog-checkbox .dialog-detail {
+  margin-top: 3px;
+}
+
+/* Unlike SettingsDialog, .dialog-tabs here isn't the dialog's first child — the master checkbox
+   (in .dialog-body, above it) comes first — so only its top margin is reset (the dialog's own
+   flex gap spaces it from the checkbox instead); left and right stay flush with .dialog's own
+   edges, same as everywhere else .dialog-tabs is used, so the strip still runs edge to edge. No
+   top corners to round here, unlike the first-child case. A sibling of .dialog-body and of
+   .enable-sbx-fields-scroll below, not nested in either: nesting it in the one that scrolls
+   would both carry the tabs off along with that scroll and, since a negative margin here
+   deliberately overflows its container's padding box, hand that container a horizontal
+   scrollbar too (measured live). Sitting outside any scroll area, it simply always stays put. */
+.enable-sbx-dialog .dialog-tabs {
+  margin: 0 -16px;
+  border-radius: 0;
+}
+
+/* No fixed height: the dialog grows with its content. Capped to the window so it cannot run off
+   top or bottom. */
+.enable-sbx-dialog.wide {
+  min-height: 530px;
+  max-height: calc(100vh - 32px);
+}
+
+/* The one part that scrolls: everything below the tabs (see above for why the tabs themselves
+   are a sibling, not the parent, of this). flex/min-height is what lets it shrink below its
+   content's natural height once .dialog hits its max-height instead of pushing the dialog
+   taller. */
+.enable-sbx-fields-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Room above the first section's own border so it doesn't sit flush against the tabs. */
+  padding-top: 4px;
+}
+
+/* "Port forwarding" and "Allowed folders" each start with a rule of their own, on top of the
+   gap above — a token field or a "+ Add" button ending a block read as glued to the label right
+   below them without it. */
+.sbx-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.sbx-add-row {
+  align-self: flex-start;
+  margin-top: 4px;
+  background: none;
+  border: none;
+  color: var(--vscode-textLink-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sbx-add-row:hover {
+  text-decoration: underline;
+}
+
 .dialog-body {
   display: flex;
   flex-direction: column;

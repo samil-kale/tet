@@ -9,8 +9,10 @@ import {
   mergeCommands,
   readCommands,
   readExplorerView,
+  readSbxConfig,
   removeFolder,
-  writeCommands
+  writeCommands,
+  writeSbxConfig
 } from "../src/main/git/commands";
 
 /** tet.json: the user's file, read defensively and written back with nothing of theirs lost. */
@@ -170,6 +172,62 @@ describe("the tree's own edits", () => {
     await addExclude(root, "build/out");
     assert.deepEqual(stored(), {
       settings: { "files.exclude": { dist: true, "build/out": true }, "explorer.sortOrder": "type" }
+    });
+  });
+});
+
+describe("readSbxConfig", () => {
+  it("is disabled with no agents for a project with no tet.json at all", async () => {
+    assert.deepEqual(await readSbxConfig(root), { enabled: false, agents: {} });
+  });
+
+  it("round-trips what writeSbxConfig wrote, keeping a saved command alongside it", async () => {
+    put(JSON.stringify({ commands: ["keep"] }));
+    await writeSbxConfig(root, {
+      enabled: true,
+      agents: {
+        claude: {
+          ports: [{ host: "3000", container: "3000" }],
+          folders: [{ path: "~/.claude", access: "Read+Write" }]
+        }
+      }
+    });
+    assert.deepEqual(await readSbxConfig(root), {
+      enabled: true,
+      agents: {
+        claude: {
+          ports: [{ host: "3000", container: "3000" }],
+          folders: [{ path: "~/.claude", access: "Read+Write" }]
+        }
+      }
+    });
+    assert.deepEqual((stored() as { commands: unknown }).commands, ["keep"], "the saved command survives");
+  });
+
+  it("drops a malformed row rather than throwing, and never carries a token", async () => {
+    put(
+      JSON.stringify({
+        sbx: {
+          enabled: true,
+          agents: {
+            claude: {
+              ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
+              folders: [{ path: "" }, { path: "~/.claude", access: "not-a-real-access" }],
+              token: "sk-ant-should-not-be-read"
+            },
+            pi: { ports: [], folders: [] }
+          }
+        }
+      })
+    );
+    assert.deepEqual(await readSbxConfig(root), {
+      enabled: true,
+      agents: {
+        claude: {
+          ports: [{ host: "3000", container: "3000" }],
+          folders: [{ path: "~/.claude", access: "Read+Write" }]
+        }
+      }
     });
   });
 });

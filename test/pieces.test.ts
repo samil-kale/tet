@@ -8,8 +8,9 @@ import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { renderPiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
-import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
+import { powershellSingleQuote, shellSingleQuote, toContainerPath } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
+import { computeWorkspaces, folderArg, sandboxName } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
@@ -69,6 +70,61 @@ describe("resolveCommand", () => {
 
   it("changes nothing elsewhere", { skip: process.platform === "win32" && "not win32" }, () => {
     assert.deepEqual(resolveCommand("npm", ["-v"]), { command: "npm", args: ["-v"] });
+  });
+});
+
+describe("sbx sandbox naming and mounts", () => {
+  it("names a sandbox deterministically, within sbx create --name's own character set", () => {
+    const name = sandboxName("a project id with spaces/slashes", "claude");
+    assert.match(name, /^[a-z0-9][a-z0-9.-]+$/);
+    assert.equal(name, sandboxName("a project id with spaces/slashes", "claude"), "stable across calls");
+    assert.notEqual(name, sandboxName("a project id with spaces/slashes", "codex"), "one sandbox per agent too");
+  });
+
+  it("mounts a Windows path the way sbx does inside the sandbox, verified live 2026-09-08", {
+    skip: process.platform !== "win32" && "win32 only"
+  }, () => {
+    assert.equal(toContainerPath("C:\\Users\\saka\\Documents\\Workspace\\Private\\tet"), "/c/Users/saka/Documents/Workspace/Private/tet");
+  });
+
+  it("leaves a macOS/Linux path untouched — already the same path inside and out", {
+    skip: process.platform === "win32" && "not win32"
+  }, () => {
+    assert.equal(toContainerPath("/Users/saka/project"), "/Users/saka/project");
+  });
+
+  it("appends sbx's own :ro suffix for Read, nothing for Read+Write", () => {
+    const repo = path.join(os.tmpdir(), "repo");
+    assert.equal(folderArg({ path: repo, access: "Read" }), `${repo}:ro`);
+    assert.equal(folderArg({ path: repo, access: "Read+Write" }), repo);
+  });
+
+  it("normalizes a typed path the way sbx lists it back, so the set compares equal on the next spawn", () => {
+    const data = path.join(os.tmpdir(), "data");
+    assert.equal(folderArg({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "Read" }), `${data}:ro`);
+    assert.equal(folderArg({ path: "~/data/", access: "Read+Write" }), path.join(os.homedir(), "data"));
+  });
+
+  it("mounts the project, the config dir, tet's own dirs, and the user's folders — each once", () => {
+    const paths = {
+      agentDir: path.join(os.tmpdir(), "agents", "claude", "p"),
+      contextFile: path.join(os.tmpdir(), "ctx", "context.md")
+    };
+    const repo = path.join(os.tmpdir(), "repo");
+    const data = path.join(os.tmpdir(), "data");
+    const folders = [
+      { path: "~/.claude/", access: "Read" as const },
+      { path: data, access: "Read" as const },
+      { path: data, access: "Read" as const },
+      { path: `${repo}${path.sep}`, access: "Read+Write" as const }
+    ];
+    assert.deepEqual(computeWorkspaces("claude", repo, { ports: [], folders }, paths), [
+      repo,
+      path.join(os.homedir(), ".claude"),
+      `${data}:ro`,
+      paths.agentDir,
+      `${path.join(os.tmpdir(), "ctx")}:ro`
+    ]);
   });
 });
 
@@ -146,6 +202,30 @@ describe("the marker watch", () => {
     assert.ok(seen[0][1] >= before, "dated by its mtime");
     assert.ok(!fs.existsSync(path.join(dir, "abc-123")), "taken away once reported");
     stop();
+  });
+
+  it("creates its own directory rather than failing to watch it, for a kind no hook has run yet", async () => {
+    // The sandbox marker dir specifically: watchTurnMarkers watches it from every prepareSpawn
+    // regardless of whether sbx is ever used for this project, so setupClaudeHooks/
+    // setupCodexHooks (the only other thing that would create it) may never have run.
+    const storageDir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-markers-")), "sandbox");
+    assert.ok(!fs.existsSync(storageDir));
+    const seen: [string, number][] = [];
+    const stop = watchMarkers(storageDir, "busy", (id, at) => void seen.push([id, at]));
+    try {
+      assert.ok(fs.existsSync(path.join(storageDir, "busy")), "created synchronously, before returning");
+      // The startup drain (queueDrain(false), draining whatever a previous run left behind
+      // unreported) is still pending on the microtask queue at this point — writing the marker
+      // here, with nothing awaited yet, would race it and be silently swept as "stale" rather
+      // than reported, the same reason the test above writes its own second marker only after
+      // an earlier `await`.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      fs.writeFileSync(path.join(storageDir, "busy", "abc-123"), "");
+      await eventually("the new marker reported", () => seen.length === 1, 4000);
+      assert.equal(seen[0][0], "abc-123");
+    } finally {
+      stop();
+    }
   });
 });
 

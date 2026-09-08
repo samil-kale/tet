@@ -14,6 +14,8 @@ import type {
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
+import { readSbxConfig } from "../git/commands";
+import { buildSbxRunArgs, sandboxName } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -50,6 +52,13 @@ const INDICATOR_LINGER_MS = 700;
  * tokens only — `2>&1` and `>>` are matched, an argument that merely holds a `>` is not.
  */
 const SHELL_OPERATOR = /^(?:&&|\|\||[|;&]|\d*>>?|\d*>&\d*|<)$/;
+
+/** What `resolveSbxRun` hands `startSession`: the whole `sbx run` command in place of the
+ *  agent's own executable and args. */
+interface SbxRunInfo {
+  executable: string;
+  args: string[];
+}
 
 interface TabState extends TerminalDescriptor {
   /** When this tab's pty was spawned — used to claim newly persisted sessions. */
@@ -631,8 +640,8 @@ export class ProjectSessionManager {
     // first frame), and releasing first would drop both counts to zero for a moment — the bar
     // flickering off and on between two pushes for what is one wait to the user.
     this.acquireIndicator(tabId);
-    void this.ensurePrepared(this.runtimeFor(tab.agentId))
-      .then(() => {
+    void Promise.all([this.ensurePrepared(this.runtimeFor(tab.agentId)), this.resolveSbxRun(tab)])
+      .then(([, sbxRun]) => {
         const dims = this.starting.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
           // Closed while the setup ran: what it brought back has no tab to serve, and the
@@ -640,7 +649,7 @@ export class ProjectSessionManager {
           this.releaseIdleRuntime(this.runtimeFor(tab.agentId));
           return;
         }
-        this.startSession(tab).ensureStarted(dims.cols, dims.rows);
+        this.startSession(tab, sbxRun).ensureStarted(dims.cols, dims.rows);
       })
       .catch((error: unknown) => {
         this.callbacks.onNotice("error", `${tab.agentId} could not be started: ${String(error)}`);
@@ -653,7 +662,48 @@ export class ProjectSessionManager {
       });
   }
 
-  private startSession(tab: TabState): TerminalSession {
+  /**
+   * Whether this tab should run inside its project's sbx sandbox instead of the host agent
+   * directly — and if so, the `sbx` command line for it. Reads tet.json fresh rather than
+   * caching it: sbx config changes through the dialog's Save button, rare enough that a fresh
+   * read on every spawn costs nothing worth avoiding, and it is the same "no cache, read at the
+   * moment it matters" choice `readCommands` already makes for saved commands.
+   *
+   * Only claude/codex — the two agents the enable-sbx dialog has real fields for — and only a
+   * plain agent tab, never a saved command's: a saved command is not "this agent's process" in
+   * the first place (see startSession), so wrapping it in a sandbox would run the wrong thing.
+   */
+  private async resolveSbxRun(tab: TabState): Promise<SbxRunInfo | null> {
+    if (tab.executable || (tab.agentId !== "claude" && tab.agentId !== "codex")) {
+      return null;
+    }
+    const config = await readSbxConfig(this.project.path);
+    const agentConfig = config.enabled ? config.agents[tab.agentId] : undefined;
+    if (!agentConfig) {
+      return null;
+    }
+    const agent = getAgent(tab.agentId);
+    const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
+    const name = sandboxName(this.project.id, tab.agentId);
+    const paths = this.pathsFor(this.runtimeFor(tab.agentId));
+    const hookArgs = agent.prepareSandboxSpawn?.(this.project.path, paths) ?? [];
+    const args = await buildSbxRunArgs(tab.agentId, this.project.path, agentConfig, name, paths, [
+      ...hookArgs,
+      ...resumeArgs,
+      ...(tab.runArgs ?? [])
+    ]);
+    return { executable: "sbx", args };
+  }
+
+  /** What sbx.ts's saveSbxConfig needs to tell whether an existing sandbox still matches the
+   *  folders resolveSbxRun would mount (see sbx.ts's computeWorkspaces) — ipc.ts's
+   *  `sbx:save-config` handler is the one caller, since saveSbxConfig itself must stay
+   *  agent-layer-agnostic. */
+  agentPaths(agentId: AgentId): AgentPaths {
+    return this.pathsFor(this.runtimeFor(agentId));
+  }
+
+  private startSession(tab: TabState, sbxRun: SbxRunInfo | null): TerminalSession {
     const runtime = this.runtimeFor(tab.agentId);
     const { agent, executable, preparation } = runtime;
     const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
@@ -676,15 +726,20 @@ export class ProjectSessionManager {
     };
 
     // A tab that brings its own program — a saved command's — is not this agent's process, so
-    // nothing the agent itself would have been started with applies to it.
+    // nothing the agent itself would have been started with applies to it. An sbx-wrapped tab is
+    // its own third case: `sbxRun.args` already is the full `sbx run` command line (built in
+    // resolveSbxRun, resumeArgs included after its own "--"), so none of preparation's host-only
+    // args/env (a generated --settings file's host path, say) apply inside the sandbox either.
     const args = tab.executable
       ? (tab.runArgs ?? [])
-      : [...(preparation?.args ?? []), ...resumeArgs, ...(tab.runArgs ?? [])];
+      : sbxRun
+        ? sbxRun.args
+        : [...(preparation?.args ?? []), ...resumeArgs, ...(tab.runArgs ?? [])];
 
     const session = new TerminalSession(
-      tab.executable ?? preparation?.executable ?? executable,
+      sbxRun ? sbxRun.executable : (tab.executable ?? preparation?.executable ?? executable),
       tab.cwd ?? this.project.path,
-      preparation?.env,
+      sbxRun ? undefined : preparation?.env,
       {
         onOutput: (data) => {
           this.callbacks.onOutput(this.project.id, tabId, data);

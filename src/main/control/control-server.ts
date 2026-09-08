@@ -1,4 +1,5 @@
 import * as crypto from "node:crypto";
+import * as http from "node:http";
 import * as net from "node:net";
 import { CONTROL_VERBS, HELP_VERB } from "../../shared/control";
 import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/control";
@@ -50,6 +51,14 @@ export interface ControlDeps {
   showTab(projectId: string, tabId: string): void;
   /** Tells the window the project list changed under it, and which entry to activate or forget. */
   projectsChanged(change: { added?: string; removed?: string }): void;
+  /**
+   * Shows a real desktop notification from this process — the one place that can, since it is
+   * the process actually holding the desktop session. The `notify` verb's whole job: a
+   * sandboxed Claude/Codex hook has no such session, so it asks this process to show the toast
+   * on its behalf instead of trying (and failing) to show one itself. Fire-and-forget, same as
+   * a host hook's own direct notify script — nothing here waits on the toast being dismissed.
+   */
+  notify(title: string, body: string): void;
 }
 
 /** The slice of ProjectSessionManager the verbs use. */
@@ -292,6 +301,11 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         );
       }
       return { result: { restarting: true }, after: () => deps.shutdown(true) };
+    },
+
+    notify: (args) => {
+      deps.notify(text(args, "title", "title"), text(args, "body", "body"));
+      return { result: { notified: true } };
     }
   };
 }
@@ -304,10 +318,17 @@ function reject(code: ControlErrorCode, message: string): ControlResponse {
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * The local server an agent's `tet-ctl` talks to — a TCP socket on 127.0.0.1, one request per
- * connection (see src/shared/control.ts). Every request carries the token main.ts made for this
- * run; anything else is answered `unauthorized` and dropped, so a process that is not inside one
- * of tet's own terminals has nothing to say here.
+ * The local server an agent's `tet-ctl` talks to — one POST per connection (see
+ * src/shared/control.ts), on 127.0.0.1 for a plain host terminal. HTTP, not a bare TCP socket
+ * with an NDJSON line, because that is the one transport that also reaches this server from
+ * inside an sbx sandbox: sbx's own docs say a sandbox reaches `host.docker.internal` through
+ * its own proxy, and that proxy is HTTP-only — verified live, 2026-09-08, a raw TCP echo server
+ * behind it accepted the connection but never saw a byte written to it, while a plain
+ * `curl http://host.docker.internal:<port>` reached the same host process immediately. One
+ * server, one protocol, for both callers — not a second listener or a sniffed-protocol branch.
+ * Every request carries the token main.ts made for this run; anything else is answered
+ * `unauthorized` and dropped, so a process that is not inside one of tet's own terminals has
+ * nothing to say here.
  */
 export async function startControlServer(
   deps: ControlDeps,
@@ -340,45 +361,37 @@ export async function startControlServer(
     }
   };
 
-  // Every open connection, so `close` can end them: `net.Server.close` waits for each one, and
-  // a client that connected and never sent its line would otherwise hold the quit open.
-  const sockets = new Set<net.Socket>();
-  const server = net.createServer((socket) => {
-    sockets.add(socket);
-    socket.once("close", () => sockets.delete(socket));
-    socket.setTimeout(REQUEST_TIMEOUT_MS, () => socket.destroy());
-    socket.setEncoding("utf8");
-    let buffer = "";
-    let answered = false;
-    socket.on("data", (chunk: string) => {
-      if (answered) {
-        return;
-      }
-      buffer += chunk;
-      const newline = buffer.indexOf("\n");
-      if (newline === -1) {
-        return;
-      }
-      answered = true;
-      // The verb itself takes as long as it takes (`projects-add` clones).
-      socket.setTimeout(0);
+  const respond = (res: http.ServerResponse, response: ControlResponse, after?: () => void): void => {
+    res.writeHead(200, { "Content-Type": "application/json", Connection: "close" });
+    if (after) {
+      // Only once the CLI has the answer: `close` is the response fully flushed and the
+      // underlying connection gone, not merely handed to the OS to send.
+      res.once("close", after);
+    }
+    res.end(JSON.stringify(response) + "\n");
+  };
+
+  const server = http.createServer({ requestTimeout: REQUEST_TIMEOUT_MS }, (req, res) => {
+    if (req.method !== "POST") {
+      res.writeHead(405, { Connection: "close" }).end();
+      return;
+    }
+    req.setEncoding("utf8");
+    let body = "";
+    req.on("data", (chunk: string) => {
+      body += chunk;
+    });
+    req.on("end", () => {
       let request: ControlRequest;
       try {
-        request = JSON.parse(buffer.slice(0, newline)) as ControlRequest;
+        request = JSON.parse(body) as ControlRequest;
       } catch {
-        socket.end(JSON.stringify(reject("bad_args", "not a JSON request")) + "\n");
+        respond(res, reject("bad_args", "not a JSON request"));
         return;
       }
-      void handle(request).then(({ response, after }) => {
-        if (after) {
-          // Only once the CLI has the answer: `close` is the socket fully gone, not merely
-          // our half of it written.
-          socket.once("close", after);
-        }
-        socket.end(JSON.stringify(response) + "\n");
-      });
+      void handle(request).then(({ response, after }) => respond(res, response, after));
     });
-    socket.on("error", () => undefined);
+    req.on("error", () => undefined);
   });
 
   // A TCP port, unlike a unix socket file, leaves nothing behind for a killed run to hand over:
@@ -388,17 +401,17 @@ export async function startControlServer(
   await bind(server, port);
 
   return {
+    // closeAllConnections (Node 18.2+): a client that connected and never finished its request
+    // would otherwise hold plain server.close()'s callback open indefinitely.
     close: () =>
       new Promise((resolve) => {
         server.close(() => resolve());
-        for (const socket of sockets) {
-          socket.destroy();
-        }
+        server.closeAllConnections();
       })
   };
 }
 
-function bind(server: net.Server, port: number): Promise<void> {
+function bind(server: http.Server, port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => {

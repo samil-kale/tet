@@ -73,7 +73,9 @@ async function augment(): Promise<void> {
  *   prefix on win32), and the roots the managers export in the environment — `NVM_SYMLINK`
  *   (nvm-windows' current node), `VOLTA_HOME`, `SCOOP`.
  * - The fixed shim directories the managers use when they export nothing: npm's default
- *   `%APPDATA%\npm`, Volta's and scoop's under their default roots, and winget's `Links`.
+ *   `%APPDATA%\npm`, Volta's and scoop's under their default roots, winget's `Links`, and
+ *   Docker Sandboxes' own `%LOCALAPPDATA%\DockerSandboxes\bin` (its installer writes straight
+ *   there rather than through a `Links` shim).
  *
  * The caller keeps only those that exist, so a manager the user does not have contributes
  * nothing. Order is widest-support-first; `mergePath` drops the duplicates a default and an
@@ -94,6 +96,10 @@ export function win32AgentDirs(env: NodeJS.ProcessEnv, npmPrefix: string | undef
   dirs.push(env.SCOOP ? path.join(env.SCOOP, "shims") : env.USERPROFILE ? path.join(env.USERPROFILE, "scoop", "shims") : "");
   if (env.LOCALAPPDATA) {
     dirs.push(path.join(env.LOCALAPPDATA, "Microsoft", "WinGet", "Links"));
+    // Docker Sandboxes' installer (winget) writes straight to the user PATH itself rather than
+    // through a WinGet Links shim — verified against a real install, 2026-09-07 — but tet's own
+    // already-running process still needs this augmented in, same as any other fixed default.
+    dirs.push(path.join(env.LOCALAPPDATA, "DockerSandboxes", "bin"));
   }
   return dirs.filter(Boolean);
 }

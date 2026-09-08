@@ -38,6 +38,7 @@ interface Calls {
   removed: string[];
   changed: { added?: string; removed?: string }[];
   shutdown: boolean[];
+  notified: [string, string][];
 }
 
 let tempDir: string;
@@ -104,6 +105,9 @@ function deps(): ControlDeps {
     },
     projectsChanged: (change) => {
       calls.changed.push(change);
+    },
+    notify: (title, body) => {
+      calls.notified.push([title, body]);
     }
   };
 }
@@ -132,7 +136,8 @@ describe("tet-ctl against the control server", () => {
       added: [],
       removed: [],
       changed: [],
-      shutdown: []
+      shutdown: [],
+      notified: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -180,18 +185,23 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses a request the server does not know, even with a valid token", async () => {
-    // Not through the CLI, which will not send it: the wire itself.
-    const net = await import("node:net");
-    const line = await new Promise<string>((resolve) => {
-      const socket = net.connect(port, "127.0.0.1", () =>
-        socket.write(JSON.stringify({ token: TOKEN, verb: "help", args: {}, caller: {} }) + "\n")
+    // Not through the CLI, which will not send it: the wire itself (HTTP, see control-server.ts
+    // and tet-ctl.ts's own send — the one transport that also reaches the server from inside an
+    // sbx sandbox).
+    const http = await import("node:http");
+    const body = await new Promise<string>((resolve) => {
+      const req = http.request(
+        { host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } },
+        (res) => {
+          let data = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk: string) => (data += chunk));
+          res.on("end", () => resolve(data));
+        }
       );
-      let data = "";
-      socket.setEncoding("utf8");
-      socket.on("data", (chunk: string) => (data += chunk));
-      socket.on("close", () => resolve(data));
+      req.end(JSON.stringify({ token: TOKEN, verb: "help", args: {}, caller: {} }));
     });
-    assert.equal(JSON.parse(line).error.code, "unknown_verb");
+    assert.equal(JSON.parse(body).error.code, "unknown_verb");
   });
 
   it("reports the version", async () => {
@@ -339,6 +349,11 @@ describe("tet-ctl against the control server", () => {
   it("answers before removing the caller's own project", async () => {
     assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id])).result, { removed: PROJECT.id });
     await eventually("what the answer was followed by", () => calls.removed.includes(PROJECT.id));
+  });
+
+  it("relays a notification to the process behind the control channel", async () => {
+    assert.deepEqual((await tetCtl(["notify", "Codex: Finished", "Finished in repo"])).result, { notified: true });
+    assert.deepEqual(calls.notified, [["Codex: Finished", "Finished in repo"]]);
   });
 
   it("refuses to restart without --confirm", async () => {

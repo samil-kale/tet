@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
@@ -14,7 +16,9 @@ import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
+import { configureSandboxes } from "./sbx";
 import { augmentAgentPath } from "./terminals/agent-path";
+import { scriptInvocation, writeNotifyScript } from "./terminals/os-notify";
 import { setControlEnv } from "./terminals/pty";
 import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
@@ -116,6 +120,28 @@ let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
 /**
+ * The real desktop toast behind the control channel's `notify` verb — the one place that can
+ * show one, since this process is the one actually holding the desktop session (a sandboxed
+ * hook has none; see os-notify.ts's buildHookNotifyCommand, the one path every Claude/Codex
+ * hook now takes, host tabs included). Unreferenced so firing a toast never keeps the app's
+ * event loop alive, but **not** `detached` — measured live, 2026-09-08: a detached
+ * `powershell -File` invocation of the exact same script never got past
+ * `CreateToastNotifier`/`ToastNotification.Show()` (the process sat alive but idle, no error,
+ * no toast, forever); the same script run non-detached (still with `stdio: "ignore"` and
+ * `windowsHide`) completes in well under a second. Whatever those WinRT calls need — a message
+ * pump, a window station, a job the process still belongs to — a detached process on Windows
+ * does not have it. Safe to drop: a plain (non-detached) child is not killed when its parent
+ * exits either, and this one finishes long before Electron ever would.
+ */
+function showDesktopNotification(title: string, body: string): void {
+  const dir = path.join(app.getPath("userData"), "notify");
+  fs.mkdirSync(dir, { recursive: true });
+  const scriptFile = writeNotifyScript(dir, "relay", title, body);
+  const { command, args } = scriptInvocation(scriptFile);
+  spawn(command, args, { stdio: "ignore", windowsHide: true }).unref();
+}
+
+/**
  * The control channel, up from the moment the workspace is: a socket that answers means every
  * project's terminals and repository are there to be asked about. Before that there is no
  * socket at all — no half-open state for a verb to find and nothing for tet-ctl to do but say
@@ -153,7 +179,8 @@ async function startControl(): Promise<void> {
         readCommands,
         shutdown,
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
-        projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change })
+        projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
+        notify: showDesktopNotification
       },
       controlChannel.token,
       controlChannel.port
@@ -293,6 +320,9 @@ if (!app.requestSingleInstanceLock()) {
       console.error("[tet] could not write the tet-ctl launcher:", error);
     }
     setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: controlToken }, binDir);
+    // Same bundle and port: an sbx sandbox has no access to userData's launcher, so sbx.ts
+    // writes this file directly into the sandbox itself (see ensureSandboxLauncher).
+    configureSandboxes(cliPath, port);
     controlChannel = { token: controlToken, port };
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
     timeStartup("window", createWindow);

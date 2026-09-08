@@ -83,6 +83,50 @@ export type PromptId = "commitMessage" | "commands";
 
 export type PromptSettings = Record<PromptId, string>;
 
+/** The two agents the enable-sbx dialog has real fields for — see the plan for why opencode/pi
+ *  are blocked. Kept as its own union rather than a subset check against `AgentId` everywhere
+ *  the sandbox config is read. */
+export type SbxAgentId = "claude" | "codex";
+
+/** One port row: forwards `host` on the machine to `container` inside the sandbox. Both stay
+ *  strings — they are typed input, validated only at `sbx run` time. */
+export interface SbxPort {
+  host: string;
+  container: string;
+}
+
+/** One allowed-folder row's access — the two modes sbx has: read-write, or read-only (`:ro`). */
+export type SbxAccess = "Read" | "Read+Write";
+
+export interface SbxFolder {
+  path: string;
+  access: SbxAccess;
+}
+
+/** What tet.json persists for one agent — never the token: that goes straight to `sbx secret
+ *  set` over stdin at Save time and is never written to disk. */
+export interface SbxAgentConfig {
+  ports: SbxPort[];
+  folders: SbxFolder[];
+}
+
+/** The enable-sbx dialog's saved state, per project — read back into the dialog on open, written
+ *  by its Save button. */
+export interface SbxProjectConfig {
+  enabled: boolean;
+  agents: Partial<Record<SbxAgentId, SbxAgentConfig>>;
+}
+
+/** What the dialog's Save button sends over IPC — `SbxAgentConfig` plus the token field, which
+ *  the main process forwards to `sbx secret set` and never persists. An empty token leaves
+ *  whatever secret is already set for that service alone. */
+export type SbxAgentSave = SbxAgentConfig & { token: string };
+
+export interface SbxSaveRequest {
+  enabled: boolean;
+  agents: Partial<Record<SbxAgentId, SbxAgentSave>>;
+}
+
 /** The Prompts tab's picker, in the order the buttons sit on screen: the git pane's wand, then
  *  the sidebar's. */
 export const PROMPT_IDS: PromptId[] = ["commitMessage", "commands"];

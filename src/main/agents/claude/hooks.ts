@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { buildBusyCommand, buildWaitingCommand, markerDir, markPosix, markPowershell } from "../../terminals/marker-watch";
-import { buildNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript } from "../../terminals/os-notify";
+import { buildHookNotifyCommand, buildReadFileCommand, hostTarget, WIN_BOM, writePosixScript } from "../../terminals/os-notify";
+import type { HookTarget } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
 /**
@@ -21,10 +22,10 @@ import type { NotificationSettings } from "../../../shared/types";
  * reports rather than staying silent — a spurious mark is a far better failure than a job
  * stuck in the list silencing every future one.
  */
-function buildStopCommand(storageDir: string, notifyCommand: string | undefined): string {
+function buildStopCommand(storageDir: string, notifyCommand: string | undefined, target: HookTarget): string {
   const marks = markerDir(storageDir, "finished");
   fs.mkdirSync(marks, { recursive: true });
-  if (process.platform === "win32") {
+  if (!target.posix) {
     const scriptFile = path.join(storageDir, "stop-guard.ps1");
     fs.writeFileSync(
       scriptFile,
@@ -40,12 +41,12 @@ function buildStopCommand(storageDir: string, notifyCommand: string | undefined)
   if ($running.Count -gt 0) {
     exit 0
   }
-${markPowershell(marks)}
+${markPowershell(target.embed(marks))}
 } catch {}
 ${notifyCommand ?? ""}
 `
     );
-    return `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptFile}"`;
+    return `powershell -NoProfile -ExecutionPolicy Bypass -File "${target.embed(scriptFile)}"`;
   }
   const scriptFile = path.join(storageDir, "stop-guard.sh");
   writePosixScript(
@@ -60,11 +61,11 @@ tasks=$(printf '%s' "$json" | sed -n 's/.*"background_tasks"[[:space:]]*:[[:spac
 if printf '%s' "$tasks" | grep -q '"status"[[:space:]]*:[[:space:]]*"running"'; then
   exit 0
 fi
-${markPosix(marks)}
+${markPosix(target.embed(marks))}
 ${notifyCommand ?? ""}
 `
   );
-  return `sh "${scriptFile}"`;
+  return `sh "${target.embed(scriptFile)}"`;
 }
 
 /**
@@ -79,7 +80,8 @@ export function setupClaudeHooks(
   displayName: string,
   notifications: NotificationSettings,
   context: { contextFile: string; contextReadPaths: string[] },
-  themeName: string
+  themeName: string,
+  target: HookTarget = hostTarget()
 ): string[] {
   const hooks: Record<string, unknown> = {
     // Two commands on the one event: the context file's contents become part of the prompt,
@@ -90,8 +92,8 @@ export function setupClaudeHooks(
     UserPromptSubmit: [
       {
         hooks: [
-          { type: "command", command: buildReadFileCommand(storageDir, "read-context", context.contextFile) },
-          { type: "command", command: buildBusyCommand(storageDir) }
+          { type: "command", command: buildReadFileCommand(storageDir, "read-context", context.contextFile, target) },
+          { type: "command", command: buildBusyCommand(storageDir, target) }
         ]
       }
     ]
@@ -100,11 +102,12 @@ export function setupClaudeHooks(
 
   // Registered whatever the notification settings say: the same hook is what marks the tab,
   // and that mark is not a notification the user can turn off — it is how a session that
-  // finished out of sight is found again. Only the toast inside it is optional.
-  const notify = notifications.finished
-    ? buildNotifyCommand(storageDir, "stop", `${displayName}: Finished`, `Finished in ${repositoryName}`)
-    : undefined;
-  hooks.Stop = [{ hooks: [{ type: "command", command: buildStopCommand(storageDir, notify) }] }];
+  // finished out of sight is found again. Only the toast inside it is optional. The command
+  // itself is `tet-ctl notify` either way (see buildHookNotifyCommand) — host or sandboxed,
+  // the process actually showing the toast is always the one on the other end of the control
+  // channel, never this hook's own.
+  const notify = notifications.finished ? buildHookNotifyCommand(target, `${displayName}: Finished`, `Finished in ${repositoryName}`) : undefined;
+  hooks.Stop = [{ hooks: [{ type: "command", command: buildStopCommand(storageDir, notify, target) }] }];
 
   // A turn that stopped on a question, registered on the same terms as Stop above: the command
   // marks the tab whatever the settings say, and only the toast inside it is optional. The
@@ -123,13 +126,9 @@ export function setupClaudeHooks(
             storageDir,
             "needs-you",
             notifications.needsYou
-              ? buildNotifyCommand(
-                  storageDir,
-                  "needs-you",
-                  `${displayName}: Action needed`,
-                  `Waiting for input in ${repositoryName}`
-                )
-              : undefined
+              ? buildHookNotifyCommand(target, `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`)
+              : undefined,
+            target
           )
         }
       ]
@@ -141,15 +140,7 @@ export function setupClaudeHooks(
     notificationHooks.push({
       matcher: "idle_prompt",
       hooks: [
-        {
-          type: "command",
-          command: buildNotifyCommand(
-            storageDir,
-            "idle",
-            `${displayName}: Still waiting`,
-            `No response yet in ${repositoryName}`
-          )
-        }
+        { type: "command", command: buildHookNotifyCommand(target, `${displayName}: Still waiting`, `No response yet in ${repositoryName}`) }
       ]
     });
   }
@@ -167,13 +158,9 @@ export function setupClaudeHooks(
             storageDir,
             "question",
             notifications.needsYou
-              ? buildNotifyCommand(
-                  storageDir,
-                  "question",
-                  `${displayName}: Question`,
-                  `Waiting for your answer in ${repositoryName}`
-                )
-              : undefined
+              ? buildHookNotifyCommand(target, `${displayName}: Question`, `Waiting for your answer in ${repositoryName}`)
+              : undefined,
+            target
           )
         }
       ]
@@ -183,7 +170,7 @@ export function setupClaudeHooks(
   // The context block points at a file in tet's own storage — outside the repository,
   // where reads are denied unless granted. Scoped to that one file rather than the whole
   // directory, which also holds the notify scripts and this settings file.
-  const permissions = { allow: context.contextReadPaths.map((file) => `Read(${file})`) };
+  const permissions = { allow: context.contextReadPaths.map((file) => `Read(${target.embed(file)})`) };
 
   // Claude Code paints its own theme — dark by default, or whatever `~/.claude.json` says —
   // without looking at the terminal, so on a light background its diff blocks came out as
@@ -195,5 +182,5 @@ export function setupClaudeHooks(
   // to see (measured), which was tried and taken back out.
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.writeFileSync(settingsFile, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));
-  return ["--settings", settingsFile];
+  return ["--settings", target.embed(settingsFile)];
 }

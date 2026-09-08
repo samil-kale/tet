@@ -147,7 +147,8 @@ describe("the agent PATH", () => {
       j("C:", "nvm", "node"),
       j("C:", "volta", "bin"),
       j("C:", "scoop", "shims"),
-      j("C:", "u", "AppData", "Local", "Microsoft", "WinGet", "Links")
+      j("C:", "u", "AppData", "Local", "Microsoft", "WinGet", "Links"),
+      j("C:", "u", "AppData", "Local", "DockerSandboxes", "bin")
     ]);
     // With nothing exported and no npm answer, it falls back to the managers' default roots.
     const defaults = win32AgentDirs({ APPDATA: j("C:", "Roaming"), LOCALAPPDATA: j("C:", "Local"), USERPROFILE: j("C:", "u") }, undefined);
@@ -155,7 +156,8 @@ describe("the agent PATH", () => {
       j("C:", "Roaming", "npm"),
       j("C:", "Local", "Volta", "bin"),
       j("C:", "u", "scoop", "shims"),
-      j("C:", "Local", "Microsoft", "WinGet", "Links")
+      j("C:", "Local", "Microsoft", "WinGet", "Links"),
+      j("C:", "Local", "DockerSandboxes", "bin")
     ]);
     // A bare environment contributes only what it can name — no empty entries.
     assert.deepEqual(win32AgentDirs({}, undefined), []);

@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import { buildBusyCommand, buildMarkCommand, buildWaitingCommand } from "../../terminals/marker-watch";
-import { buildNotifyCommand, buildReadFileCommand } from "../../terminals/os-notify";
+import { buildHookNotifyCommand, buildReadFileCommand, hostTarget } from "../../terminals/os-notify";
+import type { HookTarget } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
 /**
@@ -55,12 +56,15 @@ function sortKeysDeep(value: unknown): unknown {
 
 /**
  * The synthetic config path Codex assigns hooks passed on the command line — always this literal
- * string on win32 (`/<session-flags>/config.toml` elsewhere), whichever repository is asking.
- * Not a real file: it exists only to give `-c`-supplied hooks a trust key, the same shape a real
- * config file's path would have.
+ * string on the machine actually running Codex (win32 host or not), whichever repository is
+ * asking. Not a real file: it exists only to give `-c`-supplied hooks a trust key, the same shape
+ * a real config file's path would have. A sandboxed Codex always runs on Linux regardless of
+ * host OS, so this reads `target.posix`, not `process.platform` — the win32 form would compute
+ * the wrong trust key for a Windows host's sandbox, reopening the "Hooks need review" screen.
  */
-const SESSION_FLAGS_SOURCE =
-  process.platform === "win32" ? String.raw`C:\<session-flags>\config.toml` : "/<session-flags>/config.toml";
+function sessionFlagsSource(target: HookTarget): string {
+  return target.posix ? "/<session-flags>/config.toml" : String.raw`C:\<session-flags>\config.toml`;
+}
 
 /**
  * Codex's snake_case label for a hook event, as it appears in a trust key. `handlerIndex` is the
@@ -70,8 +74,8 @@ const SESSION_FLAGS_SOURCE =
  * `hooks/list` for a two-handler `UserPromptSubmit` (context file, then the busy marker): the
  * second handler's key is `…:0:1`, not folded into the first's hash.
  */
-function trustKey(eventLabel: string, handlerIndex: number): string {
-  return `${SESSION_FLAGS_SOURCE}:${eventLabel}:0:${handlerIndex}`;
+function trustKey(eventLabel: string, handlerIndex: number, target: HookTarget): string {
+  return `${sessionFlagsSource(target)}:${eventLabel}:0:${handlerIndex}`;
 }
 
 /**
@@ -110,7 +114,7 @@ interface HookEntry {
  * everything inside the *value* of one `-c hooks=…` sidesteps both: a real TOML parser handles
  * the quoted trust key correctly, and there is nothing left to merge.
  */
-function buildHooksArg(entries: HookEntry[]): string {
+function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
   const hookGroups = entries
     .map((entry) => {
       const matcherPart = entry.matcher !== undefined ? `matcher=${tomlValue(entry.matcher)},` : "";
@@ -122,7 +126,7 @@ function buildHooksArg(entries: HookEntry[]): string {
     .flatMap((entry) =>
       entry.commands.map((command, handlerIndex) => {
         const hash = hookTrustedHash(entry.label, command, entry.matcher);
-        return `${tomlValue(trustKey(entry.label, handlerIndex))}={trusted_hash=${tomlValue(hash)}}`;
+        return `${tomlValue(trustKey(entry.label, handlerIndex, target))}={trusted_hash=${tomlValue(hash)}}`;
       })
     )
     .join(",");
@@ -136,8 +140,8 @@ function buildHooksArg(entries: HookEntry[]): string {
  * `SubagentStop` event, which tet does not hook, so Stop firing always means this turn is
  * actually over.
  */
-function buildStopCommand(storageDir: string, notifyCommand: string | undefined): string {
-  return buildMarkCommand(storageDir, "stop", "finished", notifyCommand);
+function buildStopCommand(storageDir: string, notifyCommand: string | undefined, target: HookTarget): string {
+  return buildMarkCommand(storageDir, "stop", "finished", notifyCommand, target);
 }
 
 /**
@@ -151,7 +155,8 @@ export function setupCodexHooks(
   displayName: string,
   notifications: NotificationSettings,
   repositoryName: string,
-  contextFile: string
+  contextFile: string,
+  target: HookTarget = hostTarget()
 ): string[] {
   // Two commands on the one event: the context file's contents become part of the prompt (a
   // hook's plain, non-JSON stdout is appended to it — confirmed in Codex's own source,
@@ -160,26 +165,30 @@ export function setupCodexHooks(
   // print nothing. Unlike Claude Code, Codex's sandbox restricts writes and network, not reads
   // (`SandboxPolicy::ReadOnly` names no path at all), so — unlike `claude/hooks.ts` — nothing
   // here has to grant the model permission to read the file this one points at.
-  const readContextCommand = buildReadFileCommand(storageDir, "read-context", contextFile);
-  const busyCommand = buildBusyCommand(storageDir);
+  const readContextCommand = buildReadFileCommand(storageDir, "read-context", contextFile, target);
+  const busyCommand = buildBusyCommand(storageDir, target);
 
+  // The toast inside each of these is optional per the notification settings. The command
+  // itself is `tet-ctl notify` either way (see buildHookNotifyCommand) — host or sandboxed,
+  // the process actually showing the toast is always the one on the other end of the control
+  // channel, never this hook's own.
   const finishedNotify = notifications.finished
-    ? buildNotifyCommand(storageDir, "stop", `${displayName}: Finished`, `Finished in ${repositoryName}`)
+    ? buildHookNotifyCommand(target, `${displayName}: Finished`, `Finished in ${repositoryName}`)
     : undefined;
-  const stopCommand = buildStopCommand(storageDir, finishedNotify);
+  const stopCommand = buildStopCommand(storageDir, finishedNotify, target);
 
   // Waiting is registered for both PermissionRequest (an approval is about to be asked) and
   // PreToolUse matched to `request_user_input` (a question tool is about to run) — the same
   // shape as Claude Code's Notification/PreToolUse split.
   const permissionNotify = notifications.needsYou
-    ? buildNotifyCommand(storageDir, "needs-you", `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`)
+    ? buildHookNotifyCommand(target, `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`)
     : undefined;
-  const permissionCommand = buildWaitingCommand(storageDir, "needs-you", permissionNotify);
+  const permissionCommand = buildWaitingCommand(storageDir, "needs-you", permissionNotify, target);
 
   const questionNotify = notifications.needsYou
-    ? buildNotifyCommand(storageDir, "question", `${displayName}: Question`, `Waiting for your answer in ${repositoryName}`)
+    ? buildHookNotifyCommand(target, `${displayName}: Question`, `Waiting for your answer in ${repositoryName}`)
     : undefined;
-  const questionCommand = buildWaitingCommand(storageDir, "question", questionNotify);
+  const questionCommand = buildWaitingCommand(storageDir, "question", questionNotify, target);
 
   const entries: HookEntry[] = [
     { event: "UserPromptSubmit", label: "user_prompt_submit", commands: [readContextCommand, busyCommand] },
@@ -188,5 +197,5 @@ export function setupCodexHooks(
     { event: "PreToolUse", label: "pre_tool_use", commands: [questionCommand], matcher: "request_user_input" }
   ];
 
-  return ["-c", buildHooksArg(entries)];
+  return ["-c", buildHooksArg(entries, target)];
 }
