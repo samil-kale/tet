@@ -16,7 +16,18 @@ import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
  *
  * The cost of that: tet knows the sessions that ran through it. One started elsewhere (a plain
  * `opencode` in a shell) leaves no record — except once, when a repository is listed for the
- * first time after the records replaced the server (see seed).
+ * first time after the records replaced the server (see seed). A session removed elsewhere
+ * (`opencode session delete` in a plain shell) keeps its record until a resume of it fails —
+ * nothing here polls the database to notice a deletion it didn't make itself.
+ *
+ * Checked against opencode's own `dev` branch (2026-09-09, github.com/anomalyco/opencode) for a
+ * way around either limit: sessions are still `Database.Service`-only (session.ts), including
+ * on `dev` — the file-based `Storage` service in the same tree is for other data, not sessions,
+ * so there is no on-disk session format to read or watch directly. `opencode session list` would
+ * remove both limits at once if it were cheap enough to run on every listing, but it still isn't:
+ * anomalyco/opencode#37435 (open) tracks that it runs a full `InstanceBootstrap` — config, plugin
+ * init, LSP, VCS, file watchers — for a query its own author measured at ~7ms, seconds to
+ * minutes wasted every time. Revisit calling it unconditionally if that lands.
  */
 
 /** Where each repository's records are, registered by prepareSpawn: a provider gets a cwd, not
@@ -132,6 +143,10 @@ async function seed(executable: string, cwd: string, dir: string): Promise<void>
 }
 
 export const opencodeSessionProvider: SessionProvider = {
+  // Reads only the records (see the file header for why): a session deleted from outside tet
+  // still has its record here and is listed as if it existed, until a tab tries to resume it
+  // and fails. Cross-checking against opencode's own listing on every call would catch that,
+  // but costs what seed() below already documents avoiding.
   async list(executable: string, cwd: string): Promise<AgentSessionInfo[]> {
     const dir = recordsDir(cwd);
     if (!dir) {
@@ -175,6 +190,14 @@ export const opencodeSessionProvider: SessionProvider = {
    * apply (plugin.ts's applyRenames), and the session's record, which opencode's own update
    * event then rewrites, is what says it landed. A tab whose opencode is not running has no
    * one to apply it: the request is withdrawn after the timeout and the caller told.
+   *
+   * Checked for a CLI-based way out (2026-09-09, opencode's `dev` branch,
+   * github.com/anomalyco/opencode): `packages/opencode/src/cli/cmd/session.ts` still declares
+   * only `list` and `delete`. anomalyco/opencode#34751 ("Session rename command") was closed as
+   * completed, but by exposing rename through the plugin/tool API instead (its sibling PR
+   * #47837, `session_rename`, is a tool for the *model* to call on itself, not something an
+   * external process can reach) — the same route this already uses, not a shortcut past it.
+   * Revisit only if a `session rename <id> <title>` CLI subcommand actually ships.
    */
   async rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
     const trimmed = title.trim();
