@@ -1739,6 +1739,14 @@ textarea:focus {
   font-variant-numeric: tabular-nums;
 }
 
+/* A host row's one input fills the row, the way .sbx-path-value does; the 26px are the port
+   and path rows'. */
+.sbx-host-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+}
+
 .sbx-arrow {
   color: var(--vscode-descriptionForeground);
 }

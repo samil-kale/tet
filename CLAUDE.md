@@ -549,8 +549,10 @@ The cross-file rules:
   inside the sandbox (`C:\Users\x` → `/c/Users/x`). Each agent's `prepareSandboxSpawn` writes
   its sandbox hooks under `<agentDir>/sandbox/`, beside the host ones, and both are watched.
 - **The sandbox never sees the agent's own config directory** — its sign-in is its own.
-  `agentDir` and the context file's directory are the fixed workspaces; everything else is a
-  live `sbx mount` re-applied on every spawn, since a bind mount does not survive a stop.
+  The project is the one `sbx create` workspace, because only a create-time workspace decides
+  the agent's working directory (`sbx run` has no `--workdir`). Everything else — `agentDir` and
+  the context file's directory included (`fixedMountSpecs`) — is a live `sbx mount` re-applied on
+  every spawn, since a bind mount does not survive a stop.
 - **A sandboxed session is read through a mount, not out of the container**
   (`SessionProvider.sandbox`): a host directory mounted where the CLI writes its transcripts, so
   the *same* listing code reads it — that is what gives a sandboxed tab resume, a title and turn

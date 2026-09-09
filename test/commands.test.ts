@@ -165,46 +165,49 @@ describe("readSbxConfig", () => {
       enabled: false,
       knowledge: { skills: false, plugins: false, instructions: false },
       ports: [],
-      paths: []
+      paths: [],
+      hosts: []
     });
   });
 
   it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's paths alongside it", async () => {
     const otherOs = process.platform === "win32" ? "linux" : "win32";
-    const theirs = { path: "/their/data", access: "Read", os: otherOs };
+    const theirs = { path: "/their/data", access: "ro", os: otherOs };
     const stale = [
-      { path: "~/stale", access: "Read" },
-      { path: "/stale/absolute", access: "Read", os: process.platform }
+      { path: "~/stale", access: "ro" },
+      { path: "/stale/absolute", access: "ro", os: process.platform }
     ];
     put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, ports: [], paths: [theirs, ...stale] } }));
     const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
     const config = {
       enabled: true,
-      knowledge: { skills: "Read+Write" as const, plugins: false as const, instructions: "Read" as const },
+      knowledge: { skills: "rw" as const, plugins: false as const, instructions: "ro" as const },
       ports: [{ host: "3000", container: "3000" }],
       paths: [
-        { path: "~/data", access: "Read+Write" as const },
-        { path: elsewhere, access: "Read" as const },
+        { path: "~/data", access: "rw" as const },
+        { path: elsewhere, access: "ro" as const },
         // A single file is a row like any other — sbx mounts a file and a folder the same way.
-        { path: "~/.npmrc", access: "Read" as const }
-      ]
+        { path: "~/.npmrc", access: "ro" as const }
+      ],
+      hosts: ["gitlab.example.com", "*.s3.example.net:443"]
     };
     await writeSbxConfig(root, config);
     assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
-    const file = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown } };
+    const file = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown; hosts: unknown } };
     assert.deepEqual(
       file.sbx.knowledge,
-      { skills: "rw", plugins: false, instructions: "r" },
-      "knowledge is written alongside enabled, as sbx's own r/rw codes"
+      { skills: "rw", plugins: false, instructions: "ro" },
+      "knowledge is written alongside enabled, in sbx's own ro/rw words"
     );
     assert.deepEqual(file.commands, ["keep"], "the saved command survives");
+    assert.deepEqual(file.sbx.hosts, ["gitlab.example.com", "*.s3.example.net:443"], "hosts are written as typed, with no os");
     assert.deepEqual(
       file.sbx.paths,
       [
         theirs,
-        { path: "~/data", access: "Read+Write" },
-        { path: elsewhere, access: "Read", os: process.platform },
-        { path: "~/.npmrc", access: "Read" }
+        { path: "~/data", access: "rw" },
+        { path: elsewhere, access: "ro", os: process.platform },
+        { path: "~/.npmrc", access: "ro" }
       ],
       "the other OS's row survives; a ~ row is everyone's, an absolute one this platform's; the stale ones are replaced"
     );
@@ -215,22 +218,24 @@ describe("readSbxConfig", () => {
       JSON.stringify({
         sbx: {
           enabled: true,
-          knowledge: { skills: "not-a-real-access", plugins: true, instructions: "r" },
+          knowledge: { skills: "not-a-real-access", plugins: true, instructions: "ro" },
           ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
           paths: [
             { path: "", os: process.platform },
             { path: "~/data", access: "not-a-real-access", os: process.platform },
-            { path: "/elsewhere", access: "Read", os: process.platform === "win32" ? "linux" : "win32" }
+            { path: "/elsewhere", access: "ro", os: process.platform === "win32" ? "linux" : "win32" }
           ],
+          hosts: ["ok.example.com", 42, "", "  spaced.example.com  "],
           tokens: { claude: "sk-ant-should-not-be-read" }
         }
       })
     );
     assert.deepEqual(await readSbxConfig(root), {
       enabled: true,
-      knowledge: { skills: false, plugins: false, instructions: "Read" },
+      knowledge: { skills: false, plugins: false, instructions: "ro" },
       ports: [{ host: "3000", container: "3000" }],
-      paths: [{ path: "~/data", access: "Read+Write" }]
+      paths: [{ path: "~/data", access: "rw" }],
+      hosts: ["ok.example.com", "spaced.example.com"]
     });
   });
 });

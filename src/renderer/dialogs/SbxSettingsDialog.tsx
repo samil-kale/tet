@@ -53,6 +53,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** Org-managed filesystem policy: nothing can be mounted from here, so the checkbox stays off
    *  and disabled and there are no fields to fill — see sbx.ts's checkSbxGoverned. */
   const [governed, setGoverned] = useState(false);
+  /** Org-managed network policy: only the Allowed hosts section is affected — see SbxSettingsFields. */
+  const [networkGoverned, setNetworkGoverned] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
@@ -79,10 +81,12 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       }
     }
     const filesystemGoverned = await window.tet.sbx.checkFilesystemGoverned();
+    const hostsGoverned = await window.tet.sbx.checkNetworkGoverned();
     // The dialog's own saved state — read once setup is done, so Save always writes on top of
     // what is actually on disk rather than the blank defaults this component mounted with.
     const config = await window.tet.sbx.getConfig(project.id);
     setGoverned(filesystemGoverned);
+    setNetworkGoverned(hostsGoverned);
     // A colleague's "enabled" in tet.json does not apply here — see session-manager.ts's
     // resolveSbxRun, which starts such a project's agents on the host.
     setEnabled(config.enabled && !filesystemGoverned);
@@ -164,7 +168,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       {phase.kind === "ready" && !governed && (
         // The one part that scrolls — see the CSS: the checkbox above stays put.
         <div className="sbx-settings-fields-scroll">
-          <SbxSettingsFields state={state} setState={setState} />
+          <SbxSettingsFields state={state} setState={setState} networkGoverned={networkGoverned} />
         </div>
       )}
     </DialogFrame>

@@ -4,8 +4,8 @@ import { CloseIcon } from "../ui/icons";
 import { Dropdown } from "../ui/Dropdown";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
-  { value: "Read", label: "Read" },
-  { value: "Read+Write", label: "Read+Write" }
+  { value: "ro", label: "Read" },
+  { value: "rw", label: "Read+Write" }
 ];
 
 /** One row per `SbxKnowledgeConfig` kind, in the order shown — labels only, the actual host
@@ -17,8 +17,8 @@ const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
   { kind: "instructions", label: "Instructions file (CLAUDE.md / AGENTS.md)" }
 ];
 
-/** A port or allowed-path row as the fields hold it: the saved shape plus a local id for its
- *  React key, never sent anywhere. */
+/** A port, allowed-path or host row as the fields hold it: the saved shape plus a local id for
+ *  its React key, never sent anywhere. */
 type Row<T> = T & { id: string };
 
 export interface FieldsState {
@@ -26,6 +26,7 @@ export interface FieldsState {
   knowledge: SbxKnowledgeConfig;
   ports: Row<SbxPort>[];
   paths: Row<SbxPath>[];
+  hosts: Row<{ host: string }>[];
 }
 
 let nextRowId = 0;
@@ -41,15 +42,22 @@ function withId<T>(row: T): Row<T> {
  * user's to change.
  */
 export function fromConfig(config: SbxProjectConfig): FieldsState {
-  return { knowledge: config.knowledge, ports: config.ports.map(withId), paths: config.paths.map(withId) };
+  return {
+    knowledge: config.knowledge,
+    ports: config.ports.map(withId),
+    paths: config.paths.map(withId),
+    hosts: config.hosts.map((host) => withId({ host }))
+  };
 }
 
-/** The inverse, for Save: ids dropped, and a port row left half-empty dropped with them. */
+/** The inverse, for Save: ids dropped, and a port row left half-empty or an empty host row
+ *  dropped with them. */
 export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> {
   return {
     knowledge: state.knowledge,
     ports: state.ports.filter((port) => port.host.trim() && port.container.trim()).map(({ host, container }) => ({ host, container })),
-    paths: state.paths.map(({ path, access }) => ({ path, access }))
+    paths: state.paths.map(({ path, access }) => ({ path, access })),
+    hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean)
   };
 }
 
@@ -58,6 +66,9 @@ interface SbxSettingsFieldsProps {
    *  where the save request is built, and this only edits it. */
   state: FieldsState;
   setState: Dispatch<SetStateAction<FieldsState>>;
+  /** Org-managed network policy: a local allow is silently ignored, so Allowed hosts says so
+   *  instead of offering rows that would do nothing — see sbx.ts's allowHosts. */
+  networkGoverned: boolean;
 }
 
 /**
@@ -67,9 +78,10 @@ interface SbxSettingsFieldsProps {
  * inside the sandbox, tet holds no credentials for it. Allowed paths always shows the editable,
  * no-governance form — reading and rendering what an organization's policy actually grants needs
  * `sbx policy ls`'s JSON shape verified against a real governed account first, and none was
- * available to test with.
+ * available to test with. Allowed hosts does not: under network governance a local allow is
+ * ignored outright, and that is all the section needs to know to say so.
  */
-export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({ state, setState, networkGoverned }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -84,7 +96,7 @@ export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
   const addPath = async (picked: Promise<string | null>): Promise<void> => {
     const chosen = await picked;
     if (chosen) {
-      update("paths", (paths) => [...paths, withId({ path: chosen, access: "Read+Write" })]);
+      update("paths", (paths) => [...paths, withId({ path: chosen, access: "rw" })]);
     }
   };
 
@@ -101,7 +113,7 @@ export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
                   <input
                     type="checkbox"
                     checked={access !== false}
-                    onChange={(event) => setKnowledge(kind, event.target.checked ? "Read" : false)}
+                    onChange={(event) => setKnowledge(kind, event.target.checked ? "ro" : false)}
                   />
                   <span>{label}</span>
                 </label>
@@ -200,6 +212,45 @@ export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
             + Add file
           </button>
         </div>
+      </div>
+
+      <div className="dialog-field sbx-section">
+        <span className="dialog-field-label">Allowed hosts</span>
+        {networkGoverned ? (
+          <p className="dialog-detail">Your organization manages SBX's network policy, so no host can be allowed from this machine.</p>
+        ) : (
+          <>
+            <div className="sbx-rows">
+              {state.hosts.length === 0 && <p className="dialog-detail">No hosts allowed yet</p>}
+              {state.hosts.map((row) => (
+                // The path row's box: the input's own flex: 1 pushes the button flush right the
+                // way .sbx-path-value does, so .sbx-port-row's margin-left: auto isn't needed.
+                <div key={row.id} className="sbx-path-row">
+                  <input
+                    className="sbx-host-input"
+                    type="text"
+                    placeholder="api.example.com"
+                    title="Exact host, *.example.com, or host:443"
+                    value={row.host}
+                    onChange={(event) =>
+                      update("hosts", (hosts) => hosts.map((entry) => (entry.id === row.id ? { ...entry, host: event.target.value } : entry)))
+                    }
+                  />
+                  <button
+                    className="icon-button"
+                    title="Remove host"
+                    onClick={() => update("hosts", (hosts) => hosts.filter((entry) => entry.id !== row.id))}
+                  >
+                    <CloseIcon />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="sbx-add-row" onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>
+              + Add host
+            </button>
+          </>
+        )}
       </div>
     </>
   );

@@ -64,9 +64,13 @@ export interface TETApi {
     /** Whether an organization manages the filesystem policy — then no folder can be allowed
      *  from this machine and sbx sandboxing is off for tet (see sbx.ts's checkSbxGoverned). */
     checkFilesystemGoverned(): Promise<boolean>;
+    /** Whether an organization manages the network policy — then a local allow is silently
+     *  ignored, so the dialog says so instead of offering Allowed hosts (sbx.ts's allowHosts). */
+    checkNetworkGoverned(): Promise<boolean>;
     /** Kills whichever of `login`/`initPolicy` is currently running — the Cancel button. */
     cancelSetup(): void;
-    /** What the dialog's fields reopen with — read fresh from tet.json. */
+    /** What the dialog's fields reopen with — read fresh from tet.json, the hosts from the
+     *  project's sandboxes themselves (sbx.ts's readLiveSbxConfig). */
     getConfig(projectId: string): Promise<SbxProjectConfig>;
     /** The dialog's Save button — writes ports/folders to tet.json; a sandbox whose folders
      *  changed is removed, said as a notice from the main process. */

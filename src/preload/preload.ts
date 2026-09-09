@@ -28,6 +28,7 @@ const api: TETApi = {
     checkPolicyInitialized: () => ipcRenderer.invoke("sbx:check-policy-initialized"),
     initPolicy: () => ipcRenderer.invoke("sbx:init-policy"),
     checkFilesystemGoverned: () => ipcRenderer.invoke("sbx:check-filesystem-governed"),
+    checkNetworkGoverned: () => ipcRenderer.invoke("sbx:check-network-governed"),
     cancelSetup: () => ipcRenderer.send("sbx:cancel-setup"),
     getConfig: (projectId) => ipcRenderer.invoke("sbx:get-config", projectId),
     saveConfig: (projectId, request) => ipcRenderer.invoke("sbx:save-config", projectId, request)

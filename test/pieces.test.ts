@@ -13,7 +13,7 @@ import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/m
 import { sandboxTarget, toContainerPath } from "../src/main/terminals/hook-target";
 import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
-import { computeWorkspaces, contractHome, pathMountSpecs, sandboxName } from "../src/main/sbx";
+import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
@@ -114,11 +114,11 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(toContainerPath("/Users/saka/project"), "/Users/saka/project");
   });
 
-  it("mounts Read+Write bare (sbx maps it to the same path itself), Read with an explicit :ro target", () => {
+  it("mounts rw bare (sbx maps it to the same path itself), ro with an explicit :ro target", () => {
     const repo = path.join(os.tmpdir(), "repo");
-    assert.deepEqual(pathMountSpecs({ path: repo, access: "Read+Write" }), { mount: repo, unmount: repo });
+    assert.deepEqual(pathMountSpecs({ path: repo, access: "rw" }), { mount: repo, unmount: repo });
     const target = toContainerPath(repo);
-    assert.deepEqual(pathMountSpecs({ path: repo, access: "Read" }), {
+    assert.deepEqual(pathMountSpecs({ path: repo, access: "ro" }), {
       mount: `${repo}:${target}:ro`,
       unmount: `${repo}:${target}`
     });
@@ -126,9 +126,9 @@ describe("sbx sandbox naming and mounts", () => {
 
   it("spells a single file exactly like a folder — sbx mounts either in both forms", () => {
     const file = path.join(os.tmpdir(), "repo", ".npmrc");
-    assert.deepEqual(pathMountSpecs({ path: file, access: "Read+Write" }), { mount: file, unmount: file });
+    assert.deepEqual(pathMountSpecs({ path: file, access: "rw" }), { mount: file, unmount: file });
     const target = toContainerPath(file);
-    assert.deepEqual(pathMountSpecs({ path: file, access: "Read" }), {
+    assert.deepEqual(pathMountSpecs({ path: file, access: "ro" }), {
       mount: `${file}:${target}:ro`,
       unmount: `${file}:${target}`
     });
@@ -147,19 +147,17 @@ describe("sbx sandbox naming and mounts", () => {
 
   it("normalizes a typed host path (trimmed, ~ expanded) before building its mount spec", () => {
     const data = path.join(os.tmpdir(), "data");
-    assert.equal(pathMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "Read+Write" }).mount, data);
+    assert.equal(pathMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "rw" }).mount, data);
     const home = path.join(os.homedir(), "data");
-    assert.equal(pathMountSpecs({ path: "~/data/", access: "Read+Write" }).mount, home);
+    assert.equal(pathMountSpecs({ path: "~/data/", access: "rw" }).mount, home);
   });
 
-  it("mounts the project and tet's own dirs — Allowed paths are a live sbx mount, not a workspace", () => {
+  it("mounts tet's own dirs live — agentDir read-write, the context file's directory read-only", () => {
     const agentDir = path.join(os.tmpdir(), "agents", "claude", "p");
     const contextDir = path.join(os.tmpdir(), "ctx");
-    const repo = path.join(os.tmpdir(), "tet-sbx-repo");
-    assert.deepEqual(computeWorkspaces(repo, { agentDir, contextFile: path.join(contextDir, "context.md") }), [
-      repo,
+    assert.deepEqual(fixedMountSpecs({ agentDir, contextFile: path.join(contextDir, "context.md") }), [
       agentDir,
-      `${contextDir}:ro`
+      pathMountSpecs({ path: contextDir, access: "ro" }).mount
     ]);
   });
 });

@@ -317,7 +317,7 @@ export async function setSortOrder(root: string, value: ExplorerSortOrder): Prom
   await patchSetting(root, KEY_SORT_ORDER, value);
 }
 
-const SBX_ACCESS: readonly SbxAccess[] = ["Read", "Read+Write"];
+const SBX_ACCESS: readonly SbxAccess[] = ["ro", "rw"];
 
 function toSbxPorts(value: unknown): SbxPort[] {
   if (!Array.isArray(value)) {
@@ -334,6 +334,15 @@ function toSbxPorts(value: unknown): SbxPort[] {
     }
   }
   return ports;
+}
+
+/** Trimmed, because sbx validates nothing (see SbxProjectConfig.hosts): a stray space would
+ *  become a rule that silently matches no request. */
+function toSbxHosts(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean);
 }
 
 /**
@@ -366,7 +375,7 @@ function toSbxPaths(value: unknown): StoredSbxPath[] {
     }
     const { path: hostPath, access, os } = entry as { path?: unknown; access?: unknown; os?: unknown };
     if (typeof hostPath === "string" && hostPath.trim()) {
-      const row: StoredSbxPath = { path: hostPath, access: SBX_ACCESS.find((candidate) => candidate === access) ?? "Read+Write" };
+      const row: StoredSbxPath = { path: hostPath, access: SBX_ACCESS.find((candidate) => candidate === access) ?? "rw" };
       if (typeof os === "string") {
         row.os = os;
       }
@@ -380,23 +389,12 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
   return typeof content.sbx === "object" && content.sbx !== null ? (content.sbx as Record<string, unknown>) : {};
 }
 
-/** `knowledge`'s on-disk access codes — short because there is one of these per kind per agent
- *  rather than per user-picked row the way an allowed path's `access` is. */
-const KNOWLEDGE_ACCESS_CODE: Record<SbxAccess, "r" | "rw"> = { Read: "r", "Read+Write": "rw" };
-const KNOWLEDGE_ACCESS_FROM_CODE: Partial<Record<string, SbxAccess>> = { r: "Read", rw: "Read+Write" };
-
 /** A malformed or missing `knowledge` object reads as every kind off — never partially on from a
  *  field that happens to be truthy by accident. */
 function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
   const record = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-  const toAccess = (field: unknown): SbxAccess | false =>
-    (typeof field === "string" ? KNOWLEDGE_ACCESS_FROM_CODE[field] : undefined) ?? false;
+  const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((candidate) => candidate === field) ?? false;
   return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
-}
-
-function toStoredKnowledge(knowledge: SbxKnowledgeConfig): Record<keyof SbxKnowledgeConfig, "r" | "rw" | false> {
-  const toCode = (access: SbxAccess | false): "r" | "rw" | false => (access ? KNOWLEDGE_ACCESS_CODE[access] : false);
-  return { skills: toCode(knowledge.skills), plugins: toCode(knowledge.plugins), instructions: toCode(knowledge.instructions) };
 }
 
 /**
@@ -409,7 +407,13 @@ export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
     .map(({ path: hostPath, access }) => ({ path: hostPath, access }));
-  return { enabled: sbx.enabled === true, knowledge: toSbxKnowledge(sbx.knowledge), ports: toSbxPorts(sbx.ports), paths };
+  return {
+    enabled: sbx.enabled === true,
+    knowledge: toSbxKnowledge(sbx.knowledge),
+    ports: toSbxPorts(sbx.ports),
+    paths,
+    hosts: toSbxHosts(sbx.hosts)
+  };
 }
 
 /** Writes the rows that apply here in place of the previous ones — see StoredSbxPath. */
@@ -419,6 +423,12 @@ export async function writeSbxConfig(root: string, config: SbxProjectConfig): Pr
   const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: process.platform }));
   await write(root, {
     ...content,
-    sbx: { enabled: config.enabled, knowledge: toStoredKnowledge(config.knowledge), ports: config.ports, paths: [...others, ...mine] }
+    sbx: {
+      enabled: config.enabled,
+      knowledge: config.knowledge,
+      ports: config.ports,
+      paths: [...others, ...mine],
+      hosts: config.hosts
+    }
   });
 }

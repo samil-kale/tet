@@ -104,8 +104,10 @@ export interface SbxPort {
   container: string;
 }
 
-/** One allowed-path row's access — the two modes sbx has: read-write, or read-only (`:ro`). */
-export type SbxAccess = "Read" | "Read+Write";
+/** One allowed-path row's access — the two modes sbx has, in `sbx mount`'s own words
+ *  (`HOST:TARGET:ro|rw`), so tet.json reads like the command it feeds. The dialog labels them
+ *  Read / Read+Write. */
+export type SbxAccess = "ro" | "rw";
 
 /** One row of "Allowed paths": a host folder *or* a single file — sbx mounts either, in both
  *  access forms (see sbx.ts's pathMountSpecs). */
@@ -116,7 +118,7 @@ export interface SbxPath {
 
 /** Which of an agent's shareable, non-identity host knowledge to bring into its sandbox, and
  *  with which access — see sbx.ts's knowledgePaths for exactly which paths each is, per agent.
- *  `false` is off; `SbxAccess` is the same Read/Read+Write choice "Allowed paths" rows get, so
+ *  `false` is off; `SbxAccess` is the same ro/rw choice "Allowed paths" rows get, so
  *  an agent that edits its own skills or plugins from inside the sandbox can write them back.
  *  One switch per kind rather than a row per path, the way "Allowed paths" is the user's own
  *  list; agent-agnostic (applies to both Claude and Codex tabs the same way), since each agent's
@@ -138,6 +140,15 @@ export interface SbxProjectConfig {
   knowledge: SbxKnowledgeConfig;
   ports: SbxPort[];
   paths: SbxPath[];
+  /** "Allowed hosts": the project's own additions to sbx's network policy, one resource per
+   *  row in sbx's own grammar — an exact host (`api.example.com`), a wildcard (`*.example.com`),
+   *  an optional port (`example.com:443`). Typed input, never checked: sbx itself validates
+   *  nothing here (measured, 0.42.1 — `https://example.com` is accepted as a rule and then
+   *  matches no request), so a typo is a rule that never matches, not an error. Unlike the other
+   *  fields, the sandbox itself is the truth for this one: tet.json only seeds a new sandbox
+   *  and records what was last saved; the dialog opens with the rules actually attached to
+   *  the project's sandboxes (sbx.ts's readLiveSbxConfig, allowHosts). */
+  hosts: string[];
 }
 
 /** A project with no `sbx` section in its tet.json, and what the dialog mounts with. */
@@ -145,7 +156,8 @@ export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
   enabled: false,
   knowledge: { skills: false, plugins: false, instructions: false },
   ports: [],
-  paths: []
+  paths: [],
+  hosts: []
 };
 
 /** The Prompts tab's picker. */

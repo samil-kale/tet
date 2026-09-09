@@ -38,12 +38,13 @@ import {
   checkSbxGoverned,
   checkSbxPolicyInitialized,
   initSbxPolicy,
+  readLiveSbxConfig,
   runSbxLogin,
   saveSbxConfig
 } from "./sbx";
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
-import { DEFAULT_EXPLORER_VIEW, readCommands, readSbxConfig, writeCommands } from "./git/commands";
+import { DEFAULT_EXPLORER_VIEW, readCommands, writeCommands } from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
@@ -165,23 +166,24 @@ export function registerIpc({
   ipcMain.handle("sbx:check-policy-initialized", () => checkSbxPolicyInitialized());
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.handle("sbx:check-filesystem-governed", () => checkSbxGoverned("filesystem"));
+  ipcMain.handle("sbx:check-network-governed", () => checkSbxGoverned("network"));
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
-  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached. */
+  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached;
+   *  the hosts from the sandboxes themselves (sbx.ts's readLiveSbxConfig). */
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
-    return project ? readSbxConfig(project.path) : EMPTY_SBX_CONFIG;
+    return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
   /** The dialog's Save button — writes tet.json; see sbx.ts's saveSbxConfig for the sandbox
    *  removal each notice below is about. */
   ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxProjectConfig): Promise<GitActionResult> => {
     const project = store.get(projectId);
-    const manager = sessions.get(projectId);
-    if (!project || !manager) {
+    if (!project) {
       return { ok: false, error: "Project not found" };
     }
     try {
-      const removed = await saveSbxConfig(project.path, project.id, request, (agentId) => manager.sandboxPaths(agentId));
+      const removed = await saveSbxConfig(project.path, project.id, request);
       for (const agentId of removed) {
         const message = request.enabled
           ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`

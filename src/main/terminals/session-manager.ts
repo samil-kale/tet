@@ -11,13 +11,12 @@ import type {
   NoticeSeverity,
   Project,
   ProjectCommand,
-  SbxAgentId,
   TerminalDescriptor,
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig } from "../git/commands";
-import { checkSbxGoverned, prepareSbxRun, sandboxName, sbxNotReady, type SandboxPaths } from "../sbx";
+import { checkSbxGoverned, prepareSbxRun, sandboxName, sbxNotReady } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -813,13 +812,6 @@ export class ProjectSessionManager {
       `This ${this.runtimeFor(tab.agentId).agent.displayName} session lives in ${this.project.name}'s SBX sandbox and cannot run on this machine: ${reason}. The tab menu's Restart tries again once that has changed.`
     );
     return true;
-  }
-
-  /** The paths a sandbox of this agent is built around, for ipc.ts's `sbx:save-config`:
-   *  saveSbxConfig compares an existing sandbox against them (see sbx.ts's computeWorkspaces).
-   *  The one way out for these, since AgentPaths is the terminal layer's own. */
-  sandboxPaths(agentId: SbxAgentId): SandboxPaths {
-    return this.pathsFor(this.runtimeFor(agentId));
   }
 
   private startSession(tab: TabState, sbxArgs: string[] | null): TerminalSession {
