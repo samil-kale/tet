@@ -214,8 +214,8 @@ export interface AgentDefinition {
    * binary is what runs (see `sandboxEnv` for a constant). `cwd` is the project's own path, for
    * a notify message's repository name; `sandbox` is the sandbox's name, for an agent whose
    * sessions record where they live (AgentSessionInfo.sandbox). Synchronous: unlike
-   * prepareSpawn, nothing here waits on external setup. Omitted by an agent with no sbx kit at
-   * all (pi) or that needs no hooks (the shell).
+   * prepareSpawn, nothing here waits on external setup. Omitted by an agent that cannot be
+   * sandboxed at all, or needs no hooks — the shell, on both counts.
    */
   prepareSandboxSpawn?: (cwd: string, paths: AgentPaths, sandbox: string) => SandboxPreparation;
   /**

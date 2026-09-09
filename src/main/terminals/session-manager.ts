@@ -618,7 +618,7 @@ export class ProjectSessionManager {
    * command's: a saved command is not "this agent's process" in the first place (see
    * startSession), so wrapping it in a sandbox would run the wrong thing.
    *
-   * A session runs where it lives. For Claude Code and Codex that is always the host once a
+   * A session runs where it lives. For Claude Code, Codex and pi that is always the host once a
    * tab has a `sessionId`: a sandboxed session's transcript lives only inside its container
    * (sbx.ts's computeWorkspaces — the agent's own config directory, where it would sit, is
    * deliberately never mounted), invisible to the reconcile loop's host filesystem listing,

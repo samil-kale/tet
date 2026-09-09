@@ -10,16 +10,21 @@ export interface HookTarget {
   /** False only for a Windows host — a sandbox is always Linux, whatever host it runs on, so a
    *  hook generated for one must take the POSIX branch even when `process.platform` is win32. */
   posix: boolean;
+  /** Whether this is a sandbox rather than the host — for what a *desktop* session is needed
+   *  for rather than a shell. A sandbox has none, so anything that would show a toast there has
+   *  to go through `tet-ctl notify` instead of running a notify script itself (see
+   *  buildHookNotifyCommand, and pi's extension, which spawns the two as argument lists). */
+  sandbox: boolean;
   /** A host path exactly as this target's own shell will see it — identity outside a sandbox. */
   embed(hostPath: string): string;
 }
 
 export function hostTarget(): HookTarget {
-  return { posix: process.platform !== "win32", embed: (hostPath) => hostPath };
+  return { posix: process.platform !== "win32", sandbox: false, embed: (hostPath) => hostPath };
 }
 
 export function sandboxTarget(): HookTarget {
-  return { posix: true, embed: toContainerPath };
+  return { posix: true, sandbox: true, embed: toContainerPath };
 }
 
 /**

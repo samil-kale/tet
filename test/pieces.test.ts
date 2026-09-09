@@ -7,10 +7,10 @@ import { describe, it } from "node:test";
 import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
-import { renderPiExtension } from "../src/main/agents/pi/extension";
+import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
-import { toContainerPath } from "../src/main/terminals/hook-target";
+import { sandboxTarget, toContainerPath } from "../src/main/terminals/hook-target";
 import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
 import { computeWorkspaces, contractHome, folderMountSpecs, sandboxName } from "../src/main/sbx";
@@ -62,7 +62,7 @@ describe("Codex's hook trust", () => {
         { finished: true, needsYou: true, idleReminder: false },
         "repo",
         path.join(storageDir, "context.md"),
-        { posix, embed: (value) => value }
+        { posix, sandbox: false, embed: (value) => value }
       );
       const script = fs.readFileSync(path.join(storageDir, posix ? "stop.sh" : "stop.ps1"), "utf8");
       assert.match(script, posix ? />\/dev\/null/ : /\| Out-Null/);
@@ -318,6 +318,24 @@ describe("pi's extension", () => {
     }
     handlers.agent_start({}, { sessionManager: { getSessionId: () => "../escape" } });
     assert.deepEqual(fs.readdirSync(markers.busy), ["0000-aaaa"], "only a session id becomes a filename");
+  });
+
+  // The file is written on the host and read inside the container: every path in it is the
+  // sandbox's own, and the toast cannot be a script — there is no desktop session in there.
+  it("writes a sandbox one with container paths and tet-ctl for the toast", () => {
+    const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-sbx-"));
+    const contextFile = path.join(storageDir, "context.md");
+    const notifications = { finished: true, needsYou: true, idleReminder: false };
+    const file = writePiExtension(storageDir, "repo", "Pi", notifications, contextFile, sandboxTarget());
+    const source = fs.readFileSync(file, "utf8");
+
+    assert.ok(source.includes(JSON.stringify(toContainerPath(contextFile))), "the context file as the container sees it");
+    assert.ok(source.includes(JSON.stringify(toContainerPath(path.join(storageDir, "busy")))), "and every marker directory");
+    assert.deepEqual(fs.readdirSync(storageDir).filter((name) => name.startsWith("notify-")), [], "no notify script for a sandbox");
+    assert.match(source, /"command":\s*"tet-ctl","args":\s*\["notify"/, "the toast goes through the control channel");
+    for (const kind of ["busy", "finished", "waiting"]) {
+      assert.ok(fs.existsSync(path.join(storageDir, kind)), `${kind} directory created on the host, for the watcher`);
+    }
   });
 });
 

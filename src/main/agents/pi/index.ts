@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { sandboxHookDir, sandboxTarget } from "../../terminals/hook-target";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
@@ -14,6 +15,11 @@ import { piSessionProvider } from "./sessions";
  * Deliberately not set for the spawned process: `PI_CODING_AGENT_DIR` (it would move the
  * user's sessions and auth), `PI_OFFLINE` (pi writing `lastChangelogVersion` into its own
  * settings.json and downloading `fd` on first start is the user's business).
+ *
+ * A tab of it can run in an sbx sandbox like the other three, through a community kit rather
+ * than one Docker ships — sbx.ts's SBX_CREATE_TARGET holds the reference and what follows from
+ * it, including the one thing that differs for the user: pi has no `/login`, so its Anthropic
+ * credential comes from sbx's own store.
  */
 export const piAgent: AgentDefinition = {
   id: "pi",
@@ -35,6 +41,7 @@ export const piAgent: AgentDefinition = {
       const extension = writePiExtension(paths.agentDir, path.basename(cwd), "Pi", paths.notifications, paths.contextFile);
       args.push("-e", extension);
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
+      watchers.push(watchTurnMarkers(sandboxHookDir(paths.agentDir), paths));
     } catch (error) {
       // Unlike Claude Code's hooks, a `-e` file pi cannot load is fatal to it (measured: it
       // prints "Failed to load extension" and exits). So a file that failed to write is not
@@ -51,6 +58,20 @@ export const piAgent: AgentDefinition = {
     // answer taking longer than that queue's TTL loses its spinner, the finished mark still
     // lands. Known, and not worth a mechanism.
     return Promise.resolve({ args, dispose: () => watchers.forEach((stop) => stop()) });
+  },
+  prepareSandboxSpawn: (cwd, paths) => {
+    const target = sandboxTarget();
+    try {
+      const extension = writePiExtension(sandboxHookDir(paths.agentDir), path.basename(cwd), "Pi", paths.notifications, paths.contextFile, target);
+      // The file is written at its host path and read at the sandbox's — agentDir is a workspace
+      // (sbx.ts's computeWorkspaces) and this sits inside it. Same "a `-e` pi cannot load is
+      // fatal" reasoning as the host branch above: on a failed write pi is started without the
+      // argument at all rather than pointed at a file that is not there.
+      return { args: ["-e", target.embed(extension), "--use-theme", paths.theme.kind] };
+    } catch (error) {
+      console.error("[tet] could not write pi's sandbox extension:", error);
+      return { args: ["--use-theme", paths.theme.kind] };
+    }
   },
   // Measured startup: ~130 B of handshake by 120 ms, a 1037 B chunk at ~680 ms, a 1881 B chunk
   // at ~850 ms, ~3 KB in 0.9 s. With the project-trust dialog (a repository holding `.pi/`,

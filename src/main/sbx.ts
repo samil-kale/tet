@@ -442,9 +442,10 @@ export function computeWorkspaces(projectPath: string, paths: SandboxPaths): str
   return [projectPath, paths.agentDir, `${path.dirname(paths.contextFile)}:ro`];
 }
 
-/** Every sandbox template's non-root user, and its home — verified live, 2026-09-08, for a
- *  Claude, a Codex and an opencode sandbox (`$HOME` and `whoami`). `sbx mount`'s target must be an absolute
- *  path (its own `--help`): it is not passed through a shell, so `~` never expands there. */
+/** Every sandbox template's non-root user, and its home — verified live for a Claude, a Codex
+ *  and an opencode sandbox (2026-09-08) and for pi's community-kit one (2026-09-09), each by
+ *  `$HOME` and `whoami` inside it. `sbx mount`'s target must be an absolute path (its own
+ *  `--help`): it is not passed through a shell, so `~` never expands there. */
 const SANDBOX_HOME = "/home/agent";
 
 interface KnowledgeEntry {
@@ -478,10 +479,31 @@ interface KnowledgeEntry {
  * `~/.config/opencode/plugins`; rules from `~/.config/opencode/AGENTS.md`, else
  * `~/.claude/CLAUDE.md` — each mounted where opencode reads it, never the config directory
  * itself, which holds `opencode.json` with the user's providers. Its auth is elsewhere
- * (`~/.local/share/opencode/auth.json`, its data directory) and stays out.
+ * (`~/.local/share/opencode/auth.json`, its data directory) and stays out. pi's are its own
+ * documented ones too — see its branch below.
  */
 function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, KnowledgeEntry[]> {
   const home = os.homedir();
+  if (agentId === "pi") {
+    // pi's own documented locations, read off the installed package's bundled docs (0.85.1:
+    // docs/skills.md, docs/extensions.md, docs/usage.md) rather than a web page — skills from
+    // `~/.pi/agent/skills` and, shared with the other harnesses, `~/.agents/skills`; extensions
+    // (pi's word for plugins) from `~/.pi/agent/extensions`, the location `/reload` also watches;
+    // global instructions from `~/.pi/agent/AGENTS.md`, with `AGENTS.override.md` taking its place
+    // in the same directory, pi's own documented precedence — the same shape Codex has below. Its
+    // config directory itself stays out for the usual reason (auth.json and the sessions sit
+    // there); `PI_CODING_AGENT_DIR` is never set for a sandboxed tab either, so the sandbox's pi
+    // finds these at their default paths.
+    const instructionsHost = [path.join(home, ".pi", "agent", "AGENTS.override.md"), path.join(home, ".pi", "agent", "AGENTS.md")].find(statOf);
+    return {
+      skills: [
+        { host: path.join(home, ".pi", "agent", "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` },
+        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
+      ],
+      plugins: [{ host: path.join(home, ".pi", "agent", "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
+      instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : []
+    };
+  }
   if (agentId === "claude") {
     return {
       skills: [{ host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
@@ -574,6 +596,32 @@ async function ensureRunning(name: string, onData?: OnData): Promise<boolean> {
 }
 
 /**
+ * What goes where `sbx create` wants its agent, per agent — the agent's own id for the three
+ * Docker ships a built-in kit for, and a *kit reference* for pi, which it does not
+ * (`sbx create --help` lists the built-ins; pi is not among them, still true at 0.42.1).
+ * `docker.io/sbx/pi-kit` is the community kit from docker/sbx-kits-contrib: a `kind: sandbox`
+ * kit whose own image (`docker.io/sbx/pi-image`, the shell-docker template plus a global npm
+ * install of pi, rebuilt nightly) sbx pulls itself on the first create — nothing is installed
+ * here, and the sandbox's user and home are the same `/home/agent` every built-in template has.
+ *
+ * Three things verified live against a real install, 2026-09-09, sbx 0.42.1 (0.39.0 could not
+ * read the kit's v2 manifest at all — "no v2 kit layer found in manifest" — so this needs that
+ * version or newer):
+ * - the reference is the *first positional*, in the agent's place. Passing it as `--kit` warns
+ *   that doing so is deprecated: at 0.42.1 `--kit` means an additional *mixin* layered onto a
+ *   built-in agent, which is not what this is.
+ * - only `create` needs it. `sbx run` reattaches by `--name` and reads the agent back from the
+ *   sandbox's own spec, so `prepareSbxRun` keeps passing the plain agent id there for sbx's own
+ *   verification — `sbx run pi --name …` is accepted even though `pi` is no built-in, because
+ *   that is the name the kit itself declares (and what `sbx ls --json` reports as its `agent`).
+ * - authentication is the one place pi differs from the other three, and it is not tet's to
+ *   arrange: pi has no `/login` of its own, so its kit takes an Anthropic credential from sbx's
+ *   own store (`sbx secret set anthropic`, an OAuth login shared from a `claude` sandbox, or a
+ *   `claude setup-token`). With no binding the sandbox starts fine and every model call is a 401.
+ */
+const SBX_CREATE_TARGET: Partial<Record<SbxAgentId, string>> = { pi: "docker.io/sbx/pi-kit:latest" };
+
+/**
  * Makes sure a sandbox exists with exactly `workspaces` — tet's own fixed paths only now that
  * Allowed folders are a live mount (see computeWorkspaces), so this practically never disagrees
  * once a project's sandbox exists. One that exists with a *different* set is rebuilt rather than
@@ -592,7 +640,7 @@ async function ensureSandboxExists(agentId: SbxAgentId, workspaces: string[], na
   if (existing !== undefined) {
     await removeSandbox(name, onData);
   }
-  await runSbx(["create", agentId, ...workspaces, "--name", name], { onData });
+  await runSbx(["create", SBX_CREATE_TARGET[agentId] ?? agentId, ...workspaces, "--name", name], { onData });
 }
 
 /**
@@ -748,7 +796,8 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // and workspaces are therefore never passed here, not even right after creating it (a real
   // reproduction, not a hypothetical: the "just created" case hit this exact error before this
   // comment was written to say so). The agent positional is for sbx's own verification, per its
-  // --help; `--name` is what actually finds the sandbox.
+  // --help; `--name` is what actually finds the sandbox. It stays the plain agent id even for an
+  // agent created from a kit reference — see SBX_CREATE_TARGET.
   const args = [
     "run",
     agentId,

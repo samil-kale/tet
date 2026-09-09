@@ -83,14 +83,15 @@ export type PromptId = "commitMessage";
 
 export type PromptSettings = Record<PromptId, string>;
 
-/** The agents that run in an sbx sandbox: the ones Docker ships a sandbox kit for (`sbx run
- *  --help` lists them; pi is not among them, verified 2026-09-08 against sbx 0.39.0). Kept as
+/** The agents that run in an sbx sandbox: the three Docker ships a built-in kit for (`sbx run
+ *  --help` lists them), plus pi through the community kit `sbx-kits-contrib` publishes — see
+ *  sbx.ts's `SBX_CREATE_TARGET` for the reference and what it costs at `sbx create`. Kept as
  *  its own union rather than a subset check against `AgentId` everywhere the sandbox config is
- *  read. */
-export type SbxAgentId = "claude" | "codex" | "opencode";
+ *  read; the shell is what stays out. */
+export type SbxAgentId = "claude" | "codex" | "opencode" | "pi";
 
-/** The same three as a list, for everything that walks them — sbx.ts's save path, the dialog's text. */
-export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex", "opencode"];
+/** The same four as a list, for everything that walks them — sbx.ts's save path, the dialog's text. */
+export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex", "opencode", "pi"];
 
 export function isSbxAgent(agentId: string): agentId is SbxAgentId {
   return (SBX_AGENT_IDS as readonly string[]).includes(agentId);
@@ -121,14 +122,15 @@ export interface SbxFolder {
 export interface SbxKnowledgeConfig {
   skills: SbxAccess | false;
   plugins: SbxAccess | false;
-  /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex. */
+  /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex and pi. */
   instructions: SbxAccess | false;
 }
 
 /** The sbx-settings dialog's saved state, per project — read back into the dialog on open, written
  *  by its Save button. One set of ports, folders and knowledge for every sandboxed tab of the
  *  project, whichever agent it runs. Authentication is never part of it: each sandboxed agent
- *  signs in with its own `/login` inside the sandbox, not through tet. */
+ *  signs in with its own `/login` inside the sandbox, not through tet — pi being the one that
+ *  cannot, and takes a credential from sbx's own store instead (see its kit in sbx.ts). */
 export interface SbxProjectConfig {
   enabled: boolean;
   knowledge: SbxKnowledgeConfig;

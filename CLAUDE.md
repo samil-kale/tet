@@ -361,10 +361,11 @@ through hook processes that `touch` a marker named after the session id into `<a
 `finished/` and `waiting/` (a sandboxed tab's under `<agentDir>/sandbox/`, watched alongside),
 opencode through a generated plugin and pi through a generated `-e` extension, each writing the
 same markers from inside its own process (opencode's sandboxed tab into the same agentDir,
-through the mount) — all picked up by `watchMarkers` (`src/main/terminals/marker-watch.ts`, watch
-*plus* a timer sweep — win32 `fs.watch` misses files). The hooks register regardless of
-notification settings; only their toast is optional, and for Claude Code, Codex and opencode it
-is `tet-ctl notify` — the main process shows it, since a sandboxed hook has no desktop session
+through the mount; pi's into `<agentDir>/sandbox/`, like the hook agents') — all picked up by
+`watchMarkers` (`src/main/terminals/marker-watch.ts`, watch *plus* a timer sweep — win32
+`fs.watch` misses files). The hooks register regardless of notification settings; only their
+toast is optional, and everywhere but a pi tab on the host that toast is
+`tet-ctl notify` — the main process shows it, since a sandboxed hook has no desktop session
 (`showDesktopNotification` in `main.ts`). Reusing the Stop hook is the point: it carries the
 `background_tasks` guard, so a turn that only launched a subagent isn't "finished". Markers found
 at startup are deleted unreported.
@@ -526,9 +527,11 @@ change.
 
 ## sbx: an agent tab inside a Docker sandbox
 
-Opt-in per project through the project row's "SBX Settings", for Claude Code, Codex and
-opencode (`SbxAgentId`: the ones sbx ships a kit for; pi has none). `src/main/sbx.ts` drives
-the `sbx` CLI the way `git.ts` drives git — every call a plain spawn, never a shell — and every
+Opt-in per project through the project row's "SBX Settings", for every agent but the shell
+(`SbxAgentId`): the three sbx ships a kit for, plus pi through a community kit named as
+`sbx create`'s first positional (`SBX_CREATE_TARGET`, which also holds why pi's sign-in works
+differently from the others'). `src/main/sbx.ts` drives the `sbx` CLI the way `git.ts` drives
+git — every call a plain spawn, never a shell — and every
 fact in it about sbx was measured against the real binary (sandbox names, mount grammar, what
 survives a stop, the first-run wizard); its comments are the record. The config is the `sbx`
 key of the repository's own `tet.json` (`readSbxConfig` in `commands.ts`: ports, allowed folders

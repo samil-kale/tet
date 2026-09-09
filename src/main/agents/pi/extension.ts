@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { hostTarget, type HookTarget } from "../../terminals/hook-target";
 import { markerDir, SESSION_ID_CHARS } from "../../terminals/marker-watch";
 import { scriptInvocation, writeNotifyScript, type ScriptInvocation } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
@@ -15,18 +16,42 @@ export interface PiExtensionOptions {
 }
 
 /**
+ * How this target shows a toast, as the argument list pi's extension spawns. On the host that
+ * is the generated notify script; in a sandbox there is no desktop session to show it in, so it
+ * is `tet-ctl notify` — the same relay every other agent's hook uses (buildHookNotifyCommand),
+ * only as an argument list rather than a command line, since the extension spawns it directly.
+ * `tet-ctl` is written into every sandbox's `~/.local/bin` (sbx.ts's ensureSandboxLauncher);
+ * where it is not (no control channel, or an org-governed network policy), the extension's own
+ * `error` handler on the spawn swallows it, the same as a missing interpreter.
+ */
+function notifyInvocation(
+  target: HookTarget,
+  storageDir: string,
+  id: string,
+  title: string,
+  body: string
+): ScriptInvocation {
+  return target.sandbox ? { command: "tet-ctl", args: ["notify", title, body] } : scriptInvocation(writeNotifyScript(storageDir, id, title, body));
+}
+
+/**
  * Writes this repository's extension into `storageDir` and returns the path for `-e`. One
  * fixed name is enough: `storageDir` is already per agent per project (session-manager's
  * pathsFor), unlike opencode's shared config directory. Written beside the target and renamed
  * into place — pi reads it once at startup, and a read landing mid-write fails on Windows.
  * Throws on a failed write: the caller decides, since pi must never be pointed at a half file.
+ *
+ * `target` is where the extension will *run*: the host, or the sandbox, which reaches every one
+ * of these paths under a name of its own (hook-target.ts). Only what is baked into the file is
+ * translated — the writing itself happens here, on the host, at the paths this process sees.
  */
 export function writePiExtension(
   storageDir: string,
   repositoryName: string,
   displayName: string,
   notifications: NotificationSettings,
-  contextFile: string
+  contextFile: string,
+  target: HookTarget = hostTarget()
 ): string {
   const markers = { busy: markerDir(storageDir, "busy"), finished: markerDir(storageDir, "finished"), waiting: markerDir(storageDir, "waiting") };
   // Created here rather than by the extension alone: watchMarkers wants them to exist to
@@ -38,15 +63,16 @@ export function writePiExtension(
   // Claude Code's alone, as for Codex and opencode.
   const notify: PiExtensionOptions["notify"] = {
     finished: notifications.finished
-      ? scriptInvocation(writeNotifyScript(storageDir, "finished", `${displayName}: Finished`, `Finished in ${repositoryName}`))
+      ? notifyInvocation(target, storageDir, "finished", `${displayName}: Finished`, `Finished in ${repositoryName}`)
       : undefined,
     waiting: notifications.needsYou
-      ? scriptInvocation(writeNotifyScript(storageDir, "needs-you", `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`))
+      ? notifyInvocation(target, storageDir, "needs-you", `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`)
       : undefined
   };
   const file = path.join(storageDir, "tet.ts");
   const temp = `${file}.tmp`;
-  fs.writeFileSync(temp, renderPiExtension({ contextFile, markers, notify }));
+  const embedded = { busy: target.embed(markers.busy), finished: target.embed(markers.finished), waiting: target.embed(markers.waiting) };
+  fs.writeFileSync(temp, renderPiExtension({ contextFile: target.embed(contextFile), markers: embedded, notify }));
   fs.renameSync(temp, file);
   return file;
 }
