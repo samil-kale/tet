@@ -272,17 +272,20 @@ export async function addExclude(root: string, relPath: string): Promise<void> {
   });
 }
 
+/** Each of the three file-only view settings under the key VS Code spells it with. */
+const EXPLORER_SETTING_KEYS: Record<keyof ExplorerSettings, string> = {
+  excludeGitIgnore: KEY_EXCLUDE_GIT_IGNORE,
+  compactFolders: KEY_COMPACT_FOLDERS,
+  sortOrder: KEY_SORT_ORDER
+};
+
 /** The three file-only view settings, set from the settings dialog's Files tab. */
-export async function setExcludeGitIgnore(root: string, value: boolean): Promise<void> {
-  await patchSetting(root, KEY_EXCLUDE_GIT_IGNORE, value);
-}
-
-export async function setCompactFolders(root: string, value: boolean): Promise<void> {
-  await patchSetting(root, KEY_COMPACT_FOLDERS, value);
-}
-
-export async function setSortOrder(root: string, value: ExplorerSortOrder): Promise<void> {
-  await patchSetting(root, KEY_SORT_ORDER, value);
+export async function setExplorerSetting<K extends keyof ExplorerSettings>(
+  root: string,
+  key: K,
+  value: ExplorerSettings[K]
+): Promise<void> {
+  await patchSetting(root, EXPLORER_SETTING_KEYS[key], value);
 }
 
 const SBX_ACCESS: readonly SbxAccess[] = ["ro", "rw"];

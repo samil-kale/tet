@@ -17,15 +17,7 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import {
-  addExclude,
-  addFolder,
-  readExplorerView,
-  removeFolder,
-  setCompactFolders,
-  setExcludeGitIgnore,
-  setSortOrder
-} from "./commands";
+import { addExclude, addFolder, readExplorerView, removeFolder, setExplorerSetting } from "./commands";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { git } from "./git-client";
 import { watchedDirectoryGone } from "../watch-dir";
@@ -631,21 +623,15 @@ export class Repository {
     return this.editExplorer(() => addExclude(this.project.path, relPath));
   }
 
-  /** The settings dialog's Files tab reads and writes these three the same way. */
-  readExplorerSettings(): Promise<ExplorerSettings> {
-    return readExplorerView(this.project.path);
+  /** The settings dialog's Files tab reads and writes these three the same way. Only they cross:
+   *  the folders and the exclude globs are the tree's, edited from its own context menu. */
+  async readExplorerSettings(): Promise<ExplorerSettings> {
+    const { excludeGitIgnore, compactFolders, sortOrder } = await readExplorerView(this.project.path);
+    return { excludeGitIgnore, compactFolders, sortOrder };
   }
 
-  setExcludeGitIgnore(value: boolean): Promise<GitActionResult> {
-    return this.editExplorer(() => setExcludeGitIgnore(this.project.path, value));
-  }
-
-  setCompactFolders(value: boolean): Promise<GitActionResult> {
-    return this.editExplorer(() => setCompactFolders(this.project.path, value));
-  }
-
-  setSortOrder(value: ExplorerSortOrder): Promise<GitActionResult> {
-    return this.editExplorer(() => setSortOrder(this.project.path, value));
+  setExplorerSetting<K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): Promise<GitActionResult> {
+    return this.editExplorer(() => setExplorerSetting(this.project.path, key, value));
   }
 
   private async editExplorer(edit: () => Promise<void>): Promise<GitActionResult> {
