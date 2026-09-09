@@ -43,10 +43,7 @@ export interface TETApi {
   /** What tet is rather than what it is set to; the settings dialog's Info tab shows it. */
   app: {
     info(): Promise<AppInfo>;
-    /**
-     * A task that held the renderer's thread — into the main process's event loop log, with a
-     * line of context on what the renderer was doing just before.
-     */
+    /** A task that held the renderer's thread — into the main process's event loop log. */
     reportLongTask(ms: number, context: string): void;
   };
   /** Docker Sandboxes, opt-in per project — see the project row's "Enable sbx" entry. */
@@ -61,16 +58,13 @@ export interface TETApi {
     checkPolicyInitialized(): Promise<boolean>;
     /** Sets it to "balanced", Docker's own recommended default. */
     initPolicy(): Promise<boolean>;
-    /** Whether an organization manages any of the account's policies — then the dialog shows a
-     *  wall instead of its fields (see sbx.ts's checkSbxGoverned). */
+    /** Whether an organization manages any of the account's policies; then the dialog shows a wall. */
     checkGoverned(): Promise<boolean>;
     /** Kills whichever of `login`/`initPolicy` is currently running — the Cancel button. */
     cancelSetup(): void;
-    /** What the dialog's fields reopen with — read fresh from tet.json, the hosts from the
-     *  project's sandboxes themselves (sbx.ts's readLiveSbxConfig). */
+    /** What the dialog's fields reopen with — tet.json, the hosts from the sandboxes themselves. */
     getConfig(projectId: string): Promise<SbxProjectConfig>;
-    /** The dialog's Save button — writes ports/folders to tet.json; a sandbox whose folders
-     *  changed is removed, said as a notice from the main process. */
+    /** The dialog's Save button — writes to tet.json; a sandbox whose folders changed is removed. */
     saveConfig(projectId: string, request: SbxProjectConfig): Promise<GitActionResult>;
   };
   /** What the settings dialog reads and writes; there is one set of them for the whole app. */
@@ -81,43 +75,23 @@ export interface TETApi {
   };
   projects: {
     list(): Promise<Project[]>;
-    /**
-     * Opens a native folder picker; resolves null when it was cancelled. `defaultPath` is the
-     * folder it opens in — a folder that is no longer there is ignored by the platform.
-     */
+    /** Opens a native folder picker; null when cancelled. `defaultPath` is the folder it opens in. */
     pickDirectory(title: string, defaultPath?: string): Promise<string | null>;
-    /**
-     * The same for a single file — a separate call because Electron only honours
-     * ["openFile", "openDirectory"] as one dialog on macOS; see the ipc handler.
-     */
+    /** The same for a single file; separate because only macOS honours both modes as one dialog. */
     pickFile(title: string): Promise<string | null>;
-    /**
-     * Where the folder picker should open next time, given the user just picked `directory`.
-     * Normally `directory` itself — but when that is a repository's own root (the Add tab
-     * points the picker straight at one), its parent, where repositories are kept. See
-     * PathField in AddRepositoryDialog.
-     */
+    /** Where the folder picker opens next time: `directory` itself, or its parent when that is a
+     *  repository root. */
     directoryToRemember(directory: string): Promise<string>;
-    /**
-     * Opens the folder — or the repository it is a subdirectory of — as a project. A folder
-     * that is not there is an error, the way a failed clone is.
-     */
+    /** Opens the folder — or the repository it is inside — as a project; a missing one is an error. */
     open(directory: string): Promise<AddRepositoryResult>;
-    /**
-     * `git clone` into a new folder `name` inside `directory`, which becomes a project. With
-     * an account, its token authenticates the clone — the remote tab's rows pass one.
-     */
+    /** `git clone` into a new folder `name` inside `directory`; an account's token authenticates it. */
     clone(url: string, directory: string, name: string, accountId?: string): Promise<AddRepositoryResult>;
     /** `git init` of a new folder `name` inside `directory`, which becomes a project. */
     create(directory: string, name: string): Promise<AddRepositoryResult>;
     remove(projectId: string): Promise<void>;
     /** Persists the order the user dragged them into, as the full list of ids. */
     reorder(projectIds: string[]): Promise<void>;
-    /**
-     * The list changed without the window asking — the control channel opened or closed a
-     * project. `added` is to be shown, `removed` forgotten, the way the window's own add and
-     * close do it.
-     */
+    /** The list changed without the window asking — the control channel opened or closed a project. */
     onChanged(listener: (payload: { projects: Project[]; added?: string; removed?: string }) => void): Unsubscribe;
   };
   /** The configured repository-host accounts and what the remote tab asks them. */
@@ -178,11 +152,9 @@ export interface TETApi {
     deletePath(projectId: string, path: string): Promise<GitActionResult>;
     /** Renames or moves a file or directory — the Explorer tree's "Rename...". */
     renamePath(projectId: string, from: string, to: string): Promise<GitActionResult>;
-    /** Adds a folder to the project's `folders` list in tet.json — the Explorer tree's "Add
-     *  Folder to Workspace". */
+    /** Adds a folder to the project's `folders` list in tet.json — "Add Folder to Workspace". */
     addFolder(projectId: string, path: string): Promise<GitActionResult>;
-    /** Removes one again — "Remove Folder from Workspace"; the last one gone restores the whole
-     *  repository as one tree. */
+    /** Removes one again; the last one gone restores the whole repository as one tree. */
     removeFolder(projectId: string, path: string): Promise<GitActionResult>;
     /** Adds the path to the project's `exclude` map in tet.json — "Exclude from Files". */
     excludePath(projectId: string, path: string): Promise<GitActionResult>;
@@ -193,8 +165,7 @@ export interface TETApi {
     diff(projectId: string, path: string, options: DiffOptions): Promise<FileDiff>;
     /** Lines `from` to `to` of the file as it is now, for a gap the diff view opens. */
     fileLines(projectId: string, path: string, from: number, to: number): Promise<string[]>;
-    /** Every file in the repository, plus any directory nothing else implies — the diff dialog's
-     *  Explorer tree, not the changed-files list. */
+    /** Every file in the repository plus any directory nothing else implies — the Explorer tree. */
     listExplorer(projectId: string): Promise<ExplorerListing>;
     /** Just the settings dialog's Files tab needs — no filesystem walk, tet.json alone. */
     explorerSettings(projectId: string): Promise<ExplorerSettings>;
@@ -205,19 +176,12 @@ export interface TETApi {
     /** Fires whenever a repository's state changed (git command, file watcher or refresh). */
     onState(listener: (payload: { projectId: string; state: RepositoryState }) => void): Unsubscribe;
   };
-  /**
-   * A project's saved shell commands, kept in a tet.json in its own root. They belong to
-   * the repository, not to tet's storage, so they follow it around.
-   */
+  /** A project's saved shell commands, kept in a tet.json in its own root, so they travel with it. */
   commands: {
     list(projectId: string): Promise<ProjectCommand[]>;
     /** Writes the whole list; adding, removing and reordering all go through here. */
     save(projectId: string, commands: ProjectCommand[]): Promise<void>;
-    /**
-     * Opens a terminal tab whose process is that command, in its own directory. Resolves to
-     * the tab, so the caller can bring it to the front; null when there is nothing to run it
-     * with.
-     */
+    /** Opens a terminal tab whose process is that command; null when there is nothing to run it with. */
     run(projectId: string, command: ProjectCommand): Promise<TerminalDescriptor | null>;
     /** Fires when a project's tet.json changed on disk, whoever wrote it. */
     onChanged(listener: (payload: { projectId: string }) => void): Unsubscribe;
@@ -231,19 +195,13 @@ export interface TETApi {
     rename(projectId: string, tabId: string, title: string): Promise<void>;
     /** Kills a saved command's process and spawns it again in the same tab. */
     restart(projectId: string, tabId: string): Promise<void>;
-    /**
-     * The tab is on screen, which clears the `finishedAt` a finished turn left on it. Called
-     * for the active tab of the project on screen — the main process cannot tell which that
-     * is, so this is the renderer's half of the mark.
-     */
+    /** The tab is on screen, clearing the `finishedAt` a finished turn left on it — the renderer's
+     *  half of the mark, the main process not being able to tell which tab is in front. */
     seen(projectId: string, tabId: string): void;
     input(projectId: string, tabId: string, data: string): void;
     /** The first resize of a tab is what starts its process (lazy spawn). */
     resize(projectId: string, tabId: string, cols: number, rows: number): void;
-    /**
-     * The full url a fragment on screen was cut off from, asked of the agent that printed
-     * it. Null when it has no answer — the caller must not ask again for that fragment.
-     */
+    /** The full url a cut-off fragment came from; null when the agent has no answer — do not re-ask. */
     resolveUrl(projectId: string, tabId: string, fragment: string): Promise<string | null>;
     /** Fires with the full tab list of a project whenever it changed. */
     onTabs(listener: (payload: { projectId: string; tabs: TerminalDescriptor[] }) => void): Unsubscribe;
@@ -254,23 +212,16 @@ export interface TETApi {
     ): Unsubscribe;
     /** Whether anything in the project is still starting up (a CLI booting, sessions listing). */
     onStartupProgress(listener: (payload: { projectId: string; show: boolean }) => void): Unsubscribe;
-    /** A tab the control channel opened, to be brought to the front — its process starts
-     *  with the first resize that drawing it sends. */
+    /** A tab the control channel opened, to be brought to the front. */
     onShow(listener: (payload: { projectId: string; tabId: string }) => void): Unsubscribe;
-    /**
-     * The current value of the above. A project restored at app start bootstraps before the
-     * window exists, so that first "show" is never pushed to anyone — ask for it instead.
-     */
+    /** The current value of the above: a project restored at app start bootstraps before the window. */
     starting(projectId: string): Promise<boolean>;
   };
   agents: {
     list(): Promise<AgentInfo[]>;
   };
   files: {
-    /**
-     * The real path of a dropped file, or "" when the drag came from somewhere other than
-     * the filesystem (an image dragged out of a browser) and only carries content.
-     */
+    /** The real path of a dropped file, or "" when the drag carries only content. */
     pathOf(file: File): string;
     /** Saves content that has no path of its own and returns the temp file's path. */
     writeTemp(name: string, dataBase64: string): Promise<string>;
@@ -279,29 +230,19 @@ export interface TETApi {
   };
   shell: {
     openUrl(url: string): Promise<void>;
-    /**
-     * Opens a path the user activated in a terminal. Resolves to the repository-relative path
-     * for any file inside the repository — the caller opens it in the diff dialog — and to null
-     * when it was handed to the OS instead (outside the repository, or could not be opened).
-     */
+    /** Opens a path activated in a terminal: the repository-relative path for a file inside the
+     *  repository, null when it was handed to the OS instead. */
     openFile(projectId: string, path: string): Promise<string | null>;
     /** Shows a repository-relative path in the OS file manager, selected. */
     revealFile(projectId: string, path: string): Promise<void>;
-    /**
-     * Hands a repository-relative path to whatever the OS opens that type with — the nearest
-     * thing tet has to GitHub Desktop's external editor, which it has no setting for.
-     */
+    /** Hands a repository-relative path to whatever the OS opens that type with. */
     openFileExternally(projectId: string, path: string): Promise<void>;
     /** Opens the project's own folder in the OS file manager. */
     openProject(projectId: string): Promise<void>;
   };
   /** Anything transient the main process wants said — see Notice. */
   onNotice(listener: (payload: Notice) => void): Unsubscribe;
-  /**
-   * The persisted theme id, read synchronously off `webPreferences.additionalArguments` before
-   * main.tsx's first line runs — see main.ts's `createWindow` and preload.ts. A plain value
-   * rather than a call: the renderer sets `data-theme` with it before anything is rendered, and
-   * an async read would leave a first frame in the wrong colors.
-   */
+  /** The persisted theme id, read synchronously off `webPreferences.additionalArguments` before
+   *  main.tsx's first line runs: an async read would leave a first frame in the wrong colors. */
   initialTheme: string;
 }

@@ -24,8 +24,8 @@ export function askAgent(root: string, executable: string, args: string[], quest
       (error, stdout, stderr) => {
         clearTimeout(timer);
         const reply = stdout.trim();
-        // Some CLIs have printed a usable answer before returning a non-zero exit code. The
-        // caller knows what a usable answer looks like; only an empty failure is ours to reject.
+        // A CLI can print a usable answer and still exit non-zero; only an empty failure is
+        // ours to reject.
         if (error && reply.length === 0) {
           const reason = timedOut ? "The agent did not answer in time" : stderr.trim() || error.message;
           reject(new Error(reason.slice(0, MAX_ERROR)));

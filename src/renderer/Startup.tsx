@@ -4,9 +4,9 @@ import { App } from "./App";
 import { RequirementsDialog } from "./dialogs/RequirementsDialog";
 
 /**
- * The app, once the programs it runs on are there. The check lives in the main process, which
- * opens the stored projects only when it passed — so a machine missing git or every agent gets
- * the dialog and nothing else: nothing watched, nothing spawned, `App` never mounted.
+ * The app, once the programs it runs on are there. The main process opens the stored projects
+ * only when the check passed, so a machine missing git or every agent gets the dialog and
+ * nothing else: nothing watched, nothing spawned, `App` never mounted.
  */
 export function Startup() {
   const [requirements, setRequirements] = useState<Requirements | null>(null);
@@ -22,8 +22,7 @@ export function Startup() {
     void check();
   }, [check]);
 
-  // The window's own background for the moment the three version checks take; a message that
-  // is gone before it is read would only flicker.
+  // The window's own background for the moment the version checks take.
   if (!requirements) {
     return null;
   }

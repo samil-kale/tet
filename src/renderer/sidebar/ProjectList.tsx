@@ -7,18 +7,11 @@ import { reorder, useDragReorder } from "./drag-reorder";
 import { notify } from "../ui/Notices";
 import { ChangesIcon, CloseIcon, CommentIcon, PlusIcon, QuestionIcon, ShieldIcon, SpinnerIcon } from "../ui/icons";
 
-/**
- * A type of our own rather than text/plain: a project dragged across a terminal must not end
- * up pasted into it, and the terminal only ever reads dropped files and plain text.
- */
+/** A type of our own: a project dragged across a terminal must not end up pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";
 
-/**
- * One action in a project row — the marks, the sandbox shield, the git mark, the close button.
- * Every one of them is the same 24px box around one 13px icon, and every one has to keep its
- * click from reaching the row, whose own job is to select the project. Written once so that
- * second rule cannot be forgotten on the next one added.
- */
+/** One action in a project row: the same 24px box around one 13px icon, and every one must keep
+ *  its click from reaching the row, whose own job is to select the project. */
 function rowButton(title: string, run: () => void, icon: ReactNode) {
   return (
     <button
@@ -34,13 +27,10 @@ function rowButton(title: string, run: () => void, icon: ReactNode) {
   );
 }
 
-/**
- * The sessions of one project that are marked, by tab id, oldest first: finished out of sight,
- * waiting on an answer, and starting — the last is what lets the pane a new agent opens in show
- * the bar itself rather than always pane "a" (see `TerminalsPane`'s `startingHere`). `busy` is
- * whether any session is working on a turn, excluding one stopped on a question. Decided in
- * `App`, since the tab in front of the user counts as seen and only `App` knows what's on screen.
- */
+/** The marked sessions of one project, by tab id, oldest first: finished out of sight, waiting
+ *  on an answer, and starting — the last lets the pane a new agent opens in show the bar itself
+ *  (`TerminalsPane`'s `startingHere`). `busy` excludes a session stopped on a question. Decided
+ *  in `App`, which alone knows what is on screen. */
 export interface ProjectMarks {
   finished: string[];
   waiting: string[];
@@ -48,8 +38,7 @@ export interface ProjectMarks {
   busy: boolean;
 }
 
-/** What a row says about the repository: its HEAD (a branch, or a short commit id), first remote,
- *  and whether it has uncommitted changes. */
+/** What a row says about the repository: HEAD, first remote, whether it is dirty. */
 export interface ProjectHead {
   head?: string;
   remote?: RemoteInfo;
@@ -64,14 +53,12 @@ interface ProjectListProps {
   /** The full list in the order the user dropped it into. */
   onReorder: (projects: Project[]) => void;
   onAdd: () => void;
-  /**
-   * Both by project id, and — like everything this memoized list takes — by identity only where
-   * the answer changed; `App` sees to that. Records rather than lookup callbacks: a callback
-   * closing over every project's state was remade on every push, and the memo never held.
-   */
+  /** By project id, and by identity only where the answer changed; `App` sees to that. Records
+   *  rather than lookup callbacks: a callback closing over every project's state was remade on
+   *  every push, and the memo never held. */
   heads: Record<string, ProjectHead>;
   marks: Record<string, ProjectMarks>;
-  /** Which projects run their agents in an sbx sandbox, the same way and for the same reason. */
+  /** Which projects run their agents in an sbx sandbox, keyed and memoized the same way. */
   sandboxed: Record<string, boolean>;
   /** Opens a shell tab in that project, which is what "open in terminal" means here. */
   onOpenTerminal: (projectId: string) => void;
@@ -87,12 +74,10 @@ interface ProjectListProps {
   onSbxSettings: (projectId: string) => void;
 }
 
-/**
- * The page a remote's git url points at, or null when it is not one a browser can open.
- * Both spellings git uses: "git@host:owner/repo.git" and a real url with a scheme.
- */
+/** The page a remote's git url points at, or null when a browser cannot open it. Both spellings
+ *  git uses: "git@host:owner/repo.git" and a real url with a scheme. */
 function webUrl(remoteUrl: string): string | null {
-  // Not a Windows path ("C:\bare\repo.git"): a colon followed by either slash is no host.
+  // Excludes a Windows path ("C:\bare\repo.git"): a colon followed by either slash is no host.
   const scp = /^(?:[\w.-]+@)?([\w.-]+):(?![\\/])(.+?)(?:\.git)?\/?$/.exec(remoteUrl);
   if (scp) {
     return `https://${scp[1]}/${scp[2]}`;
@@ -106,7 +91,7 @@ function webUrl(remoteUrl: string): string | null {
       return `https://${url.host}${url.pathname.replace(/\.git\/?$/, "")}`;
     }
   } catch {
-    // Not a url at all — a local path, say. There is nothing to open.
+    // Not a url at all — a local path, say.
   }
   return null;
 }
@@ -140,8 +125,7 @@ export const ProjectList = memo(function ProjectList({
   const { rowProps, listProps, rowClasses } = useDragReorder({
     dragType: DRAG_TYPE,
     count: projects.length,
-    // The id, not the position: it still names the same project if the list changed while
-    // the drag was in the air.
+    // The id, not the position: it still names the same project if the list changed mid-drag.
     payloadOf: (index) => projects[index].id,
     indexOf: (id) => projects.findIndex((project) => project.id === id),
     onMove: (from, to) => onReorder(reorder(projects, from, to))
@@ -171,10 +155,8 @@ export const ProjectList = memo(function ProjectList({
     }
   };
 
-  /**
-   * What a repository can be asked for from its own row. Nothing here touches the working
-   * tree — those actions live in the git pane, where what they act on is on screen.
-   */
+  /** What a repository can be asked for from its own row. Nothing here touches the working tree;
+   *  those actions live in the git pane, where what they act on is on screen. */
   const menuEntries = (project: Project): ContextMenuEntry[] => {
     const remote = heads[project.id]?.remote;
     const web = remote?.url ? webUrl(remote.url) : null;
@@ -223,17 +205,11 @@ export const ProjectList = memo(function ProjectList({
           >
             <span className="project-main">
               <span className="project-label">{project.name}</span>
-              {/* Where the repository stands, next to what a command runs with in the list below
-                  and drawn the same way: context for the row, not part of its name. The git pane
-                  says it for the project on screen only, and an agent switching a branch in a
-                  terminal is exactly what one wants to see on a project that is not. */}
+              {/* Where the repository stands: context for the row, not part of its name. */}
               {heads[project.id]?.head && <span className="project-extra">({heads[project.id].head})</span>}
             </span>
-            {/* All three states of a project's sessions, and they can hold at once — one tab
-                stopped on a question, another working, a third waiting to be read. Each is a
-                button and each goes to a session. Unlike on a tab there is no ranking here:
-                a row has no single icon to replace, so nothing has to give way to anything.
-                A standing question comes first because it is the one costing time. */}
+            {/* All three states of a project's sessions, which can hold at once, each a button going to a
+                session. No ranking, unlike on a tab: a row has no single icon to replace. */}
             {(marks[project.id]?.waiting.length ?? 0) > 0 &&
               rowButton(
                 "Open the session waiting for an answer",
@@ -246,25 +222,19 @@ export const ProjectList = memo(function ProjectList({
                 () => onShowBusy(project.id),
                 <SpinnerIcon className="session-mark spinning" />
               )}
-            {/* A session of this project finished while its terminal was out of sight. Pressing
-                it goes there, which is also what takes it away again. */}
+            {/* Pressing it goes to the session, which is also what takes the mark away. */}
             {(marks[project.id]?.finished.length ?? 0) > 0 &&
               rowButton(
                 "Open the session that finished",
                 () => onShowFinished(project.id),
                 <CommentIcon className="session-mark" />
               )}
-            {/* Uncommitted changes, read off the same status every refresh already loads
-                (`state.changes`) — no extra git call. It stands here only while the changes do,
-                and says the changes rather than git: the branch beside it already said that. */}
+            {/* Uncommitted changes, read off the status every refresh loads — no extra git call. */}
             {heads[project.id]?.dirty &&
               rowButton("Uncommitted changes", () => onShowChanges(project.id), <ChangesIcon />)}
-            {/* Where this project's agents run, which is a standing property of the repository
-                rather than of a session — so it sits outside the marks above and gives way to
-                nothing. A button because the sbx settings are otherwise only in the row's
-                context menu, and this is the row that says they are on. It says the switch is
-                on, not that the agent in the tab beside it got its sandbox: sbx can be away, and
-                resolveSbxRun then runs that one spawn on the host. */}
+            {/* A standing property of the repository, so outside the mark ranking above. It says the
+                switch is on, not that this tab got a sandbox: sbx can be away, and resolveSbxRun then
+                runs that one spawn on the host. */}
             {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
             {rowButton("Close repository", () => onClose(project.id), <CloseIcon />)}
           </div>

@@ -22,10 +22,8 @@ const ANSI_CSS_VARS: Record<string, string> = {
 
 /**
  * xterm renders on canvas and needs resolved color values, not CSS var() references, so the
- * --vscode-* custom properties of the theme layer are read out into a plain xterm ITheme.
- *
- * One thing in it depends on the agent (see the swap below), so a terminal's theme is built per
- * terminal rather than once for the window.
+ * --vscode-* custom properties are read out into a plain xterm ITheme. One thing in it depends
+ * on the agent (see the swap below), so this is built per terminal, not once for the window.
  */
 export function buildXtermTheme(agent: AgentInfo): ITheme {
   const styles = getComputedStyle(document.documentElement);
@@ -37,23 +35,19 @@ export function buildXtermTheme(agent: AgentInfo): ITheme {
     background,
     foreground,
     // Left to xterm, cursor and selection are white (`#ffffff`, `rgba(255, 255, 255, .3)`) —
-    // invisible on a light background. The fallbacks are VS Code's own: an unset terminal
-    // cursor is the terminal foreground, an unset terminal selection the editor's. xterm
-    // thins an opaque selection to 30% itself, as VS Code's does.
+    // invisible on a light background. An unset terminal cursor falls back to the terminal
+    // foreground, an unset terminal selection to the editor's. xterm thins an opaque selection
+    // to 30% itself.
     cursor: read("--vscode-terminalCursor-foreground") ?? foreground,
     cursorAccent: background,
     selectionBackground: read("--vscode-terminal-selectionBackground") ?? read("--vscode-editor-selectionBackground"),
     selectionInactiveBackground:
       read("--vscode-terminal-inactiveSelectionBackground") ?? read("--vscode-editor-inactiveSelectionBackground"),
-    // Everything xterm draws down the lane at the right edge, made invisible — a scrollbar has
-    // no business beside a TUI (see styles.css), and the ruler is only there to keep FitAddon
-    // from reserving room for one (see terminal-views.ts). Color rather than CSS is what does
-    // it: both are xterm's own elements, redrawn as the buffer grows, and this is the value
+    // Everything xterm draws down the lane at the right edge, made invisible. Color rather than
+    // CSS: both are xterm's own elements, redrawn as the buffer grows, and this is the value
     // they are painted with. Spelled `#00000000` and not `transparent`, since it goes through
-    // xterm's color parser on the way to a stylesheet and a canvas.
-    //
-    // The theme layer's own scrollbar variables are deliberately not read here: they are for
-    // the app's lists, where a slider is exactly what you want.
+    // xterm's color parser on the way to a stylesheet and a canvas. The theme layer's own
+    // scrollbar variables are not read here — they are for the app's lists.
     scrollbarSliderBackground: "#00000000",
     scrollbarSliderHoverBackground: "#00000000",
     scrollbarSliderActiveBackground: "#00000000",
@@ -63,10 +57,8 @@ export function buildXtermTheme(agent: AgentInfo): ITheme {
     overviewRulerBorder: "#00000000"
   };
 
-  // opencode's TUI draws blue and magenta the other way round — the story, observed and not
-  // derived, is at AgentDefinition.swapsBlueMagenta, whose value travels here as a flag on
-  // AgentInfo: that interface is the main process's, and the renderer is where a colour is
-  // resolved.
+  // opencode's TUI draws blue and magenta the other way round (observed, not derived — see
+  // AgentDefinition.swapsBlueMagenta).
   const ansiCssVars = agent.swapsBlueMagenta
     ? { ...ANSI_CSS_VARS, blue: ANSI_CSS_VARS.magenta, magenta: ANSI_CSS_VARS.blue }
     : ANSI_CSS_VARS;
@@ -92,12 +84,10 @@ function readCssVars(vars: Record<string, string>): Record<string, string> {
 }
 
 /**
- * VS Code color ids to the --vscode-* variable they read, for the editor surface itself
- * (background, gutter, selection, widgets...) — the same dotted namespace shiki's own theme.colors
- * uses. Read once here rather than per consumer: shiki's theme is patched with these at load time
- * (see diff-highlight.ts's `highlighter`), and monaco inherits them from shiki's theme in turn (see
- * editor.ts's `applyChrome`) — so a theme swap only ever means changing the variables, not two
- * separate color maps.
+ * VS Code color ids to the --vscode-* variable they read, for the editor surface itself — the
+ * same dotted namespace shiki's own theme.colors uses. Read once here: shiki's theme is patched
+ * with these at load time (`diff-highlight.ts`), and monaco inherits them from shiki's theme in
+ * turn (`editor.ts`'s `applyChrome`).
  */
 const EDITOR_CSS_VARS: Record<string, string> = {
   "editor.background": "--vscode-editor-background",
@@ -123,9 +113,9 @@ export function buildShikiColors(): Record<string, string> {
 }
 
 /**
- * monaco color id to the --vscode-* variable it reads, for chrome shiki's theme has no notion of —
- * menus, inputs, lists — see editor.ts's `applyChrome`. The editor surface itself is not repeated
- * here: it comes from shiki's own theme, already patched with `EDITOR_CSS_VARS` at load time.
+ * monaco color id to the --vscode-* variable it reads, for chrome shiki's theme has no notion of
+ * (menus, inputs, lists). The editor surface is not repeated here: it comes from shiki's own
+ * theme, already patched with `EDITOR_CSS_VARS`.
  */
 const MONACO_CSS_VARS: Record<string, string> = {
   "input.background": "--vscode-input-background",
@@ -133,11 +123,8 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "input.border": "--vscode-input-border",
   "input.placeholderForeground": "--vscode-input-placeholderForeground",
   focusBorder: "--vscode-focusBorder",
-  // The find widget's Aa/ab/.* toggles: a plain, persistent background when on — the same
-  // translucent grey an action button already hovers with everywhere else — rather than monaco's
-  // own default of a `#007ACC` border and a recoloured icon. No colour at all, not even the
-  // shared accent: an icon-button toggle turning blue reads fine standing alone, but these three
-  // sit in a row together, and a row of icons some blue and some not reads as broken, not toggled.
+  // The find widget's Aa/ab/.* toggles: the same translucent grey an action button hovers with,
+  // rather than monaco's default `#007ACC` border and recoloured icon.
   "inputOption.activeForeground": "--vscode-foreground",
   "inputOption.activeBackground": "--vscode-toolbar-hoverBackground",
   "scrollbarSlider.background": "--vscode-scrollbarSlider-background",
@@ -155,19 +142,16 @@ const MONACO_CSS_VARS: Record<string, string> = {
 };
 
 /**
- * Monaco's own chrome (menus, inputs, lists...) as color overrides, read the same way
- * `buildXtermTheme` reads xterm's — everything else (bracket match, hover widget, suggest
- * widget...) is left to monaco's own vs-dark defaults, which are VS Code's own values anyway.
- * The editor surface is not part of this: monaco gets that from shiki's theme (see editor.ts's
- * `applyChrome`), which is already patched with `EDITOR_CSS_VARS`.
+ * Monaco's own chrome (menus, inputs, lists) as color overrides; everything else is left to
+ * monaco's vs-dark defaults. The editor surface is not part of this — monaco gets that from
+ * shiki's theme (`editor.ts`'s `applyChrome`).
  */
 export function buildMonacoColors(): Record<string, string> {
   const colors = readCssVars(MONACO_CSS_VARS);
   // No border box around an active toggle — just the background set through the map above.
   colors["inputOption.activeBorder"] = "#00000000";
   // Monaco paints a shadow along the top edge once the editor is scrolled (its `.shadow.top`
-  // decoration, vs-dark's default being black). Nothing else in the app marks "scrolled"
-  // that way — not xterm, not the diff view — so the editor doesn't either.
+  // decoration, black in vs-dark). Nothing else in the app marks "scrolled" that way.
   colors["scrollbar.shadow"] = "#00000000";
   return colors;
 }

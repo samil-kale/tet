@@ -5,7 +5,7 @@ import type { HookTarget } from "./hook-target";
 /** PowerShell 5.1 decodes BOM-less files as ANSI, so generated .ps1 files need this. */
 export const WIN_BOM = "﻿";
 
-/** What starts a generated script without a shell in between — see scriptInvocation. */
+/** What starts a generated script without a shell in between. */
 export interface ScriptInvocation {
   command: string;
   args: string[];
@@ -13,14 +13,9 @@ export interface ScriptInvocation {
 
 /**
  * The one way a Claude/Codex hook — and opencode's plugin — shows a toast, host or sandboxed
- * alike: `tet-ctl notify`, never a script invoked directly. Only the process actually holding
- * the desktop session can show a real notification, and for a sandboxed hook that is never the
- * sandbox itself — but `tet-ctl` already reaches the host over the control channel (see
- * control-server.ts's own `notify` verb, which runs the script below on the host's behalf).
- * Routing every hook through the same relay, host tabs included, means there is exactly one
- * mechanism to reason about instead of a host/sandbox split repeated at every call site — the
- * cost is that a Stop/Waiting toast now depends on the control server being reachable, same as
- * any other tet-ctl call already does.
+ * alike: `tet-ctl notify`, never a script invoked directly. Only the process holding the desktop
+ * session can show a real notification, which a sandboxed hook never is; `tet-ctl` reaches the
+ * host, whose `notify` verb runs the script below. So a toast needs a reachable control server.
  */
 export function buildHookNotifyCommand(target: HookTarget, title: string, body: string): string {
   const quote = target.posix ? shellSingleQuote : powershellSingleQuote;
@@ -29,11 +24,8 @@ export function buildHookNotifyCommand(target: HookTarget, title: string, body: 
 
 /**
  * A script that shows a native OS notification through each platform's built-in notifier — no
- * extra dependency, no registry writes, no installs. Notification-only, no click action: making
- * a toast act on a click requires registering an app identity, which would mean writing to the
- * registry. `id` must be unique per call site — it names the script file, so two events do not
- * overwrite each other's. Written and its path returned, for the process that starts it: the
- * control server's `notify` verb, and pi's extension from inside pi's own process.
+ * extra dependency, no registry writes, no installs. No click action: that needs a registered app
+ * identity. `id` names the script file and must be unique per call site; its path is returned.
  */
 export function writeNotifyScript(storageDir: string, id: string, title: string, body: string): string {
   if (process.platform === "win32") {
@@ -45,11 +37,8 @@ export function writeNotifyScript(storageDir: string, id: string, title: string,
   return writeLinuxScript(storageDir, id, title, body);
 }
 
-/**
- * How such a script is started as a plain spawn — the same interpreter and flags the command
- * line above names, as an argument list. `-File` rather than `-Command`, so the path is never
- * re-parsed by PowerShell. Measured through pi's extension on win32 as exactly this shape.
- */
+/** How such a script is started as a plain spawn. `-File` rather than `-Command`, so the path is
+ *  never re-parsed by PowerShell. Measured through pi's extension on win32 as exactly this shape. */
 export function scriptInvocation(scriptFile: string): ScriptInvocation {
   if (process.platform === "win32") {
     return { command: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptFile] };
@@ -59,10 +48,8 @@ export function scriptInvocation(scriptFile: string): ScriptInvocation {
 
 function writeWindowsScript(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = path.join(storageDir, `notify-${id}.ps1`);
-  // Well-known AUMID Windows registers by default for its own PowerShell Start Menu
-  // shortcut. Reusing it never creates a registry entry, but it does attribute the toast to
-  // "Windows PowerShell" rather than to tet — an app identity of our own would have to
-  // be registered first, which this deliberately avoids.
+  // Well-known AUMID Windows registers by default for its own PowerShell Start Menu shortcut.
+  // Reusing it creates no registry entry, at the price of attributing the toast to PowerShell.
   const appId = String.raw`{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe`;
   fs.writeFileSync(
     scriptFile,
@@ -70,9 +57,9 @@ function writeWindowsScript(storageDir: string, id: string, title: string, body:
       `[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
 [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
 
-# @'...'@, not @"..."@: the literal here-string. The interpolating one would have PowerShell
-# read the text below as code — a repository folder named "cost$analysis" would lose half its
-# name to an empty variable, and one with $(...) in it would run whatever that says.
+# @'...'@, not @"..."@: the literal here-string. The interpolating one reads the text below as
+# code — a folder named "cost$analysis" loses half its name to an empty variable, one with
+# $(...) in it runs whatever that says.
 $template = @'
 <toast activationType="protocol" launch="">
   <visual>
@@ -84,9 +71,8 @@ $template = @'
 </toast>
 '@
 
-# activationType="protocol" with an empty launch URI makes the click a no-op — there is
-# nothing to launch, so the toast just dismisses. Without it the click falls back to
-# activating the app behind $appId, which pops a dialog about an external application.
+# activationType="protocol" with an empty launch URI makes the click a no-op. Without it the
+# click activates the app behind $appId, which pops a dialog about an external application.
 $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
 $xml.LoadXml($template)
 try {
@@ -100,9 +86,8 @@ try {
 
 function writeMacScript(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = path.join(storageDir, `notify-${id}.sh`);
-  // Route the values through env vars read via AppleScript's `system attribute` instead of
-  // interpolating them into the -e string directly, so no AppleScript string-literal
-  // escaping is needed regardless of what title/body contain.
+  // The values go through env vars read via AppleScript's `system attribute` rather than into
+  // the -e string, so no AppleScript string-literal escaping is needed for any title/body.
   writePosixScript(
     scriptFile,
     `#!/bin/sh
@@ -116,8 +101,7 @@ exit 0
 function writeLinuxScript(storageDir: string, id: string, title: string, body: string): string {
   const scriptFile = path.join(storageDir, `notify-${id}.sh`);
   // Guarded with `command -v`: notify-send ships with most desktop distros but not
-  // minimal/headless ones, and a missing binary must fail silently, not surface as a hook
-  // error in the TUI.
+  // minimal/headless ones, and a missing binary must fail silently rather than as a hook error.
   writePosixScript(
     scriptFile,
     `#!/bin/sh
@@ -135,13 +119,10 @@ export function writePosixScript(file: string, contents: string): void {
 
 /**
  * Builds a hook command that prints a file's contents on stdout — the context file, for the
- * `UserPromptSubmit` hook whose plain stdout an agent appends to the prompt. Shared by Claude
- * Code and Codex: both treat a hook's non-JSON stdout the same way, so the same script does for
- * either.
- *
- * Which shell a hook runs under on win32 is environment-dependent — PowerShell, cmd.exe and Git
- * Bash were all observed for Claude Code's own hooks — so builtins like `type` are unreliable. An
- * explicit `powershell -File` invocation is parsed identically by all three.
+ * `UserPromptSubmit` hook whose plain stdout an agent appends to the prompt; Claude Code and Codex
+ * treat non-JSON stdout alike, so one script serves both. Which shell a hook runs under on win32
+ * varies (PowerShell, cmd.exe and Git Bash all observed), so builtins like `type` are unreliable;
+ * an explicit `powershell -File` invocation is parsed identically by all three.
  */
 export function buildReadFileCommand(
   storageDir: string,
@@ -153,8 +134,8 @@ export function buildReadFileCommand(
     return `cat ${shellSingleQuote(target.embed(targetFile))}`;
   }
   const scriptFile = path.join(storageDir, `${scriptName}.ps1`);
-  // Quoted the literal way in both shells: every path we generate has the user's own name in
-  // it, and a "$" in that would otherwise be read as a variable rather than as a character.
+  // Quoted the literal way: every path we generate holds the user's own name, and a "$" in that
+  // would otherwise be read as a variable.
   fs.writeFileSync(
     scriptFile,
     WIN_BOM +
@@ -177,11 +158,8 @@ export function shellSingleQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
-/**
- * The same for PowerShell, whose single-quoted strings are literal too — `$` and `$(...)` in
- * a path (the user's own name is part of every path we generate) would otherwise be read as
- * a variable or a command substitution.
- */
+/** The same for PowerShell, whose single-quoted strings are literal too: `$` and `$(...)` in a
+ *  path would otherwise be read as a variable or a command substitution. */
 export function powershellSingleQuote(value: string): string {
   return "'" + value.replace(/'/g, "''") + "'";
 }

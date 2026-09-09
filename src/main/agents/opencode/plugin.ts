@@ -6,23 +6,18 @@ import type { HookTarget } from "../../terminals/hook-target";
 import type { NotificationSettings } from "../../../shared/types";
 
 /**
- * opencode is driven through one generated plugin per repository, the way pi is driven through
- * a generated extension: a `.ts` file under a config directory's `plugins/`, loaded in-process
- * by the `opencode` the tab runs. It has no declarative hook file, and the plugin API is the
- * one way into a message being composed (`chat.message`) — and, since it also delivers the
- * server's whole event bus (`event`), the one place every turn signal can be read without a
- * server of tet's own to subscribe to. Measured against 1.18.4 on the host and 1.18.23 in an
- * sbx sandbox (2026-09-08): the plugin loads in the TUI (where opencode's server is a worker
- * thread of the same process) and in `run`, and the `event` hook receives `session.created`,
- * `session.updated` (with the whole session), `session.status`, `session.idle`,
- * `permission.asked`/`replied` and `question.asked` exactly as the `/event` stream does.
+ * opencode is driven through one generated plugin per repository: a `.ts` file under a config
+ * directory's `plugins/`, loaded in-process by the `opencode` the tab runs. It has no declarative
+ * hook file; the plugin API is the one way into a message being composed (`chat.message`) and,
+ * through the server's whole event bus (`event`), the one place every turn signal can be read.
+ * Measured against 1.18.4 on the host and 1.18.23 in an sbx sandbox: the `event` hook receives
+ * `session.created`, `session.updated` (with the whole session), `session.status`,
+ * `session.idle`, `permission.asked`/`replied` and `question.asked` exactly as `/event` does.
  *
- * `OPENCODE_CONFIG_DIR` points opencode at the directory additively: it does not replace the
- * user's `.opencode/plugins/` or `~/.config/opencode/plugins/`. The first time opencode sees a
- * `plugins/` file in a config dir it bun-installs `@opencode-ai/plugin` *into that dir*
- * (`node_modules/`, measured), which takes seconds to minutes — so the host's dir is shared
- * across repositories to pay that once per machine, and a sandbox gets a dir of its own
- * under agentDir (a Linux install, never the host's).
+ * `OPENCODE_CONFIG_DIR` points opencode at the directory additively; it does not replace the
+ * user's own `plugins/`. The first time opencode sees a `plugins/` file in a config dir it
+ * bun-installs `@opencode-ai/plugin` *into that dir* (measured), taking seconds to minutes — so
+ * the host's dir is shared across repositories and a sandbox gets a Linux one under agentDir.
  */
 
 /** The three session markers plus the two files a session leaves for tet — see the header. */
@@ -56,10 +51,8 @@ export interface SessionRecord {
   sandbox: string | null;
 }
 
-/**
- * Where a sandboxed tab's plugin lives: its own config dir under agentDir, mounted into the
- * sandbox whole, so its bun install is a Linux one and never collides with the host's.
- */
+/** A sandboxed tab's plugin lives in its own config dir under agentDir, mounted into the sandbox
+ *  whole, so its bun install is a Linux one and never collides with the host's. */
 export function sandboxConfigDir(agentDir: string): string {
   return path.join(agentDir, "sandbox", "opencode");
 }
@@ -73,10 +66,9 @@ export function renameDir(agentDir: string): string {
 }
 
 /**
- * The toast is `tet-ctl notify`, host and sandbox alike (see os-notify.ts's
- * buildHookNotifyCommand for why), started from inside opencode's process as a plain spawn: on
- * a POSIX target the launcher is a script found on PATH, on a win32 host a `.cmd` that only
- * cmd.exe can start — the arguments are passed to it as a list, never spliced into a line.
+ * The toast is `tet-ctl notify`, host and sandbox alike (see buildHookNotifyCommand), spawned
+ * from inside opencode's process: a script on PATH on a POSIX target, on a win32 host a `.cmd`
+ * that only cmd.exe can start. Arguments go as a list, never spliced into a line.
  */
 function notifyInvocation(target: HookTarget): { command: string; args: string[] } {
   return target.posix ? { command: "tet-ctl", args: ["notify"] } : { command: "cmd.exe", args: ["/c", "tet-ctl", "notify"] };
@@ -90,9 +82,9 @@ function pluginName(cwd: string): string {
 /**
  * Writes this repository's plugin into `configDir/plugins/` for one target and returns the
  * environment that makes opencode load and scope it. The marker and record directories are
- * created here: watchMarkers wants them to exist to fs.watch them. Written beside the target and
- * renamed into place, and only when the content changed — opencode recompiles a plugin whose
- * file changed, at a cost of seconds to minutes, so a restart of tet must not retrigger that.
+ * created here, since watchMarkers needs them to exist. Written beside the target and renamed
+ * into place, and only when the content changed — opencode recompiles a changed plugin file, at
+ * a cost of seconds to minutes.
  */
 export function writeOpencodePlugin(
   configDir: string,
@@ -134,8 +126,7 @@ export function writeOpencodePlugin(
     fs.writeFileSync(temp, contents);
     fs.renameSync(temp, file);
   }
-  // The generation before this one wrote `context-<hash>.ts` into the same shared dir; left
-  // there, it would load alongside and append the context a second time.
+  // A `context-<hash>.ts` left in the shared dir would append the context a second time.
   const stale = path.join(pluginsDir, `context-${pluginName(cwd).slice("tet-".length)}`);
   fs.rmSync(stale, { force: true });
   return { OPENCODE_CONFIG_DIR: target.embed(configDir), [PROJECT_ROOT_ENV]: target.embed(cwd) };
@@ -143,15 +134,13 @@ export function writeOpencodePlugin(
 
 /**
  * The plugin's TypeScript source, pure so the test can compile and drive it without opencode.
- * Nothing is imported from opencode's packages: the file has to be valid wherever the config
- * dir is, and the event contract is plain objects. Every path and name is baked in as a JSON
- * literal, never spliced raw.
+ * Nothing is imported from opencode's packages — the file must be valid wherever the config dir
+ * is — and every path and name is baked in as a JSON literal, never spliced raw.
  */
 export function renderOpencodePlugin(options: OpencodePluginOptions): string {
-  return `// Generated by tet for one repository — rewritten whenever this project's opencode is
-// prepared, and read by nothing but opencode. Marker files under the three directories are how
-// tet learns about this session's turns (marker-watch.ts); the session records are its listing;
-// the context file is tet's, kept current for the model.
+  return `// Generated by tet for one repository, read by nothing but opencode. Marker files under
+// the three directories report this session's turns (marker-watch.ts); the session records are
+// tet's listing; the context file is tet's.
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
@@ -178,15 +167,13 @@ const PERMISSION_SETTLE_MS = 500;
 const RENAME_POLL_MS = 1000;
 const WAITING_TOAST_GAP_MS = 2000;
 
-// The marker's filename is the whole message, so only a session id may ever become one — the
-// same guard the shell hooks apply, from the same list of characters. Rewriting an existing
-// marker is harmless: the file is empty, and its mtime is what tet reads as the time.
+// The marker's filename is the whole message, so only a session id may ever become one.
+// Rewriting an existing marker is harmless: the file is empty, and its mtime is the time.
 function isSessionId(id: unknown): id is string {
   return typeof id === "string" && /^[${SESSION_ID_CHARS}]+$/.test(id);
 }
 
-// What ties a permission's reply to its request: the request's own id, which the reply has
-// carried under three names across releases (opencode-notify and wmux read the same three).
+// A reply names its request's id under one of three names, varying across releases.
 function permissionKey(props: any): string {
   return [props.id, props.requestID, props.permissionID].find((value) => typeof value === "string") ?? String(props.sessionID);
 }
@@ -216,9 +203,8 @@ function writeRecord(id: string, record: unknown): void {
   }
 }
 
-// A plain spawn with stdio ignored, the way pi's extension does it (measured there: detached
-// plus unref never ran at all). Never awaited: opencode waits for a hook to return, and a toast
-// must not hold up the TUI's own idle transition.
+// A plain spawn with stdio ignored. Never awaited: opencode waits for a hook to return, and a
+// toast must not hold up the TUI's own idle transition.
 function notify(kind: "finished" | "waiting"): void {
   if (!NOTIFY[kind]) {
     return;
@@ -231,20 +217,17 @@ function notify(kind: "finished" | "waiting"): void {
 }
 
 export const TETPlugin = async (input: any) => {
-  // The host's plugins dir is shared across repositories, so each repository's process loads
-  // every repository's plugin; the variable is set on the process, and without this guard a
-  // message would get every other open repository's context appended too.
+  // The host's plugins dir is shared across repositories, so each process loads every
+  // repository's plugin; without this guard a message would get every other one's context too.
   const mine = process.env.${PROJECT_ROOT_ENV} === PROJECT_ROOT;
-  // Subagent sessions (opencode's task tool) go idle on every turn of theirs and raise
-  // questions of their own; the tab is about the root session, so a child's signals are
-  // dropped — like Claude Code's background_tasks guard. Children are created in this very
-  // process, so their created/updated event is seen before any signal of theirs; an id never
-  // seen is treated as a root, since a spurious mark beats a missed one.
+  // Subagent sessions (opencode's task tool) go idle on every turn of theirs and raise questions
+  // of their own; the tab is about the root session, so a child's signals are dropped. Children
+  // are created here, so their created/updated event precedes any signal of theirs; an id never
+  // seen counts as a root.
   const children = new Set<string>();
   const pendingPermissions = new Map<string, ReturnType<typeof setTimeout>>();
-  // One question reaches this twice — question.asked and the tool call below, milliseconds
-  // apart (measured) — and a permission can follow a question within the same turn. The
-  // marker absorbs a repeat; the toast is held back for a moment per session.
+  // One question reaches this twice — question.asked and the tool call below, milliseconds apart
+  // (measured). The marker absorbs a repeat; the toast is held back for a moment per session.
   const lastWaitingToast = new Map<string, number>();
 
   const waiting = (sessionId: unknown): void => {
@@ -285,8 +268,7 @@ export const TETPlugin = async (input: any) => {
   };
 
   // A rename tet asked for: a file named after the session, holding the new title. Applied
-  // through the server this process already is — opencode's own session.updated then rewrites
-  // the record, which is how tet learns it landed.
+  // through the server this process already is; session.updated then rewrites the record.
   const applyRenames = async (): Promise<void> => {
     let names: string[];
     try {
@@ -345,8 +327,7 @@ export const TETPlugin = async (input: any) => {
         // Nothing run in a shell yet — skip silently.
       }
     },
-    // The question tool raises question.asked below as well; seen here too, the way
-    // opencode-notify does it, in case the event is renamed out from under us.
+    // The question tool raises question.asked below too; seen here in case that event is renamed.
     "tool.execute.before": async (call: any) => {
       if (mine && call?.tool === "question") {
         waiting(call.sessionID);

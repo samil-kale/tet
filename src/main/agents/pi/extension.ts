@@ -5,10 +5,8 @@ import { markerDir, SESSION_ID_CHARS } from "../../terminals/marker-watch";
 import { scriptInvocation, writeNotifyScript, type ScriptInvocation } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
-/**
- * Everything the generated extension has baked in. Paths and argument lists only: each is
- * written into the source as a JSON literal, so nothing is ever shell-quoted.
- */
+/** Everything the generated extension has baked in — written into the source as JSON literals,
+ *  so nothing is ever shell-quoted. */
 export interface PiExtensionOptions {
   contextFile: string;
   markers: { busy: string; finished: string; waiting: string };
@@ -16,13 +14,10 @@ export interface PiExtensionOptions {
 }
 
 /**
- * How this target shows a toast, as the argument list pi's extension spawns. On the host that
- * is the generated notify script; in a sandbox there is no desktop session to show it in, so it
- * is `tet-ctl notify` — the same relay every other agent's hook uses (buildHookNotifyCommand),
- * only as an argument list rather than a command line, since the extension spawns it directly.
- * `tet-ctl` is written into every sandbox's `~/.local/bin` (sbx.ts's ensureSandboxLauncher);
- * where it is not (no control channel), the extension's own
- * `error` handler on the spawn swallows it, the same as a missing interpreter.
+ * How this target shows a toast, as the argument list pi's extension spawns. On the host that is
+ * the generated notify script; a sandbox has no desktop session, so it is `tet-ctl notify`,
+ * written into every sandbox's `~/.local/bin` (sbx.ts's ensureSandboxLauncher). Where it is
+ * missing, the extension's `error` handler on the spawn swallows it.
  */
 function notifyInvocation(
   target: HookTarget,
@@ -35,15 +30,13 @@ function notifyInvocation(
 }
 
 /**
- * Writes this repository's extension into `storageDir` and returns the path for `-e`. One
- * fixed name is enough: `storageDir` is already per agent per project (session-manager's
- * pathsFor), unlike opencode's shared config directory. Written beside the target and renamed
- * into place — pi reads it once at startup, and a read landing mid-write fails on Windows.
- * Throws on a failed write: the caller decides, since pi must never be pointed at a half file.
+ * Writes this repository's extension into `storageDir` and returns the path for `-e`. One fixed
+ * name is enough: `storageDir` is already per agent per project. Written beside the target and
+ * renamed into place — pi reads it once at startup, and a read landing mid-write fails on
+ * Windows. Throws on a failed write: pi must never be pointed at a half file.
  *
- * `target` is where the extension will *run*: the host, or the sandbox, which reaches every one
- * of these paths under a name of its own (hook-target.ts). Only what is baked into the file is
- * translated — the writing itself happens here, on the host, at the paths this process sees.
+ * `target` is where the extension will *run*, host or sandbox (hook-target.ts). Only what is
+ * baked into the file is translated; the writing happens here, at the paths this process sees.
  */
 export function writePiExtension(
   storageDir: string,
@@ -54,13 +47,11 @@ export function writePiExtension(
   target: HookTarget = HOST_TARGET
 ): string {
   const markers = { busy: markerDir(storageDir, "busy"), finished: markerDir(storageDir, "finished"), waiting: markerDir(storageDir, "waiting") };
-  // Created here rather than by the extension alone: watchMarkers wants them to exist to
-  // fs.watch them, the way buildMarkCommand creates them for the hook agents.
+  // Created here, not by the extension alone: watchMarkers needs them to exist to fs.watch them.
   for (const dir of Object.values(markers)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  // The marker is always written; only the toast inside it is a setting. `idleReminder` is
-  // Claude Code's alone, as for Codex and opencode.
+  // The marker is always written; only the toast is a setting. `idleReminder` is Claude's alone.
   const notify: PiExtensionOptions["notify"] = {
     finished: notifications.finished
       ? notifyInvocation(target, storageDir, "finished", `${displayName}: Finished`, `Finished in ${repositoryName}`)
@@ -81,11 +72,9 @@ export function writePiExtension(
  * The extension's TypeScript source, pure so the test can check its syntax without a disk.
  *
  * pi loads it through `-e <path>` (jiti compiles the TypeScript; paths with spaces work) before
- * the project-trust dialog, and EXITS outright on one that fails to load — "Error: Failed to
- * load extension …" — unlike Claude Code, which runs without a broken hook. So every branch
- * of this file has to stay valid, which pieces.test.ts checks by compiling it. Nothing is
- * imported from pi's own packages: the file lives under userData, where they do not resolve,
- * and pi's event contract is plain objects anyway.
+ * the project-trust dialog, and EXITS outright on one that fails to load. So every branch has to
+ * stay valid, which pieces.test.ts checks by compiling it. Nothing is imported from pi's own
+ * packages: they do not resolve under userData, and pi's event contract is plain objects.
  *
  * The events, in the order measured: session_start → (per prompt) before_agent_start →
  * agent_start → turn_start/turn_end… → agent_end → agent_settled; ui_prompt_start/end around an
@@ -93,9 +82,8 @@ export function writePiExtension(
  */
 export function renderPiExtension(options: PiExtensionOptions): string {
   const notify = { finished: options.notify.finished ?? null, waiting: options.notify.waiting ?? null };
-  return `// Generated by tet for one repository — rewritten whenever this project's pi is prepared, and
-// read by nothing but pi. Marker files under the three directories are how tet learns about
-// this session's turns (marker-watch.ts); the context file is tet's, kept current for the model.
+  return `// Generated by tet for one repository, read by nothing but pi. Marker files under the
+// three directories report this session's turns (marker-watch.ts); the context file is tet's.
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
@@ -109,10 +97,8 @@ const CONTEXT_FILE = ${JSON.stringify(options.contextFile)};
 const MARKERS = ${JSON.stringify(options.markers)};
 const NOTIFY: { finished: Invocation | null; waiting: Invocation | null } = ${JSON.stringify(notify)};
 
-// The marker's filename is the whole message, so only a session id may ever become one — the
-// same guard the shell hooks apply, from the same list of characters. Rewriting an existing
-// marker is harmless: the file is empty, there is nothing in it to lose, and its mtime is
-// what tet reads as the time.
+// The marker's filename is the whole message, so only a session id may ever become one.
+// Rewriting an existing marker is harmless: the file is empty, and its mtime is the time.
 function mark(dir: string, id: unknown): void {
   if (typeof id !== "string" || !/^[${SESSION_ID_CHARS}]+$/.test(id)) {
     return;
@@ -151,9 +137,8 @@ function sessionId(ctx: any): unknown {
 
 export default function (pi: { on(event: string, handler: (event: any, ctx: any) => unknown): void }): void {
   // The context file's contents go at the end of the system prompt, which is where a returned
-  // systemPrompt lands in the request (measured). Read on every prompt, since tet keeps the
-  // file current through the session; blank means nothing to say. On win32 it carries a BOM
-  // (shell-context.ts), stripped here so it does not reach the model.
+  // systemPrompt lands in the request (measured). Read on every prompt, since tet keeps the file
+  // current. On win32 it carries a BOM (shell-context.ts), stripped so it never reaches the model.
   pi.on("before_agent_start", (event) => {
     let text = "";
     try {
@@ -167,10 +152,9 @@ export default function (pi: { on(event: string, handler: (event: any, ctx: any)
     const base = typeof event.systemPrompt === "string" ? event.systemPrompt : "";
     return { systemPrompt: base + "\\n\\n" + text };
   });
-  // agent_start fires per low-level run — a retry or a compaction is another one, and the
-  // marker is simply rewritten. agent_settled fires once nothing is left to run automatically,
-  // which is the end of the turn as the tab sees it; an Escape-abort settles too. pi has no
-  // equivalent of Claude Code's background_tasks (no subagents of its own), so no guard here.
+  // agent_start fires per low-level run — a retry or a compaction is another one, and the marker
+  // is simply rewritten. agent_settled fires once nothing is left to run automatically, the end
+  // of the turn as the tab sees it; an Escape-abort settles too. pi has no subagents, no guard.
   pi.on("agent_start", (_event, ctx) => {
     mark(MARKERS.busy, sessionId(ctx));
   });
@@ -178,9 +162,8 @@ export default function (pi: { on(event: string, handler: (event: any, ctx: any)
     mark(MARKERS.finished, sessionId(ctx));
     notify(NOTIFY.finished);
   });
-  // pi has no permission prompts; ui_prompt_start is an extension's own dialog. The
-  // project-trust dialog at startup is not reported (it comes before session_start), which
-  // is fine — that one is on screen in a tab just opened.
+  // pi has no permission prompts; ui_prompt_start is an extension's own dialog. The project-trust
+  // dialog at startup is not reported — it comes before session_start.
   pi.on("ui_prompt_start", (_event, ctx) => {
     mark(MARKERS.waiting, sessionId(ctx));
     notify(NOTIFY.waiting);

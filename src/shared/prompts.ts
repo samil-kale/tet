@@ -1,17 +1,13 @@
 import type { PromptId, PromptSettings } from "./types";
 
 /**
- * The question tet puts to an agent in the background. Here rather than beside its caller in
- * src/main/git because the settings dialog shows and edits it, and
- * the renderer may import nothing from src/main. What is *appended* to a question — the diff
- * under the commit prompt — is the caller's, so a user's own text keeps the same shape.
+ * The question tet puts to an agent in the background. Here rather than beside its caller because
+ * the settings dialog shows and edits it, and the renderer may import nothing from src/main. What
+ * is *appended* — the diff under the commit prompt — is the caller's.
  */
 
-/**
- * The question, with everything it needs already in it. Telling the agent to go and look was
- * the first version and cost several times as long — see `readCommitContext`.
- * Nothing here asks it to run a command, so it answers in one round trip.
- */
+/** The question, with everything it needs already in it: nothing asks the agent to run a command,
+ *  so it answers in one round trip. */
 const COMMIT_MESSAGE_PROMPT = [
   "Below are a repository's recent commit subjects and every change `git add --all` would",
   "commit. Suggest the commit message for those changes.",
@@ -28,11 +24,8 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
   commitMessage: COMMIT_MESSAGE_PROMPT
 };
 
-/**
- * The text actually put to the agent: the user's own, or tet's where none is set. Read at the
- * moment of asking, so a change applies to the next press — the one setting that needs no
- * restart, since nothing keeps a copy.
- */
+/** The text actually put to the agent: the user's own, or tet's where none is set. Read at the moment
+ *  of asking, so a change applies to the next press — the one setting that needs no restart. */
 export function effectivePrompt(prompts: PromptSettings, id: PromptId): string {
   return prompts[id] || DEFAULT_PROMPTS[id];
 }

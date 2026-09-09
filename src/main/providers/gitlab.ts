@@ -27,13 +27,9 @@ export const gitlab: GitProvider = {
   },
 
   async listRepositories(host, token) {
-    // membership=true: the projects the user is a member of, directly or through a group —
-    // without it a self-hosted instance answers with everything it can see.
-    //
-    // simple=true is what makes the listing bearable: the full record carries permissions,
-    // statistics, the owner and a block of _links, and none of the four fields below are in
-    // there. Measured against a real instance, per page: several times the bytes and the wait
-    // without it.
+    // membership=true: without it a self-hosted instance answers with everything it can see.
+    // simple=true: the full record carries permissions, statistics, the owner and _links, none of
+    // the four fields below. Measured against a real instance: several times the bytes and wait.
     const url = `${apiBase(host)}/projects?membership=true&per_page=100&order_by=last_activity_at&simple=true`;
     const entries = (await getPaged(url, headers(token))) as GitLabProject[];
     return entries.map(

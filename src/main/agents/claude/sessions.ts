@@ -7,15 +7,11 @@ import { findEncodedDir, nonEmptyString, readLinesBackwards, truncateTitle } fro
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
-/**
- * Claude Code has no session CLI — sessions are the `<uuid>.jsonl` transcripts in
- * ~/.claude/projects/<cwd with non-alphanumerics replaced by "-">, identified by
- * filename and ordered by mtime. Deleting a session means deleting its transcript.
- *
- * A sandboxed session is the same file in the same shape; only the two inputs differ, which is
- * why every operation below takes the projects root and the cwd rather than reading either off
- * this host — see SessionProvider.sandbox.
- */
+/** Claude Code has no session CLI — sessions are the `<uuid>.jsonl` transcripts in
+ *  ~/.claude/projects/<cwd with non-alphanumerics replaced by "-">, identified by filename and
+ *  ordered by mtime. Deleting one means deleting its transcript. A sandboxed session is the same
+ *  file in the same shape, so every operation takes the projects root and the cwd rather than
+ *  reading either off this host — see SessionProvider.sandbox. */
 export const claudeSessionProvider: SessionProvider = {
   list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
     return listIn(projectsRoot(), cwd);
@@ -33,10 +29,8 @@ export const claudeSessionProvider: SessionProvider = {
     return renameIn(projectsRoot(), cwd, sessionId, title);
   },
 
-  /**
-   * The project directory doesn't exist until Claude first writes a transcript there, and a
-   * session's own `subagents/` subdirectory must not count — watchTranscriptDir covers both.
-   */
+  /** The project directory doesn't exist until Claude writes a transcript there, and a session's
+   *  own `subagents/` subdirectory must not count — watchTranscriptDir covers both. */
   watch(_executable: string, cwd: string, onChange: () => void): () => void {
     return watchTranscriptDir(
       projectsRoot,
@@ -46,13 +40,10 @@ export const claudeSessionProvider: SessionProvider = {
     );
   },
 
-  /**
-   * `~/.claude/projects` inside the sandbox — where a sandboxed Claude writes exactly the same
-   * transcripts it writes on the host. Measured live, 2026-09-09: sbx gives that path a volume
-   * of its own (`/dev/vde`), and a later `sbx mount` stacks on top of it and wins, so what the
-   * CLI writes from then on lands on the host side. What the volume already held is shadowed
-   * by the mount, not deleted.
-   */
+  /** `~/.claude/projects` inside the sandbox, where a sandboxed Claude writes the same
+   *  transcripts it writes on the host. Measured: sbx gives that path a volume of its own
+   *  (`/dev/vde`), and a later `sbx mount` stacks on top and wins, so what the CLI writes lands
+   *  on the host side; what the volume already held is shadowed by the mount, not deleted. */
   sandbox: {
     mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
     list: (_executable, root, cwd) => listIn(path.join(root, "projects"), cwd),
@@ -104,19 +95,15 @@ async function removeIn(root: string, cwd: string, sessionId: string): Promise<v
   }
   const filePath = path.join(projectDir, `${sessionId}.jsonl`);
   await fs.promises.rm(filePath);
-  // What Claude Code keeps beside the transcript under the same id — subagent transcripts,
-  // tool results — and would otherwise stay behind for good.
+  // Claude Code keeps subagent transcripts and tool results beside it under the same id.
   await fs.promises.rm(path.join(projectDir, sessionId), { recursive: true, force: true });
   scanCache.delete(filePath);
   headCache.delete(filePath);
   createdAtCache.delete(filePath);
 }
 
-/**
- * Mirrors Claude Code's own (CLI-flag-less) `/rename` slash command: a rename is persisted
- * as a `custom-title` transcript entry, which — like Claude's own title resolution — always
- * wins over the derived `ai-title`/`summary`/message fallback.
- */
+/** Mirrors Claude Code's `/rename`: a rename is persisted as a `custom-title` transcript entry,
+ *  which always wins over the derived `ai-title`/`summary`/message fallback. */
 async function renameIn(root: string, cwd: string, sessionId: string, title: string): Promise<void> {
   const trimmed = title.trim();
   if (!trimmed) {
@@ -139,17 +126,11 @@ function findProjectDir(root: string, cwd: string): Promise<string | undefined> 
   return findEncodedDir(root, cwd.replace(/[^a-zA-Z0-9]/g, "-"));
 }
 
-/**
- * Drops what the three caches below still hold for transcripts that are gone — `remove` is not
- * the only way one disappears: Claude Code's own picker deletes them behind tet's back, and
- * without this they are only ever added to. Done at the one point a listing already knows the
- * full set of files, the way codex's and pi's listings do.
- *
- * Only within the directory just listed. A sandbox's transcripts are read from a second root
- * (SessionProvider.sandbox) into these same caches, and one root's listing knows nothing about
- * the other's files — unscoped, each pass would evict the other's entries and nothing would
- * ever be answered from cache again.
- */
+/** Drops what the three caches hold for transcripts that are gone — Claude Code's own picker
+ *  deletes them behind tet's back, and without this the caches only ever grow. Scoped to the
+ *  directory just listed: a sandbox's transcripts are read from a second root
+ *  (SessionProvider.sandbox) into these same caches, and unscoped each pass would evict the
+ *  other root's entries. */
 function forgetMissing(dir: string, files: string[]): void {
   const present = new Set(files.map((file) => path.join(dir, file)));
   for (const cache of [headCache, scanCache, createdAtCache]) {
@@ -169,21 +150,13 @@ interface ResolvedTitle {
   provisional: boolean;
 }
 
-/**
- * Resolves a session's display name the same way Claude Code's own `/resume` list does
- * (order verified against the CLI, including that a rename outranks an "agent-name"):
- * a `custom-title` entry (Claude's own `/rename`, and what our rename writes) wins; it can
- * sit anywhere in the file, so it comes from the backwards scan the caller has already run
- * rather than from the head window below. Otherwise "agent-name", else "ai-title" — for both
- * the last occurrence in the file wins, since a later one supersedes an earlier one, and that
- * one is the scan's as well; the head window's own copy is the fallback. Else
- * a "summary" entry (only seen after `/compact`), else the first prompt the user typed:
- * Claude assigns no title at all to short sessions, and `/resume` labels those by that
- * prompt rather than leaving them blank. Falls back to "" — the UI shows a placeholder.
+/** Resolves a session's display name the way Claude Code's own `/resume` list does (order
+ *  verified against the CLI): `custom-title` wins and can sit anywhere in the file, so it comes
+ *  from the caller's backwards scan; else "agent-name", else "ai-title" — for both the last
+ *  occurrence in the file wins, the head window's copy being the fallback; else "summary" (only
+ *  seen after `/compact`); else the first prompt the user typed. Falls back to "".
  *
- * Don't change this scanning logic casually: a regression here silently shows the wrong
- * tab title with nothing to catch it.
- */
+ *  Don't change this scanning logic casually: a regression silently shows the wrong tab title. */
 async function extractTitle(filePath: string, size: number, tail: TranscriptTail): Promise<ResolvedTitle> {
   if (tail.customTitle) {
     return { title: truncateTitle(tail.customTitle), provisional: false };
@@ -204,13 +177,10 @@ interface TranscriptHead {
   firstPrompt?: string;
 }
 
-/**
- * The last head scan of each transcript, by path, for the same reason `scanCache` below
- * exists: a listing runs for every session on every change to any of them. Keyed by how much of
- * the window the file fills rather than by its size — the stream only ever reads the first
- * TITLE_SCAN_BYTE_LIMIT bytes, and a transcript is append-only, so once it has grown past that
- * the window never changes again, however much the session being worked in keeps growing.
- */
+/** The last head scan of each transcript, by path: a listing runs for every session on every
+ *  change to any of them. Keyed by how much of the window the file fills rather than by its size
+ *  — only the first TITLE_SCAN_BYTE_LIMIT bytes are ever read, and a transcript is append-only,
+ *  so past that the window never changes again. */
 const headCache = new Map<string, { size: number; head: TranscriptHead }>();
 
 /** Only a line naming one of the entry types is worth parsing — most of a transcript is not. */
@@ -227,8 +197,7 @@ async function scanHead(filePath: string, fileSize: number): Promise<TranscriptH
   const head: TranscriptHead = {};
   try {
     for await (const line of lines) {
-      // The prompt is wanted from the first `user` entry only; after that, `user` lines — the
-      // bulk of a transcript, tool results included — are skipped unparsed like the rest.
+      // Only the first `user` entry is wanted; later ones (mostly tool results) go unparsed.
       const wanted =
         HEAD_ENTRY_TYPES.some((type) => line.includes(type)) ||
         (head.firstPrompt === undefined && line.includes('"user"'));
@@ -241,9 +210,8 @@ async function scanHead(filePath: string, fileSize: number): Promise<TranscriptH
       } catch {
         continue;
       }
-      // agent-name/ai-title keep the last occurrence (a later one supersedes an earlier
-      // one), summary and the first prompt the first — an empty value never displaces
-      // what's already there either way.
+      // agent-name/ai-title keep the last occurrence, summary and the first prompt the first;
+      // an empty value never displaces what's already there.
       if (entry.type === "agent-name") {
         head.agentName = nonEmptyString(entry.agentName) ?? head.agentName;
       } else if (entry.type === "ai-title") {
@@ -269,12 +237,9 @@ async function scanHead(filePath: string, fileSize: number): Promise<TranscriptH
 /** A transcript's first timestamp never changes once it has one, so it is read once per path. */
 const createdAtCache = new Map<string, number>();
 
-/**
- * A transcript's own first timestamped entry is a far more stable "created" signal than the
- * file's mtime, which shifts on every append. Deliberately independent of extractTitle rather
- * than folded into its scan: that one returns early once it finds a custom-title, skipping its
- * head-scan — reusing it here would leave every renamed session without a createdAt.
- */
+/** A transcript's first timestamped entry is a more stable "created" signal than mtime, which
+ *  shifts on every append. Kept out of extractTitle's scan: that one returns early on a
+ *  custom-title, which would leave every renamed session without a createdAt. */
 async function extractCreatedAt(filePath: string): Promise<number | undefined> {
   const cached = createdAtCache.get(filePath);
   if (cached !== undefined) {
@@ -308,10 +273,8 @@ async function extractCreatedAt(filePath: string): Promise<number | undefined> {
   return undefined;
 }
 
-/**
- * Most `user` entries are tool results the CLI writes back into the transcript itself; only
- * those tagged `origin.kind === "human"` are prompts the user typed.
- */
+/** Most `user` entries are tool results the CLI writes back into the transcript itself; only
+ *  those tagged `origin.kind === "human"` are prompts the user typed. */
 function typedPromptText(entry: Record<string, unknown>): string | undefined {
   const origin = entry.origin as { kind?: unknown } | undefined;
   if (origin?.kind !== "human") {
@@ -328,23 +291,17 @@ interface TranscriptTail {
   /** The last `agent-name` and `ai-title` entries — Claude appends fresh ones on a resume. */
   agentName?: string;
   aiTitle?: string;
-  /**
-   * When the last turn ended *without* its Stop hooks ever running for it — the one case the
-   * busy/finished/waiting markers have no other way to report, and what AgentSessionInfo.
-   * turnEndedAt exists for. A turn whose Stop hooks did run is left out even when they chose not
-   * to write a `finished` marker (a background task still pending, per the `background_tasks`
-   * guard in stop-guard.ps1): the marker mechanism is authoritative for that turn either way, and
-   * this net exists only for the turn hooks never got a chance to run for at all. Resolved via
-   * `pendingTurnEnd` below rather than read here directly.
-   */
+  /** When the last turn ended *without* its Stop hooks ever running for it — the one case the
+   *  markers cannot report. A turn whose Stop hooks did run is left out even when they wrote no
+   *  `finished` marker (the `background_tasks` guard in stop-guard.ps1): the marker mechanism is
+   *  authoritative for that turn. Resolved via `pendingTurnEnd` below. */
   turnEndedAt?: number;
-  /** Set once a `turn_duration` entry's Stop-hook parentage has been checked one way or the
-   * other — see readTailEntries. Internal to the scan; distinct from `turnEndedAt` being
-   * undefined, which by itself does not say whether that check has even happened yet. */
+  /** Set once a `turn_duration` entry's Stop-hook parentage has been checked — see
+   * readTailEntries. Distinct from `turnEndedAt` being undefined, which says nothing about
+   * whether that check has happened. */
   turnEndResolved?: boolean;
-  /** A `turn_duration` entry found but not yet checked against its parent for a matching
-   * `stop_hook_summary` — resolved by whichever entry the backward scan visits next, whatever
-   * kind it is. */
+  /** A `turn_duration` entry not yet checked against its parent for a matching
+   * `stop_hook_summary` — resolved by whichever entry the backward scan visits next. */
   pendingTurnEnd?: { ms: number; parentUuid: string };
 }
 
@@ -381,11 +338,9 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
       continue;
     }
     // A pending turn_duration is resolved by the next *turn* entry below it: a stop_hook_summary
-    // it names as its parent means Stop hooks ran (nothing to report - see turnEndedAt's own
-    // comment); any other summary or an earlier turn's own turn_duration means this turn had no
-    // summary of its own, i.e. it was cut short before any hook fired. A title entry between
-    // the two says nothing either way and is skipped - a rename appends a custom-title at any
-    // moment, and treating that as "no summary" would end a turn that finished normally.
+    // it names as its parent means Stop hooks ran (nothing to report); any other summary or an
+    // earlier turn's own turn_duration means this turn had none, i.e. it was cut short. A title
+    // entry between the two is skipped — a rename appends a custom-title at any moment.
     if (tail.pendingTurnEnd !== undefined) {
       if (
         entry.type === "system" &&
@@ -427,29 +382,17 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
   }
 }
 
-/**
- * The last scan of each transcript, by path: a listing runs for every session of the
- * repository and on every change to any of them, so all but the one being written to are
- * answered from here, and that one is only read from where the last scan left off.
- */
+/** The last scan of each transcript, by path: all but the one being written to are answered from
+ *  here, and that one is only read from where the last scan left off. */
 const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
 
-/**
- * Reads the transcript backwards for the entries that can sit anywhere in it and of which the
- * *last* one counts: the custom-title (Claude's own `/rename`, and what our rename appends),
- * the agent-name and ai-title Claude re-appends on a resume, and when the last turn ended.
- * Backwards, so it stops as soon as it has them all — and to the beginning of the file where a
- * session has none of them, since a rename made 300 KB of transcript ago is still the name.
- * Only lines naming one of those types are parsed, most of a transcript being tool output.
- *
- * Claude writes a `turn_duration` entry when a turn ends whichever way it ended — the one after
- * an interrupted turn is what the Stop hook never reports, and what AgentSessionInfo.turnEndedAt
- * exists for. Sidechain entries are a subagent's own turns, not the session's.
- *
- * A file scanned before is only read from a chunk below where that scan ended, and what the
- * new stretch does not hold is taken from the old answer: the entries below the overlap were
- * all seen then, and the overlap covers a line the earlier read may have caught half-written.
- */
+/** Reads the transcript backwards for the entries that can sit anywhere in it and of which the
+ *  *last* one counts: custom-title, the agent-name and ai-title Claude re-appends on a resume,
+ *  and when the last turn ended. It runs to the beginning of the file where a session has none
+ *  of them, since a rename made 300 KB of transcript ago is still the name. Claude writes a
+ *  `turn_duration` entry when a turn ends whichever way it ended; sidechain entries are a
+ *  subagent's own turns. A file scanned before is only read from a chunk below where that scan
+ *  ended, and the overlap covers a line an earlier read may have caught half-written. */
 async function scanTail(filePath: string, sessionId: string): Promise<TranscriptTail> {
   const tail: TranscriptTail = {};
   let handle: fs.promises.FileHandle | undefined;
@@ -466,9 +409,8 @@ async function scanTail(filePath: string, sessionId: string): Promise<Transcript
       readTailEntries(lines, sessionId, tail);
       return scanComplete(tail);
     });
-    // A turn_duration with nothing below it to check against: the whole stretch under it held
-    // no summary and no earlier turn, and a summary is written right before its turn_duration,
-    // so there is none - the turn was cut short. Never left pending into the cache.
+    // A turn_duration with nothing below it to check against: a summary is written right before
+    // its turn_duration, so there is none — the turn was cut short. Never left pending.
     if (tail.pendingTurnEnd !== undefined) {
       tail.turnEndedAt = tail.pendingTurnEnd.ms;
       tail.pendingTurnEnd = undefined;
@@ -478,10 +420,8 @@ async function scanTail(filePath: string, sessionId: string): Promise<Transcript
       tail.customTitle ??= previous.tail.customTitle;
       tail.agentName ??= previous.tail.agentName;
       tail.aiTitle ??= previous.tail.aiTitle;
-      // Not ??=: turnEndedAt legitimately stays undefined once resolved (Stop hooks ran, so
-      // there's nothing to report), and that must not be overwritten by a now-superseded answer
-      // from before. Only an unresolved scan - one that ran out of newly-read material with a
-      // turn_duration still unconfirmed, or none at all in the new stretch - falls back to it.
+      // Not ??=: turnEndedAt legitimately stays undefined once resolved (Stop hooks ran), which
+      // a superseded earlier answer must not overwrite. Only an unresolved scan falls back.
       if (tail.turnEndResolved !== true) {
         tail.turnEndedAt = previous.tail.turnEndedAt;
         tail.turnEndResolved = previous.tail.turnEndResolved;

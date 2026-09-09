@@ -6,29 +6,19 @@ import type { NotificationSettings } from "../../../shared/types";
 
 /**
  * Codex only runs a hook once it is *trusted* — a sha256 over a normalized form of its event
- * name, matcher and command, checked against a `trusted_hash` Codex reads back out of its own
- * config. Passed cold, an unknown hash means an interactive session opens on a blocking "Hooks
- * need review" screen instead of the chat. Reproduced here so tet can hand in the matching
- * hash alongside the hook itself and skip that screen entirely — verified end to end against a
- * real Codex install (five (event, matcher, command) → hash pairs Codex itself computed, and a
- * live interactive session that went straight to the chat with a never-before-seen hash set).
+ * name, matcher and command, checked against a `trusted_hash` in its own config. An unknown hash
+ * opens an interactive session on a blocking "Hooks need review" screen instead of the chat, so
+ * tet reproduces the hash and hands it in alongside the hook.
  *
- * `timeout` is always present at its effective value: 600 is the default for every event Codex
- * lets a hook run on other than SessionEnd (tet uses none of the events that differ), so it
- * has to be in the hash even though tet never sets it explicitly. Key order matters — this
- * has to be a real recursive alphabetical sort, not the object's own key order (`matcher`, when
- * present, sorts after `hooks`, not between `event_name` and `hooks`).
+ * `timeout` is always present at its effective value: 600 is the default for every event tet
+ * uses, so it must be in the hash even though tet never sets it. Key order is a real recursive
+ * alphabetical sort, not the object's own (`matcher` sorts after `hooks`). `async` stays `false`:
+ * the installed build refuses an `async` hook ("async hooks are not supported yet") and drops it
+ * from the trust listing entirely — revisit once a release actually runs one.
  *
- * `async` stays `false`: Codex's own schema has it, but the installed build refuses an `async`
- * hook outright ("async hooks are not supported yet") rather than merely warning, dropping it
- * from the trust listing entirely — confirmed by testing, not by reading the schema. Revisit
- * once a Codex release actually runs one.
- *
- * If Codex ever changes this normalization, the pre-computed hash simply stops matching: the
- * hook shows as "Modified" instead of "Trusted" and the review screen reappears once, the same
- * as it would for a user who hand-edited their own config — not a crash, not a silent failure.
- * Cross-check against `hooks/src/engine/discovery.rs::hook_hash` and `config/src/fingerprint.rs`
- * in the Codex source if it ever does.
+ * If Codex changes this normalization the hash stops matching, the hook shows as "Modified" and
+ * the review screen reappears once — not a crash. Cross-check
+ * `hooks/src/engine/discovery.rs::hook_hash` and `config/src/fingerprint.rs`.
  */
 export function hookTrustedHash(eventLabel: string, command: string, matcher?: string): string {
   const identity: Record<string, unknown> = { event_name: eventLabel };
@@ -55,24 +45,20 @@ function sortKeysDeep(value: unknown): unknown {
 }
 
 /**
- * The synthetic config path Codex assigns hooks passed on the command line — always this literal
- * string on the machine actually running Codex (win32 host or not), whichever repository is
- * asking. Not a real file: it exists only to give `-c`-supplied hooks a trust key, the same shape
- * a real config file's path would have. A sandboxed Codex always runs on Linux regardless of
- * host OS, so this reads `target.posix`, not `process.platform` — the win32 form would compute
- * the wrong trust key for a Windows host's sandbox, reopening the "Hooks need review" screen.
+ * The synthetic config path Codex assigns hooks passed on the command line — not a real file,
+ * only a trust key shaped like a config file's path. A sandboxed Codex always runs on Linux
+ * whatever the host, so this reads `target.posix`, not `process.platform`: the win32 form would
+ * compute the wrong trust key for a Windows host's sandbox and reopen the review screen.
  */
 function sessionFlagsSource(target: HookTarget): string {
   return target.posix ? "/<session-flags>/config.toml" : String.raw`C:\<session-flags>\config.toml`;
 }
 
 /**
- * Codex's snake_case label for a hook event, as it appears in a trust key. `handlerIndex` is the
- * handler's own position within the event's one matcher group (`group_index` is always `0` here
- * — tet never registers two matcher groups for the same event) — each handler is trusted
- * *independently*, hashed as if it were the only one in its group, verified against Codex's own
- * `hooks/list` for a two-handler `UserPromptSubmit` (context file, then the busy marker): the
- * second handler's key is `…:0:1`, not folded into the first's hash.
+ * A hook event's trust key. `handlerIndex` is the handler's position within the event's one
+ * matcher group (`group_index` is always `0` — tet registers no second group). Each handler is
+ * trusted independently, hashed as if it were alone in its group: verified against Codex's own
+ * `hooks/list` that a second handler's key is `…:0:1`, not folded into the first's hash.
  */
 function trustKey(eventLabel: string, handlerIndex: number, target: HookTarget): string {
   return `${sessionFlagsSource(target)}:${eventLabel}:0:${handlerIndex}`;
@@ -80,12 +66,9 @@ function trustKey(eventLabel: string, handlerIndex: number, target: HookTarget):
 
 /**
  * TOML literal string (`'...'`): everything but `'` itself is taken verbatim, so a Windows path
- * full of backslashes and a PowerShell command line full of `"` need no escaping at all — the
- * same reasoning `powershellSingleQuote`/`shellSingleQuote` apply to their own shells. None of
- * what tet generates (its own storage paths, a sha256 hash, `request_user_input`) can ever
- * contain a `'`, but a Windows user or repository name could, so this still has to fall back
- * rather than emit invalid TOML — a basic string, with `\` and `"` escaped this time since those
- * *do* mean something inside one.
+ * full of backslashes and a PowerShell command line full of `"` need no escaping. A Windows user
+ * or repository name can hold a `'`, so that case falls back to a basic string with `\` and `"`
+ * escaped, since those do mean something inside one.
  */
 function tomlValue(value: string): string {
   if (!value.includes("'")) {
@@ -106,13 +89,11 @@ interface HookEntry {
 }
 
 /**
- * The one `-c hooks={…}` argument covering every hook tet registers and its matching trust
- * entry, built as a single TOML value on purpose: `-c hooks.Stop=[…]` and a second
- * `-c hooks.state…=…` do not reliably merge (verified — the state entry silently failed to
- * apply), and `-c`'s own key-path parsing splits on every literal `.` in the *key* before any
- * TOML parsing runs, which corrupts a trust key that itself contains one (`config.toml`). Putting
- * everything inside the *value* of one `-c hooks=…` sidesteps both: a real TOML parser handles
- * the quoted trust key correctly, and there is nothing left to merge.
+ * One `-c hooks={…}` argument covering every hook tet registers and its matching trust entry, as
+ * a single TOML value: two `-c hooks.…` arguments do not reliably merge (verified — the state
+ * entry silently failed to apply), and `-c`'s key-path parsing splits on every literal `.` in the
+ * key, corrupting a trust key that contains one (`config.toml`). Inside one value, a real TOML
+ * parser handles the quoted trust key and there is nothing left to merge.
  */
 function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
   const hookGroups = entries
@@ -135,23 +116,19 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
 
 /**
  * Builds the Stop hook's command line: marks the session finished, then notifies where
- * notifications are on. Unlike Claude Code, Codex has no `background_tasks` payload to guard
- * against — a turn that merely spawns a subagent and returns is reported through the separate
- * `SubagentStop` event, which tet does not hook, so Stop firing always means this turn is
- * actually over.
+ * notifications are on. Codex needs no `background_tasks` guard — a turn that only spawns a
+ * subagent is reported through `SubagentStop`, which tet does not hook.
  */
 function buildStopCommand(storageDir: string, notifyCommand: string | undefined, target: HookTarget): string {
-  // Stop is stricter than the other hook events: a successful command must write one JSON
-  // value to stdout. Keep tet-ctl's own result out of that channel and return an empty object;
-  // the marker and optional notification are side effects, not feedback for Codex.
+  // Stop is stricter than the other events: a successful command must write one JSON value to
+  // stdout, so tet-ctl's own result is kept out of that channel and an empty object returned.
   return buildMarkCommand(storageDir, "stop", "finished", notifyCommand, target, "{}");
 }
 
 /**
  * Generates this repository's Codex hook scripts and returns the `-c` argument that registers
- * them, pre-trusted. Everything is scoped to `storageDir` (this agent's own per-repository
- * scratch directory), and nothing is written to Codex's own configuration — `-c` overrides are
- * layered on top of the user's `config.toml` for this one process only, never persisted.
+ * them, pre-trusted. Everything is scoped to `storageDir`; nothing is written to Codex's own
+ * configuration — `-c` overrides apply to this one process only and are never persisted.
  */
 export function setupCodexHooks(
   storageDir: string,
@@ -161,28 +138,21 @@ export function setupCodexHooks(
   contextFile: string,
   target: HookTarget = HOST_TARGET
 ): string[] {
-  // Two commands on the one event: the context file's contents become part of the prompt (a
-  // hook's plain, non-JSON stdout is appended to it — confirmed in Codex's own source,
-  // `hooks/src/events/user_prompt_submit.rs`, the same contract Claude Code's hooks have), and
-  // the marker says the session has started working. Order matters only in that the second must
-  // print nothing. Unlike Claude Code, Codex's sandbox restricts writes and network, not reads
-  // (`SandboxPolicy::ReadOnly` names no path at all), so — unlike `claude/hooks.ts` — nothing
-  // here has to grant the model permission to read the file this one points at.
+  // Two commands on the one event: a hook's plain, non-JSON stdout is appended to the prompt
+  // (`hooks/src/events/user_prompt_submit.rs`), and the marker says the session started working;
+  // the second must print nothing. Codex's sandbox restricts writes and network, not reads.
   const readContextCommand = buildReadFileCommand(storageDir, "read-context", contextFile, target);
   const busyCommand = buildBusyCommand(storageDir, target);
 
-  // The toast inside each of these is optional per the notification settings. The command
-  // itself is `tet-ctl notify` either way (see buildHookNotifyCommand) — host or sandboxed,
-  // the process actually showing the toast is always the one on the other end of the control
-  // channel, never this hook's own.
+  // The toast is optional per the notification settings; the command is `tet-ctl notify` either
+  // way (buildHookNotifyCommand), so the toast is always shown by the control channel's process.
   const finishedNotify = notifications.finished
     ? buildHookNotifyCommand(target, `${displayName}: Finished`, `Finished in ${repositoryName}`)
     : undefined;
   const stopCommand = buildStopCommand(storageDir, finishedNotify, target);
 
   // Waiting is registered for both PermissionRequest (an approval is about to be asked) and
-  // PreToolUse matched to `request_user_input` (a question tool is about to run) — the same
-  // shape as Claude Code's Notification/PreToolUse split.
+  // PreToolUse matched to `request_user_input` (a question tool is about to run).
   const permissionNotify = notifications.needsYou
     ? buildHookNotifyCommand(target, `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`)
     : undefined;

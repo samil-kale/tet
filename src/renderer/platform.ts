@@ -15,7 +15,7 @@ export function isModifierKey(event: KeyboardEvent): boolean {
   return isMac() ? event.key === "Meta" : event.key === "Control";
 }
 
-/** What each platform calls its own file manager, the way GitHub Desktop names them. */
+/** What each platform calls its own file manager. */
 export function revealLabel(): string {
   if (isMac()) {
     return "Reveal in Finder";
@@ -23,8 +23,7 @@ export function revealLabel(): string {
   return isWindows() ? "Show in Explorer" : "Show in your file manager";
 }
 
-/** git (and this app's own file listing) reports paths relative to the root with `/`; the
- *  clipboard gets one the platform's own file manager accepts. */
+/** git and this app's file listing report `/`-separated paths; the clipboard gets a native one. */
 export function absolutePath(projectPath: string, relative: string): string {
   return [projectPath, ...relative.split("/")].join(isWindows() ? "\\" : "/");
 }

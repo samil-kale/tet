@@ -22,9 +22,8 @@ import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePaneSize }
 
 interface DiffDialogProps {
   project: Project;
-  /** Repository-relative path of the file being looked at; null only for a project whose dialog
-   *  has never had one — "Browse files" itself reopens whatever this project last showed
-   *  (`App`'s `lastDiffPathKey`), so this is null in practice only before that first file. */
+  /** Repository-relative path of the file shown; null only before this project's dialog has ever
+   *  had one ("Browse files" reopens the last, `App`'s `lastDiffPathKey`). */
   path: string | null;
   /** What the diff depends on besides the file — a change to it reloads while the dialog is open. */
   version: string;
@@ -35,7 +34,7 @@ interface DiffDialogProps {
   onClose: () => void;
 }
 
-/** Asks before losing an edit that hasn't reached disk — the same wording wherever it's asked. */
+/** Asks before losing an edit that hasn't reached disk. */
 async function confirmDiscardEdit(path: string): Promise<boolean> {
   const answer = await confirm({
     title: "Unsaved changes",
@@ -45,20 +44,8 @@ async function confirmDiscardEdit(path: string): Promise<boolean> {
   return answer.confirmed;
 }
 
-/**
- * One file, over the whole window — a diff, or (see CLAUDE.md) an editor for the same file when
- * it has none, or the user asked for one anyway. A dialog rather than a pane for the same reason
- * as always: the git view has no room for it, and looking at (or briefly fixing) a file is
- * something you come out of again, unlike the branch list next to it. EXPLORER over LOCAL CHANGES
- * on the left mirrors the git pane's own BRANCHES-over-LOCAL-CHANGES shape — a browser for any
- * file above the changed ones, with GitHub Desktop's own file actions and VS Code's
- * new/rename/delete (see `Explorer`); still no ↑/↓ of its own — that stays with `ChangesList` — and a single click
- * opens rather than needing a double one.
- *
- * Not part of Dialog.tsx: that file puts *questions* (confirm, prompt) and is built around a
- * form with two buttons. This asks nothing itself — it delegates the one question it does need
- * (discard unsaved changes?) to that file, same as everything else that asks one.
- */
+/** One file over the whole window: a diff, or an editor for it. EXPLORER over LOCAL CHANGES on
+ *  the left mirrors the git pane's shape. Its one question goes through `Dialog.tsx`. */
 export const DiffDialog = memo(function DiffDialog({ project, path, version, changes, onOpenDiff, onClose }: DiffDialogProps) {
   const change = path ? changes.find((entry) => entry.path === path) : undefined;
   const diffable = change !== undefined;
@@ -66,13 +53,13 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
   const [diff, setDiff] = useState<FileDiff | null>(null);
   const [loading, setLoading] = useState(true);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
-  /** Reading the diff and colouring it, `DiffView`'s own two waits. */
+  /** `DiffView`'s two waits: reading the diff and colouring it. */
   const [diffBusy, setDiffBusy] = useState(false);
   /** A file action started from the list beside the diff — that pane's own bar. */
   const [acting, setActing] = useState(false);
 
-  /** The user's own Diff/Edit choice — reset below whenever `path` changes, not on every render:
-   *  a save can flip `diffable` from false to true without the file leaving Edit mode. */
+  /** The user's Diff/Edit choice, reset on a `path` change only: a save can flip `diffable` from
+   *  false to true without the file leaving Edit mode. */
   const [mode, setMode] = useState<"diff" | "edit">(diffable ? "diff" : "edit");
   const [modeForPath, setModeForPath] = useState(path);
   if (modeForPath !== path) {
@@ -88,15 +75,14 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
   const editorRef = useRef<CodeEditorHandle>(null);
   const explorerRef = useRef<ExplorerHandle>(null);
 
-  /** Bumped after a successful save so the diff reloads even when the watcher's own push does
-   *  not — `Repository.emit` only pushes a changed *state*, and modified→modified isn't one. */
+  /** Bumped after a successful save: `Repository.emit` only pushes a changed state, and
+   *  modified→modified isn't one, so the watcher alone would not reload the diff. */
   const [savedAt, setSavedAt] = useState(0);
 
   const [explorerListing, setExplorerListing] = useState<ExplorerListing | undefined>(undefined);
   const [listing, setListing] = useState(false);
-  /** Bumped by the Explorer tree's own create/rename/delete — the only kind of change to the
-   *  listing `changesKey` below never catches, since an empty new folder never touches git
-   *  status the way a new file does. */
+  /** Bumped by the Explorer tree's create/rename/delete: an empty new folder never touches git
+   *  status, so `changesKey` below does not catch it. */
   const [explorerVersion, setExplorerVersion] = useState(0);
   const [treeHeight, setTreeHeight] = usePaneSize("diff-explorer", 300, MIN_PANE_HEIGHT);
   const [filesWidth, setFilesWidth] = usePaneSize("diff-files", 260, MIN_PANE_WIDTH);
@@ -105,9 +91,8 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
   const canEdit = diffable ? change?.status !== "deleted" && !diff?.binary : !file?.binary && !file?.tooLarge;
   const effective: "diff" | "edit" = diffable ? (canEdit ? mode : "diff") : "edit";
 
-  // Reloads whenever the file, the repository state, the whitespace switch or a save changes it.
-  // Not run at all for a file with nothing to diff — a tree file the changes list never named
-  // costs no git process just for being looked at.
+  // Reloads on the file, the repository state, the whitespace switch or a save. A file with
+  // nothing to diff costs no git process just for being looked at.
   useEffect(() => {
     if (!path || !diffable) {
       setDiff(null);
@@ -131,10 +116,8 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     };
   }, [project.id, path, version, ignoreWhitespace, diffable, savedAt]);
 
-  // The file's content — read whenever there's nothing to diff (Edit is the only mode there is)
-  // or the user has switched to Edit for a file that also has one. Not on `version`/`savedAt`: a
-  // change from outside is instead folded into the open model in place, below, so it never
-  // clobbers what's being typed.
+  // The file's content, read when there is nothing to diff or the user switched to Edit. Not on
+  // `version`/`savedAt`: a change from outside is folded into the open model in place below.
   const wantsFile = path !== null && (!diffable || mode === "edit");
   useEffect(() => {
     if (!path || !wantsFile) {
@@ -142,10 +125,9 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
       return;
     }
     let cancelled = false;
-    // Cleared before every read, not only when nothing wants a file: switching A→B and back
-    // fast enough lands here with `file` still holding A's *earlier* read — and an editor
-    // mounted from that copy, handed the fresh read's mtime, would save stale text right past
-    // the mtime guard.
+    // Cleared before every read: switching A→B and back fast enough lands here with `file` still
+    // holding A's earlier read, and an editor mounted from that copy but handed the fresh read's
+    // mtime would save stale text right past the mtime guard.
     setFile(null);
     setFileLoading(true);
     void window.tet.repository.readFile(project.id, path).then((result) => {
@@ -163,11 +145,8 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     };
   }, [project.id, path, wantsFile]);
 
-  // An outside edit (an agent, a terminal) changing the open file while it sits clean in the
-  // editor — folded into the model in place rather than remounting it, so undo history and the
-  // cursor survive. Left alone while dirty: the user's own unsaved edit wins until they act on
-  // it themselves (switch away, or save over a stale file and hit the mtime guard).
-  // Deliberately keyed on `version` alone — see the file read above for why not `file` itself.
+  // An outside edit while the file sits clean in the editor, folded into the model in place so
+  // undo history and the cursor survive. Left alone while dirty; keyed on `version` alone.
   useEffect(() => {
     if (!path || effective !== "edit" || dirty || !file || file.error) {
       return;
@@ -185,12 +164,9 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     };
   }, [version]);
 
-  // The Explorer tree — read on open, again whenever a file starts or stops existing (added,
-  // removed, renamed, untracked), again after the tree's own create/rename/delete, and again
-  // when the project's tet.json changed, since the listing carries that file's `folders`,
-  // `exclude` and sort settings — whoever wrote it, the tree's own menu, an editor or an agent.
-  // A plain edit leaves `changes` at "modified" for a path already in the tree, so it alone
-  // does not re-list.
+  // The Explorer tree — read on open, whenever a file starts or stops existing, after the tree's
+  // own create/rename/delete, and when tet.json changed, the listing carrying its `folders`,
+  // `exclude` and sort settings. A plain edit leaves `changes` at "modified", so it does not.
   useEffect(
     () =>
       window.tet.commands.onChanged((payload) => {
@@ -222,9 +198,8 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     };
   }, [project.id, changesKey, explorerVersion]);
 
-  // Takes the keyboard while it is up and hands it back on the way out: ↑/↓ step through the
-  // files, and the terminal a path was ctrl-clicked in would otherwise still be the one
-  // getting them — xterm swallows every key it is given, arrows first of all.
+  // Takes the keyboard while it is up and hands it back: xterm swallows every key it is given,
+  // arrows first of all, so a terminal left focused would eat ↑/↓.
   useEffect(() => {
     const previous = document.activeElement;
     root.current?.focus();
@@ -235,8 +210,7 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     };
   }, []);
 
-  // Back from Edit to Diff (a toggle, a file that stops being edit-only) — refocus the root so
-  // ↑/↓ reach `ChangesList` again rather than whatever the editor left focused.
+  // Back from Edit to Diff: refocus the root so ↑/↓ reach `ChangesList` again.
   useEffect(() => {
     if (effective === "diff") {
       root.current?.focus();
@@ -288,8 +262,8 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
   };
 
   const onDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    // Reaches here only when nothing inside — the editor included — already claimed the key: a
-    // save from the editor's own Ctrl+S never gets this far, so there is no double save.
+    // Reaches here only when nothing inside claimed the key, so the editor's own Ctrl+S never
+    // gets this far and there is no double save.
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void save();
@@ -318,8 +292,6 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
               <span>
                 EXPLORER <span className="count-badge">({explorerListing?.files.length ?? 0})</span>
               </span>
-              {/* VS Code's own trio, in its order — "Refresh Explorer" is left out: the watcher
-                  already keeps this tree current on its own (see `onExplorerChanged`). */}
               <span className="section-header-actions">
                 <button
                   className="icon-button"
@@ -364,13 +336,8 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
               <span>
                 LOCAL CHANGES <span className="count-badge">({changes.length})</span>
               </span>
-              {/* Only "Discard all" here, unlike the git pane's three — commit and stash both
-                  name what they do to the *repository* (a message, a stash entry), which reads
-                  oddly next to a dialog that is otherwise about one file. Narrower than "all of
-                  it" is the list's own context menu, shared with that pane's list too. Gated on
-                  `acting` alone, not a `branch.busy` as well: unlike that pane, nothing here sits
-                  next to a BRANCHES section a fetch/pull/push could be run from while this dialog
-                  is up — it covers the whole window. */}
+              {/* Only "Discard all" here: commit and stash act on the repository, which reads oddly in a
+                  dialog about one file. Gated on `acting` alone, no BRANCHES section being reachable. */}
               <span className="section-header-actions">
                 <button
                   className="icon-button"
@@ -459,9 +426,8 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
           ) : file.tooLarge ? (
             <div className="placeholder">File too large to edit.</div>
           ) : (
-            // Mounted only once `file` actually belongs to `path` — the fetch a path change
-            // starts is async, and rendering the editor before it lands would seed a fresh
-            // model with the *previous* file's text under the new file's path.
+            // Mounted only once `file` belongs to `path`: mounting before the fetch lands would seed a
+            // fresh model with the previous file's text under the new file's path.
             <CodeEditor
               ref={editorRef}
               path={path}

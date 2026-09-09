@@ -18,10 +18,9 @@ const DEFAULTS: AppSettings = {
 };
 
 /**
- * The settings dialog's values, persisted in tet's own userData. Written whole from memory
- * like the projects next to it, and read back defensively: a file someone edited by hand is
- * still a file, so a key of the wrong type falls back to its default rather than reaching an
- * agent as `undefined`.
+ * The settings dialog's values, persisted in tet's own userData. Written whole from memory and
+ * read back defensively: a key of the wrong type falls back to its default rather than reaching
+ * an agent as `undefined`.
  */
 export class SettingsStore {
   private readonly file: string;
@@ -80,23 +79,21 @@ function booleans(notifications: Partial<AppSettings["notifications"]> | undefin
   };
 }
 
-/** Not a string in the file is the default; an id the current presets no longer know is left
- *  as it is — the renderer's own lookup falls back to VS Code's bindings for one it doesn't
- *  recognise, same as it would for an id this store had never heard of either. */
+/** Not a string in the file is the default; an id the current presets no longer know is left as it
+ *  is — the renderer's own lookup falls back to VS Code's bindings for one it doesn't recognise. */
 function presetId(value: unknown): string {
   return typeof value === "string" && value ? value : DEFAULTS.editorKeybindingPreset;
 }
 
-/** The same contract for the theme: an unknown id is left standing, and every reader of it
- *  (`currentTheme`, which also answers "system") falls back to the default on its own. */
+/** The same for the theme: an unknown id is left standing, and `currentTheme` falls back. */
 function themeId(value: unknown): string {
   return typeof value === "string" && value ? value : DEFAULTS.theme;
 }
 
 /**
- * One text for the question. Not a string is the default; so is tet's own text spelled out in
- * full — stored as "" instead, so the file only ever holds what the user changed and a default
- * improved in a later version still reaches them (`effectivePrompt` fills it back in).
+ * One text for the question. Not a string is the default, and so is tet's own text spelled out in
+ * full — stored as "" instead, so a default improved in a later version still reaches the user
+ * (`effectivePrompt` fills it back in).
  */
 function promptTexts(value: unknown): PromptSettings {
   const texts = (typeof value === "object" && value !== null ? value : {}) as Partial<Record<string, unknown>>;

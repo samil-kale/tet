@@ -7,10 +7,7 @@ import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript
 import { deleteThread, renameThread } from "./app-server-client";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
-/**
- * Codex's own config root — never overridden by tet (see CLAUDE.md's "never touch the
- * user's agent configuration"), so this is the same location Codex itself resolves to.
- */
+/** Codex's own config root — never overridden by tet, so this is what Codex itself resolves to. */
 function codexHome(): string {
   return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
 }
@@ -26,11 +23,8 @@ function sessionIndexFile(home: string): string {
 
 /** Same budget as Claude's scan for the same reason: bounds a pathological single line. */
 const TAIL_SCAN_BYTE_LIMIT = 256 * 1024;
-/**
- * A rollout's `session_meta` line is always first, but not small: since 0.14x it carries the whole
- * base instructions (measured), and the small budget then in place cut every one of them short — no Codex
- * session was ever listed. Only the first line is read either way; this bounds a pathological one.
- */
+/** A rollout's `session_meta` line is first but not small: since 0.14x it carries the whole base
+ *  instructions (measured), which a smaller budget cut short — no session was ever listed. */
 const META_SCAN_BYTE_LIMIT = TAIL_SCAN_BYTE_LIMIT;
 
 interface SessionMeta {
@@ -42,9 +36,8 @@ interface SessionMeta {
 }
 
 /**
- * Cached by path once read: `session_meta` never changes, and a listing runs for every rollout
- * on the machine on every change to any of them. A failed read is not cached — a rollout that
- * has only just been created can still be empty the first time it is seen.
+ * Cached by path once read: `session_meta` never changes, and a listing runs for every rollout on
+ * the machine. A failed read is not cached — a just-created rollout can still be empty.
  */
 const metaCache = new Map<string, SessionMeta>();
 
@@ -95,11 +88,9 @@ async function parseSessionMeta(filePath: string): Promise<SessionMeta | undefin
 }
 
 /**
- * What a listing needs from a rollout's body: the first real prompt from its head, and,
- * backwards from the end, the last turn boundary — `task_complete`/`turn_aborted` cover a normal
- * end and an interrupted one alike, the net under the Stop hook the
- * same way Claude's `turn_duration` is. Cached by path and size for the same reason Claude's
- * scan is: a listing runs for every session on every change to any of them.
+ * What a listing needs from a rollout's body: the first real prompt from its head, and the last
+ * turn boundary from its end — `task_complete`/`turn_aborted` cover a normal end and an
+ * interrupted one alike, the net under the Stop hook. Cached by path and size.
  */
 interface TailInfo {
   turnEndedAt?: number;
@@ -138,8 +129,7 @@ function readTurnEnd(lines: string[]): number | undefined {
 
 /**
  * The first real prompt, read forwards from the head: Codex writes its injected context blocks
- * first, so it sits a few lines in — never in the tail, which is why it is not looked for there
- * (the tail is read newest chunk first, and its first prompt would be a later one's).
+ * first, so it sits a few lines in. Not looked for in the tail, which is read newest chunk first.
  */
 async function readFirstPrompt(handle: fs.promises.FileHandle, size: number): Promise<string | undefined> {
   const buffer = Buffer.alloc(Math.min(size, TAIL_SCAN_BYTE_LIMIT));
@@ -190,9 +180,8 @@ async function scanTail(filePath: string): Promise<TailInfo> {
     if (cached?.size === size) {
       return cached.tail;
     }
-    // The first prompt never changes once written, so a session that has already been scanned
-    // once keeps that answer regardless of how much has grown; only one that had none yet
-    // (just created, nothing typed) looks again.
+    // The first prompt never changes once written, so only a session that had none yet looks
+    // again.
     tail.firstPrompt = cached?.tail.firstPrompt ?? (await readFirstPrompt(handle, size));
     const previous = cached && cached.size < size ? cached : undefined;
     const floor = previous ? Math.max(0, previous.size - TAIL_SCAN_BYTE_LIMIT) : 0;
@@ -262,11 +251,8 @@ async function listRolloutFiles(home: string): Promise<string[]> {
   return files;
 }
 
-/**
- * How many rollouts are read at once. Every rollout on the machine — all projects, every `exec`
- * run — is opened by a listing, and all of them at once is more file descriptors than a low
- * `ulimit -n` allows once there are a thousand.
- */
+/** How many rollouts are read at once. A listing opens every rollout on the machine, and all at
+ *  once is more file descriptors than a low `ulimit -n` allows past a thousand of them. */
 const READ_CONCURRENCY = 32;
 
 async function mapLimited<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -292,14 +278,10 @@ async function safeReaddir(dir: string): Promise<string[]> {
 }
 
 /**
- * Both caches hold an entry per rollout on the machine and are keyed by path, so a rollout
- * deleted — by `remove`, or by Codex's own picker behind tet's back — is dropped here, at the
- * one point every listing already knows the full set. Without this they only ever grow.
- *
- * Only ever within the tree that was just listed: a sandbox's rollouts are read from a second
- * root (SessionProvider.sandbox) into these same caches, and a listing of one root knows
- * nothing about the other's files — unscoped, the two would evict each other's entries on
- * every pass and no rollout would ever be answered from cache again.
+ * Drops both caches' entries for rollouts that are gone — Codex's own picker deletes them behind
+ * tet's back, and without this the caches only ever grow. Scoped to the tree just listed: a
+ * sandbox's rollouts are read from a second root (SessionProvider.sandbox) into these same
+ * caches, and unscoped the two would evict each other's entries on every pass.
  */
 function forgetMissing(files: string[], root: string): void {
   const present = new Set(files);
@@ -337,14 +319,11 @@ export const codexSessionProvider: SessionProvider = {
 
   /**
    * `~/.codex/sessions` and the name index beside it, inside the sandbox. Two mounts because
-   * Codex keeps a session's name outside the rollout — `session_index.jsonl` is the only writer
-   * of it, and without that file every sandboxed session would list under its first prompt
-   * however often it was renamed. Measured live, 2026-09-09: the codex template puts no volume
-   * of its own anywhere under `~/.codex` (unlike Claude's), sbx creates a missing target for
-   * either kind, and `auth.json` stays out of both paths.
-   *
-   * The mounted root is shaped exactly like a `CODEX_HOME` for that reason, which is what lets
-   * rename and delete run against it — see `deleteThread`'s `home`.
+   * Codex keeps a session's name outside the rollout, in `session_index.jsonl`; without it every
+   * sandboxed session would list under its first prompt however often it was renamed. Measured:
+   * the codex template puts no volume of its own under `~/.codex`, sbx creates a missing target
+   * for either kind, and `auth.json` stays out of both paths. The mounted root is shaped like a
+   * `CODEX_HOME`, which is what lets rename and delete run against it — see `deleteThread`.
    */
   sandbox: {
     mounts: [
@@ -353,18 +332,16 @@ export const codexSessionProvider: SessionProvider = {
     ],
     list: (_executable, root, cwd) => listIn(root, cwd),
     // The mounted root as the working directory too, not the sandbox's cwd: that one is a path
-    // inside the container (`/c/Users/…` from a Windows host), and `codex app-server` is spawned
-    // *in* its cwd — one that does not exist on this host fails the spawn outright with ENOENT.
-    // Nothing is lost by it: a thread is addressed by id under the CODEX_HOME these act on.
+    // inside the container, and `codex app-server` spawned in a cwd this host lacks fails with
+    // ENOENT. A thread is addressed by id under the CODEX_HOME these act on, so nothing is lost.
     remove: (executable, root, _cwd, sessionId) => deleteThread(executable, root, sessionId, root),
     rename: (executable, root, _cwd, sessionId, title) => renameIn(executable, root, sessionId, title, root)
   },
 
   /**
    * Watches today's rollout folder for new/changed sessions and the name index for renames.
-   * Two-stage like Claude's: the day's folder (and the month's, and the year's) may not exist
-   * yet, and `fs.watch` throws on a missing directory. Not scoped to `cwd` — there is no
-   * per-repository folder to watch, unlike Claude's — `list()` filters by cwd on every read.
+   * Two-stage: the day's folder (and the month's and year's) may not exist yet, and `fs.watch`
+   * throws on a missing directory. There is no per-repository folder, so `list()` filters by cwd.
    */
   watch(_executable: string, _cwd: string, onChange: () => void): () => void {
     let stopped = false;
@@ -392,8 +369,7 @@ export const codexSessionProvider: SessionProvider = {
       }
     };
 
-    // A day changes at most once every 24h; re-resolving the chain on every poll is cheap and
-    // keeps this correct across midnight without a timer of its own.
+    // Re-resolving the chain on every event keeps this correct across midnight without a timer.
     const rearm = (): void => {
       if (stopped) {
         return;
@@ -435,8 +411,7 @@ async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
     const names = await readSessionNames(home);
     const entries = await mapLimited(files, async (filePath): Promise<AgentSessionInfo | undefined> => {
       const meta = await readSessionMeta(filePath);
-      // `exec`/`mcp`/subagent runs are never interactive sessions of this repository's
-      // tabs — only `cli` is, matching what Codex's own `/resume` picker shows by default.
+      // Only `source: "cli"` is an interactive session, matching Codex's own `/resume` picker.
       if (!meta || meta.source !== "cli" || !samePath(meta.cwd, cwd)) {
         return undefined;
       }
@@ -459,10 +434,7 @@ async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
   }
 }
 
-/**
- * The only writer of a Codex thread's name is the app-server RPC Codex's own `/rename` uses
- * internally — there is no CLI command and no rollout entry the picker reads as a name.
- */
+/** The only writer of a thread's name is the app-server RPC — no CLI command, no rollout entry. */
 async function renameIn(executable: string, cwd: string, sessionId: string, title: string, home?: string): Promise<void> {
   const trimmed = title.trim();
   if (!trimmed) {

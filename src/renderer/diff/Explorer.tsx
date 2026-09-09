@@ -34,11 +34,8 @@ import {
   type IconProps
 } from "../ui/icons";
 
-/**
- * A file's language, marked in its twistie slot — one entry per grammar `diff-highlight.ts`
- * bundles, so a mark only ever names a language the diff view itself can colour. Anything else
- * (an unlisted extension, no extension at all) shows no mark, same as a file always has until now.
- */
+/** A file's language, marked in its twistie slot — one entry per grammar `diff-highlight.ts`
+ *  bundles, so a mark only names a language the diff view can colour. */
 const LANGUAGE_ICONS: Record<string, (props: IconProps) => React.ReactElement> = {
   c: CIcon,
   cpp: CppIcon,
@@ -65,16 +62,13 @@ const LANGUAGE_ICONS: Record<string, (props: IconProps) => React.ReactElement> =
 };
 
 interface TreeNode {
-  /**
-   * What `expanded`, the row map and React keys go by. The path alone, until the project lists
-   * `folders`: then the same file can sit under two roots, so each root prefixes its own
-   * index — "1:src/a.ts" — and the two rows fold and scroll independently.
-   */
+  /** What `expanded`, the row map and React keys go by. The path alone, until the project lists
+   *  `folders`: the same file can then sit under two roots, so each root prefixes its own index
+   *  ("1:src/a.ts") and the two rows fold and scroll independently. */
   id: string;
   /** The label; a compacted chain's is `a/b/c`. */
   name: string;
-  /** Repository-relative, forward-slashed — the same shape `changes` paths already have. For a
-   *  compacted chain, the innermost folder's, which is the one every action acts on. */
+  /** Repository-relative, forward-slashed; for a compacted chain, the innermost folder's. */
   path: string;
   /** Present for a folder, absent for a file — what tells the two apart while rendering. */
   children?: TreeNode[];
@@ -82,22 +76,19 @@ interface TreeNode {
   root?: true;
 }
 
-/* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), shrunk 2px across the board
- * — indent, twistie slot, its gap to the label, and the chevron glyph itself (see .explorer-tree
- * .tree-icon in styles.css) — so the whole tree reads smaller as one piece, not just some of it. */
+/* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), shrunk 2px across the
+ * board, the chevron glyph included (see .explorer-tree .tree-icon in styles.css). */
 const INDENT_STEP = 6;
 const INDENT_BASE = 6;
-/** Wide enough for a folder's chevron or a file's two-letter language badge, whichever a row
- *  has — both centred in the same box, so either way the label after it starts at the same x. */
+/** Wide enough for a folder's chevron or a file's language badge, both centred in the same box. */
 const TWISTIE_WIDTH = 16;
 const TWISTIE_GAP = 4;
 
-/** Name order as VS Code's explorer compares: case-insensitive, locale-aware. */
+/** Name order: case-insensitive, locale-aware. */
 function compareNames(a: TreeNode, b: TreeNode): number {
   return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
-/** Folders before files (or the other way round), then by name. */
 function compareGrouped(a: TreeNode, b: TreeNode, foldersFirst: boolean): number {
   if (!!a.children !== !!b.children) {
     return (a.children ? -1 : 1) * (foldersFirst ? 1 : -1);
@@ -110,12 +101,9 @@ function extensionOf(name: string): string {
   return index > 0 ? name.slice(index + 1).toLowerCase() : "";
 }
 
-/**
- * VS Code's `explorer.sortOrder` values, one comparator each: `default` (and
- * `foldersNestsFiles`, the same without file nesting) is folders before files then name;
- * `mixed` name alone; `filesFirst` the reverse grouping; `type` folders first, files by
- * extension then name; `modified` newest first, folders and files alike, name on a tie.
- */
+/** `explorer.sortOrder`: `default` (and `foldersNestsFiles`) is folders before files then name;
+ *  `mixed` name alone; `filesFirst` the reverse grouping; `type` files by extension then name;
+ *  `modified` newest first, name on a tie. */
 function comparatorFor(order: ExplorerSortOrder, mtimes: Record<string, number>): (a: TreeNode, b: TreeNode) => number {
   switch (order) {
     case "mixed":
@@ -145,12 +133,9 @@ function sortTree(nodes: TreeNode[], compare: (a: TreeNode, b: TreeNode) => numb
   }
 }
 
-/**
- * Every file under `under` ("" for all of them), split on `/` into nested folders, plus any
- * directory `files` alone wouldn't imply (see `ExplorerListing`) — inserted the same way, except
- * its own leaf is a folder node too. Paths stay repository-relative whatever `under` is; `idOf`
- * is what a root prefixes them with (see `TreeNode.id`).
- */
+/** Every file under `under` ("" for all of them), split on `/` into nested folders, plus any
+ *  directory `files` alone wouldn't imply (see `ExplorerListing`). Paths stay
+ *  repository-relative; `idOf` is the root prefix (see `TreeNode.id`). */
 function buildTree(files: string[], emptyDirs: string[], under: string, idOf: (path: string) => string): TreeNode[] {
   const top: TreeNode[] = [];
   const folders = new Map<string, TreeNode>();
@@ -190,12 +175,9 @@ function buildTree(files: string[], emptyDirs: string[], under: string, idOf: (p
   return top;
 }
 
-/**
- * VS Code's `explorer.compactFolders`: a folder whose only child is another folder becomes one
- * row with that child — `src/main/java` — down the whole chain. The row *is* the innermost
- * folder (its id, its path, its children), so folding, reveal and the context menu all act on
- * that one; VS Code's per-segment click is not reproduced. Roots are left as they are, as there.
- */
+/** `explorer.compactFolders`: a folder whose only child is another folder becomes one row down
+ *  the whole chain. The row is the innermost folder, so folding, reveal and the menu act on
+ *  that one. Roots are left as they are. */
 function compactTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((node) => {
     if (!node.children) {
@@ -210,11 +192,8 @@ function compactTree(nodes: TreeNode[]): TreeNode[] {
   });
 }
 
-/**
- * The whole tree: one of every file where the project names no `folders`, otherwise one subtree
- * per root under a top-level node carrying its name — the same file under two overlapping roots
- * twice, each row its own. Sorted by the project's `sortOrder` either way.
- */
+/** The whole tree: every file where the project names no `folders`, otherwise one subtree per
+ *  root, a file under two overlapping roots getting a row in each. Sorted by `sortOrder`. */
 function buildForest(files: ExplorerListing): TreeNode[] {
   const compare = comparatorFor(files.sortOrder, files.mtimes ?? {});
   if (!files.roots) {
@@ -229,9 +208,7 @@ function buildForest(files: ExplorerListing): TreeNode[] {
   });
 }
 
-/** VS Code's `hasExpandedRootChild`: is there a root with an open, collapsible child — a
- *  subfolder open one level under a workspace folder? Defaults match `toggle`'s (a root open, a
- *  plain folder shut) since a node left out of `expanded` is exactly that default. */
+/** Is there a root with an open, collapsible child? Defaults match `toggle`'s. */
 function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolean>): boolean {
   return roots.some(
     (root) =>
@@ -240,8 +217,7 @@ function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolea
   );
 }
 
-/** The root whose subtree a path is revealed in: the innermost one containing it — VS Code's
- *  `getWorkspaceFolder` — or undefined when it lies under none. */
+/** The innermost root containing the path, or undefined when it lies under none. */
 function rootIndexFor(roots: ExplorerRoot[], filePath: string): number | undefined {
   let best: number | undefined;
   roots.forEach((root, index) => {
@@ -253,18 +229,14 @@ function rootIndexFor(roots: ExplorerRoot[], filePath: string): number | undefin
   return best;
 }
 
-/** Everything up to but not including a path's own last segment — its parent folder, "" at the
- *  root. */
+/** A path's parent folder, "" at the root. */
 function parentOf(entryPath: string): string {
   const index = entryPath.lastIndexOf("/");
   return index === -1 ? "" : entryPath.slice(0, index);
 }
 
-/**
- * The filtered tree, VS Code's own quick-filter rule: a folder whose own path matches keeps its
- * whole subtree as it was; otherwise only descendants that themselves match survive, and their
- * ancestors are kept just to carry them.
- */
+/** The filtered tree: a folder whose own path matches keeps its whole subtree; otherwise only
+ *  descendants that match survive, their ancestors kept to carry them. */
 function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
   const result: TreeNode[] = [];
   for (const node of nodes) {
@@ -314,7 +286,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
     <>
       {nodes.map((node) => {
         const isFolder = node.children !== undefined;
-        // A root starts open, the way VS Code's workspace folders do; everything else closed.
+        // A root starts open, everything else closed.
         const open = forceExpanded || (expanded[node.id] ?? node.root === true);
         const LangIcon = isFolder ? undefined : LANGUAGE_ICONS[languageForPath(node.path) ?? ""];
         return (
@@ -376,20 +348,18 @@ interface ExplorerProps {
   project: Project;
   /** Undefined while the listing is still being read — the EXPLORER header's own bar says so. */
   files: ExplorerListing | undefined;
-  /** The open file, if any — reveals and highlights it; not itself an ↑/↓ target (see CLAUDE.md). */
+  /** The open file, if any — reveals and highlights it. */
   selected: string | null;
   onOpen: (path: string) => void;
-  /** Runs a file-tree action, the way `ChangesList`'s own list runs a git one — the owner shows
-   *  it running on its own bar. */
+  /** Runs a file-tree action; the owner shows it running on its own bar. */
   act: FileAct;
-  /** A create, rename or delete settled — nothing else would tell the tree to read the listing
-   *  again: an empty new folder, unlike a new file, never touches git status. */
+  /** A create, rename or delete settled: an empty new folder never touches git status, so
+   *  nothing else would tell the tree to read the listing again. */
   onExplorerChanged: () => void;
   ref?: React.Ref<ExplorerHandle>;
 }
 
-/** What the EXPLORER header's own title-bar buttons reach in — VS Code's "New File...", "New
- *  Folder..." and "Collapse Folders in Explorer", the same trio its explorer carries. */
+/** What the EXPLORER header's own title-bar buttons reach in. */
 export interface ExplorerHandle {
   newFile(): void;
   newFolder(): void;
@@ -398,14 +368,9 @@ export interface ExplorerHandle {
 
 /**
  * The diff dialog's file browser: every file in the repository, not just the changed ones under
- * LOCAL CHANGES beside it — a way in for the occasional file that has no diff. No ↑/↓ (stays with
- * `ChangesList`), but otherwise GitHub Desktop's own file actions plus the handful VS Code's
- * explorer adds for a tree rather than a flat list: new file, new folder, rename, delete.
- *
- * How it is shown is the project's own say, from its tet.json and carried in by the listing
- * (see `ExplorerListing`): `folders` make it VS Code's multi-root explorer — one top-level node
- * per entry, overlapping allowed, the file revealed in the innermost root containing it — while
- * `exclude`/`excludeGitIgnore` have already thinned the listing before it gets here, and
+ * LOCAL CHANGES beside it. No ↑/↓ of its own — that stays with `ChangesList`. How it is shown
+ * comes from the project's tet.json, carried in by the listing: `folders` make it a multi-root
+ * explorer, overlapping allowed; `exclude`/`excludeGitIgnore` have already thinned it, and
  * `sortOrder`/`compactFolders` are applied on the way to the screen.
  */
 export function Explorer({ project, files, selected, onOpen, act, onExplorerChanged, ref }: ExplorerProps) {
@@ -417,17 +382,13 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
   const query = filter.trim().toLowerCase();
   const filtering = query.length > 0;
-  // Compacted last, on what is actually shown: a filter that prunes a folder down to one
-  // subfolder folds the two together, as VS Code's does.
+  // Compacted last, on what is shown: a filter pruning a folder to one subfolder folds them.
   const shown = useMemo(() => {
     const filtered = filtering ? filterTree(tree, query) : tree;
     return files?.compactFolders ? compactTree(filtered) : filtered;
   }, [tree, query, filtering, files?.compactFolders]);
 
-  // Reveals the file the rest of the dialog opened (a ChangesList click, a ctrl-clicked path):
-  // its folders expand and it scrolls into view, the same way VS Code's explorer follows the
-  // active editor. Under `folders`, in the innermost root containing it — or nowhere, when no
-  // root does.
+  // Reveals the file the rest of the dialog opened, in the innermost root containing it.
   const roots = files?.roots;
   const pendingReveal = useRef<string | null>(null);
   useEffect(() => {
@@ -445,8 +406,7 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
       ids.push(idOf(""));
     }
     pendingReveal.current = idOf(selected);
-    // Every ancestor, the ones a compacted chain folded away included — an id no row carries
-    // is simply never read.
+    // Every ancestor, folded-away ones included: an id no row carries is never read.
     ids.push(...ancestorsOf(selected).map(idOf));
     setExpanded((current) => {
       const next = { ...current };
@@ -460,11 +420,9 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
       return changed ? next : current;
     });
   }, [selected, roots]);
-  // The scroll itself, one effect later: a row inside a still-collapsed folder is not in the
-  // DOM on the pass that expands it, so scrolling right after `setExpanded` above found nothing
-  // to scroll to — exactly the case a reveal exists for. Watching `expanded` too runs this
-  // again on the render where the row finally exists; the pending ref keeps an ordinary fold
-  // toggle from yanking the view back to a long-since-revealed selection.
+  // The scroll itself, one effect later: a row inside a still-collapsed folder is not in the DOM
+  // on the pass that expands it, so watching `expanded` runs this again once it exists. The
+  // pending ref keeps an ordinary fold toggle from yanking the view back to an old selection.
   useEffect(() => {
     if (pendingReveal.current) {
       const row = rows.current.get(pendingReveal.current);
@@ -478,14 +436,9 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
   const toggle = (node: TreeNode): void =>
     setExpanded((current) => ({ ...current, [node.id]: !(current[node.id] ?? node.root === true) }));
 
-  /** VS Code's "Collapse Folders in Explorer": with `folders` open (a multi-root workspace) and
-   *  something expanded below one of them, a press only shuts what's open under each root,
-   *  leaving the roots themselves in place — a plain `collapseAll()` would close the very
-   *  folders the button is meant to declutter, not empty them out. Only once nothing is left
-   *  open below the roots (or there are none — a single tree, same as VS Code's single-folder
-   *  window) does a press fold everything, roots included. Walks the unfiltered, uncompacted
-   *  `tree`: a compacted chain's row keeps its innermost folder's id (see `compactTree`), which
-   *  this still collects either way. */
+  /** "Collapse Folders in Explorer", in two stages: with something expanded below a root, a
+   *  press shuts only that; once nothing is (or there are no roots), it folds everything. Walks
+   *  the unfiltered, uncompacted `tree`, whose ids a compacted row keeps (see `compactTree`). */
   const collapseAll = (): void => {
     const ids: string[] = [];
     const collect = (nodes: TreeNode[]): void => {
@@ -568,22 +521,16 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
     }
   };
 
-  // The EXPLORER header's own title-bar buttons — same target as right-clicking the empty space
-  // below the tree (`menuEntries` with `node: null`): the repository root.
+  // The EXPLORER header's buttons act on the repository root.
   useImperativeHandle(ref, () => ({
     newFile: () => void askNewFile(""),
     newFolder: () => void askNewFolder(""),
     collapseAll
   }));
 
-  /**
-   * GitHub Desktop's changed-file menu (`ChangesList`'s own), minus what only makes sense for a
-   * change, plus VS Code's new/rename/delete for a tree of every file, and its explorer's
-   * workspace entries — "Add Folder to Workspace" on a folder, "Remove Folder from Workspace" on
-   * a root — with one VS Code keeps in its settings editor, "Exclude from Files". All three edit
-   * the project's tet.json (see CLAUDE.md, "Explorer"). A root is neither renamed nor deleted
-   * from here: it is a view onto a folder, not the folder.
-   */
+  /** `ChangesList`'s menu minus what only suits a change, plus new/rename/delete and the workspace
+   *  entries, which edit the project's tet.json (see CLAUDE.md, "Explorer"). A root is neither
+   *  renamed nor deleted here: it is a view onto a folder, not the folder. */
   const menuEntries = (node: TreeNode | null): ContextMenuEntry[] => {
     const dir = node ? (node.children !== undefined ? node.path : parentOf(node.path)) : "";
     const isFile = node !== null && node.children === undefined;
@@ -663,8 +610,7 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
       <div
         className="tree"
         onContextMenu={(event) => {
-          // A row's own handler already fired and set `event.target` to itself; reaching here
-          // means the empty space below the last one was clicked instead.
+          // A row's own handler sets `event.target` to itself, so this is the space below.
           if (event.target === event.currentTarget) {
             event.preventDefault();
             setMenu({ x: event.clientX, y: event.clientY, node: null });

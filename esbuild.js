@@ -38,10 +38,8 @@ const gitHostConfig = {
   external: ["electron"]
 };
 
-/**
- * The `tet-ctl` CLI an agent runs from a terminal, under tet's own electron as node (see
- * src/main/control/control-launcher.ts) — plain node, nothing from electron in it.
- */
+/** The `tet-ctl` CLI an agent runs from a terminal, under tet's own electron as node (see
+ *  src/main/control/control-launcher.ts). Plain node, nothing from electron in it. */
 /** @type {import('esbuild').BuildOptions} */
 const cliConfig = {
   ...common,
@@ -73,9 +71,9 @@ const rendererConfig = {
   target: "chrome130",
   // monaco's CSS pulls in codicon.ttf; without a loader for it the build fails outright.
   loader: { ".ttf": "file" },
-  // monaco reads `import.meta.url` as a worker-location fallback (unreached — see editor.ts's
+  // monaco reads `import.meta.url` as a worker-location fallback (unreached, see editor.ts's
   // `getWorker`); esbuild replaces `import.meta` with `{}` under `format: "iife"` and warns at
-  // every such site, which would otherwise bury real warnings in noise.
+  // every such site, burying real warnings.
   logOverride: { "empty-import-meta": "silent" }
 };
 
@@ -90,11 +88,8 @@ const editorWorkerConfig = {
   target: "chrome130"
 };
 
-/**
- * The tests, for node's own runner (`npm test`): the control server with its dependencies
- * faked, driven through the built CLI — see test/control.test.ts. Bundled like the CLI, so a
- * test imports the source the way the app does, without a loader of its own.
- */
+/** The tests, for node's own runner (`npm test`). Bundled like the CLI, so a test imports the
+ *  source the way the app does, without a loader of its own. */
 /** @type {import('esbuild').BuildOptions} */
 const testConfig = {
   ...common,
@@ -103,9 +98,8 @@ const testConfig = {
   platform: "node",
   target: "node22",
   format: "cjs",
-  // electron for its binary's path (app.test.ts starts it), node-pty because pty.ts imports it
-  // and neither can be bundled — the first reads a file beside itself, the second is native.
-  // esbuild finds its own binary relative to its package; pieces.test.ts compiles pi's
+  // Neither electron (it reads a file beside itself) nor node-pty (native) can be bundled;
+  // esbuild finds its own binary relative to its package, and pieces.test.ts compiles pi's
   // generated extension with it.
   external: ["electron", "node-pty", "esbuild"]
 };

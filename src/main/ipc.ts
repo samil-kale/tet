@@ -56,9 +56,8 @@ import type { SessionManagerRegistry } from "./terminals/session-manager";
 import type { SettingsStore } from "./settings";
 
 /**
- * Everything the renderer can ask the main process for, in one place — main.ts builds these
- * singletons and the window, this is the surface between the two processes. A new capability
- * (the providers, say) is a new block here, not a longer main.ts.
+ * Everything the renderer can ask the main process for, in one place: main.ts builds these
+ * singletons and the window, this is the surface between the two processes.
  */
 export interface IpcDeps {
   store: ProjectStore;
@@ -84,16 +83,15 @@ const TEMP_FILE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 async function writeTempFile(name: string, data: Buffer): Promise<string> {
   const file = path.join(os.tmpdir(), `tet-${Date.now()}-${path.basename(name)}`);
   // Asynchronously: a pasted screenshot is megabytes, and a synchronous write would hold the
-  // ptys' output and the keystrokes on their way to them for as long as the disk takes.
+  // ptys' output and keystrokes for as long as the disk takes.
   await fs.promises.writeFile(file, data);
   return file;
 }
 
 /**
- * Clears what writeTempFile left behind: nothing marks one of its files as "already read", so
- * without this they sit in the OS temp directory forever. Run once at startup rather than after
- * each paste — the file may still be read a moment later, and a session cut short must not take
- * it with it. The write time is in the name already, so this costs one `readdir`, no `stat`.
+ * Clears what writeTempFile left behind — nothing marks one of its files as "already read". Once
+ * at startup rather than after each paste: the file may still be read a moment later. The write
+ * time is in the name already, so this costs one `readdir`, no `stat`.
  */
 export function sweepTempFiles(): void {
   void (async () => {
@@ -128,13 +126,12 @@ export function registerIpc({
   openWorkspace
 }: IpcDeps): void {
   /**
-   * The gate the window opens with: nothing is restored until git and an agent are there, so a
-   * machine missing one never gets as far as a repository or a terminal. Asked again after
-   * every re-check, and passing is what starts the app.
+   * The gate the window opens with: nothing is restored until git and an agent are there. Asked
+   * again after every re-check, and passing is what starts the app.
    */
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
-    // A manager's bin directory that did not exist at startup (the user just ran `npm i -g`)
-    // is on PATH only once looked for again — that is what makes "Check again" find it.
+    // A manager's bin directory that did not exist at startup is on PATH only once looked for
+    // again — that is what makes "Check again" find it.
     markStartup("path");
     await augmentAgentPath();
     markStartup("requirements");
@@ -147,8 +144,7 @@ export function registerIpc({
 
   ipcMain.on("startup:quit", () => app.quit());
 
-  // The Info tab's rows. Every one of them is fixed for the life of the process, so this is
-  // asked once when the dialog opens rather than pushed at the renderer.
+  // The Info tab's rows, all fixed for the life of the process — asked once when the dialog opens.
   ipcMain.handle(
     "app:info",
     (): AppInfo => ({
@@ -168,14 +164,14 @@ export function registerIpc({
   ipcMain.handle("sbx:check-governed", () => checkSbxGoverned());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
-  /** What the dialog reopens with — read fresh, like a project's saved commands, never cached;
-   *  the hosts from the sandboxes themselves (sbx.ts's readLiveSbxConfig). */
+  // What the dialog reopens with — read fresh, never cached; the hosts from the sandboxes
+  // themselves (sbx.ts's readLiveSbxConfig).
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
     return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
-  /** The dialog's Save button — writes tet.json; see sbx.ts's saveSbxConfig for the sandbox
-   *  removal each notice below is about. */
+  // The dialog's Save button — writes tet.json; the notices below are about the sandbox removals
+  // saveSbxConfig reports.
   ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxProjectConfig): Promise<GitActionResult> => {
     const project = store.get(projectId);
     if (!project) {
@@ -203,8 +199,7 @@ export function registerIpc({
 
   ipcMain.handle("settings:get", (): AppSettings => settings.get());
 
-  // Written whole, like a project's saved commands: the dialog holds all of it and every
-  // switch it draws is one the user could have flipped since it was opened.
+  // Written whole, like a project's saved commands: the dialog holds all of it.
   ipcMain.handle("settings:save", (_event, next: AppSettings): void => settings.save(next));
 
   ipcMain.handle("projects:list", (): Project[] => store.list());
@@ -213,7 +208,7 @@ export function registerIpc({
     "projects:pick-directory",
     async (_event, title: string, defaultPath?: string): Promise<string | null> => {
       // Undefined rather than "" for a folder nobody has picked yet: an empty defaultPath is a
-      // path too, and the platform would open wherever it resolves to.
+      // path too, and the platform opens wherever it resolves to.
       const result = await dialog.showOpenDialog({
         title,
         defaultPath: defaultPath === "" ? undefined : defaultPath,
@@ -223,10 +218,9 @@ export function registerIpc({
     }
   );
 
-  // Its own handler rather than a mode on the one above, because the two cannot be one picker:
-  // Electron only honours ["openFile", "openDirectory"] together on macOS — on Windows and Linux
-  // the platform dialog is one or the other, and it silently shows the directory selector. So
-  // the sbx dialog offers two buttons, and each asks for exactly one kind.
+  // Its own handler, not a mode on the one above: Electron only honours ["openFile",
+  // "openDirectory"] together on macOS — on Windows and Linux the platform dialog is one or the
+  // other and silently shows the directory selector. So the sbx dialog offers two buttons.
   ipcMain.handle("projects:pick-file", async (_event, title: string): Promise<string | null> => {
     const result = await dialog.showOpenDialog({ title, properties: ["openFile"] });
     return result.canceled ? null : (result.filePaths[0] ?? null);
@@ -235,9 +229,8 @@ export function registerIpc({
   ipcMain.handle(
     "projects:directory-to-remember",
     async (_event, directory: string): Promise<string> => {
-      // The Add tab points the picker at a repository directly, so remembering that folder
-      // would open the next picker inside a repository rather than where they are kept. Only
-      // when the picked folder is a root itself — a subdirectory of one is not "a repository".
+      // The Add tab points the picker at a repository directly, so remembering that folder would
+      // open the next picker inside one. Only when the picked folder is a root itself.
       const root = await git.resolveRoot(directory).catch(() => undefined);
       if (root !== undefined && path.relative(root, directory) === "") {
         const parent = path.dirname(directory);
@@ -264,8 +257,8 @@ export function registerIpc({
     try {
       const result = await action;
       if (!result.ok) {
-        // The dialog asks for an account or a token when this says the credentials were what
-        // was missing, so it has to survive the trip rather than be flattened into the message.
+        // The dialog asks for an account or a token when credentials were what was missing, so
+        // that has to survive the trip rather than be flattened into the message.
         return { error: result.error || `${label} failed`, authRequired: result.authRequired };
       }
     } catch (error) {
@@ -279,8 +272,8 @@ export function registerIpc({
 
   ipcMain.handle("projects:clone", (_event, url: string, directory: string, name: string, accountId?: string) => {
     const target = path.join(directory, name);
-    // From the remote tab the account's token authenticates the clone itself — the repository
-    // was just listed with it, so the clone must not hinge on a credential helper too.
+    // From the remote tab the account's token authenticates the clone itself, so it does not
+    // hinge on a credential helper too.
     const account = accountId !== undefined ? accounts.get(accountId) : undefined;
     const token = accountId !== undefined ? accounts.token(accountId) : undefined;
     const action =
@@ -343,10 +336,8 @@ export function registerIpc({
     return (await repositories.get(projectId)?.refresh()) ?? MISSING_REPOSITORY;
   });
 
-  /**
-   * Every command a repository can be asked to run: they all answer a GitActionResult, and
-   * they all have nothing to act on when the project is not open.
-   */
+  /** Every command a repository can be asked to run: they all answer a GitActionResult, and all
+   *  have nothing to act on when the project is not open. */
   const onRepository = <A extends unknown[]>(
     channel: string,
     run: (repository: Repository, ...args: A) => Promise<GitActionResult>
@@ -465,8 +456,7 @@ export function registerIpc({
     );
   });
 
-  // The settings dialog's Files tab: just the three view settings, not a full listing — reads
-  // tet.json alone, no filesystem walk.
+  // The settings dialog's Files tab: the three view settings from tet.json alone, no walk.
   ipcMain.handle("repo:explorer-settings", async (_event, projectId: string): Promise<ExplorerSettings> => {
     return (await repositories.get(projectId)?.readExplorerSettings()) ?? DEFAULT_EXPLORER_VIEW;
   });
@@ -507,9 +497,7 @@ export function registerIpc({
     }
   });
 
-  /**
-   * Running one is opening a tab for it: the command is the tab's process.
-   */
+  /** Running one is opening a tab for it: the command is the tab's process. */
   ipcMain.handle(
     "commands:run",
     (_event, projectId: string, command: ProjectCommand): TerminalDescriptor | null => {
@@ -541,10 +529,8 @@ export function registerIpc({
     sessions.get(projectId)?.restartTab(tabId);
   });
 
-  /**
-   * The tab is in front of the user, so the mark a finished turn left on it goes away. Only
-   * the renderer knows which tab that is, hence the call rather than a rule applied here.
-   */
+  /** The tab is in front of the user, so the mark a finished turn left on it goes away. Only the
+   *  renderer knows which tab that is. */
   ipcMain.on("terminal:seen", (_event, projectId: string, tabId: string) => {
     sessions.get(projectId)?.markSeen(tabId);
   });
@@ -577,10 +563,9 @@ export function registerIpc({
   });
 
   /**
-   * A path the user ctrl-clicked in a terminal. A file inside the repository is answered with
-   * its repository-relative path, which the renderer opens in the diff dialog (as a diff when
-   * it has local changes, as plain content otherwise); anything else is handed to the OS here,
-   * where the filesystem actually is.
+   * A path the user ctrl-clicked in a terminal. A file inside the repository is answered with its
+   * repository-relative path, which the renderer opens in the diff dialog; anything else is handed
+   * to the OS here.
    */
   ipcMain.handle("shell:open-file", async (_event, projectId: string, rawPath: string): Promise<string | null> => {
     const repository = repositories.get(projectId);
@@ -621,11 +606,8 @@ export function registerIpc({
     }
   });
 
-  /**
-   * The changed-file menu's "Open in external editor". tet has no editor setting, so the
-   * file goes to whatever the OS opens its type with — which on a developer's machine is the
-   * editor GitHub Desktop would have asked about.
-   */
+  /** The changed-file menu's "Open in external editor". tet has no editor setting, so the file
+   *  goes to whatever the OS opens its type with. */
   ipcMain.handle("shell:open-file-externally", async (_event, projectId: string, filePath: string): Promise<void> => {
     const repository = repositories.get(projectId);
     if (!repository) {

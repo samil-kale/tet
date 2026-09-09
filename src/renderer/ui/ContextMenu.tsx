@@ -8,7 +8,7 @@ export interface ContextMenuAction {
   run?: () => void;
 }
 
-/** Divides the menu's action groups, like VS Code's own menu separators. */
+/** Divides the menu's action groups. */
 export const SEPARATOR = "separator";
 
 export type ContextMenuEntry = ContextMenuAction | typeof SEPARATOR;
@@ -28,9 +28,8 @@ interface ContextMenuProps {
 export function ContextMenu({ x, y, entries, onClose, className, width }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
 
-  // Anchored at the pointer like VS Code, then clamped so a menu opened near an edge
-  // doesn't hang outside the window. Written to the node rather than held in state, so
-  // there is no first paint at the unclamped position.
+  // Anchored at the pointer, then clamped so a menu opened near an edge doesn't hang outside the
+  // window. Written to the node rather than held in state: no first paint at the unclamped spot.
   useLayoutEffect(() => {
     const element = menu.current;
     if (!element) {
@@ -41,9 +40,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width }: Contex
     element.style.top = `${Math.max(0, Math.min(y, window.innerHeight - height))}px`;
   }, [x, y]);
 
-  // Held in a ref: callers pass an inline arrow, and re-attaching three capture listeners on
-  // every parent render (a repository or tab push, while a menu stands) is not worth avoiding
-  // per call site.
+  // Held in a ref: callers pass an inline arrow, and the listeners below must not be re-attached
+  // on every parent render (a repository or tab push while the menu stands).
   const close = useRef(onClose);
   close.current = onClose;
 
@@ -56,8 +54,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width }: Contex
     };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
-        // Listened for in the capture phase and swallowed here, so dismissing the menu
-        // can't double as an ESC keystroke for the (still focused) terminal's CLI.
+        // Capture phase and swallowed here, so dismissing the menu can't double as an ESC
+        // keystroke for the (still focused) terminal's CLI.
         event.preventDefault();
         event.stopPropagation();
         onClose();
@@ -66,8 +64,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width }: Contex
     document.addEventListener("mousedown", onMouseDown, true);
     document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("blur", onClose);
-    // The menu is anchored to raw pointer coordinates, not a moving element, so a resize
-    // leaves it pointing at nothing meaningful — close it rather than pretend it tracked.
+    // Anchored to raw pointer coordinates, not a moving element, so a resize leaves it pointing
+    // at nothing.
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", onMouseDown, true);

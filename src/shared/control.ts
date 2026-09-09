@@ -1,11 +1,10 @@
 /**
- * The control channel's wire contract, shared by the server in the main process
- * (`src/main/control/control-server.ts`) and the `tet-ctl` CLI (`src/cli/tet-ctl.ts`) the same way
- * `api.ts` is shared by the main process and the renderer. Nothing here imports electron or
- * node: the CLI is bundled on its own and must stay a plain script.
+ * The control channel's wire contract, shared by the server (`src/main/control/control-server.ts`)
+ * and the `tet-ctl` CLI (`src/cli/tet-ctl.ts`). Nothing here imports electron or node: the CLI is
+ * bundled on its own and must stay a plain script.
  *
- * One request per connection: a single JSON line in, a single JSON line out, then the server
- * ends the connection. No ids, no pipelining — the CLI is one process per invocation.
+ * One request per connection: a single JSON line in, a single JSON line out, then the server ends
+ * the connection. No ids, no pipelining — the CLI is one process per invocation.
  */
 
 /** The environment every pty tet spawns carries; the CLI reads its whole configuration off it. */
@@ -14,13 +13,9 @@ export const CONTROL_ENV = {
   token: "TET_CONTROL_TOKEN",
   projectId: "TET_PROJECT_ID",
   tabId: "TET_TAB_ID",
-  /**
-   * Unset for every ordinary pty, which is what makes tet-ctl.ts fall back to "127.0.0.1" —
-   * a plain host process reaches the control server over loopback. Only an sbx-wrapped session
-   * carries this, set to "host.docker.internal": the sandbox is its own kernel with its own
-   * loopback, and that is the address Docker Sandboxes documents for reaching the host. See
-   * sbx.ts's ensureControlNetworkAllowed for the policy-allow this also requires.
-   */
+  /** Unset for every ordinary pty, so tet-ctl.ts falls back to "127.0.0.1". Only an sbx-wrapped
+   *  session carries this, set to "host.docker.internal" — the sandbox has its own loopback. See
+   *  sbx.ts's ensureControlNetworkAllowed for the policy-allow this also requires. */
   host: "TET_CONTROL_HOST"
 } as const;
 
@@ -48,11 +43,8 @@ export interface ControlVerb {
   positionals: string[];
 }
 
-/**
- * Every verb, with the one line `tet-ctl help` prints for it. The CLI answers `help` by itself,
- * so an agent learns the surface even while tet is not listening; the server refuses anything
- * not in this list as `unknown_verb`. `[--project <id>]` left out means the tab's own project.
- */
+/** Every verb, with the one line `tet-ctl help` prints for it. The CLI answers `help` by itself; the
+ *  server refuses anything not in this list as `unknown_verb`. */
 export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   { verb: "help", usage: "help", summary: "Print this list.", positionals: [] },
   { verb: "version", usage: "version", summary: "TET's version.", positionals: [] },

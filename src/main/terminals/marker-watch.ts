@@ -3,47 +3,30 @@ import * as path from "node:path";
 import type { HookTarget } from "./hook-target";
 import { powershellSingleQuote, shellSingleQuote, WIN_BOM, writePosixScript } from "./os-notify";
 
-/**
- * Where a hook drops its markers, and where tet watches for them, shared by every agent
- * whose lifecycle signals arrive as hook-written files rather than an event stream: three kinds,
- * `busy` from a prompt-submitted hook and `finished` from a turn-ended hook, either end of a
- * turn, plus `waiting` from an approval/question hook for a turn that stopped part-way on a
- * question. A marker's *filename* is the whole message — nothing is read out of a file, so a
- * reader never races a half-written one, which every other file shared with another process here
- * has to be written around.
- */
+/** The kinds of marker a hook drops and tet watches for: `busy` and `finished` for either end of a
+ *  turn, `waiting` for one stopped part-way on a question. A marker's *filename* is the whole
+ *  message, so a reader never races a half-written file. */
 export type Marker = "busy" | "finished" | "waiting";
 
-/**
- * How often the marker directories are swept regardless of the watcher — see watchMarkers for
- * what this is a net under. Two seconds: a spinner that stops a moment late reads as the agent
- * finishing, while one that never stops reads as a broken app.
- */
+/** How often the marker directories are swept regardless of the watcher. */
 const MARKER_SWEEP_MS = 2000;
 
-/**
- * The characters a session id may consist of — uuids or hex for Claude Code, Codex and pi,
- * `ses_` plus base62 for opencode — and so the only ones that may ever reach a marker's
- * filename: no separator, no dot, nothing that could leave the directory. Written once here,
- * spelled into each guard below and into the generated pi extension and opencode plugin, so
- * nothing but a session id becomes a path.
- */
+/** The characters a session id may consist of — uuids or hex for Claude Code, Codex and pi, `ses_`
+ *  plus base62 for opencode — and so the only ones that may reach a marker's filename: no
+ *  separator, no dot, nothing that could leave the directory. Also in the generated pi extension
+ *  and opencode plugin. */
 export const SESSION_ID_CHARS = "0-9A-Za-z_-";
 
 export function markerDir(storageDir: string, kind: Marker): string {
   return path.join(storageDir, kind);
 }
 
-/**
- * The lines that turn a hook payload's session id into a marker file, in each shell. Written
- * once for every hook of every agent, so the one thing that has to be exactly right — that
- * nothing but a session id can ever become a filename — is written once. `$json` must be in
- * scope, holding the parsed payload (win32) or its raw text (sh).
- */
+/** The lines that turn a hook payload's session id into a marker file, in each shell, shared by
+ *  every hook of every agent. `$json` must be in scope, holding the parsed payload (win32) or its
+ *  raw text (sh). */
 export function markPowershell(dir: string): string {
-  return `  # Matched before it is used as a path: the id is a uuid and nothing else may become
-  # a filename here. -Force so a session that reaches this twice overwrites its own marker
-  # rather than erroring - the file is empty, there is nothing in it to lose.
+  return `  # Matched before use as a path: nothing but a session id may become a filename here.
+  # -Force so a session reaching this twice overwrites its own empty marker rather than erroring.
   $id = [string]$json.session_id
   if ($id -match '^[${SESSION_ID_CHARS}]+$') {
     New-Item -ItemType File -Force -Path (Join-Path ${powershellSingleQuote(dir)} $id) -ErrorAction SilentlyContinue | Out-Null
@@ -51,23 +34,21 @@ export function markPowershell(dir: string): string {
 }
 
 export function markPosix(dir: string): string {
-  return `# Only the uuid characters are captured, so nothing else can ever become a filename below.
+  return `# Only the session-id characters are captured, so nothing else becomes a filename below.
 id=$(printf '%s' "$json" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\\([${SESSION_ID_CHARS}]*\\)".*/\\1/p')
 # touch rather than a ">" redirection: ":" is a special built-in, and POSIX has a failed
-# redirection on one of those end the whole shell - which would take whatever follows with it
-# the one time the directory is missing.
+# redirection on one of those end the whole shell, the one time the directory is missing.
 if [ -n "$id" ]; then
   touch ${shellSingleQuote(dir)}/"$id" 2>/dev/null || true
 fi`;
 }
 
 /**
- * The hook command shared by every marker hook without a guard of its own: read the JSON
- * payload off stdin, touch a file named after its session id in the `kind` directory, then run
- * `notifyCommand` if one was given. Always exits 0 — a hook on UserPromptSubmit that fails can
- * hold the prompt back, and none of these has anything to report by exit code. Where `stdout`
- * is supplied, the notification's own result is hidden so that value is the script's complete
- * output. `id` names the script file, since two hooks of one agent must not share one.
+ * The hook command shared by every marker hook without a guard of its own: read the JSON payload
+ * off stdin, touch a file named after its session id in the `kind` directory, then run
+ * `notifyCommand` if one was given. Always exits 0: a failing UserPromptSubmit hook can hold the
+ * prompt back. Where `stdout` is supplied, the notification's result is hidden so that value is
+ * the script's complete output. `id` names the script file, which two hooks must not share.
  */
 export function buildMarkCommand(
   storageDir: string,
@@ -113,26 +94,18 @@ exit 0
   return `sh "${target.embed(scriptFile)}"`;
 }
 
-/**
- * The prompt-submitted hook's command: marks the session busy, the other end of the turn from
- * the agent's Stop hook. No guard of its own — a prompt was submitted, so the agent is busy,
- * full stop. Shared by every marker agent: what differs between them is the Stop end (Claude
- * Code's `background_tasks` guard), never this one.
- */
+/** The prompt-submitted hook's command: marks the session busy, the other end of the turn from
+ *  the agent's Stop hook. No guard of its own, and shared by every marker agent. */
 export function buildBusyCommand(storageDir: string, target: HookTarget): string {
   return buildMarkCommand(storageDir, "busy", "busy", undefined, target);
 }
 
 /**
- * An approval/question hook's command: marks the session waiting on the user, then notifies
- * where notifications are on. The marker is what puts the mark on the tab, and that mark is not
- * a notification the user can turn off — it is how a session blocked out of sight is found
- * again; only the toast is optional. It carries no turn state: the turn is still open, and
- * `waiting` says where it stopped, not that it ended.
- *
- * Every agent registers it twice — once for a permission prompt, once for a question tool — so
- * `id` names the script file: the two callers want different toast wording, and a shared file
- * would have the second overwrite the first.
+ * An approval/question hook's command: marks the session waiting on the user, then notifies where
+ * notifications are on. The marker puts the mark on the tab regardless of the settings; only the
+ * toast is optional. `waiting` says where the turn stopped, not that it ended. Every agent
+ * registers it twice — a permission prompt and a question tool, wanting different wording — so
+ * `id` names the script file.
  */
 export function buildWaitingCommand(
   storageDir: string,
@@ -143,14 +116,9 @@ export function buildWaitingCommand(
   return buildMarkCommand(storageDir, id, "waiting", notifyCommand, target);
 }
 
-/**
- * The tet half of a hook-driven agent's markers: reports every session marked with `kind`
- * and takes the marker away again. From then on the state lives in the tab, so a file left lying
- * around would report the same turn again on the next start.
- *
- * Whatever is already in there at startup is therefore deleted *without* being reported: those
- * turns ended before this window existed, and every tab is freshly opened at that point.
- */
+/** The tet half of a hook-driven agent's markers: reports every session marked with `kind` and
+ *  takes the marker away again, the state living in the tab from then on. Whatever is already
+ *  there at startup is deleted *without* being reported. */
 export function watchMarkers(
   storageDir: string,
   kind: Marker,
@@ -165,19 +133,17 @@ export function watchMarkers(
     try {
       names = await fs.promises.readdir(dir);
     } catch {
-      // The hook has never run here, or its setup failed — nothing to report either way.
+      // The hook has never run here, or its setup failed.
       return;
     }
     for (const name of names) {
       let at: number;
       try {
         const file = path.join(dir, name);
-        // The time it was written travels with the report: the three kinds are watched and
-        // swept separately, so a `busy` the watcher missed can be found *after* the `finished`
-        // of the same short turn, and the reader needs to know which came first.
+        // The write time travels with the report: the kinds are swept separately, so a `busy` the
+        // watcher missed can be found *after* the `finished` of the same short turn.
         at = (await fs.promises.stat(file)).mtimeMs;
-        // Not `force`: a marker gone by now raises ENOENT here, and an unlink that did not
-        // happen is not a turn to report.
+        // Not `force`: an unlink that did not happen is not a turn to report.
         await fs.promises.unlink(file);
       } catch {
         continue;
@@ -188,8 +154,8 @@ export function watchMarkers(
     }
   };
 
-  // One drain at a time, in order: the startup drain's own unlinks fire the watcher, and a
-  // drain started by that would race it for the next stale marker — and report it.
+  // One drain at a time, in order: the startup drain's own unlinks fire the watcher, and a drain
+  // started by that would race it for the next stale marker.
   let draining = Promise.resolve();
   const queueDrain = (report: boolean): void => {
     draining = draining.then(() => drain(report)).catch(() => undefined);
@@ -197,10 +163,8 @@ export function watchMarkers(
   queueDrain(false);
   let watcher: fs.FSWatcher | undefined;
   try {
-    // The hooks that would create `dir` (buildMarkCommand) only run for a tab that actually
-    // starts — a sandboxed one may never spawn, and watchTurnMarkers still watches its own
-    // marker dir unconditionally from every prepareSpawn (see claude/index.ts and
-    // codex/index.ts). Idempotent either way: a host tab's setupXHooks already created this.
+    // The hooks that create `dir` only run for a tab that actually starts, while watchTurnMarkers
+    // is called unconditionally from every prepareSpawn. Idempotent.
     fs.mkdirSync(dir, { recursive: true });
     watcher = fs.watch(dir, () => queueDrain(true));
     // Unhandled, an `error` (the directory removed underneath it, on win32) takes the main
@@ -209,13 +173,9 @@ export function watchMarkers(
   } catch (error) {
     console.error(`[tet] could not watch ${kind} markers in ${dir}:`, error);
   }
-  // The watcher alone is not enough, and this was measured rather than feared: a marker sat in
-  // `finished/` for minutes while the process that should have picked it up was running
-  // and healthy — the next write drained it along with the fresh one. On win32 fs.watch can
-  // fire before the new name is in the directory listing, and nothing fires a second time, so
-  // one lost event strands a turn *forever*: the spinner never stops and the mark never lands.
-  // A readdir on an all-but-always-empty directory is a syscall, not a process, so the net
-  // costs nothing; the watcher stays because it is what makes the common case immediate.
+  // The sweep is the net under the watcher, measured: on win32 fs.watch can fire before the new
+  // name is in the directory listing and never fires again, so one lost event strands a turn
+  // forever — a marker sat in `finished/` for minutes until the next write drained it too.
   const sweep = setInterval(() => queueDrain(true), MARKER_SWEEP_MS);
   return () => {
     stopped = true;
@@ -231,11 +191,7 @@ export interface TurnReporter {
   onSessionWaiting: (sessionId: string, at: number) => void;
 }
 
-/**
- * All three kinds at once, for an agent whose hooks are processes of their own and cannot call
- * back into tet: each end of a turn — and the point part-way through where it stops for an
- * answer — leaves a file behind, and this is what picks them up. Returns the one stop for all.
- */
+/** All three kinds at once, for an agent whose hooks are processes of their own. One stop for all. */
 export function watchTurnMarkers(storageDir: string, reporter: TurnReporter): () => void {
   const stops = [
     watchMarkers(storageDir, "busy", reporter.onSessionBusy),

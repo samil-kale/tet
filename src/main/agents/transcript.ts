@@ -2,21 +2,16 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
- * What Claude Code's and Codex's session providers share about reading a transcript: both are
- * append-only JSONL files read from the end, since what a listing wants — the last turn's end,
- * the latest title — sits there. The entry types and the "found what I came for" test are each
- * agent's own (each `sessions.ts` under `src/main/agents/`); the chunked read, the title rules
- * and the lookup of a per-repository directory are not.
+ * What the session providers share about reading append-only JSONL transcripts from the end:
+ * the chunked read, the title rules, the per-repository directory lookup. Entry types and the
+ * "found what I came for" test are each agent's own `sessions.ts`.
  */
 
 /**
- * The directory `root/<encoded>`, for an agent that keeps one per repository under a name
- * derived from its path (Claude Code, pi), or undefined where the agent has never run in it.
- * Windows paths are case-insensitive and the CLIs preserve whatever casing they saw — pi's
- * drive letter follows the spawn, Claude Code's whole path does — so the same repository can
- * have differently-cased directories there, and the match ignores case on win32. No root at
- * all (the agent has never run on this machine) is the same answer as no directory for this
- * repository: no sessions, not a failure to report.
+ * The directory `root/<encoded>` for an agent that keeps one per repository (Claude Code, pi),
+ * or undefined. The CLIs preserve whatever path casing they saw (pi's drive letter follows the
+ * spawn, Claude Code's whole path does), so the match ignores case on win32. A missing root is
+ * the same answer as a missing directory: no sessions, not a failure.
  */
 export async function findEncodedDir(root: string, encoded: string): Promise<string | undefined> {
   const ignoreCase = process.platform === "win32";
@@ -52,12 +47,11 @@ export function truncateTitle(text: string): string {
 }
 
 /**
- * Hands `onLines` the file's lines from `size` down to `floor`, one chunk of `chunkBytes` at a
- * time and later chunks first, until `onLines` returns true or `floor` is reached. Every line
- * arrives whole: the bytes before a chunk's first newline are the tail of a line the next chunk
- * up ends, and are carried over as bytes, so a character cut in two survives — except at
- * `floor`, where the partial line is handed over as it is (a scan resuming above an earlier one
- * overlaps it by a chunk for exactly that reason).
+ * Hands `onLines` the file's lines from `size` down to `floor`, later chunks of `chunkBytes`
+ * first, until `onLines` returns true or `floor` is reached. Every line arrives whole: the
+ * bytes before a chunk's first newline are carried (as bytes, so a cut character survives) into
+ * the next chunk up — except at `floor`, where the partial line is handed over as it is, which
+ * is why a scan resuming above an earlier one overlaps it by a chunk.
  */
 export async function readLinesBackwards(
   handle: fs.promises.FileHandle,

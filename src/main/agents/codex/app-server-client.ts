@@ -3,14 +3,11 @@ import * as readline from "node:readline";
 import { resolveCommand } from "../../terminals/pty";
 
 /**
- * `codex app-server` is a JSON-RPC-over-stdio process (JSONL, JSON-RPC 2.0 without the
- * `jsonrpc` field), not a persistently running server — tet starts one, sends exactly one
- * request, and tears it down. Timed against a real install: nearly all of the round trip is the
- * process's own startup (config/discovery), the request itself answering at once — acceptable
- * for the rare, user-triggered actions this is for (rename, delete). Stays one-shot rather than
- * a server tet keeps running: the same `$CODEX_HOME` SQLite state every repository's Codex
- * shares does not tolerate concurrent first-time startup (measured: parallel cold starts against
- * a fresh `CODEX_HOME` failed outright).
+ * `codex app-server` is a JSON-RPC-over-stdio process (JSONL, JSON-RPC 2.0 without the `jsonrpc`
+ * field). tet starts one, sends exactly one request and tears it down: the `$CODEX_HOME` SQLite
+ * state every repository's Codex shares does not tolerate concurrent first-time startup
+ * (measured: parallel cold starts against a fresh `CODEX_HOME` failed outright). Nearly all of
+ * the round trip is that startup, affordable for the rare rename and delete this is for.
  */
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -19,11 +16,7 @@ interface RpcRequest {
   params?: unknown;
 }
 
-/**
- * One call at a time, across every project: two tabs closed within a second (or a rename and
- * a close) would otherwise start two of these against the same state database — the very
- * cold-start race described above.
- */
+/** One call at a time, across every project — two at once hit the cold-start race above. */
 let queue: Promise<unknown> = Promise.resolve();
 
 function callAppServer(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
@@ -33,9 +26,9 @@ function callAppServer(executable: string, cwd: string, request: RpcRequest, hom
 }
 
 /**
- * Starts one `codex app-server` process, performs the `initialize` handshake, sends one further
- * request, and returns its result — rejecting on a JSON-RPC error, a spawn failure, or timeout.
- * The process is always killed on the way out, success or failure alike.
+ * Starts one `codex app-server`, performs the `initialize` handshake, sends one further request
+ * and returns its result — rejecting on a JSON-RPC error, spawn failure or timeout. The process
+ * is always killed on the way out.
  */
 async function callAppServerNow(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
   const { command, args } = resolveCommand(executable, ["app-server", "--stdio"]);
@@ -74,9 +67,8 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
     };
 
     child.on("error", (error) => finish(() => reject(error)));
-    // An app-server that died before reading its request fails the write asynchronously, where
-    // no `try` around it can catch it — and an unhandled stream error takes the whole main
-    // process into Electron's modal crash dialog. `ask.ts` guards its own stdin the same way.
+    // An app-server that died before reading its request fails the write asynchronously, and an
+    // unhandled stream error takes the main process into Electron's modal crash dialog.
     child.stdin.on("error", () => undefined);
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
@@ -122,12 +114,10 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
 }
 
 /**
- * `home` is what a *sandboxed* session needs: its rollouts and name index live in the directory
- * tet mounts into the sandbox, not in this host's `~/.codex` — so the one-shot app-server is
- * pointed at that directory as its `CODEX_HOME` and acts on the same files the sandbox writes.
- * Measured live, 2026-09-09: a foreign CODEX_HOME needs no sign-in and no config of its own for
- * these — `initialize` and a `thread/*` request both answer — but the directory has to exist
- * ("CODEX_HOME points to … but that path does not exist", and it exits 1).
+ * `home` is what a sandboxed session needs: its rollouts and name index live in the directory tet
+ * mounts into the sandbox, so the one-shot app-server is pointed at that as its `CODEX_HOME`.
+ * Measured: a foreign CODEX_HOME needs no sign-in and no config of its own — `initialize` and a
+ * `thread/*` request both answer — but the directory has to exist, or it exits 1.
  */
 export async function renameThread(executable: string, cwd: string, threadId: string, name: string, home?: string): Promise<void> {
   await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } }, home);

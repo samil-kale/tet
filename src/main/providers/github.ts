@@ -32,8 +32,7 @@ export const github: GitProvider = {
   },
 
   async listRepositories(host, token) {
-    // The default affiliation already covers owned repositories, collaborations and the
-    // user's organizations — the same set the web's "Your repositories" shows.
+    // The default affiliation covers owned, collaborated and organization repositories.
     const url = `${apiBase(host)}/user/repos?per_page=100&sort=pushed`;
     const entries = (await getPaged(url, headers(token))) as GitHubRepository[];
     return entries.map(

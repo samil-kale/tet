@@ -6,33 +6,20 @@ import { runOpencode } from "./cli";
 import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
 
 /**
- * opencode keeps its sessions in one SQLite database per machine (`opencode.db` under its data
- * directory, and a sandbox's inside the sandbox), which nothing here reads: the listing is the
- * records the generated plugin writes into tet's own agentDir (plugin.ts's SessionRecord), one
- * file per root session, host and sandboxed alike — the same source wherever the tab ran.
- * Reading them costs what reading Claude Code's transcripts costs; asking opencode instead
- * boots a process per question (~1.5 s measured, writing to the database on every one), which
- * is what the one-off actions below pay and a listing never does.
+ * opencode keeps its sessions in one SQLite database per machine, which nothing here reads: the
+ * listing is the records the generated plugin writes into tet's own agentDir (plugin.ts's
+ * SessionRecord), one file per root session, host and sandboxed alike. There is no on-disk
+ * session format to read or watch instead, and `opencode session list` boots a full instance per
+ * call (~1.5 s measured, writing to the database each time) — anomalyco/opencode#37435. That is
+ * what the one-off actions below pay and a listing never does.
  *
- * The cost of that: tet knows the sessions that ran through it. One started elsewhere (a plain
- * `opencode` in a shell) leaves no record — except once, when a repository is listed for the
- * first time after the records replaced the server (see seed). A session removed elsewhere
- * (`opencode session delete` in a plain shell) keeps its record until a resume of it fails —
- * nothing here polls the database to notice a deletion it didn't make itself.
- *
- * Checked against opencode's own `dev` branch (2026-09-09, github.com/anomalyco/opencode) for a
- * way around either limit: sessions are still `Database.Service`-only (session.ts), including
- * on `dev` — the file-based `Storage` service in the same tree is for other data, not sessions,
- * so there is no on-disk session format to read or watch directly. `opencode session list` would
- * remove both limits at once if it were cheap enough to run on every listing, but it still isn't:
- * anomalyco/opencode#37435 (open) tracks that it runs a full `InstanceBootstrap` — config, plugin
- * init, LSP, VCS, file watchers — for a query its own author measured at ~7ms, seconds to
- * minutes wasted every time. Revisit calling it unconditionally if that lands.
+ * The cost: tet knows the sessions that ran through it. One started elsewhere leaves no record,
+ * except once when a repository is listed for the first time (see seed). One removed elsewhere
+ * keeps its record until a resume of it fails.
  */
 
-/** Where each repository's records are, registered by prepareSpawn: a provider gets a cwd, not
- *  an agentDir, and the two are only ever paired there. Never cleared — the directory outlives
- *  any preparation, and the strings are cheap. */
+/** Where each repository's records are, registered by prepareSpawn: a provider gets a cwd, not an
+ *  agentDir, and the two are only ever paired there. Never cleared. */
 const agentDirs = new Map<string, string>();
 
 export function registerAgentDir(cwd: string, agentDir: string): void {
@@ -94,14 +81,12 @@ function writeRecord(dir: string, record: SessionRecord): void {
 }
 
 /**
- * The one time opencode itself is asked for a listing: a repository whose records directory
- * has never been filled, so the sessions from before the records existed become tabs again
- * after the update that introduced them. `session list --format json` names every session the
- * database holds with its directory (measured), so it is filtered to this repository here; the
- * CLI knows no `roots` filter, but lists conversations only, the same as opencode's own picker.
- * On the host only: a sandbox's database starts empty, and its plugin records from the first
- * session on. A failure leaves the marker unwritten for the next start to try again — not the
- * next listing, which follows every tab's output and would spend a process each time.
+ * The one time opencode itself is asked for a listing: a repository whose records directory has
+ * never been filled. `session list --format json` names every session the database holds with
+ * its directory (measured), so it is filtered to this repository here; the CLI has no `roots`
+ * filter and lists conversations only. Host only — a sandbox's database starts empty. A failure
+ * leaves the marker unwritten for the next start to try again, not the next listing, which
+ * follows every tab's output and would spend a process each time.
  */
 const seedTried = new Set<string>();
 
@@ -143,10 +128,8 @@ async function seed(executable: string, cwd: string, dir: string): Promise<void>
 }
 
 export const opencodeSessionProvider: SessionProvider = {
-  // Reads only the records (see the file header for why): a session deleted from outside tet
-  // still has its record here and is listed as if it existed, until a tab tries to resume it
-  // and fails. Cross-checking against opencode's own listing on every call would catch that,
-  // but costs what seed() below already documents avoiding.
+  // Reads only the records (see the file header): a session deleted from outside tet is listed
+  // as if it existed until a tab tries to resume it and fails.
   async list(executable: string, cwd: string): Promise<AgentSessionInfo[]> {
     const dir = recordsDir(cwd);
     if (!dir) {
@@ -168,11 +151,9 @@ export const opencodeSessionProvider: SessionProvider = {
     return ["--session", sessionId];
   },
 
-  /**
-   * `opencode session delete`, run where the session is — the record says whether that is a
-   * sandbox. The record goes whatever opencode said: a session whose sandbox was removed
-   * (SBX turned off for the project) is gone with it, and the record is all that is left.
-   */
+  /** `opencode session delete`, run where the session is — the record says whether that is a
+   *  sandbox. The record goes whatever opencode said: a session whose sandbox was removed is
+   *  gone with it, and the record is all that is left. */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     const dir = recordsDir(cwd);
     try {
@@ -186,18 +167,11 @@ export const opencodeSessionProvider: SessionProvider = {
 
   /**
    * opencode has no `session rename` command, only the HTTP API — and the one server there is
-   * runs inside the tab's own process. So the title is left for that process's plugin to
-   * apply (plugin.ts's applyRenames), and the session's record, which opencode's own update
-   * event then rewrites, is what says it landed. A tab whose opencode is not running has no
-   * one to apply it: the request is withdrawn after the timeout and the caller told.
-   *
-   * Checked for a CLI-based way out (2026-09-09, opencode's `dev` branch,
-   * github.com/anomalyco/opencode): `packages/opencode/src/cli/cmd/session.ts` still declares
-   * only `list` and `delete`. anomalyco/opencode#34751 ("Session rename command") was closed as
-   * completed, but by exposing rename through the plugin/tool API instead (its sibling PR
-   * #47837, `session_rename`, is a tool for the *model* to call on itself, not something an
-   * external process can reach) — the same route this already uses, not a shortcut past it.
-   * Revisit only if a `session rename <id> <title>` CLI subcommand actually ships.
+   * runs inside the tab's own process. So the title is left for that process's plugin to apply
+   * (plugin.ts's applyRenames), and the record it rewrites is what says it landed. A tab whose
+   * opencode is not running has no one to apply it: the request is withdrawn after the timeout.
+   * anomalyco/opencode#34751 was closed by exposing rename through the plugin/tool API, not a
+   * CLI subcommand — revisit only if `session rename <id> <title>` actually ships.
    */
   async rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
     const trimmed = title.trim();
@@ -230,9 +204,9 @@ export const opencodeSessionProvider: SessionProvider = {
     if (!dir) {
       return () => undefined;
     }
-    // The records directory exists from prepareSpawn on; the root above it is agentDir. A
-    // record written from inside a sandbox may not raise an event on this side of the bind
-    // mount — the reconcile that follows a tab's output is the net, as it is for the markers.
+    // The records directory exists from prepareSpawn on; the root above it is agentDir. A record
+    // written inside a sandbox may raise no event on this side of the bind mount — the reconcile
+    // that follows a tab's output is the net.
     return watchTranscriptDir(
       () => path.dirname(dir),
       () => Promise.resolve(fs.existsSync(dir) ? dir : undefined),

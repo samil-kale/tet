@@ -6,23 +6,16 @@ import { WIN_BOM } from "./os-notify";
 const WRITE_DEBOUNCE_MS = 250;
 /** Under continuous output the debounce never fires; this is the longest a write is held back. */
 const WRITE_MAX_WAIT_MS = 2000;
-/**
- * The log lives in its own file rather than being inlined into every prompt, so it can hold
- * far more than an excerpt. A verbose producer still fills it without bound, so keep the
- * most recent slice rather than an ever-growing file.
- */
+/** A verbose producer fills the log without bound, so only the most recent slice is kept. */
 const MAX_LOG_CHARS = 500_000;
 const LOG_TRUNCATION_NOTE = "... [earlier output dropped, showing most recent]\n";
 // PowerShell 5.1's Get-Content decodes BOM-less files as ANSI, so on win32 the context file
 // needs a UTF-8 BOM or non-ASCII output gets garbled on its way into the prompt.
 const CONTEXT_FILE_BOM = process.platform === "win32" ? WIN_BOM : "";
 
-/**
- * Replaces a file's contents without ever holding it open for writing. Everything written here
- * is read by another process — an agent's prompt hook, or the agent's own file reads — and on
- * Windows opening a file mid-write fails outright rather than returning partial data. Writing
- * beside it and renaming into place gives a reader either the previous file or the new one.
- */
+/** Replaces a file's contents without holding it open for writing. Everything written here is read
+ *  by another process, and on Windows opening a file mid-write fails outright. Writing beside it
+ *  and renaming gives a reader either version, whole. */
 async function replaceFile(file: string, contents: string): Promise<void> {
   const temp = `${file}.tmp`;
   await fs.promises.writeFile(temp, contents);
@@ -46,8 +39,7 @@ class CappedLogFile {
   append(text: string): void {
     this.content += text;
     // Trimmed at twice the cap here and to the cap in flush(): a slice copies the whole buffer,
-    // and doing that per chunk once the log is full — a build produces thousands — is half a
-    // megabyte of copying per pty read on the main thread.
+    // so trimming per chunk once the log is full is half a megabyte of copying per pty read.
     if (this.content.length > 2 * MAX_LOG_CHARS) {
       this.trim();
     }
@@ -72,7 +64,7 @@ class CappedLogFile {
       .then(() => replaceFile(this.file, contents))
       .catch((error) => {
         console.error(`[tet] failed to write ${path.basename(this.file)}:`, error);
-        // Nothing landed on disk, so the next flush has to try again.
+        // Nothing landed on disk, so the next flush has to retry.
         this.dirty = true;
       });
   }
@@ -81,11 +73,9 @@ class CappedLogFile {
 // eslint-disable-next-line no-control-regex
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
 
-/**
- * Terminal data arrives raw. Escape sequences mean nothing in a log file, and a progress bar
- * redraws its line with a bare carriage return — keeping only what follows the last one
- * leaves each line as the terminal finally showed it, instead of one line per redraw.
- */
+/** Terminal data arrives raw. Escape sequences mean nothing in a log file, and a progress bar
+ *  redraws its line with a bare carriage return, so keeping only what follows the last one leaves
+ *  the line as the terminal finally showed it. */
 function cleanTerminalOutput(data: string): string {
   return data
     .replace(ANSI_PATTERN, "")
@@ -100,16 +90,10 @@ const ANSI_AT_START = /^(?:\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\
 /** How much of a chunk may be held back for the next one before it counts as never ending. */
 const MAX_CARRY = 4096;
 
-/**
- * Where a chunk has to be cut so that what `cleanTerminalOutput` acts on is whole: pty reads
- * end anywhere, and a chunk ending in the `\r` of a `\r\n` would lose its whole line to the
- * carriage-return rule, while an escape sequence split in two would leave both halves in the
- * log. Everything from that point on waits for the next chunk.
- *
- * A line still being written waits whole, up to that same limit: a progress bar redrawn with
- * `\r` across a chunk boundary would otherwise leave both drawings in the log, the very thing
- * the carriage-return rule is there to prevent. (A `\r` at the very end is that case too.)
- */
+/** Where a chunk has to be cut so that what `cleanTerminalOutput` acts on is whole: pty reads end
+ *  anywhere, a chunk ending in the `\r` of a `\r\n` would lose its whole line to the
+ *  carriage-return rule, and an escape sequence split in two would leave both halves in the log.
+ *  The rest waits for the next chunk, as does a line still being written, up to the same limit. */
 function carryFrom(data: string): number {
   const newline = data.lastIndexOf("\n");
   if (data.length - newline - 1 < MAX_CARRY) {
@@ -123,18 +107,11 @@ function carryFrom(data: string): number {
 }
 
 /**
- * What tet tells an agent about the repository it is working in: the running transcript of
- * the shell tabs the user opened next to it. Modelled on how the VS Code extension passed a
- * debug session's console output — a capped file the agent is pointed at and reads on demand,
- * not an excerpt inlined into every prompt.
- *
- * Only shell tabs feed it. An agent tab's output is its TUI redrawing itself, and handing
- * that back to the agent that produced it is noise at best.
- *
- * Every shell tab of a project writes into the one file, in the order the output arrived. So
- * a build in one tab and a `git log` in another do interleave — but never mid-line (each tab
- * keeps its own unfinished line back) and never unmarked: a header names the tab wherever the
- * writer changes, so a reader can tell whose output a section is.
+ * What tet tells an agent about the repository it is working in: the running transcript of the
+ * shell tabs the user opened next to it, as a capped file the agent is pointed at and reads on
+ * demand. Only shell tabs feed it; an agent tab's output is its TUI redrawing itself. Every shell
+ * tab of a project writes into the one file in arrival order, so tabs interleave — but never
+ * mid-line (each keeps its unfinished line back), and a header names the tab at every change.
  */
 export class ShellContext {
   private readonly log: CappedLogFile;
@@ -156,8 +133,7 @@ export class ShellContext {
   ) {
     fs.mkdirSync(directory, { recursive: true });
     this.log = new CappedLogFile(this.logFile);
-    // Written up front so the agent's hook has something to read before the first output
-    // ever arrives — an absent file would make the hook fail rather than say nothing.
+    // Written up front: an absent file makes the agent's hook fail rather than say nothing.
     this.writeContext();
   }
 
@@ -192,14 +168,11 @@ export class ShellContext {
     }
     if (tabId !== this.lastWriter) {
       this.lastWriter = tabId;
-      // On a line of its own, so a plain search finds it and it reads apart from the
-      // program output either side of it.
       this.log.append(`${this.log.chars === 0 ? "" : "\n"}=== shell tab: ${label} ===\n`);
     }
     this.log.append(text);
-    // Debounced, but no further than the deadline: a build or a `tail -f` never pauses long
-    // enough for the debounce alone, and a file that is only ever written once the output
-    // stops is one the agent can't read while the user is asking about it.
+    // Debounced, but no further than the deadline: a build or a `tail -f` never pauses long enough
+    // for the debounce alone, and the agent has to read the file while output still runs.
     const now = Date.now();
     this.flushDeadline ??= now + WRITE_MAX_WAIT_MS;
     clearTimeout(this.writeTimer);
@@ -214,9 +187,8 @@ export class ShellContext {
   }
 
   private writeContext(): void {
-    // The `tet-ctl` line is there from the first prompt on: nothing else tells an agent that
-    // the app around it can be asked anything (see src/main/control/control-server.ts). The shell
-    // paragraph only once something ran.
+    // The `tet-ctl` line is there from the first prompt on: nothing else tells an agent the app
+    // around it can be asked anything. The shell paragraph only once something ran.
     const contents = [
       "<tet_context>",
       "You are running inside TET. Its own settings, projects and terminal tabs are",

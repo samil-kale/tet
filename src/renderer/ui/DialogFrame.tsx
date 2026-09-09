@@ -9,8 +9,7 @@ export interface DialogTab<T extends string> {
 /**
  * What heads the dialog — one of two shapes, nothing else. A title bar names one thing and may
  * carry a close button; a tab strip stands in for the title where the dialog has more than one
- * pane (the selected tab names what is below it, and the button that opened the dialog already
- * said what it is).
+ * pane.
  */
 export type DialogHeader<T extends string> =
   | {
@@ -31,9 +30,8 @@ interface DialogFrameProps<T extends string> {
   /** Variants on `.dialog` — `wide`, or the dialog's own class for its rules alone. */
   className?: string;
   /**
-   * Given, the card is a form and Enter submits from wherever the focus sits — a field, a
-   * checkbox. A caller that isn't ready yet checks that inside; the frame only prevents the
-   * browser's own submit.
+   * Given, the card is a form and Enter submits from wherever the focus sits. A caller that
+   * isn't ready yet checks that inside; the frame only prevents the browser's own submit.
    */
   onSubmit?: () => void;
   /** What goes in the button row, the one being suggested last. */
@@ -43,9 +41,8 @@ interface DialogFrameProps<T extends string> {
 
 /**
  * The one shell every card dialog is drawn in: the overlay, the card, a header of one of the two
- * shapes above, the body, the button row. The questions in `Dialog.tsx` and every dialog under
- * `dialogs/` use it, so a header, a body gap or a button row can't drift between them. Not the
- * diff dialog, which is a whole-window surface with its own bar rather than a card.
+ * shapes above, the body, the button row. Used by the questions in `Dialog.tsx` and every dialog
+ * under `dialogs/`, but not the diff dialog, which is a whole-window surface.
  *
  * Escape is the caller's: a question listens on `window`, the others on `document`
  * (`useEscape`), and RequirementsDialog takes none at all.

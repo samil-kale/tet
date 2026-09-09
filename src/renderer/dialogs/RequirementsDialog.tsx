@@ -33,19 +33,13 @@ interface RequirementsDialogProps {
   onRecheck: () => void;
 }
 
-/**
- * What is missing, and where it comes from. Not part of Dialog.tsx: that file puts a question
- * and resolves to an answer, and this is a wall — it stands until the programs it lists are
- * there, there is nothing behind it yet, and no Escape takes it away.
- *
- * It installs nothing itself. No command would work on every platform: a package manager that
- * may not be there, an elevation prompt, a shell to answer in — and a button that works on one
- * of the three would be worse than none.
- */
+/** What is missing, and where it comes from. Not part of Dialog.tsx: this is a wall, not a
+ *  question — it stands until the programs it lists are there, and no Escape takes it away.
+ *  Installs nothing: no command works on all three platforms. */
 export function RequirementsDialog({ requirements, checking, onRecheck }: RequirementsDialogProps) {
   return (
     <DialogFrame
-      // No close button: nothing stands behind this yet, so there is nothing to go back to.
+      // No close button: nothing stands behind this yet.
       header={{ title: "TET cannot start" }}
       buttons={
         <>

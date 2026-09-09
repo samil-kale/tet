@@ -17,8 +17,7 @@ export default tseslint.config(
   },
   // The process borders, as lint rules rather than prose (see "Agent-specific vs shared code" in
   // CLAUDE.md): each folder under src/ is one process, and `shared/` the only thing they may
-  // import from one another. A violation here used to surface at runtime — a `ReferenceError`
-  // in the git utility process, an electron require in the CLI bundle — or not at all.
+  // import from one another.
   {
     files: ["src/renderer/**", "src/preload/**", "src/cli/**", "src/shared/**"],
     rules: {

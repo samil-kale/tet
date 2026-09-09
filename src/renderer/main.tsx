@@ -8,9 +8,8 @@ import { Startup } from "./Startup";
 import { takeOutputStats } from "./terminal/terminal-views";
 
 /**
- * A file dropped anywhere but on a terminal would be handled by the browser, and in Electron
- * that means navigating the window to it — the app replaced by the file, with no way back. The
- * terminals prevent this themselves and act on the drop; here it is only swallowed. Files
+ * A file dropped anywhere but on a terminal navigates the Electron window to it, replacing the
+ * app with no way back. The terminals act on their own drops; here it is only swallowed. Files
  * alone: text dragged into a field is a drop the field itself still has to get.
  */
 function swallowStrayDrop(event: DragEvent): void {
@@ -22,13 +21,11 @@ function swallowStrayDrop(event: DragEvent): void {
 document.addEventListener("dragover", swallowStrayDrop);
 document.addEventListener("drop", swallowStrayDrop);
 
-// This process's half of event-loop.log (src/main/event-loop-monitor.ts): a keystroke on its
-// way to xterm waits behind whatever holds this thread — a busy TUI's repaint being parsed, the
-// git pane re-rendering — none of which the main process's sampler can see. Chromium reports
-// every task past 50ms; the threshold for a line of its own is the monitor's. Each report
-// carries what the terminals were doing just before it (takeOutputStats), so the line says
-// whether several sessions were writing at the time — the window is the sweep below, since
-// the stats are only ever taken here.
+// This process's half of event-loop.log (src/main/event-loop-monitor.ts): stalls on this thread
+// are invisible to the main process's sampler. Chromium reports every task past 50ms; the
+// threshold for a line of its own is the monitor's. Each report carries what the terminals were
+// doing just before it (takeOutputStats), whose window is the sweep below, since the stats are
+// only ever taken here.
 const OUTPUT_STATS_WINDOW_MS = 2000;
 try {
   new PerformanceObserver((list) => {
@@ -47,8 +44,8 @@ if (!container) {
   throw new Error("Root container not found");
 }
 
-// Which of themes/'s value sets applies, set before anything is rendered: every
-// reader of those variables (xterm, shiki, monaco) reads them once and keeps the result.
+// Set before anything is rendered: xterm, shiki and monaco read those variables once and keep
+// the result.
 document.documentElement.dataset.theme = window.tet.initialTheme;
 
 createRoot(container).render(<Startup />);

@@ -4,11 +4,8 @@ import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu
 import { confirm, prompt } from "../ui/Dialog";
 import { ArrowDownIcon, ArrowUpIcon, BranchIcon, ChevronIcon, RemoteIcon, SearchIcon, StashIcon, TagIcon } from "../ui/icons";
 
-/**
- * How the tree starts a git command: one at a time per project, named while it runs. The
- * questions a command needs answering first are put here rather than by the caller — this is
- * what knows which remote holds a branch and whether it is the one HEAD is on.
- */
+/** How the tree starts a git command: one at a time per project, named while it runs. The tree
+ *  asks a command's questions itself, knowing which remote holds a branch and where HEAD is. */
 export interface BranchActions {
   /** A git command is running in this project; the tree offers no second one meanwhile. */
   busy: boolean;
@@ -50,11 +47,9 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
 
   const isCurrent = (name: string): boolean => !state.detached && name === state.head;
 
-  /**
-   * The checked-out branch's numbers come from `state.ahead`/`state.behind`, already read for
-   * free off the status header; every other local branch's come from `state.branchTrack`, which
-   * only holds one once `for-each-ref` reported it differing from its upstream at all.
-   */
+  /** The checked-out branch's numbers come free off the status header (`state.ahead`/`behind`);
+   *  every other branch's from `state.branchTrack`, which holds only those `for-each-ref`
+   *  reported as differing from their upstream. */
   const track = (name: string): { ahead: number; behind: number } | undefined =>
     isCurrent(name) ? { ahead: state.ahead, behind: state.behind } : state.branchTrack[name];
 
@@ -85,11 +80,8 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     }
   };
 
-  /**
-   * Deleting is `git branch -D`, like GitHub Desktop's, so a branch whose work is not merged
-   * anywhere goes too — which is what the question says. The remote copy is that question's
-   * checkbox, and only where there is one to delete.
-   */
+  /** Deleting is `git branch -D`, so unmerged work goes too, which is what the question says.
+   *  The remote copy is a checkbox, only where there is one. */
   const askDeleteBranch = async (name: string): Promise<void> => {
     const onRemote = remote !== undefined && state.remotes[0].branches.includes(name);
     const answer = await confirm({
@@ -144,11 +136,8 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     }
   };
 
-  /**
-   * The half-finished merge or rebase, offered from every row because it belongs to the
-   * repository rather than to any one branch. Nothing else in the tree is worth doing while
-   * one is open, so it goes first.
-   */
+  /** The half-finished merge or rebase, offered from every row: it belongs to the repository, and
+   *  goes first because nothing else is worth doing while it is open. */
   const abortEntries = (): ContextMenuEntry[] => {
     if (!state.operation) {
       return [];
@@ -157,11 +146,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     return [{ label, run: () => branch.run(`${label}...`, () => repository.abort(projectId)) }, SEPARATOR];
   };
 
-  /**
-   * What can be done with a branch, following GitHub Desktop: check it out, base something new
-   * on it, bring it into the branch you are on. Rewriting history in more than these two ways
-   * stays a job for a terminal.
-   */
+  /** What can be done with a branch: check it out, base something new on it, bring it in. */
   const branchEntries = (menu: Extract<BranchMenu, { kind: "branch" }>): ContextMenuEntry[] => {
     const { name, remote: from } = menu;
     // A remote branch is named by its remote everywhere but in the checkout, which creates the
@@ -169,8 +154,8 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     const ref = from ? `${from}/${name}` : name;
     const current = from === undefined && isCurrent(name);
     const onHead = current || state.detached;
-    // The default branch as the remote has it: an auto-fetch keeps that one current, while a
-    // local copy of it may be many commits behind without anything saying so.
+    // The default branch as the remote has it: an auto-fetch keeps that current, while a local
+    // copy may be many commits behind without anything saying so.
     const updateRef = state.defaultBranch
       ? `${remote ? `${remote}/` : ""}${state.defaultBranch}`
       : undefined;
@@ -186,8 +171,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
             { label: "Delete...", run: current ? undefined : () => void askDeleteBranch(name) }
           ]),
       SEPARATOR,
-      // On the branch you are on, merging it into itself is meaningless — what that row
-      // offers instead is bringing the default branch in, GitHub Desktop's "Update from main".
+      // On the branch you are on, that row offers bringing the default branch in instead.
       ...(onHead
         ? [
             {
@@ -228,10 +212,8 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     { label: "Copy tag name", run: () => void navigator.clipboard.writeText(name) }
   ];
 
-  /**
-   * A stash's ref is its position in the list, and dropping one renumbers the rest — so these
-   * only ever act on what the last refresh reported, and every one of them refreshes after.
-   */
+  /** A stash's ref is its position in the list, and dropping one renumbers the rest, so these act
+   *  on what the last refresh reported and every one of them refreshes after. */
   const stashEntries = (stash: StashEntry): ContextMenuEntry[] => [
     ...abortEntries(),
     {
@@ -377,8 +359,8 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
               <button
                 key={stash.ref}
                 className="tree-item"
-                // Nothing a stash does is worth a click of its own: applying it and dropping
-                // it are one right-click apart and one of them cannot be taken back.
+                // No double-click action: applying and dropping are one right-click apart, and one of them
+                // cannot be taken back.
                 title={`${stash.ref}: ${stash.message}\nRight-click to apply, pop or drop it`}
                 onContextMenu={(event) => openMenu(event, { kind: "stash", stash })}
               >

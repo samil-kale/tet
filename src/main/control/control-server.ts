@@ -17,8 +17,8 @@ import type {
 
 /**
  * What the control channel acts on, handed over by main.ts rather than imported: nothing here
- * reaches for electron or node-pty, so the server runs under plain node with these faked —
- * which is how test/control.test.ts drives it, through the real CLI.
+ * reaches for electron or node-pty, so the server runs under plain node with these faked — how
+ * test/control.test.ts drives it, through the real CLI.
  */
 export interface ControlDeps {
   version: string;
@@ -51,13 +51,8 @@ export interface ControlDeps {
   showTab(projectId: string, tabId: string): void;
   /** Tells the window the project list changed under it, and which entry to activate or forget. */
   projectsChanged(change: { added?: string; removed?: string }): void;
-  /**
-   * Shows a real desktop notification from this process — the one place that can, since it is
-   * the process actually holding the desktop session. The `notify` verb's whole job: a
-   * sandboxed Claude/Codex hook has no such session, so it asks this process to show the toast
-   * on its behalf instead of trying (and failing) to show one itself. Fire-and-forget, same as
-   * a host hook's own direct notify script — nothing here waits on the toast being dismissed.
-   */
+  /** Shows a real desktop notification from this process, the one holding the desktop session. A
+   *  sandboxed Claude/Codex hook has none, so it asks this process instead. Fire-and-forget. */
   notify(title: string, body: string): void;
 }
 
@@ -79,11 +74,8 @@ class ControlError extends Error {
   }
 }
 
-/**
- * A verb's answer. `after` runs once the response has reached the CLI: for the verbs that end
- * the caller's own process (closing its tab, its project, or the whole app) the reply has to be
- * out of the door first, or the CLI dies with an empty stdout.
- */
+/** A verb's answer. `after` runs once the response has reached the CLI: a verb that ends the
+ *  caller's own process must get the reply out first, or the CLI dies with an empty stdout. */
 interface Answer {
   result: unknown;
   after?: () => void;
@@ -117,15 +109,13 @@ function canBind(port: number): Promise<boolean> {
 }
 
 /**
- * The port the control server will listen on: derived from userData, the same on every platform
- * — so a dev checkout and the installed app, or two Windows accounts, each land on a port of
- * their own rather than the first one's. Bound and released again here, rather than trusted
- * outright, because Windows carves pieces out of the dynamic range for Hyper-V/WSL/Docker's own
- * NAT (`netsh int ipv4 show excludedportrange`) — a bind into one of those fails with `EACCES`,
- * not `EADDRINUSE`, and the exclusion is static enough that probing now and reusing the same
- * port at the real bind (see startControlServer) is reliable. Probed rather than left to the OS
- * to assign, because the port has to be in every terminal's environment (setControlEnv) before
- * the server actually starts (see main.ts's startControl, gated on the workspace opening).
+ * The port the control server will listen on, derived from userData so a dev checkout and the
+ * installed app, or two Windows accounts, each land on a port of their own. Bound and released
+ * here rather than trusted outright: Windows carves pieces out of the dynamic range for
+ * Hyper-V/WSL/Docker NAT (`netsh int ipv4 show excludedportrange`), and a bind into one fails with
+ * `EACCES`, not `EADDRINUSE` — static enough that reusing the probed port at the real bind is
+ * reliable. Probed rather than assigned by the OS because the port has to be in every terminal's
+ * environment (setControlEnv) before the server starts.
  */
 export async function findControlPort(userDataPath: string): Promise<number> {
   const start = hashPort(userDataPath);
@@ -177,15 +167,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "settings-set-theme": (args) => {
       const theme = text(args, "theme", "theme id");
-      // The store keeps any string (see settings.ts); what it would silently fall back from is
+      // The store keeps any string (settings.ts); what it would silently fall back from is
       // refused here, where the caller can be told.
       if (theme !== SYSTEM_THEME_ID && !THEMES.some((candidate) => candidate.id === theme)) {
         throw new ControlError("bad_args", `unknown theme: ${theme} (see list-themes)`);
       }
       settings.save({ ...settings.get(), theme });
-      // Never applied to the running window — xterm, shiki, monaco and the window chrome bake
-      // the theme in at construction (see createWindow). The flag is for the agent to relay,
-      // not to act on: restart-app is the user's call.
+      // Never applied to the running window — xterm, shiki, monaco and the window chrome bake the
+      // theme in at construction. The flag is for the agent to relay; restarting is the user's call.
       return { result: { saved: true, restartRequired: true } };
     },
 
@@ -194,8 +183,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!PROMPT_IDS.some((candidate) => candidate === id)) {
         throw new ControlError("bad_args", `unknown prompt: ${id} (one of ${PROMPT_IDS.join(", ")})`);
       }
-      // No text is the reset, same as the dialog's button: the store keeps "" for tet's own
-      // (see settings.ts), and ipc.ts reads it at the moment of asking, so nothing to restart.
+      // No text is the reset: the store keeps "" for tet's own, and ipc.ts reads it when asking.
       const value = args.text;
       const current = settings.get();
       settings.save({ ...current, prompts: { ...current.prompts, [id]: typeof value === "string" ? value : "" } });
@@ -318,17 +306,14 @@ function reject(code: ControlErrorCode, message: string): ControlResponse {
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * The local server an agent's `tet-ctl` talks to — one POST per connection (see
- * src/shared/control.ts), on 127.0.0.1 for a plain host terminal. HTTP, not a bare TCP socket
- * with an NDJSON line, because that is the one transport that also reaches this server from
- * inside an sbx sandbox: sbx's own docs say a sandbox reaches `host.docker.internal` through
- * its own proxy, and that proxy is HTTP-only — verified live, 2026-09-08, a raw TCP echo server
- * behind it accepted the connection but never saw a byte written to it, while a plain
- * `curl http://host.docker.internal:<port>` reached the same host process immediately. One
- * server, one protocol, for both callers — not a second listener or a sniffed-protocol branch.
+ * The local server an agent's `tet-ctl` talks to — one POST per connection, on 127.0.0.1 for a
+ * plain host terminal. HTTP, not a bare TCP socket with an NDJSON line, because that is the one
+ * transport that also reaches this server from inside an sbx sandbox: a sandbox reaches
+ * `host.docker.internal` through sbx's own proxy, and that proxy is HTTP-only — verified live, a
+ * raw TCP echo server behind it accepted the connection but never saw a byte written to it, while
+ * a plain `curl http://host.docker.internal:<port>` reached the same host process immediately.
  * Every request carries the token main.ts made for this run; anything else is answered
- * `unauthorized` and dropped, so a process that is not inside one of tet's own terminals has
- * nothing to say here.
+ * `unauthorized` and dropped.
  */
 export async function startControlServer(
   deps: ControlDeps,
@@ -364,8 +349,8 @@ export async function startControlServer(
   const respond = (res: http.ServerResponse, response: ControlResponse, after?: () => void): void => {
     res.writeHead(200, { "Content-Type": "application/json", Connection: "close" });
     if (after) {
-      // Only once the CLI has the answer: `close` is the response fully flushed and the
-      // underlying connection gone, not merely handed to the OS to send.
+      // Only once the CLI has the answer: `close` is the response fully flushed and the connection
+      // gone, not merely handed to the OS to send.
       res.once("close", after);
     }
     res.end(JSON.stringify(response) + "\n");
@@ -392,24 +377,21 @@ export async function startControlServer(
       void handle(request).then(({ response, after }) => respond(res, response, after));
     });
     req.on("error", () => undefined);
-    // The response side needs the same, and for a sharper reason: a write that fails *after*
-    // it was handed over — the CLI already gone, the connection reset, or this process on its
-    // way out because the verb it just answered ends it (see `after`) — surfaces as an
-    // uncaught exception in the main process, which Electron turns into a modal error dialog.
-    // That is the whole app blocked, every terminal session with it, over a client that stopped
-    // listening. Seen for real as `write EAGAIN` while the test suite drove a live instance.
+    // The response side needs the same, and for a sharper reason: a write failing *after* it was
+    // handed over — the CLI gone, the connection reset, or this process leaving because the verb
+    // it just answered ends it — surfaces as an uncaught exception, which would block the whole
+    // app. Seen for real as `write EAGAIN` while the test suite drove a live instance.
     res.on("error", () => undefined);
   });
 
-  // A TCP port, unlike a unix socket file, leaves nothing behind for a killed run to hand over:
-  // the OS reclaims it the moment the process is gone, so EADDRINUSE here only ever means
-  // another tet is genuinely listening on it — the single-instance lock makes that one about to
-  // quit anyway (see main.ts). Nothing to recover, so bind once and let that error surface.
+  // A TCP port leaves nothing behind for a killed run to hand over — the OS reclaims it the moment
+  // the process is gone — so EADDRINUSE here only ever means another tet is genuinely listening.
+  // Nothing to recover: bind once and let that error surface.
   await bind(server, port);
 
   return {
     // closeAllConnections (Node 18.2+): a client that connected and never finished its request
-    // would otherwise hold plain server.close()'s callback open indefinitely.
+    // would otherwise hold server.close()'s callback open indefinitely.
     close: () =>
       new Promise((resolve) => {
         server.close(() => resolve());

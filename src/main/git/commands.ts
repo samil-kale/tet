@@ -12,22 +12,13 @@ import type {
   SbxProjectConfig
 } from "../../shared/types";
 
-/**
- * What a project keeps about itself in its own root: shell commands — "npm run build", a deploy
- * script, whatever is typed often enough to be worth a button — and how its Explorer tree is shown.
- * Shaped like a VS Code `.code-workspace`: `folders` at the top level, the view settings nested
- * under `settings` by their full VS Code name (`files.exclude`, `explorer.excludeGitIgnore`,
- * `explorer.compactFolders`, `explorer.sortOrder`; see `readExplorerView`). They live in the
- * repository rather than in tet's own storage, so they travel with it like any other project
- * file.
- */
+/** What a project keeps about itself in its own root: shell commands and how its Explorer tree is
+ *  shown. Shaped like a VS Code `.code-workspace`: `folders` at the top level, the view settings
+ *  nested under `settings` by their full VS Code name (see `readExplorerView`). It lives in the
+ *  repository rather than in tet's own storage, so it travels with it. */
 const FILE = "tet.json";
 
-/**
- * What that file holds. A command is a plain string while the command line alone says
- * everything, and an object once it needs a directory, variables or a shell — so the common
- * case stays a one-line entry a person can read, and a file full of strings stays valid.
- */
+/** A plain string while the command line says everything, an object once it needs cwd, env or shell. */
 type StoredCommand =
   | string
   | { command?: unknown; name?: unknown; cwd?: unknown; env?: unknown; shell?: unknown };
@@ -36,8 +27,7 @@ interface ProjectFile {
   commands?: StoredCommand[];
   folders?: unknown;
   settings?: unknown;
-  /** The sbx-settings dialog's Save button — see readSbxConfig/writeSbxConfig. Never a credential:
-   *  each sandboxed agent signs in inside its own sandbox. */
+  /** The sbx-settings dialog's Save button — see readSbxConfig/writeSbxConfig. Never a credential. */
   sbx?: unknown;
 }
 
@@ -47,11 +37,7 @@ const KEY_EXCLUDE_GIT_IGNORE = "explorer.excludeGitIgnore";
 const KEY_COMPACT_FOLDERS = "explorer.compactFolders";
 const KEY_SORT_ORDER = "explorer.sortOrder";
 
-/**
- * How the Explorer tree shows this project — VS Code's `folders` list and `files.exclude` /
- * `explorer.*` settings, read the same defensive way as the commands: anything not of the
- * expected shape is its default, never an error.
- */
+/** How the Explorer tree shows this project. Anything not of the expected shape is its default. */
 export interface ExplorerView {
   /** Top-level nodes; empty means the whole repository as one tree. */
   folders: ExplorerRoot[];
@@ -67,23 +53,15 @@ export interface ExplorerView {
 
 const SORT_ORDERS: readonly ExplorerSortOrder[] = ["default", "mixed", "filesFirst", "type", "modified", "foldersNestsFiles"];
 
-/**
- * What `read` answers for a file that is there but does not parse — the one `patch` must not
- * write over, since it would replace whatever the user has in there with only our key.
- */
+/** What `read` answers for a file that is there but does not parse; `patch` must never write over it. */
 const UNREADABLE: ProjectFile = {};
 
 function file(root: string): string {
   return path.join(root, FILE);
 }
 
-/**
- * The file's contents, or **null** when there is no tet.json at all. One that is there but
- * unreadable or shaped differently is no commands rather than none: it is a file in the user's
- * repository, and half of it being someone else's is reason neither to throw nor to write over
- * it. The distinction stays inside this module so writes may create a missing file but refuse
- * to replace a broken one.
- */
+/** The file's contents, or **null** when there is no tet.json at all. A write may create a missing
+ *  file, but must refuse to replace a broken one — it is a file in the user's repository. */
 async function read(root: string): Promise<ProjectFile | null> {
   let content: string;
   try {
@@ -171,12 +149,8 @@ export function writeCommands(root: string, commands: ProjectCommand[]): Promise
   });
 }
 
-/**
- * A `folders` entry's path the way the tree keys everything: repository-relative with forward
- * slashes, "" for the root. Undefined for anything that is not a path inside the repository —
- * an absolute path, one climbing out with `..`, a non-string — which is simply skipped, like a
- * command with no command line.
- */
+/** A `folders` entry's path as the tree keys it: repository-relative, forward slashes, "" for the
+ *  root. Undefined for anything not inside the repository, which is simply skipped. */
 function toFolderPath(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -243,20 +217,15 @@ export async function readExplorerView(root: string): Promise<ExplorerView> {
   };
 }
 
-/** `readExplorerView`'s defaults for a project with no tet.json at all — the one place ipc.ts's
- *  fallbacks for a missing repository read them from, so the three values can't drift apart. */
+/** `readExplorerView`'s defaults, also ipc.ts's fallbacks for a missing repository — one source. */
 export const DEFAULT_EXPLORER_VIEW: ExplorerSettings = {
   excludeGitIgnore: false,
   compactFolders: true,
   sortOrder: "default"
 };
 
-/**
- * The Explorer tree's "Add Folder to Workspace". A project with no `folders` yet is the whole
- * repository as one tree, so the first add writes that root down alongside the new folder —
- * VS Code's own move when a single-folder window gets a second folder — rather than narrowing
- * the view to the new one. Entries are kept as written, so a `name` survives.
- */
+/** "Add Folder to Workspace". A project with no `folders` yet is the whole repository as one tree,
+ *  so the first add writes that root down alongside the new one. Entries are kept as written. */
 export async function addFolder(root: string, folderPath: string): Promise<void> {
   const content = await readForPatch(root);
   const folders = Array.isArray(content.folders) ? (content.folders as unknown[]) : [];
@@ -267,8 +236,7 @@ export async function addFolder(root: string, folderPath: string): Promise<void>
   await write(root, { ...content, folders: [...kept, { path: folderPath }] });
 }
 
-/** "Remove Folder from Workspace": the last one gone means no `folders` at all — the whole
- *  repository again, not an empty tree. */
+/** "Remove Folder from Workspace": the last one gone means no `folders` — the whole repository. */
 export async function removeFolder(root: string, folderPath: string): Promise<void> {
   const content = await readForPatch(root);
   const folders = (Array.isArray(content.folders) ? (content.folders as unknown[]) : []).filter(
@@ -336,8 +304,7 @@ function toSbxPorts(value: unknown): SbxPort[] {
   return ports;
 }
 
-/** Trimmed, because sbx validates nothing (see SbxProjectConfig.hosts): a stray space would
- *  become a rule that silently matches no request. */
+/** Trimmed: sbx validates nothing, so a stray space becomes a rule that matches no request. */
 function toSbxHosts(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -345,16 +312,10 @@ function toSbxHosts(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean);
 }
 
-/**
- * An allowed-path row as tet.json holds it: the dialog's row plus, for a path outside the
- * home, the platform it was entered on. tet.json travels with the repository, and an absolute
- * path means nothing on another OS (`C:\…` on Linux, `/home/…` on Windows), so such a row is
- * that platform's alone: readSbxConfig hands out only this platform's rows, and writeSbxConfig
- * replaces only those, leaving what a colleague on another OS saved untouched. A `~/…` row
- * (what saveSbxConfig stores every path under the home as — see sbx.ts's contractHome) resolves
- * on every OS, so it carries no `os` and is everyone's. Neither the dialog nor sbx.ts ever sees
- * the field — the OS is whatever tet is running on, never a choice.
- */
+/** An allowed-path row as tet.json holds it: the dialog's row plus, for a path outside the home, the
+ *  platform it was entered on. tet.json travels with the repository and an absolute path means
+ *  nothing on another OS, so readSbxConfig hands out only this platform's rows and writeSbxConfig
+ *  replaces only those. A `~/…` row resolves everywhere, carries no `os` and is everyone's. */
 interface StoredSbxPath extends SbxPath {
   os?: string;
 }
@@ -389,19 +350,15 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
   return typeof content.sbx === "object" && content.sbx !== null ? (content.sbx as Record<string, unknown>) : {};
 }
 
-/** A malformed or missing `knowledge` object reads as every kind off — never partially on from a
- *  field that happens to be truthy by accident. */
+/** A malformed or missing `knowledge` object reads as every kind off, never partially on. */
 function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
   const record = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
   const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((candidate) => candidate === field) ?? false;
   return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
 }
 
-/**
- * The sbx-settings dialog's persisted state — read the same defensively-anything-goes way as the
- * rest of tet.json. Never holds a token: each sandboxed agent signs in with its own `/login`
- * inside the sandbox, nothing tet stores ever needs to.
- */
+/** The sbx-settings dialog's persisted state. Never holds a token: each sandboxed agent signs in
+ *  with its own `/login` inside the sandbox. */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)

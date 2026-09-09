@@ -16,11 +16,8 @@ export function commitMessageFrom(reply: string): string {
     : withoutLabel;
 }
 
-/**
- * `prompt` is the settings' (`effectivePrompt`) and `context` is `readCommitContext`'s, both
- * handed in rather than fetched here: the git process and the settings are reached from the
- * main process, and this file stays the question's shape and its answer alone.
- */
+/** `prompt` is the settings' (`effectivePrompt`) and `context` is `readCommitContext`'s, both handed
+ *  in: only the main process reaches the git process and the settings. */
 export async function suggestCommitMessage(
   root: string,
   executable: string,
@@ -28,8 +25,7 @@ export async function suggestCommitMessage(
   prompt: string,
   context: string
 ): Promise<string> {
-  // Nothing to describe, so nothing to ask — an agent would spend the same half minute finding
-  // that out.
+  // Nothing to describe, so nothing to ask.
   if (context.trim() === "") {
     return "";
   }

@@ -10,44 +10,30 @@ import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
 import { buildShikiColors } from "../terminal/theme";
 import type { DiffLine, FileDiff } from "../../shared/types";
 
-/**
- * Syntax colors for the diff, through Shiki — the same TextMate grammars and the same theme
- * VS Code itself uses, so a file reads here the way it reads in an editor.
- *
- * Per-token colors are the one thing that does not come from a --vscode-* variable: a theme
- * assigns them per grammar scope, of which there are hundreds, and Shiki hands them back per
- * token. The theme is the token half of the one picked in Settings (Dark Modern takes its
- * tokens from Dark+, Light Modern from Light+) — its editor-surface colors (background,
- * selection, widgets...) are patched with tet's own variables in `loadTheme` below. Decided
- * once per window, like the variables themselves (see main.tsx).
- */
+/** Syntax colors for the diff, through Shiki. Per-token colors are the one thing not from a
+ *  --vscode-* variable: a theme assigns them per grammar scope and Shiki hands them back per
+ *  token. The theme is the token half of the one picked in Settings (Dark Modern's tokens come
+ *  from Dark+, Light Modern's from Light+); its editor-surface colors are patched in `loadTheme`. */
 export const THEME = resolveTheme(window.tet.initialTheme).shikiTheme;
 
-/** One import per theme, each spelled out: esbuild can only bundle an import whose path it can
- *  read off the call — the same reason GRAMMARS below is a map rather than a template. */
+/** One import per theme, spelled out: esbuild can only bundle an import whose path it can read
+ *  off the call — the same reason GRAMMARS below is a map rather than a template. */
 const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ default: ThemeRegistration }>> = {
   "dark-plus": () => import("@shikijs/themes/dark-plus"),
   "light-plus": () => import("@shikijs/themes/light-plus")
 };
 
-/**
- * Loads `THEME` and patches its editor-surface colors with tet's own --vscode-* values (see
- * theme.ts's `buildShikiColors`), so shiki's theme — and monaco's, layered on top of it in
- * editor.ts's `applyChrome` — draw tet's chrome rather than the theme's own.
- */
+/** Loads `THEME` and patches its editor-surface colors with tet's own --vscode-* values, so
+ *  shiki's theme — and monaco's, layered on it in editor.ts — draw tet's chrome. */
 async function loadTheme(): Promise<ThemeRegistration> {
   const { default: theme } = await THEME_MODULES[THEME]();
   return { ...theme, colors: { ...theme.colors, ...buildShikiColors() } };
 }
 
-/**
- * The grammars tet bundles. The renderer is one file with no code splitting, so a language
- * is in the bundle whether it is used or not — hence a list of what an agent's repository
- * plausibly holds rather than all two hundred Shiki ships. Anything missing shows uncolored.
- *
- * Each is imported lazily: esbuild keeps a dynamic import in its own module and only evaluates
- * it when awaited, so an unopened language costs parse time, not startup.
- */
+/** The grammars tet bundles: what an agent's repository plausibly holds, not all two hundred
+ *  Shiki ships, the renderer being one file with no code splitting. Anything missing shows
+ *  uncolored. Each is imported lazily — esbuild keeps a dynamic import in its own module and
+ *  evaluates it when awaited, so an unopened language costs parse time, not startup. */
 const GRAMMARS: Record<string, () => Promise<{ default: LanguageRegistration[] }>> = {
   bat: () => import("@shikijs/langs/bat"),
   c: () => import("@shikijs/langs/c"),
@@ -174,15 +160,14 @@ let core: Promise<HighlighterCore> | undefined;
 /** One load per grammar, kept as the promise so two files of a kind don't race it. */
 const grammars = new Map<string, Promise<void>>();
 
-/** The one shiki instance, shared by the diff view and the editor (see editor.ts) — one theme,
- *  `THEME`, grammars loaded lazily and kept once loaded either way. */
+/** The one shiki instance, shared with the editor (see editor.ts): one theme, `THEME`, and
+ *  grammars loaded lazily. */
 export function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
     themes: [loadTheme()],
     langs: [],
-    // The JavaScript engine rather than the oniguruma one: that would pull in a wasm binary,
-    // which a single-file bundle can only carry base64-encoded. "forgiving" skips the few
-    // patterns it cannot express instead of refusing the whole grammar.
+    // The JavaScript engine, not oniguruma: that pulls in a wasm binary, which a single-file
+    // bundle can only carry base64-encoded. "forgiving" skips patterns it cannot express.
     engine: createJavaScriptRegexEngine({ forgiving: true })
   });
   return core;
@@ -210,15 +195,10 @@ interface Block {
   code: string;
 }
 
-/**
- * A diff is not a file: it holds fragments of two versions of one, interleaved. Handed to a
- * grammar as written, the old and the new half of every changed line would read as consecutive
- * code, which goes wrong wherever a construct spans lines — a string, a block comment, a
- * template literal.
- *
- * So each hunk is tokenized twice: once as the file was, once as it is. Context lines are in
- * both passes and take the colors of the second, the same answer for unchanged text anyway.
- */
+/** A diff holds fragments of two versions of a file, interleaved: as written, the old and the
+ *  new half of a changed line read as consecutive code, which goes wrong wherever a construct
+ *  spans lines. So each hunk is tokenized twice, once as the file was and once as it is;
+ *  context lines are in both passes and take the colors of the second. */
 function blocksOf(lines: readonly DiffLine[]): Block[] {
   const blocks: Block[] = [];
   let old: Block = { indices: [], code: "" };
@@ -252,14 +232,8 @@ function blocksOf(lines: readonly DiffLine[]): Block[] {
   return blocks.filter((block) => block.indices.length > 0);
 }
 
-/**
- * Colors a diff, one token list per line of it. Lines the grammar had nothing to say about —
- * hunk headers, and everything in a language that isn't bundled — stay undefined and are
- * rendered as plain text.
- *
- * Resolves to undefined when nothing could be colored at all, so the caller can keep what it
- * already has on screen rather than repaint it.
- */
+/** Colors a diff, one token list per line. Lines the grammar had nothing to say about stay
+ *  undefined and render as plain text; undefined means nothing could be colored at all. */
 export async function highlightDiff(diff: FileDiff): Promise<(ThemedToken[] | undefined)[] | undefined> {
   const language = languageForPath(diff.path);
   if (!language) {
@@ -272,8 +246,8 @@ export async function highlightDiff(diff: FileDiff): Promise<(ThemedToken[] | un
     const colored: (ThemedToken[] | undefined)[] = [];
     for (const block of blocksOf(diff.lines)) {
       const { tokens } = shiki.codeToTokens(block.code, { lang: language, theme: THEME });
-      // One array per line of the block — but only if the tokenizer split it the way it was
-      // joined, so a mismatch leaves those lines plain instead of coloring them out of step.
+      // One array per line of the block, but only if the tokenizer split it the way it was
+      // joined: a mismatch leaves those lines plain instead of coloring them out of step.
       if (tokens.length === block.indices.length) {
         block.indices.forEach((index, line) => (colored[index] = tokens[line]));
       }

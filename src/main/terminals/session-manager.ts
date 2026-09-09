@@ -24,34 +24,29 @@ import { sandboxSessionDir, toContainerPath } from "./hook-target";
 import { currentTheme } from "../theme";
 
 const RECONCILE_DEBOUNCE_MS = 5000;
-// A tab's CLI can persist a title (a generated summary) well after its output went idle, so
-// one reconcile after the debounce is not always enough — retry a few times before giving up.
+// A CLI can persist a generated title well after its output went idle: retry a few times.
 const RECONCILE_RETRY_MS = 5000;
 const RECONCILE_MAX_RETRIES = 3;
-// A busy CLI redraws continuously, so the debounce above would be pushed out for the whole
-// turn and a tab whose session or title is not known yet would keep its placeholder long
-// after the CLI persisted one. Caps how far output can push it.
+// A busy CLI redraws continuously and would push the debounce out for the whole turn; caps
+// how far output can push it while a tab's session or title is still unknown.
 const RECONCILE_MAX_WAIT_MS = 10000;
-// A watcher event is the change itself, not a guess that one may have happened, so it only
-// needs enough of a debounce to collapse the handful of events a single write produces.
+// A watcher event is the change itself; only the handful of events per write need collapsing.
 const WATCH_DEBOUNCE_MS = 300;
 // A killed CLI gets a moment to die before its transcript is removed, so a final in-flight
-// write can't resurrect the file we just deleted.
+// write can't resurrect the deleted file.
 const SESSION_REMOVE_DELAY_MS = 500;
 /**
- * How long a turn whose session no tab has claimed is held before it is given up on. It has to
- * outlast the gap between a CLI reporting its first prompt and persisting the transcript that
- * the session listing reads — seconds, not milliseconds — and it is the only thing bounding
- * `pendingTurns`, so it must not be indefinite either.
+ * How long a turn whose session no tab has claimed is held. Must outlast the seconds between a
+ * CLI reporting its first prompt and persisting the transcript the listing reads; the only bound
+ * on `pendingTurns`.
  */
 const PENDING_TURN_TTL_MS = 60_000;
-// Readiness fires on the CLI's first full frame, which is a moment before the terminal
-// actually looks settled — hiding the indicator right then reads as a flicker.
+// Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
 /**
- * A token that only means anything to a shell. A saved command is started without one, so it
- * would silently become an argument; such a command is refused with a message instead. Whole
- * tokens only — `2>&1` and `>>` are matched, an argument that merely holds a `>` is not.
+ * A token that only means anything to a shell; a saved command is started without one, so it is
+ * refused with a message. Whole tokens only — `2>&1` and `>>` match, an argument holding a `>`
+ * does not.
  */
 const SHELL_OPERATOR = /^(?:&&|\|\||[|;&]|\d*>>?|\d*>&\d*|<)$/;
 
@@ -65,10 +60,9 @@ interface TabState extends TerminalDescriptor {
   /** When the running turn was reported as started — what a turn end is dated against. */
   busySince?: number;
   /**
-   * When the latest turn signal applied here was made. Claude Code's and Codex's signals are
-   * files in three directories, each watched and swept on its own, so a `busy` the watcher
-   * missed can be found after the `finished` of the same short turn — and applied in that
-   * order it left the spinner running until the next turn ended. Anything older is dropped.
+   * When the latest turn signal applied here was made. The marker directories are watched and
+   * swept on their own, so a `busy` the watcher missed can be found after the `finished` of the
+   * same short turn; anything older than the last applied signal is dropped.
    */
   signalAt?: number;
   /** The program a saved command runs, when that is not this agent's own executable. */
@@ -107,9 +101,8 @@ interface AgentRuntime {
 
 /**
  * What a session reported before any tab held its id, waiting for the reconcile that gives it
- * one. The two are kept side by side rather than as one latest-wins value: a question always
- * arrives *within* a turn, so a waiting report that overwrote the busy before it would land a
- * mark on a tab that never learned it was working.
+ * one. Turn and question are kept side by side, not latest-wins: a question arrives *within* a
+ * turn, and overwriting the busy would mark a tab that never learned it was working.
  */
 interface PendingTurn {
   /** The latest turn signal, if one came in at all, and when it was made. */
@@ -137,13 +130,10 @@ function titleUnsettled(tab: TabState): boolean {
 }
 
 /**
- * A turn started or ended. The spinner follows it either way, and the end of one also leaves
- * the mark that outlives it — the two belong together, so one function sets both.
- *
- * Either end also clears `waitingAt`: a question can only stand open within a turn, so a turn
- * that has just begun cannot have one yet and one that has ended cannot still have one. This is
- * the only signal there is — no agent reports that a question was answered — which is why a
- * permission granted mid-turn leaves the mark until the tab is looked at.
+ * A turn started or ended: the spinner follows, and an end leaves the mark that outlives it.
+ * Either end clears `waitingAt`, since a question can only stand open within a turn. No agent
+ * reports that a question was answered, so a permission granted mid-turn leaves the mark until
+ * the tab is looked at.
  */
 function setTurn(tab: TabState, busy: boolean, at: number): void {
   tab.busy = busy;
@@ -159,12 +149,10 @@ function setTurn(tab: TabState, busy: boolean, at: number): void {
 /**
  * Whether one chunk of terminal input can be the answer to a standing question — see `write`.
  * Enter, any printable character (Claude Code's permission prompt takes the option's digit with
- * no Enter at all) and a mouse *click*: the TUIs turn mouse tracking on, so a click on an option
- * arrives here as an SGR press sequence, `ESC [ < button ; x ; y M`. What is left out is moving
- * around without choosing — the arrow keys, Tab and Shift+Tab, a bare Escape, mouse motion (bit
- * 32 in the button code) and the wheel (64 and up), since scrolling past a prompt is not answering
- * it. Deliberately generous otherwise: a mark dropped a keystroke early is a mark on a tab the
- * user is typing into, which is on screen and hides it regardless.
+ * no Enter) and a mouse click (an SGR press sequence, `ESC [ < button ; x ; y M`, since the TUIs
+ * turn mouse tracking on). Left out: arrow keys, Tab, Shift+Tab, a bare Escape, mouse motion
+ * (bit 32 in the button code) and the wheel (64 and up). Generous otherwise: a mark dropped a
+ * keystroke early is on a tab the user is typing into, which hides it regardless.
  */
 function answersQuestion(data: string): boolean {
   if (data.includes("\r") || data.includes("\n")) {
@@ -204,11 +192,7 @@ function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
   };
 }
 
-/**
- * A saved command's own program (non-shell) or its shell arguments (`"shell": true`) — either
- * is set only for a tab created by `createCommandTab`, never for a plain interactive shell tab
- * or an agent tab.
- */
+/** Either field is set only for a tab created by `createCommandTab`. */
 function isSavedCommandTab(tab: TabState): boolean {
   return tab.executable !== undefined || tab.runArgs !== undefined;
 }
@@ -224,9 +208,8 @@ export class ProjectSessionManager {
   /** Tabs whose session is being constructed; a second resize must not start a second one. */
   private readonly starting = new Map<string, { cols: number; rows: number }>();
   /**
-   * The last size the renderer fitted each tab to. `this.starting` holds one too, but only
-   * while a start is underway; a restart happens long after that, and no fit follows it on its
-   * own — the terminal element is already laid out, so nothing resizes.
+   * The last size the renderer fitted each tab to. `this.starting` holds one only while a start
+   * is underway; a restart happens later, and no fit follows it (the element is already laid out).
    */
   private readonly lastSizes = new Map<string, { cols: number; rows: number }>();
   /** Session ids whose removal is still in flight — reconcile must not re-claim them. */
@@ -238,18 +221,12 @@ export class ProjectSessionManager {
   private disposed = false;
   /** Said once per project, not once per tab — see resolveSbxRun's own-session-id fallback. */
   private sbxPreexistingSaid = false;
-  /**
-   * How many things in this project are still starting — the progress bar is shared across
-   * the project's tabs, so it stays up as long as at least one of them hasn't settled.
-   */
+  /** How many things in this project are still starting; the bar stays up while any is. */
   private indicators = 0;
   /**
-   * How many of those belong to which tab — what `TerminalDescriptor.starting` says, so the pane
-   * that tab lives in can show the bar itself. A count per tab rather than a flag on the tab,
-   * for two reasons: a tab's setup and its CLI's first frame are two indicators that overlap
-   * (see `handleResize` and `startSession`), and a release for a tab that has just been closed
-   * must still balance its acquire — `closeTabs` can put a tab back after a failed delete, and
-   * a flag on it would come back stuck.
+   * How many of those belong to which tab (`TerminalDescriptor.starting`). A count, not a flag:
+   * a tab's setup and its CLI's first frame overlap, and a release for a closed tab must still
+   * balance its acquire — `closeTabs` can put a tab back after a failed delete.
    */
   private readonly tabIndicators = new Map<string, number>();
 
@@ -278,8 +255,7 @@ export class ProjectSessionManager {
       contextFile: this.shellContext.contextFile,
       contextReadPaths: [this.shellContext.logFile],
       storageRoot: this.storageRoot,
-      // Read here rather than held: an agent prepares once per project, so this is the moment
-      // the current settings apply, and a change reaches the ones set up after it.
+      // Read at preparation time: a change reaches agents set up after it.
       notifications: this.settings.get().notifications,
       theme: currentTheme(this.settings),
       onSessionBusy: (sessionId, at) => this.markTurn(runtime, sessionId, true, at ?? Date.now()),
@@ -293,9 +269,7 @@ export class ProjectSessionManager {
   }
 
   private postTabs(): void {
-    // Not after the project is gone: a release, a status or a turn arriving late would post an
-    // empty list for it, and the renderer — which forgot the project on close — would take
-    // that as a project it has tabs for again.
+    // Not after the project is gone: a late post would revive the project in the renderer.
     if (this.disposed) {
       return;
     }
@@ -303,20 +277,17 @@ export class ProjectSessionManager {
   }
 
   /**
-   * The current value of what onStartupProgress reports. The bootstrap of a project restored
-   * at app start runs before the window exists, so its "show" never reaches a renderer — the
-   * pane asks for the state once instead of waiting for a push.
+   * The current value of what onStartupProgress reports: a bootstrap at app start runs before
+   * the window exists, so its "show" never reaches a renderer.
    */
   isStarting(): boolean {
     return this.indicators > 0;
   }
 
   /**
-   * `tabId`, where there is one, is what lets the pane that tab lives in show the bar itself
-   * instead of every pane borrowing pane "a"'s — `bootstrap` below has none, since it starts
-   * before any tab does, and stays a plain project-wide reason for pane "a" to fall back to.
-   * Every acquire is matched by one release with the same `tabId`, or the count never comes
-   * back down.
+   * `tabId` lets the pane that tab lives in show the bar itself; `bootstrap` has none and is a
+   * project-wide reason pane "a" falls back to. Every acquire needs one release with the same
+   * `tabId`.
    */
   private acquireIndicator(tabId?: string): void {
     this.indicators += 1;
@@ -333,8 +304,7 @@ export class ProjectSessionManager {
   }
 
   private releaseIndicator(tabId?: string): void {
-    // A setup or a linger timer settling after the project closed: `dispose` cleared the
-    // per-tab counts, and a release now would take the total below the zero it crossed.
+    // `dispose` already zeroed the counts.
     if (this.disposed) {
       return;
     }
@@ -346,8 +316,6 @@ export class ProjectSessionManager {
       const count = this.tabIndicators.get(tabId) ?? 0;
       if (count <= 1) {
         this.tabIndicators.delete(tabId);
-        // The tab may be gone already; posting for one that is not there costs a snapshot
-        // nothing changed in, and the map is right either way.
         this.postTabs();
       } else {
         this.tabIndicators.set(tabId, count - 1);
@@ -357,8 +325,7 @@ export class ProjectSessionManager {
 
   /** Restores one tab per persisted session of every installed agent. */
   async bootstrap(): Promise<void> {
-    // Covers the version checks and session listings too, not just the first tab's CLI
-    // startup: a setup and a listing take long enough to show nothing at all otherwise.
+    // Covers the version checks and session listings, which take long enough to show.
     this.acquireIndicator();
     try {
       await Promise.all(AGENTS.map((agent) => this.runtimeFor(agent.id).ready));
@@ -369,14 +336,10 @@ export class ProjectSessionManager {
   }
 
   /**
-   * A project that restored no session at all — just cloned, or every session deleted — opens
-   * with one agent tab rather than an empty pane. Which agent is registration order, so Claude
-   * Code where it is installed and opencode otherwise; the shell is skipped by having no
-   * sessions, the same rule that decides whether a tab takes its title from one.
-   *
-   * Nothing is spawned by this: the tab only goes in the list, and the pane's first resize is
-   * what starts the CLI — so a project the user never switches to costs nothing, and a fresh
-   * tab persists no session, which is why this runs again on the next start.
+   * A project that restored no session opens with one agent tab: the first installed agent in
+   * registration order that has sessions (so never the shell). Nothing is spawned — the pane's
+   * first resize starts the CLI, and a never-used tab persists nothing, so this runs again next
+   * start.
    */
   private openFirstAgentTab(): void {
     if (this.disposed || this.tabs.length > 0) {
@@ -410,15 +373,10 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Every session of this project's repository for one agent — the host's, and the ones its
-   * sandbox wrote through the mount tet put there (SessionProvider.sandbox). Two listings, one
-   * list: the sandboxed ones are named after the sandbox they live in, which is what
-   * resolveSbxRun reads to send a session back where it belongs, and what keeps the manager
-   * itself from having to know which is which anywhere else.
-   *
-   * The sandbox side is listed whenever its directory holds anything, not when sandboxing is
-   * enabled: a session that ran in a sandbox stays resumable there after the project's switch
-   * was turned off, and the listing costs one readdir of an empty directory otherwise.
+   * Every session of this repository for one agent: the host's, and the sandbox's through its
+   * mount (SessionProvider.sandbox), the latter named after the sandbox so resolveSbxRun can
+   * send them back there. The sandbox side is listed regardless of the project's switch: a
+   * session that ran there stays resumable there, and an empty directory costs one readdir.
    */
   private async listSessions(runtime: AgentRuntime): Promise<AgentSessionInfo[]> {
     const { agent, executable } = runtime;
@@ -430,9 +388,7 @@ export class ProjectSessionManager {
     if (!sandbox || !isSbxAgent(agent.id)) {
       return onHost;
     }
-    // Started together, not one after the other: two roots with nothing between them, and this
-    // is both the bootstrap listing the startup bar covers and what `logSlow` times on every
-    // reconcile — no reason to pay for the second tree only once the first is read.
+    // In parallel: this is the bootstrap listing and what `logSlow` times on every reconcile.
     const [host, inSandbox] = await Promise.all([
       onHost,
       sandbox.list(executable, this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path))
@@ -462,16 +418,14 @@ export class ProjectSessionManager {
       return;
     }
 
-    // Before anything that could lead to a spawn: the listing may need what this sets up
-    // (opencode's records directory), and the terminal's own arguments come out of it too.
+    // Before the listing, which may need what this sets up (opencode's records directory).
     if (!(await this.prepare(runtime))) {
       return;
     }
 
     markStartup(`list ${agent.id}`);
     const infos = await this.listSessions(runtime);
-    // Closed while listing: nothing to post to, and the watcher started below would be one
-    // `dispose` has already run past.
+    // Closed while listing: the watcher started below would outlive `dispose`.
     if (this.disposed) {
       return;
     }
@@ -497,9 +451,8 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Runs the agent's setup, at most one at a time. False means it failed and the agent must
-   * not be started at all — one that asks for preparation cannot run without it in any
-   * meaningful way. Better to start nothing than a terminal that quietly misbehaves.
+   * Runs the agent's setup, at most one at a time. False means it failed and the agent must not
+   * be started at all.
    */
   private prepare(runtime: AgentRuntime): Promise<boolean> {
     runtime.preparing ??= this.doPrepare(runtime).finally(() => {
@@ -519,17 +472,14 @@ export class ProjectSessionManager {
     try {
       markStartup(`prepare ${agent.id}`);
       const preparation = await agent.prepareSpawn(executable, this.project.path, this.pathsFor(runtime));
-      // The project may have been closed while that ran, and `dispose` has already been past
-      // `runtime.preparation`, so what arrives now would outlive the project (the marker
-      // watchers) with nothing left to end it.
+      // Closed while that ran: `dispose` is past `runtime.preparation`, and the marker
+      // watchers would outlive the project.
       if (this.disposed) {
         preparation.dispose();
         return false;
       }
       runtime.preparation = preparation;
-      // A setup that worked clears the earlier failure: `canStart` reads this flag and nothing
-      // else puts it back, so one failed preparation would leave the agent unstartable for the
-      // rest of the session.
+      // Nothing else clears an earlier failure.
       runtime.prepareFailed = false;
       return true;
     } catch (error) {
@@ -554,13 +504,9 @@ export class ProjectSessionManager {
   }
 
   /**
-   * A tab that runs one of the project's saved commands and ends with it. Its process *is* the
-   * command, and its label is the command's `name` if it has one, the command line otherwise,
-   * since a shell tab has no session to take a title from.
-   *
-   * The program is started directly, without a shell; `resolveCommand` is where the platform
-   * difference is settled (a `.cmd` shim on win32 goes through cmd.exe). Only a command that
-   * asked for a shell gets one, and then it is the same one the project's shell tabs use.
+   * A tab whose process *is* a saved command, labelled by its `name` or the command line. The
+   * program is started directly, without a shell (`resolveCommand` settles the platform
+   * difference); only a command that asked for a shell gets the project's shell.
    */
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined {
     const shared = {
@@ -579,8 +525,7 @@ export class ProjectSessionManager {
       return undefined;
     }
     // Shell syntax would reach the program as an ordinary argument — `rm x && y` would ask rm
-    // to delete "&&" and "y". Said out loud rather than run: a file written when saved
-    // commands still went through a shell is where such a line comes from.
+    // to delete "&&" and "y".
     const operator = [executable, ...runArgs].find((token) => SHELL_OPERATOR.test(token));
     if (operator) {
       this.callbacks.onNotice(
@@ -606,7 +551,7 @@ export class ProjectSessionManager {
     };
     this.tabs.push(tab);
     this.postTabs();
-    // Nothing of a tab this new can be starting yet — that begins with its first fit.
+    // Starting begins with the first fit.
     return toDescriptor(tab, false);
   }
 
@@ -625,24 +570,19 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Everything one tab's first spawn needs: the agent's setup, its sandbox, then the process
-   * itself at the size given. Split out of `handleResize` because `restartTab` needs the very
-   * same path — a dead sandboxed tab cannot simply respawn its old command line (see there).
+   * Everything one tab's first spawn needs: the agent's setup, its sandbox, then the process at
+   * the size given. Shared by `handleResize` and `restartTab`.
    */
   private startTab(tab: TabState, cols: number, rows: number): void {
     const tabId = tab.tabId;
-    // The agent's setup may still be running (version check, the generated hooks). Remember
-    // the size and start once it settles — the first resize is what spawns the process.
+    // The agent's setup may still be running; remember the size and start once it settles.
     const pending = this.starting.get(tabId);
     this.starting.set(tabId, { cols, rows });
     if (pending) {
       return;
     }
-    // The wait for the setup and the sandbox is the bar under the tab strip. Released *after*
-    // the session is started, not before: `startSession` acquires the same tab's next
-    // indicator (its CLI's first frame), and releasing first would drop both counts to zero
-    // for a moment — the bar flickering off and on between two pushes for what is one wait to
-    // the user.
+    // Released *after* the session is started: `startSession` acquires the same tab's next
+    // indicator, and releasing first would flicker the bar off and on.
     this.acquireIndicator(tabId);
     void Promise.all([this.runtimeFor(tab.agentId).ready, this.resolveSbxRun(tab)])
       .then(([, sbxArgs]) => {
@@ -651,16 +591,9 @@ export class ProjectSessionManager {
           // Closed while the setup ran: nothing left to start.
           return;
         }
-        // A session that lives in a sandbox can only be resumed there (see resolveSbxRun): its
-        // transcript is the one the sandbox wrote, and the host's own CLI has never seen that
-        // id — resuming it here fails outright, and starting without the resume would quietly
-        // put a *new* session in a tab that already stands for one. So nothing is started, and
-        // the tab takes the error status: it did fail to start, and that status is what puts the
-        // way back in the user's hands — the tab menu's Restart, which is this same method
-        // again. Leaving it "ready" for the next fit to retry would strand it instead: a fit of
-        // an unchanged size sends nothing at all (`sent` in terminal-views.ts), so activating
-        // the tab again would never reach here. The status is all that is done here:
-        // `sbxStranded` has already said why, at the branch that knows the reason.
+        // A sandboxed session cannot resume on the host (see resolveSbxRun). Left in `error`
+        // so the tab menu's Restart retries: a `ready` tab gets no second fit for an unchanged
+        // size (`sent` in terminal-views.ts). `sbxStranded` has already said why.
         if (sbxArgs === null && tab.sandbox) {
           tab.status = "error";
           this.callbacks.onStatus(this.project.id, tabId, "error");
@@ -670,54 +603,34 @@ export class ProjectSessionManager {
       })
       .catch((error: unknown) => {
         this.callbacks.onNotice("error", `${tab.agentId} could not be started: ${String(error)}`);
-        // A setup that threw (a sandbox that could not be created, say) spawned nothing, so
-        // the tab takes the error status for the same reason the stranded one above does:
-        // "ready" would leave it with no fit to retry on, and error is what offers Restart.
+        // Spawned nothing; `error` offers Restart, as above.
         if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
           tab.status = "error";
           this.callbacks.onStatus(this.project.id, tabId, "error");
         }
       })
       .finally(() => {
-        // Whichever way the setup ended: an entry left here would make every later resize
-        // return early as "still starting", and the tab would never spawn.
+        // An entry left here would make every later resize return as "still starting".
         this.starting.delete(tabId);
         this.releaseIndicator(tabId);
       });
   }
 
   /**
-   * Whether this tab should run inside its project's sbx sandbox instead of the host agent
-   * directly — and if so, the whole `sbx run` argument list for it. Reads tet.json fresh rather
-   * than caching it: sbx config changes through the dialog's Save button, rare enough that a
-   * fresh read on every spawn costs nothing worth avoiding, and it is the same "no cache, read at
-   * the moment it matters" choice `readCommands` already makes for saved commands.
+   * Whether this tab runs inside its project's sbx sandbox, and if so the whole `sbx run`
+   * argument list. Reads tet.json fresh on every spawn, like `readCommands`.
    *
-   * Only the agents with an sbx kit (isSbxAgent) — and only a plain agent tab, never a saved
-   * command's: a saved command is not "this agent's process" in the first place (see
-   * startSession), so wrapping it in a sandbox would run the wrong thing.
+   * Only sbx agents (isSbxAgent), and only a plain agent tab, never a saved command's.
    *
-   * A session runs where it lives, and every agent now says which that is: opencode from the
-   * records its plugin writes, the other three because their sessions are read back through a
-   * mount (SessionProvider.sandbox, whose directories this passes to prepareSbxRun). So a tab
-   * whose session was made on the host keeps running there — `--resume`ing it inside a sandbox
-   * that has never seen it fails outright ("No conversation found with session ID: …", measured
-   * live, 2026-09-08) — and one made in the sandbox goes back into it. A tab with no
-   * `sessionId` yet is sandboxed either way.
+   * A session runs where it lives: resuming a host session inside a sandbox fails outright
+   * ("No conversation found with session ID: …", measured), so a host session stays on the host
+   * and a sandboxed one goes back in. A tab with no `sessionId` yet is sandboxed.
    *
-   * Sbx not being ready — not installed, not signed in, or its network policy never
-   * initialized — skips the sandbox for this one spawn and says so, and deliberately does *not*
-   * write `enabled: false` back to tet.json: the three checks cannot tell a permanent state from
-   * a passing one (`checkSbxLoggedIn` is `sbx ls`'s exit code, which fails the same way while
-   * the sandbox daemon is restarting — an sbx update is exactly that), and turning the project's
-   * switch off over a passing outage would need the user to find and flip it back by hand.
-   * Skipping *is* needed though: without it, `sbx run` would run its own interactive setup right
-   * there in the tab (a device-code sign-in prompt, an arrow-key policy picker), which a plain
-   * agent tab has no business showing (measured live, 2026-09-08, after sbx was uninstalled and
-   * reinstalled: the full "not authenticated… sign in… network policy" flow printed into the
-   * tab, only to still fail once the sandbox itself needed rebuilding). The sbx-settings
-   * dialog's own setup already runs these same three checks before ever offering Save; a tab
-   * reaching them unprepared means the dialog was skipped, or things changed since.
+   * Sbx not ready (not installed, not signed in, policy never initialized) skips the sandbox for
+   * this one spawn and says so, without writing `enabled: false` back: the checks cannot tell an
+   * outage from a permanent state (`sbx ls` fails the same way while the daemon restarts, e.g.
+   * during an sbx update). Skipping is needed: `sbx run` would otherwise print its own
+   * interactive sign-in and policy setup into the tab (measured).
    */
   private async resolveSbxRun(tab: TabState): Promise<string[] | null> {
     if (tab.executable || !isSbxAgent(tab.agentId)) {
@@ -725,8 +638,7 @@ export class ProjectSessionManager {
     }
     const config = await readSbxConfig(this.project.path);
     if (!config.enabled) {
-      // Nothing to say to a tab that simply starts on this machine — the switch is off because
-      // someone turned it off. Only a tab that cannot follow it there is worth a word.
+      // Only a tab that cannot follow onto this machine gets a notice.
       this.sbxStranded(tab, "sandboxing is switched off for the project");
       return null;
     }
@@ -783,18 +695,9 @@ export class ProjectSessionManager {
   }
 
   /**
-   * The one notice a tab gets when its sandbox will not be there for it — said at the branch
-   * that knows why, since that reason is the whole content of it. A tab whose session lives in
-   * the sandbox cannot follow the others onto this machine (startTab leaves it in error, and
-   * the tab menu's Restart is the way back), so what would be a "starts here instead" for any
-   * other tab is a "does not start" for this one: two shapes of the same fact, and telling it
-   * twice — once here and once from startTab — is what this exists to avoid. It names no way
-   * out beyond that Restart on purpose: the reason it carries is the whole of what there is
-   * to say, and the sbx-settings dialog is where the way out is anyway.
-   *
-   * Returns whether it was that kind of tab, which is what the fallback notice beside each
-   * call site skips on. Deliberately not "said once" the way the preexisting-session one is:
-   * this is about one tab the user just tried to open, not a standing condition of the project.
+   * The one notice a sandboxed tab gets when its sandbox is not there, said at the branch that
+   * knows the reason. Returns whether the tab was sandboxed, so the caller skips its fallback
+   * notice. Said per tab, not once per project: it is about one tab the user just opened.
    */
   private sbxStranded(tab: TabState, reason: string): boolean {
     if (!tab.sandbox) {
@@ -813,8 +716,7 @@ export class ProjectSessionManager {
     const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
     const tabId = tab.tabId;
 
-    // Called fresh per session, so each one's predicate starts counting from zero rather
-    // than carrying over a previous session's already-passed state.
+    // Fresh per session, so the predicate starts counting from zero.
     let isSessionReady = agent.createIsSessionReady?.();
     if (isSessionReady) {
       this.acquireIndicator(tabId);
@@ -823,18 +725,14 @@ export class ProjectSessionManager {
       if (!isSessionReady) {
         return;
       }
-      // Cleared before the delay, so a second call (e.g. the session stopping right after)
-      // can't queue a second release.
+      // Cleared before the delay, so a second call can't queue a second release.
       isSessionReady = undefined;
       setTimeout(() => this.releaseIndicator(tabId), INDICATOR_LINGER_MS);
     };
 
-    // A tab that brings its own program — a saved command's — is not this agent's process, so
-    // nothing the agent itself would have been started with applies to it. An sbx-wrapped tab is
-    // its own third case: `sbxArgs` already is the full `sbx run` command line (built in
-    // resolveSbxRun, resumeArgs included after its own "--"), so none of preparation's host-only
-    // executable/args/env (a generated --settings file's host path, say) apply inside the sandbox
-    // either.
+    // A saved command is not this agent's process, so the preparation's args don't apply. An
+    // sbx-wrapped tab: `sbxArgs` is the full `sbx run` command line, resumeArgs included, and
+    // the preparation's host-only executable/args/env don't apply inside the sandbox.
     const args = tab.executable
       ? (tab.runArgs ?? [])
       : (sbxArgs ?? [...(preparation?.args ?? []), ...resumeArgs, ...(tab.runArgs ?? [])]);
@@ -853,9 +751,7 @@ export class ProjectSessionManager {
           if (isSessionReady?.(data)) {
             hideIndicator();
           }
-          // A CLI persists or updates its session shortly after producing output, so
-          // reconciling once output settles adopts a fresh session id and picks up a title
-          // the CLI generated for one it already had.
+          // A CLI persists or updates its session shortly after producing output.
           this.scheduleReconcile(runtime);
         },
         onStatusChange: (status) => {
@@ -863,20 +759,15 @@ export class ProjectSessionManager {
           this.callbacks.onStatus(this.project.id, tabId, status);
           if (status === "stopped" || status === "error" || status === "missing") {
             this.scheduleReconcile(runtime);
-            // A process that is gone is not working on anything, whatever the agent last said:
-            // a CLI killed mid-turn never gets to report its end, and the spinner would turn
-            // on a dead tab for the rest of the session. An open question goes the same way and
-            // for the same reason — there is nothing left to answer it.
+            // A CLI killed mid-turn never reports its end; a dead tab is neither working nor
+            // waiting for an answer.
             if (tab.busy || tab.waitingAt !== undefined) {
               tab.busy = false;
               tab.waitingAt = undefined;
               this.postTabs();
             }
-            // Safety net: the CLI may exit before ever producing enough output to cross the
-            // heuristic above — don't leave the bar stuck up forever. `markInstalled` can report
-            // "missing" here too (found not installed exactly when this tab tried to start): no
-            // process is ever spawned for it, so neither this status change nor any output would
-            // otherwise follow to release the indicator startSession acquired.
+            // The CLI may exit before crossing the readiness heuristic, and a "missing" from
+            // `markInstalled` spawns no process at all: release the indicator either way.
             hideIndicator();
           }
         }
@@ -897,12 +788,8 @@ export class ProjectSessionManager {
   }
 
   write(tabId: string, data: string): void {
-    // The one "answered" signal there is, and it is ours rather than the agent's: a question
-    // is answered by typing into the tab that asked it, and every keystroke and click passes
-    // through here on its way to the pty. Uniform across agents — no hook, no event, no
-    // process per tool call. Cleared before forwarding, so the answer and the mark's end are
-    // one moment; wrong at worst by a stray keystroke into a prompt, which puts the mark back
-    // to what the tab in front of the user says anyway.
+    // The one "answered" signal there is: a question is answered by typing into the tab that
+    // asked it. Cleared before forwarding, so the answer and the mark's end are one moment.
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
     if (tab?.waitingAt !== undefined && answersQuestion(data)) {
       tab.waitingAt = undefined;
@@ -933,9 +820,8 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Closing a tab deletes the session behind it. Every tab is dropped from the UI up front;
-   * the teardown then runs one tab at a time, to avoid concurrent CLI calls for
-   * listing/removing sessions.
+   * Closing a tab deletes the session behind it. Every tab is dropped from the UI up front; the
+   * teardown runs one tab at a time, so session listing and removal never overlap.
    */
   async closeTabs(tabIds: string[]): Promise<void> {
     const doomed = new Set(tabIds);
@@ -947,10 +833,8 @@ export class ProjectSessionManager {
     this.tabs = this.tabs.filter((tab) => !doomed.has(tab.tabId));
     this.postTabs();
 
-    // Every process is asked to end here, before the loop below waits for any of them: stopping
-    // an agent now takes a grace period (see TerminalSession.stop), and closing four tabs must
-    // not cost four of them. The loop itself stays one at a time — `destroyTab` asks for the same
-    // stop again and joins the one already underway.
+    // Every stop started before any is awaited: each takes a grace period (TerminalSession.stop),
+    // and closing four tabs must not cost four. `destroyTab` joins the stop already underway.
     for (const tab of tabs) {
       void this.sessions.get(tab.tabId)?.stop();
     }
@@ -968,8 +852,7 @@ export class ProjectSessionManager {
     this.lastSizes.delete(tab.tabId);
     if (session) {
       this.sessions.delete(tab.tabId);
-      // Awaited, so everything below — deleting what the CLI persisted — happens after the
-      // process is gone rather than beside one that could still write it.
+      // Awaited: the persisted session is deleted after the process is gone.
       await session.stop();
     }
 
@@ -981,13 +864,11 @@ export class ProjectSessionManager {
     }
     if (!tab.sessionId && session) {
       // A fresh tab may have persisted a session already — claim its id so it gets deleted
-      // too. Runs after the UI removal (the list call can take seconds); detachedTabs lets
-      // reconcile match a tab we already spliced out.
+      // too. detachedTabs lets reconcile match a tab already spliced out.
       this.detachedTabs.push(tab);
       try {
-        // A reconcile already underway listed before this tab was detached and cannot match
-        // it; `reconcile` would hand back that very promise. Let it finish, then run one that
-        // sees the tab — or its session outlives the tab and is back on the next start.
+        // A reconcile already underway listed before this tab was detached; wait it out, then
+        // run one that sees the tab.
         await runtime.reconciling;
         await this.reconcile(runtime);
       } finally {
@@ -1020,10 +901,7 @@ export class ProjectSessionManager {
     }
   }
 
-  /**
-   * A tab without a sessionId yet has nothing persisted to rename (no transcript file, no
-   * opencode row) — the renderer's optimistic label reverts to the placeholder in that case.
-   */
+  /** A tab without a sessionId has nothing persisted to rename; the optimistic label reverts. */
   async renameTab(tabId: string, title: string): Promise<void> {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
     if (!tab) {
@@ -1043,7 +921,7 @@ export class ProjectSessionManager {
         await agent.sessions.rename(executable, this.project.path, tab.sessionId, title);
       }
       tab.title = title.trim();
-      // A name the user picked is final — nothing left for the polling below to wait for.
+      // A name the user picked is final.
       tab.provisionalTitle = false;
     } catch (error) {
       this.callbacks.onNotice("error", `Could not rename ${agent.displayName} session: ${String(error)}`);
@@ -1053,23 +931,13 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Runs a tab's process again, in the tab it already has. Two paths, and the difference is the
-   * point of this method:
-   *
-   * A **saved command** is killed and respawned in place with the same executable, arguments,
-   * cwd and env — `TerminalSession.restart`, which repeats exactly what it was constructed
-   * with, since for a plain program that is still right.
-   *
-   * An **agent tab whose process is gone** — the sbx daemon went away under a sandboxed one,
-   * say — goes through the whole start path instead. Repeating its old command line would be
-   * wrong: a sandboxed tab's is an `sbx run` built by resolveSbxRun around mounts that do not
-   * survive a sandbox stop, against a sandbox that may have to be created again. So the dead
-   * session is dropped and the tab started as if for the first time, which re-runs the readiness
-   * checks, recreates the sandbox, re-applies the mounts and resumes the session the tab holds.
-   * Only a tab that *has* no process: one still running is left alone (closing it is what ends
-   * it), and one not fitted yet has its first fit for that. A tab whose start gave up before
-   * spawning anything counts as gone too — it carries the error status for exactly that reason
-   * (see startTab).
+   * Runs a tab's process again in the same tab. A saved command is respawned in place with the
+   * same command line (`TerminalSession.restart`). An agent tab whose process is gone goes
+   * through the whole start path instead: a sandboxed tab's `sbx run` line was built around
+   * mounts that do not survive a sandbox stop, so the readiness checks, the sandbox and the
+   * mounts are redone and the session resumed. Only a tab with no process (`stopped` or
+   * `error`, the latter also a start that gave up before spawning); one not fitted yet has its
+   * first fit for that.
    */
   restartTab(tabId: string): void {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
@@ -1084,32 +952,24 @@ export class ProjectSessionManager {
     if (!size || (tab.status !== "stopped" && tab.status !== "error")) {
       return;
     }
-    // `startTab` gives up on a tab that already has one, and `startSession` would otherwise
-    // just overwrite the entry, leaving the old session's exit handler writing into this tab.
+    // `startTab` gives up on a tab that already has a session.
     this.sessions.delete(tabId);
-    // The status is left as it is until the new process reports its own: the mark stays on a
-    // tab that is not running yet, and a start that gives up again (sbx still away) leaves the
-    // tab exactly as it found it — offering the restart once more rather than looking as if it
-    // had worked.
+    // The status stays until the new process reports its own, so a start that gives up again
+    // still offers Restart.
     this.startTab(tab, size.cols, size.rows);
   }
 
   /**
-   * A turn in one of this project's sessions started or ended, as the agent itself reported it
-   * — see AgentPaths.onSessionBusy and onSessionFinished. Whether the mark a finished turn
-   * leaves is *shown* is not decided here: the renderer is the half that knows which tab is in
-   * front of the user.
+   * A turn started or ended, as the agent reported it (AgentPaths.onSessionBusy/onSessionFinished).
+   * Whether the mark is *shown* is the renderer's decision.
    */
   private markTurn(runtime: AgentRuntime, sessionId: string, busy: boolean, at: number): void {
     if (this.disposed || this.applyTurn(runtime, sessionId, busy, at)) {
       return;
     }
-    // No tab holds that id yet — a fresh tab whose first turn began, or ended, before the
-    // reconcile that adopts its session ran; the common short-first-question case. Held rather
-    // than dropped, and re-listed at once so the wait is as short as it can be. A newer turn
-    // signal for the same session replaces the one held, so what lands is the state it ended up
-    // in; a question held alongside it is left where it is, since applying the turn is what
-    // decides whether it still stands.
+    // No tab holds that id yet (a fresh tab's first turn, before the reconcile adopted its
+    // session). Held and re-listed at once; a newer signal replaces the held one, a question
+    // held alongside stays until the turn is applied.
     const pending = runtime.pendingTurns.get(sessionId);
     if (pending?.busyAt !== undefined && at < pending.busyAt) {
       return;
@@ -1123,7 +983,7 @@ export class ProjectSessionManager {
     if (!tab) {
       return false;
     }
-    // Made before the signal already applied: found late, not sent late — see `signalAt`.
+    // Older than the signal already applied: found late — see `signalAt`.
     if (at >= (tab.signalAt ?? 0)) {
       setTurn(tab, busy, at);
       this.postTabs();
@@ -1132,12 +992,9 @@ export class ProjectSessionManager {
   }
 
   /**
-   * A turn in one of this project's sessions stopped on a question — see
-   * AgentPaths.onSessionWaiting. Held for a tabless session the same way a turn is, because the
-   * very first thing a fresh session does can be to ask for a permission.
-   *
-   * Deliberately not routed through setTurn: the turn is still open, and nothing here touches
-   * `busy`. What the mark does to the spinner is the renderer's decision.
+   * A turn stopped on a question (AgentPaths.onSessionWaiting). Held for a tabless session the
+   * way a turn is: a fresh session's first act can be a permission prompt. Not through setTurn:
+   * the turn is still open, `busy` is untouched.
    */
   private markWaiting(runtime: AgentRuntime, sessionId: string, waitingAt: number): void {
     if (this.disposed) {
@@ -1159,14 +1016,9 @@ export class ProjectSessionManager {
   }
 
   /**
-   * The tab is in front of the user, so a turn that finished out of sight has been seen. Nothing
-   * is checked here: the renderer calls it for the active tab of the project on screen, which is
-   * the one thing this process cannot know for itself.
-   *
-   * A standing question is left alone: unlike a finished turn, it is not a one-off notification
-   * of something that already happened — the turn is still open, so the mark states a fact that
-   * remains true for as long as the user is looking at it too. It ends with an answer typed into
-   * the tab (see `write`) or with the turn itself, at either end of setTurn.
+   * The renderer says this tab is in front of the user, so a finished turn has been seen. A
+   * standing question is left alone: it stays true while looked at, and ends with an answer
+   * (`write`) or with the turn (setTurn).
    */
   markSeen(tabId: string): void {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
@@ -1178,17 +1030,14 @@ export class ProjectSessionManager {
   }
 
   private scheduleReconcile(runtime: AgentRuntime, delayMs = RECONCILE_DEBOUNCE_MS): void {
-    // Nothing to list for an agent without sessions (the shell) — and its output arrives per
-    // chunk, so this would otherwise re-arm a timer for a no-op on every line of a build.
+    // Nothing to list for the shell, and this runs on every output chunk.
     if (!runtime.agent.sessions) {
       return;
     }
     runtime.reconcileRetriesLeft = RECONCILE_MAX_RETRIES;
-    // Only tabs whose label is unsettled need the mid-output reconcile; elsewhere the debounce
-    // alone keeps the extra session listings out of a turn. A stand-in title counts as
-    // unsettled — non-empty, but the agent can still replace it mid-turn.
-    // A plain loop, not `tabsOf(...).some(...)`: this runs on every output chunk of every agent
-    // tab, and `tabsOf` filters into a fresh array each time.
+    // Only an unsettled label needs the mid-output reconcile; otherwise the debounce keeps
+    // listings out of a turn. Not `tabsOf(...).some(...)`: this runs on every output chunk, and
+    // `tabsOf` allocates.
     if (
       runtime.reconcileDeadline === undefined &&
       this.tabs.some((tab) => tab.agentId === runtime.agent.id && titleUnsettled(tab))
@@ -1199,8 +1048,7 @@ export class ProjectSessionManager {
   }
 
   private armReconcileTimer(runtime: AgentRuntime, delayMs: number): void {
-    // The retry below re-arms this timer after every run, so a reconcile in flight when the
-    // project closed would put a fresh one in place behind dispose's back.
+    // The retry re-arms after every run; a reconcile in flight at close must not re-arm.
     if (this.disposed) {
       return;
     }
@@ -1243,9 +1091,7 @@ export class ProjectSessionManager {
     if (this.disposed || !agent.sessions || !this.canStart(runtime)) {
       return;
     }
-    // Wall time, not pure blocking time: the listing's own I/O is async. But for local
-    // transcript files that I/O is fast, so a slow listing here is the per-line JSON.parse
-    // dominating — the actual synchronous cost this exists to surface.
+    // Wall time; for local transcript files a slow listing is the per-line JSON.parse.
     const listStart = performance.now();
     const infos = await this.listSessions(runtime);
     logSlow("reconcile", performance.now() - listStart);
@@ -1254,14 +1100,12 @@ export class ProjectSessionManager {
       ...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined),
       ...this.deletingSessionIds
     ]);
-    // Oldest first, so the `find` below is the *nearest* session created after a tab's spawn
-    // — sorted here rather than trusted to the provider, since the matching rule lives here.
+    // Oldest first, so the `find` below is the *nearest* session created after a tab's spawn.
     const unclaimed = infos.filter((info) => !claimed.has(info.id)).sort((a, b) => a.createdAt - b.createdAt);
     let changed = false;
 
-    // Newest tab first, each taking the nearest session created after it was spawned: two
-    // tabs spawned close together sort out this way as long as their CLIs persist in spawn
-    // order. Nothing more is knowable — a listing carries no cwd or pid to tell them apart.
+    // Newest tab first, each taking the nearest session created after its spawn: right as long
+    // as CLIs persist in spawn order, and a listing carries no cwd or pid to do better.
     const pendingTabs = [...ownTabs, ...this.detachedTabs.filter((tab) => tab.agentId === agent.id)]
       .filter((tab) => !tab.sessionId && tab.spawnedAt !== undefined)
       .sort((a, b) => (b.spawnedAt ?? 0) - (a.spawnedAt ?? 0));
@@ -1277,7 +1121,7 @@ export class ProjectSessionManager {
       tab.createdAt = match.createdAt;
       tab.provisionalTitle = match.provisionalTitle;
       tab.sandbox = match.sandbox;
-      // Detached tabs are gone from the UI — claiming their id is all that's needed.
+      // A detached tab is gone from the UI; claiming its id is all that's needed.
       changed ||= this.tabs.includes(tab);
     }
 
@@ -1289,23 +1133,16 @@ export class ProjectSessionManager {
       if (!info) {
         continue;
       }
-      // Tracked even when the label itself is unchanged: an assigned name can read the same
-      // as the stand-in it replaces, and that still ends the polling above.
+      // Tracked even when the label is unchanged: an assigned name can read the same as the
+      // stand-in, and that still ends the polling.
       tab.provisionalTitle = info.provisionalTitle;
-      // The net under the end-of-turn signal, for the ends that signal cannot carry: Claude
-      // Code runs no Stop hook for a turn the user cut short — an escaped prompt or a rejected
-      // tool call — so no marker lands and the spinner would run until the *next* turn ends.
-      // The agent's own record has the end either way, so the listing reports it and this is
-      // where it is read, the way the marker sweep is the net under fs.watch.
-      //
-      // Only ever ends a turn, and only one still believed to be running: an end older than
-      // the busy that started this turn belongs to the one before it. And it leaves no mark —
-      // the only end that reaches us this way is one the user cut short in that very tab, so
-      // there is nothing to find again later.
+      // The net under the end-of-turn signal: no Stop hook fires for a turn the user cut short,
+      // but the agent's own record has the end. Only ever ends a turn still believed running
+      // (an older end belongs to the previous turn), and leaves no mark — the user cut it short
+      // in that very tab.
       if (tab.busy && info.turnEndedAt !== undefined && info.turnEndedAt > (tab.busySince ?? 0)) {
         tab.busy = false;
-        // A question can only stand within a turn — the same rule setTurn applies, without the
-        // mark setTurn would leave (a turn cut short in that tab has nothing to find again).
+        // A question can only stand within a turn, as in setTurn.
         tab.waitingAt = undefined;
         changed = true;
       }
@@ -1316,17 +1153,13 @@ export class ProjectSessionManager {
       }
     }
 
-    // Turns reported before their tab had claimed the session — see markTurn. Held until a tab
-    // takes them or they age out, and **not** dropped merely for being absent from this
-    // listing: a brand new session's `busy` arrives from UserPromptSubmit *before* Claude Code
-    // has written the transcript that listing reads, so dropping it there lost the spinner for
-    // exactly the case it matters most — the first turn of a fresh tab. The age limit is what
-    // bounds the map instead.
+    // Turns reported before their tab claimed the session — see markTurn. Held until a tab
+    // takes them or they age out, never dropped for being absent from this listing: a new
+    // session's `busy` arrives from UserPromptSubmit *before* Claude Code writes the transcript.
     for (const [sessionId, pending] of runtime.pendingTurns) {
       const tab = ownTabs.find((candidate) => candidate.sessionId === sessionId);
       if (tab) {
-        // The turn first, the question after: setTurn clears `waitingAt`, so the other order
-        // would drop a question that came in while the same turn was still open.
+        // The turn first: setTurn clears `waitingAt`.
         if (pending.busy !== undefined) {
           setTurn(tab, pending.busy, pending.busyAt ?? Date.now());
         }
@@ -1347,11 +1180,9 @@ export class ProjectSessionManager {
   }
 
   async dispose(): Promise<void> {
-    // Read by the reconcile loop, whose calls can outlive this and would otherwise arm
-    // themselves again — see armReconcileTimer.
+    // See armReconcileTimer.
     this.disposed = true;
-    // A resize whose preparation is still underway spawns its tab once that resolves, if the
-    // tab is still known — with the project gone, none of them is.
+    // A start still underway spawns only if its tab is still known.
     this.tabs = [];
     this.starting.clear();
     this.lastSizes.clear();
@@ -1363,8 +1194,7 @@ export class ProjectSessionManager {
       runtime.stopWatching?.();
       runtime.stopWatching = undefined;
     }
-    // All at once: each one may take a grace period to end (see TerminalSession.stop), and the
-    // app is waiting on this before it quits.
+    // All at once: each may take a grace period (TerminalSession.stop), and quit waits on this.
     await Promise.all([...this.sessions.values()].map((session) => session.stop()));
     this.sessions.clear();
     // Last: the sessions above may still be talking to whatever it set up.

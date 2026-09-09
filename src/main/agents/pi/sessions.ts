@@ -10,21 +10,18 @@ import { SANDBOX_HOME } from "../../terminals/hook-target";
 
 /**
  * pi keeps one JSONL transcript per session under its own config directory, named
- * `<ISO timestamp with ":" and "." as "-">_<uuid>.jsonl` inside a directory encoding the
- * working directory — see encodeCwd. Everything here was read off the real files pi 0.85.1
- * wrote through tet's own pty, not off its docs:
+ * `<ISO timestamp with ":" and "." as "-">_<uuid>.jsonl` inside a directory encoding the working
+ * directory — see encodeCwd. The format below was read off the real files pi 0.85.1 wrote:
  *
  * - line 1 is the header `{"type":"session","version":3,"id":"<uuid>","timestamp":"<ISO>",
  *   "cwd":"<path>"}`; the session's id is the header's, which is what `--session` matches
- * - every later line is an entry with an 8-hex `id`, a `parentId` (a tree: pi branches in
- *   place) and an ISO `timestamp`; `message` entries carry `message.role` and, for the
- *   assistant, `stopReason` — an Escape-abort is persisted as `"aborted"`
- * - the file is created only with the first assistant message; until then the id exists in
- *   pi's memory alone, which is why a fresh session's first `busy` marker waits in
- *   session-manager's pendingTurns
- * - the display name is the LAST `session_info` entry in file order, whatever its position in
- *   the tree (pi's own getSessionName walks entries backwards), a blank one being an explicit
- *   clear; without one pi shows the first user message
+ * - every later line is an entry with an 8-hex `id`, a `parentId` (a tree: pi branches in place)
+ *   and an ISO `timestamp`; `message` entries carry `message.role` and, for the assistant,
+ *   `stopReason` — an Escape-abort is persisted as `"aborted"`
+ * - the file is created only with the first assistant message; until then the id exists in pi's
+ *   memory alone, so a fresh session's first `busy` marker waits in pendingTurns
+ * - the display name is the LAST `session_info` entry in file order, whatever its tree position,
+ *   a blank one being an explicit clear; without one pi shows the first user message
  */
 export const piSessionProvider: SessionProvider = {
   list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
@@ -54,9 +51,8 @@ export const piSessionProvider: SessionProvider = {
   },
 
   /**
-   * `~/.pi/agent/sessions` inside the sandbox — the default path, since `PI_CODING_AGENT_DIR`
-   * is deliberately never set for a sandboxed tab either (it would move the user's sessions and
-   * auth on the host). Measured live, 2026-09-09: nothing else of pi's config directory is a
+   * `~/.pi/agent/sessions` inside the sandbox — the default path, since `PI_CODING_AGENT_DIR` is
+   * never set for a sandboxed tab either. Measured: nothing else of pi's config directory is a
    * mount or a volume there, and `auth.json` sits beside this directory rather than in it, so
    * mounting it carries no identity out of the sandbox.
    */
@@ -88,14 +84,12 @@ async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
         return {
           id: head.id,
           title: tail.name ? truncateTitle(tail.name) : (head.firstPrompt ?? ""),
-          // mtime, like Claude's and Codex's: only ever compared for change, and a rename
-          // bumps it too. pi's own picker sorts by the last message's time instead.
+          // mtime: only ever compared for change, and a rename bumps it too.
           updatedAt: stat.mtimeMs,
           createdAt: head.createdAt ?? stat.mtimeMs,
           turnEndedAt: tail.turnEndedAt
-          // No provisionalTitle: pi never names a session on its own, so a title standing in
-          // from the first prompt is final — flagging it would keep reconcile polling for a
-          // name that never comes.
+          // No provisionalTitle: pi never names a session, so a title from the first prompt is
+          // final — flagging it would keep reconcile polling for a name that never comes.
         };
       })
     );
@@ -114,18 +108,17 @@ async function removeIn(root: string, cwd: string, sessionId: string): Promise<v
     throw new Error("pi session directory not found");
   }
   const filePath = await findSessionFile(dir, sessionId);
-  // Nothing beside the transcript: pi keeps no per-session directory the way Claude does.
+  // Nothing beside the transcript: pi keeps no per-session directory.
   await fs.promises.rm(filePath);
   headCache.delete(filePath);
   scanCache.delete(filePath);
 }
 
 /**
- * Mirrors pi's own `/name` (appendSessionInfo): a `session_info` entry appended to the
- * transcript, parented to whatever entry is last. Measured to work while pi is running on the
- * file — it keeps appending with its own in-memory leaf as parent, the file stays valid, its
- * own later `/name` wins by file order, and the running pi shows the new name only after a
- * restart (it reads the file once, at startup).
+ * Mirrors pi's own `/name` (appendSessionInfo): a `session_info` entry appended to the transcript,
+ * parented to whatever entry is last. Measured to work while pi is running on the file — it keeps
+ * appending with its own in-memory leaf as parent, the file stays valid, and the running pi shows
+ * the new name only after a restart, reading the file once at startup.
  */
 async function renameIn(root: string, cwd: string, sessionId: string, title: string): Promise<void> {
   const trimmed = title.trim();
@@ -137,9 +130,8 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
     throw new Error("pi session directory not found");
   }
   const filePath = await findSessionFile(dir, sessionId);
-  // The whole file, not just its tail: the new entry's id has to be unique across all of it
-  // (pi keys its tree by id, and a collision would corrupt that), and a rename is a rare,
-  // user-initiated action.
+  // The whole file, not just its tail: the new entry's id has to be unique across all of it (pi
+  // keys its tree by id), and a rename is a rare, user-initiated action.
   const text = await fs.promises.readFile(filePath, "utf8");
   const lines = text.split("\n").filter((line) => line.trim() !== "");
   let last: Record<string, unknown>;
@@ -161,10 +153,9 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
 }
 
 /**
- * pi's config directory — the one env override it documents, and what the tests set. Its
- * other two ways of moving sessions, `PI_CODING_AGENT_SESSION_DIR` (one flat directory for
- * every cwd, filtered by the header) and the `sessionDir` key of its settings.json, are
- * deliberately not honoured: the second would mean reading the user's configuration.
+ * pi's config directory — the one env override it documents, and what the tests set. Its other
+ * two ways of moving sessions, `PI_CODING_AGENT_SESSION_DIR` and the `sessionDir` key of its
+ * settings.json, are not honoured: the second would mean reading the user's configuration.
  */
 function sessionsRoot(): string {
   const agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
@@ -181,19 +172,16 @@ export function encodeCwd(cwd: string): string {
 }
 
 /**
- * Where this repository's transcripts are, or undefined where pi has never run in it. Measured
- * on win32: the drive letter's case follows whatever pi was spawned with (`c:\…` gives
- * `--c--Users…`) while the folder names come back canonical — the case-insensitive match in
- * findEncodedDir is what covers that.
+ * Where this repository's transcripts are, or undefined where pi has never run in it. Measured on
+ * win32: the drive letter's case follows whatever pi was spawned with (`c:\…` gives `--c--Users…`)
+ * while the folder names come back canonical — findEncodedDir's case-insensitive match covers it.
  */
 function findSessionDir(root: string, cwd: string): Promise<string | undefined> {
   return findEncodedDir(root, encodeCwd(cwd));
 }
 
-/**
- * The transcript holding a session, by the uuid in its filename — or, for a file pi renamed or
- * forked into place, by the header's id.
- */
+/** The transcript holding a session, by the uuid in its filename — or, for a file pi renamed or
+ *  forked into place, by the header's id. */
 async function findSessionFile(dir: string, sessionId: string): Promise<string> {
   const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
   const named = files.find((file) => file.endsWith(`_${sessionId}.jsonl`));
@@ -234,10 +222,8 @@ interface TranscriptHead {
 /** The transcript's start is all the head needs; pi's own picker reads the whole file. */
 const HEAD_SCAN_BYTE_LIMIT = 256 * 1024;
 
-/**
- * Keyed by how much of the window the file fills rather than by its size, as Claude's is: the
- * stream only ever reads the first HEAD_SCAN_BYTE_LIMIT bytes of an append-only file.
- */
+/** Keyed by how much of the window the file fills rather than by its size: the stream only ever
+ *  reads the first HEAD_SCAN_BYTE_LIMIT bytes of an append-only file. */
 const headCache = new Map<string, { size: number; head: TranscriptHead }>();
 
 /** The header and the first prompt; undefined for a `.jsonl` that is not a pi transcript. */
@@ -263,8 +249,7 @@ async function scanHead(filePath: string, fileSize: number): Promise<TranscriptH
         head = { id, createdAt: Number.isNaN(createdAt) ? undefined : createdAt };
         continue;
       }
-      // Only the first user message is wanted; every other line — tool results are the bulk of
-      // a transcript — is skipped unparsed.
+      // Only the first user message is wanted; every other line is skipped unparsed.
       if (!line.includes('"user"')) {
         continue;
       }
@@ -314,16 +299,12 @@ function parseLine(line: string): Record<string, unknown> | undefined {
 }
 
 interface TranscriptTail {
-  /**
-   * The last session_info's name, trimmed — "" for one that clears the name (pi reads
-   * `entry.name?.trim() || undefined`, and the last one wins whatever its tree position).
-   */
+  /** The last session_info's name, trimmed — "" for one that clears the name (pi reads
+   *  `entry.name?.trim() || undefined`, and the last one wins whatever its tree position). */
   name?: string;
-  /**
-   * When the last assistant message was written, whichever way its turn ended — an Escape-abort
-   * is persisted as one with `stopReason: "aborted"` too. Its own ms timestamp first, the
-   * entry's ISO one as the fallback, the way pi's getMessageActivityTime reads it.
-   */
+  /** When the last assistant message was written, whichever way its turn ended — an Escape-abort
+   *  is persisted as one with `stopReason: "aborted"` too. Its own ms timestamp first, the entry's
+   *  ISO one as fallback, the way pi's getMessageActivityTime reads it. */
   turnEndedAt?: number;
 }
 
@@ -333,19 +314,17 @@ const TAIL_SCAN_BYTE_LIMIT = 256 * 1024;
 const TAIL_ENTRY_TYPES = ['"session_info"', '"assistant"'];
 
 /**
- * The last scan of each transcript, by path: a listing runs for every session of the
- * repository on every change to any of them, so all but the one being written to are answered
- * from here, and that one is only read from where the last scan left off.
+ * The last scan of each transcript, by path: all but the one being written to are answered from
+ * here, and that one is only read from where the last scan left off.
  */
 const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
 
 /**
- * Reads the transcript backwards for the two entries of which the *last* one counts, and stops
- * as soon as it has both — or reaches the beginning where a session has no session_info at
- * all, since a rename made 300 KB of transcript ago is still the name. A file scanned before is
- * only read from a chunk below where that scan ended, and what the new stretch does not hold
- * is taken from the old answer: everything below the overlap was seen then, and the overlap
- * covers a line the earlier read may have caught half-written.
+ * Reads the transcript backwards for the two entries of which the *last* one counts, to the
+ * beginning where a session has no session_info at all, since a rename made 300 KB of transcript
+ * ago is still the name. A file scanned before is only read from a chunk below where that scan
+ * ended, and what the new stretch does not hold is taken from the old answer — the overlap covers
+ * a line the earlier read may have caught half-written.
  */
 async function scanTail(filePath: string): Promise<TranscriptTail> {
   const tail: TranscriptTail = {};

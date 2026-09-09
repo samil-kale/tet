@@ -3,13 +3,11 @@ import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/con
 import type { ControlRequest, ControlResponse } from "../shared/control";
 
 /**
- * `tet-ctl`: the command an agent runs inside one of tet's terminals to ask the app around
- * it something. A plain script with no electron in it, bundled on its own (see esbuild.js) and
- * started by the launcher in userData/bin under tet's own electron as node — the terminal's
- * environment tells it where tet listens and who it is (see src/shared/control.ts).
- *
- * Output is for an agent, not a person: the result as JSON on stdout, one line of plain text
- * on stderr when something went wrong, and an exit code it can branch on.
+ * `tet-ctl`: the command an agent runs inside one of tet's terminals to ask the app around it
+ * something. A plain script with no electron in it, bundled on its own (esbuild.js) and started by
+ * the launcher in userData/bin; the terminal's environment says where tet listens and who it is
+ * (src/shared/control.ts). Output is for an agent, not a person: the result as JSON on stdout, one
+ * line of plain text on stderr when something went wrong, and an exit code it can branch on.
  */
 
 function usage(): string {
@@ -68,15 +66,8 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown> } 
   return { verb, args };
 }
 
-/**
- * HTTP rather than a raw socket — the one transport that reaches the server both from a plain
- * host terminal and from inside an sbx sandbox. sbx's own docs (docker/docs' sandboxes/workflows/
- * development.md, read live 2026-09-08): a sandbox reaches `host.docker.internal` through sbx's
- * own proxy, and that proxy is HTTP-only — a raw TCP echo server behind it accepted the connect
- * but never saw a byte of what was written, verified live against a real sandbox, while a plain
- * `curl http://host.docker.internal:<port>` reached the same host process immediately. One
- * request per connection either way (`Connection: close`), matching the server's own model.
- */
+/** HTTP rather than a raw socket, one request per connection (`Connection: close`), matching the
+ *  server's model — the reason is at `startControlServer` in src/main/control/control-server.ts. */
 function send(host: string, port: number, request: ControlRequest): Promise<ControlResponse> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(request);
@@ -113,11 +104,9 @@ function send(host: string, port: number, request: ControlRequest): Promise<Cont
   });
 }
 
-/**
- * How long a port nobody answers on is tried again before it counts as absent. The server comes
- * up with the workspace (see main.ts's startControl), a moment after the terminal this runs in
- * did — and after `restart-app`, the new tet is that same moment away.
- */
+/** How long a port nobody answers on is retried before it counts as absent: the server comes up
+ *  with the workspace, a moment after the terminal this runs in did, and likewise after a
+ *  `restart-app`. */
 const CONNECT_RETRY_MS = 5000;
 const CONNECT_RETRY_GAP_MS = 250;
 

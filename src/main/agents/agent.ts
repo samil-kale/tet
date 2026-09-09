@@ -11,63 +11,47 @@ export interface AgentSessionInfo {
   /** Creation time, ms since epoch — determines tab order, independent of `updatedAt`. */
   createdAt: number;
   /**
-   * True while `title` is only standing in for a name the agent hasn't assigned yet (Claude:
-   * the first prompt, shown until an agent-name/ai-title lands). Those arrive from a background
-   * call that can finish after the CLI has gone quiet, so the manager keeps polling a while
-   * longer for sessions flagged here — see reconcile.
+   * True while `title` stands in for a name the agent hasn't assigned yet (Claude: the first
+   * prompt until an agent-name/ai-title lands, which can arrive after the CLI has gone quiet).
+   * The manager keeps polling such sessions a while longer — see reconcile.
    */
   provisionalTitle?: boolean;
   /**
-   * When this session's last turn ended, ms since epoch, as the agent's own record of it says —
-   * undefined where the agent keeps no such record. It is a *net* under the end-of-turn signal
-   * an agent reports through AgentPaths.onSessionFinished, for the ends that signal cannot
-   * carry: Claude Code runs no Stop hook for a turn the user cut short. See reconcile, which is
-   * the one place it is read, and only ever to end a turn.
+   * When this session's last turn ended, ms since epoch, per the agent's own record; undefined
+   * where it keeps none. A net under AgentPaths.onSessionFinished for ends that signal cannot
+   * carry (Claude Code runs no Stop hook for a turn the user cut short). Read only in reconcile,
+   * only to end a turn.
    */
   turnEndedAt?: number;
   /**
-   * The sbx sandbox this session lives in, by name. Such a session can only be resumed there —
-   * see resolveSbxRun. Unset for one on the host. Set by the session manager, which knows the
-   * sandbox's name, on everything a `SessionProvider.sandbox` listing returns, and by opencode's
-   * own provider, whose plugin records where each session ran.
+   * The sbx sandbox this session lives in, by name; unset on the host. Such a session can only
+   * be resumed there (resolveSbxRun). Set by the session manager on everything a
+   * `SessionProvider.sandbox` listing returns, and by opencode's provider from its plugin's records.
    */
   sandbox?: string;
 }
 
-/**
- * One host path tet mounts into a sandbox so an agent's sessions land on this side of it —
- * see SessionProvider.sandbox.
- */
+/** One host path tet mounts into a sandbox so an agent's sessions land on the host — see SessionProvider.sandbox. */
 export interface SandboxSessionMount {
   /** Under the host root (`sandboxSessionDir`), the file or directory that is mounted. */
   sub: string;
   /** The absolute container path it is mounted at — where this agent's CLI looks. */
   target: string;
-  /** Whether `sub` is a plain file rather than a directory: sbx mounts either, but the host
-   *  side has to exist first, and the two are created differently. */
+  /** Whether `sub` is a plain file: sbx mounts either, but the host side must exist first and
+   *  the two are created differently. */
   file?: boolean;
 }
 
 /**
- * How an agent's sessions are read back out of an sbx sandbox. Without this its sandboxed
- * sessions are invisible to tet: the manager's listing runs on the host, while the CLI writes
- * its transcripts inside the container — so nothing ever claims them and the tab gets no
- * session id, hence no resume, no title and no turn marks (`applyTurn` matches on the id).
+ * How an agent's sessions are read back out of an sbx sandbox: a host directory bind-mounted
+ * at the path the CLI writes to (stacks even over sbx's own volume, see `mounts`), read by the
+ * same code that reads a host transcript. Every method takes the mounted host `root` and the
+ * sandbox's own `cwd` (`toContainerPath`), because the CLI wrote container paths into its records.
+ * Without it a sandboxed tab gets no session id, hence no resume, title or turn marks.
  *
- * The mechanism is a bind mount, not a second way of listing: tet mounts a host directory at
- * the path the CLI writes to (measured per agent — it stacks even over sbx's own volume, see
- * `mounts`), and from there the *same* code that reads a host transcript reads a sandboxed one.
- * Which is why every method here takes the mounted host `root` and the sandbox's own `cwd` (the
- * container path of the repository, `toContainerPath`) instead of the host's: the CLI wrote
- * both into paths and records that only make sense from inside.
- *
- * Left out by an agent that already reports its sandboxed sessions another way — opencode,
- * whose plugin writes its records through the agentDir mount from inside the sandbox, and whose
- * own storage is a SQLite database tet deliberately never reads.
- *
- * No `watch` counterpart on purpose: the host one exists to notice a transcript the tab's own
- * output never announced, and a sandboxed tab has no such gap — its CLI is the one filling the
- * mounted tree, so the reconcile its output already schedules is what picks the change up.
+ * No `watch` counterpart: the host one notices transcripts the tab's output never announced,
+ * and a sandboxed tab's CLI is the one filling the mounted tree, so its output already
+ * schedules the reconcile.
  */
 export interface SandboxSessions {
   /** Everything that has to be mounted for this agent's sessions to land on the host. */
@@ -81,11 +65,7 @@ export interface SandboxSessions {
   rename(executable: string, root: string, cwd: string, sessionId: string, title: string): Promise<void>;
 }
 
-/**
- * Agent-specific session enumeration/resume/deletion, living in the agent's own folder
- * since it speaks that agent's protocol (Claude: transcript files on disk; opencode: the
- * session records its plugin writes, and its CLI).
- */
+/** Agent-specific session enumeration/resume/deletion; lives in the agent's own folder. */
 export interface SessionProvider {
   /** All sessions of this repository, in creation order (oldest first). Must resolve [] on any failure. */
   list(executable: string, cwd: string): Promise<AgentSessionInfo[]>;
@@ -96,33 +76,30 @@ export interface SessionProvider {
   /** Renames the session's persisted title. Rejects on failure (caller surfaces the error). */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;
   /**
-   * Optional: calls `onChange` whenever this repository's sessions change, so the manager can
-   * re-list right away instead of waiting out its polling. Returns a stop function, called on
-   * shutdown — an implementation owning a process or connection tears it down there.
+   * Optional: calls `onChange` whenever this repository's sessions change, so the manager
+   * re-lists at once instead of waiting out its polling. Returns a stop function, called on shutdown.
    */
   watch?(executable: string, cwd: string, onChange: () => void): () => void;
   /**
-   * How this agent's *sandboxed* sessions are read — see SandboxSessions. Omitted where they
-   * already come back from `list` (opencode) or where the agent cannot be sandboxed at all.
+   * How this agent's sandboxed sessions are read — see SandboxSessions. Omitted where they
+   * already come back from `list` (opencode) or the agent cannot be sandboxed.
    */
   sandbox?: SandboxSessions;
 }
 
 /**
  * What one agent is handed to set itself up for one repository: where it may write, and the
- * one thing it reports back out of band. Everything else an agent says goes through the
- * return value of the call it was made from.
+ * one thing it reports back out of band.
  */
 export interface AgentPaths {
   /**
-   * This agent's own scratch directory for this repository, already created. Per repository
-   * because several are open at once and what is generated in there (notification texts, hook
-   * settings) names the one it belongs to.
+   * This agent's own scratch directory for this repository, already created. Per repository,
+   * since what is generated in there (notification texts, hook settings) names the one it belongs to.
    */
   agentDir: string;
   /**
-   * The repository's context file, kept current by tet — the agent's job is only to
-   * arrange for it to reach the model. Blank whenever there is nothing to say.
+   * The repository's context file, kept current by tet — the agent only arranges for it to
+   * reach the model. Blank whenever there is nothing to say.
    */
   contextFile: string;
   /**
@@ -134,40 +111,32 @@ export interface AgentPaths {
   storageRoot: string;
   /**
    * What this agent may notify the OS about, as the settings dialog last left it. Handed over
-   * rather than imported, so the one persisted copy stays the only one — and read here, at
-   * setup, because that is where each agent bakes it in: Claude Code into the settings file it
-   * reads once at startup, opencode into the plugin it loads once.
+   * rather than imported so the persisted copy stays the only one; read at setup because that
+   * is where each agent bakes it in.
    */
   notifications: NotificationSettings;
   /**
-   * The window's color theme, handed over for the same reason and read at the same moment:
-   * an agent that cannot read the terminal's colors off the terminal (Codex on win32 reads
-   * the console's) is told them at setup, and keeps them for its process's lifetime.
+   * The window's color theme, handed over the same way: an agent that cannot read the terminal's
+   * colors (Codex on win32 reads the console's) is told them at setup.
    */
   theme: ThemeDefinition;
   /**
-   * The two ends of a turn, reported as the agent itself sees them — never guessed from the
-   * terminal's output. `busy` puts the spinner on the tab, `finished` takes it off again and
-   * leaves the mark behind; see "Both ends of a turn" in CLAUDE.md.
+   * The two ends of a turn, as the agent itself reports them — never guessed from output.
+   * `busy` puts the spinner on the tab, `finished` takes it off and leaves the mark; see "Both
+   * ends of a turn" in CLAUDE.md.
    *
-   * A session id, not a tab id: an agent knows nothing about tabs. One that has no tab yet is
-   * held until the next reconcile claims it, so a fresh session's first turn is not lost.
-   *
-   * `at` is when the agent *made* the report, where that is known (a marker file's mtime);
-   * a report older than the last one applied to its session is dropped, since markers of the
-   * three kinds are watched separately and can arrive out of order. Left out, it is now.
+   * A session id, not a tab id. A session with no tab yet is held until the next reconcile
+   * claims it. `at` is when the agent made the report (a marker file's mtime); a report older
+   * than the last one applied is dropped, since the three marker kinds are watched separately
+   * and can arrive out of order. Left out, it is now.
    */
   onSessionBusy(sessionId: string, at?: number): void;
   onSessionFinished(sessionId: string, at?: number): void;
   /**
-   * The turn stopped part-way on a question only the user can answer — a permission prompt, an
-   * elicitation, or `AskUserQuestion`. Reported through the same path and held the same way as
-   * the two above, and deliberately *not* an end: the turn is still open, which is why it takes
-   * the spinner's place rather than clearing it.
-   *
-   * There is no matching "answered" signal from either agent, and neither is worth buying: it
-   * would cost a hook process on every tool call. The mark is cleared by being looked at, and
-   * by either end of the turn — see setTurn.
+   * The turn stopped on a question only the user can answer (permission prompt, elicitation,
+   * `AskUserQuestion`). Not an end: the turn is still open, so it takes the spinner's place.
+   * No agent reports "answered" (it would cost a hook process per tool call); the mark clears
+   * on being looked at and on either end of the turn — see setTurn.
    */
   onSessionWaiting(sessionId: string, at?: number): void;
 }
@@ -180,9 +149,9 @@ export interface SpawnPreparation {
   args: string[];
   env?: Record<string, string>;
   /**
-   * What to start instead of the agent's own executable, where something has to run *inside*
-   * the pty before it — Codex's console-color launcher on win32. Only the terminal's process
-   * takes it; listing, renaming and the version check still go to the agent itself.
+   * What to start instead of the agent's own executable when something has to run inside the
+   * pty before it (Codex's console-color launcher on win32). Only the terminal's process takes
+   * it; listing, renaming and the version check still go to the agent itself.
    */
   executable?: string;
   dispose(): void;
@@ -193,9 +162,8 @@ export interface SandboxPreparation {
   /** Extra CLI arguments, appended after `sbx run`'s own "--". */
   args: string[];
   /**
-   * Environment for the sandboxed process, passed as `sbx run -e KEY=VALUE` — values in the
-   * sandbox's own view (container paths). Only for what is decided per repository; a constant
-   * belongs in `sandboxEnv`.
+   * Environment for the sandboxed process, passed as `sbx run -e KEY=VALUE`, in container
+   * paths. Only for what is decided per repository; a constant belongs in `sandboxEnv`.
    */
   env?: Record<string, string>;
 }
@@ -210,143 +178,104 @@ export interface AgentDefinition {
   /** Resolved at spawn time, since the shell's executable depends on the platform. */
   executable(): string;
   /**
-   * Args that make the executable report its version, used to tell "not installed" from a
-   * spawn that failed for another reason. Omitted for agents that always exist (the shell).
+   * Args that make the executable report its version, to tell "not installed" from a spawn
+   * that failed for another reason. Omitted for agents that always exist (the shell).
    */
   versionArgs?: string[];
-  /**
-   * Where this agent is installed from, for the startup check's dialog — tet needs one of
-   * them and installs none of them itself. Goes with `versionArgs`: an agent that is always
-   * there has neither.
-   */
+  /** Where this agent is installed from, for the startup check's dialog. Goes with `versionArgs`. */
   installUrl?: string;
   /**
-   * Args that put one question to the agent without a terminal, answered on stdout and then
-   * over. The question itself arrives on stdin, so these name the mode and nothing else (see
-   * `askAgent` for why it is not an argument). Omitted for an agent that cannot be
-   * asked anything (the shell), which is what keeps it out of the jobs that use this.
+   * Args that put one question to the agent without a terminal, answered on stdout. The
+   * question arrives on stdin (see `askAgent`), so these name the mode and nothing else.
+   * Omitted for an agent that cannot be asked anything (the shell).
    */
   askArgs?: string[];
   /**
-   * Args that hand one command to this agent *in a terminal*, ending when it does. Only the
-   * shell has it, and only a saved command that asked for a shell uses it — one otherwise
-   * starts as the program it names, with nothing in between.
+   * Args that hand one command to this agent in a terminal, ending when it does. Only the
+   * shell has it, and only a saved command with `"shell": true` uses it.
    */
   runArgs?: (command: string) => string[];
   /**
    * Removes what `askArgs` left behind, for an agent that persists a session either way — a
-   * question asked in the background must not come back as a tab on the next start. Left out
-   * by an agent that can be told not to persist one in the first place.
+   * background question must not come back as a tab on the next start.
    */
   cleanupAsk?: (executable: string, cwd: string) => Promise<void>;
   /** Session enumeration/resume/deletion; a missing provider means "this agent has no sessions". */
   sessions?: SessionProvider;
   /**
-   * Async setup that has to finish before any session of this agent is spawned, for agents
-   * whose spawn arguments aren't known up front — Claude Code's hooks are generated into a
-   * settings file it is pointed at, opencode's plugin into a config directory.
-   *
-   * Also where an agent arranges for the repository's context file to reach the model, which
-   * each does its own way — see AgentPaths.
+   * Async setup before any session of this agent is spawned: generated hooks, settings files,
+   * plugins, and however the repository's context file reaches the model (see AgentPaths).
+   * A rejection marks the agent unstartable, so a failed optional write (a notification script)
+   * is swallowed, never rethrown.
    */
   prepareSpawn?: (executable: string, cwd: string, paths: AgentPaths) => Promise<SpawnPreparation>;
   /**
-   * The sbx-sandbox equivalent of prepareSpawn's hook wiring — same turn-tracking (see "Both
-   * ends of a turn" in CLAUDE.md), generated as if for a POSIX host regardless of what
-   * `process.platform` actually is (a sandbox is Linux whatever host it runs on) and with every
-   * embedded path translated into the sandbox's own view of it (`SANDBOX_TARGET` in
-   * hook-target.ts). Desktop notifications work the same as on the host: the hook calls
-   * `tet-ctl notify`, which reaches this process over the control channel — see
-   * os-notify.ts's buildHookNotifyCommand — so the toast itself is always shown by the process
-   * that actually has a desktop session, never by the sandbox.
+   * prepareSpawn's hook wiring for an sbx sandbox: generated for a POSIX host regardless of
+   * `process.platform`, every embedded path in the sandbox's own view (`SANDBOX_TARGET` in
+   * hook-target.ts). Notifications go through `tet-ctl notify` over the control channel
+   * (os-notify.ts's buildHookNotifyCommand), so the toast is shown by the host process.
    *
-   * Returns the extra CLI arguments appended after `sbx run`'s own "--" and, where the setup
-   * is pointed at by a variable rather than an argument, the environment for it — unlike
-   * SpawnPreparation there is no executable to override, since the sandbox's own bundled agent
-   * binary is what runs (see `sandboxEnv` for a constant). `cwd` is the project's own path, for
-   * a notify message's repository name; `sandbox` is the sandbox's name, for an agent whose
-   * sessions record where they live (AgentSessionInfo.sandbox). Synchronous: unlike
-   * prepareSpawn, nothing here waits on external setup. Omitted by an agent that cannot be
-   * sandboxed at all, or needs no hooks — the shell, on both counts.
+   * Returns the extra CLI arguments after `sbx run`'s "--" and, where the setup is pointed at
+   * by a variable, the environment for it. No executable override: the sandbox's own bundled
+   * binary runs. `cwd` is the project's host path (for a notify message's repository name);
+   * `sandbox` its name (AgentSessionInfo.sandbox). Synchronous. Omitted by the shell.
    */
   prepareSandboxSpawn?: (cwd: string, paths: AgentPaths, sandbox: string) => SandboxPreparation;
   /**
-   * "KEY=VALUE" entries passed as `sbx run -e` — for a fact that only differs inside the
-   * sandbox. Claude Code's own fullscreen-by-default rollout reads feature flags from
-   * `statsig.anthropic.com`, which the sandbox's own kit policy does not allow (verified live,
-   * 2026-09-08: `sbx policy ls --type network` lists it for the global default-ai-services rule
-   * but not for the per-sandbox `kit:` one) — so a sandboxed session never gets the flag and
-   * falls back to the classic renderer even on a host that would start fullscreen.
-   * `CLAUDE_CODE_NO_FLICKER=1` forces fullscreen regardless of feature flags (Claude Code's own
-   * docs, code.claude.com/docs/en/fullscreen).
+   * "KEY=VALUE" entries passed as `sbx run -e`, for a fact that only differs inside the
+   * sandbox. Claude Code's fullscreen rollout reads feature flags from `statsig.anthropic.com`,
+   * which the per-sandbox `kit:` policy rule does not allow (measured: `sbx policy ls --type
+   * network` lists it only for the global default-ai-services rule), so a sandboxed session
+   * falls back to the classic renderer; `CLAUDE_CODE_NO_FLICKER=1` forces fullscreen regardless
+   * (code.claude.com/docs/en/fullscreen).
    */
   sandboxEnv?: string[];
   /**
    * Completes a url the agent's TUI wrapped across rows, from the agent's own record of what
-   * it printed — in the buffer such a row cannot be told apart from one that merely ends in a
-   * url (opencode breaks a long token at the last "." that fits, so not even the right edge
-   * marks it). Returns the full url starting with `prefix`, or undefined when nothing is
-   * known; the renderer then keeps the fragment as it is.
+   * it printed — in the buffer such a row cannot be told from one that merely ends in a url
+   * (opencode breaks a long token at the last "." that fits). Returns the full url starting
+   * with `prefix`, or undefined; the renderer then keeps the fragment.
    *
    * Called only when the user holds the modifier over such a url, at most once per fragment,
-   * so an implementation may go over HTTP, and may reject: the one caller
-   * (`ProjectSessionManager.resolveUrlPrefix`) reads a rejection as "nothing known", so no
-   * implementation has to catch for itself.
+   * so it may go over HTTP and may reject — the one caller reads a rejection as "nothing known".
    */
   resolveUrlPrefix?: (executable: string, cwd: string, sessionId: string, prefix: string) => Promise<string | undefined>;
   /**
-   * A factory (not the predicate itself!) for the "is this session's CLI ready yet" check, so
-   * each session gets a fresh one instead of carrying over one that already passed. It sees
-   * each output chunk and the ms since that session started; once it returns true, the
-   * progress bar under the tab strip hides. Output keeps flowing to the terminal throughout —
-   * some CLIs query it for capabilities like the background colour at start and need a timely
-   * answer, which withholding would break.
+   * A factory (not the predicate itself) for the "is this session's CLI ready yet" check, so
+   * each session gets a fresh one. It sees each output chunk and the ms since the session
+   * started; once true, the progress bar under the tab strip hides. Output flows to the
+   * terminal throughout — some CLIs query it for capabilities at start and need a timely answer.
    *
-   * There is no real readiness signal (no port, no log line, no flag), so this is a
-   * best-effort guess at undocumented output behaviour — which is why the tuning lives per
-   * agent. Omitted for agents that are up as soon as they are spawned (the shell).
+   * There is no real readiness signal, so this is a per-agent guess at undocumented output
+   * behaviour. Omitted for agents that are up as soon as spawned (the shell).
    */
   createIsSessionReady?: () => (chunk: string) => boolean;
   /**
-   * How many Ctrl+C bytes it takes to make this CLI quit by itself, so tet can ask before it
-   * kills (see TerminalSession.stop). Omitted where asking makes no sense — the shell, which
-   * has nothing to save and whose Ctrl+C is a plain SIGINT.
-   *
-   * Per agent because they genuinely differ, measured through this same pty rather than
-   * assumed: Claude Code wants two, and drops its "press again to exit" offer after about a
-   * second, so the second byte has to arrive well inside that. Codex and opencode start
-   * shutting down on the first one — and a byte sent to a Codex
-   * already on its way out lands after it has given up raw mode, where ConPTY turns it into a
-   * process-level CTRL_C_EVENT and kills the very shutdown we were waiting for. That left no
-   * single interval that is right for all three: this is what one number to rule them all
-   * would have had to thread, and why it is a per-agent count instead.
+   * Ctrl+C presses that make this CLI quit by itself, so tet can ask before it kills
+   * (TerminalSession.stop). Measured per agent: Claude Code and pi 2 (the second well inside
+   * the ~1 s "press again" window), Codex and opencode 1 — and a second byte to a Codex already
+   * leaving lands after it left raw mode, where ConPTY turns it into a CTRL_C_EVENT that kills
+   * the shutdown. Omitted for the shell, whose Ctrl+C is a plain SIGINT.
    */
   quitPresses?: number;
   /**
    * Whether a plain `\x03` kills this CLI instead of reaching it as input, so Ctrl+C without a
-   * selection is swallowed rather than sent (terminal-views.ts). Measured, not assumed: Claude
-   * Code and opencode run raw and read the byte as any other (clear the prompt, interrupt a
-   * turn), but Codex sits in cooked mode, where on win32 ConPTY raises it as a process-level
-   * CTRL_C_EVENT that kills a CLI with no handler for it rather than "interrupting" it.
-   * Closing the tab is such an agent's equivalent action.
+   * selection is swallowed rather than sent (terminal-views.ts). Measured: Claude Code and
+   * opencode run raw and read the byte as any other; Codex sits in cooked mode, where on win32
+   * ConPTY raises a process-level CTRL_C_EVENT that kills it.
    */
   plainCtrlCKills?: boolean;
   /**
-   * Whether this agent's TUI takes the right mouse button itself through xterm's mouse
-   * reporting (Claude Code pastes, opencode copies the selection). Where it does not — the
-   * shell never turns mouse reporting on, and Codex deliberately leaves the mouse to the
-   * terminal (github.com/openai/codex#8344) — tet supplies the usual terminal convention
-   * itself: copy a selection, or paste when there is none (terminal-views.ts).
+   * Whether this agent's TUI takes the right mouse button itself through mouse reporting
+   * (Claude Code pastes, opencode copies the selection). Where it does not — the shell, and
+   * Codex (github.com/openai/codex#8344) — tet supplies the terminal convention itself: copy a
+   * selection, or paste when there is none (terminal-views.ts).
    */
   takesRightMouse?: boolean;
   /**
-   * opencode's TUI assigns blue and magenta the other way round from VS Code's terminal
-   * palette, so what it draws comes out in the colour the user did not theme — the renderer
-   * swaps the two in the palette this agent's terminals are handed (buildXtermTheme in
-   * theme.ts), putting them back. Ported from sbc-vsc-agents, where it was observed, not
-   * derived — if opencode's colours ever look wrong the other way, take this back out. It goes
-   * with the `"theme": "system"` in tui-config.ts, which is what makes opencode take that
-   * palette at all rather than painting in its own.
+   * opencode's TUI under `"theme": "system"` (tui-config.ts) draws blue and magenta swapped
+   * relative to VS Code's terminal palette (observed, not derived); buildXtermTheme in theme.ts
+   * swaps them back in the palette this agent's terminals are handed.
    */
   swapsBlueMagenta?: boolean;
 }

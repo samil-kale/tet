@@ -19,13 +19,11 @@ function hostConfigDir(storageRoot: string): string {
 }
 
 /**
- * opencode is client/server inside, but tet runs it the way it runs Claude Code: the plain
- * `opencode` in each tab, its server a worker thread of that same process (measured: the
- * generated plugin loads in `src/cli/tui/worker.js`, and nothing listens on a port), and a
- * generated plugin reporting the turns, the sessions and taking the context in — see plugin.ts.
- * The same on the host and in an sbx sandbox; only the launcher differs. No `opencode serve`
- * of tet's own, no `attach`: the one thing that bought — a listing without a process — the
- * session records give for nothing (sessions.ts).
+ * opencode is client/server inside, but tet runs the plain `opencode` in each tab: its server is
+ * a worker thread of that same process (measured: the generated plugin loads in
+ * `src/cli/tui/worker.js`, and nothing listens on a port), and a generated plugin reports the
+ * turns and sessions and takes the context in — see plugin.ts. The same on the host and in an sbx
+ * sandbox; only the launcher differs. No `opencode serve` of tet's own, no `attach`.
  */
 export const opencodeAgent: AgentDefinition = {
   id: "opencode",
@@ -35,14 +33,11 @@ export const opencodeAgent: AgentDefinition = {
   installUrl: "https://opencode.ai/docs/",
   /*
    * Its own non-interactive mode: prints the reply and exits. It has no way to skip persisting
-   * the session, so the run is titled and `cleanupAsk` deletes it again by that title — the
-   * alternative, deleting whatever appeared while the question ran, would also catch a session
-   * the user started themselves in the meantime.
+   * the session, so the run is titled and `cleanupAsk` deletes it again by that title.
    */
   askArgs: ["run", "--title", ASK_TITLE],
-  // The question runs without the plugin (askAgent spawns with the machine's environment), so
-  // it leaves no record: opencode's own listing finds it — a process each, affordable once
-  // after a suggestion, never in a hot path.
+  // The question runs without the plugin (askAgent spawns with the machine's environment), so it
+  // leaves no record and opencode's own listing has to find it — a process each, affordable once.
   cleanupAsk: async (executable, cwd) => {
     const output = await runOpencode(executable, cwd, null, ["session", "list", "--format", "json"]);
     const entries = (output.trim() ? JSON.parse(output) : []) as { id?: unknown; title?: unknown }[];
@@ -61,13 +56,11 @@ export const opencodeAgent: AgentDefinition = {
     try {
       env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, "OpenCode", paths.notifications, paths.contextFile, HOST_TARGET, null);
       // One watch serves host and sandboxed tabs: the sandbox's plugin writes its markers into
-      // the same agentDir, through the mount (unlike Claude's hooks, whose sandbox copy has a
-      // marker dir of its own under sandboxHookDir).
+      // the same agentDir, through the mount.
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
     } catch (error) {
       // A plugin that could not be written costs the turn marks, the records and the context —
-      // not the CLI, which starts fine without it. Not a rejection: that would mark the whole
-      // agent unstartable.
+      // not the CLI. See prepareSpawn: swallow, never reject.
       console.error("[tet] could not write opencode's plugin:", error);
     }
     return Promise.resolve({
@@ -94,13 +87,11 @@ export const opencodeAgent: AgentDefinition = {
       return { args: [] };
     }
   },
-  // See createNonAsciiThresholdCheck: a raw byte count fires mid-repaint of an empty screen
-  // while opencode is still fetching its model list, well before its logo and prompt are
-  // actually on screen (measured, 1.18.4). 20 sits comfortably below the 164 the real frame
-  // always carries and above the 0 every blank repaint before it does.
+  // See createNonAsciiThresholdCheck: a raw byte count fires mid-repaint of an empty screen while
+  // opencode is still fetching its model list (measured, 1.18.4). 20 sits below the 164 non-ASCII
+  // bytes the real frame always carries and above the 0 of every blank repaint before it.
   createIsSessionReady: () => createNonAsciiThresholdCheck(20),
-  // One: its TUI starts leaving immediately (measured on the plain TUI, 1.18.4: gone 213 ms
-  // after the byte).
+  // One: its TUI starts leaving immediately (measured, 1.18.4: gone 213 ms after the byte).
   quitPresses: 1,
   // Its TUI handles the right click itself (it copies the selection).
   takesRightMouse: true,

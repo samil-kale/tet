@@ -6,18 +6,15 @@ const BIT_WIDTH = 40;
 const SPEED = 500;
 
 /**
- * The one indeterminate progress bar, drawn under whichever header or bar it is a child of — a
- * pane's tab strip, a git section's header, the diff dialog's bar (each declares `position:
- * relative`, which is all it takes). Every pane that can be slow shows one of these and nothing
- * else — see "One progress indicator per pane" in CLAUDE.md.
+ * The one indeterminate progress bar, drawn under whichever header or bar it is a child of; each
+ * declares `position: relative`, which is all it takes. See "One progress indicator per pane" in
+ * CLAUDE.md.
  *
- * The bit's length and speed are absolute, not a share of the bar's width: VS Code's own bar
- * sizes its bit at 2% and moves it 4900% of that in a fixed two seconds, which reads fine when
- * there is one bar in the window and wrong the moment there are several side by side — a 300px
- * pane's worm a third the length of a 900px pane's, crawling at a third the speed. So the width
- * is measured and the run's duration follows from it, which is what keeps `SPEED` a speed. Not a
- * `useEffect`: the first paint has to have the real width already, or the bit sets off for one
- * frame with a duration computed for zero.
+ * The bit's length and speed are absolute, not a share of the bar's width: a percentage-sized
+ * bit reads wrong the moment two bars of different widths sit side by side, a 300px pane's worm
+ * a third the length of a 900px pane's and crawling at a third the speed. The width is measured
+ * and the run's duration follows from it. `useLayoutEffect`, not `useEffect`: the first paint has
+ * to have the real width, or the bit sets off for one frame with a duration computed for zero.
  */
 export function ProgressBar() {
   const bar = useRef<HTMLDivElement>(null);

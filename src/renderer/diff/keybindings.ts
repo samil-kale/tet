@@ -1,18 +1,12 @@
 import type { Monaco } from "./editor";
 import { KEYBINDING_PRESETS } from "./keybinding-presets";
 
-/**
- * The editor's own default bindings for the commands tet adds itself — layered under whatever
- * the chosen preset says, so a preset that never mentions "tet.save" still saves on Ctrl+S, and
- * one that does simply overrides this entry for that key.
- */
+/** Defaults for the commands tet adds itself, layered under the chosen preset. */
 const DEFAULT_KEYBINDINGS: Record<string, string> = {
   "ctrl+s": "tet.save"
 };
 
-/** Key names a preset may use for the part after the last `+` — VS Code's own spelling where
- *  one exists, so a binding copied from there mostly just works. Not exhaustive: these are
- *  curated presets for the handful of commands worth rebinding, not a full keyboard. */
+/** Key names a preset may use after the last `+`, in VS Code's spelling. Not exhaustive. */
 const KEY_NAMES: Record<string, string> = {
   backspace: "Backspace",
   tab: "Tab",
@@ -69,11 +63,7 @@ for (const letter of "abcdefghijklmnopqrstuvwxyz") {
   KEY_NAMES[letter] = `Key${letter.toUpperCase()}`;
 }
 
-/**
- * One entry of a key-combo string ("ctrl+shift+s") into monaco's keybinding number, or undefined
- * for anything this table doesn't know — an unrecognised entry in a preset is skipped rather
- * than guessed at.
- */
+/** A key-combo string ("ctrl+shift+s") as monaco's keybinding number; undefined for anything unknown. */
 export function parseKeyCombo(monaco: Monaco, combo: string): number | undefined {
   const parts = combo
     .toLowerCase()
@@ -104,12 +94,7 @@ export function parseKeyCombo(monaco: Monaco, combo: string): number | undefined
   return keyCode === undefined ? undefined : mods | keyCode;
 }
 
-/**
- * The chosen preset's bindings, layered over tet's own defaults for the commands it adds — the
- * presets are in-code data (`KEYBINDING_PRESETS`), never a file, so there is nothing here to
- * read or write. An id the presets no longer know (a removed preset, a settings.json edited by
- * hand) falls back to VS Code's own bindings, same as "vscode"'s own empty map would.
- */
+/** The chosen preset's bindings over tet's defaults. An unknown id yields the defaults alone. */
 export function resolveKeybindings(presetId: string): Record<string, string> {
   const preset = KEYBINDING_PRESETS.find((entry) => entry.id === presetId);
   return { ...DEFAULT_KEYBINDINGS, ...preset?.bindings };

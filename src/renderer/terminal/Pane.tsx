@@ -71,8 +71,7 @@ interface PaneProps {
   visible: boolean;
   /**
    * The project's focused pane — where keyboard focus goes when the project comes on screen or
-   * this pane's active tab changes. Nothing is drawn for it: a frame around the focused pane was
-   * tried and taken out, and the drag-over frame below is the one this pane shows.
+   * this pane's active tab changes. Nothing is drawn for it.
    */
   focused: boolean;
   onActivate: (paneId: PaneId, tabId: string) => void;
@@ -81,29 +80,13 @@ interface PaneProps {
   waitingTabIds: string[];
   /** Present only for the pane that carries the project's shared chrome — see `PaneChrome`. */
   chrome?: PaneChrome;
-  /**
-   * Present only for the pane that carries the layout picker — the same pane `chrome` is on
-   * (pane "a"), right of the browse-files button.
-   */
+  /** The layout picker, right of the browse-files button. Present only on pane "a". */
   onPresetChange?: (preset: SplitPreset) => void;
-  /**
-   * Browsing the repository's files — the diff dialog reopened on whatever it last showed —
-   * right of the git toggle, present on exactly the pane `onPresetChange` is and for the same
-   * reason.
-   */
+  /** Browsing the repository's files, right of the git toggle. Present only on pane "a". */
   onBrowseFiles?: () => void;
-  /**
-   * The settings, right of the layout picker — present on exactly the pane `onPresetChange` is,
-   * for the same reason: it belongs to the window rather than to a project, so it sits beside the
-   * git toggle rather than following any one project's own layout.
-   */
+  /** The settings, right of the layout picker. Present only on pane "a". */
   onOpenSettings?: () => void;
-  /**
-   * Whether this pane's own progress bar shows — one of its own tabs starting, or (only ever
-   * true where `chrome` also is) a project-wide reason with no tab of its own to point at.
-   * Independent of `chrome`, the same way `onPresetChange` is: unlike the git toggle, the reason
-   * this bar is up is not bound to pane "a" once it is a tab starting somewhere else.
-   */
+  /** One of this pane's tabs starting, or — only where `chrome` is — a project-wide reason. */
   showProgress: boolean;
   /**
    * This pane's own size within the grid, in pixels — one of the two for a pane a divider sizes,
@@ -113,10 +96,8 @@ interface PaneProps {
   width?: number;
   height?: number;
   /**
-   * Whether a plain drop would land the dragged tab here — `TerminalsPane` is what decides,
-   * since only it knows which dividers border which, where the tab came from, and whether the
-   * pointer is in a snap zone instead. This pane only reports what it sees: the drag starting
-   * on one of its tabs, the pointer over it (and where), the drop, and the drag ending.
+   * Whether a plain drop would land the dragged tab here. `TerminalsPane` decides; this pane
+   * only reports what it sees.
    */
   dragOver: boolean;
   onDragStart: (paneId: PaneId) => void;
@@ -165,8 +146,8 @@ export const Pane = memo(function Pane({
   const strip = useRef<HTMLDivElement>(null);
   const tabElements = useRef(new Map<string, HTMLDivElement>());
 
-  // VS Code scrolls its tab strip horizontally with the vertical wheel. Registered by hand
-  // because preventDefault needs a non-passive listener, which React's onWheel isn't.
+  // The vertical wheel scrolls the tab strip horizontally. Registered by hand because
+  // preventDefault needs a non-passive listener, which React's onWheel isn't.
   useEffect(() => {
     const element = strip.current;
     if (!element) {
@@ -184,8 +165,7 @@ export const Pane = memo(function Pane({
     return () => element.removeEventListener("wheel", onWheel);
   }, []);
 
-  // A new or newly activated tab can land past the strip's visible width once it no longer
-  // fits — scroll it into view rather than leaving it reachable only by manually scrolling.
+  // A new or newly activated tab can land past the strip's visible width.
   useEffect(() => {
     if (!activeTabId) {
       return;
@@ -201,17 +181,13 @@ export const Pane = memo(function Pane({
     }
   }, [visible, activeTabId, projectId]);
 
-  // Keyboard focus follows the focused pane's active tab — on the project coming on screen, on
-  // that pane's selection changing, on focus moving to this pane. Only the focused pane's: with
-  // several panes each doing this for their own tab, whichever effect ran last would win, and a
-  // tab closed in a pane the user is not in would pull the cursor over there. Separate from the
-  // refit above on purpose — a focus change alone must not resize the pty, which repaints the CLI.
+  // Keyboard focus follows the focused pane's active tab. Only the focused pane's: with several
+  // panes each doing this, whichever effect ran last would win. Separate from the refit above —
+  // a focus change alone must not resize the pty, which repaints the CLI.
   //
-  // A freshly created tab is activated before its own push arrives (`activateTab`'s own comment:
-  // "a tab just activated can be ahead of its own push") — its TerminalHost has not mounted yet,
-  // so there is no view to focus. `activeTabReady` retriggers this once the tab actually shows up
-  // in `tabs`, without reacting to unrelated tab updates that would otherwise steal focus back
-  // from wherever the user is.
+  // A freshly created tab is activated before its own push arrives, so its TerminalHost has not
+  // mounted yet and there is no view to focus. `activeTabReady` retriggers this once the tab
+  // shows up in `tabs`, without reacting to unrelated tab updates that would steal focus back.
   const activeTabReady = activeTabId !== null && tabs.some((tab) => tab.tabId === activeTabId);
   useEffect(() => {
     if (visible && focused && activeTabId) {
@@ -225,10 +201,10 @@ export const Pane = memo(function Pane({
       return;
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
-    // Only ever the debounced pty resize, never an immediate local reflow — see `fitTerminal`'s
-    // own comment for why: reflowing xterm ahead of the pty is what let a CLI's own redraw land
-    // on a ConPTY buffer already reflowed for a size it does not know about yet. A dragged sash
-    // can show an empty strip of background until it settles; that is the trade for it.
+    // Only ever the debounced pty resize, never an immediate local reflow: reflowing xterm ahead
+    // of the pty lets a CLI's own redraw land on a ConPTY buffer already reflowed for a size it
+    // does not know about yet (see `fitTerminal`). A dragged sash shows background until it
+    // settles; that is the trade.
     const observer = new ResizeObserver(() => {
       if (!visible || !activeTabId) {
         return;
@@ -309,17 +285,14 @@ export const Pane = memo(function Pane({
   const siblingPanes = PRESET_PANES[preset].filter((id) => id !== paneId);
 
   /**
-   * VS Code's editor tab context menu, reduced to its close actions plus rename, and — once this
-   * project has more than one pane — where else this tab could live. What a close action would
-   * close is what decides whether it is enabled, so "nothing to close" (a right-click on the
-   * only tab, or on the last one) renders it disabled.
+   * The close actions plus rename, and — once this project has more than one pane — where else
+   * this tab could live. A close action with nothing to close renders disabled.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
     const renamable = tabs.find((tab) => tab.tabId === tabId && tab.sessionId !== undefined);
-    // A saved command can be run again whenever; anything else only once its process is gone —
-    // a tab whose agent died (an sbx sandbox pulled out from under it, say) starts over, and one
-    // that is still running is ended by closing it, not by this.
+    // A saved command can be run again whenever; anything else only once its process is gone. A
+    // running tab is ended by closing it, not by this.
     const restartable = tabs.some(
       (tab) => tab.tabId === tabId && (tab.savedCommand === true || tab.status === "stopped" || tab.status === "error")
     );
@@ -353,8 +326,8 @@ export const Pane = memo(function Pane({
       closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
       closeAction("Close All", ids),
       SEPARATOR,
-      // A tab whose agent hasn't persisted a session yet has nothing to rename — the host
-      // would just revert the new label, so don't offer it in the first place.
+      // A tab whose agent hasn't persisted a session yet has nothing to rename: the host would
+      // revert the new label.
       {
         label: "Rename...",
         run: renamable ? () => void askRename(renamable) : undefined
@@ -386,9 +359,8 @@ export const Pane = memo(function Pane({
       className={`terminal-pane${width === undefined && height === undefined ? " fill" : ""}${dragOver ? " drag-over" : ""}`}
       style={width !== undefined ? { width } : height !== undefined ? { height } : undefined}
       // Capture, not bubble: xterm's own mousedown handler calls stopPropagation() once a TUI
-      // has turned on mouse tracking (agent CLIs commonly do), which would otherwise stop a
-      // click inside the terminal from ever reaching this handler — leaving focusedPane stuck
-      // wherever it last was.
+      // has turned on mouse tracking (agent CLIs commonly do), so a click inside the terminal
+      // would never reach this handler.
       onMouseDownCapture={() => onFocus(paneId)}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {
@@ -403,8 +375,7 @@ export const Pane = memo(function Pane({
         });
       }}
       onDragLeave={(event) => {
-        // Fires for every tab and button inside the pane too; only leaving the pane itself
-        // counts — the same rule `terminal-views.ts` applies to a file dragged over a terminal.
+        // Fires for every tab and button inside the pane too; only leaving the pane itself counts.
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           onDragOverChange(paneId, null);
         }
@@ -421,15 +392,13 @@ export const Pane = memo(function Pane({
           onDragOverChange(paneId, null);
         }
       }}
-      // A drag cancelled mid-air (Escape, or dropped somewhere that refuses it) fires neither
-      // `drop` nor `dragleave` for the pane the preview is over — this still clears it.
+      // A drag cancelled mid-air fires neither `drop` nor `dragleave` for the pane the preview
+      // is over; this clears it.
       onDragEnd={onDragEnd}
     >
       <div className={`tab-strip${chrome?.gitOpen ? " git-open" : ""}`}>
-        {/* Where the git tab used to be, and no longer a tab: toggling it shows a pane of its own
-            beside this one rather than taking its place. Grouped with browse-files, the layout
-            picker and settings — none of them about a tab, all of them window chrome rather than
-            anything a project's own tab strip owns. Present only on pane "a". */}
+        {/* Window chrome rather than tabs — the git toggle, browse-files, the layout picker and
+            settings. Present only on pane "a". */}
         {(chrome || onPresetChange) && (
           <div className="tab-strip-actions">
             {chrome && (
@@ -490,10 +459,9 @@ export const Pane = memo(function Pane({
               }}
               onClick={() => onActivate(paneId, tab.tabId)}
               onDoubleClick={() => tab.sessionId !== undefined && void askRename(tab)}
-              // Keeps the terminal focused across the whole right-click interaction: without
-              // this, mousedown's default focus handling blurs xterm's textarea (the tab isn't
-              // focusable, so focus falls back to <body>), leaving the user unable to type
-              // after the menu closes until they click the terminal again.
+              // Keeps the terminal focused across the right-click: without this, mousedown's
+              // default focus handling blurs xterm's textarea (the tab isn't focusable, so focus
+              // falls back to <body>) and the user cannot type once the menu closes.
               onMouseDown={(event) => {
                 if (event.button === 2) {
                   event.preventDefault();
@@ -505,24 +473,16 @@ export const Pane = memo(function Pane({
               }}
               title={tabTooltip(tab)}
             >
-              {/* What this session is doing takes the agent icon's place rather than claiming room
-                  of its own — the tab is as wide as its label and nothing more. In the order of
-                  how much they say: a tab whose agent cannot even start, or whose process ended on
-                  its own rather than at the user's own request, outranks everything else — none of
-                  the other three can ever be true for it. Of the rest, a standing question outranks
-                  working, because such a session is precisely *not* working and nothing moves until
-                  it is answered; working outranks finished, since a turn that started after the
-                  last one ended is the newer truth, and the mark is still there underneath for when
-                  it stops. */}
+              {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
+                  > finished. See "Both ends of a turn" in CLAUDE.md. */}
               {tab.status === "missing" || tab.status === "error" ? (
                 <ExclamationIcon className="tab-icon session-mark session-mark-error" />
               ) : waitingTabIds.includes(tab.tabId) ? (
                 <QuestionIcon className="tab-icon session-mark" />
               ) : tab.busy && tab.waitingAt === undefined ? (
-                // Not merely the ranking above: a question is *hidden* on the tab in front of the
-                // user (`waitingTabIds` leaves it out), and the spinner must not step in for it —
-                // a session stopped on a question is not working, on screen or off, the same rule
-                // `App`'s `marks[].busy` applies to the project row.
+                // A question is *hidden* on the tab in front of the user (`waitingTabIds` leaves
+                // it out), and the spinner must not step in for it: a session stopped on a
+                // question is not working, on screen or off.
                 <SpinnerIcon className="tab-icon session-mark spinning" />
               ) : markedTabIds.includes(tab.tabId) ? (
                 <CommentIcon className="tab-icon session-mark" />
@@ -544,9 +504,7 @@ export const Pane = memo(function Pane({
           ))}
         </div>
         {/* This pane's own progress bar — a new agent starting here, or, in pane "a" alone, the
-            one project-wide reason with no tab of its own to point at (the session listing at
-            bootstrap). Every pane carries the reason that is its own, so an agent opened in
-            another pane no longer lights up the bar the user is not looking at. */}
+            project-wide reason with no tab to point at (the session listing at bootstrap). */}
         {showProgress && <ProgressBar />}
         <div className="new-tab">
           <button
@@ -554,9 +512,8 @@ export const Pane = memo(function Pane({
             title="New session"
             onMouseDown={(event) => {
               event.stopPropagation();
-              // The context menu's own outside-click handler already closed it by the time
-              // this runs (it listens on the capture phase), so a second click only reopens
-              // when the check below still sees the menu as open from before that happened.
+              // The context menu's outside-click handler listens on the capture phase and has
+              // already closed it by the time this runs, so a second click would reopen it.
               if (plusMenu) {
                 return;
               }

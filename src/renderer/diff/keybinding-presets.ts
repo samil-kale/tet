@@ -5,26 +5,10 @@ export interface KeybindingPreset {
 }
 
 /**
- * A curated keymap, one per popular editor/IDE — in-code data the settings dialog's preset
- * picker only ever selects from, never writes anywhere; `resolveKeybindings` (keybindings.ts)
- * layers the chosen one's bindings over this editor's own defaults, entirely in memory. Each is
- * trimmed from that editor's own well-known VS Code keymap extension down to the commands this
- * editor's reduced contribution set actually registers (see monaco-core.ts): line
- * comment/delete/copy/move, multi-cursor, fold/unfold, find/replace. Left out for all of them:
- * workbench-level commands (there is no explorer, no editor groups, no command palette here),
- * provider-dependent ones (format, rename, organize imports — no LSP), and chord bindings
- * ("ctrl+k ctrl+b") — `parseKeyCombo` only understands a single combo per command.
- * A binding identical to this editor's own default is left out too, since it would be a no-op.
- *
- * Emacs and Neovim/Vim have no preset here: both are almost entirely chords or modal motions
- * (C-x C-s; `dd`, `ciw`), which the reasons above already rule out — a "preset" built only from
- * their handful of non-chord, non-modal keys would barely resemble either and isn't worth
- * shipping. Cursor, Windsurf and Zed are VS Code forks that keep its keymap, and Android Studio
- * runs on the IntelliJ platform with IntelliJ's own default keymap — all four would just be a
- * second copy of an existing preset here, so none gets one of its own. TextMate is left out for
- * a related reason: its real bindings pair Ctrl and Cmd as two separate modifiers on a Mac
- * keyboard, which has no honest equivalent on the Ctrl/Alt/Shift keyboard this app runs on
- * elsewhere. RStudio has no widely-used keymap extension to source one from.
+ * Curated per-editor keymaps, each sourced from that editor's VS Code keymap extension and
+ * trimmed to the commands monaco-core.ts registers; `resolveKeybindings` layers the chosen one
+ * over this editor's defaults in memory. No chords (`parseKeyCombo` takes one combo), no
+ * bindings identical to the default. Modal/chord-only editors and VS Code forks have no preset.
  */
 export const KEYBINDING_PRESETS: KeybindingPreset[] = [
   {
@@ -83,9 +67,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/microsoft/vscode-vs-keybindings. Thin on purpose: Visual Studio's real
-    // defaults for comment/move-line are chords or not built in at all, so those two are all
-    // that carries over.
+    // Source: github.com/microsoft/vscode-vs-keybindings. Visual Studio's comment/move-line
+    // defaults are chords or absent, so only these two carry over.
     id: "visualstudio",
     label: "Visual Studio",
     bindings: {
@@ -105,10 +88,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/stevemoser/vscode-xcode-keybindings. Xcode is Mac-only, so its own
-    // keymap is written with "cmd" throughout; translated to "ctrl" here, since this editor's
-    // KeyMod.CtrlCmd already resolves to the right modifier per platform on its own (see
-    // parseKeyCombo) and every other preset spells it that way.
+    // Source: github.com/stevemoser/vscode-xcode-keybindings. Xcode's "cmd" is written "ctrl"
+    // here: KeyMod.CtrlCmd resolves per platform (see parseKeyCombo).
     id: "xcode",
     label: "Xcode",
     bindings: {

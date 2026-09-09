@@ -20,11 +20,8 @@ function toAccount(entry: StoredAccount): ProviderAccount {
   };
 }
 
-/**
- * The configured accounts, persisted like the projects — except for the token, which only
- * leaves this class decrypted on its way into a provider call or a clone. The renderer sees
- * accounts without tokens, full stop.
- */
+/** The configured accounts. A token only leaves this class decrypted on its way into a provider
+ *  call or a clone; the renderer sees accounts without tokens, full stop. */
 export class AccountStore {
   private readonly file: string;
   private accounts: StoredAccount[] = [];
@@ -43,10 +40,7 @@ export class AccountStore {
     return entry && toAccount(entry);
   }
 
-  /**
-   * Adds the account, or — for the same user on the same host — replaces its token: entering
-   * a fresh token for an account that expired must not leave two rows behind.
-   */
+  /** Adds the account, or replaces the token of the same user on the same host — never two rows. */
   add(provider: ProviderId, host: string, user: string, token: string): ProviderAccount {
     if (!safeStorage.isEncryptionAvailable()) {
       throw new Error("The OS offers no encryption to store the token with");
@@ -89,8 +83,7 @@ export class AccountStore {
     try {
       return safeStorage.decryptString(Buffer.from(entry.token, "base64"));
     } catch {
-      // Encrypted under an OS keychain this machine no longer has — the account needs its
-      // token entered again, which replacing it through `add` is for.
+      // Encrypted under a keychain this machine no longer has; the token must be entered again.
       return undefined;
     }
   }

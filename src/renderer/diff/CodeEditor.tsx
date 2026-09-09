@@ -24,10 +24,8 @@ interface CodeEditorProps {
 
 /**
  * The dialog's Edit mode: one editor and one model for this component's whole lifetime.
- * `DiffDialog` only ever mounts it once it already has the right file's content in hand (its own
- * `file.path === path` guard) and unmounts it the moment another file is chosen, so `path` and
- * `content` are read once, at mount, and nothing here ever needs to swap a model under the user —
- * a look-and-fix dialog, not a multi-file editing session (see CLAUDE.md).
+ * `DiffDialog` mounts it only with the right file's content in hand and unmounts it when another
+ * file is chosen, so `path` and `content` are read once, at mount.
  */
 export function CodeEditor({ path, content, onDirty, onSave, onBusy, ref }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -63,15 +61,12 @@ export function CodeEditor({ path, content, onDirty, onSave, onBusy, ref }: Code
     onBusy(true);
     void (async () => {
       const monaco = await loadMonaco();
-      // Only a grammar diff-highlight.ts bundles gets shiki's colors — same rule the diff view
-      // itself follows; anything else reads as monaco's built-in, uncolored "plaintext". Called
-      // for plaintext too: the first call is also what defines the theme — see ensureLanguage.
+      // Only a grammar diff-highlight.ts bundles gets colors; anything else is "plaintext".
+      // Called for plaintext too — the first call defines the theme (see ensureLanguage).
       const language = languageForPath(path);
       await ensureLanguage(monaco, language ?? null);
-      // The settings dialog's chosen preset, layered over tet's defaults for the commands added
-      // below — free to name any of monaco's own command ids too (see keybindings.ts). Read
-      // before the editor exists: an unmount landing during this read must find nothing to
-      // dispose, not an editor the loop below would then reach for through a nulled ref.
+      // Read before the editor exists: an unmount landing during this await must find nothing
+      // to dispose.
       const { editorKeybindingPreset } = await window.tet.settings.get();
       const keybindings = resolveKeybindings(editorKeybindingPreset);
       if (cancelled || !hostRef.current) {
@@ -84,12 +79,9 @@ export function CodeEditor({ path, content, onDirty, onSave, onBusy, ref }: Code
       });
       const fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim();
       editorRef.current = monaco.editor.create(hostRef.current, { ...editorOptions(fontFamily), model });
-      // No keybinding here — every command tet adds gets one the same way, below, from the
-      // resolved keybindings ("ctrl+s" among tet's own defaults in there).
+      // No keybinding here; it comes from the resolved keybindings below.
       editorRef.current.addAction({ id: "tet.save", label: "Save", run: () => onSaveRef.current() });
-      // Monaco's find/find-replace actions (Ctrl+F/Ctrl+H, both already bound by default) don't
-      // declare a context menu group of their own — VS Code's own right-click menu doesn't carry
-      // them either. Added here as their own group so they're reachable without the shortcuts.
+      // Monaco's find/find-replace actions declare no context menu group; added as one here.
       editorRef.current.addAction({
         id: "tet.find",
         label: "Find",
@@ -104,8 +96,7 @@ export function CodeEditor({ path, content, onDirty, onSave, onBusy, ref }: Code
         contextMenuOrder: 2,
         run: (instance) => void instance.getAction("editor.action.startFindReplaceAction")?.run()
       });
-      // An entry whose key or command this editor doesn't recognise is skipped rather than
-      // guessed at — the combo at parse time, an unknown command id silently at run time.
+      // An unknown combo is skipped at parse time, an unknown command id silently at run time.
       for (const [combo, commandId] of Object.entries(keybindings)) {
         const parsed = parseKeyCombo(monaco, combo);
         if (parsed !== undefined) {
@@ -121,13 +112,10 @@ export function CodeEditor({ path, content, onDirty, onSave, onBusy, ref }: Code
       editorRef.current?.dispose();
       model?.dispose();
       editorRef.current = null;
-      // The load above may still be in flight, and its own onBusy(false) never runs once
-      // cancelled — without this the dialog's bar would keep running for an editor that no
-      // longer exists (toggled back to Diff mid-load). Same hand-back DiffView's cleanup does.
+      // A load still in flight never reaches its own onBusy(false) once cancelled.
       onBusy(false);
     };
-    // Mount-once, deliberately: `path` and `content` are this instance's fixed starting point,
-    // never a later value to re-sync to — see the doc comment above for why that always holds.
+    // Mount-once: `path` and `content` are this instance's fixed starting point.
   }, []);
 
   return <div className="editor-host" ref={hostRef} />;

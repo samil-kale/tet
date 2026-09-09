@@ -1,9 +1,7 @@
 import * as fs from "node:fs";
 
-/**
- * How often the loop is sampled. A keystroke on its way to a pty waits in the same queue as
- * this timer, so how late the timer runs is how late the keystroke would be.
- */
+/** How often the loop is sampled. A keystroke on its way to a pty waits in the same queue as this
+ *  timer, so how late the timer runs is how late the keystroke would be. */
 const SAMPLE_MS = 20;
 /** Below this, a late sample is scheduling noise rather than something a typist could feel. */
 const STALL_MS = 50;
@@ -11,37 +9,24 @@ const STALL_MS = 50;
 const LOUD_STALL_MS = 200;
 /** One summary per interval, and only when there was something to report. */
 const REPORT_MS = 60_000;
-/**
- * Below this, a single measured block is scheduling noise the same way a short stall is; above
- * it, worth a line naming the block itself rather than leaving it to the "ran last" guess.
- */
+/** Below this a single measured block is scheduling noise; above it, worth a line naming the block
+ *  itself rather than leaving it to the "ran last" guess. */
 const SLOW_MS = 100;
-/**
- * The log is appended across sessions, so a stall can still be looked up days after the run
- * that produced it; once past this size it is rotated to `<file>.1`, replacing the previous
- * generation, so at most two files of this size ever exist.
- */
+/** The log is appended across sessions, so a stall can be looked up days later; past this size it
+ *  is rotated to `<file>.1`, so at most two files of this size ever exist. */
 const MAX_LOG_BYTES = 1_000_000;
 
-/**
- * The main process's continuous work, in the places it happens. Nothing here is a guess about
- * cost — the point is to find out which of them the loop is actually sitting in.
- */
+/** The main process's continuous work, in the places it happens. */
 export type Activity = "output" | "input" | "reconcile" | "git" | "emit" | "startup";
 
 const counts = new Map<Activity, number>();
-/**
- * What ran last. A stall is only noticed by the sample that follows it, so whatever was
- * running just before is the likeliest thing to have blocked it — a guess `logSlow` doesn't
- * need, since it times the block directly.
- */
+/** What ran last. A stall is only noticed by the sample that follows it, so whatever was running
+ *  just before is the likeliest thing to have blocked it. */
 let lastActivity: Activity | undefined;
 /**
- * Which stretch of "startup" ran last: the one activity that is a sequence of different things
- * (the window, the requirements check, each project's open, the git process, each agent's
- * setup and first listing), every one of them run once and none of them counted elsewhere —
- * so a stall before the first output or refresh, which the tally alone can only call
- * "nothing", is put to the stretch it fell in. Also what the "after" of a stall says.
+ * Which stretch of "startup" ran last: the one activity that is a sequence of different things,
+ * each run once and none of them counted elsewhere — so a stall before the first output or
+ * refresh, which the tally alone can only call "nothing", is put to the stretch it fell in.
  */
 let startupPhase: string | undefined;
 
@@ -56,11 +41,8 @@ export function markStartup(phase: string): void {
   startupPhase = phase;
 }
 
-/**
- * A stretch of startup that runs synchronously, timed as `logSlow` times a block: what it
- * returns is what `run` returns. For the async ones, `markStartup` alone — their blocking part,
- * if any, shows up as a stall "after" them.
- */
+/** A stretch of startup that runs synchronously, timed as `logSlow` times a block; returns what
+ *  `run` returns. For the async ones, `markStartup` alone. */
 export function timeStartup<T>(phase: string, run: () => T): T {
   markStartup(phase);
   const start = performance.now();
@@ -88,13 +70,9 @@ function tally(): string {
 
 let append: ((line: string) => void) | undefined;
 
-/**
- * The renderer's half of the same question. A keystroke's lag is either process: the sampler
- * above cannot see xterm parsing a busy TUI's repaint or React re-rendering the git pane, so
- * the renderer reports its own long tasks (Chromium's Long Tasks API, main.tsx) into this log,
- * tallied into the same summary and, past the same threshold, given a line of their own.
- * Reported rather than sampled: a task the API names is one that actually ran.
- */
+/** The renderer's half of the same question: the sampler above cannot see xterm parsing a busy
+ *  TUI's repaint or React re-rendering the git pane, so the renderer reports its own long tasks
+ *  (Chromium's Long Tasks API, main.tsx) into this log and the same summary. */
 let rendererTasks = 0;
 let rendererMs = 0;
 let rendererWorst = 0;
@@ -108,11 +86,8 @@ export function reportRendererTask(ms: number, context: string): void {
   }
 }
 
-/**
- * Names a block of work directly instead of leaving it to a stall sample's "ran last" guess —
- * for work whose own duration is worth knowing regardless of whether it happened to line up
- * with a sample. Callers still call `countActivity` themselves for the tally.
- */
+/** Names a block of work directly instead of leaving it to a stall sample's "ran last" guess.
+ *  Callers still call `countActivity` themselves for the tally. */
 export function logSlow(activity: Activity, ms: number): void {
   if (ms >= SLOW_MS) {
     append?.(`${activity} took ${Math.round(ms)}ms`);
@@ -122,11 +97,8 @@ export function logSlow(activity: Activity, ms: number): void {
 /**
  * Records how long the main process's event loop is blocked and what was running when it was.
  * Writes to a file and nowhere else: the app is normally started from a shortcut, where stdout
- * goes nowhere, and a line in the console is one more thing the loop being measured has to do.
- *
- * Runs in every session rather than behind a switch: a stall is noticed while working, not while
- * looking for it, and by the time it is worth investigating the run that produced it is over.
- * A sample every 20ms is the price, and it is paid whether or not anything is being measured.
+ * goes nowhere. Runs in every session rather than behind a switch — by the time a stall is worth
+ * investigating, the run that produced it is over. A sample every 20ms is the price.
  */
 export function startEventLoopMonitor(logFile: string): void {
   try {

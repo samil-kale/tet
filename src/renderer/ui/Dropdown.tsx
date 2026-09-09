@@ -16,8 +16,8 @@ interface DropdownProps {
 /**
  * A `<select>` stand-in built from the shared `ContextMenu`: Chrome renders a native select's
  * open list itself, so `option:hover`/`:checked` and every other CSS color on this page are
- * ignored for the highlighted row (measured directly, not assumed) — there is no way to theme
- * it short of not using `<select>`.
+ * ignored for the highlighted row (measured). There is no way to theme it short of not using
+ * `<select>`.
  */
 export function Dropdown({ value, options, onChange }: DropdownProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; width: number } | null>(null);

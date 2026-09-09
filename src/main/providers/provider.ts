@@ -1,10 +1,7 @@
 import type { RemoteRepository } from "../../shared/types";
 
-/**
- * What a repository host has to offer tet: authenticate, list repositories, and — through
- * the listing — the url a repository is cloned from. Everything past the clone goes through
- * the local git CLI like any other repository; a provider never touches a working tree.
- */
+/** What a repository host offers tet: authenticate and list repositories, with the clone url in the
+ *  listing. Everything past the clone goes through the local git CLI; no provider touches a tree. */
 export interface GitProvider {
   /** Checks the token against the host and answers the login it belongs to. */
   validate(host: string, token: string): Promise<string>;
@@ -12,11 +9,8 @@ export interface GitProvider {
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
 }
 
-/**
- * Pages are followed through the RFC 5988 `Link` header, which GitHub and GitLab both send.
- * The cap bounds an account that can reach thousands of repositories — ten pages of a hundred
- * are more than a picker's search field needs.
- */
+/** Pages are followed through the RFC 5988 `Link` header, which GitHub and GitLab both send; the
+ *  cap bounds an account that can reach thousands of repositories. */
 const PAGE_CAP = 10;
 
 /** One GET as JSON; a non-2xx status becomes an Error carrying what the API said. */
@@ -29,12 +23,9 @@ export async function getJson(url: string, headers: Record<string, string>): Pro
 }
 
 /**
- * Every page of a listing, up to the cap. The first says how many there are: both hosts send
- * `rel="last"` alongside `rel="next"`, so the rest are fetched at once — a page costs about a
- * second, and waiting for each to name the next spends that many seconds in a row for nothing.
- *
- * Where there is no `rel="last"` — a listing that fits on one page sends neither, and an
- * instance may leave it out past a certain size — it follows `rel="next"` instead.
+ * Every page of a listing, up to the cap. Both hosts send `rel="last"` alongside `rel="next"`, so
+ * the rest are fetched at once — a page costs about a second, and waiting for each to name the next
+ * spends that many seconds in a row. Without a `rel="last"` it follows `rel="next"` instead.
  */
 export async function getPaged(first: string, headers: Record<string, string>): Promise<unknown[]> {
   const response = await fetch(first, { headers });
@@ -92,7 +83,7 @@ function pageOf(url: string): number | undefined {
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-/** The same url with its page replaced — the rest of the query has to be carried along. */
+/** The same url with its page replaced; the rest of the query is carried along. */
 function withPage(url: string, page: number): string {
   const next = new URL(url);
   next.searchParams.set("page", String(page));

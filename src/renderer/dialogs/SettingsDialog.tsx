@@ -27,7 +27,7 @@ interface SettingsDialogProps {
 
 type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "info";
 
-/** The dialog's panes, in the order they are worth opening; the first is the one it opens on. */
+/** The dialog's panes; the first is the one it opens on. */
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "appearance", label: "Appearance" },
   { id: "notifications", label: "Notifications" },
@@ -42,7 +42,7 @@ const PROMPT_LABELS: Record<PromptId, string> = {
   commitMessage: "Commit message"
 };
 
-/** One switch per line, in the order they matter: the turn ended, it is stuck, it is idle. */
+/** One switch per line: the turn ended, it is stuck, it is idle. */
 const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
   { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
@@ -50,9 +50,8 @@ const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
 ];
 
 /**
- * The Files tab's sort-order picker. `foldersNestsFiles` is left out on purpose: the Explorer
- * tree has no file nesting to turn off, so it sorts identically to `default` and would be a
- * second, indistinguishable entry — a hand-written tet.json can still hold it.
+ * The Files tab's sort-order picker. `foldersNestsFiles` is left out: the Explorer tree has no
+ * file nesting, so it sorts identically to `default`. A hand-written tet.json can still hold it.
  */
 const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "default", label: "Default" },
@@ -62,7 +61,7 @@ const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "modified", label: "Modified" }
 ];
 
-/** The Info tab's rows, in the order the versions nest: tet, then what it runs on. */
+/** The Info tab's rows: tet, then what it runs on. */
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
   { key: "version", label: "TET" },
   { key: "electron", label: "Electron" },
@@ -72,12 +71,8 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 ];
 
 /**
- * Everything tet keeps about itself rather than about one repository. Opened from the title
- * bar, over the whole window like the diff.
- *
- * Not part of Dialog.tsx: that file puts *questions* and is built around a form with two
- * buttons. This asks nothing — every switch applies the moment it is flipped, the way VS Code's
- * own settings do, so there is nothing to confirm and nothing to take back.
+ * Everything tet keeps about itself rather than about one repository. Not part of Dialog.tsx:
+ * this asks nothing — every switch applies the moment it is flipped.
  */
 export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
@@ -88,13 +83,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
-    // Asked alongside the settings rather than when the Info tab is first opened: none of it can
-    // change while the process runs, so there is nothing a later read would catch.
+    // Asked alongside the settings: none of it can change while the process runs.
     void window.tet.app.info().then(setInfo);
   }, []);
 
   // The active project's Explorer settings — read on open and again whenever its tet.json
-  // changes underneath, whoever wrote it (the tree's own menu, an editor, an agent).
+  // changes underneath, whoever wrote it.
   useEffect(() => {
     if (!activeProject) {
       setExplorerSettings(null);
@@ -128,8 +122,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   const applyTheme = (id: string): void => patch(() => ({ theme: id }));
 
-  /** Tet's own text is stored as "" (the store does the same, see settings.ts — here as well
-   *  because the dialog's copy is never read back, and the reset button reads off it). */
+  /** Tet's own text is stored as "" (settings.ts does the same); the reset button reads off it. */
   const applyPrompt = (id: PromptId, text: string): void =>
     patch((current) => ({ prompts: { ...current.prompts, [id]: text === DEFAULT_PROMPTS[id] ? "" : text } }));
 
@@ -150,8 +143,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   };
 
   return (
-    // The tabs head the dialog instead of a title, as in the add-repository dialog: the selected
-    // one names what is below it, and "Settings" is what the button that opened this says.
+    // The tabs head the dialog instead of a title, as in the add-repository dialog.
     <DialogFrame
       header={{ tabs: TABS, active: tab, onSelect: setTab }}
       className="wide settings-dialog"
@@ -174,9 +166,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               ]}
             />
           </label>
-          {/* Not live, for the same reason the notifications below aren't: xterm, shiki and
-              monaco each read the theme once and keep it, as does the window's own chrome;
-              the agents are handed it when their first terminal in a project starts. */}
+          {/* Not live: xterm, shiki, monaco and the window's chrome each read the theme once
+              and keep it, and an agent is handed it when its first terminal starts. */}
           <p className="dialog-detail">Applies after tet is restarted.</p>
         </>
       )}
@@ -194,10 +185,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <span>{label}</span>
               </label>
             ))}
-          {/* Said out loud because it is not what a switch usually promises: an agent is handed
-              its notification setup once per project, when its first terminal there starts —
-              Claude Code as the settings file it reads once, opencode as the plugin it loads
-              once — and neither can be reached afterwards. */}
+          {/* An agent is handed its notification setup once per project, when its first
+              terminal there starts, and cannot be reached afterwards. */}
           <p className="dialog-detail">
             Handed to an agent when its first terminal in a project starts - a change reaches
             already-open projects only after tet is restarted.
@@ -290,9 +279,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               Reset to default
             </button>
           </div>
-          {/* Always the text the agent will get, never a placeholder: the default is what a
-              user edits from, so it has to be in the box. Live — read when the commit-message
-              suggestion is requested, unlike everything else in this dialog. */}
+          {/* Always the text the agent will get, never a placeholder. Live — read when the
+              commit-message suggestion is requested, unlike everything else here. */}
           <textarea
             className="settings-prompt"
             spellCheck={false}

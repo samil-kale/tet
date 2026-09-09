@@ -21,34 +21,19 @@ type Phase =
   | { kind: "failed"; message: string };
 
 /**
- * The one dialog for the whole sbx open path and its configuration — installed or not, signed in
- * or not, network policy set or not, this is where it all shows, not scattered across notices.
+ * The one dialog for the whole sbx open path and its configuration. Runs its own setup once
+ * mounted: sbx installed, signed in (signing in in the background if needed), machine-wide
+ * network policy initialized to "balanced" if needed (see sbx.ts's initSbxPolicy), then the
+ * project's saved config. Each step shows in `DialogFrame`'s `busy` bar. Installs nothing: no
+ * command works on all three platforms. An account whose policies an organization manages gets
+ * a wall instead of the fields, what a managed policy grants never having been measured.
  *
- * Runs its own setup once mounted: check sbx is installed, check sign-in, sign in in the
- * background if needed (`sbx login` opens the OAuth page in the browser itself), check the
- * machine-wide network policy, initialize it (to "balanced") if needed — a one-time,
- * all-sandboxes setting, so a background default rather than a per-project choice (see sbx.ts's
- * initSbxPolicy). Each step shows in the title bar's progress bar (`DialogFrame`'s `busy` — see
- * "One progress indicator per pane" in CLAUDE.md) so the click is never followed by nothing
- * happening. Installing is not a step: the same rule as RequirementsDialog, no command works on
- * all three platforms, so a missing sbx gets Docker's install page and a "Check again". An
- * account whose policies an organization manages gets a wall instead of the fields: every mount
- * tet makes is a local filesystem rule, and what a managed policy grants has never been
- * measured (see sbx.ts's checkSbxGoverned) — so tet does not offer sandboxing there at all
- * rather than offering something it cannot verify works.
- *
- * The fields' state lives here, not in SbxSettingsFields: Save (the footer button, once ready)
- * builds the request it sends to `sbx:save-config` from it — session-manager.ts's `resolveSbxRun`
- * is what actually acts on what gets saved, the next time a claude/codex tab in this project
- * spawns. Each sandboxed agent authenticates inside the sandbox (its own `/login`, or for pi a
- * credential from sbx's own store — see SbxProjectConfig) — tet never asks for or stores one.
- *
- * A step that resolves after the dialog closed sets state on an unmounted component, which React
- * ignores — so nothing here tracks whether it is still mounted.
+ * The fields' state lives here, not in SbxSettingsFields: Save builds the `sbx:save-config`
+ * request from it. Each sandboxed agent authenticates inside the sandbox.
  */
 export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) {
   // One way out, whichever of × / Escape / Cancel triggers it: `cancelSbxSetup` is a no-op when
-  // nothing is running, so this is safe to call every time, not just from the Cancel button.
+  // nothing is running.
   const close = (): void => {
     window.tet.sbx.cancelSetup();
     onClose();
@@ -84,8 +69,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       setPhase({ kind: "governed" });
       return;
     }
-    // The dialog's own saved state — read once setup is done, so Save always writes on top of
-    // what is actually on disk rather than the blank defaults this component mounted with.
+    // Read once setup is done, so Save writes on top of what is on disk rather than the blank
+    // defaults this component mounted with.
     const config = await window.tet.sbx.getConfig(project.id);
     setEnabled(config.enabled);
     setState(fromConfig(config));
@@ -161,7 +146,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         </label>
       )}
       {phase.kind === "ready" && (
-        // The one part that scrolls — see the CSS: the checkbox above stays put.
+        // The one part that scrolls; the checkbox above stays put.
         <div className="sbx-settings-fields-scroll">
           <SbxSettingsFields state={state} setState={setState} />
         </div>

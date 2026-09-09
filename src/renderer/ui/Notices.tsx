@@ -2,34 +2,31 @@ import { useSyncExternalStore } from "react";
 import type { NoticeSeverity } from "../../shared/types";
 import { SeverityIcon } from "./icons";
 
-/** Long enough to read a line, short enough not to sit in the way. Same for every severity — a
- *  notice you didn't click away still shouldn't outlive the moment it was about. */
+/** Long enough to read a line, short enough not to sit in the way. Same for every severity. */
 const DISMISS_MS = 8000;
 
-/** How long a progress notice sits at 100% before it closes itself — long enough to read that
- *  it finished, short enough not to need a click. */
+/** How long a progress notice sits at 100% before it closes itself. */
 const PROGRESS_DONE_MS = 2000;
 
 interface ShownNotice {
   id: number;
   severity: NoticeSeverity;
   message: string;
-  /** 0-100 while tracking a download; undefined for a plain notice. Presence, not severity,
-   *  decides whether a notice renders its bar and skips click-to-dismiss. */
+  /** 0-100 while tracking a download; undefined for a plain notice. Its presence decides whether
+   *  a notice renders its bar and skips click-to-dismiss. */
   progress?: number;
 }
 
 /**
  * Everything the user is told goes through here — there is no second way to say something in
  * this app, and views keep no messages of their own. A plain function rather than a hook or a
- * prop, the way VS Code's `window.showErrorMessage` is: whatever fails, wherever, can report it
- * without a callback threaded to it first.
+ * prop, so whatever fails, wherever, can report it without a callback threaded to it first.
  */
 let shown: ShownNotice[] = [];
 const listeners = new Set<() => void>();
 let nextId = 0;
-// The one progress notice in flight, if any. A download's percent changes on every tick, so
-// each tick updates this notice in place rather than stacking a new one under a new message.
+// The one progress notice in flight, if any. A download's percent changes on every tick, so each
+// tick updates this notice in place rather than stacking a new one.
 let progressNoticeId: number | null = null;
 
 function publish(next: ShownNotice[]): void {
@@ -45,8 +42,7 @@ export function notify(severity: NoticeSeverity, message: string, progress?: num
     return;
   }
   const id = ++nextId;
-  // A failure that repeats (a checkout retried on the same dirty tree, say) says nothing new
-  // the second time — better one message standing than a wall of identical ones.
+  // An identical message already standing is dropped, not stacked.
   if (shown.some((notice) => notice.message === message && notice.severity === severity)) {
     return;
   }
@@ -86,8 +82,7 @@ function subscribe(listener: () => void): () => void {
 
 /**
  * Stacked over the window's bottom right corner, newest at the bottom, each dismissed by
- * clicking it — except a progress notice, which tracks a download and closes itself once it
- * reaches 100% rather than waiting to be clicked away.
+ * clicking it — except a progress notice, which closes itself once it reaches 100%.
  */
 export function Notices() {
   const notices = useSyncExternalStore(subscribe, () => shown);

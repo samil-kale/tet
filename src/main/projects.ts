@@ -15,17 +15,15 @@ export interface ProjectDeps {
 }
 
 /**
- * Opens a folder as a project. Shared by the add-repository dialog (`projects:open-path`) and
- * the control channel, so both answer a typed path the same way: the folder may not exist —
- * and a project that does not would watch nothing and spawn nothing, with only a notice per
- * action to say why.
+ * Opens a folder as a project, shared by the add-repository dialog (`projects:open-path`) and the
+ * control channel so both answer a typed path the same way. The folder may not exist; a project
+ * that does not watches nothing and spawns nothing, with a notice per action to say why.
  */
 export async function addProject({ store, openProject }: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
   if (!(await fs.promises.stat(directory).then((stat) => stat.isDirectory(), () => false))) {
     return { error: `${directory} is not a folder` };
   }
-  // Picking a subdirectory of a repository opens the repository itself: git reports every
-  // path relative to the root, and the root is what branches and status describe.
+  // Picking a subdirectory opens the repository itself: git reports paths relative to the root.
   const project = store.add((await git.resolveRoot(directory).catch(() => undefined)) ?? directory);
   openProject(project);
   return { project };
@@ -33,8 +31,8 @@ export async function addProject({ store, openProject }: ProjectDeps, directory:
 
 /** Closes a project: its terminals, its repository, then the stored entry. */
 export function removeProject({ store, repositories, sessions }: ProjectDeps, projectId: string): void {
-  // Not awaited: the project is gone from the window either way, and its sessions are given a
-  // moment to end by themselves (see TerminalSession.stop) rather than holding the removal up.
+  // Not awaited: the project is gone from the window either way, and its sessions still get their
+  // moment to end by themselves (TerminalSession.stop).
   void sessions.close(projectId);
   repositories.close(projectId);
   store.remove(projectId);
@@ -80,11 +78,8 @@ export class ProjectStore {
     this.save();
   }
 
-  /**
-   * Puts the projects in the given order. Ids the store does not know are dropped, and ones the
-   * caller left out keep their place at the end: the renderer sends the list it had on screen,
-   * which can be a moment behind one added or closed elsewhere.
-   */
+  /** Puts the projects in the given order. Unknown ids are dropped, ones left out keep their place
+   *  at the end: the renderer sends the list it had on screen, which can be a moment behind. */
   reorder(projectIds: string[]): void {
     const known = new Map(this.projects.map((project) => [project.id, project]));
     const ordered = projectIds

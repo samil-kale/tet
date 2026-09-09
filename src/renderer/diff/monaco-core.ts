@@ -1,32 +1,19 @@
 /**
- * Monaco's own `editor.main` pulls in ~80 Monarch language definitions plus full CSS/HTML/JSON/
- * TypeScript language *services* (each wanting a worker of its own) — exactly what colouring
- * through shiki (`editor.ts`) is meant to replace. 0.56.0 ships no narrower entry point (an
- * `edcore.main` some older versions had is gone), so this file reproduces `editor.main.js`'s own
- * import list minus its language-definition and language-feature-service blocks: every editor
- * contribution (find, folding, bracket matching, context menu, coreCommands, ...), none of the
- * languages. Re-diff against `node_modules/monaco-editor/editor/editor.main.js` on a
- * monaco upgrade — this list is not a public API and can be renamed or reshuffled under it.
- *
- * Also left out, on top of that: every contribution whose only job is talking to a language
- * provider (code actions, code lens, colour swatches, document symbols, drop/paste transforms,
- * format, marker navigation, hover, inlay hints, inline completions, linked editing, parameter
- * hints, references, rename, semantic tokens, suggestions, go-to-definition) — this editor
- * registers no such providers (shiki colours tokens, nothing resolves symbols or diagnostics), so
- * each of those loaded for nothing at all. And a handful that plainly don't apply here: a dev-only
- * token inspector, iPad's on-screen-keyboard contribution, the experimental GPU renderer, a
- * high-contrast theme toggle (the theme is ours, from `editor.ts`), X11's middle-mouse-paste
- * scroll, and sticky scroll (already off via `editorOptions`, so loading it bought nothing).
+ * Monaco's `editor.main` pulls in ~80 Monarch languages plus the CSS/HTML/JSON/TypeScript
+ * language services, each with a worker; colouring goes through shiki (`editor.ts`) instead.
+ * 0.56.0 ships no narrower entry point, so this file reproduces `editor.main.js`'s import list
+ * minus the language blocks and every contribution that only talks to a language provider
+ * (hover, suggestions, format, rename, go-to-definition, ...). Re-diff against
+ * `node_modules/monaco-editor/editor/editor.main.js` on a monaco upgrade — the list is not a
+ * public API.
  */
 import "monaco-editor/editor/contrib/anchorSelect/browser/anchorSelect.js";
 import "monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js";
 import "monaco-editor/editor/contrib/caretOperations/browser/transpose.js";
 import "monaco-editor/editor/contrib/clipboard/browser/clipboard.js";
 import "monaco-editor/editor/browser/widget/codeEditor/codeEditorWidget.js";
-// monaco-editor's package.json "exports" maps every "./*" to "./esm/vs/*.js" — appending .js to
-// even a .css request, which then 404s. A relative path reaches the file on disk directly,
-// bypassing that map (this is what "exports" restricts: bare-specifier resolution, not a
-// relative one) — the only reason these two imports look unlike the rest of monaco-core.ts.
+// monaco-editor's package.json "exports" maps "./*" to "./esm/vs/*.js", appending .js even to a
+// .css request. A relative path bypasses the map — hence the two CSS imports look unlike the rest.
 import "../../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css";
 import "monaco-editor/editor/contrib/comment/browser/comment.js";
 import "monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js";
@@ -48,9 +35,7 @@ import "monaco-editor/editor/contrib/links/browser/links.js";
 import "monaco-editor/editor/contrib/longLinesHelper/browser/longLinesHelper.js";
 import "monaco-editor/editor/contrib/multicursor/browser/multicursor.js";
 import "monaco-editor/editor/contrib/placeholderText/browser/placeholderText.contribution.js";
-// standaloneCommandsQuickAccess.js (F1's full command palette) deliberately left out: this is a
-// quick look-and-fix editor, not an IDE, and that surface is dozens of internal editor commands
-// nobody asked for here.
+// standaloneCommandsQuickAccess.js (F1's command palette) deliberately left out.
 import "monaco-editor/editor/standalone/browser/quickAccess/standaloneHelpQuickAccess.js";
 import "monaco-editor/editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js";
 import "monaco-editor/editor/contrib/readOnlyMessage/browser/contribution.js";

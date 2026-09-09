@@ -6,21 +6,11 @@ import { buildHookNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript
 import type { NotificationSettings } from "../../../shared/types";
 
 /**
- * Builds the Stop hook: it records that the session finished a turn — a file named after its
- * id — and then notifies, where notifications are on. Both are guarded by the same condition,
- * since both answer the one question of whether the turn is actually over.
- *
- * Stop fires on every turn boundary, including one that merely launches a background subagent
- * or shell command and returns at once — so unguarded, "Finished" shows up while that work is
- * still running.
- *
- * The Stop payload carries a `background_tasks` array for exactly this: every still pending
- * job, each with an `id`, a `type` (`subagent` for Task/Agent runs, `shell` for Bash calls
- * made with run_in_background) and a `status`.
- *
- * Deliberately narrow: it suppresses only on `status: running`. An unknown status therefore
- * reports rather than staying silent — a spurious mark is a far better failure than a job
- * stuck in the list silencing every future one.
+ * The Stop hook: touches the "finished" marker and notifies where enabled, both behind one
+ * guard. Stop fires on every turn boundary, including one that merely launched a background
+ * subagent or shell command; the payload's `background_tasks` array lists each pending job
+ * with `id`, `type` (`subagent`, `shell`) and `status`. Suppresses only on `status: running`,
+ * so an unknown status reports rather than silencing every future turn.
  */
 function buildStopCommand(storageDir: string, notifyCommand: string | undefined, target: HookTarget): string {
   const marks = markerDir(storageDir, "finished");
@@ -32,11 +22,9 @@ function buildStopCommand(storageDir: string, notifyCommand: string | undefined,
       WIN_BOM +
         `try {
   $json = [Console]::In.ReadToEnd() | ConvertFrom-Json
-  # The @() must wrap the whole pipeline, not just the input: PowerShell 5.1 returns a bare
-  # object rather than a 1-element array when Where-Object matches exactly once, and a bare
-  # object has no .Count - so $running.Count yields $null and the comparison below turns
-  # false. That is the single-subagent case, i.e. the common one. The $_ test drops the lone
-  # $null that piping an absent field would pass on.
+  # @() must wrap the whole pipeline: PowerShell 5.1 returns a bare object when Where-Object
+  # matches exactly once, and a bare object has no .Count. The $_ test drops the lone $null
+  # an absent field pipes on.
   $running = @($json.background_tasks | Where-Object { $_ -and $_.status -eq "running" })
   if ($running.Count -gt 0) {
     exit 0
@@ -53,10 +41,8 @@ ${notifyCommand ?? ""}
     scriptFile,
     `#!/bin/sh
 json=$(cat)
-# Isolate the background_tasks array before matching, so a "status":"running" that merely
-# appears in some other field (last_assistant_message quoting the payload shape, say)
-# cannot suppress the notification. Task objects hold no nested arrays, so stopping at the
-# first ] is safe.
+# Isolate the background_tasks array first, so a "status":"running" quoted in another field
+# cannot suppress. Task objects hold no nested arrays, so stopping at the first ] is safe.
 tasks=$(printf '%s' "$json" | sed -n 's/.*"background_tasks"[[:space:]]*:[[:space:]]*\\(\\[[^]]*\\]\\).*/\\1/p')
 if printf '%s' "$tasks" | grep -q '"status"[[:space:]]*:[[:space:]]*"running"'; then
   exit 0
@@ -69,10 +55,9 @@ ${notifyCommand ?? ""}
 }
 
 /**
- * Generates the settings file that registers Claude Code's hooks, and returns the arguments
- * that point the CLI at it. Everything is scoped to that per-repository file and passed with
- * `--settings`, which Claude Code layers on top of its own configuration — the user's
- * `~/.claude/settings.json` is never read, written or replaced here.
+ * Generates the per-repository settings file registering Claude Code's hooks and returns the
+ * `--settings` arguments. Claude Code layers it over its own configuration; the user's
+ * `~/.claude/settings.json` is never touched.
  */
 export function setupClaudeHooks(
   storageDir: string,
@@ -84,11 +69,9 @@ export function setupClaudeHooks(
   target: HookTarget = HOST_TARGET
 ): string[] {
   const hooks: Record<string, unknown> = {
-    // Two commands on the one event: the context file's contents become part of the prompt,
-    // and the marker says the session has started working. Order matters only in that the
-    // second must print nothing — everything a UserPromptSubmit hook writes is appended to
-    // the prompt itself — and it must exit 0 whatever happens, since a non-zero
-    // UserPromptSubmit hook can hold the prompt back; `buildMarkCommand` guarantees both.
+    // The context file's contents become part of the prompt; the marker says the session is
+    // working. A UserPromptSubmit hook's output is appended to the prompt and a non-zero exit
+    // can hold it back, so the marker command prints nothing and always exits 0.
     UserPromptSubmit: [
       {
         hooks: [
@@ -100,22 +83,13 @@ export function setupClaudeHooks(
   };
   const repositoryName = path.basename(cwd);
 
-  // Registered whatever the notification settings say: the same hook is what marks the tab,
-  // and that mark is not a notification the user can turn off — it is how a session that
-  // finished out of sight is found again. Only the toast inside it is optional. The command
-  // itself is `tet-ctl notify` either way (see buildHookNotifyCommand) — host or sandboxed,
-  // the process actually showing the toast is always the one on the other end of the control
-  // channel, never this hook's own.
+  // Registered whatever the settings say: the mark is not optional, only the toast inside it.
   const notify = notifications.finished ? buildHookNotifyCommand(target, `${displayName}: Finished`, `Finished in ${repositoryName}`) : undefined;
   hooks.Stop = [{ hooks: [{ type: "command", command: buildStopCommand(storageDir, notify, target) }] }];
 
-  // A turn that stopped on a question, registered on the same terms as Stop above: the command
-  // marks the tab whatever the settings say, and only the toast inside it is optional. The
-  // matcher is the pair of Notification events that mean Claude Code is actually blocked —
-  // `idle_prompt` is deliberately not among them, since that one fires *after* a turn ended and
-  // is already what the bubble stands for. No guard of its own, unlike Stop's
-  // `background_tasks` check: Claude Code raises these events only when it has actually stopped
-  // for an answer, so there is no "it merely looks stopped" case to rule out.
+  // The two Notification events that mean Claude Code is blocked on the user. Not
+  // `idle_prompt`: that fires after a turn ended, which the bubble already stands for. No
+  // guard: these events are raised only when it has actually stopped for an answer.
   const notificationHooks: { matcher: string; hooks: { type: string; command: string }[] }[] = [
     {
       matcher: "permission_prompt|elicitation_dialog",
@@ -134,8 +108,7 @@ export function setupClaudeHooks(
       ]
     }
   ];
-  // Claude Code only: it is the one agent whose events name the idle case, and nothing
-  // equivalent is wired for Codex or opencode — the switch's label in Settings says so.
+  // Claude Code is the one agent with an idle event; the switch's label in Settings says so.
   if (notifications.idleReminder) {
     notificationHooks.push({
       matcher: "idle_prompt",
@@ -167,19 +140,13 @@ export function setupClaudeHooks(
     }
   ];
 
-  // The context block points at a file in tet's own storage — outside the repository,
-  // where reads are denied unless granted. Scoped to that one file rather than the whole
-  // directory, which also holds the notify scripts and this settings file.
+  // The context files sit outside the repository, where reads are denied unless granted.
+  // Per file, not the directory (which also holds the scripts and this settings file).
   const permissions = { allow: context.contextReadPaths.map((file) => `Read(${target.embed(file)})`) };
 
-  // Claude Code paints its own theme — dark by default, or whatever `~/.claude.json` says —
-  // without looking at the terminal, so on a light background its diff blocks came out as
-  // the dark theme's near-black red and green. A `theme` in this file outranks the global
-  // one for this process alone (measured: `light` changes every RGB the welcome screen is
-  // drawn with), so the user's own file stays as it is. One of Claude's built-in themes, not
-  // a custom one in tet's colors: those it reads after its first render — from a plugin and
-  // from its own themes directory alike — and draws a dark frame in the meantime, long enough
-  // to see (measured), which was tried and taken back out.
+  // Claude Code paints dark unless told otherwise; `theme` here outranks `~/.claude.json` for
+  // this process alone (measured). A built-in theme name, not a custom one: custom themes load
+  // after the first render, and it draws a dark frame meanwhile (measured).
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.writeFileSync(settingsFile, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));
   return ["--settings", target.embed(settingsFile)];

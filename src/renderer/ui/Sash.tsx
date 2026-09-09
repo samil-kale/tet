@@ -1,25 +1,20 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
 
 /**
- * Where a dragged pane size is kept. Layout describes the window rather than any one
- * repository, so it lives in the renderer's own storage instead of the project store, and
- * every project sees the same one.
+ * Where a dragged pane size is kept. Layout describes the window rather than any one repository,
+ * so it lives in the renderer's own storage instead of the project store.
  */
 const STORAGE_PREFIX = "tet.layout.";
 /** How long after the last resize a pane size is written to storage. */
 const PERSIST_MS = 300;
 
 /**
- * The floor every pane shares, per direction. A pane here is either a column beside the
- * terminals or one of two sections stacked inside such a column, and each kind is dragged the
- * same way — so this is one number per direction rather than one per view, the way the 35px
- * bar and the 22px action button are.
+ * The floor every pane shares, per direction — one number per direction rather than one per view.
  *
- * The height is a section header (35px) and three of the 28px rows under it, which is the
- * least that still reads as a list rather than a strip. The width is what such a header needs
- * with its actions beside it. `styles.css` states both again as `--pane-min-width` and
- * `--pane-min-height`, and they have to stay in step: a sash only bounds a *drag*, while a
- * window being made smaller reaches the same panes without going through one.
+ * The height is a section header (35px) and three of the 28px rows under it; the width is what
+ * such a header needs with its actions beside it. `styles.css` states both again as
+ * `--pane-min-width` and `--pane-min-height`, and they have to stay in step: a sash only bounds
+ * a *drag*, while a window being made smaller reaches the same panes without going through one.
  */
 export const MIN_PANE_WIDTH = 180;
 export const MIN_PANE_HEIGHT = 120;
@@ -32,8 +27,8 @@ export function usePaneToggle(key: string, initial: boolean): [boolean, (open: b
     const stored = localStorage.getItem(STORAGE_PREFIX + key);
     return stored === null ? initial : stored === "true";
   });
-  // Stable, like a setState: it is passed down as a prop, and a fresh function per render
-  // would re-render every memoized view that takes it.
+  // Stable, like a setState: passed down as a prop, and a fresh function per render would
+  // re-render every memoized view that takes it.
   const set = useCallback(
     (next: boolean) => {
       setOpen(next);
@@ -45,12 +40,10 @@ export function usePaneToggle(key: string, initial: boolean): [boolean, (open: b
 }
 
 /**
- * A number the user sets by dragging, restored on the next start — a pane size here, a
- * divider's share in the terminal split (`useDividerFraction`). `restore` turns what storage
+ * A number the user sets by dragging, restored on the next start. `restore` turns what storage
  * holds (`NaN` when nothing) into the value to start from. Written once the drag has settled
- * rather than per pointer move: the write is synchronous, and a drag delivers a value per move —
- * sixty and more a second. A write still pending on unmount is dropped. The setter is stable for
- * the same reason as the toggle's above.
+ * rather than per pointer move: the write is synchronous and a drag delivers sixty and more
+ * values a second. A write still pending on unmount is dropped.
  */
 export function usePersistedNumber(storageKey: string, restore: (stored: number) => number): [number, (next: number) => void] {
   const [value, setValue] = useState(() => restore(Number(localStorage.getItem(storageKey))));
@@ -69,8 +62,8 @@ export function usePersistedNumber(storageKey: string, restore: (stored: number)
 
 /**
  * A pane size the user can drag. The floor applies to what comes back as well, not only to the
- * drag: a size stored before that floor existed would otherwise disagree with the pane's own
- * `min-*` until somebody grabbed the sash.
+ * drag: a stored size below it would disagree with the pane's own `min-*` until somebody grabbed
+ * the sash.
  */
 export function usePaneSize(key: string, initial: number, min: number): [number, (size: number) => void] {
   return usePersistedNumber(STORAGE_PREFIX + key, (stored) =>
@@ -87,18 +80,14 @@ interface SashProps {
   min: number;
   /** How much of the container has to be left over for the pane on the other side. */
   minOther: number;
-  /**
-   * The pane it sizes is the one *behind* it, not in front — dragging towards it makes it
-   * smaller. What the commands list needs, since it is the bottom one that keeps its height.
-   */
+  /** The pane it sizes is the one *behind* it, not in front — what the commands list needs. */
   reverse?: boolean;
   onResize: (size: number) => void;
 }
 
 /**
- * The draggable divider between two panes, VS Code's "sash". It sizes the pane in front of it
- * and lets the rest of the container absorb the difference, so of the two sides only one ever
- * carries a size of its own.
+ * The draggable divider between two panes. It sizes the pane in front of it and lets the rest of
+ * the container absorb the difference, so only one of the two sides carries a size of its own.
  */
 export function Sash({ orientation, size, min, minOther, reverse, onResize }: SashProps) {
   const vertical = orientation === "vertical";
@@ -137,9 +126,8 @@ export function Sash({ orientation, size, min, minOther, reverse, onResize }: Sa
     const next = reverse ? start.size - moved : start.size + moved;
     pending.current = Math.round(Math.max(min, Math.min(next, start.total - minOther)));
     // One resize per frame, not per pointer event: a mouse reports several hundred moves a
-    // second, each of which was a render of everything the size reaches, and nothing between
-    // two paints can be seen anyway. The last position always wins — the frame reads it when
-    // it comes, and `end` flushes what a frame has not yet taken.
+    // second, and nothing between two paints can be seen. The last position wins — the frame
+    // reads it when it comes, and `end` flushes what a frame has not yet taken.
     frame.current ??= requestAnimationFrame(flush);
   };
 

@@ -4,9 +4,8 @@ import { sessionSandbox } from "./sessions";
 
 /**
  * A url too long for the terminal width is broken across rows by opencode's TUI at the last "."
- * that still fits, which leaves nothing in the buffer to tell that break from an ordinary one.
- * The session's messages hold the url whole, so what the screen shows is completed from those —
- * see AgentDefinition.resolveUrlPrefix.
+ * that still fits, leaving nothing in the buffer to tell that break from an ordinary one. The
+ * session's messages hold the url whole — see AgentDefinition.resolveUrlPrefix.
  */
 
 /** Long enough that holding the modifier over the same link twice doesn't refetch, short
@@ -27,8 +26,7 @@ export async function resolveOpencodeUrlPrefix(
     if (found !== undefined) {
       return found;
     }
-    // Nothing found — but the cached answer may just predate the message the url is in, and
-    // the caller remembers a "no" for a while. Worth one fresh look before saying it.
+    // The cached answer may predate the message the url is in — worth one fresh look.
   }
   return longestStartingWith(await fetchSessionUrls(executable, cwd, sessionId), prefix);
 }
@@ -59,18 +57,16 @@ function longestStartingWith(urls: string[], prefix: string): string | undefined
 }
 
 /**
- * `opencode export <id>` prints the whole session as json on stdout (its banner goes to
- * stderr, measured) — a process of its own (~1.5 s), affordable here: only on hover, at most
- * once per fragment (see resolveUrlPrefix), and where the session lives, host or sandbox, as
- * its record says.
+ * `opencode export <id>` prints the whole session as json on stdout (its banner goes to stderr,
+ * measured) — a process of its own (~1.5 s), affordable here: only on hover, at most once per
+ * fragment, and where the session lives, host or sandbox, as its record says.
  */
 async function fetchSessionUrls(executable: string, cwd: string, sessionId: string): Promise<string[]> {
   const output = await runOpencode(executable, cwd, sessionSandbox(cwd, sessionId), ["export", sessionId]);
-  // Every string in the response, whatever its shape: a url can sit in a message part, a
-  // tool result or a summary, and this way no part of opencode's message schema has to be
-  // tracked here. Parsed rather than scanned as raw text, though — json escapes would
-  // otherwise end up inside the urls: a "\n" before one turns it into "nhttps://...", and
-  // an escaped "\/" cuts it short, neither of which can ever match what's on screen.
+  // Every string in the response, whatever its shape, so no part of opencode's message schema
+  // has to be tracked here. Parsed rather than scanned as raw text: json escapes would end up
+  // inside the urls — a "\n" before one turns it into "nhttps://...", an escaped "\/" cuts it
+  // short.
   const strings: string[] = [];
   collectStrings(JSON.parse(output), strings);
   const urls = findUrls(strings.join("\n"));

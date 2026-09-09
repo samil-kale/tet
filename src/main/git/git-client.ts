@@ -2,11 +2,7 @@ import * as path from "node:path";
 import { utilityProcess, type UtilityProcess } from "electron";
 import type { GitRequest, GitResponse } from "./git-host";
 
-/**
- * `git.ts` as seen from the main process: the same functions, each asynchronous now that it
- * answers from another process. Everything it exports already returns a promise, so no
- * signature actually changes.
- */
+/** `git.ts` as seen from the main process: the same functions, each asynchronous. */
 type GitModule = typeof import("./git");
 export type GitApi = {
   [K in keyof GitModule]: GitModule[K] extends (...args: infer A) => infer R
@@ -30,11 +26,8 @@ function fail(message: string): void {
   pending.clear();
 }
 
-/**
- * Starts the git process, or hands back the one already running. It is restarted on the next
- * call after a crash rather than kept alive by a supervisor: git commands are all short-lived
- * and independent, so there is no state in there worth preserving.
- */
+/** Starts the git process, or hands back the running one. Restarted on the next call after a crash
+ *  rather than supervised: git commands are short-lived and independent, so no state is lost. */
 function host(): UtilityProcess {
   if (child) {
     return child;
@@ -68,19 +61,14 @@ function call(method: string, args: unknown[]): Promise<unknown> {
     try {
       host().postMessage(request);
     } catch (error) {
-      // A process that could not be forked, or a port that is already gone: without this the
-      // entry would sit in `pending` for a reply that is never coming, and the caller with it.
+      // A fork that failed or a port already gone; without this the caller waits forever.
       pending.delete(id);
       reject(error instanceof Error ? error : new Error(String(error)));
     }
   });
 }
 
-/**
- * Forwards every property as a call to the git process. A proxy rather than one hand-written
- * line per function: they would all be the same line, and each new function in `git.ts` would
- * need another one before it could be used.
- */
+/** Forwards every property as a call to the git process, so a new `git.ts` function needs no line here. */
 export const git: GitApi = new Proxy({} as GitApi, {
   get:
     (_target, method: string) =>

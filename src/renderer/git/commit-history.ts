@@ -1,10 +1,6 @@
-/**
- * The commit dialog's message history, per project: the last ten messages as they were
- * submitted, newest first, and up to five the user pinned. Kept in `localStorage` under the
- * same `tet.dialog.` namespace the add-repository dialog keeps its last-picked directory in —
- * a fact about how this window's dialogs are used, not about the repository — and per project,
- * since a message names tickets and branches that mean nothing anywhere else.
- */
+/** The commit dialog's message history, per project: the last ten messages as submitted, newest
+ *  first, and up to five pinned. Kept in `localStorage` under the `tet.dialog.` namespace — a
+ *  fact about this window's dialogs, not about the repository. */
 export interface CommitHistory {
   /** Pin order is display order. */
   pinned: string[];
@@ -27,11 +23,8 @@ function readList(value: unknown, cap: number): string[] {
   return value.filter((entry): entry is string => typeof entry === "string").slice(0, cap);
 }
 
-/**
- * Read back defensively, the way a pane layout is: it is the user's `localStorage`, so a shape
- * that does not parse — or one someone edited by hand — is an empty history, never an error.
- * The caps hold on the way in too, so a stored list cannot grow past what the dialog shows.
- */
+/** Read back defensively: a shape that does not parse is an empty history, never an error. The
+ *  caps hold on the way in too. */
 export function loadCommitHistory(projectId: string): CommitHistory {
   try {
     const raw = localStorage.getItem(storageKey(projectId));
@@ -53,12 +46,8 @@ function save(projectId: string, history: CommitHistory): void {
   localStorage.setItem(storageKey(projectId), JSON.stringify(history));
 }
 
-/**
- * Called on submit, whether or not the commit then goes through — a message whose commit
- * failed is exactly one worth having at hand again. A pinned message stays where the user put
- * it; one already recent moves to the front rather than duplicating; the eleventh pushes the
- * oldest out.
- */
+/** Called on submit, whether or not the commit then goes through. A pinned message stays put;
+ *  one already recent moves to the front; the eleventh pushes the oldest out. */
 export function recordCommitMessage(projectId: string, message: string): void {
   const history = loadCommitHistory(projectId);
   if (history.pinned.includes(message)) {
@@ -81,12 +70,9 @@ export function deleteCommitMessage(projectId: string, text: string): CommitHist
   return next;
 }
 
-/**
- * Pins to the end — pin order is display order, like pinned tabs — or unpins to the front of
- * the recents: the unpinned message is the most recently touched, and the oldest recent falls
- * out, the same rotation an eleventh message causes. Pinning past the cap returns the lists
- * unchanged; the dialog disables the pin buttons there, this holds the line for a stale view.
- */
+/** Pins to the end (pin order is display order) or unpins to the front of the recents, pushing
+ *  the oldest out. Pinning past the cap returns the lists unchanged, for a stale view whose pin
+ *  buttons the dialog has not yet disabled. */
 export function toggleCommitPin(projectId: string, text: string): CommitHistory {
   const history = loadCommitHistory(projectId);
   let next: CommitHistory;

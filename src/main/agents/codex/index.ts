@@ -9,20 +9,16 @@ import { setupCodexHooks } from "./hooks";
 import { codexSessionProvider } from "./sessions";
 
 /**
- * On win32 Codex does not ask the terminal for its colors (OSC 10/11 — xterm answers those,
- * and that is what it does elsewhere) but the *console*: `GetConsoleScreenBufferInfoEx` on
- * the ConPTY between us, whose own palette is conhost's Campbell default whatever xterm
- * draws — black behind light gray. Codex blends its composer and user-message boxes from
- * that, so on a light theme they came out near-black on white (measured).
+ * On win32 Codex reads its colors from the *console*, not the terminal:
+ * `GetConsoleScreenBufferInfoEx` on the ConPTY between us, whose palette is conhost's Campbell
+ * default whatever xterm draws. Codex blends its composer and user-message boxes from that, so
+ * on a light theme they came out near-black on white (measured).
  *
- * What ConPTY *does* reflect in that table is OSC 4 — set entry 0 (the default background's
- * index) and 7 (the foreground's) and Codex reads the theme's colors back (measured: the
- * box turns light with the theme). OSC 10/11 change nothing there. The
- * sequence has to be written by a process inside the pty, hence a generated launcher: a
- * `.cmd` that prints it (`<nul set /p` — `echo` would add a line) and hands over to Codex
- * with `%*`, the same `cmd.exe /d /s /c` path an npm `codex.cmd` shim took. ConPTY forwards
- * the OSC 4 to xterm too, which `terminal-views.ts` swallows — otherwise xterm's own ANSI
- * black and white would turn into the theme's background and foreground.
+ * What ConPTY does reflect in that table is OSC 4: set entry 0 (the default background's index)
+ * and 7 (the foreground's) and Codex reads the theme's colors back (measured); OSC 10/11 change
+ * nothing there. The sequence has to come from a process inside the pty, so a generated `.cmd`
+ * prints it (`<nul set /p` — `echo` would add a line) and hands over to Codex with `%*`. ConPTY
+ * forwards the OSC 4 to xterm too, which `terminal-views.ts` swallows.
  */
 function writeConsoleColorLauncher(agentDir: string, executable: string, theme: ThemeDefinition): string {
   const rgb = (hex: string): string => `rgb:${hex.slice(1, 3)}/${hex.slice(3, 5)}/${hex.slice(5, 7)}`;
@@ -38,8 +34,7 @@ export const codexAgent: AgentDefinition = {
   executable: () => "codex",
   versionArgs: ["--version"],
   installUrl: "https://github.com/openai/codex",
-  // `--ephemeral` skips the rollout file entirely, so nothing is left behind for cleanupAsk to
-  // remove — the same reasoning as Claude's `--no-session-persistence`.
+  // `--ephemeral` skips the rollout file entirely, so there is nothing for cleanupAsk to remove.
   askArgs: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
   sessions: codexSessionProvider,
   prepareSpawn: (executable, cwd, paths) => {
@@ -59,8 +54,7 @@ export const codexAgent: AgentDefinition = {
       watchers.push(watchTurnMarkers(paths.agentDir, paths));
       watchers.push(watchTurnMarkers(sandboxHookDir(paths.agentDir), paths));
     } catch (error) {
-      // As with Claude, losing the hooks must not keep Codex from starting — swallowed rather
-      // than rejected, since a rejection here marks the whole agent unstartable.
+      // See prepareSpawn: swallow, never reject.
       console.error("[tet] could not set up Codex hooks:", error);
     }
     return Promise.resolve({ args, executable: launcher, dispose: () => watchers.forEach((stop) => stop()) });
@@ -82,11 +76,9 @@ export const codexAgent: AgentDefinition = {
       return { args: [] };
     }
   },
-  // No documented readiness signal (no port, no log line, no flag) — a plain byte count, tuned
-  // against the TUI's own startup frames observed on a real install: setup/onboarding chunks
-  // total a few hundred bytes before the first real redraw, itself a single ~700-900 byte chunk.
-  // Unverified against a *logged-in* start, which may draw less before the first redraw — revisit
-  // once that is checked.
+  // No documented readiness signal — a plain byte count. Observed on a real install: setup and
+  // onboarding chunks total a few hundred bytes before the first real redraw, itself a single
+  // ~700-900 byte chunk. Unverified against a logged-in start, which may draw less — revisit.
   createIsSessionReady: () => createByteThresholdCheck(600),
   // One: a second byte would land mid-shutdown and kill it instead.
   quitPresses: 1,

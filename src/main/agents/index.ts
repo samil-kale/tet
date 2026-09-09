@@ -10,11 +10,7 @@ import { shellAgent } from "./shell";
 /** Registration order; also the order of the "new terminal" menu. */
 export const AGENTS: AgentDefinition[] = [claudeAgent, opencodeAgent, codexAgent, piAgent, shellAgent];
 
-/**
- * The first installed agent that can be asked a question without a terminal, in registration
- * order — the shell has no `askArgs` and is skipped by that alone. Which one it is stays this
- * registry's knowledge: a caller only wants *someone* to put a question to.
- */
+/** The first installed agent with `askArgs`, in registration order (the shell has none). */
 export async function findAskableAgent(
   cwd: string
 ): Promise<{ executable: string; agent: AgentDefinition } | undefined> {

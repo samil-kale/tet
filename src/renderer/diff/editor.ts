@@ -3,11 +3,9 @@ import { highlighter, loadGrammar, THEME } from "./diff-highlight";
 import type { HighlighterCore } from "shiki/core";
 
 /**
- * monaco-editor's own "editor.main" pulls in ~80 Monarch languages plus full CSS/HTML/JSON/
- * TypeScript language services, each wanting a worker of its own — everything `monaco-core.ts`
- * leaves out on purpose, since colouring goes through the same shiki instance the diff view uses
- * instead (`@shikijs/monaco`). Both this module's dynamic import and the language services it
- * would otherwise pull in stay unevaluated until an editor is actually opened.
+ * `monaco-core.ts`, not monaco's `editor.main`: colouring goes through the diff view's shiki
+ * instance (`@shikijs/monaco`), so no language or language service is loaded. Nothing here is
+ * evaluated until an editor is opened.
  */
 export type Monaco = typeof import("./monaco-core");
 
@@ -16,10 +14,8 @@ let monacoPromise: Promise<Monaco> | undefined;
 /** Loads monaco once, sharing the promise across every `CodeEditor` mount. */
 export function loadMonaco(): Promise<Monaco> {
   if (!monacoPromise) {
-    // Must be set before the first editor is created, and only once — later assignments would
-    // race an already-starting worker. `getWorker` rather than `getWorkerUrl`: a recent monaco
-    // build makes a module worker from the latter, which can fail to start from a `file://`
-    // origin; a classic worker from `getWorker` does not.
+    // Set once, before the first editor. `getWorker`, not `getWorkerUrl`: monaco makes a module
+    // worker from the latter, which fails to start from a `file://` origin.
     (self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
       getWorker: () => new Worker("./editor.worker.js")
     };
@@ -28,22 +24,17 @@ export function loadMonaco(): Promise<Monaco> {
   return monacoPromise;
 }
 
-/** One language registered at a time is enough for a re-run of `shikiToMonaco` below — see it. */
+/** Languages already wired into monaco. */
 const registered = new Set<string>();
 /** Whether `applyChrome` has run and still stands — false again after `shikiToMonaco` re-themes. */
 let chromeApplied = false;
 
 /**
  * Wires a language into monaco through shiki, so a token reads the same color here as in the
- * diff view: `shikiToMonaco` only sees languages loaded into shiki *and* registered with monaco
- * at the moment it runs, so it has to run again after every newly loaded grammar — which also
- * redefines the theme from shiki's own colors, wiping `applyChrome`'s override. Hence the fixed
- * order below. A language seen before skips all of that — nothing new for shiki to see, so a
- * re-run would only redo identical theme work on every mount. What can never be skipped is the
- * first `applyChrome`: without it the theme name `editorOptions` passes to `create` is unknown
- * to monaco, which silently falls back to its built-in *light* theme — why this is called for
- * a plaintext file too (`language: null`), which has no grammar to wire but still needs the
- * theme to exist.
+ * diff view. `shikiToMonaco` only sees languages loaded and registered at call time, so it
+ * re-runs per new grammar, and each run redefines the theme from shiki's colors — `applyChrome`
+ * must follow every run. It must run at least once even for plaintext (`language: null`): an
+ * unknown theme name makes monaco fall back to its built-in light theme.
  */
 export async function ensureLanguage(monaco: Monaco, language: string | null): Promise<void> {
   const shiki = await highlighter();
@@ -52,9 +43,8 @@ export async function ensureLanguage(monaco: Monaco, language: string | null): P
     monaco.languages.register({ id: language });
     registered.add(language);
     const { shikiToMonaco } = await import("@shikijs/monaco");
-    // @shikijs/monaco types itself against the `monaco-editor-core` package rather than
-    // `monaco-editor`'s own re-export of the identical API — structurally the same shape, but TS
-    // sees two different nominal origins for the same interfaces.
+    // @shikijs/monaco is typed against `monaco-editor-core`, not `monaco-editor`'s re-export of
+    // the same API.
     shikiToMonaco(shiki, monaco as never);
     chromeApplied = false;
   }
@@ -65,18 +55,13 @@ export async function ensureLanguage(monaco: Monaco, language: string | null): P
 }
 
 /**
- * Turns shiki's theme into a monaco one. `defineTheme` only inherits from monaco's own built-in
- * bases (`vs-dark`, ...), not from another custom theme, so this rebuilds the same rules shiki
- * already computed — the exact translation `@shikijs/monaco` does internally, exposed as
- * `textmateThemeToMonacoTheme`. The editor surface (background, selection, widgets...) comes
- * along already patched with tet's own `--vscode-*` values, since `diff-highlight.ts`'s
- * `loadTheme` patches shiki's theme with them before this ever reads it; `buildMonacoColors`
- * only adds the chrome shiki has no notion of — menus, inputs, lists.
+ * Turns shiki's theme into a monaco one. `defineTheme` only inherits from monaco's built-in
+ * bases, not from another custom theme, so this rebuilds shiki's rules through the same
+ * `textmateThemeToMonacoTheme` that `@shikijs/monaco` uses. The editor surface is already
+ * patched with tet's `--vscode-*` values by `loadTheme` (`diff-highlight.ts`); `buildMonacoColors`
+ * adds the chrome shiki has no notion of — menus, inputs, lists.
  *
- * Awaited by `ensureLanguage`, deliberately: this used to fire the import and move on, so
- * `monaco.editor.create` below could run — and paint the editor once in monaco's own colors —
- * before this ever resolved. On any colored open `@shikijs/monaco` is already loaded by the
- * time this runs; only a plaintext-first open pays the one import here instead.
+ * Must resolve before `monaco.editor.create`, or the editor paints once in monaco's own colors.
  */
 async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void> {
   const { textmateThemeToMonacoTheme } = await import("@shikijs/monaco");
@@ -86,10 +71,8 @@ async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void
 }
 
 /**
- * Options shared by every editor, tuned so Diff and Edit read as one tool rather than two:
- * matching font metrics (`.diff-body`'s own 13px/18px), no bracket-pair colors (the diff has
- * none), and a plain quick-edit surface — no suggestions, no sticky scroll, no minimap. Easy to
- * turn back on individually if that turns out to be missed.
+ * Options shared by every editor, matched to the diff view: `.diff-body`'s 13px/18px font
+ * metrics, no bracket-pair colors, no suggestions, no sticky scroll, no minimap.
  */
 export function editorOptions(fontFamily: string): Record<string, unknown> {
   return {
