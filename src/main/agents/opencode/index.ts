@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { hostTarget, sandboxTarget } from "../../terminals/hook-target";
+import { HOST_TARGET, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
 import { createNonAsciiThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
@@ -59,7 +59,7 @@ export const opencodeAgent: AgentDefinition = {
     let env: Record<string, string> = {};
     const watchers: (() => void)[] = [];
     try {
-      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, "OpenCode", paths.notifications, paths.contextFile, hostTarget(), null);
+      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, "OpenCode", paths.notifications, paths.contextFile, HOST_TARGET, null);
       // One watch serves host and sandboxed tabs: the sandbox's plugin writes its markers into
       // the same agentDir, through the mount (unlike Claude's hooks, whose sandbox copy has a
       // marker dir of its own under sandboxHookDir).
@@ -83,11 +83,10 @@ export const opencodeAgent: AgentDefinition = {
       // Its own config dir (a Linux bun install), but the markers, records and rename requests
       // are agentDir's own, shared with a host tab — a session is a session wherever it ran.
       const configDir = sandboxConfigDir(paths.agentDir);
-      const target = sandboxTarget();
-      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, "OpenCode", paths.notifications, paths.contextFile, target, sandbox);
+      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, "OpenCode", paths.notifications, paths.contextFile, SANDBOX_TARGET, sandbox);
       // The tui config too goes under the mounted dir: storageRoot's copy is not in the sandbox.
       for (const [key, file] of Object.entries(installTuiConfig(configDir))) {
-        env[key] = target.embed(file);
+        env[key] = SANDBOX_TARGET.embed(file);
       }
       return { args: [], env };
     } catch (error) {

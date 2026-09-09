@@ -121,8 +121,8 @@ export interface SbxPath {
  *  `false` is off; `SbxAccess` is the same ro/rw choice "Allowed paths" rows get, so
  *  an agent that edits its own skills or plugins from inside the sandbox can write them back.
  *  One switch per kind rather than a row per path, the way "Allowed paths" is the user's own
- *  list; agent-agnostic (applies to both Claude and Codex tabs the same way), since each agent's
- *  own actual paths are sbx.ts's concern, not the dialog's. */
+ *  list; agent-agnostic (one setting for every sandboxed agent's tabs), since each agent's own
+ *  actual paths are sbx.ts's concern, not the dialog's. */
 export interface SbxKnowledgeConfig {
   skills: SbxAccess | false;
   plugins: SbxAccess | false;
@@ -147,7 +147,9 @@ export interface SbxProjectConfig {
    *  matches no request), so a typo is a rule that never matches, not an error. Unlike the other
    *  fields, the sandbox itself is the truth for this one: tet.json only seeds a new sandbox
    *  and records what was last saved; the dialog opens with the rules actually attached to
-   *  the project's sandboxes (sbx.ts's readLiveSbxConfig, allowHosts). */
+   *  the project's sandboxes (sbx.ts's readLiveSbxConfig, allowHosts). A deliberate exception,
+   *  not a model for the other three — see readLiveSbxConfig for why only this one can be read
+   *  back from the sandbox at all. */
   hosts: string[];
 }
 

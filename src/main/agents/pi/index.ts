@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { sandboxHookDir, sandboxTarget } from "../../terminals/hook-target";
+import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
@@ -60,14 +60,13 @@ export const piAgent: AgentDefinition = {
     return Promise.resolve({ args, dispose: () => watchers.forEach((stop) => stop()) });
   },
   prepareSandboxSpawn: (cwd, paths) => {
-    const target = sandboxTarget();
     try {
-      const extension = writePiExtension(sandboxHookDir(paths.agentDir), path.basename(cwd), "Pi", paths.notifications, paths.contextFile, target);
-      // The file is written at its host path and read at the sandbox's — agentDir is a workspace
-      // (sbx.ts's computeWorkspaces) and this sits inside it. Same "a `-e` pi cannot load is
+      const extension = writePiExtension(sandboxHookDir(paths.agentDir), path.basename(cwd), "Pi", paths.notifications, paths.contextFile, SANDBOX_TARGET);
+      // The file is written at its host path and read at the sandbox's — agentDir is mounted
+      // whole (sbx.ts's fixedMountSpecs) and this sits inside it. Same "a `-e` pi cannot load is
       // fatal" reasoning as the host branch above: on a failed write pi is started without the
       // argument at all rather than pointed at a file that is not there.
-      return { args: ["-e", target.embed(extension), "--use-theme", paths.theme.kind] };
+      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind] };
     } catch (error) {
       console.error("[tet] could not write pi's sandbox extension:", error);
       return { args: ["--use-theme", paths.theme.kind] };

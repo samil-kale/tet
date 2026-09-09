@@ -17,6 +17,7 @@ type Phase =
   | { kind: "signing-in" }
   | { kind: "initializing-policy" }
   | { kind: "ready" }
+  | { kind: "governed" }
   | { kind: "failed"; message: string };
 
 /**
@@ -30,13 +31,17 @@ type Phase =
  * initSbxPolicy). Each step shows in the title bar's progress bar (`DialogFrame`'s `busy` — see
  * "One progress indicator per pane" in CLAUDE.md) so the click is never followed by nothing
  * happening. Installing is not a step: the same rule as RequirementsDialog, no command works on
- * all three platforms, so a missing sbx gets Docker's install page and a "Check again".
+ * all three platforms, so a missing sbx gets Docker's install page and a "Check again". An
+ * account whose policies an organization manages gets a wall instead of the fields: every mount
+ * tet makes is a local filesystem rule, and what a managed policy grants has never been
+ * measured (see sbx.ts's checkSbxGoverned) — so tet does not offer sandboxing there at all
+ * rather than offering something it cannot verify works.
  *
  * The fields' state lives here, not in SbxSettingsFields: Save (the footer button, once ready)
  * builds the request it sends to `sbx:save-config` from it — session-manager.ts's `resolveSbxRun`
  * is what actually acts on what gets saved, the next time a claude/codex tab in this project
- * spawns. Each sandboxed agent authenticates with its own `/login` once inside the sandbox — tet
- * never asks for or stores a credential for it.
+ * spawns. Each sandboxed agent authenticates inside the sandbox (its own `/login`, or for pi a
+ * credential from sbx's own store — see SbxProjectConfig) — tet never asks for or stores one.
  *
  * A step that resolves after the dialog closed sets state on an unmounted component, which React
  * ignores — so nothing here tracks whether it is still mounted.
@@ -50,11 +55,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   };
   useEscape(close);
   const [enabled, setEnabled] = useState(false);
-  /** Org-managed filesystem policy: nothing can be mounted from here, so the checkbox stays off
-   *  and disabled and there are no fields to fill — see sbx.ts's checkSbxGoverned. */
-  const [governed, setGoverned] = useState(false);
-  /** Org-managed network policy: only the Allowed hosts section is affected — see SbxSettingsFields. */
-  const [networkGoverned, setNetworkGoverned] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
@@ -80,16 +80,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         return;
       }
     }
-    const filesystemGoverned = await window.tet.sbx.checkFilesystemGoverned();
-    const hostsGoverned = await window.tet.sbx.checkNetworkGoverned();
+    if (await window.tet.sbx.checkGoverned()) {
+      setPhase({ kind: "governed" });
+      return;
+    }
     // The dialog's own saved state — read once setup is done, so Save always writes on top of
     // what is actually on disk rather than the blank defaults this component mounted with.
     const config = await window.tet.sbx.getConfig(project.id);
-    setGoverned(filesystemGoverned);
-    setNetworkGoverned(hostsGoverned);
-    // A colleague's "enabled" in tet.json does not apply here — see session-manager.ts's
-    // resolveSbxRun, which starts such a project's agents on the host.
-    setEnabled(config.enabled && !filesystemGoverned);
+    setEnabled(config.enabled);
     setState(fromConfig(config));
     setPhase({ kind: "ready" });
   };
@@ -129,7 +127,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               Check again
             </button>
           )}
-          {phase.kind === "ready" && !governed && (
+          {phase.kind === "ready" && (
             <button type="button" className="button" disabled={saving} onClick={() => void save()}>
               Save
             </button>
@@ -144,31 +142,28 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to SBX…</p>}
       {phase.kind === "initializing-policy" && <p className="dialog-detail">Setting up SBX's network policy…</p>}
       {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
+      {phase.kind === "governed" && (
+        <p className="dialog-detail">
+          Your organization manages SBX's policies. SBX sandboxing in tet does not work under a
+          managed policy yet, so it is not offered here.
+        </p>
+      )}
       {phase.kind === "ready" && (
         <label className="dialog-checkbox">
-          <input type="checkbox" checked={enabled} disabled={governed} onChange={(event) => setEnabled(event.target.checked)} />
+          <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
           <span>
             <strong>Enable SBX sandboxing for this project</strong>
-            {governed ? (
-              <p className="dialog-detail">
-                Your organization manages SBX's filesystem policy, so no folder can be allowed from
-                this machine - not even the agent's own settings or tet's data. SBX sandboxing is
-                unavailable in tet until your administrator delegates filesystem rules to local
-                control.
-              </p>
-            ) : (
-              <p className="dialog-detail">
-                Claude, Codex and OpenCode tabs in {project.name} run in their own isolated Docker
-                sandbox instead of directly on this machine. Pi (no SBX kit) stays outside.
-              </p>
-            )}
+            <p className="dialog-detail">
+              Claude, Codex, OpenCode and Pi tabs in {project.name} run in their own isolated Docker
+              sandbox instead of directly on this machine.
+            </p>
           </span>
         </label>
       )}
-      {phase.kind === "ready" && !governed && (
+      {phase.kind === "ready" && (
         // The one part that scrolls — see the CSS: the checkbox above stays put.
         <div className="sbx-settings-fields-scroll">
-          <SbxSettingsFields state={state} setState={setState} networkGoverned={networkGoverned} />
+          <SbxSettingsFields state={state} setState={setState} />
         </div>
       )}
     </DialogFrame>

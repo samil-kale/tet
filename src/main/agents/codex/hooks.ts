@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import { buildBusyCommand, buildMarkCommand, buildWaitingCommand } from "../../terminals/marker-watch";
-import { hostTarget, type HookTarget } from "../../terminals/hook-target";
+import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
 import { buildHookNotifyCommand, buildReadFileCommand } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
@@ -159,7 +159,7 @@ export function setupCodexHooks(
   notifications: NotificationSettings,
   repositoryName: string,
   contextFile: string,
-  target: HookTarget = hostTarget()
+  target: HookTarget = HOST_TARGET
 ): string[] {
   // Two commands on the one event: the context file's contents become part of the prompt (a
   // hook's plain, non-JSON stdout is appended to it — confirmed in Codex's own source,

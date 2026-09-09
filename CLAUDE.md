@@ -561,7 +561,9 @@ The cross-file rules:
   records through the `agentDir` mount, its own storage being SQLite tet never reads.
 - **`tet-ctl` inside a sandbox** is the same bundle written into the sandbox's `~/.local/bin`,
   reaching the control server at `host.docker.internal` (`TET_CONTROL_HOST`) through an
-  `sbx policy allow` for `localhost:<port>`; under org-managed policy none of that is passed in.
+  `sbx policy allow` for `localhost:<port>`. An account whose policies an organization manages
+  gets a wall in the sbx dialog instead of the fields — nothing else in tet asks about
+  governance (`checkSbxGoverned`, unverified against a real managed account).
 
 ## Never touch the user's agent configuration
 

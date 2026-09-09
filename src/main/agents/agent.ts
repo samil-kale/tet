@@ -254,8 +254,8 @@ export interface AgentDefinition {
    * The sbx-sandbox equivalent of prepareSpawn's hook wiring — same turn-tracking (see "Both
    * ends of a turn" in CLAUDE.md), generated as if for a POSIX host regardless of what
    * `process.platform` actually is (a sandbox is Linux whatever host it runs on) and with every
-   * embedded path translated into the sandbox's own view of it (`sandboxTarget()` in
-   * os-notify.ts). Desktop notifications work the same as on the host: the hook calls
+   * embedded path translated into the sandbox's own view of it (`SANDBOX_TARGET` in
+   * hook-target.ts). Desktop notifications work the same as on the host: the hook calls
    * `tet-ctl notify`, which reaches this process over the control channel — see
    * os-notify.ts's buildHookNotifyCommand — so the toast itself is always shown by the process
    * that actually has a desktop session, never by the sandbox.

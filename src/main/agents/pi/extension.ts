@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { hostTarget, type HookTarget } from "../../terminals/hook-target";
+import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
 import { markerDir, SESSION_ID_CHARS } from "../../terminals/marker-watch";
 import { scriptInvocation, writeNotifyScript, type ScriptInvocation } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
@@ -21,7 +21,7 @@ export interface PiExtensionOptions {
  * is `tet-ctl notify` — the same relay every other agent's hook uses (buildHookNotifyCommand),
  * only as an argument list rather than a command line, since the extension spawns it directly.
  * `tet-ctl` is written into every sandbox's `~/.local/bin` (sbx.ts's ensureSandboxLauncher);
- * where it is not (no control channel, or an org-governed network policy), the extension's own
+ * where it is not (no control channel), the extension's own
  * `error` handler on the spawn swallows it, the same as a missing interpreter.
  */
 function notifyInvocation(
@@ -51,7 +51,7 @@ export function writePiExtension(
   displayName: string,
   notifications: NotificationSettings,
   contextFile: string,
-  target: HookTarget = hostTarget()
+  target: HookTarget = HOST_TARGET
 ): string {
   const markers = { busy: markerDir(storageDir, "busy"), finished: markerDir(storageDir, "finished"), waiting: markerDir(storageDir, "waiting") };
   // Created here rather than by the extension alone: watchMarkers wants them to exist to

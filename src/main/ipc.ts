@@ -165,8 +165,7 @@ export function registerIpc({
   ipcMain.handle("sbx:login", () => runSbxLogin());
   ipcMain.handle("sbx:check-policy-initialized", () => checkSbxPolicyInitialized());
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
-  ipcMain.handle("sbx:check-filesystem-governed", () => checkSbxGoverned("filesystem"));
-  ipcMain.handle("sbx:check-network-governed", () => checkSbxGoverned("network"));
+  ipcMain.handle("sbx:check-governed", () => checkSbxGoverned());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
   /** What the dialog reopens with — read fresh, like a project's saved commands, never cached;

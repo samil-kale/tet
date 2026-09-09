@@ -19,13 +19,9 @@ export interface HookTarget {
   embed(hostPath: string): string;
 }
 
-export function hostTarget(): HookTarget {
-  return { posix: process.platform !== "win32", sandbox: false, embed: (hostPath) => hostPath };
-}
+export const HOST_TARGET: HookTarget = { posix: process.platform !== "win32", sandbox: false, embed: (hostPath) => hostPath };
 
-export function sandboxTarget(): HookTarget {
-  return { posix: true, sandbox: true, embed: toContainerPath };
-}
+export const SANDBOX_TARGET: HookTarget = { posix: true, sandbox: true, embed: toContainerPath };
 
 /**
  * A host path the way sbx mounts it inside a sandbox — verified live, 2026-09-08: a Windows
@@ -46,10 +42,11 @@ export function toContainerPath(hostPath: string): string {
 
 /** Every sandbox template's non-root user's home — verified live for a Claude, a Codex and an
  *  opencode sandbox (2026-09-08) and for pi's community-kit one (2026-09-09), each by `$HOME`
- *  and `whoami` inside it. Here rather than in sbx.ts because an agent's own folder needs it to
- *  say where its sessions sit inside a sandbox (SessionProvider.sandbox), and the agents may
- *  not reach into the sbx layer for it. A mount target must be absolute (`sbx mount --help`):
- *  it is not passed through a shell, so `~` never expands there. */
+ *  and `whoami` inside it. Here rather than in sbx.ts because it is a fact about the sandbox's
+ *  *view* of paths, like `toContainerPath` beside it, and an agent's own folder needs it to say
+ *  where its sessions sit inside a sandbox (SessionProvider.sandbox) — the same import it
+ *  already has for the other. A mount target must be absolute (`sbx mount --help`): it is not
+ *  passed through a shell, so `~` never expands there. */
 export const SANDBOX_HOME = "/home/agent";
 
 /**

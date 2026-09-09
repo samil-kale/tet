@@ -254,18 +254,18 @@ export const ProjectList = memo(function ProjectList({
                 () => onShowFinished(project.id),
                 <CommentIcon className="session-mark" />
               )}
-            {/* Where this project's agents run, which is a standing property of the repository
-                rather than of a session — so it sits outside the marks above and gives way to
-                nothing. A button because the sbx settings are otherwise only in the row's
-                context menu, and this is the row that says they are on. It says the switch is
-                on, not that the agent in the tab beside it got its sandbox: sbx can be away or
-                the policy org-managed, and resolveSbxRun then runs that one spawn on the host. */}
-            {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
             {/* Uncommitted changes, read off the same status every refresh already loads
                 (`state.changes`) — no extra git call. It stands here only while the changes do,
                 and says the changes rather than git: the branch beside it already said that. */}
             {heads[project.id]?.dirty &&
               rowButton("Uncommitted changes", () => onShowChanges(project.id), <ChangesIcon />)}
+            {/* Where this project's agents run, which is a standing property of the repository
+                rather than of a session — so it sits outside the marks above and gives way to
+                nothing. A button because the sbx settings are otherwise only in the row's
+                context menu, and this is the row that says they are on. It says the switch is
+                on, not that the agent in the tab beside it got its sandbox: sbx can be away, and
+                resolveSbxRun then runs that one spawn on the host. */}
+            {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
             {rowButton("Close repository", () => onClose(project.id), <CloseIcon />)}
           </div>
         ))}

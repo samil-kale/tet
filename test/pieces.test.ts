@@ -10,7 +10,7 @@ import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/ag
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
-import { sandboxTarget, toContainerPath } from "../src/main/terminals/hook-target";
+import { SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
 import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
 import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
@@ -335,7 +335,7 @@ describe("pi's extension", () => {
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-sbx-"));
     const contextFile = path.join(storageDir, "context.md");
     const notifications = { finished: true, needsYou: true, idleReminder: false };
-    const file = writePiExtension(storageDir, "repo", "Pi", notifications, contextFile, sandboxTarget());
+    const file = writePiExtension(storageDir, "repo", "Pi", notifications, contextFile, SANDBOX_TARGET);
     const source = fs.readFileSync(file, "utf8");
 
     assert.ok(source.includes(JSON.stringify(toContainerPath(contextFile))), "the context file as the container sees it");

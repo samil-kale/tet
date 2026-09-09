@@ -7,6 +7,7 @@ import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
 import type { SbxAgentId, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../shared/types";
+import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { SANDBOX_HOME, toContainerPath } from "./terminals/hook-target";
@@ -131,18 +132,20 @@ export function cancelSbxSetup(): void {
  * sbx is opt-in per project, never a reason to block the workspace from opening. Never cached,
  * and PATH re-read first, the way `startup:check` does it: the dialog's "Check again" is pressed
  * right after installing, and the installer's directory (`win32AgentDirs`) was not on this
- * process's PATH a moment ago.
+ * process's PATH a moment ago. The spawn path (`checkSbxReady`) asks without the PATH re-read:
+ * on macOS/Linux that is a login shell per call, and a tab start is not the moment after an
+ * install.
  *
  * `version` is a subcommand, not a `--version` flag (verified against a real install,
  * 2026-09-07: `sbx --version` fails with "unknown flag").
  */
 export async function checkSbxInstalled(): Promise<boolean> {
   await augmentAgentPath();
-  const installed = await checkAgentInstalled("sbx", ["version"], os.tmpdir());
-  if (installed) {
-    await suppressSbxFirstRunWizard();
-  }
-  return installed;
+  return isSbxInstalled();
+}
+
+function isSbxInstalled(): Promise<boolean> {
+  return checkAgentInstalled("sbx", ["version"], os.tmpdir());
 }
 
 /**
@@ -166,7 +169,9 @@ export async function checkSbxInstalled(): Promise<boolean> {
  * user who wants their host MCP servers in a sandbox now has to run `sbx setup` or `sbx mcp add`
  * by hand. Undocumented, private sbx state, Windows-only verified — macOS/Linux paths are
  * unknown, so this is a no-op there for now (TODO once verified); best-effort even on Windows,
- * since a failure to write it must not stop the installed-check it rides on.
+ * since a failure to write it must not keep the tab from starting. Run from `prepareSbxRun`,
+ * right before the one interactive `sbx run` tet does, not from a check: a check that writes
+ * is a surprise, and this is only ever needed on that path.
  */
 async function suppressSbxFirstRunWizard(): Promise<void> {
   if (process.platform !== "win32" || !process.env.LOCALAPPDATA) {
@@ -202,6 +207,9 @@ async function suppressSbxFirstRunWizard(): Promise<void> {
  * Treats every other failure as "not logged in" too, on purpose: attempting a login for nothing
  * costs one glance at an "already signed in" message, while showing the dialog's real content on
  * some other, unrecognized failure would look like it worked when it cannot.
+ *
+ * The same `sbx ls` is the listing `prepareSbxRun` needs a moment later, which is why the spawn
+ * path (`checkSbxReady`) goes through `listSandboxes` rather than here.
  */
 export async function checkSbxLoggedIn(): Promise<boolean> {
   return (await runSbx(["ls"])).ok;
@@ -237,54 +245,46 @@ export async function initSbxPolicy(): Promise<boolean> {
   return (await runSbx(["policy", "init", "balanced"], { cancellable: true })).ok;
 }
 
+/** `sbx ls --json` as name → workspaces. */
+type SandboxList = Map<string, string[]>;
+
 /**
- * The first of the three preconditions above not met, worded for a notice — or undefined when
- * a sandbox can be run. The same checks in the same order the sbx-settings dialog walks before it
- * ever offers Save; session-manager.ts asks this once more before every sandboxed spawn, since
- * things may have changed since (see its resolveSbxRun for what it does with the answer).
+ * What one sandboxed spawn needs to know first: the first of the three preconditions not met,
+ * worded for a notice — or the sandbox listing, which is `prepareSbxRun`'s next question and
+ * came out of the same `sbx ls` the sign-in probe is. The same checks in the same order the
+ * sbx-settings dialog walks before it ever offers Save; session-manager.ts asks this before
+ * every sandboxed spawn, since things may have changed since (see its resolveSbxRun for what it
+ * does with the answer).
  */
-export async function sbxNotReady(): Promise<string | undefined> {
-  if (!(await checkSbxInstalled())) {
-    return "SBX is not installed (or no longer on PATH)";
+export async function checkSbxReady(): Promise<{ notReady: string } | { sandboxes: SandboxList }> {
+  if (!(await isSbxInstalled())) {
+    return { notReady: "SBX is not installed (or no longer on PATH)" };
   }
-  if (!(await checkSbxLoggedIn())) {
-    return "SBX is not signed in to Docker";
+  const sandboxes = await listSandboxes();
+  if (!sandboxes) {
+    return { notReady: "SBX is not signed in to Docker" };
   }
   if (!(await checkSbxPolicyInitialized())) {
-    return "SBX's network policy is not set up";
+    return { notReady: "SBX's network policy is not set up" };
   }
-  return undefined;
+  return { sandboxes };
 }
 
-/** The two policy kinds tet has to know are org-managed or not — see checkSbxGoverned. */
-type PolicyType = "filesystem" | "network";
-
-/** Cached for the process's lifetime, per kind: whether org governance is active does not
- *  change while tet runs, and `sbx policy ls` is one more process to spawn on every sandboxed
- *  session start. */
-const governed = new Map<PolicyType, Promise<boolean>>();
-
 /**
- * Whether this account's policy of one kind is org-managed — `sbx policy ls`'s SOURCE column
- * reads "local" for an ungoverned account (verified live, 2026-09-08); Docker's own docs
- * (docker/docs) say a governed one reads "Managed by <org>" instead, and that an admin can
- * delegate a kind back to local control, which is why this asks per kind. Not verified against
- * an actual governed account — none was available to test with.
- *
- * "filesystem" governed means no local mount can be allowed — not the agent's own config
- * directory, not tet's data folders (see fixedMountSpecs), let alone the user's — so sbx
- * sandboxing is off for tet as a whole: the dialog says so instead of its fields, and a project
- * that has it enabled in tet.json starts its agents on the host (session-manager.ts's
- * resolveSbxRun). "network" governed only costs the control channel inside a sandbox
- * (ensureControlNetworkAllowed) and the project's own Allowed hosts (allowHosts).
+ * Whether any of this account's policies is org-managed — `sbx policy ls`'s SOURCE column
+ * reads "local" (or "kit") for an ungoverned account, one row per policy of every kind
+ * (verified live, 2026-09-09, 0.42.1); Docker's own docs (docker/docs) say a governed one reads
+ * "Managed by <org>" instead. Not verified against an actual governed account — none was
+ * available to test with — which is why governance is only ever *detected*, never worked
+ * around: the sbx-settings dialog shows a wall instead of its fields (a managed filesystem
+ * policy allows no local mount, and everything tet does is a mount), and nothing else in tet
+ * asks. Cached for the process's lifetime: whether an org manages the account does not change
+ * while tet runs.
  */
-export function checkSbxGoverned(type: PolicyType): Promise<boolean> {
-  let pending = governed.get(type);
-  if (!pending) {
-    pending = runSbx(["policy", "ls", "--type", type]).then((result) => /managed by/i.test(result.stdout));
-    governed.set(type, pending);
-  }
-  return pending;
+let governed: Promise<boolean> | undefined;
+export function checkSbxGoverned(): Promise<boolean> {
+  governed ??= runSbx(["policy", "ls"]).then((result) => /managed by/i.test(result.stdout));
+  return governed;
 }
 
 /** Cached per app run: once the rule is there, it stays there — no reason to ask `sbx` again. */
@@ -300,14 +300,12 @@ let networkAllowed: Promise<void> | undefined;
  * this function) silently matched nothing, and every request from inside the sandbox connected
  * without error but never reached the control server at all. See tet-ctl.ts's `send` for why
  * this proxy being HTTP-only is also why the control server speaks HTTP rather than a raw
- * NDJSON socket. Skipped entirely under org governance — a local `sbx policy allow network` is
- * silently ignored there anyway, and the point of asking first is to not even try:
- * `prepareSbxRun` leaves TET_CONTROL_HOST/PORT/TOKEN out of the sandbox's env in that case, so
- * tet-ctl inside it fails closed instead of reaching for a host address nothing agreed to
- * expose.
+ * NDJSON socket. False only in a run without a control channel — then `prepareSbxRun` leaves
+ * TET_CONTROL_HOST/PORT/TOKEN out of the sandbox's env, so tet-ctl inside it fails closed
+ * instead of reaching for a host address nothing listens on.
  */
 async function ensureControlNetworkAllowed(): Promise<boolean> {
-  if (!control || (await checkSbxGoverned("network"))) {
+  if (!control) {
     return false;
   }
   const resource = `localhost:${control.port}`;
@@ -381,6 +379,16 @@ function normalizeHostPath(hostPath: string): string {
 }
 
 /**
+ * One live bind mount both ways: what `sbx mount` is given, and what `sbx umount` takes it back
+ * with. `mount` carries the access, so two specs with the same `mount` are the same grant — which
+ * is what `staleMounts` compares by.
+ */
+export interface MountSpec {
+  mount: string;
+  unmount: string;
+}
+
+/**
  * The `sbx mount`/`sbx umount` MOUNT_SPEC for one allowed-path row — a live bind mount, not a
  * `sbx create` workspace positional (see fixedMountSpecs' own comment for why everything but
  * the project itself is off that list). `sbx mount`'s own spec grammar is
@@ -400,7 +408,7 @@ function normalizeHostPath(hostPath: string): string {
  * `umount` takes it back either way. That is why the create-time positional's own restriction
  * ("workspace path exists but is not a directory") does not reach this list.
  */
-export function pathMountSpecs(entry: SbxPath): { mount: string; unmount: string } {
+export function pathMountSpecs(entry: SbxPath): MountSpec {
   const host = normalizeHostPath(entry.path);
   if (entry.access === "rw") {
     return { mount: host, unmount: host };
@@ -419,12 +427,8 @@ function statOf(candidate: string): Stats | undefined {
   }
 }
 
-/** The terminal layer's two paths a sandbox is built around — `AgentPaths` fits, and so does a
- *  plain pair, so sbx.ts never has to import the agent layer's own type. */
-export interface SandboxPaths {
-  agentDir: string;
-  contextFile: string;
-}
+/** The two of an agent's paths a sandbox is built around. */
+export type SandboxPaths = Pick<AgentPaths, "agentDir" | "contextFile">;
 
 /**
  * The two paths of tet's own that every sandboxed tab needs, as `sbx mount` specs — `agentDir`
@@ -567,9 +571,9 @@ function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, K
  * own workspace (Docker's own sbx-quickstart guide) — this is what makes a single, curated path
  * (a folder or a plain file, both measured working) land exactly where the agent looks for it,
  * without copying anything. `:ro`/no suffix — the same sbx default (`:rw` when omitted),
- * verified in `sbx mount --help`.
+ * verified in `sbx mount --help`. The unmount form drops the suffix, like pathMountSpecs'.
  */
-function knowledgeMountSpecs(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig): string[] {
+function knowledgeMountSpecs(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig): MountSpec[] {
   const paths = knowledgePaths(agentId);
   return (Object.keys(knowledge) as (keyof SbxKnowledgeConfig)[]).flatMap((kind) => {
     const access = knowledge[kind];
@@ -577,8 +581,35 @@ function knowledgeMountSpecs(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig)
       return [];
     }
     const suffix = access === "ro" ? ":ro" : "";
-    return paths[kind].filter((entry) => statOf(entry.host)).map((entry) => `${entry.host}:${entry.target}${suffix}`);
+    return paths[kind]
+      .filter((entry) => statOf(entry.host))
+      .map((entry) => ({ mount: `${entry.host}:${entry.target}${suffix}`, unmount: `${entry.host}:${entry.target}` }));
   });
+}
+
+/**
+ * Every live grant the user can change from the dialog — Allowed paths and knowledge alike —
+ * as this agent's sandbox is to have it. One list because Save narrows and every spawn
+ * re-applies the same set (see mountAll and staleMounts): a kind that only one of the two knew
+ * about would be a grant nothing ever takes back. Only what is actually on this host: a path
+ * that is not there cannot be mounted, and is reported by prepareSbxRun (`missing`) when it
+ * was the user's own row.
+ */
+function grantedMounts(agentId: SbxAgentId, config: SbxProjectConfig): MountSpec[] {
+  return [
+    ...knowledgeMountSpecs(agentId, config.knowledge),
+    ...config.paths.filter((entry) => statOf(normalizeHostPath(entry.path))).map(pathMountSpecs)
+  ];
+}
+
+/**
+ * The `sbx umount` specs for the grants of `previous` that `current` no longer makes — a path
+ * dropped, or its access changed, which changes the mount string (an rw→ro downgrade is a
+ * different grant, not the same one narrower). Compared by `mount`, since that is the whole
+ * grant in sbx's own words.
+ */
+function staleMounts(previous: MountSpec[], current: MountSpec[]): string[] {
+  return previous.filter((old) => !current.some((next) => next.mount === old.mount)).map((old) => old.unmount);
 }
 
 /** Which sandboxes already got the `tet-ctl` launcher written this run — the file is small
@@ -586,13 +617,20 @@ function knowledgeMountSpecs(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig)
  *  Forgotten along with the sandbox in removeSandbox. */
 const launcherWritten = new Set<string>();
 
-/** `sbx ls --json` as name → workspaces; empty when sbx itself could not answer. */
-async function listSandboxes(): Promise<Map<string, string[]>> {
-  const sandboxes = new Map<string, string[]>();
+/**
+ * `sbx ls --json` as name → workspaces, or undefined when sbx itself could not answer — which
+ * is also the sign-in probe (see checkSbxLoggedIn): signed out, `sbx ls` exits 1. One process
+ * for both questions, and for every sandbox at once: a caller walking the four agents looks
+ * each up here rather than listing four times.
+ */
+async function listSandboxes(): Promise<SandboxList | undefined> {
+  const result = await runSbx(["ls", "--json"]);
+  if (!result.ok) {
+    return undefined;
+  }
+  const sandboxes: SandboxList = new Map();
   try {
-    const parsed = JSON.parse((await runSbx(["ls", "--json"])).stdout) as {
-      sandboxes?: { name?: string; workspaces?: string[] }[];
-    };
+    const parsed = JSON.parse(result.stdout) as { sandboxes?: { name?: string; workspaces?: string[] }[] };
     for (const sandbox of parsed.sandboxes ?? []) {
       if (sandbox.name) {
         sandboxes.set(sandbox.name, sandbox.workspaces ?? []);
@@ -602,11 +640,6 @@ async function listSandboxes(): Promise<Map<string, string[]>> {
     // Unreadable is the same as none — callers treat a missing name as "does not exist".
   }
   return sandboxes;
-}
-
-/** One sandbox's workspaces, or undefined if it does not exist. */
-async function getSandboxWorkspaces(name: string): Promise<string[] | undefined> {
-  return (await listSandboxes()).get(name);
 }
 
 /**
@@ -643,10 +676,24 @@ async function readSandboxHosts(): Promise<Map<string, string[]>> {
  * up as it stands, and Save then writes that state back to tet.json. Several sandboxes (one per
  * agent) are read as one union, since the dialog has one list for all of them; Save makes them
  * equal again. With no sandbox to ask, tet.json is all there is.
+ *
+ * Hosts are the *only* setting read back this way, and that is a measured line, not an
+ * oversight (all verified live, 2026-09-09, sbx 0.42.1): a policy rule lives in sbx's policy
+ * store, so `sbx policy ls --json` answers for a stopped sandbox too — one process, whatever
+ * state the sandbox is in. Ports do not: `sbx ports` lists nothing for a stopped sandbox
+ * (the publication is in the spec and comes back on the next start, but the listing asks
+ * the running container), so reading them here would start every sandbox of the project as a
+ * side effect of opening a dialog. Mounts have no listing at all — only `sbx exec` and
+ * `/proc/mounts` inside, per sandbox, with container paths to translate back — and a bind
+ * mount does not survive a stop either way. So for paths, knowledge and ports tet.json is the
+ * truth, applied whole at every spawn and narrowed by delta at Save; there is also no event
+ * or watch mode anywhere in the sbx CLI (checked against every verb's help), so a live read
+ * is only ever a snapshot at the moment it is taken, which is the one moment — opening the
+ * dialog — it is taken.
  */
 export async function readLiveSbxConfig(projectPath: string, projectId: string): Promise<SbxProjectConfig> {
   const config = await readSbxConfig(projectPath);
-  const sandboxes = await listSandboxes();
+  const sandboxes = (await listSandboxes()) ?? new Map();
   const existing = SBX_AGENT_IDS.map((agentId) => sandboxName(projectId, agentId)).filter((name) => sandboxes.has(name));
   if (existing.length === 0) {
     return config;
@@ -713,16 +760,32 @@ const SBX_CREATE_TARGET: Partial<Record<SbxAgentId, string>> = { pi: "docker.io/
  * check, since attaching to it is exactly what the check would have refused. Safe to remove
  * outright. Returns whether it created one — a new sandbox is the one that still needs seeding
  * with what tet.json holds (prepareSbxRun's allowHosts).
+ *
+ * A `create` that fails is the one setup step that is not best-effort: `sbx run --name` would
+ * create the sandbox itself, without the workspace positional it refuses on an existing one,
+ * and the agent would start in an empty in-container directory with nothing saying so. A kit
+ * that could not be pulled (pi's, on a first start without network) is exactly this. Rejects,
+ * for the caller to leave the tab in error; sbx's own message has already reached the tab
+ * through `onData`.
  */
-async function ensureSandboxExists(agentId: SbxAgentId, projectPath: string, name: string, onData?: OnData): Promise<boolean> {
-  const existing = await getSandboxWorkspaces(name);
+async function ensureSandboxExists(
+  agentId: SbxAgentId,
+  projectPath: string,
+  name: string,
+  sandboxes: SandboxList,
+  onData?: OnData
+): Promise<boolean> {
+  const existing = sandboxes.get(name);
   if (existing !== undefined && sameWorkspaceSet(existing, [projectPath])) {
     return false;
   }
   if (existing !== undefined) {
     await removeSandbox(name, onData);
   }
-  await runSbx(["create", SBX_CREATE_TARGET[agentId] ?? agentId, projectPath, "--name", name], { onData });
+  const created = await runSbx(["create", SBX_CREATE_TARGET[agentId] ?? agentId, projectPath, "--name", name], { onData });
+  if (!created.ok) {
+    throw new Error(`sbx could not create the ${agentId} sandbox`);
+  }
   return true;
 }
 
@@ -761,7 +824,7 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
  * again afterward — and a sandbox can be stopped from outside tet (a plain `sbx stop`), so there
  * is no reliable moment to cache "already mounted" against. The command is its own idempotency
  * check when it is not needed again (sbx's own guarantee); an access change or a removed path
- * is narrowed immediately at Save instead (see revokeStalePaths) — so by the time this runs,
+ * is narrowed immediately at Save instead (see revokeMounts) — so by the time this runs,
  * the previous mount of that path either matches or is already gone, and a plain re-mount here
  * never hits sbx's "already mounted read-write; cannot also mount read-only" conflict (verified
  * live, 2026-09-08).
@@ -777,26 +840,18 @@ async function mountAll(name: string, specs: string[], onData?: OnData): Promise
 }
 
 /**
- * Narrows a running sandbox's path grants the moment the user changes them, rather than
- * leaving the old one in force until whoever has that tab open next restarts it: a path
- * dropped from Allowed paths, or downgraded from rw to ro, must stop being
- * (over-)accessible *now*. Needed because the grant a `sbx mount` makes survives a sandbox
- * stop/restart even though the live bind does not (verified live, 2026-09-08: mounting the same
- * host path again with a different access after a restart still hit the "already mounted"
- * conflict) — so nothing here can rely on a later mount to self-correct it. Best-effort: a
- * sandbox that was never created, or is not currently running, has no live grant to narrow, and
- * the failed `exec` is the same signal either way.
+ * Narrows a running sandbox's grants the moment the user changes them, rather than leaving
+ * the old one in force until whoever has that tab open next restarts it: a path dropped from
+ * Allowed paths or a knowledge kind switched off, or either downgraded from rw to ro, must
+ * stop being (over-)accessible *now*. Needed because the grant a `sbx mount` makes survives a
+ * sandbox stop/restart even though the live bind does not (verified live, 2026-09-08: mounting
+ * the same host path again with a different access after a restart still hit the "already
+ * mounted" conflict) — so nothing here can rely on a later mount to self-correct it. The
+ * caller has started the sandbox (`sbx umount` refuses a stopped one, see ensureRunning).
  */
-async function revokeStalePaths(name: string, previous: SbxPath[], current: SbxPath[]): Promise<void> {
-  const stale = previous.filter((old) => {
-    const match = current.find((next) => normalizeHostPath(next.path) === normalizeHostPath(old.path));
-    return !match || match.access !== old.access;
-  });
-  if (stale.length === 0 || !(await ensureRunning(name))) {
-    return;
-  }
-  for (const entry of stale) {
-    await runSbx(["umount", name, pathMountSpecs(entry).unmount]);
+async function revokeMounts(name: string, unmountSpecs: string[]): Promise<void> {
+  for (const spec of unmountSpecs) {
+    await runSbx(["umount", name, spec]);
   }
 }
 
@@ -808,7 +863,7 @@ async function revokeStalePaths(name: string, previous: SbxPath[], current: SbxP
  * - the sandbox has to *exist* (`sandbox "x" not found` otherwise) but need not be running: a
  *   stopped one takes the rule without being started, so there is no ensureRunning here. Both
  *   callers already know it exists — prepareSbxRun runs after ensureSandboxExists,
- *   saveSbxConfig's loop skips a name getSandboxWorkspaces does not know.
+ *   saveSbxConfig's loop skips a name the listing does not know.
  * - the rule survives a stop/restart and dies with `sbx rm` — so a disabled or rebuilt sandbox
  *   leaves nothing behind, and only a *newly created* one needs seeding from tet.json
  *   (prepareSbxRun). After that the sandbox's own rules are the truth (readSandboxHosts): an
@@ -819,13 +874,11 @@ async function revokeStalePaths(name: string, previous: SbxPath[], current: SbxP
  *   sandbox's list is exactly the dialog's, and revokeStaleHosts finds what was set here.
  * - a change applies to a *running* sandbox at once (403 → 200 with no restart), which is why
  *   saveSbxConfig applies the list too, not just the removals.
- * Skipped under org governance, where a local allow is silently ignored anyway (see
- * ensureControlNetworkAllowed) — the list may come from a colleague's tet.json, so this is
- * checked here and not only in the dialog. Best-effort like the mounts: no host allowed is no
- * worse than today, and sbx validates nothing (see SbxProjectConfig.hosts).
+ * Best-effort like the mounts: no host allowed is no worse than today, and sbx validates
+ * nothing (see SbxProjectConfig.hosts).
  */
 async function allowHosts(name: string, hosts: string[], onData?: OnData): Promise<void> {
-  if (hosts.length === 0 || (await checkSbxGoverned("network"))) {
+  if (hosts.length === 0) {
     return;
   }
   await runSbx(["policy", "allow", "network", "--sandbox", name, hosts.join(",")], { onData });
@@ -833,7 +886,7 @@ async function allowHosts(name: string, hosts: string[], onData?: OnData): Promi
 
 /**
  * Removes the hosts dropped since the last save, right at Save — the same reasoning as
- * revokeStalePaths: an allowance must end *now*, not when the tab is next restarted, and a
+ * revokeMounts: an allowance must end *now*, not when the tab is next restarted, and a
  * policy change reaches a running sandbox immediately (see allowHosts). One `rm` per host: the
  * comma-list form is atomic and removes nothing if any one entry is missing (measured), and an
  * entry the user already removed by hand answers "rule not found", exit 1 — best-effort, the
@@ -856,20 +909,23 @@ function portKey(port: SbxPort): string {
  * `-p` still handles a *newly created* sandbox's first port set (prepareSbxRun), and this only
  * has to run once, here, rather than on every spawn. And unlike a mount, re-publishing an
  * already-published port is not a no-op — it errors outright ("already published", verified live)
- * — so only the actual delta may be sent, never the whole current list.
+ * — so only the actual delta may be sent, never the whole current list. The caller has
+ * started the sandbox (`sbx ports` refuses a stopped one, see ensureRunning).
  */
-async function applyPortChanges(name: string, previous: SbxPort[], current: SbxPort[]): Promise<void> {
+function portDelta(previous: SbxPort[], current: SbxPort[]): { removed: SbxPort[]; added: SbxPort[] } {
   const previousKeys = new Set(previous.map(portKey));
   const currentKeys = new Set(current.map(portKey));
-  const removed = previous.filter((port) => !currentKeys.has(portKey(port)));
-  const added = current.filter((port) => !previousKeys.has(portKey(port)));
-  if ((removed.length === 0 && added.length === 0) || !(await ensureRunning(name))) {
-    return;
-  }
-  for (const port of removed) {
+  return {
+    removed: previous.filter((port) => !currentKeys.has(portKey(port))),
+    added: current.filter((port) => !previousKeys.has(portKey(port)))
+  };
+}
+
+async function applyPortChanges(name: string, delta: { removed: SbxPort[]; added: SbxPort[] }): Promise<void> {
+  for (const port of delta.removed) {
     await runSbx(["ports", name, "--unpublish", portKey(port)]);
   }
-  for (const port of added) {
+  for (const port of delta.added) {
     await runSbx(["ports", name, "--publish", portKey(port)]);
   }
 }
@@ -887,6 +943,9 @@ export interface SbxRunRequest {
   projectId: string;
   projectPath: string;
   config: SbxProjectConfig;
+  /** What `checkSbxReady` listed a moment ago — the sandbox is looked up there rather than
+   *  listed again. */
+  sandboxes: SandboxList;
   paths: SandboxPaths;
   /** The agent's own command line inside the sandbox — hook and resume arguments, after `sbx
    *  run`'s own "--". */
@@ -942,13 +1001,14 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
  * paths (whose `missing` is passed on for the caller to say), published ports, and (when network
  * policy allows it, see ensureControlNetworkAllowed) the control-channel env and `tet-ctl`
  * launcher. Creates the sandbox first if it is missing (ensureSandboxExists) — `sbx run` would
- * too, but the launcher has to be written into it before `sbx run` starts the agent.
+ * too, but the launcher has to be written into it before `sbx run` starts the agent. Rejects
+ * only when that creation failed (see there); everything after it is best-effort.
  */
 export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: string[]; missing: string[] }> {
   const { agentId, config, onData } = request;
   const env = request.env ?? [];
   const name = sandboxName(request.projectId, agentId);
-  const created = await ensureSandboxExists(agentId, request.projectPath, name, onData);
+  const created = await ensureSandboxExists(agentId, request.projectPath, name, request.sandboxes, onData);
   // Best-effort, same reasoning as the launcher below: no skills or allowed paths in the sandbox
   // is no worse than today, so a failure here must not block the agent itself from starting. A
   // row is mounted for merely *being there* — a folder and a plain file mount the same way
@@ -960,16 +1020,12 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // failure means something is wrong that refusing to start the tab would not fix. The Allowed
   // hosts follow the mounts for the same reason, but only into a sandbox this call created:
   // from then on the sandbox's own rules are the truth, not tet.json (allowHosts).
-  const missing: string[] = [];
-  const specs = [...fixedMountSpecs(request.paths), ...knowledgeMountSpecs(agentId, config.knowledge)];
-  specs.push(...(await sessionMountSpecs(request.sessionMounts ?? [])));
-  for (const entry of config.paths) {
-    if (statOf(normalizeHostPath(entry.path))) {
-      specs.push(pathMountSpecs(entry).mount);
-    } else {
-      missing.push(entry.path);
-    }
-  }
+  const missing = config.paths.map((entry) => entry.path).filter((entry) => !statOf(normalizeHostPath(entry)));
+  const specs = [
+    ...fixedMountSpecs(request.paths),
+    ...(await sessionMountSpecs(request.sessionMounts ?? [])),
+    ...grantedMounts(agentId, config).map((spec) => spec.mount)
+  ];
   await mountAll(name, specs, onData);
   if (created) {
     await allowHosts(name, config.hosts, onData);
@@ -1000,6 +1056,7 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
     await ensureSandboxLauncher(name, onData);
   }
   args.push("--", ...request.agentArgs);
+  await suppressSbxFirstRunWizard();
   return { args, missing };
 }
 
@@ -1009,23 +1066,28 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
  * once its agent can't be sent to it again. If it's still on, every existing sandbox either gets
  * removed too (its workspace is no longer this project's path — see ensureSandboxExists for the
  * two ways that happens — and is rebuilt when its next tab starts) or, the normal case, has its
- * live path grants narrowed to match (revokeStalePaths), whatever ports changed applied
- * (applyPortChanges) and its allowed hosts brought in line both ways (revokeStaleHosts,
- * allowHosts) — none is a create-time workspace or `-p` any more, so an edit no longer
- * forces a rebuild. The hosts' "previous" is each sandbox's own rule list, not tet.json's: the
- * sandbox is the truth for that list (readLiveSbxConfig), so a rule set by hand and now
- * deleted as a row has to go too. Returns which agents' sandboxes were removed, for the caller
- * to say so: a session of that agent still running in a tab just lost its sandbox under it.
+ * live grants narrowed to match (revokeMounts, paths and knowledge alike), whatever ports
+ * changed applied (applyPortChanges) and its allowed hosts brought in line both ways
+ * (revokeStaleHosts, allowHosts) — none is a create-time workspace or `-p` any more, so an edit
+ * no longer forces a rebuild. The hosts' "previous" is each sandbox's own rule list, not
+ * tet.json's: the sandbox is the truth for that list (readLiveSbxConfig), so a rule set by hand
+ * and now deleted as a row has to go too. Mounts and ports need the sandbox running (each
+ * refuses a stopped one), so it is started once for both, and only when either has something
+ * to do — a sandbox that is not running has no live grant to narrow, and one whose start fails
+ * is skipped, the failed `exec` being the same signal either way. Returns which agents'
+ * sandboxes were removed, for the caller to say so: a session of that agent still running in a
+ * tab just lost its sandbox under it.
  */
 export async function saveSbxConfig(projectPath: string, projectId: string, request: SbxProjectConfig): Promise<SbxAgentId[]> {
   const previous = await readSbxConfig(projectPath);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   await writeSbxConfig(projectPath, config);
+  const sandboxes = (await listSandboxes()) ?? new Map();
   const liveHosts = await readSandboxHosts();
   const removed: SbxAgentId[] = [];
   for (const agentId of SBX_AGENT_IDS) {
     const name = sandboxName(projectId, agentId);
-    const existing = await getSandboxWorkspaces(name);
+    const existing = sandboxes.get(name);
     if (existing === undefined) {
       continue;
     }
@@ -1035,8 +1097,12 @@ export async function saveSbxConfig(projectPath: string, projectId: string, requ
       }
       continue;
     }
-    await revokeStalePaths(name, previous.paths, config.paths);
-    await applyPortChanges(name, previous.ports, config.ports);
+    const stale = staleMounts(grantedMounts(agentId, previous), grantedMounts(agentId, config));
+    const ports = portDelta(previous.ports, config.ports);
+    if ((stale.length > 0 || ports.removed.length > 0 || ports.added.length > 0) && (await ensureRunning(name))) {
+      await revokeMounts(name, stale);
+      await applyPortChanges(name, ports);
+    }
     await revokeStaleHosts(name, liveHosts.get(name) ?? [], config.hosts);
     await allowHosts(name, config.hosts);
   }

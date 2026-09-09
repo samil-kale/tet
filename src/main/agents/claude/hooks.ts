@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { buildBusyCommand, buildWaitingCommand, markerDir, markPosix, markPowershell } from "../../terminals/marker-watch";
-import { hostTarget, type HookTarget } from "../../terminals/hook-target";
+import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
 import { buildHookNotifyCommand, buildReadFileCommand, WIN_BOM, writePosixScript } from "../../terminals/os-notify";
 import type { NotificationSettings } from "../../../shared/types";
 
@@ -81,7 +81,7 @@ export function setupClaudeHooks(
   notifications: NotificationSettings,
   context: { contextFile: string; contextReadPaths: string[] },
   themeName: string,
-  target: HookTarget = hostTarget()
+  target: HookTarget = HOST_TARGET
 ): string[] {
   const hooks: Record<string, unknown> = {
     // Two commands on the one event: the context file's contents become part of the prompt,

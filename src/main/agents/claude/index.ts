@@ -1,7 +1,7 @@
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { watchTurnMarkers } from "../../terminals/marker-watch";
-import { sandboxHookDir, sandboxTarget } from "../../terminals/hook-target";
+import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
 
@@ -39,7 +39,7 @@ export const claudeAgent: AgentDefinition = {
   },
   prepareSandboxSpawn: (cwd, paths) => {
     try {
-      return { args: setupClaudeHooks(sandboxHookDir(paths.agentDir), cwd, "Claude", paths.notifications, paths, paths.theme.kind, sandboxTarget()) };
+      return { args: setupClaudeHooks(sandboxHookDir(paths.agentDir), cwd, "Claude", paths.notifications, paths, paths.theme.kind, SANDBOX_TARGET) };
     } catch (error) {
       console.error("[tet] could not write Claude sandbox hook settings:", error);
       return { args: [] };

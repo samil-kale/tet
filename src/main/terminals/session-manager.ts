@@ -16,7 +16,7 @@ import type {
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig } from "../git/commands";
-import { checkSbxGoverned, prepareSbxRun, sandboxName, sbxNotReady } from "../sbx";
+import { checkSbxReady, prepareSbxRun, sandboxName } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -236,8 +236,6 @@ export class ProjectSessionManager {
   private newTabCounter = 0;
   /** The project was closed; nothing that was still in flight may start anything back up. */
   private disposed = false;
-  /** Said once per project, not once per tab — see resolveSbxRun. */
-  private sbxGovernedSaid = false;
   /** Said once per project, not once per tab — see resolveSbxRun's own-session-id fallback. */
   private sbxPreexistingSaid = false;
   /**
@@ -672,6 +670,13 @@ export class ProjectSessionManager {
       })
       .catch((error: unknown) => {
         this.callbacks.onNotice("error", `${tab.agentId} could not be started: ${String(error)}`);
+        // A setup that threw (a sandbox that could not be created, say) spawned nothing, so
+        // the tab takes the error status for the same reason the stranded one above does:
+        // "ready" would leave it with no fit to retry on, and error is what offers Restart.
+        if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
+          tab.status = "error";
+          this.callbacks.onStatus(this.project.id, tabId, "error");
+        }
       })
       .finally(() => {
         // Whichever way the setup ended: an entry left here would make every later resize
@@ -725,25 +730,12 @@ export class ProjectSessionManager {
       this.sbxStranded(tab, "sandboxing is switched off for the project");
       return null;
     }
-    const notReady = await sbxNotReady();
-    if (notReady) {
-      if (!this.sbxStranded(tab, notReady)) {
+    const ready = await checkSbxReady();
+    if ("notReady" in ready) {
+      if (!this.sbxStranded(tab, ready.notReady)) {
         this.callbacks.onNotice(
           "warning",
-          `SBX is not available for ${this.project.name}: ${notReady}. This tab starts on this machine directly; sandboxing stays on for the project.`
-        );
-      }
-      return null;
-    }
-    // tet.json travels with the repository, so "enabled" may come from a colleague whose
-    // account is not governed — here it is, and no mount could be allowed (see sbx.ts's
-    // checkSbxGoverned): the agent runs on the host as if sbx were off, said once.
-    if (await checkSbxGoverned("filesystem")) {
-      if (!this.sbxStranded(tab, "your organization manages SBX's filesystem policy") && !this.sbxGovernedSaid) {
-        this.sbxGovernedSaid = true;
-        this.callbacks.onNotice(
-          "warning",
-          `SBX sandboxing is off for ${this.project.name}: your organization manages SBX's filesystem policy, so its agents run on this machine directly.`
+          `SBX is not available for ${this.project.name}: ${ready.notReady}. This tab starts on this machine directly; sandboxing stays on for the project.`
         );
       }
       return null;
@@ -770,6 +762,7 @@ export class ProjectSessionManager {
       projectId: this.project.id,
       projectPath: this.project.path,
       config,
+      sandboxes: ready.sandboxes,
       paths,
       agentArgs: [...hooks.args, ...resumeArgs, ...(tab.runArgs ?? [])],
       env: [...(agent.sandboxEnv ?? []), ...Object.entries(hooks.env ?? {}).map(([key, value]) => `${key}=${value}`)],
@@ -796,12 +789,12 @@ export class ProjectSessionManager {
    * the tab menu's Restart is the way back), so what would be a "starts here instead" for any
    * other tab is a "does not start" for this one: two shapes of the same fact, and telling it
    * twice — once here and once from startTab — is what this exists to avoid. It names no way
-   * out beyond that Restart on purpose: one of the reasons it carries (an org-managed policy)
-   * is not something the user can fix at all.
+   * out beyond that Restart on purpose: the reason it carries is the whole of what there is
+   * to say, and the sbx-settings dialog is where the way out is anyway.
    *
    * Returns whether it was that kind of tab, which is what the fallback notice beside each
-   * call site skips on. Deliberately not "said once" the way the governed one is: this is about
-   * one tab the user just tried to open, not a standing condition of the project.
+   * call site skips on. Deliberately not "said once" the way the preexisting-session one is:
+   * this is about one tab the user just tried to open, not a standing condition of the project.
    */
   private sbxStranded(tab: TabState, reason: string): boolean {
     if (!tab.sandbox) {
