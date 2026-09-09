@@ -275,8 +275,7 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
       return false;
     }
     // Ctrl+C with a selection copies instead of interrupting, in every terminal type. Without a
-    // selection it sends \x03, except where that kills the process outright — measured per agent
-    // at AgentDefinition.plainCtrlCKills.
+    // selection xterm sends \x03 and what it means there is the CLI's own business.
     if (event.type === "keydown" && event.key.toLowerCase() === "c" && isModifierHeld(event) && !event.shiftKey) {
       const selection = term.getSelection();
       if (selection) {
@@ -286,11 +285,6 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
           void navigator.clipboard.writeText(selection);
           term.clearSelection();
         }
-        return false;
-      }
-      if (agent.plainCtrlCKills) {
-        event.preventDefault();
-        event.stopPropagation();
         return false;
       }
     }

@@ -368,8 +368,8 @@ folder. A new agent is a new folder, one entry in that index, one case in `Agent
 - `resolveUrlPrefix` — completes a url the agent's TUI wrapped across rows
 - `createIsSessionReady` — the per-agent guess at "the CLI drew its first real frame"
 - `quitPresses` — how many Ctrl+C bytes make it quit by itself
-- `plainCtrlCKills`, `takesRightMouse`, `swapsBlueMagenta` — measured facts the *renderer* acts
-  on; they travel as flags on `AgentInfo`
+- `takesRightMouse`, `swapsBlueMagenta` — measured facts the *renderer* acts on; they travel as
+  flags on `AgentInfo`
 
 ### Never assume the agents behave alike
 
@@ -396,9 +396,9 @@ agent to another:
   a hook it has hashed and decided to trust, opencode loads a TypeScript plugin whose `event` hook
   is its whole event bus (and bun-installs its dependency into the config dir the first time), and
   pi loads a TypeScript extension and exits outright when it fails to load.
-- Ctrl+C: Claude Code, opencode and pi read `\x03` as an ordinary byte; to a Codex in cooked mode
-  it is a process-level `CTRL_C_EVENT` that kills it, so it is never sent there
-  (`plainCtrlCKills`).
+- Ctrl+C: all four read `\x03` as an ordinary byte and decide for themselves what it means — Codex
+  clears its composer, or quits when it is empty (0.153.4; it once sat in cooked mode, where win32
+  turned the byte into a `CTRL_C_EVENT` that killed it, and tet swallowed Ctrl+C for it).
 - Resize redraw: Codex reprints its whole scrollback on any real pty resize, because it never
   enters its own alternate screen — its `alternate_screen = "always"` config has no effect in the
   shipped binary (raw pty bytes captured; openai/codex#24552). A Codex bug, not tet's; per-agent

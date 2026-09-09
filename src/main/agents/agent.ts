@@ -259,13 +259,6 @@ export interface AgentDefinition {
    */
   quitPresses?: number;
   /**
-   * Whether a plain `\x03` kills this CLI instead of reaching it as input, so Ctrl+C without a
-   * selection is swallowed rather than sent (terminal-views.ts). Measured: Claude Code and
-   * opencode run raw and read the byte as any other; Codex sits in cooked mode, where on win32
-   * ConPTY raises a process-level CTRL_C_EVENT that kills it.
-   */
-  plainCtrlCKills?: boolean;
-  /**
    * Whether this agent's TUI takes the right mouse button itself through mouse reporting
    * (Claude Code pastes, opencode copies the selection). Where it does not — the shell, and
    * Codex (github.com/openai/codex#8344) — tet supplies the terminal convention itself: copy a

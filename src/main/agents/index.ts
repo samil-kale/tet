@@ -39,7 +39,6 @@ export function listAgents(): AgentInfo[] {
     id: agent.id,
     displayName: agent.displayName,
     hasSessions: agent.sessions !== undefined,
-    plainCtrlCKills: agent.plainCtrlCKills === true,
     takesRightMouse: agent.takesRightMouse === true,
     swapsBlueMagenta: agent.swapsBlueMagenta === true
   }));

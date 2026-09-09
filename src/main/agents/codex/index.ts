@@ -81,7 +81,9 @@ export const codexAgent: AgentDefinition = {
   // ~700-900 byte chunk. Unverified against a logged-in start, which may draw less — revisit.
   createIsSessionReady: () => createByteThresholdCheck(600),
   // One: a second byte would land mid-shutdown and kill it instead.
-  quitPresses: 1,
-  // Cooked mode: on win32 the byte arrives as a CTRL_C_EVENT and kills it, so it is never sent.
-  plainCtrlCKills: true
+  quitPresses: 1
+  // Measured through this pty at 0.153.4: Codex runs raw and reads \x03 as an ordinary byte — with
+  // text in the composer it clears it and lives on, with an empty one it quits itself, printing
+  // its own "Session ID:" line and exiting 0. It used to sit in cooked mode, where win32 turned
+  // the byte into a process-level CTRL_C_EVENT that killed it, and tet swallowed Ctrl+C for it.
 };

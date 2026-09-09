@@ -5,9 +5,8 @@ export interface AgentInfo {
   displayName: string;
   /** Whether this agent persists sessions; the shell does not, so its tabs are just terminals. */
   hasSessions: boolean;
-  /* The three below mirror their measured AgentDefinition fields; the renderer acts on them but
+  /* The two below mirror their measured AgentDefinition fields; the renderer acts on them but
      cannot import src/main/agents, so the facts travel here as data. */
-  plainCtrlCKills: boolean;
   takesRightMouse: boolean;
   swapsBlueMagenta: boolean;
 }

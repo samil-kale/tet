@@ -69,8 +69,8 @@ export const piAgent: AgentDefinition = {
   // One Ctrl+C clears the editor; two within 500 ms (pi's handleCtrlC) exit cleanly with code 0
   // in ~1.1 s, and 700 ms apart do nothing. TET's 250 ms gap and 2 s grace fit inside that.
   quitPresses: 2
-  // Left out on purpose, each measured through this pty: plainCtrlCKills (pi runs raw and reads
-  // \x03 as a byte), takesRightMouse (no mouse reporting at all), swapsBlueMagenta (truecolor
+  // Left out on purpose, each measured through this pty: takesRightMouse (no mouse reporting at
+  // all), swapsBlueMagenta (truecolor
   // `38;2` only, no palette indices, no OSC 10/11), resolveUrlPrefix (pi wraps a long url in
   // OSC 8 with the full url, which the renderer's linkHandler already opens).
 };
