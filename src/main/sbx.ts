@@ -9,7 +9,7 @@ import { SBX_AGENT_IDS } from "../shared/types";
 import type { SbxAgentId, SbxFolder, SbxKnowledgeConfig, SbxPort, SbxProjectConfig } from "../shared/types";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { augmentAgentPath } from "./terminals/agent-path";
-import { toContainerPath } from "./terminals/hook-target";
+import { SANDBOX_HOME, toContainerPath } from "./terminals/hook-target";
 import { resolveCommand } from "./terminals/pty";
 import { checkAgentInstalled } from "./terminals/terminal-session";
 
@@ -436,17 +436,13 @@ export interface SandboxPaths {
  * measured live, 2026-09-08: Claude answered over the host's OAuth credentials at once, and a
  * `/login` inside would replace the host's — so the sandbox keeps its own config directory and
  * its own sign-in. Its skills, plugins and instructions file come in as separate live mounts
- * instead (knowledgePaths); its sessions stay out.
+ * instead (knowledgePaths), and so does the one directory of that config it *writes*, its
+ * sessions (sessionMountSpecs): a curated subpath each time, never the directory holding the
+ * credentials, and never an env variable pointed at any of it.
  */
 export function computeWorkspaces(projectPath: string, paths: SandboxPaths): string[] {
   return [projectPath, paths.agentDir, `${path.dirname(paths.contextFile)}:ro`];
 }
-
-/** Every sandbox template's non-root user, and its home — verified live for a Claude, a Codex
- *  and an opencode sandbox (2026-09-08) and for pi's community-kit one (2026-09-09), each by
- *  `$HOME` and `whoami` inside it. `sbx mount`'s target must be an absolute path (its own
- *  `--help`): it is not passed through a shell, so `~` never expands there. */
-const SANDBOX_HOME = "/home/agent";
 
 interface KnowledgeEntry {
   host: string;
@@ -746,6 +742,14 @@ async function applyPortChanges(name: string, previous: SbxPort[], current: SbxP
   }
 }
 
+/** One `SandboxSessionMount` with its host side resolved to an absolute path — what the
+ *  session manager hands over for `sessionMountSpecs` to mount. */
+export interface SbxSessionMount {
+  host: string;
+  target: string;
+  file?: boolean;
+}
+
 export interface SbxRunRequest {
   agentId: SbxAgentId;
   projectId: string;
@@ -757,9 +761,47 @@ export interface SbxRunRequest {
   agentArgs: string[];
   /** `AgentDefinition.sandboxEnv` — "KEY=VALUE" entries for `sbx run -e`, ahead of "--". */
   env?: string[];
+  /**
+   * Where this agent's sessions are to land on the host — its `SandboxSessionMount`s with the
+   * host side already resolved. Created here if missing (sbx has nothing to mount otherwise),
+   * read-write, and re-applied on every spawn like every other live mount.
+   */
+  sessionMounts?: SbxSessionMount[];
   /** Every setup step's own console output, forwarded live to the tab that is about to run in
    *  this sandbox — see `RunOptions.onData` for why this needs no pty of its own to reach it. */
   onData?: OnData;
+}
+
+/**
+ * The `sbx mount` specs that put a sandboxed agent's own sessions on the host — see
+ * SessionProvider.sandbox for why they are read through a mount rather than out of the
+ * container. Read-write (no suffix, sbx's own default): the CLI inside writes them.
+ *
+ * The host side is created first, as a directory or an empty file, because `sbx mount` has
+ * nothing to mount otherwise. The container side needs no such care — verified live,
+ * 2026-09-09: sbx creates a missing target for either kind, and a mount even stacks over a
+ * volume the template already put there (Claude's `~/.claude/projects`), the mount winning.
+ * Best-effort per entry, like the knowledge mounts: no sessions on the host is no worse than
+ * before, and must not keep the agent itself from starting.
+ */
+async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
+  const specs: string[] = [];
+  for (const mount of mounts) {
+    try {
+      if (mount.file) {
+        await fs.mkdir(path.dirname(mount.host), { recursive: true });
+        // Never truncating one that is already there: it is the session index the sandbox has
+        // been appending to.
+        await fs.appendFile(mount.host, "");
+      } else {
+        await fs.mkdir(mount.host, { recursive: true });
+      }
+      specs.push(`${mount.host}:${mount.target}`);
+    } catch (error) {
+      console.error("[tet] could not prepare sandbox session mount:", error);
+    }
+  }
+  return specs;
 }
 
 /**
@@ -780,6 +822,7 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // when nothing is enabled or nothing enabled exists on this host.
   const missing: string[] = [];
   const specs = knowledgeMountSpecs(agentId, config.knowledge);
+  specs.push(...(await sessionMountSpecs(request.sessionMounts ?? [])));
   for (const folder of config.folders) {
     if (statOf(normalizeFolder(folder.path))?.isDirectory()) {
       specs.push(folderMountSpecs(folder).mount);

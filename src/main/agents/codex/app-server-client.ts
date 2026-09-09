@@ -26,8 +26,8 @@ interface RpcRequest {
  */
 let queue: Promise<unknown> = Promise.resolve();
 
-function callAppServer(executable: string, cwd: string, request: RpcRequest): Promise<unknown> {
-  const call = queue.then(() => callAppServerNow(executable, cwd, request));
+function callAppServer(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
+  const call = queue.then(() => callAppServerNow(executable, cwd, request, home));
   queue = call.catch(() => undefined);
   return call;
 }
@@ -37,9 +37,14 @@ function callAppServer(executable: string, cwd: string, request: RpcRequest): Pr
  * request, and returns its result — rejecting on a JSON-RPC error, a spawn failure, or timeout.
  * The process is always killed on the way out, success or failure alike.
  */
-async function callAppServerNow(executable: string, cwd: string, request: RpcRequest): Promise<unknown> {
+async function callAppServerNow(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
   const { command, args } = resolveCommand(executable, ["app-server", "--stdio"]);
-  const child = spawn(command, args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn(command, args, {
+    cwd,
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: home === undefined ? process.env : { ...process.env, CODEX_HOME: home }
+  });
 
   return new Promise((resolve, reject) => {
     let nextId = 1;
@@ -69,6 +74,10 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
     };
 
     child.on("error", (error) => finish(() => reject(error)));
+    // An app-server that died before reading its request fails the write asynchronously, where
+    // no `try` around it can catch it — and an unhandled stream error takes the whole main
+    // process into Electron's modal crash dialog. `ask.ts` guards its own stdin the same way.
+    child.stdin.on("error", () => undefined);
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
@@ -112,10 +121,18 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
   });
 }
 
-export async function renameThread(executable: string, cwd: string, threadId: string, name: string): Promise<void> {
-  await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } });
+/**
+ * `home` is what a *sandboxed* session needs: its rollouts and name index live in the directory
+ * tet mounts into the sandbox, not in this host's `~/.codex` — so the one-shot app-server is
+ * pointed at that directory as its `CODEX_HOME` and acts on the same files the sandbox writes.
+ * Measured live, 2026-09-09: a foreign CODEX_HOME needs no sign-in and no config of its own for
+ * these — `initialize` and a `thread/*` request both answer — but the directory has to exist
+ * ("CODEX_HOME points to … but that path does not exist", and it exits 1).
+ */
+export async function renameThread(executable: string, cwd: string, threadId: string, name: string, home?: string): Promise<void> {
+  await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } }, home);
 }
 
-export async function deleteThread(executable: string, cwd: string, threadId: string): Promise<void> {
-  await callAppServer(executable, cwd, { method: "thread/delete", params: { threadId } });
+export async function deleteThread(executable: string, cwd: string, threadId: string, home?: string): Promise<void> {
+  await callAppServer(executable, cwd, { method: "thread/delete", params: { threadId } }, home);
 }

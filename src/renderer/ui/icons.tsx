@@ -178,6 +178,57 @@ export function PinIcon(props: IconProps) {
   );
 }
 
+/** Lucide's `shield`, vendored the same way — a project whose agents run in an sbx sandbox.
+ *  Tall and narrow like the pin above, so the extent is the long-side cap rather than the
+ *  geometric mean, same 0.87 formula: measured 18 by 22 (stroke included) gives extent 20.23,
+ *  centered at (12, 12). Full size, not `SMALLER`: it stands in the project row beside the
+ *  session marks, which is what it has to read at. */
+export function ShieldIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.23, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.23, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+    </svg>
+  );
+}
+
+/** Lucide's `file-diff`, vendored the same way — a repository with uncommitted changes, which is
+ *  what the project row's mark stands for and what pressing it opens. Not the git logo beside it
+ *  in the tab strip: that one says "git" where the row already names the branch. Tall and narrow
+ *  like the shield above, so the same long-side cap: measured 18 by 22 (stroke included) gives
+ *  extent 20.23, centered at (12, 12). */
+export function ChangesIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.23, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.23, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
+      <path d="M9 10h6" />
+      <path d="M12 13V7" />
+      <path d="M9 17h6" />
+    </svg>
+  );
+}
+
 /**
  * The three shapes VS Code uses for a notification: a cross for an error, an exclamation for a
  * warning, an "i" for information — each in the circle they share, so a glance at the outline

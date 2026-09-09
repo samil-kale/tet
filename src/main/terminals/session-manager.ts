@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AGENTS, getAgent } from "../agents";
 
-import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../agents/agent";
+import type { AgentDefinition, AgentPaths, AgentSessionInfo, SpawnPreparation } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { CONTROL_ENV } from "../../shared/control";
 import { isSbxAgent } from "../../shared/types";
@@ -16,11 +16,12 @@ import type {
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
-import { readSbxConfig, writeSbxConfig } from "../git/commands";
+import { readSbxConfig } from "../git/commands";
 import { checkSbxGoverned, prepareSbxRun, sandboxName, sbxNotReady, type SandboxPaths } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
+import { sandboxSessionDir, toContainerPath } from "./hook-target";
 import { currentTheme } from "../theme";
 
 const RECONCILE_DEBOUNCE_MS = 5000;
@@ -223,6 +224,12 @@ export class ProjectSessionManager {
   private readonly runtimes = new Map<AgentId, AgentRuntime>();
   /** Tabs whose session is being constructed; a second resize must not start a second one. */
   private readonly starting = new Map<string, { cols: number; rows: number }>();
+  /**
+   * The last size the renderer fitted each tab to. `this.starting` holds one too, but only
+   * while a start is underway; a restart happens long after that, and no fit follows it on its
+   * own — the terminal element is already laid out, so nothing resizes.
+   */
+  private readonly lastSizes = new Map<string, { cols: number; rows: number }>();
   /** Session ids whose removal is still in flight — reconcile must not re-claim them. */
   private readonly deletingSessionIds = new Set<string>();
   /** Tabs already removed from the UI that still need their persisted session claimed for deletion. */
@@ -260,9 +267,14 @@ export class ProjectSessionManager {
     this.shellContext = new ShellContext(path.join(storageRoot, "projects", project.id), project.name);
   }
 
+  /** This agent's own scratch directory for this repository — see AgentPaths.agentDir. */
+  private agentDirOf(agentId: AgentId): string {
+    return path.join(this.storageRoot, "agents", agentId, this.project.id);
+  }
+
   /** Where one agent may set itself up for this repository — see AgentDefinition.prepareSpawn. */
   private pathsFor(runtime: AgentRuntime): AgentPaths {
-    const agentDir = path.join(this.storageRoot, "agents", runtime.agent.id, this.project.id);
+    const agentDir = this.agentDirOf(runtime.agent.id);
     fs.mkdirSync(agentDir, { recursive: true });
     return {
       agentDir,
@@ -400,6 +412,43 @@ export class ProjectSessionManager {
     return runtime;
   }
 
+  /**
+   * Every session of this project's repository for one agent — the host's, and the ones its
+   * sandbox wrote through the mount tet put there (SessionProvider.sandbox). Two listings, one
+   * list: the sandboxed ones are named after the sandbox they live in, which is what
+   * resolveSbxRun reads to send a session back where it belongs, and what keeps the manager
+   * itself from having to know which is which anywhere else.
+   *
+   * The sandbox side is listed whenever its directory holds anything, not when sandboxing is
+   * enabled: a session that ran in a sandbox stays resumable there after the project's switch
+   * was turned off, and the listing costs one readdir of an empty directory otherwise.
+   */
+  private async listSessions(runtime: AgentRuntime): Promise<AgentSessionInfo[]> {
+    const { agent, executable } = runtime;
+    if (!agent.sessions) {
+      return [];
+    }
+    const onHost = agent.sessions.list(executable, this.project.path);
+    const sandbox = agent.sessions.sandbox;
+    if (!sandbox || !isSbxAgent(agent.id)) {
+      return onHost;
+    }
+    // Started together, not one after the other: two roots with nothing between them, and this
+    // is both the bootstrap listing the startup bar covers and what `logSlow` times on every
+    // reconcile — no reason to pay for the second tree only once the first is read.
+    const [host, inSandbox] = await Promise.all([
+      onHost,
+      sandbox.list(executable, this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path))
+    ]);
+    const name = sandboxName(this.project.id, agent.id);
+    return [...host, ...inSandbox.map((info) => ({ ...info, sandbox: name }))];
+  }
+
+  /** Where this agent's sandboxed sessions land on the host — the mounted directory. */
+  private sandboxSessionRoot(agentId: AgentId): string {
+    return sandboxSessionDir(this.agentDirOf(agentId));
+  }
+
   /** Both conditions for running the agent at all: it exists, and its setup succeeded. */
   private canStart(runtime: AgentRuntime): boolean {
     return runtime.installed && !runtime.prepareFailed;
@@ -423,7 +472,7 @@ export class ProjectSessionManager {
     }
 
     markStartup(`list ${agent.id}`);
-    const infos = await agent.sessions.list(executable, cwd);
+    const infos = await this.listSessions(runtime);
     // Closed while listing: nothing to post to, and the watcher started below would be one
     // `dispose` has already run past.
     if (this.disposed) {
@@ -565,6 +614,7 @@ export class ProjectSessionManager {
   }
 
   handleResize(tabId: string, cols: number, rows: number): void {
+    this.lastSizes.set(tabId, { cols, rows });
     const existing = this.sessions.get(tabId);
     if (existing) {
       existing.ensureStarted(cols, rows);
@@ -574,6 +624,16 @@ export class ProjectSessionManager {
     if (!tab) {
       return;
     }
+    this.startTab(tab, cols, rows);
+  }
+
+  /**
+   * Everything one tab's first spawn needs: the agent's setup, its sandbox, then the process
+   * itself at the size given. Split out of `handleResize` because `restartTab` needs the very
+   * same path — a dead sandboxed tab cannot simply respawn its old command line (see there).
+   */
+  private startTab(tab: TabState, cols: number, rows: number): void {
+    const tabId = tab.tabId;
     // The agent's setup may still be running (version check, the generated hooks). Remember
     // the size and start once it settles — the first resize is what spawns the process.
     const pending = this.starting.get(tabId);
@@ -592,6 +652,21 @@ export class ProjectSessionManager {
         const dims = this.starting.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
           // Closed while the setup ran: nothing left to start.
+          return;
+        }
+        // A session that lives in a sandbox can only be resumed there (see resolveSbxRun): its
+        // transcript is the one the sandbox wrote, and the host's own CLI has never seen that
+        // id — resuming it here fails outright, and starting without the resume would quietly
+        // put a *new* session in a tab that already stands for one. So nothing is started, and
+        // the tab takes the error status: it did fail to start, and that status is what puts the
+        // way back in the user's hands — the tab menu's Restart, which is this same method
+        // again. Leaving it "ready" for the next fit to retry would strand it instead: a fit of
+        // an unchanged size sends nothing at all (`sent` in terminal-views.ts), so activating
+        // the tab again would never reach here. The status is all that is done here:
+        // `sbxStranded` has already said why, at the branch that knows the reason.
+        if (sbxArgs === null && tab.sandbox) {
+          tab.status = "error";
+          this.callbacks.onStatus(this.project.id, tabId, "error");
           return;
         }
         this.startSession(tab, sbxArgs).ensureStarted(dims.cols, dims.rows);
@@ -618,28 +693,27 @@ export class ProjectSessionManager {
    * command's: a saved command is not "this agent's process" in the first place (see
    * startSession), so wrapping it in a sandbox would run the wrong thing.
    *
-   * A session runs where it lives. For Claude Code, Codex and pi that is always the host once a
-   * tab has a `sessionId`: a sandboxed session's transcript lives only inside its container
-   * (sbx.ts's computeWorkspaces — the agent's own config directory, where it would sit, is
-   * deliberately never mounted), invisible to the reconcile loop's host filesystem listing,
-   * which is the only thing that ever assigns a tab's `sessionId`. So a `sessionId` that exists
-   * at all was read off the host, and `--resume`ing it inside a sandbox that has never seen it
-   * fails outright ("No conversation found with session ID: …", measured live, 2026-09-08) —
-   * for any session that predates this tab's sandbox, not only ones that predate SBX itself (a
-   * sandbox rebuild after an Allowed-folders change orphans every session that was already
-   * sandboxed too). opencode's listing records where each session ran (AgentSessionInfo.sandbox,
-   * from its plugin), so its sandboxed sessions are resumed in their sandbox and its host
-   * sessions on the host. A tab with no `sessionId` yet is sandboxed either way.
+   * A session runs where it lives, and every agent now says which that is: opencode from the
+   * records its plugin writes, the other three because their sessions are read back through a
+   * mount (SessionProvider.sandbox, whose directories this passes to prepareSbxRun). So a tab
+   * whose session was made on the host keeps running there — `--resume`ing it inside a sandbox
+   * that has never seen it fails outright ("No conversation found with session ID: …", measured
+   * live, 2026-09-08) — and one made in the sandbox goes back into it. A tab with no
+   * `sessionId` yet is sandboxed either way.
    *
    * Sbx not being ready — not installed, not signed in, or its network policy never
-   * initialized — turns sandboxing off outright for the project (writes `enabled: false`), not
-   * just skipped for this one spawn: without this, `sbx run` would run its own interactive setup
-   * right there in the tab (a device-code sign-in prompt, an arrow-key policy picker), which a
-   * plain agent tab has no business showing (measured live, 2026-09-08, after sbx was
-   * uninstalled and reinstalled: the full "not authenticated… sign in… network policy" flow
-   * printed into the tab, only to still fail once the sandbox itself needed rebuilding). The
-   * sbx-settings dialog's own setup already runs these same three checks before ever offering
-   * Save; a tab reaching them unprepared means the dialog was skipped, or things changed since.
+   * initialized — skips the sandbox for this one spawn and says so, and deliberately does *not*
+   * write `enabled: false` back to tet.json: the three checks cannot tell a permanent state from
+   * a passing one (`checkSbxLoggedIn` is `sbx ls`'s exit code, which fails the same way while
+   * the sandbox daemon is restarting — an sbx update is exactly that), and turning the project's
+   * switch off over a passing outage would need the user to find and flip it back by hand.
+   * Skipping *is* needed though: without it, `sbx run` would run its own interactive setup right
+   * there in the tab (a device-code sign-in prompt, an arrow-key policy picker), which a plain
+   * agent tab has no business showing (measured live, 2026-09-08, after sbx was uninstalled and
+   * reinstalled: the full "not authenticated… sign in… network policy" flow printed into the
+   * tab, only to still fail once the sandbox itself needed rebuilding). The sbx-settings
+   * dialog's own setup already runs these same three checks before ever offering Save; a tab
+   * reaching them unprepared means the dialog was skipped, or things changed since.
    */
   private async resolveSbxRun(tab: TabState): Promise<string[] | null> {
     if (tab.executable || !isSbxAgent(tab.agentId)) {
@@ -647,22 +721,26 @@ export class ProjectSessionManager {
     }
     const config = await readSbxConfig(this.project.path);
     if (!config.enabled) {
+      // Nothing to say to a tab that simply starts on this machine — the switch is off because
+      // someone turned it off. Only a tab that cannot follow it there is worth a word.
+      this.sbxStranded(tab, "sandboxing is switched off for the project");
       return null;
     }
     const notReady = await sbxNotReady();
     if (notReady) {
-      await writeSbxConfig(this.project.path, { ...config, enabled: false });
-      this.callbacks.onNotice(
-        "warning",
-        `SBX sandboxing was turned off for ${this.project.name}: ${notReady}. Future tabs start on this machine directly until it's fixed and re-enabled.`
-      );
+      if (!this.sbxStranded(tab, notReady)) {
+        this.callbacks.onNotice(
+          "warning",
+          `SBX is not available for ${this.project.name}: ${notReady}. This tab starts on this machine directly; sandboxing stays on for the project.`
+        );
+      }
       return null;
     }
     // tet.json travels with the repository, so "enabled" may come from a colleague whose
     // account is not governed — here it is, and no mount could be allowed (see sbx.ts's
     // checkSbxGoverned): the agent runs on the host as if sbx were off, said once.
     if (await checkSbxGoverned("filesystem")) {
-      if (!this.sbxGovernedSaid) {
+      if (!this.sbxStranded(tab, "your organization manages SBX's filesystem policy") && !this.sbxGovernedSaid) {
         this.sbxGovernedSaid = true;
         this.callbacks.onNotice(
           "warning",
@@ -687,6 +765,7 @@ export class ProjectSessionManager {
     const sandbox = sandboxName(this.project.id, tab.agentId);
     const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
     const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
+    const sessionRoot = this.sandboxSessionRoot(tab.agentId);
     const { args, missing } = await prepareSbxRun({
       agentId: tab.agentId,
       projectId: this.project.id,
@@ -695,6 +774,11 @@ export class ProjectSessionManager {
       paths,
       agentArgs: [...hooks.args, ...resumeArgs, ...(tab.runArgs ?? [])],
       env: [...(agent.sandboxEnv ?? []), ...Object.entries(hooks.env ?? {}).map(([key, value]) => `${key}=${value}`)],
+      sessionMounts: (agent.sessions?.sandbox?.mounts ?? []).map((mount) => ({
+        host: path.join(sessionRoot, mount.sub),
+        target: mount.target,
+        file: mount.file
+      })),
       onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
     });
     if (missing.length > 0) {
@@ -704,6 +788,31 @@ export class ProjectSessionManager {
       );
     }
     return args;
+  }
+
+  /**
+   * The one notice a tab gets when its sandbox will not be there for it — said at the branch
+   * that knows why, since that reason is the whole content of it. A tab whose session lives in
+   * the sandbox cannot follow the others onto this machine (startTab leaves it in error, and
+   * the tab menu's Restart is the way back), so what would be a "starts here instead" for any
+   * other tab is a "does not start" for this one: two shapes of the same fact, and telling it
+   * twice — once here and once from startTab — is what this exists to avoid. It names no way
+   * out beyond that Restart on purpose: one of the reasons it carries (an org-managed policy)
+   * is not something the user can fix at all.
+   *
+   * Returns whether it was that kind of tab, which is what the fallback notice beside each
+   * call site skips on. Deliberately not "said once" the way the governed one is: this is about
+   * one tab the user just tried to open, not a standing condition of the project.
+   */
+  private sbxStranded(tab: TabState, reason: string): boolean {
+    if (!tab.sandbox) {
+      return false;
+    }
+    this.callbacks.onNotice(
+      "warning",
+      `This ${this.runtimeFor(tab.agentId).agent.displayName} session lives in ${this.project.name}'s SBX sandbox and cannot run on this machine: ${reason}. The tab menu's Restart tries again once that has changed.`
+    );
+    return true;
   }
 
   /** The paths a sandbox of this agent is built around, for ipc.ts's `sbx:save-config`:
@@ -871,6 +980,7 @@ export class ProjectSessionManager {
    */
   private async destroyTab(tab: TabState, index: number): Promise<void> {
     const session = this.sessions.get(tab.tabId);
+    this.lastSizes.delete(tab.tabId);
     if (session) {
       this.sessions.delete(tab.tabId);
       // Awaited, so everything below — deleting what the CLI persisted — happens after the
@@ -908,7 +1018,12 @@ export class ProjectSessionManager {
       if (session) {
         await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
       }
-      await agent.sessions.remove(executable, this.project.path, sessionId);
+      const sandbox = tab.sandbox ? agent.sessions.sandbox : undefined;
+      if (sandbox) {
+        await sandbox.remove(executable, this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path), sessionId);
+      } else {
+        await agent.sessions.remove(executable, this.project.path, sessionId);
+      }
     } catch (error) {
       this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${String(error)}`);
       // The persisted session still exists — put its tab back.
@@ -936,7 +1051,12 @@ export class ProjectSessionManager {
     }
     const previousTitle = tab.title;
     try {
-      await agent.sessions.rename(executable, this.project.path, tab.sessionId, title);
+      const sandbox = tab.sandbox ? agent.sessions.sandbox : undefined;
+      if (sandbox) {
+        await sandbox.rename(executable, this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path), tab.sessionId, title);
+      } else {
+        await agent.sessions.rename(executable, this.project.path, tab.sessionId, title);
+      }
       tab.title = title.trim();
       // A name the user picked is final — nothing left for the polling below to wait for.
       tab.provisionalTitle = false;
@@ -948,16 +1068,45 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Kills a saved command's process and spawns it again in the same tab, at the same size, with
-   * the same executable, arguments, cwd and env it was started with — a no-op for any other kind
-   * of tab, or one whose process was never spawned in the first place.
+   * Runs a tab's process again, in the tab it already has. Two paths, and the difference is the
+   * point of this method:
+   *
+   * A **saved command** is killed and respawned in place with the same executable, arguments,
+   * cwd and env — `TerminalSession.restart`, which repeats exactly what it was constructed
+   * with, since for a plain program that is still right.
+   *
+   * An **agent tab whose process is gone** — the sbx daemon went away under a sandboxed one,
+   * say — goes through the whole start path instead. Repeating its old command line would be
+   * wrong: a sandboxed tab's is an `sbx run` built by resolveSbxRun around mounts that do not
+   * survive a sandbox stop, against a sandbox that may have to be created again. So the dead
+   * session is dropped and the tab started as if for the first time, which re-runs the readiness
+   * checks, recreates the sandbox, re-applies the mounts and resumes the session the tab holds.
+   * Only a tab that *has* no process: one still running is left alone (closing it is what ends
+   * it), and one not fitted yet has its first fit for that. A tab whose start gave up before
+   * spawning anything counts as gone too — it carries the error status for exactly that reason
+   * (see startTab).
    */
   restartTab(tabId: string): void {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
-    if (!tab || !isSavedCommandTab(tab)) {
+    if (!tab) {
       return;
     }
-    this.sessions.get(tabId)?.restart();
+    if (isSavedCommandTab(tab)) {
+      this.sessions.get(tabId)?.restart();
+      return;
+    }
+    const size = this.lastSizes.get(tabId);
+    if (!size || (tab.status !== "stopped" && tab.status !== "error")) {
+      return;
+    }
+    // `startTab` gives up on a tab that already has one, and `startSession` would otherwise
+    // just overwrite the entry, leaving the old session's exit handler writing into this tab.
+    this.sessions.delete(tabId);
+    // The status is left as it is until the new process reports its own: the mark stays on a
+    // tab that is not running yet, and a start that gives up again (sbx still away) leaves the
+    // tab exactly as it found it — offering the restart once more rather than looking as if it
+    // had worked.
+    this.startTab(tab, size.cols, size.rows);
   }
 
   /**
@@ -1104,7 +1253,7 @@ export class ProjectSessionManager {
 
   private async doReconcile(runtime: AgentRuntime): Promise<void> {
     countActivity("reconcile");
-    const { agent, executable } = runtime;
+    const { agent } = runtime;
     // A disposed project has nothing to reconcile into.
     if (this.disposed || !agent.sessions || !this.canStart(runtime)) {
       return;
@@ -1113,7 +1262,7 @@ export class ProjectSessionManager {
     // transcript files that I/O is fast, so a slow listing here is the per-line JSON.parse
     // dominating — the actual synchronous cost this exists to surface.
     const listStart = performance.now();
-    const infos = await agent.sessions.list(executable, this.project.path);
+    const infos = await this.listSessions(runtime);
     logSlow("reconcile", performance.now() - listStart);
     const ownTabs = this.tabsOf(runtime);
     const claimed = new Set([
@@ -1220,6 +1369,7 @@ export class ProjectSessionManager {
     // tab is still known — with the project gone, none of them is.
     this.tabs = [];
     this.starting.clear();
+    this.lastSizes.clear();
     this.tabIndicators.clear();
     this.indicators = 0;
     this.shellContext.dispose();

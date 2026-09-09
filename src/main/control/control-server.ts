@@ -392,6 +392,13 @@ export async function startControlServer(
       void handle(request).then(({ response, after }) => respond(res, response, after));
     });
     req.on("error", () => undefined);
+    // The response side needs the same, and for a sharper reason: a write that fails *after*
+    // it was handed over — the CLI already gone, the connection reset, or this process on its
+    // way out because the verb it just answered ends it (see `after`) — surfaces as an
+    // uncaught exception in the main process, which Electron turns into a modal error dialog.
+    // That is the whole app blocked, every terminal session with it, over a client that stopped
+    // listening. Seen for real as `write EAGAIN` while the test suite drove a live instance.
+    res.on("error", () => undefined);
   });
 
   // A TCP port, unlike a unix socket file, leaves nothing behind for a killed run to hand over:

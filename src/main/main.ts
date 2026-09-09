@@ -20,6 +20,7 @@ import { configureSandboxes } from "./sbx";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { scriptInvocation, writeNotifyScript } from "./terminals/os-notify";
 import { setControlEnv } from "./terminals/pty";
+import { installUncaughtHandler } from "./uncaught";
 import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
@@ -73,6 +74,13 @@ const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.s
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
 }
+
+// Before the stores, and before anything that could throw asynchronously: what an uncaught
+// exception does here is show a notice and keep every terminal alive, rather than let Electron
+// freeze them all behind a modal dialog — see uncaught.ts for the trade that makes.
+installUncaughtHandler(path.join(app.getPath("userData"), "errors.log"), (severity, message) =>
+  send("app:notice", { severity, message })
+);
 
 const store = new ProjectStore(app.getPath("userData"));
 const settings = new SettingsStore(app.getPath("userData"));

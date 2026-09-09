@@ -44,6 +44,24 @@ export function toContainerPath(hostPath: string): string {
   return `/${match[1].toLowerCase()}/${match[2].replace(/\\/g, "/")}`;
 }
 
+/** Every sandbox template's non-root user's home — verified live for a Claude, a Codex and an
+ *  opencode sandbox (2026-09-08) and for pi's community-kit one (2026-09-09), each by `$HOME`
+ *  and `whoami` inside it. Here rather than in sbx.ts because an agent's own folder needs it to
+ *  say where its sessions sit inside a sandbox (SessionProvider.sandbox), and the agents may
+ *  not reach into the sbx layer for it. A mount target must be absolute (`sbx mount --help`):
+ *  it is not passed through a shell, so `~` never expands there. */
+export const SANDBOX_HOME = "/home/agent";
+
+/**
+ * Where the sessions a sandboxed agent writes land on the host — the directory tet mounts into
+ * the sandbox at the path that agent's CLI keeps its transcripts under (see
+ * SessionProvider.sandbox). Beside `sandboxHookDir` rather than inside it: that one is watched
+ * for marker files, and a transcript tree under it would be swept for markers on every pass.
+ */
+export function sandboxSessionDir(agentDir: string): string {
+  return path.join(agentDir, "sandbox-sessions");
+}
+
 /** Where a sandboxed session's own hook scripts, settings and markers live — a subdirectory of
  *  the same agentDir a host session uses, so the two never overwrite each other's files (a host
  *  one is posix/win32-specific and path-literal; a sandboxed one is always posix with

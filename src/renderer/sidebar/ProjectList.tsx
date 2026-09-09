@@ -1,17 +1,38 @@
-import { memo, useState } from "react";
+import { memo, useState, type ReactNode } from "react";
 import type { Project, RemoteInfo } from "../../shared/types";
 import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { notify } from "../ui/Notices";
-import { CloseIcon, CommentIcon, PlusIcon, QuestionIcon, SpinnerIcon } from "../ui/icons";
+import { ChangesIcon, CloseIcon, CommentIcon, PlusIcon, QuestionIcon, ShieldIcon, SpinnerIcon } from "../ui/icons";
 
 /**
  * A type of our own rather than text/plain: a project dragged across a terminal must not end
  * up pasted into it, and the terminal only ever reads dropped files and plain text.
  */
 const DRAG_TYPE = "application/x-tet-project";
+
+/**
+ * One action in a project row — the marks, the sandbox shield, the git mark, the close button.
+ * Every one of them is the same 24px box around one 13px icon, and every one has to keep its
+ * click from reaching the row, whose own job is to select the project. Written once so that
+ * second rule cannot be forgotten on the next one added.
+ */
+function rowButton(title: string, run: () => void, icon: ReactNode) {
+  return (
+    <button
+      className="icon-button"
+      title={title}
+      onClick={(event) => {
+        event.stopPropagation();
+        run();
+      }}
+    >
+      {icon}
+    </button>
+  );
+}
 
 /**
  * The sessions of one project that are marked, by tab id, oldest first: finished out of sight,
@@ -50,6 +71,8 @@ interface ProjectListProps {
    */
   heads: Record<string, ProjectHead>;
   marks: Record<string, ProjectMarks>;
+  /** Which projects run their agents in an sbx sandbox, the same way and for the same reason. */
+  sandboxed: Record<string, boolean>;
   /** Opens a shell tab in that project, which is what "open in terminal" means here. */
   onOpenTerminal: (projectId: string) => void;
   /** Opens the first session that is working — what the spinner goes to. */
@@ -58,6 +81,8 @@ interface ProjectListProps {
   onShowFinished: (projectId: string) => void;
   /** The same, for the session that has been waiting on an answer the longest. */
   onShowWaiting: (projectId: string) => void;
+  /** Puts the project on screen with the git pane out — where its uncommitted changes are. */
+  onShowChanges: (projectId: string) => void;
   /** "SBX Settings" — opens the project's sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
 }
@@ -102,10 +127,12 @@ export const ProjectList = memo(function ProjectList({
   onAdd,
   heads,
   marks,
+  sandboxed,
   onOpenTerminal,
   onShowBusy,
   onShowFinished,
   onShowWaiting,
+  onShowChanges,
   onSbxSettings
 }: ProjectListProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
@@ -201,66 +228,45 @@ export const ProjectList = memo(function ProjectList({
                   says it for the project on screen only, and an agent switching a branch in a
                   terminal is exactly what one wants to see on a project that is not. */}
               {heads[project.id]?.head && <span className="project-extra">({heads[project.id].head})</span>}
-              {/* Uncommitted changes, read off the same status every refresh already loads
-                  (`state.changes`) — no extra git call. The modified-file color, not a new one:
-                  the same fact the changes list marks each such file with, just rolled up. */}
-              {heads[project.id]?.dirty && (
-                <span className="project-dirty" title="Has uncommitted changes" />
-              )}
             </span>
             {/* All three states of a project's sessions, and they can hold at once — one tab
                 stopped on a question, another working, a third waiting to be read. Each is a
                 button and each goes to a session. Unlike on a tab there is no ranking here:
                 a row has no single icon to replace, so nothing has to give way to anything.
                 A standing question comes first because it is the one costing time. */}
-            {(marks[project.id]?.waiting.length ?? 0) > 0 && (
-              <button
-                className="icon-button"
-                title="Open the session waiting for an answer"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onShowWaiting(project.id);
-                }}
-              >
+            {(marks[project.id]?.waiting.length ?? 0) > 0 &&
+              rowButton(
+                "Open the session waiting for an answer",
+                () => onShowWaiting(project.id),
                 <QuestionIcon className="session-mark" />
-              </button>
-            )}
-            {marks[project.id]?.busy && (
-              <button
-                className="icon-button"
-                title="Open the session that is working"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onShowBusy(project.id);
-                }}
-              >
+              )}
+            {marks[project.id]?.busy &&
+              rowButton(
+                "Open the session that is working",
+                () => onShowBusy(project.id),
                 <SpinnerIcon className="session-mark spinning" />
-              </button>
-            )}
+              )}
             {/* A session of this project finished while its terminal was out of sight. Pressing
                 it goes there, which is also what takes it away again. */}
-            {(marks[project.id]?.finished.length ?? 0) > 0 && (
-              <button
-                className="icon-button"
-                title="Open the session that finished"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onShowFinished(project.id);
-                }}
-              >
+            {(marks[project.id]?.finished.length ?? 0) > 0 &&
+              rowButton(
+                "Open the session that finished",
+                () => onShowFinished(project.id),
                 <CommentIcon className="session-mark" />
-              </button>
-            )}
-            <button
-              className="icon-button"
-              title="Close repository"
-              onClick={(event) => {
-                event.stopPropagation();
-                onClose(project.id);
-              }}
-            >
-              <CloseIcon />
-            </button>
+              )}
+            {/* Where this project's agents run, which is a standing property of the repository
+                rather than of a session — so it sits outside the marks above and gives way to
+                nothing. A button because the sbx settings are otherwise only in the row's
+                context menu, and this is the row that says they are on. It says the switch is
+                on, not that the agent in the tab beside it got its sandbox: sbx can be away or
+                the policy org-managed, and resolveSbxRun then runs that one spawn on the host. */}
+            {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
+            {/* Uncommitted changes, read off the same status every refresh already loads
+                (`state.changes`) — no extra git call. It stands here only while the changes do,
+                and says the changes rather than git: the branch beside it already said that. */}
+            {heads[project.id]?.dirty &&
+              rowButton("Uncommitted changes", () => onShowChanges(project.id), <ChangesIcon />)}
+            {rowButton("Close repository", () => onClose(project.id), <CloseIcon />)}
           </div>
         ))}
       </div>

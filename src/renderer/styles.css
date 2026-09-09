@@ -391,12 +391,14 @@ textarea:focus {
 }
 
 /* One row shape for both sidebar lists: the same indent and the same gap. Declared together
-   so they cannot drift apart. */
+   so they cannot drift apart. No gap at all: a row ends in a run of icon buttons, and each of
+   those already carries 5.5px of its own around a 13px drawing in a 24px box — a gap on top of
+   that read as a wide hole between marks, while taking it out costs no hover area, which is the
+   button's box rather than the space beside it. */
 .project-item,
 .command-item {
   display: flex;
   align-items: center;
-  gap: 4px;
   padding: 0 6px 0 10px;
   font-size: 13px;
 }
@@ -464,15 +466,6 @@ textarea:focus {
   white-space: nowrap;
   font-size: 11px;
   color: var(--vscode-descriptionForeground);
-}
-
-/* Uncommitted changes on a project not on screen. */
-.project-dirty {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--vscode-focusBorder);
 }
 
 /* Branch tree ----------------------------------------------------------------------------- */

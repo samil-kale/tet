@@ -57,8 +57,6 @@ function formatIso(ms: number): string {
 export interface PaneChrome {
   gitOpen: boolean;
   onToggleGit: () => void;
-  /** Whether the repository has local changes — colors the toggle regardless of pane state. */
-  gitDirty: boolean;
 }
 
 interface PaneProps {
@@ -319,7 +317,12 @@ export const Pane = memo(function Pane({
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
     const renamable = tabs.find((tab) => tab.tabId === tabId && tab.sessionId !== undefined);
-    const restartable = tabs.find((tab) => tab.tabId === tabId && tab.savedCommand === true);
+    // A saved command can be run again whenever; anything else only once its process is gone —
+    // a tab whose agent died (an sbx sandbox pulled out from under it, say) starts over, and one
+    // that is still running is ended by closing it, not by this.
+    const restartable = tabs.some(
+      (tab) => tab.tabId === tabId && (tab.savedCommand === true || tab.status === "stopped" || tab.status === "error")
+    );
     const closeAction = (label: string, targets: string[]): ContextMenuEntry => ({
       label,
       run: targets.length > 0 ? () => closeTabs(targets) : undefined
@@ -431,7 +434,7 @@ export const Pane = memo(function Pane({
           <div className="tab-strip-actions">
             {chrome && (
               <button
-                className={`icon-button${chrome.gitDirty ? " active" : ""}`}
+                className={`icon-button${chrome.gitOpen ? " active" : ""}`}
                 onClick={chrome.onToggleGit}
                 title={chrome.gitOpen ? "Hide the repository" : "Show the repository"}
               >

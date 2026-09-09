@@ -312,8 +312,9 @@ it happens. A plain function, not a prop or hook, modelled on VS Code's `window.
 The main process uses the same channel (`app:notice`). All three severities disappear after 8
 seconds or on click; an identical message already standing is dropped, not stacked.
 
-Not a notice: a status — a tab colored for an uninstalled agent, the progress bar, the head and
-dirty dot next to a project's name. Those are conditions a view draws for as long as they hold.
+Not a notice: a status — a tab colored for an uninstalled agent, the progress bar, the head, the
+git mark and the sandbox shield next to a project's name. Those are conditions a view draws for
+as long as they hold.
 
 Nor a *question*. `Dialog.tsx` puts both kinds the same way: a plain function anything can call,
 one `Dialogs` drawing whatever's pending, one question at a time. `confirm` resolves to whether
@@ -536,8 +537,9 @@ fact in it about sbx was measured against the real binary (sandbox names, mount 
 survives a stop, the first-run wizard); its comments are the record. The config is the `sbx`
 key of the repository's own `tet.json` (`readSbxConfig` in `commands.ts`: ports, allowed folders
 stored `~/…` or per platform, and which of the agent's skills/plugins/instructions to mount);
-the tab-time decision is `resolveSbxRun` in `session-manager.ts`, which turns sandboxing back
-off for the project when sbx is not ready, and only ever sandboxes a tab that has no session yet.
+the tab-time decision is `resolveSbxRun` in `session-manager.ts`, which skips the sandbox for the
+one spawn when sbx is not ready — never writing the project's switch off, those checks not telling
+an outage from a permanent state — and sends each session back where it was made.
 
 The cross-file rules:
 
@@ -548,6 +550,12 @@ The cross-file rules:
 - **The sandbox never sees the agent's own config directory** — its sign-in is its own.
   `agentDir` and the context file's directory are the fixed workspaces; everything else is a
   live `sbx mount` re-applied on every spawn, since a bind mount does not survive a stop.
+- **A sandboxed session is read through a mount, not out of the container**
+  (`SessionProvider.sandbox`): a host directory mounted where the CLI writes its transcripts, so
+  the *same* listing code reads it — that is what gives a sandboxed tab resume, a title and turn
+  marks at all, and what lets its sessions outlive the container. Curated subpaths only, never
+  the one holding the credentials. opencode differs in mechanism only: its plugin already writes
+  records through the `agentDir` mount, its own storage being SQLite tet never reads.
 - **`tet-ctl` inside a sandbox** is the same bundle written into the sandbox's `~/.local/bin`,
   reaching the control server at `host.docker.internal` (`TET_CONTROL_HOST`) through an
   `sbx policy allow` for `localhost:<port>`; under org-managed policy none of that is passed in.

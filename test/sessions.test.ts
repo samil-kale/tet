@@ -381,3 +381,94 @@ describe("opencode's session records", () => {
     await assert.rejects(opencodeSessionProvider.rename("opencode", cwd, "ses_a", "  "), /non-empty/);
   });
 });
+
+/**
+ * The same three providers read through the directory tet mounts into an sbx sandbox — the
+ * sandbox's own view, so the paths are the container's (`/c/work/...`, what `toContainerPath`
+ * makes of a Windows path) and the root is the mounted host directory rather than this host's
+ * config. What the CLI writes in there is byte-for-byte what it writes on the host, which is
+ * the whole point: only the two inputs differ.
+ */
+describe("sessions written inside a sandbox", () => {
+  const cwd = "/c/work/Repo One";
+
+  function root(prefix: string): string {
+    return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  }
+
+  it("lists, renames and deletes Claude's sandboxed transcripts", async () => {
+    const dir = root("tet-sbx-claude-");
+    const projectDir = path.join(dir, "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectDir, "s1.jsonl"),
+      [{ type: "user", timestamp: AT, origin: { kind: "human" }, message: { content: "In the sandbox" } }].map(line).join("")
+    );
+    const sandbox = claudeSessionProvider.sandbox;
+    assert.ok(sandbox);
+    const [session] = await sandbox.list("claude", dir, cwd);
+    assert.equal(session.id, "s1");
+    assert.equal(session.title, "In the sandbox");
+    await sandbox.rename("claude", dir, cwd, "s1", "Renamed");
+    assert.equal((await sandbox.list("claude", dir, cwd))[0].title, "Renamed");
+    await sandbox.remove("claude", dir, cwd, "s1");
+    assert.deepEqual(await sandbox.list("claude", dir, cwd), []);
+  });
+
+  it("lists Codex's sandboxed rollouts against the mounted home", async () => {
+    const dir = root("tet-sbx-codex-");
+    const day = path.join(dir, "sessions", "2026", "03", "04");
+    fs.mkdirSync(day, { recursive: true });
+    fs.writeFileSync(
+      path.join(day, "rollout-one.jsonl"),
+      [
+        { type: "session_meta", timestamp: AT, payload: { session_id: "s1", cwd, source: "cli" } },
+        { type: "event_msg", payload: { type: "user_message", message: "In the sandbox" } }
+      ]
+        .map(line)
+        .join("")
+    );
+    fs.writeFileSync(path.join(dir, "session_index.jsonl"), line({ id: "s1", thread_name: "Named" }));
+    const sandbox = codexSessionProvider.sandbox;
+    assert.ok(sandbox);
+    const [session] = await sandbox.list("codex", dir, cwd);
+    assert.equal(session.id, "s1");
+    assert.equal(session.title, "Named", "the name index beside the rollouts is mounted too");
+  });
+
+  it("lists, renames and deletes pi's sandboxed transcripts", async () => {
+    const dir = root("tet-sbx-pi-");
+    const sessionDir = path.join(dir, "sessions", encodeCwd(cwd));
+    fs.mkdirSync(sessionDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sessionDir, `${AT.replace(/[:.]/g, "-")}_s1.jsonl`),
+      [
+        { type: "session", version: 3, id: "s1", timestamp: AT, cwd },
+        { type: "model_change", id: "m1", parentId: null, timestamp: AT, provider: "x", modelId: "y" },
+        { type: "message", id: "u1", parentId: "m1", timestamp: AT, message: { role: "user", content: "In the sandbox", timestamp: ms(AT) } }
+      ]
+        .map(line)
+        .join("")
+    );
+    const sandbox = piSessionProvider.sandbox;
+    assert.ok(sandbox);
+    const [session] = await sandbox.list("pi", dir, cwd);
+    assert.equal(session.id, "s1");
+    assert.equal(session.title, "In the sandbox");
+    await sandbox.rename("pi", dir, cwd, "s1", "Renamed");
+    assert.equal((await sandbox.list("pi", dir, cwd))[0].title, "Renamed");
+    await sandbox.remove("pi", dir, cwd, "s1");
+    assert.deepEqual(await sandbox.list("pi", dir, cwd), []);
+  });
+
+  it("has nothing to list where the sandbox never wrote anything", async () => {
+    const dir = path.join(os.tmpdir(), "tet-sbx-never");
+    for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider]) {
+      assert.deepEqual(await provider.sandbox?.list("agent", dir, cwd), []);
+    }
+  });
+
+  it("keeps opencode out of it — its plugin already records where a session ran", () => {
+    assert.equal(opencodeSessionProvider.sandbox, undefined);
+  });
+});

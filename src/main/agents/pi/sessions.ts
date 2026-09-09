@@ -6,6 +6,7 @@ import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import { findEncodedDir, nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
+import { SANDBOX_HOME } from "../../terminals/hook-target";
 
 /**
  * pi keeps one JSONL transcript per session under its own config directory, named
@@ -26,107 +27,138 @@ import { watchTranscriptDir } from "../../watch-dir";
  *   clear; without one pi shows the first user message
  */
 export const piSessionProvider: SessionProvider = {
-  async list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
-    try {
-      const dir = await findSessionDir(cwd);
-      if (!dir) {
-        return [];
-      }
-      const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
-      forgetMissing(dir, files);
-      const entries = await Promise.all(
-        files.map(async (file): Promise<AgentSessionInfo | undefined> => {
-          const filePath = path.join(dir, file);
-          const stat = await fs.promises.stat(filePath);
-          const head = await scanHead(filePath, stat.size);
-          if (!head) {
-            return undefined;
-          }
-          const tail = await scanTail(filePath);
-          return {
-            id: head.id,
-            title: tail.name ? truncateTitle(tail.name) : (head.firstPrompt ?? ""),
-            // mtime, like Claude's and Codex's: only ever compared for change, and a rename
-            // bumps it too. pi's own picker sorts by the last message's time instead.
-            updatedAt: stat.mtimeMs,
-            createdAt: head.createdAt ?? stat.mtimeMs,
-            turnEndedAt: tail.turnEndedAt
-            // No provisionalTitle: pi never names a session on its own, so a title standing in
-            // from the first prompt is final — flagging it would keep reconcile polling for a
-            // name that never comes.
-          };
-        })
-      );
-      const sessions = entries.filter((entry): entry is AgentSessionInfo => entry !== undefined);
-      sessions.sort((a, b) => a.createdAt - b.createdAt);
-      return sessions;
-    } catch (error) {
-      console.error("[tet] pi session listing failed:", error);
-      return [];
-    }
+  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+    return listIn(sessionsRoot(), cwd);
   },
 
   resumeArgs(sessionId: string): string[] {
     return ["--session", sessionId];
   },
 
-  async remove(_executable: string, cwd: string, sessionId: string): Promise<void> {
-    const dir = await findSessionDir(cwd);
-    if (!dir) {
-      throw new Error("pi session directory not found");
-    }
-    const filePath = await findSessionFile(dir, sessionId);
-    // Nothing beside the transcript: pi keeps no per-session directory the way Claude does.
-    await fs.promises.rm(filePath);
-    headCache.delete(filePath);
-    scanCache.delete(filePath);
+  remove(_executable: string, cwd: string, sessionId: string): Promise<void> {
+    return removeIn(sessionsRoot(), cwd, sessionId);
   },
 
-  /**
-   * Mirrors pi's own `/name` (appendSessionInfo): a `session_info` entry appended to the
-   * transcript, parented to whatever entry is last. Measured to work while pi is running on the
-   * file — it keeps appending with its own in-memory leaf as parent, the file stays valid, its
-   * own later `/name` wins by file order, and the running pi shows the new name only after a
-   * restart (it reads the file once, at startup).
-   */
-  async rename(_executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
-    const trimmed = title.trim();
-    if (!trimmed) {
-      throw new Error("title must be non-empty");
-    }
-    const dir = await findSessionDir(cwd);
-    if (!dir) {
-      throw new Error("pi session directory not found");
-    }
-    const filePath = await findSessionFile(dir, sessionId);
-    // The whole file, not just its tail: the new entry's id has to be unique across all of it
-    // (pi keys its tree by id, and a collision would corrupt that), and a rename is a rare,
-    // user-initiated action.
-    const text = await fs.promises.readFile(filePath, "utf8");
-    const lines = text.split("\n").filter((line) => line.trim() !== "");
-    let last: Record<string, unknown>;
-    try {
-      last = JSON.parse(lines[lines.length - 1] ?? "") as Record<string, unknown>;
-    } catch {
-      throw new Error("pi transcript is not readable");
-    }
-    // The header is the only line without an entry id; an entry right after it is a root
-    // (parentId null), which is how pi writes its own first entry.
-    const parentId = last.type === "session" ? null : (nonEmptyString(last.id) ?? null);
-    let id: string;
-    do {
-      id = crypto.randomUUID().slice(0, 8);
-    } while (text.includes(`"id":"${id}"`));
-    const entry = { type: "session_info", id, parentId, timestamp: new Date().toISOString(), name: trimmed };
-    await fs.promises.appendFile(filePath, (text.endsWith("\n") ? "" : "\n") + JSON.stringify(entry) + "\n");
-    scanCache.delete(filePath);
+  rename(_executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
+    return renameIn(sessionsRoot(), cwd, sessionId, title);
   },
 
   /** The session directory exists only once pi has written a transcript here — see watchTranscriptDir. */
   watch(_executable: string, cwd: string, onChange: () => void): () => void {
-    return watchTranscriptDir(sessionsRoot, () => findSessionDir(cwd), (filename) => filename.endsWith(".jsonl"), onChange);
+    return watchTranscriptDir(
+      sessionsRoot,
+      () => findSessionDir(sessionsRoot(), cwd),
+      (filename) => filename.endsWith(".jsonl"),
+      onChange
+    );
+  },
+
+  /**
+   * `~/.pi/agent/sessions` inside the sandbox — the default path, since `PI_CODING_AGENT_DIR`
+   * is deliberately never set for a sandboxed tab either (it would move the user's sessions and
+   * auth on the host). Measured live, 2026-09-09: nothing else of pi's config directory is a
+   * mount or a volume there, and `auth.json` sits beside this directory rather than in it, so
+   * mounting it carries no identity out of the sandbox.
+   */
+  sandbox: {
+    mounts: [{ sub: "sessions", target: `${SANDBOX_HOME}/.pi/agent/sessions` }],
+    list: (_executable, root, cwd) => listIn(path.join(root, "sessions"), cwd),
+    remove: (_executable, root, cwd, sessionId) => removeIn(path.join(root, "sessions"), cwd, sessionId),
+    rename: (_executable, root, cwd, sessionId, title) => renameIn(path.join(root, "sessions"), cwd, sessionId, title)
   }
 };
+
+async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
+  try {
+    const dir = await findSessionDir(root, cwd);
+    if (!dir) {
+      return [];
+    }
+    const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
+    forgetMissing(dir, files);
+    const entries = await Promise.all(
+      files.map(async (file): Promise<AgentSessionInfo | undefined> => {
+        const filePath = path.join(dir, file);
+        const stat = await fs.promises.stat(filePath);
+        const head = await scanHead(filePath, stat.size);
+        if (!head) {
+          return undefined;
+        }
+        const tail = await scanTail(filePath);
+        return {
+          id: head.id,
+          title: tail.name ? truncateTitle(tail.name) : (head.firstPrompt ?? ""),
+          // mtime, like Claude's and Codex's: only ever compared for change, and a rename
+          // bumps it too. pi's own picker sorts by the last message's time instead.
+          updatedAt: stat.mtimeMs,
+          createdAt: head.createdAt ?? stat.mtimeMs,
+          turnEndedAt: tail.turnEndedAt
+          // No provisionalTitle: pi never names a session on its own, so a title standing in
+          // from the first prompt is final — flagging it would keep reconcile polling for a
+          // name that never comes.
+        };
+      })
+    );
+    const sessions = entries.filter((entry): entry is AgentSessionInfo => entry !== undefined);
+    sessions.sort((a, b) => a.createdAt - b.createdAt);
+    return sessions;
+  } catch (error) {
+    console.error("[tet] pi session listing failed:", error);
+    return [];
+  }
+}
+
+async function removeIn(root: string, cwd: string, sessionId: string): Promise<void> {
+  const dir = await findSessionDir(root, cwd);
+  if (!dir) {
+    throw new Error("pi session directory not found");
+  }
+  const filePath = await findSessionFile(dir, sessionId);
+  // Nothing beside the transcript: pi keeps no per-session directory the way Claude does.
+  await fs.promises.rm(filePath);
+  headCache.delete(filePath);
+  scanCache.delete(filePath);
+}
+
+/**
+ * Mirrors pi's own `/name` (appendSessionInfo): a `session_info` entry appended to the
+ * transcript, parented to whatever entry is last. Measured to work while pi is running on the
+ * file — it keeps appending with its own in-memory leaf as parent, the file stays valid, its
+ * own later `/name` wins by file order, and the running pi shows the new name only after a
+ * restart (it reads the file once, at startup).
+ */
+async function renameIn(root: string, cwd: string, sessionId: string, title: string): Promise<void> {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new Error("title must be non-empty");
+  }
+  const dir = await findSessionDir(root, cwd);
+  if (!dir) {
+    throw new Error("pi session directory not found");
+  }
+  const filePath = await findSessionFile(dir, sessionId);
+  // The whole file, not just its tail: the new entry's id has to be unique across all of it
+  // (pi keys its tree by id, and a collision would corrupt that), and a rename is a rare,
+  // user-initiated action.
+  const text = await fs.promises.readFile(filePath, "utf8");
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+  let last: Record<string, unknown>;
+  try {
+    last = JSON.parse(lines[lines.length - 1] ?? "") as Record<string, unknown>;
+  } catch {
+    throw new Error("pi transcript is not readable");
+  }
+  // The header is the only line without an entry id; an entry right after it is a root
+  // (parentId null), which is how pi writes its own first entry.
+  const parentId = last.type === "session" ? null : (nonEmptyString(last.id) ?? null);
+  let id: string;
+  do {
+    id = crypto.randomUUID().slice(0, 8);
+  } while (text.includes(`"id":"${id}"`));
+  const entry = { type: "session_info", id, parentId, timestamp: new Date().toISOString(), name: trimmed };
+  await fs.promises.appendFile(filePath, (text.endsWith("\n") ? "" : "\n") + JSON.stringify(entry) + "\n");
+  scanCache.delete(filePath);
+}
 
 /**
  * pi's config directory — the one env override it documents, and what the tests set. Its
@@ -154,8 +186,8 @@ export function encodeCwd(cwd: string): string {
  * `--c--Users…`) while the folder names come back canonical — the case-insensitive match in
  * findEncodedDir is what covers that.
  */
-function findSessionDir(cwd: string): Promise<string | undefined> {
-  return findEncodedDir(sessionsRoot(), encodeCwd(cwd));
+function findSessionDir(root: string, cwd: string): Promise<string | undefined> {
+  return findEncodedDir(root, encodeCwd(cwd));
 }
 
 /**

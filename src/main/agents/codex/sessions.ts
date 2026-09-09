@@ -5,6 +5,7 @@ import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
 import { deleteThread, renameThread } from "./app-server-client";
+import { SANDBOX_HOME } from "../../terminals/hook-target";
 
 /**
  * Codex's own config root — never overridden by tet (see CLAUDE.md's "never touch the
@@ -14,13 +15,13 @@ function codexHome(): string {
   return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
 }
 
-function sessionsRoot(): string {
-  return path.join(codexHome(), "sessions");
+function sessionsRoot(home: string): string {
+  return path.join(home, "sessions");
 }
 
 /** Codex's own name index — `{id, thread_name, updated_at}` lines, last one per id wins. */
-function sessionIndexFile(): string {
-  return path.join(codexHome(), "session_index.jsonl");
+function sessionIndexFile(home: string): string {
+  return path.join(home, "session_index.jsonl");
 }
 
 /** Same budget as Claude's scan for the same reason: bounds a pathological single line. */
@@ -210,11 +211,11 @@ async function scanTail(filePath: string): Promise<TailInfo> {
 }
 
 /** `{id -> name}`, the last `session_index.jsonl` line per id — small file, read whole each time. */
-async function readSessionNames(): Promise<Map<string, string>> {
+async function readSessionNames(home: string): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   let text: string;
   try {
-    text = await fs.promises.readFile(sessionIndexFile(), "utf8");
+    text = await fs.promises.readFile(sessionIndexFile(home), "utf8");
   } catch {
     return names;
   }
@@ -243,9 +244,9 @@ async function readSessionNames(): Promise<Map<string, string>> {
 }
 
 /** Every `.jsonl` rollout under `sessions/`, three levels deep (`YYYY/MM/DD`). */
-async function listRolloutFiles(): Promise<string[]> {
+async function listRolloutFiles(home: string): Promise<string[]> {
   const files: string[] = [];
-  const root = sessionsRoot();
+  const root = sessionsRoot(home);
   for (const year of await safeReaddir(root)) {
     for (const month of await safeReaddir(path.join(root, year))) {
       for (const day of await safeReaddir(path.join(root, year, month))) {
@@ -294,12 +295,18 @@ async function safeReaddir(dir: string): Promise<string[]> {
  * Both caches hold an entry per rollout on the machine and are keyed by path, so a rollout
  * deleted — by `remove`, or by Codex's own picker behind tet's back — is dropped here, at the
  * one point every listing already knows the full set. Without this they only ever grow.
+ *
+ * Only ever within the tree that was just listed: a sandbox's rollouts are read from a second
+ * root (SessionProvider.sandbox) into these same caches, and a listing of one root knows
+ * nothing about the other's files — unscoped, the two would evict each other's entries on
+ * every pass and no rollout would ever be answered from cache again.
  */
-function forgetMissing(files: string[]): void {
+function forgetMissing(files: string[], root: string): void {
   const present = new Set(files);
+  const prefix = root + path.sep;
   for (const cache of [metaCache, tailCache]) {
     for (const filePath of cache.keys()) {
-      if (!present.has(filePath)) {
+      if (filePath.startsWith(prefix) && !present.has(filePath)) {
         cache.delete(filePath);
       }
     }
@@ -312,55 +319,45 @@ function samePath(a: string, b: string): boolean {
 }
 
 export const codexSessionProvider: SessionProvider = {
-  async list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
-    try {
-      const files = await listRolloutFiles();
-      forgetMissing(files);
-      const names = await readSessionNames();
-      const entries = await mapLimited(files, async (filePath): Promise<AgentSessionInfo | undefined> => {
-          const meta = await readSessionMeta(filePath);
-          // `exec`/`mcp`/subagent runs are never interactive sessions of this repository's
-          // tabs — only `cli` is, matching what Codex's own `/resume` picker shows by default.
-          if (!meta || meta.source !== "cli" || !samePath(meta.cwd, cwd)) {
-            return undefined;
-          }
-          const [tail, stat] = await Promise.all([scanTail(filePath), fs.promises.stat(filePath)]);
-          const title = names.get(meta.sessionId) ?? tail.firstPrompt ?? "";
-          return {
-            id: meta.sessionId,
-            title,
-            updatedAt: stat.mtimeMs,
-            createdAt: meta.createdAt ?? stat.mtimeMs,
-            turnEndedAt: tail.turnEndedAt
-          };
-        });
-      const sessions = entries.filter((entry): entry is AgentSessionInfo => entry !== undefined);
-      sessions.sort((a, b) => a.createdAt - b.createdAt);
-      return sessions;
-    } catch (error) {
-      console.error("[tet] codex session listing failed:", error);
-      return [];
-    }
+  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+    return listIn(codexHome(), cwd);
   },
 
   resumeArgs(sessionId: string): string[] {
     return ["resume", sessionId];
   },
 
-  async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
-    await deleteThread(executable, cwd, sessionId);
+  remove(executable: string, cwd: string, sessionId: string): Promise<void> {
+    return deleteThread(executable, cwd, sessionId);
+  },
+
+  rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
+    return renameIn(executable, cwd, sessionId, title);
   },
 
   /**
-   * The only writer of a Codex thread's name is the app-server RPC Codex's own `/rename` uses
-   * internally — there is no CLI command and no rollout entry the picker reads as a name.
+   * `~/.codex/sessions` and the name index beside it, inside the sandbox. Two mounts because
+   * Codex keeps a session's name outside the rollout — `session_index.jsonl` is the only writer
+   * of it, and without that file every sandboxed session would list under its first prompt
+   * however often it was renamed. Measured live, 2026-09-09: the codex template puts no volume
+   * of its own anywhere under `~/.codex` (unlike Claude's), sbx creates a missing target for
+   * either kind, and `auth.json` stays out of both paths.
+   *
+   * The mounted root is shaped exactly like a `CODEX_HOME` for that reason, which is what lets
+   * rename and delete run against it — see `deleteThread`'s `home`.
    */
-  async rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
-    const trimmed = title.trim();
-    if (!trimmed) {
-      throw new Error("title must be non-empty");
-    }
-    await renameThread(executable, cwd, sessionId, trimmed);
+  sandbox: {
+    mounts: [
+      { sub: "sessions", target: `${SANDBOX_HOME}/.codex/sessions` },
+      { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
+    ],
+    list: (_executable, root, cwd) => listIn(root, cwd),
+    // The mounted root as the working directory too, not the sandbox's cwd: that one is a path
+    // inside the container (`/c/Users/…` from a Windows host), and `codex app-server` is spawned
+    // *in* its cwd — one that does not exist on this host fails the spawn outright with ENOENT.
+    // Nothing is lost by it: a thread is addressed by id under the CODEX_HOME these act on.
+    remove: (executable, root, _cwd, sessionId) => deleteThread(executable, root, sessionId, root),
+    rename: (executable, root, _cwd, sessionId, title) => renameIn(executable, root, sessionId, title, root)
   },
 
   /**
@@ -402,7 +399,7 @@ export const codexSessionProvider: SessionProvider = {
         return;
       }
       closeAll();
-      const root = sessionsRoot();
+      const root = sessionsRoot(codexHome());
       const now = new Date();
       const year = String(now.getFullYear());
       const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -430,3 +427,46 @@ export const codexSessionProvider: SessionProvider = {
     };
   }
 };
+
+async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
+  try {
+    const files = await listRolloutFiles(home);
+    forgetMissing(files, sessionsRoot(home));
+    const names = await readSessionNames(home);
+    const entries = await mapLimited(files, async (filePath): Promise<AgentSessionInfo | undefined> => {
+      const meta = await readSessionMeta(filePath);
+      // `exec`/`mcp`/subagent runs are never interactive sessions of this repository's
+      // tabs — only `cli` is, matching what Codex's own `/resume` picker shows by default.
+      if (!meta || meta.source !== "cli" || !samePath(meta.cwd, cwd)) {
+        return undefined;
+      }
+      const [tail, stat] = await Promise.all([scanTail(filePath), fs.promises.stat(filePath)]);
+      const title = names.get(meta.sessionId) ?? tail.firstPrompt ?? "";
+      return {
+        id: meta.sessionId,
+        title,
+        updatedAt: stat.mtimeMs,
+        createdAt: meta.createdAt ?? stat.mtimeMs,
+        turnEndedAt: tail.turnEndedAt
+      };
+    });
+    const sessions = entries.filter((entry): entry is AgentSessionInfo => entry !== undefined);
+    sessions.sort((a, b) => a.createdAt - b.createdAt);
+    return sessions;
+  } catch (error) {
+    console.error("[tet] codex session listing failed:", error);
+    return [];
+  }
+}
+
+/**
+ * The only writer of a Codex thread's name is the app-server RPC Codex's own `/rename` uses
+ * internally — there is no CLI command and no rollout entry the picker reads as a name.
+ */
+async function renameIn(executable: string, cwd: string, sessionId: string, title: string, home?: string): Promise<void> {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new Error("title must be non-empty");
+  }
+  await renameThread(executable, cwd, sessionId, trimmed, home);
+}

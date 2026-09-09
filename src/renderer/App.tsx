@@ -194,6 +194,14 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** The project the "Enable sbx" dialog is up for, if any; the dialog runs every check itself. */
   const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
+  /**
+   * Which projects run their agents in an sbx sandbox, by project id — the `sbx.enabled` of each
+   * repository's own tet.json. Held here like every other per-project record the project list
+   * draws from, and by identity only where the answer changed, or the memoized list re-renders on
+   * every read. The file is not ours: the settings dialog, an agent in a terminal, an editor or a
+   * checkout all change it, and every one of those arrives as the `commands:changed` below.
+   */
+  const [sandboxed, setSandboxed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const unsubscribers = [
@@ -356,6 +364,7 @@ export function App() {
     setTabs((current) => forget(current, projectId));
     setLayouts((current) => forget(current, projectId));
     setStarting((current) => forget(current, projectId));
+    setSandboxed((current) => forget(current, projectId));
     delete previousTabsRef.current[projectId];
     delete savedLayoutsRef.current[projectId];
     settledProjects.current.delete(projectId);
@@ -392,6 +401,22 @@ export function App() {
       }),
     [forgetProject]
   );
+
+  const readSandboxed = useCallback(async (projectId: string) => {
+    const config = await window.tet.sbx.getConfig(projectId);
+    setSandboxed((current) =>
+      (current[projectId] ?? false) === config.enabled ? current : { ...current, [projectId]: config.enabled }
+    );
+  }, []);
+
+  // One tet.json write reports as one `commands:changed`, whichever half of the file changed —
+  // so the saved commands and this read the same event, each taking the part it draws.
+  useEffect(() => {
+    for (const project of projects) {
+      void readSandboxed(project.id);
+    }
+    return window.tet.commands.onChanged(({ projectId }) => void readSandboxed(projectId));
+  }, [projects, readSandboxed]);
 
   const reorderProjects = useCallback((ordered: Project[]) => {
     setProjects(ordered);
@@ -797,6 +822,18 @@ export function App() {
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
   const closeDiff = useCallback(() => setDiffFile(null), []);
   const toggleGit = useCallback(() => setGitOpen(!gitOpen), [gitOpen, setGitOpen]);
+  /**
+   * The project row's git mark, which only stands there while that repository has uncommitted
+   * changes: it puts the project on screen and slides the git pane out, where those changes are.
+   * One direction only — the pane's own toggle is what closes it again.
+   */
+  const showChanges = useCallback(
+    (projectId: string) => {
+      setActiveProjectId(projectId);
+      setGitOpen(true);
+    },
+    [setGitOpen]
+  );
   /** No explicit path — "Browse files" itself — reopens whatever this project last showed. */
   const openDiff = useCallback((projectId: string, path?: string) => {
     const resolved = path ?? localStorage.getItem(lastDiffPathKey(projectId));
@@ -853,6 +890,8 @@ export function App() {
             onAdd={openAdd}
             heads={heads}
             marks={marks}
+            sandboxed={sandboxed}
+            onShowChanges={showChanges}
             onOpenTerminal={openTerminal}
             onShowBusy={showBusy}
             onShowFinished={showFinished}
@@ -918,7 +957,6 @@ export function App() {
               visible={project.id === activeProjectId}
               gitOpen={gitOpen}
               onToggleGit={toggleGit}
-              gitDirty={(states[project.id]?.changes.length ?? 0) > 0}
               // The git pane, the diff dialog and a discard/stash now all carry their own bar —
               // this one is left with only the reason that has no tab of its own to point a pane
               // at yet: the session listing at bootstrap, before any tab exists. Once a tab is

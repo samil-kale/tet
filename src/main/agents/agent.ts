@@ -26,12 +26,59 @@ export interface AgentSessionInfo {
    */
   turnEndedAt?: number;
   /**
-   * The sbx sandbox this session lives in, by name, for an agent whose listing covers its
-   * sandboxed sessions too (opencode's, written by its plugin from inside the sandbox). Such a
-   * session can only be resumed there — see resolveSbxRun. Unset for one on the host, and for
-   * every session of an agent whose sandboxed sessions stay out of sight.
+   * The sbx sandbox this session lives in, by name. Such a session can only be resumed there —
+   * see resolveSbxRun. Unset for one on the host. Set by the session manager, which knows the
+   * sandbox's name, on everything a `SessionProvider.sandbox` listing returns, and by opencode's
+   * own provider, whose plugin records where each session ran.
    */
   sandbox?: string;
+}
+
+/**
+ * One host path tet mounts into a sandbox so an agent's sessions land on this side of it —
+ * see SessionProvider.sandbox.
+ */
+export interface SandboxSessionMount {
+  /** Under the host root (`sandboxSessionDir`), the file or directory that is mounted. */
+  sub: string;
+  /** The absolute container path it is mounted at — where this agent's CLI looks. */
+  target: string;
+  /** Whether `sub` is a plain file rather than a directory: sbx mounts either, but the host
+   *  side has to exist first, and the two are created differently. */
+  file?: boolean;
+}
+
+/**
+ * How an agent's sessions are read back out of an sbx sandbox. Without this its sandboxed
+ * sessions are invisible to tet: the manager's listing runs on the host, while the CLI writes
+ * its transcripts inside the container — so nothing ever claims them and the tab gets no
+ * session id, hence no resume, no title and no turn marks (`applyTurn` matches on the id).
+ *
+ * The mechanism is a bind mount, not a second way of listing: tet mounts a host directory at
+ * the path the CLI writes to (measured per agent — it stacks even over sbx's own volume, see
+ * `mounts`), and from there the *same* code that reads a host transcript reads a sandboxed one.
+ * Which is why every method here takes the mounted host `root` and the sandbox's own `cwd` (the
+ * container path of the repository, `toContainerPath`) instead of the host's: the CLI wrote
+ * both into paths and records that only make sense from inside.
+ *
+ * Left out by an agent that already reports its sandboxed sessions another way — opencode,
+ * whose plugin writes its records through the agentDir mount from inside the sandbox, and whose
+ * own storage is a SQLite database tet deliberately never reads.
+ *
+ * No `watch` counterpart on purpose: the host one exists to notice a transcript the tab's own
+ * output never announced, and a sandboxed tab has no such gap — its CLI is the one filling the
+ * mounted tree, so the reconcile its output already schedules is what picks the change up.
+ */
+export interface SandboxSessions {
+  /** Everything that has to be mounted for this agent's sessions to land on the host. */
+  mounts: SandboxSessionMount[];
+  /** SessionProvider.list against the mounted root, for the sandbox's own cwd. The manager
+   *  names the sandbox on what comes back. */
+  list(executable: string, root: string, cwd: string): Promise<AgentSessionInfo[]>;
+  /** SessionProvider.remove against the mounted root. */
+  remove(executable: string, root: string, cwd: string, sessionId: string): Promise<void>;
+  /** SessionProvider.rename against the mounted root. */
+  rename(executable: string, root: string, cwd: string, sessionId: string, title: string): Promise<void>;
 }
 
 /**
@@ -54,6 +101,11 @@ export interface SessionProvider {
    * shutdown — an implementation owning a process or connection tears it down there.
    */
   watch?(executable: string, cwd: string, onChange: () => void): () => void;
+  /**
+   * How this agent's *sandboxed* sessions are read — see SandboxSessions. Omitted where they
+   * already come back from `list` (opencode) or where the agent cannot be sandboxed at all.
+   */
+  sandbox?: SandboxSessions;
 }
 
 /**

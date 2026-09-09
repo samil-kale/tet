@@ -8,6 +8,7 @@ import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { findControlPort } from "../src/main/control/control-server";
 import { resolveRoot } from "../src/main/git/git";
+import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl } from "./helpers";
@@ -92,6 +93,16 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
       // A pty's conhost can hold a file a moment longer than the app; the OS temp dir is where
       // this is allowed to fail.
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+    }
+    // Last, after the cleanup that must happen either way: an exception nobody handled is a
+    // failure of this run even when every assertion passed, and the stack is right here in the
+    // app's own stderr. Without it such a fault only showed as whatever it happened to break —
+    // once, as a four-minute timeout, because Electron's own dialog had frozen the app. Covers
+    // the instance this spawned; the one `restart-app` leaves behind is no longer on this pipe.
+    const uncaught = stderr.indexOf(UNCAUGHT_MARKER);
+    if (uncaught >= 0) {
+      assert.fail(`tet reported an uncaught exception:
+${stderr.slice(uncaught)}`);
     }
   });
 

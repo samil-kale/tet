@@ -5,83 +5,32 @@ import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import { findEncodedDir, nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
+import { SANDBOX_HOME } from "../../terminals/hook-target";
 
 /**
  * Claude Code has no session CLI — sessions are the `<uuid>.jsonl` transcripts in
  * ~/.claude/projects/<cwd with non-alphanumerics replaced by "-">, identified by
  * filename and ordered by mtime. Deleting a session means deleting its transcript.
+ *
+ * A sandboxed session is the same file in the same shape; only the two inputs differ, which is
+ * why every operation below takes the projects root and the cwd rather than reading either off
+ * this host — see SessionProvider.sandbox.
  */
 export const claudeSessionProvider: SessionProvider = {
-  async list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
-    try {
-      const projectDir = await findProjectDir(cwd);
-      if (!projectDir) {
-        return [];
-      }
-      const files = (await fs.promises.readdir(projectDir)).filter((file) => file.endsWith(".jsonl"));
-      const entries = await Promise.all(
-        files.map(async (file) => {
-          const id = file.slice(0, -".jsonl".length);
-          const filePath = path.join(projectDir, file);
-          const [tail, stat, createdAt] = await Promise.all([
-            scanTail(filePath, id),
-            fs.promises.stat(filePath),
-            extractCreatedAt(filePath)
-          ]);
-          const { title, provisional } = await extractTitle(filePath, stat.size, tail);
-          return {
-            id,
-            title,
-            updatedAt: stat.mtimeMs,
-            provisionalTitle: provisional,
-            createdAt: createdAt ?? stat.mtimeMs,
-            turnEndedAt: tail.turnEndedAt
-          };
-        })
-      );
-      entries.sort((a, b) => a.createdAt - b.createdAt);
-      return entries;
-    } catch (error) {
-      console.error("[tet] claude session listing failed:", error);
-      return [];
-    }
+  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+    return listIn(projectsRoot(), cwd);
   },
 
   resumeArgs(sessionId: string): string[] {
     return ["--resume", sessionId];
   },
 
-  async remove(_executable: string, cwd: string, sessionId: string): Promise<void> {
-    const projectDir = await findProjectDir(cwd);
-    if (!projectDir) {
-      throw new Error("Claude project directory not found");
-    }
-    const filePath = path.join(projectDir, `${sessionId}.jsonl`);
-    await fs.promises.rm(filePath);
-    // What Claude Code keeps beside the transcript under the same id — subagent transcripts,
-    // tool results — and would otherwise stay behind for good.
-    await fs.promises.rm(path.join(projectDir, sessionId), { recursive: true, force: true });
-    scanCache.delete(filePath);
-    headCache.delete(filePath);
-    createdAtCache.delete(filePath);
+  remove(_executable: string, cwd: string, sessionId: string): Promise<void> {
+    return removeIn(projectsRoot(), cwd, sessionId);
   },
 
-  /**
-   * Mirrors Claude Code's own (CLI-flag-less) `/rename` slash command: a rename is persisted
-   * as a `custom-title` transcript entry, which — like Claude's own title resolution — always
-   * wins over the derived `ai-title`/`summary`/message fallback.
-   */
-  async rename(_executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
-    const trimmed = title.trim();
-    if (!trimmed) {
-      throw new Error("title must be non-empty");
-    }
-    const projectDir = await findProjectDir(cwd);
-    if (!projectDir) {
-      throw new Error("Claude project directory not found");
-    }
-    const line = JSON.stringify({ type: "custom-title", customTitle: trimmed, sessionId }) + "\n";
-    await fs.promises.appendFile(path.join(projectDir, `${sessionId}.jsonl`), line);
+  rename(_executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
+    return renameIn(projectsRoot(), cwd, sessionId, title);
   },
 
   /**
@@ -89,17 +38,127 @@ export const claudeSessionProvider: SessionProvider = {
    * session's own `subagents/` subdirectory must not count — watchTranscriptDir covers both.
    */
   watch(_executable: string, cwd: string, onChange: () => void): () => void {
-    return watchTranscriptDir(projectsRoot, () => findProjectDir(cwd), (filename) => filename.endsWith(".jsonl"), onChange);
+    return watchTranscriptDir(
+      projectsRoot,
+      () => findProjectDir(projectsRoot(), cwd),
+      (filename) => filename.endsWith(".jsonl"),
+      onChange
+    );
+  },
+
+  /**
+   * `~/.claude/projects` inside the sandbox — where a sandboxed Claude writes exactly the same
+   * transcripts it writes on the host. Measured live, 2026-09-09: sbx gives that path a volume
+   * of its own (`/dev/vde`), and a later `sbx mount` stacks on top of it and wins, so what the
+   * CLI writes from then on lands on the host side. What the volume already held is shadowed
+   * by the mount, not deleted.
+   */
+  sandbox: {
+    mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
+    list: (_executable, root, cwd) => listIn(path.join(root, "projects"), cwd),
+    remove: (_executable, root, cwd, sessionId) => removeIn(path.join(root, "projects"), cwd, sessionId),
+    rename: (_executable, root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title)
   }
 };
+
+async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
+  try {
+    const projectDir = await findProjectDir(root, cwd);
+    if (!projectDir) {
+      return [];
+    }
+    const files = (await fs.promises.readdir(projectDir)).filter((file) => file.endsWith(".jsonl"));
+    forgetMissing(projectDir, files);
+    const entries = await Promise.all(
+      files.map(async (file) => {
+        const id = file.slice(0, -".jsonl".length);
+        const filePath = path.join(projectDir, file);
+        const [tail, stat, createdAt] = await Promise.all([
+          scanTail(filePath, id),
+          fs.promises.stat(filePath),
+          extractCreatedAt(filePath)
+        ]);
+        const { title, provisional } = await extractTitle(filePath, stat.size, tail);
+        return {
+          id,
+          title,
+          updatedAt: stat.mtimeMs,
+          provisionalTitle: provisional,
+          createdAt: createdAt ?? stat.mtimeMs,
+          turnEndedAt: tail.turnEndedAt
+        };
+      })
+    );
+    entries.sort((a, b) => a.createdAt - b.createdAt);
+    return entries;
+  } catch (error) {
+    console.error("[tet] claude session listing failed:", error);
+    return [];
+  }
+}
+
+async function removeIn(root: string, cwd: string, sessionId: string): Promise<void> {
+  const projectDir = await findProjectDir(root, cwd);
+  if (!projectDir) {
+    throw new Error("Claude project directory not found");
+  }
+  const filePath = path.join(projectDir, `${sessionId}.jsonl`);
+  await fs.promises.rm(filePath);
+  // What Claude Code keeps beside the transcript under the same id — subagent transcripts,
+  // tool results — and would otherwise stay behind for good.
+  await fs.promises.rm(path.join(projectDir, sessionId), { recursive: true, force: true });
+  scanCache.delete(filePath);
+  headCache.delete(filePath);
+  createdAtCache.delete(filePath);
+}
+
+/**
+ * Mirrors Claude Code's own (CLI-flag-less) `/rename` slash command: a rename is persisted
+ * as a `custom-title` transcript entry, which — like Claude's own title resolution — always
+ * wins over the derived `ai-title`/`summary`/message fallback.
+ */
+async function renameIn(root: string, cwd: string, sessionId: string, title: string): Promise<void> {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new Error("title must be non-empty");
+  }
+  const projectDir = await findProjectDir(root, cwd);
+  if (!projectDir) {
+    throw new Error("Claude project directory not found");
+  }
+  const line = JSON.stringify({ type: "custom-title", customTitle: trimmed, sessionId }) + "\n";
+  await fs.promises.appendFile(path.join(projectDir, `${sessionId}.jsonl`), line);
+}
 
 function projectsRoot(): string {
   const configDir = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
   return path.join(configDir, "projects");
 }
 
-function findProjectDir(cwd: string): Promise<string | undefined> {
-  return findEncodedDir(projectsRoot(), cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+function findProjectDir(root: string, cwd: string): Promise<string | undefined> {
+  return findEncodedDir(root, cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+}
+
+/**
+ * Drops what the three caches below still hold for transcripts that are gone — `remove` is not
+ * the only way one disappears: Claude Code's own picker deletes them behind tet's back, and
+ * without this they are only ever added to. Done at the one point a listing already knows the
+ * full set of files, the way codex's and pi's listings do.
+ *
+ * Only within the directory just listed. A sandbox's transcripts are read from a second root
+ * (SessionProvider.sandbox) into these same caches, and one root's listing knows nothing about
+ * the other's files — unscoped, each pass would evict the other's entries and nothing would
+ * ever be answered from cache again.
+ */
+function forgetMissing(dir: string, files: string[]): void {
+  const present = new Set(files.map((file) => path.join(dir, file)));
+  for (const cache of [headCache, scanCache, createdAtCache]) {
+    for (const filePath of cache.keys()) {
+      if (path.dirname(filePath) === dir && !present.has(filePath)) {
+        cache.delete(filePath);
+      }
+    }
+  }
 }
 
 const TITLE_SCAN_BYTE_LIMIT = 256 * 1024;

@@ -84,8 +84,6 @@ interface TerminalsPaneProps {
   /** Whether the git pane beside this one is open; the button in the strip shows which. */
   gitOpen: boolean;
   onToggleGit: () => void;
-  /** Whether this project's repository has local changes; the button in the strip colors on it. */
-  gitDirty: boolean;
   /** Bootstrap's own session listing, before any tab exists yet to carry `starting` itself — the
       one project-wide reason left with no tab of its own to show on, so it falls to pane "a". */
   externalBusy: boolean;
@@ -120,7 +118,6 @@ export const TerminalsPane = memo(function TerminalsPane({
   visible,
   gitOpen,
   onToggleGit,
-  gitDirty,
   externalBusy,
   onOpenDiff,
   layout,
@@ -250,8 +247,8 @@ export const TerminalsPane = memo(function TerminalsPane({
     [onPresetChange, project.id]
   );
   const chrome = useMemo<PaneChrome>(
-    () => ({ gitOpen, onToggleGit, gitDirty }),
-    [gitOpen, onToggleGit, gitDirty]
+    () => ({ gitOpen, onToggleGit }),
+    [gitOpen, onToggleGit]
   );
   const onActivate = useCallback(
     (paneId: PaneId, tabId: string) => onActivateTab(project.id, tabId, paneId),

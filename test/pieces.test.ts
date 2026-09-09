@@ -16,6 +16,7 @@ import { ProjectStore } from "../src/main/projects";
 import { computeWorkspaces, contractHome, folderMountSpecs, sandboxName } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
+import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
 import { THEMES } from "../src/shared/themes";
 import { DEFAULT_KEYBINDING_PRESET_ID } from "../src/shared/types";
@@ -481,6 +482,42 @@ describe("the color themes", () => {
       assert.equal(valueOf(css, "--vscode-titleBar-activeForeground"), theme.titleBarSymbolColor, theme.id);
       assert.equal(valueOf(css, "--vscode-terminal-background"), theme.terminalBackground, theme.id);
       assert.equal(valueOf(css, "--vscode-terminal-foreground"), theme.terminalForeground, theme.id);
+    }
+  });
+});
+
+/**
+ * The net under a fault nobody handled — see uncaught.ts for why the main process survives one
+ * instead of letting Electron freeze every terminal behind a modal dialog. Driven by emitting
+ * the event the way node would, since the point is the handler, not how the throw got there.
+ */
+describe("an uncaught exception", () => {
+  it("logs the whole stack, tells the user once, and lets the process live", () => {
+    const logFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-uncaught-")), "errors.log");
+    const notices: string[] = [];
+    const before = process.listenerCount("uncaughtException");
+    installUncaughtHandler(logFile, (_severity, message) => notices.push(message));
+    // The listener it registered, called the way node would call it — not `process.emit`, which
+    // node's own test runner also listens for and would count as this test having crashed.
+    const handler = process.listeners("uncaughtException")[before];
+    // The handler prints its report to stderr as well, which here would read like this run
+    // having crashed. Held back for the two calls below; the log file is what is asserted on.
+    const printed = console.error;
+    console.error = () => undefined;
+    try {
+      const error = new Error("write EAGAIN");
+      error.stack = "Error: write EAGAIN\n    at WriteWrap.onWriteComplete";
+      handler(error, "uncaughtException");
+      handler(error, "uncaughtException");
+      const log = fs.readFileSync(logFile, "utf8");
+      assert.ok(log.includes(`${UNCAUGHT_MARKER} (uncaughtException, #1)`), "marked, with its origin and count");
+      assert.match(log, /#2/, "every occurrence is logged");
+      assert.match(log, /at WriteWrap\.onWriteComplete/, "the stack, not just the message");
+      assert.equal(notices.length, 1, "one notice per distinct error, however often it repeats");
+      assert.match(notices[0], /write EAGAIN/);
+    } finally {
+      console.error = printed;
+      process.off("uncaughtException", handler);
     }
   });
 });
