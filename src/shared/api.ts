@@ -86,6 +86,11 @@ export interface TETApi {
      */
     pickDirectory(title: string, defaultPath?: string): Promise<string | null>;
     /**
+     * The same for a single file — a separate call because Electron only honours
+     * ["openFile", "openDirectory"] as one dialog on macOS; see the ipc handler.
+     */
+    pickFile(title: string): Promise<string | null>;
+    /**
      * Where the folder picker should open next time, given the user just picked `directory`.
      * Normally `directory` itself — but when that is a repository's own root (the Add tab
      * points the picker straight at one), its parent, where repositories are kept. See

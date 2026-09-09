@@ -165,31 +165,33 @@ describe("readSbxConfig", () => {
       enabled: false,
       knowledge: { skills: false, plugins: false, instructions: false },
       ports: [],
-      folders: []
+      paths: []
     });
   });
 
-  it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's folders alongside it", async () => {
+  it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's paths alongside it", async () => {
     const otherOs = process.platform === "win32" ? "linux" : "win32";
     const theirs = { path: "/their/data", access: "Read", os: otherOs };
     const stale = [
       { path: "~/stale", access: "Read" },
       { path: "/stale/absolute", access: "Read", os: process.platform }
     ];
-    put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, ports: [], folders: [theirs, ...stale] } }));
+    put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, ports: [], paths: [theirs, ...stale] } }));
     const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
     const config = {
       enabled: true,
       knowledge: { skills: "Read+Write" as const, plugins: false as const, instructions: "Read" as const },
       ports: [{ host: "3000", container: "3000" }],
-      folders: [
+      paths: [
         { path: "~/data", access: "Read+Write" as const },
-        { path: elsewhere, access: "Read" as const }
+        { path: elsewhere, access: "Read" as const },
+        // A single file is a row like any other — sbx mounts a file and a folder the same way.
+        { path: "~/.npmrc", access: "Read" as const }
       ]
     };
     await writeSbxConfig(root, config);
     assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
-    const file = stored() as { commands: unknown; sbx: { knowledge: unknown; folders: unknown } };
+    const file = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown } };
     assert.deepEqual(
       file.sbx.knowledge,
       { skills: "rw", plugins: false, instructions: "r" },
@@ -197,8 +199,13 @@ describe("readSbxConfig", () => {
     );
     assert.deepEqual(file.commands, ["keep"], "the saved command survives");
     assert.deepEqual(
-      file.sbx.folders,
-      [theirs, { path: "~/data", access: "Read+Write" }, { path: elsewhere, access: "Read", os: process.platform }],
+      file.sbx.paths,
+      [
+        theirs,
+        { path: "~/data", access: "Read+Write" },
+        { path: elsewhere, access: "Read", os: process.platform },
+        { path: "~/.npmrc", access: "Read" }
+      ],
       "the other OS's row survives; a ~ row is everyone's, an absolute one this platform's; the stale ones are replaced"
     );
   });
@@ -210,7 +217,7 @@ describe("readSbxConfig", () => {
           enabled: true,
           knowledge: { skills: "not-a-real-access", plugins: true, instructions: "r" },
           ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
-          folders: [
+          paths: [
             { path: "", os: process.platform },
             { path: "~/data", access: "not-a-real-access", os: process.platform },
             { path: "/elsewhere", access: "Read", os: process.platform === "win32" ? "linux" : "win32" }
@@ -223,7 +230,7 @@ describe("readSbxConfig", () => {
       enabled: true,
       knowledge: { skills: false, plugins: false, instructions: "Read" },
       ports: [{ host: "3000", container: "3000" }],
-      folders: [{ path: "~/data", access: "Read+Write" }]
+      paths: [{ path: "~/data", access: "Read+Write" }]
     });
   });
 });

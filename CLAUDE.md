@@ -535,8 +535,9 @@ differently from the others'). `src/main/sbx.ts` drives the `sbx` CLI the way `g
 git — every call a plain spawn, never a shell — and every
 fact in it about sbx was measured against the real binary (sandbox names, mount grammar, what
 survives a stop, the first-run wizard); its comments are the record. The config is the `sbx`
-key of the repository's own `tet.json` (`readSbxConfig` in `commands.ts`: ports, allowed folders
-stored `~/…` or per platform, and which of the agent's skills/plugins/instructions to mount);
+key of the repository's own `tet.json` (`readSbxConfig` in `commands.ts`: ports, allowed paths —
+a folder or a single file, both mounted the same way — stored `~/…` or per platform, and which of
+the agent's skills/plugins/instructions to mount);
 the tab-time decision is `resolveSbxRun` in `session-manager.ts`, which skips the sandbox for the
 one spawn when sbx is not ready — never writing the project's switch off, those checks not telling
 an outage from a permanent state — and sends each session back where it was made.

@@ -6,7 +6,7 @@ import type {
   ExplorerSortOrder,
   ProjectCommand,
   SbxAccess,
-  SbxFolder,
+  SbxPath,
   SbxKnowledgeConfig,
   SbxPort,
   SbxProjectConfig
@@ -337,7 +337,7 @@ function toSbxPorts(value: unknown): SbxPort[] {
 }
 
 /**
- * An allowed-folder row as tet.json holds it: the dialog's row plus, for a path outside the
+ * An allowed-path row as tet.json holds it: the dialog's row plus, for a path outside the
  * home, the platform it was entered on. tet.json travels with the repository, and an absolute
  * path means nothing on another OS (`C:\…` on Linux, `/home/…` on Windows), so such a row is
  * that platform's alone: readSbxConfig hands out only this platform's rows, and writeSbxConfig
@@ -346,34 +346,34 @@ function toSbxPorts(value: unknown): SbxPort[] {
  * on every OS, so it carries no `os` and is everyone's. Neither the dialog nor sbx.ts ever sees
  * the field — the OS is whatever tet is running on, never a choice.
  */
-interface StoredSbxFolder extends SbxFolder {
+interface StoredSbxPath extends SbxPath {
   os?: string;
 }
 
 /** Whether a stored row applies here — its platform's, or everyone's. */
-function appliesHere(folder: StoredSbxFolder): boolean {
-  return folder.os === undefined || folder.os === process.platform;
+function appliesHere(entry: StoredSbxPath): boolean {
+  return entry.os === undefined || entry.os === process.platform;
 }
 
-function toSbxFolders(value: unknown): StoredSbxFolder[] {
+function toSbxPaths(value: unknown): StoredSbxPath[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const folders: StoredSbxFolder[] = [];
+  const paths: StoredSbxPath[] = [];
   for (const entry of value) {
     if (typeof entry !== "object" || entry === null) {
       continue;
     }
-    const { path: folderPath, access, os } = entry as { path?: unknown; access?: unknown; os?: unknown };
-    if (typeof folderPath === "string" && folderPath.trim()) {
-      const folder: StoredSbxFolder = { path: folderPath, access: SBX_ACCESS.find((candidate) => candidate === access) ?? "Read+Write" };
+    const { path: hostPath, access, os } = entry as { path?: unknown; access?: unknown; os?: unknown };
+    if (typeof hostPath === "string" && hostPath.trim()) {
+      const row: StoredSbxPath = { path: hostPath, access: SBX_ACCESS.find((candidate) => candidate === access) ?? "Read+Write" };
       if (typeof os === "string") {
-        folder.os = os;
+        row.os = os;
       }
-      folders.push(folder);
+      paths.push(row);
     }
   }
-  return folders;
+  return paths;
 }
 
 function sbxSection(content: ProjectFile): Record<string, unknown> {
@@ -381,7 +381,7 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
 }
 
 /** `knowledge`'s on-disk access codes — short because there is one of these per kind per agent
- *  rather than per user-picked row the way a folder's `access` is. */
+ *  rather than per user-picked row the way an allowed path's `access` is. */
 const KNOWLEDGE_ACCESS_CODE: Record<SbxAccess, "r" | "rw"> = { Read: "r", "Read+Write": "rw" };
 const KNOWLEDGE_ACCESS_FROM_CODE: Partial<Record<string, SbxAccess>> = { r: "Read", rw: "Read+Write" };
 
@@ -406,19 +406,19 @@ function toStoredKnowledge(knowledge: SbxKnowledgeConfig): Record<keyof SbxKnowl
  */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
-  const folders = toSbxFolders(sbx.folders)
+  const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
-    .map(({ path: folderPath, access }) => ({ path: folderPath, access }));
-  return { enabled: sbx.enabled === true, knowledge: toSbxKnowledge(sbx.knowledge), ports: toSbxPorts(sbx.ports), folders };
+    .map(({ path: hostPath, access }) => ({ path: hostPath, access }));
+  return { enabled: sbx.enabled === true, knowledge: toSbxKnowledge(sbx.knowledge), ports: toSbxPorts(sbx.ports), paths };
 }
 
-/** Writes the rows that apply here in place of the previous ones — see StoredSbxFolder. */
+/** Writes the rows that apply here in place of the previous ones — see StoredSbxPath. */
 export async function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<void> {
   const content = await readForPatch(root);
-  const others = toSbxFolders(sbxSection(content).folders).filter((folder) => !appliesHere(folder));
-  const mine = config.folders.map((folder): StoredSbxFolder => (folder.path.startsWith("~") ? folder : { ...folder, os: process.platform }));
+  const others = toSbxPaths(sbxSection(content).paths).filter((entry) => !appliesHere(entry));
+  const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: process.platform }));
   await write(root, {
     ...content,
-    sbx: { enabled: config.enabled, knowledge: toStoredKnowledge(config.knowledge), ports: config.ports, folders: [...others, ...mine] }
+    sbx: { enabled: config.enabled, knowledge: toStoredKnowledge(config.knowledge), ports: config.ports, paths: [...others, ...mine] }
   });
 }

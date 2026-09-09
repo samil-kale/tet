@@ -784,7 +784,7 @@ export class ProjectSessionManager {
     if (missing.length > 0) {
       this.callbacks.onNotice(
         "warning",
-        `${agent.displayName} in ${this.project.name} starts without ${missing.length === 1 ? "an allowed folder that does not exist" : "allowed folders that do not exist"} on this machine: ${missing.join(", ")}`
+        `${agent.displayName} in ${this.project.name} starts without ${missing.length === 1 ? "an allowed path that does not exist" : "allowed paths that do not exist"} on this machine: ${missing.join(", ")}`
       );
     }
     return args;

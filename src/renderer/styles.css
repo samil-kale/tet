@@ -1672,7 +1672,7 @@ textarea:focus {
   font-weight: 600;
 }
 
-/* A section header for a multi-row field (Port forwarding, Allowed folders) — same color as
+/* A section header for a multi-row field (Port forwarding, Allowed paths) — same color as
    .dialog-field's own label span, for a field that isn't a single label/input pair. */
 .dialog-field-label {
   color: var(--vscode-descriptionForeground);
@@ -1686,7 +1686,7 @@ textarea:focus {
 }
 
 /* Its own scrollbox rather than growing the dialog: the section labels and "+ Add" buttons stay
-   put no matter how many ports or folders are added. */
+   put no matter how many ports or paths are added. */
 .sbx-rows {
   display: flex;
   flex-direction: column;
@@ -1704,7 +1704,7 @@ textarea:focus {
   margin-top: 5px;
 }
 
-/* One kind's checkbox, and its access dropdown once checked, level with the folder row below. */
+/* One kind's checkbox, and its access dropdown once checked, level with the path row below. */
 .sbx-knowledge-row {
   display: flex;
   align-items: center;
@@ -1714,7 +1714,7 @@ textarea:focus {
 }
 
 .sbx-port-row,
-.sbx-folder-row {
+.sbx-path-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1724,14 +1724,14 @@ textarea:focus {
   padding: 4px 4px 4px 8px;
 }
 
-/* The folder row's remove button sits flush right on its own, pushed there by the path field's
+/* The path row's remove button sits flush right on its own, pushed there by the path field's
    own flex: 1. The two fixed-width port fields leave no such stretch to push against, so this
    does the same job explicitly. */
 .sbx-port-row .icon-button {
   margin-left: auto;
 }
 
-/* Same explicit height as the folder row's text and dropdown (26px, below), so the two kinds of
+/* Same explicit height as the path row's text and dropdown (26px, below), so the two kinds of
    row read level. */
 .sbx-port-input {
   width: 70px;
@@ -1743,10 +1743,10 @@ textarea:focus {
   color: var(--vscode-descriptionForeground);
 }
 
-/* Plain text, not an input: the path comes from the native folder picker and is only shown.
+/* Plain text, not an input: the path comes from the native picker and is only shown.
    Line-height pins the text to the row's own 26px; a long path is cut with an ellipsis and
    carried whole in the title. */
-.sbx-folder-path {
+.sbx-path-value {
   flex: 1;
   min-width: 0;
   line-height: 26px;
@@ -1756,10 +1756,10 @@ textarea:focus {
   font-family: var(--vscode-editor-font-family, monospace);
 }
 
-/* The Read/Write dropdown in a folder or knowledge row is a button (.dropdown-trigger, padding:
+/* The Read/Write dropdown in a path or knowledge row is a button (.dropdown-trigger, padding:
    3px 6px), shorter by default than an input's own padding — pinned to the same 26px so every
    row reads level. */
-.sbx-folder-row .dropdown-trigger,
+.sbx-path-row .dropdown-trigger,
 .sbx-knowledge-row .dropdown-trigger {
   height: 26px;
 }
@@ -1800,12 +1800,19 @@ textarea:focus {
   gap: 10px;
 }
 
-/* "Port forwarding" and "Allowed folders" each start with a rule of their own, on top of the
+/* "Port forwarding" and "Allowed paths" each start with a rule of their own, on top of the
    gap above — the knowledge checkbox or a "+ Add" button ending a block read as glued to the
    label right below them without it. */
 .sbx-section {
   padding-top: 14px;
   border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* Two "+ Add" buttons side by side — a folder and a file are one list but two native pickers,
+   which cannot be one dialog off macOS (see the projects:pick-file handler). */
+.sbx-add-paths {
+  display: flex;
+  gap: 12px;
 }
 
 .sbx-add-row {

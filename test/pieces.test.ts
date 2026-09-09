@@ -13,7 +13,7 @@ import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/m
 import { sandboxTarget, toContainerPath } from "../src/main/terminals/hook-target";
 import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
-import { computeWorkspaces, contractHome, folderMountSpecs, sandboxName } from "../src/main/sbx";
+import { computeWorkspaces, contractHome, pathMountSpecs, sandboxName } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
@@ -116,11 +116,21 @@ describe("sbx sandbox naming and mounts", () => {
 
   it("mounts Read+Write bare (sbx maps it to the same path itself), Read with an explicit :ro target", () => {
     const repo = path.join(os.tmpdir(), "repo");
-    assert.deepEqual(folderMountSpecs({ path: repo, access: "Read+Write" }), { mount: repo, unmount: repo });
+    assert.deepEqual(pathMountSpecs({ path: repo, access: "Read+Write" }), { mount: repo, unmount: repo });
     const target = toContainerPath(repo);
-    assert.deepEqual(folderMountSpecs({ path: repo, access: "Read" }), {
+    assert.deepEqual(pathMountSpecs({ path: repo, access: "Read" }), {
       mount: `${repo}:${target}:ro`,
       unmount: `${repo}:${target}`
+    });
+  });
+
+  it("spells a single file exactly like a folder — sbx mounts either in both forms", () => {
+    const file = path.join(os.tmpdir(), "repo", ".npmrc");
+    assert.deepEqual(pathMountSpecs({ path: file, access: "Read+Write" }), { mount: file, unmount: file });
+    const target = toContainerPath(file);
+    assert.deepEqual(pathMountSpecs({ path: file, access: "Read" }), {
+      mount: `${file}:${target}:ro`,
+      unmount: `${file}:${target}`
     });
   });
 
@@ -135,14 +145,14 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(contractHome("relative/path"), "relative/path");
   });
 
-  it("normalizes a typed folder path (trimmed, ~ expanded) before building its mount spec", () => {
+  it("normalizes a typed host path (trimmed, ~ expanded) before building its mount spec", () => {
     const data = path.join(os.tmpdir(), "data");
-    assert.equal(folderMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "Read+Write" }).mount, data);
+    assert.equal(pathMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "Read+Write" }).mount, data);
     const home = path.join(os.homedir(), "data");
-    assert.equal(folderMountSpecs({ path: "~/data/", access: "Read+Write" }).mount, home);
+    assert.equal(pathMountSpecs({ path: "~/data/", access: "Read+Write" }).mount, home);
   });
 
-  it("mounts the project and tet's own dirs — Allowed folders are a live sbx mount, not a workspace", () => {
+  it("mounts the project and tet's own dirs — Allowed paths are a live sbx mount, not a workspace", () => {
     const agentDir = path.join(os.tmpdir(), "agents", "claude", "p");
     const contextDir = path.join(os.tmpdir(), "ctx");
     const repo = path.join(os.tmpdir(), "tet-sbx-repo");

@@ -222,6 +222,15 @@ export function registerIpc({
     }
   );
 
+  // Its own handler rather than a mode on the one above, because the two cannot be one picker:
+  // Electron only honours ["openFile", "openDirectory"] together on macOS — on Windows and Linux
+  // the platform dialog is one or the other, and it silently shows the directory selector. So
+  // the sbx dialog offers two buttons, and each asks for exactly one kind.
+  ipcMain.handle("projects:pick-file", async (_event, title: string): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({ title, properties: ["openFile"] });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
   ipcMain.handle(
     "projects:directory-to-remember",
     async (_event, directory: string): Promise<string> => {

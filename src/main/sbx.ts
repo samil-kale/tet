@@ -6,7 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
-import type { SbxAgentId, SbxFolder, SbxKnowledgeConfig, SbxPort, SbxProjectConfig } from "../shared/types";
+import type { SbxAgentId, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../shared/types";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { SANDBOX_HOME, toContainerPath } from "./terminals/hook-target";
@@ -340,26 +340,26 @@ export function sandboxName(projectId: string, agentId: SbxAgentId): string {
   return `tet-${agentId}-${hash}`;
 }
 
-/** `~` the way tet.json holds a folder under the home (contractHome's `~` and `~/…`) — expanded
+/** `~` the way tet.json holds a path under the home (contractHome's `~` and `~/…`) — expanded
  *  before it ever reaches `sbx`, which is not a shell and would otherwise pass the tilde
  *  through literally. */
-function expandHome(folderPath: string): string {
-  if (folderPath === "~") {
+function expandHome(hostPath: string): string {
+  if (hostPath === "~") {
     return os.homedir();
   }
-  return folderPath.startsWith("~/") ? path.join(os.homedir(), folderPath.slice(2)) : folderPath;
+  return hostPath.startsWith("~/") ? path.join(os.homedir(), hostPath.slice(2)) : hostPath;
 }
 
 /**
- * The inverse, for what goes into tet.json: a folder under this user's home is stored as `~/…`
+ * The inverse, for what goes into tet.json: a path under this user's home is stored as `~/…`
  * with forward slashes, so the same row serves a colleague on the same OS under another user
  * name (`C:\Users\saka\data` and `C:\Users\anna\data` are one row, `~/data`). Anything
  * else — outside the home, or not absolute — is stored as typed. Case-insensitive on win32
  * through `path.relative` itself.
  */
-export function contractHome(folderPath: string): string {
-  const typed = folderPath.trim();
-  const resolved = normalizeFolder(typed);
+export function contractHome(hostPath: string): string {
+  const typed = hostPath.trim();
+  const resolved = normalizeHostPath(typed);
   if (!path.isAbsolute(resolved)) {
     return typed;
   }
@@ -373,16 +373,16 @@ export function contractHome(folderPath: string): string {
   return `~/${relative.split(path.sep).join("/")}`;
 }
 
-/** A typed folder path as sbx will list it back: `~` expanded, separators native, no trailing
+/** A typed host path as sbx will list it back: `~` expanded, separators native, no trailing
  *  one. A relative path is left alone — it is meaningless here either way. */
-function normalizeFolder(folderPath: string): string {
-  const expanded = expandHome(folderPath.trim());
+function normalizeHostPath(hostPath: string): string {
+  const expanded = expandHome(hostPath.trim());
   return path.isAbsolute(expanded) ? path.resolve(expanded) : expanded;
 }
 
 /**
- * The `sbx mount`/`sbx umount` MOUNT_SPEC for one allowed-folder row — a live bind mount, not a
- * `sbx create` workspace positional (see computeWorkspaces' own comment for why folders moved off
+ * The `sbx mount`/`sbx umount` MOUNT_SPEC for one allowed-path row — a live bind mount, not a
+ * `sbx create` workspace positional (see computeWorkspaces' own comment for why they moved off
  * that list). `sbx mount`'s own spec grammar is `HOST[:CTR_TARGET[:ro|rw]]`, and a bare two-part
  * `HOST:ro` parses as `HOST:CTR_TARGET="ro"` there (verified live, 2026-09-08: "CTR_TARGET 'ro'
  * must be absolute") — unlike `sbx create`'s positional, where the same suffix means read-only at
@@ -392,17 +392,23 @@ function normalizeFolder(folderPath: string): string {
  * in one spec) — `toContainerPath` gives the one form that works, matching what sbx itself
  * reported back for a real mount. `unmount` drops the `:ro`/`:rw` — `sbx umount`'s own syntax is
  * `HOST[:CTR_TARGET]`, and an explicit-target mount must be revoked with that same target.
+ *
+ * A **single file** takes both forms unchanged — nothing here is directory-only. Measured live
+ * against sbx v0.42.1, 2026-09-09: the bare host path mounts one file read-write, the three-part
+ * `:ro` form mounts it read-only (a write inside then fails with "Read-only file system"), and
+ * `umount` takes it back either way. That is why the create-time positional's own restriction
+ * ("workspace path exists but is not a directory") does not reach this list.
  */
-export function folderMountSpecs(folder: SbxFolder): { mount: string; unmount: string } {
-  const host = normalizeFolder(folder.path);
-  if (folder.access === "Read+Write") {
+export function pathMountSpecs(entry: SbxPath): { mount: string; unmount: string } {
+  const host = normalizeHostPath(entry.path);
+  if (entry.access === "Read+Write") {
     return { mount: host, unmount: host };
   }
   const target = toContainerPath(host);
   return { mount: `${host}:${target}:ro`, unmount: `${host}:${target}` };
 }
 
-/** What is at a host path, or undefined for nothing — a folder to allow, a skills directory, an
+/** What is at a host path, or undefined for nothing — a path to allow, a skills directory, an
  *  instructions file, each only mounted when it is actually there. */
 function statOf(candidate: string): Stats | undefined {
   try {
@@ -421,11 +427,11 @@ export interface SandboxPaths {
 
 /**
  * Every `sbx create` workspace positional for one agent tab — tet's own fixed paths only, never
- * the user's "Allowed folders": those are a live `sbx mount`/`umount` (see folderMountSpecs and
+ * the user's "Allowed paths": those are a live `sbx mount`/`umount` (see pathMountSpecs and
  * prepareSbxRun), not a create-time positional, because `sbx create`/`run` refuses to add a
  * workspace to a sandbox that already exists with a different set ("sandbox 'x' already exists
  * and can't be given new workspaces" — verified live, 2026-09-08), which used to mean any
- * Allowed-folders edit had to destroy and rebuild the whole sandbox. The two fixed paths still go
+ * Allowed-paths edit had to destroy and rebuild the whole sandbox. The two fixed paths still go
  * through this list — they never change once a project's sandbox exists, so the mismatch this
  * guards against in practice never fires for them: `agentDir` (tet's own generated hook
  * settings and markers, read-write) and the directory holding the shell-context file
@@ -619,7 +625,7 @@ const SBX_CREATE_TARGET: Partial<Record<SbxAgentId, string>> = { pi: "docker.io/
 
 /**
  * Makes sure a sandbox exists with exactly `workspaces` — tet's own fixed paths only now that
- * Allowed folders are a live mount (see computeWorkspaces), so this practically never disagrees
+ * Allowed paths are a live mount (see computeWorkspaces), so this practically never disagrees
  * once a project's sandbox exists. One that exists with a *different* set is rebuilt rather than
  * reused: `computeWorkspaces` cannot change within one running instance of tet (its inputs —
  * project id, agent id, storageRoot — are all already fixed), so a mismatch can only mean this
@@ -667,14 +673,14 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
 }
 
 /**
- * Applies live bind mounts — knowledge and Allowed folders alike — to a sandbox that already
+ * Applies live bind mounts — knowledge and Allowed paths alike — to a sandbox that already
  * exists (ensureSandboxExists ran first). Re-applied on *every* start rather than once per
  * sandbox: unlike a file written into the sandbox's own disk (ensureSandboxLauncher's tet-ctl),
  * a runtime bind mount does not survive a stop/restart — measured live, the target was empty
  * again afterward — and a sandbox can be stopped from outside tet (a plain `sbx stop`), so there
  * is no reliable moment to cache "already mounted" against. The command is its own idempotency
- * check when it is not needed again (sbx's own guarantee); an access change or a removed folder
- * is narrowed immediately at Save instead (see revokeStaleFolders) — so by the time this runs,
+ * check when it is not needed again (sbx's own guarantee); an access change or a removed path
+ * is narrowed immediately at Save instead (see revokeStalePaths) — so by the time this runs,
  * the previous mount of that path either matches or is already gone, and a plain re-mount here
  * never hits sbx's "already mounted read-write; cannot also mount read-only" conflict (verified
  * live, 2026-09-08).
@@ -690,9 +696,9 @@ async function mountAll(name: string, specs: string[], onData?: OnData): Promise
 }
 
 /**
- * Narrows a running sandbox's folder grants the moment the user changes them, rather than
- * leaving the old one in force until whoever has that tab open next restarts it: a folder
- * dropped from Allowed folders, or downgraded from Read+Write to Read, must stop being
+ * Narrows a running sandbox's path grants the moment the user changes them, rather than
+ * leaving the old one in force until whoever has that tab open next restarts it: a path
+ * dropped from Allowed paths, or downgraded from Read+Write to Read, must stop being
  * (over-)accessible *now*. Needed because the grant a `sbx mount` makes survives a sandbox
  * stop/restart even though the live bind does not (verified live, 2026-09-08: mounting the same
  * host path again with a different access after a restart still hit the "already mounted"
@@ -700,16 +706,16 @@ async function mountAll(name: string, specs: string[], onData?: OnData): Promise
  * sandbox that was never created, or is not currently running, has no live grant to narrow, and
  * the failed `exec` is the same signal either way.
  */
-async function revokeStaleFolders(name: string, previous: SbxFolder[], current: SbxFolder[]): Promise<void> {
+async function revokeStalePaths(name: string, previous: SbxPath[], current: SbxPath[]): Promise<void> {
   const stale = previous.filter((old) => {
-    const match = current.find((next) => normalizeFolder(next.path) === normalizeFolder(old.path));
+    const match = current.find((next) => normalizeHostPath(next.path) === normalizeHostPath(old.path));
     return !match || match.access !== old.access;
   });
   if (stale.length === 0 || !(await ensureRunning(name))) {
     return;
   }
-  for (const folder of stale) {
-    await runSbx(["umount", name, folderMountSpecs(folder).unmount]);
+  for (const entry of stale) {
+    await runSbx(["umount", name, pathMountSpecs(entry).unmount]);
   }
 }
 
@@ -806,7 +812,7 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
 
 /**
  * Readies one agent tab's sandbox and returns the full `sbx run` argument list for it — fixed
- * workspaces (computeWorkspaces), live-mounted knowledge and Allowed folders (whose `missing` is
+ * workspaces (computeWorkspaces), live-mounted knowledge and Allowed paths (whose `missing` is
  * passed on for the caller to say), published ports, and (when network policy allows it, see
  * ensureControlNetworkAllowed) the control-channel env and `tet-ctl` launcher. Creates the
  * sandbox first if it is missing (ensureSandboxExists) — `sbx run` would too, but the launcher
@@ -817,17 +823,19 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   const env = request.env ?? [];
   const name = sandboxName(request.projectId, agentId);
   await ensureSandboxExists(agentId, computeWorkspaces(request.projectPath, request.paths), name, onData);
-  // Best-effort, same reasoning as the launcher below: no skills or folders in the sandbox is no
-  // worse than today, so a failure here must not block the agent itself from starting. A no-op
-  // when nothing is enabled or nothing enabled exists on this host.
+  // Best-effort, same reasoning as the launcher below: no skills or allowed paths in the sandbox
+  // is no worse than today, so a failure here must not block the agent itself from starting. A
+  // no-op when nothing is enabled or nothing enabled exists on this host. A row is mounted for
+  // merely *being there* — a folder and a plain file mount the same way (pathMountSpecs); only a
+  // path that is gone from this host is reported back as missing.
   const missing: string[] = [];
   const specs = knowledgeMountSpecs(agentId, config.knowledge);
   specs.push(...(await sessionMountSpecs(request.sessionMounts ?? [])));
-  for (const folder of config.folders) {
-    if (statOf(normalizeFolder(folder.path))?.isDirectory()) {
-      specs.push(folderMountSpecs(folder).mount);
+  for (const entry of config.paths) {
+    if (statOf(normalizeHostPath(entry.path))) {
+      specs.push(pathMountSpecs(entry).mount);
     } else {
-      missing.push(folder.path);
+      missing.push(entry.path);
     }
   }
   await mountAll(name, specs, onData);
@@ -861,12 +869,12 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
 }
 
 /**
- * The dialog's Save button: writes tet.json (ports/folders), then, if sandboxing is off now,
+ * The dialog's Save button: writes tet.json (ports/paths), then, if sandboxing is off now,
  * removes every sandbox the project has — there is no more "off but still there" for a sandbox
  * once its agent can't be sent to it again. If it's still on, every existing sandbox either gets
  * removed too (its *fixed* paths no longer match — never actually seen in practice, see
  * computeWorkspaces — and is rebuilt when its next tab starts) or, the normal case, has its live
- * folder grants narrowed to match (revokeStaleFolders) and whatever ports changed applied
+ * path grants narrowed to match (revokeStalePaths) and whatever ports changed applied
  * (applyPortChanges) — neither is a create-time workspace or `-p` any more, so an edit no longer
  * forces a rebuild. Returns which agents' sandboxes were removed, for the caller to say so: a
  * session of that agent still running in a tab just lost its sandbox under it. `getPaths` is
@@ -880,7 +888,7 @@ export async function saveSbxConfig(
   getPaths: (agentId: SbxAgentId) => SandboxPaths
 ): Promise<SbxAgentId[]> {
   const previous = await readSbxConfig(projectPath);
-  const config = { ...request, folders: request.folders.map((folder) => ({ ...folder, path: contractHome(folder.path) })) };
+  const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   await writeSbxConfig(projectPath, config);
   const removed: SbxAgentId[] = [];
   for (const agentId of SBX_AGENT_IDS) {
@@ -895,7 +903,7 @@ export async function saveSbxConfig(
       }
       continue;
     }
-    await revokeStaleFolders(name, previous.folders, config.folders);
+    await revokeStalePaths(name, previous.paths, config.paths);
     await applyPortChanges(name, previous.ports, config.ports);
   }
   return removed;
