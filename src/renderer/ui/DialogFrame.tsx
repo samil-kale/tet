@@ -21,6 +21,8 @@ export type DialogHeader<T extends string> =
       tabs: readonly DialogTab<T>[];
       active: T;
       onSelect: (id: T) => void;
+      /** Optional close action at the right edge of the tab strip. */
+      onClose?: () => void;
     };
 
 interface DialogFrameProps<T extends string> {
@@ -63,6 +65,11 @@ export function DialogFrame<T extends string>({ header, busy, className, onSubmi
               {entry.label}
             </button>
           ))}
+          {header.onClose && (
+            <button type="button" className="icon-button dialog-tabs-close" title="Close" onClick={header.onClose}>
+              <CloseIcon />
+            </button>
+          )}
           {busy && <ProgressBar />}
         </div>
       ) : (

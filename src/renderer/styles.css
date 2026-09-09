@@ -1471,6 +1471,12 @@ textarea:focus {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
+.dialog-tabs-close {
+  flex: none;
+  align-self: center;
+  margin: 0 6px 0 auto;
+}
+
 /* Same shape as .diff-dialog-bar, and shows progress the same way. It sits inside .dialog's
    16px padding, cancelled on three sides so the bar is flush; the top corners then need
    .dialog's own radius back. */
@@ -1514,7 +1520,7 @@ textarea:focus {
   flex-direction: column;
   gap: 6px;
   margin-top: 5px;
-  max-height: 160px;
+  max-height: 245px;
   overflow-y: auto;
 }
 
@@ -1588,17 +1594,16 @@ textarea:focus {
   height: 26px;
 }
 
-/* The master enable checkbox. A direct child only: the knowledge checkbox inside
-   SbxSettingsFields is a .dialog-checkbox too, but takes its spacing from .sbx-section. */
-.sbx-settings-dialog > .dialog-body > .dialog-checkbox {
-  padding-bottom: 20px;
-}
-
 .sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail {
   margin-top: 3px;
 }
 
-/* No fixed height: the dialog grows with its content, capped to the window. */
+/* Stable across tabs with different amounts of content, capped to the window. */
+.sbx-settings-dialog {
+  min-width: 560px;
+  min-height: 405px;
+}
+
 .sbx-settings-dialog.wide {
   max-height: calc(100vh - 32px);
 }
@@ -1609,20 +1614,14 @@ textarea:focus {
   min-height: 0;
 }
 
-/* The one part that scrolls. flex/min-height is what lets it shrink below its content's
-   natural height once .dialog hits its max-height. */
-.sbx-settings-fields-scroll {
+/* Each settings tab scrolls independently when its rows outgrow the available dialog height. */
+.sbx-settings-pane {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.sbx-section {
-  padding-top: 14px;
-  border-top: 1px solid var(--vscode-panel-border);
 }
 
 /* Two "+ Add" buttons: a folder and a file are two native pickers, which cannot be one dialog

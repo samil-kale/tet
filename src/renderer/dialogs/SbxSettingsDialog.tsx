@@ -20,6 +20,17 @@ type Phase =
   | { kind: "governed" }
   | { kind: "failed"; message: string };
 
+type SbxSettingsTab = "general" | keyof FieldsState;
+
+/** The project's SBX settings, split along the same sections that are stored in tet.json. */
+const TABS: { id: SbxSettingsTab; label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "knowledge", label: "Knowledge" },
+  { id: "ports", label: "Ports" },
+  { id: "paths", label: "Paths" },
+  { id: "hosts", label: "Hosts" }
+];
+
 /**
  * The one dialog for the whole sbx open path and its configuration. Runs its own setup once
  * mounted: sbx installed, signed in (signing in in the background if needed), machine-wide
@@ -43,6 +54,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
+  const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
 
   /** Installed → signed in → policy → saved config. Run on mount and by "Check again". */
   const setup = async (): Promise<void> => {
@@ -99,7 +111,11 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
 
   return (
     <DialogFrame
-      header={{ title: `SBX Settings - ${project.name}`, onClose: close }}
+      header={
+        phase.kind === "ready"
+          ? { tabs: TABS, active: tab, onSelect: setTab, onClose: close }
+          : { title: `SBX Settings - ${project.name}`, onClose: close }
+      }
       className={phase.kind === "ready" ? "wide sbx-settings-dialog" : "sbx-settings-dialog"}
       busy={busy}
       buttons={
@@ -133,7 +149,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           managed policy yet, so it is not offered here.
         </p>
       )}
-      {phase.kind === "ready" && (
+      {phase.kind === "ready" && tab === "general" && (
         <label className="dialog-checkbox">
           <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
           <span>
@@ -145,10 +161,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           </span>
         </label>
       )}
-      {phase.kind === "ready" && (
-        // The one part that scrolls; the checkbox above stays put.
-        <div className="sbx-settings-fields-scroll">
-          <SbxSettingsFields state={state} setState={setState} />
+      {phase.kind === "ready" && tab !== "general" && (
+        <div className="sbx-settings-pane">
+          <SbxSettingsFields section={tab} state={state} setState={setState} />
         </div>
       )}
     </DialogFrame>

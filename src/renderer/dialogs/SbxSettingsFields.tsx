@@ -61,11 +61,12 @@ interface SbxSettingsFieldsProps {
   /** Owned by SbxSettingsDialog, where the save request is built; this only edits it. */
   state: FieldsState;
   setState: Dispatch<SetStateAction<FieldsState>>;
+  section: keyof FieldsState;
 }
 
-/** The dialog's fields, once sbx is installed, signed in and its network policy is set (see
- *  SbxSettingsDialog). One set for every sandboxed tab of the project, whichever agent it runs. */
-export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
+/** One tab of the dialog's fields, once sbx is installed, signed in and its network policy is
+ *  set (see SbxSettingsDialog). The state remains shared while the user switches tabs. */
+export function SbxSettingsFields({ state, setState, section }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -82,9 +83,9 @@ export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
     }
   };
 
-  return (
-    <>
-      <div className="dialog-field sbx-section">
+  if (section === "knowledge") {
+    return (
+      <div className="dialog-field">
         <span className="dialog-field-label">Bring from this machine</span>
         <div className="sbx-knowledge-rows">
           {KNOWLEDGE_LABELS.map(({ kind, label }) => {
@@ -107,8 +108,12 @@ export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
           })}
         </div>
       </div>
+    );
+  }
 
-      <div className="dialog-field sbx-section">
+  if (section === "ports") {
+    return (
+      <div className="dialog-field">
         <span className="dialog-field-label">Port forwarding</span>
         <div className="sbx-rows">
           {state.ports.length === 0 && <p className="dialog-detail">No ports forwarded yet</p>}
@@ -153,8 +158,12 @@ export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
           + Add port
         </button>
       </div>
+    );
+  }
 
-      <div className="dialog-field sbx-section">
+  if (section === "paths") {
+    return (
+      <div className="dialog-field">
         <span className="dialog-field-label">Allowed paths</span>
         <div className="sbx-rows">
           {state.paths.length === 0 && <p className="dialog-detail">No paths shared yet</p>}
@@ -194,39 +203,41 @@ export function SbxSettingsFields({ state, setState }: SbxSettingsFieldsProps) {
           </button>
         </div>
       </div>
+    );
+  }
 
-      <div className="dialog-field sbx-section">
-        <span className="dialog-field-label">Allowed hosts</span>
-        <div className="sbx-rows">
-          {state.hosts.length === 0 && <p className="dialog-detail">No hosts allowed yet</p>}
-          {state.hosts.map((row) => (
-            // The path row's box: the input's flex: 1 pushes the button flush right the way
-            // .sbx-path-value does, so .sbx-port-row's margin-left: auto is not needed.
-            <div key={row.id} className="sbx-path-row">
-              <input
-                className="sbx-host-input"
-                type="text"
-                placeholder="api.example.com"
-                title="Exact host, *.example.com, or host:443"
-                value={row.host}
-                onChange={(event) =>
-                  update("hosts", (hosts) => hosts.map((entry) => (entry.id === row.id ? { ...entry, host: event.target.value } : entry)))
-                }
-              />
-              <button
-                className="icon-button"
-                title="Remove host"
-                onClick={() => update("hosts", (hosts) => hosts.filter((entry) => entry.id !== row.id))}
-              >
-                <CloseIcon />
-              </button>
-            </div>
-          ))}
-        </div>
-        <button type="button" className="sbx-add-row" onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>
-          + Add host
-        </button>
+  return (
+    <div className="dialog-field">
+      <span className="dialog-field-label">Allowed hosts</span>
+      <div className="sbx-rows">
+        {state.hosts.length === 0 && <p className="dialog-detail">No hosts allowed yet</p>}
+        {state.hosts.map((row) => (
+          // The path row's box: the input's flex: 1 pushes the button flush right the way
+          // .sbx-path-value does, so .sbx-port-row's margin-left: auto is not needed.
+          <div key={row.id} className="sbx-path-row">
+            <input
+              className="sbx-host-input"
+              type="text"
+              placeholder="api.example.com"
+              title="Exact host, *.example.com, or host:443"
+              value={row.host}
+              onChange={(event) =>
+                update("hosts", (hosts) => hosts.map((entry) => (entry.id === row.id ? { ...entry, host: event.target.value } : entry)))
+              }
+            />
+            <button
+              className="icon-button"
+              title="Remove host"
+              onClick={() => update("hosts", (hosts) => hosts.filter((entry) => entry.id !== row.id))}
+            >
+              <CloseIcon />
+            </button>
+          </div>
+        ))}
       </div>
-    </>
+      <button type="button" className="sbx-add-row" onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>
+        + Add host
+      </button>
+    </div>
   );
 }
