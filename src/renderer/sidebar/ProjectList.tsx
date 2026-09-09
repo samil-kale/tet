@@ -68,7 +68,7 @@ interface ProjectListProps {
   onShowFinished: (projectId: string) => void;
   /** The same, for the session that has been waiting on an answer the longest. */
   onShowWaiting: (projectId: string) => void;
-  /** Puts the project on screen with the git pane out — where its uncommitted changes are. */
+  /** Puts the project on screen and toggles the git pane when it is already selected. */
   onShowChanges: (projectId: string) => void;
   /** "SBX Settings" — opens the project's sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;

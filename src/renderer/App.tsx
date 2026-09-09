@@ -747,15 +747,15 @@ export function App() {
   const closeDiff = useCallback(() => setDiffFile(null), []);
   const toggleGit = useCallback(() => setGitOpen(!gitOpen), [gitOpen, setGitOpen]);
   /**
-   * The project row's git mark: puts the project on screen and slides the git pane out. One
-   * direction only — the pane's own toggle closes it.
+   * The project row's git mark: switches to that project and slides the git pane out. On the
+   * project already on screen it is the same toggle as the one in the terminal strip.
    */
   const showChanges = useCallback(
     (projectId: string) => {
       setActiveProjectId(projectId);
-      setGitOpen(true);
+      setGitOpen(projectId !== activeProjectId || !gitOpen);
     },
-    [setGitOpen]
+    [activeProjectId, gitOpen, setGitOpen]
   );
   /** No explicit path — "Browse files" itself — reopens whatever this project last showed. */
   const openDiff = useCallback((projectId: string, path?: string) => {
