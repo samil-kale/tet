@@ -423,9 +423,15 @@ export function registerIpc({
   onRepository("repo:add-folder", (repository, folderPath: string) => repository.addFolder(folderPath));
   onRepository("repo:remove-folder", (repository, folderPath: string) => repository.removeFolder(folderPath));
   onRepository("repo:exclude-path", (repository, relPath: string) => repository.excludePath(relPath));
-  onRepository("repo:set-exclude-git-ignore", (repository, value: boolean) => repository.setExcludeGitIgnore(value));
-  onRepository("repo:set-compact-folders", (repository, value: boolean) => repository.setCompactFolders(value));
-  onRepository("repo:set-sort-order", (repository, value: ExplorerSortOrder) => repository.setSortOrder(value));
+  onRepository("repo:set-exclude-git-ignore", (repository, value: boolean) =>
+    repository.setExplorerSetting("excludeGitIgnore", value)
+  );
+  onRepository("repo:set-compact-folders", (repository, value: boolean) =>
+    repository.setExplorerSetting("compactFolders", value)
+  );
+  onRepository("repo:set-sort-order", (repository, value: ExplorerSortOrder) =>
+    repository.setExplorerSetting("sortOrder", value)
+  );
 
   ipcMain.handle(
     "repo:diff",

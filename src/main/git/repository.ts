@@ -7,7 +7,6 @@ import type {
   DiffOptions,
   ExplorerListing,
   ExplorerSettings,
-  ExplorerSortOrder,
   FileContent,
   FileDiff,
   FileWriteResult,
