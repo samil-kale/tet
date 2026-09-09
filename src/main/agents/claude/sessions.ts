@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { findEncodedDir, nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
+import { findEncodedDir, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
@@ -391,47 +391,35 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
  *  and when the last turn ended. It runs to the beginning of the file where a session has none
  *  of them, since a rename made 300 KB of transcript ago is still the name. Claude writes a
  *  `turn_duration` entry when a turn ends whichever way it ended; sidechain entries are a
- *  subagent's own turns. A file scanned before is only read from a chunk below where that scan
- *  ended, and the overlap covers a line an earlier read may have caught half-written. */
-async function scanTail(filePath: string, sessionId: string): Promise<TranscriptTail> {
-  const tail: TranscriptTail = {};
-  let handle: fs.promises.FileHandle | undefined;
-  try {
-    handle = await fs.promises.open(filePath, "r");
-    const { size } = await handle.stat();
-    const cached = scanCache.get(filePath);
-    if (cached?.size === size) {
-      return cached.tail;
-    }
-    const previous = cached && cached.size < size ? cached : undefined;
-    const floor = previous ? Math.max(0, previous.size - TITLE_SCAN_BYTE_LIMIT) : 0;
-    await readLinesBackwards(handle, size, floor, TITLE_SCAN_BYTE_LIMIT, (lines) => {
+ *  subagent's own turns. */
+function scanTail(filePath: string, sessionId: string): Promise<TranscriptTail> {
+  return scanTranscriptTail(filePath, scanCache, {
+    byteLimit: TITLE_SCAN_BYTE_LIMIT,
+    label: "claude",
+    create: (): TranscriptTail => ({}),
+    read: (lines, tail) => {
       readTailEntries(lines, sessionId, tail);
       return scanComplete(tail);
-    });
-    // A turn_duration with nothing below it to check against: a summary is written right before
-    // its turn_duration, so there is none — the turn was cut short. Never left pending.
-    if (tail.pendingTurnEnd !== undefined) {
-      tail.turnEndedAt = tail.pendingTurnEnd.ms;
-      tail.pendingTurnEnd = undefined;
-      tail.turnEndResolved = true;
-    }
-    if (previous) {
-      tail.customTitle ??= previous.tail.customTitle;
-      tail.agentName ??= previous.tail.agentName;
-      tail.aiTitle ??= previous.tail.aiTitle;
+    },
+    finish: (tail) => {
+      // A turn_duration with nothing below it to check against: a summary is written right before
+      // its turn_duration, so there is none — the turn was cut short. Never left pending.
+      if (tail.pendingTurnEnd !== undefined) {
+        tail.turnEndedAt = tail.pendingTurnEnd.ms;
+        tail.pendingTurnEnd = undefined;
+        tail.turnEndResolved = true;
+      }
+    },
+    merge: (tail, previous) => {
+      tail.customTitle ??= previous.customTitle;
+      tail.agentName ??= previous.agentName;
+      tail.aiTitle ??= previous.aiTitle;
       // Not ??=: turnEndedAt legitimately stays undefined once resolved (Stop hooks ran), which
       // a superseded earlier answer must not overwrite. Only an unresolved scan falls back.
       if (tail.turnEndResolved !== true) {
-        tail.turnEndedAt = previous.tail.turnEndedAt;
-        tail.turnEndResolved = previous.tail.turnEndResolved;
+        tail.turnEndedAt = previous.turnEndedAt;
+        tail.turnEndResolved = previous.turnEndResolved;
       }
     }
-    scanCache.set(filePath, { size, tail });
-  } catch (error) {
-    console.error("[tet] claude transcript scan failed:", error);
-  } finally {
-    await handle?.close();
-  }
-  return tail;
+  });
 }

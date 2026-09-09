@@ -15,7 +15,6 @@ import type {
   DiffOptions,
   ExplorerListing,
   ExplorerSettings,
-  ExplorerSortOrder,
   FileContent,
   FileDiff,
   FileWriteResult,
@@ -33,12 +32,9 @@ import type {
 } from "../shared/types";
 import {
   cancelSbxSetup,
-  checkSbxInstalled,
-  checkSbxLoggedIn,
-  checkSbxGoverned,
-  checkSbxPolicyInitialized,
   initSbxPolicy,
   readLiveSbxConfig,
+  readSbxStatus,
   runSbxLogin,
   saveSbxConfig
 } from "./sbx";
@@ -156,12 +152,9 @@ export function registerIpc({
     })
   );
 
-  ipcMain.handle("sbx:check-installed", () => checkSbxInstalled());
-  ipcMain.handle("sbx:check-logged-in", () => checkSbxLoggedIn());
+  ipcMain.handle("sbx:status", () => readSbxStatus());
   ipcMain.handle("sbx:login", () => runSbxLogin());
-  ipcMain.handle("sbx:check-policy-initialized", () => checkSbxPolicyInitialized());
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
-  ipcMain.handle("sbx:check-governed", () => checkSbxGoverned());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
   // What the dialog reopens with — read fresh, never cached; the hosts from the sandboxes
@@ -423,14 +416,10 @@ export function registerIpc({
   onRepository("repo:add-folder", (repository, folderPath: string) => repository.addFolder(folderPath));
   onRepository("repo:remove-folder", (repository, folderPath: string) => repository.removeFolder(folderPath));
   onRepository("repo:exclude-path", (repository, relPath: string) => repository.excludePath(relPath));
-  onRepository("repo:set-exclude-git-ignore", (repository, value: boolean) =>
-    repository.setExplorerSetting("excludeGitIgnore", value)
-  );
-  onRepository("repo:set-compact-folders", (repository, value: boolean) =>
-    repository.setExplorerSetting("compactFolders", value)
-  );
-  onRepository("repo:set-sort-order", (repository, value: ExplorerSortOrder) =>
-    repository.setExplorerSetting("sortOrder", value)
+  onRepository(
+    "repo:set-explorer-setting",
+    (repository, key: keyof ExplorerSettings, value: ExplorerSettings[keyof ExplorerSettings]) =>
+      repository.setExplorerSetting(key, value)
   );
 
   ipcMain.handle(

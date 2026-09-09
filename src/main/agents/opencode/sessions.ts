@@ -13,9 +13,8 @@ import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
  * call (~1.5 s measured, writing to the database each time) — anomalyco/opencode#37435. That is
  * what the one-off actions below pay and a listing never does.
  *
- * The cost: tet knows the sessions that ran through it. One started elsewhere leaves no record,
- * except once when a repository is listed for the first time (see seed). One removed elsewhere
- * keeps its record until a resume of it fails.
+ * The cost: tet knows the sessions that ran through it. One started elsewhere leaves no record.
+ * One removed elsewhere keeps its record until a resume of it fails.
  */
 
 /** Where each repository's records are, registered by prepareSpawn: a provider gets a cwd, not an
@@ -41,9 +40,6 @@ export function sessionSandbox(cwd: string, sessionId: string): string | null {
 /** How long a rename waits for the tab's opencode to apply it before it is called off. */
 const RENAME_TIMEOUT_MS = 5000;
 const RENAME_POLL_MS = 250;
-
-/** Written once the seeding ran, so a repository with no sessions is not seeded on every start. */
-const SEEDED_MARKER = ".seeded";
 
 function readRecord(file: string): SessionRecord | undefined {
   try {
@@ -74,69 +70,15 @@ function readRecords(dir: string): SessionRecord[] {
   return names.filter((name) => name.endsWith(".json")).flatMap((name) => readRecord(path.join(dir, name)) ?? []);
 }
 
-function writeRecord(dir: string, record: SessionRecord): void {
-  const file = path.join(dir, `${record.id}.json`);
-  fs.writeFileSync(`${file}.tmp`, JSON.stringify(record));
-  fs.renameSync(`${file}.tmp`, file);
-}
-
-/**
- * The one time opencode itself is asked for a listing: a repository whose records directory has
- * never been filled. `session list --format json` names every session the database holds with
- * its directory (measured), so it is filtered to this repository here; the CLI has no `roots`
- * filter and lists conversations only. Host only — a sandbox's database starts empty. A failure
- * leaves the marker unwritten for the next start to try again, not the next listing, which
- * follows every tab's output and would spend a process each time.
- */
-const seedTried = new Set<string>();
-
-async function seed(executable: string, cwd: string, dir: string): Promise<void> {
-  const marker = path.join(dir, SEEDED_MARKER);
-  if (seedTried.has(dir) || fs.existsSync(marker)) {
-    return;
-  }
-  seedTried.add(dir);
-  try {
-    const output = await runOpencode(executable, cwd, null, ["session", "list", "--format", "json"]);
-    const entries = (output.trim() ? JSON.parse(output) : []) as {
-      id?: unknown;
-      title?: unknown;
-      directory?: unknown;
-      created?: unknown;
-      updated?: unknown;
-    }[];
-    const here = path.resolve(cwd).toLowerCase();
-    for (const entry of entries) {
-      if (typeof entry.id !== "string" || typeof entry.directory !== "string" || path.resolve(entry.directory).toLowerCase() !== here) {
-        continue;
-      }
-      if (fs.existsSync(path.join(dir, `${entry.id}.json`))) {
-        continue;
-      }
-      writeRecord(dir, {
-        id: entry.id,
-        title: typeof entry.title === "string" ? entry.title : "",
-        created: typeof entry.created === "number" ? entry.created : 0,
-        updated: typeof entry.updated === "number" ? entry.updated : 0,
-        sandbox: null
-      });
-    }
-    fs.writeFileSync(marker, "");
-  } catch (error) {
-    console.error("[tet] opencode session seeding failed:", error);
-  }
-}
-
 export const opencodeSessionProvider: SessionProvider = {
   // Reads only the records (see the file header): a session deleted from outside tet is listed
   // as if it existed until a tab tries to resume it and fails.
-  async list(executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
     const dir = recordsDir(cwd);
     if (!dir) {
-      return [];
+      return Promise.resolve([]);
     }
-    await seed(executable, cwd, dir);
-    return readRecords(dir)
+    const sessions = readRecords(dir)
       .map((record) => ({
         id: record.id,
         title: record.title,
@@ -145,6 +87,7 @@ export const opencodeSessionProvider: SessionProvider = {
         sandbox: record.sandbox ?? undefined
       }))
       .sort((a, b) => a.createdAt - b.createdAt);
+    return Promise.resolve(sessions);
   },
 
   resumeArgs(sessionId: string): string[] {

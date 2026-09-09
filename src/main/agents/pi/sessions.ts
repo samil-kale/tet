@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { findEncodedDir, nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
+import { findEncodedDir, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
@@ -322,37 +322,22 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
 /**
  * Reads the transcript backwards for the two entries of which the *last* one counts, to the
  * beginning where a session has no session_info at all, since a rename made 300 KB of transcript
- * ago is still the name. A file scanned before is only read from a chunk below where that scan
- * ended, and what the new stretch does not hold is taken from the old answer — the overlap covers
- * a line the earlier read may have caught half-written.
+ * ago is still the name.
  */
-async function scanTail(filePath: string): Promise<TranscriptTail> {
-  const tail: TranscriptTail = {};
-  let handle: fs.promises.FileHandle | undefined;
-  try {
-    handle = await fs.promises.open(filePath, "r");
-    const { size } = await handle.stat();
-    const cached = scanCache.get(filePath);
-    if (cached?.size === size) {
-      return cached.tail;
-    }
-    const previous = cached && cached.size < size ? cached : undefined;
-    const floor = previous ? Math.max(0, previous.size - TAIL_SCAN_BYTE_LIMIT) : 0;
-    await readLinesBackwards(handle, size, floor, TAIL_SCAN_BYTE_LIMIT, (lines) => {
+function scanTail(filePath: string): Promise<TranscriptTail> {
+  return scanTranscriptTail(filePath, scanCache, {
+    byteLimit: TAIL_SCAN_BYTE_LIMIT,
+    label: "pi",
+    create: (): TranscriptTail => ({}),
+    read: (lines, tail) => {
       readTailEntries(lines, tail);
       return tail.name !== undefined && tail.turnEndedAt !== undefined;
-    });
-    if (previous) {
-      tail.name ??= previous.tail.name;
-      tail.turnEndedAt ??= previous.tail.turnEndedAt;
+    },
+    merge: (tail, previous) => {
+      tail.name ??= previous.name;
+      tail.turnEndedAt ??= previous.turnEndedAt;
     }
-    scanCache.set(filePath, { size, tail });
-  } catch (error) {
-    console.error("[tet] pi transcript scan failed:", error);
-  } finally {
-    await handle?.close();
-  }
-  return tail;
+  });
 }
 
 function readTailEntries(lines: string[], tail: TranscriptTail): void {

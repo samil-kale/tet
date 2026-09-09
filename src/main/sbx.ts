@@ -6,7 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
-import type { SbxAgentId, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../shared/types";
+import type { SbxAgentId, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStatus } from "../shared/types";
 import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { augmentAgentPath } from "./terminals/agent-path";
@@ -113,19 +113,7 @@ export function cancelSbxSetup(): void {
   currentChild = undefined;
 }
 
-/**
- * Whether the `sbx` CLI is on PATH. Not part of `Requirements.met`: sbx is opt-in per project.
- * Never cached, PATH re-read first (the dialog's "Check again" is pressed right after
- * installing). The spawn path (`checkSbxReady`) skips the re-read: on macOS/Linux that is a
- * login shell per call.
- *
- * `version` is a subcommand; `sbx --version` fails with "unknown flag".
- */
-export async function checkSbxInstalled(): Promise<boolean> {
-  await augmentAgentPath();
-  return isSbxInstalled();
-}
-
+/** `version` is a subcommand; `sbx --version` fails with "unknown flag". */
 function isSbxInstalled(): Promise<boolean> {
   return checkAgentInstalled("sbx", ["version"], os.tmpdir());
 }
@@ -158,32 +146,10 @@ async function suppressSbxFirstRunWizard(): Promise<void> {
   }
 }
 
-/**
- * Whether the user is signed in to sbx. Never cached: sign-in and sign-out happen outside tet.
- * `sbx ls` is the probe: side-effect-free, exits 1 with "Not authenticated to Docker" when
- * signed out. Not `sbx policy ls`: it also exits 1 on a signed-in account without a policy.
- * Every other failure reads as "not logged in" too: a needless login costs one glance at an
- * "already signed in" message. The spawn path (`checkSbxReady`) uses `listSandboxes` instead,
- * which is the same `sbx ls`.
- */
-export async function checkSbxLoggedIn(): Promise<boolean> {
-  return (await runSbx(["ls"])).ok;
-}
-
 /** `sbx login` opens the OAuth page in the browser itself and waits on its own callback; no
  *  console needed. */
 export async function runSbxLogin(): Promise<boolean> {
   return (await runSbx(["login"], { cancellable: true })).ok;
-}
-
-/**
- * Whether the machine-wide network policy has been initialized: `sbx create` and `sbx policy
- * ls` both fail with "global network policy has not been initialized" until `sbx policy init`
- * has run once. Only meaningful after `checkSbxLoggedIn`, since the same probe also fails when
- * signed out.
- */
-export async function checkSbxPolicyInitialized(): Promise<boolean> {
-  return (await runSbx(["policy", "ls"])).ok;
 }
 
 /**
@@ -204,30 +170,63 @@ type SandboxList = Map<string, string[]>;
  * question. Asked before every sandboxed spawn (`resolveSbxRun`).
  */
 export async function checkSbxReady(): Promise<{ notReady: string } | { sandboxes: SandboxList }> {
-  if (!(await isSbxInstalled())) {
+  // The spawn path, so no PATH re-read: on macOS/Linux that is a login shell per call.
+  const { status, sandboxes } = await probeSbx(false);
+  if (!status.installed) {
     return { notReady: "SBX is not installed (or no longer on PATH)" };
   }
-  const sandboxes = await listSandboxes();
-  if (!sandboxes) {
+  if (!status.loggedIn || !sandboxes) {
     return { notReady: "SBX is not signed in to Docker" };
   }
-  if (!(await checkSbxPolicyInitialized())) {
+  if (!status.policyInitialized) {
     return { notReady: "SBX's network policy is not set up" };
   }
   return { sandboxes };
 }
 
 /**
- * Whether any of this account's policies is org-managed. `sbx policy ls`'s SOURCE column reads
- * "local" or "kit" for an ungoverned account (measured, 0.42.1); Docker's docs say a governed
- * one reads "Managed by <org>". Unverified against a real governed account, so governance is
- * only detected: the sbx-settings dialog shows a wall instead of its fields (a managed
- * filesystem policy allows no local mount). Cached for the process's lifetime.
+ * Everything the sbx-settings dialog asks before it shows its fields, in one call. PATH is
+ * re-read first: "Check again" is pressed right after installing. Nothing here is cached —
+ * sbx is installed, signed into and governed from outside tet at any time.
  */
-let governed: Promise<boolean> | undefined;
-export function checkSbxGoverned(): Promise<boolean> {
-  governed ??= runSbx(["policy", "ls"]).then((result) => /managed by/i.test(result.stdout));
-  return governed;
+export async function readSbxStatus(): Promise<SbxStatus> {
+  return (await probeSbx(true)).status;
+}
+
+/**
+ * The one implementation behind both. Probes in order and stops at the first "no", since each
+ * question is only meaningful once the one before it is answered: `sbx policy ls` fails when
+ * signed out too. Three processes at most, and `policy ls` answers two questions at once — its
+ * exit code whether the policy is initialized, its output whether an organization manages it.
+ *
+ * `sbx ls` is the sign-in probe: side-effect-free, exits 1 with "Not authenticated to Docker"
+ * when signed out, and its listing is what `prepareSbxRun` asks for next. Not `sbx policy ls`:
+ * that also exits 1 on a signed-in account without a policy. Every other failure reads as "not
+ * signed in" too — a needless login costs one glance at an "already signed in" message.
+ *
+ * `sbx policy ls`'s SOURCE column reads "local" or "kit" for an ungoverned account (measured,
+ * 0.42.1); Docker's docs say a governed one reads "Managed by <org>". Unverified against a real
+ * governed account, so governance is only detected: the dialog shows a wall instead of its
+ * fields, a managed filesystem policy allowing no local mount.
+ */
+async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList }> {
+  const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, governed: false };
+  if (refreshPath) {
+    await augmentAgentPath();
+  }
+  status.installed = await isSbxInstalled();
+  if (!status.installed) {
+    return { status };
+  }
+  const sandboxes = await listSandboxes();
+  status.loggedIn = sandboxes !== undefined;
+  if (!status.loggedIn) {
+    return { status };
+  }
+  const policy = await runSbx(["policy", "ls"]);
+  status.policyInitialized = policy.ok;
+  status.governed = policy.ok && /managed by/i.test(policy.stdout);
+  return { status, sandboxes };
 }
 
 /** Cached per app run: once the rule is there, it stays. */
@@ -496,7 +495,7 @@ const launcherWritten = new Set<string>();
 
 /**
  * `sbx ls --json` as name → workspaces, or undefined when sbx could not answer — signed out,
- * `sbx ls` exits 1 (checkSbxLoggedIn). One process for every sandbox at once.
+ * `sbx ls` exits 1 (see probeSbx). One process for every sandbox at once.
  */
 async function listSandboxes(): Promise<SandboxList | undefined> {
   const result = await runSbx(["ls", "--json"]);

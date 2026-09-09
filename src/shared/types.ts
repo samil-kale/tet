@@ -120,6 +120,16 @@ export interface SbxProjectConfig {
   hosts: string[];
 }
 
+/** What the sbx-settings dialog asks before it shows its fields — see sbx.ts's readSbxStatus.
+ *  Each answer is only meaningful when the one above it is true. */
+export interface SbxStatus {
+  installed: boolean;
+  loggedIn: boolean;
+  policyInitialized: boolean;
+  /** An organization manages one of the account's policies; the dialog shows a wall instead. */
+  governed: boolean;
+}
+
 /** A project with no `sbx` section in its tet.json, and what the dialog mounts with. */
 export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
   enabled: false,

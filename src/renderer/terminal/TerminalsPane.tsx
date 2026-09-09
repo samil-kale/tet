@@ -214,8 +214,14 @@ export const TerminalsPane = memo(function TerminalsPane({
     [onPresetChange, project.id]
   );
   const chrome = useMemo<PaneChrome>(
-    () => ({ gitOpen, onToggleGit }),
-    [gitOpen, onToggleGit]
+    () => ({
+      gitOpen,
+      onToggleGit,
+      onBrowseFiles: browseFiles,
+      onPresetChange: onPresetChangeHere,
+      onOpenSettings
+    }),
+    [gitOpen, onToggleGit, browseFiles, onPresetChangeHere, onOpenSettings]
   );
   const onActivate = useCallback(
     (paneId: PaneId, tabId: string) => onActivateTab(project.id, tabId, paneId),
@@ -354,10 +360,6 @@ export const TerminalsPane = memo(function TerminalsPane({
       markedTabIds={markedTabIds}
       waitingTabIds={waitingTabIds}
       chrome={first ? chrome : undefined}
-      // The picker sits beside the git toggle, on pane "a" — the same pane `chrome` is on.
-      onPresetChange={first ? onPresetChangeHere : undefined}
-      onBrowseFiles={first ? browseFiles : undefined}
-      onOpenSettings={first ? onOpenSettings : undefined}
       // Pane "a" also carries whatever project-wide reason has no tab of its own to point at.
       showProgress={(first && externalBusy) || (startingHere[paneId] ?? false)}
       dragOver={dragOverPane === paneId}

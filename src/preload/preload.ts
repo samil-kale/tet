@@ -22,12 +22,9 @@ const api: TETApi = {
     reportLongTask: (ms, context) => ipcRenderer.send("app:long-task", ms, context)
   },
   sbx: {
-    checkInstalled: () => ipcRenderer.invoke("sbx:check-installed"),
-    checkLoggedIn: () => ipcRenderer.invoke("sbx:check-logged-in"),
+    status: () => ipcRenderer.invoke("sbx:status"),
     login: () => ipcRenderer.invoke("sbx:login"),
-    checkPolicyInitialized: () => ipcRenderer.invoke("sbx:check-policy-initialized"),
     initPolicy: () => ipcRenderer.invoke("sbx:init-policy"),
-    checkGoverned: () => ipcRenderer.invoke("sbx:check-governed"),
     cancelSetup: () => ipcRenderer.send("sbx:cancel-setup"),
     getConfig: (projectId) => ipcRenderer.invoke("sbx:get-config", projectId),
     saveConfig: (projectId, request) => ipcRenderer.invoke("sbx:save-config", projectId, request)
@@ -89,9 +86,8 @@ const api: TETApi = {
     addFolder: (projectId, folderPath) => ipcRenderer.invoke("repo:add-folder", projectId, folderPath),
     removeFolder: (projectId, folderPath) => ipcRenderer.invoke("repo:remove-folder", projectId, folderPath),
     excludePath: (projectId, relPath) => ipcRenderer.invoke("repo:exclude-path", projectId, relPath),
-    setExcludeGitIgnore: (projectId, value) => ipcRenderer.invoke("repo:set-exclude-git-ignore", projectId, value),
-    setCompactFolders: (projectId, value) => ipcRenderer.invoke("repo:set-compact-folders", projectId, value),
-    setSortOrder: (projectId, value) => ipcRenderer.invoke("repo:set-sort-order", projectId, value),
+    setExplorerSetting: (projectId, key, value) =>
+      ipcRenderer.invoke("repo:set-explorer-setting", projectId, key, value),
     diff: (projectId, filePath, options) => ipcRenderer.invoke("repo:diff", projectId, filePath, options),
     fileLines: (projectId, filePath, from, to) =>
       ipcRenderer.invoke("repo:file-lines", projectId, filePath, from, to),

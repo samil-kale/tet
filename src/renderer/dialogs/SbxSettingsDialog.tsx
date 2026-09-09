@@ -56,28 +56,33 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
 
-  /** Installed → signed in → policy → saved config. Run on mount and by "Check again". */
+  /** Installed → signed in → policy → saved config. Run on mount and by "Check again". One
+   *  status call answers the first three; signing in or setting the policy re-asks, both being
+   *  the kind of thing that changes the answer. */
   const setup = async (): Promise<void> => {
     setPhase({ kind: "checking" });
-    if (!(await window.tet.sbx.checkInstalled())) {
+    let status = await window.tet.sbx.status();
+    if (!status.installed) {
       setPhase({ kind: "not-installed" });
       return;
     }
-    if (!(await window.tet.sbx.checkLoggedIn())) {
+    if (!status.loggedIn) {
       setPhase({ kind: "signing-in" });
       if (!(await window.tet.sbx.login())) {
         setPhase({ kind: "failed", message: "SBX login failed." });
         return;
       }
+      status = await window.tet.sbx.status();
     }
-    if (!(await window.tet.sbx.checkPolicyInitialized())) {
+    if (!status.policyInitialized) {
       setPhase({ kind: "initializing-policy" });
       if (!(await window.tet.sbx.initPolicy())) {
         setPhase({ kind: "failed", message: "Could not set up SBX's network policy." });
         return;
       }
+      status = await window.tet.sbx.status();
     }
-    if (await window.tet.sbx.checkGoverned()) {
+    if (status.governed) {
       setPhase({ kind: "governed" });
       return;
     }

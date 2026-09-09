@@ -53,10 +53,13 @@ function formatIso(ms: number): string {
   );
 }
 
-/** What only the first pane of a split project shows — the git toggle. */
+/** The one row of icon buttons, carried by pane "a" alone whatever the preset. */
 export interface PaneChrome {
   gitOpen: boolean;
   onToggleGit: () => void;
+  onBrowseFiles: () => void;
+  onPresetChange: (preset: SplitPreset) => void;
+  onOpenSettings: () => void;
 }
 
 interface PaneProps {
@@ -78,14 +81,8 @@ interface PaneProps {
   onFocus: (paneId: PaneId) => void;
   markedTabIds: string[];
   waitingTabIds: string[];
-  /** Present only for the pane that carries the project's shared chrome — see `PaneChrome`. */
+  /** Present only on pane "a", which carries the project's shared chrome — see `PaneChrome`. */
   chrome?: PaneChrome;
-  /** The layout picker, right of the browse-files button. Present only on pane "a". */
-  onPresetChange?: (preset: SplitPreset) => void;
-  /** Browsing the repository's files, right of the git toggle. Present only on pane "a". */
-  onBrowseFiles?: () => void;
-  /** The settings, right of the layout picker. Present only on pane "a". */
-  onOpenSettings?: () => void;
   /** One of this pane's tabs starting, or — only where `chrome` is — a project-wide reason. */
   showProgress: boolean;
   /**
@@ -129,9 +126,6 @@ export const Pane = memo(function Pane({
   markedTabIds,
   waitingTabIds,
   chrome,
-  onPresetChange,
-  onBrowseFiles,
-  onOpenSettings,
   showProgress,
   dragOver,
   onDragStart,
@@ -346,11 +340,11 @@ export const Pane = memo(function Pane({
     }));
 
   const presetEntries = (): ContextMenuEntry[] =>
-    onPresetChange
+    chrome
       ? PRESETS.map((value) => ({
           label: PRESET_LABELS[value],
           icon: <PresetIcon preset={value} className="tab-icon" />,
-          run: () => onPresetChange(value)
+          run: () => chrome.onPresetChange(value)
         }))
       : [];
 
@@ -397,45 +391,36 @@ export const Pane = memo(function Pane({
       onDragEnd={onDragEnd}
     >
       <div className={`tab-strip${chrome?.gitOpen ? " git-open" : ""}`}>
-        {/* Window chrome rather than tabs — the git toggle, browse-files, the layout picker and
-            settings. Present only on pane "a". */}
-        {(chrome || onPresetChange) && (
+        {/* Window chrome rather than tabs, on pane "a" alone. */}
+        {chrome && (
           <div className="tab-strip-actions">
-            {chrome && (
-              <button
-                className={`icon-button${chrome.gitOpen ? " active" : ""}`}
-                onClick={chrome.onToggleGit}
-                title={chrome.gitOpen ? "Hide the repository" : "Show the repository"}
-              >
-                <GitIcon />
-              </button>
-            )}
-            {onBrowseFiles && (
-              <button className="icon-button" title="Browse files" onClick={onBrowseFiles}>
-                <FilesIcon />
-              </button>
-            )}
-            {onPresetChange && (
-              <button
-                className="icon-button"
-                title="Split layout"
-                onMouseDown={(event) => {
-                  event.stopPropagation();
-                  if (layoutMenu) {
-                    return;
-                  }
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  setLayoutMenu({ x: rect.left, y: rect.bottom + 6 });
-                }}
-              >
-                <PresetIcon preset={preset} />
-              </button>
-            )}
-            {onOpenSettings && (
-              <button className="icon-button" title="Settings" onClick={onOpenSettings}>
-                <GearIcon />
-              </button>
-            )}
+            <button
+              className={`icon-button${chrome.gitOpen ? " active" : ""}`}
+              onClick={chrome.onToggleGit}
+              title={chrome.gitOpen ? "Hide the repository" : "Show the repository"}
+            >
+              <GitIcon />
+            </button>
+            <button className="icon-button" title="Browse files" onClick={chrome.onBrowseFiles}>
+              <FilesIcon />
+            </button>
+            <button
+              className="icon-button"
+              title="Split layout"
+              onMouseDown={(event) => {
+                event.stopPropagation();
+                if (layoutMenu) {
+                  return;
+                }
+                const rect = event.currentTarget.getBoundingClientRect();
+                setLayoutMenu({ x: rect.left, y: rect.bottom + 6 });
+              }}
+            >
+              <PresetIcon preset={preset} />
+            </button>
+            <button className="icon-button" title="Settings" onClick={chrome.onOpenSettings}>
+              <GearIcon />
+            </button>
           </div>
         )}
         <div className="tabs" ref={strip}>

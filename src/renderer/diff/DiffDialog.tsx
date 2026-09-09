@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { ExplorerListing, FileChange, FileContent, FileDiff, Project } from "../../shared/types";
 import { ChangesList, confirmDiscard, type FileAct } from "../git/ChangesList";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
@@ -50,8 +51,6 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
   const change = path ? changes.find((entry) => entry.path === path) : undefined;
   const diffable = change !== undefined;
 
-  const [diff, setDiff] = useState<FileDiff | null>(null);
-  const [loading, setLoading] = useState(true);
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   /** `DiffView`'s two waits: reading the diff and colouring it. */
   const [diffBusy, setDiffBusy] = useState(false);
@@ -67,8 +66,6 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     setMode(diffable ? "diff" : "edit");
   }
 
-  const [file, setFile] = useState<FileContent | null>(null);
-  const [fileLoading, setFileLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editorLoading, setEditorLoading] = useState(false);
@@ -79,71 +76,17 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
    *  modified→modified isn't one, so the watcher alone would not reload the diff. */
   const [savedAt, setSavedAt] = useState(0);
 
-  const [explorerListing, setExplorerListing] = useState<ExplorerListing | undefined>(undefined);
-  const [listing, setListing] = useState(false);
-  /** Bumped by the Explorer tree's create/rename/delete: an empty new folder never touches git
-   *  status, so `changesKey` below does not catch it. */
-  const [explorerVersion, setExplorerVersion] = useState(0);
   const [treeHeight, setTreeHeight] = usePaneSize("diff-explorer", 300, MIN_PANE_HEIGHT);
   const [filesWidth, setFilesWidth] = usePaneSize("diff-files", 260, MIN_PANE_WIDTH);
   const root = useRef<HTMLDivElement>(null);
 
+  const { diff, loading } = useDiff(project.id, path, diffable, ignoreWhitespace, version, savedAt);
+  // The file is read when there is nothing to diff or the user switched to Edit.
+  const wantsFile = path !== null && (!diffable || mode === "edit");
+  const { file, setFile, loading: fileLoading } = useFileContent(project.id, path, wantsFile);
+
   const canEdit = diffable ? change?.status !== "deleted" && !diff?.binary : !file?.binary && !file?.tooLarge;
   const effective: "diff" | "edit" = diffable ? (canEdit ? mode : "diff") : "edit";
-
-  // Reloads on the file, the repository state, the whitespace switch or a save. A file with
-  // nothing to diff costs no git process just for being looked at.
-  useEffect(() => {
-    if (!path || !diffable) {
-      setDiff(null);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    void window.tet.repository.diff(project.id, path, { ignoreWhitespace }).then((result) => {
-      if (cancelled) {
-        return;
-      }
-      if (result.error) {
-        notify("error", `${result.path}: ${result.error}`);
-      }
-      setDiff(result);
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [project.id, path, version, ignoreWhitespace, diffable, savedAt]);
-
-  // The file's content, read when there is nothing to diff or the user switched to Edit. Not on
-  // `version`/`savedAt`: a change from outside is folded into the open model in place below.
-  const wantsFile = path !== null && (!diffable || mode === "edit");
-  useEffect(() => {
-    if (!path || !wantsFile) {
-      setFile(null);
-      return;
-    }
-    let cancelled = false;
-    // Cleared before every read: switching A→B and back fast enough lands here with `file` still
-    // holding A's earlier read, and an editor mounted from that copy but handed the fresh read's
-    // mtime would save stale text right past the mtime guard.
-    setFile(null);
-    setFileLoading(true);
-    void window.tet.repository.readFile(project.id, path).then((result) => {
-      if (cancelled) {
-        return;
-      }
-      if (result.error) {
-        notify("error", `${result.path}: ${result.error}`);
-      }
-      setFile(result);
-      setFileLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [project.id, path, wantsFile]);
 
   // An outside edit while the file sits clean in the editor, folded into the model in place so
   // undo history and the cursor survive. Left alone while dirty; keyed on `version` alone.
@@ -164,39 +107,7 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     };
   }, [version]);
 
-  // The Explorer tree — read on open, whenever a file starts or stops existing, after the tree's
-  // own create/rename/delete, and when tet.json changed, the listing carrying its `folders`,
-  // `exclude` and sort settings. A plain edit leaves `changes` at "modified", so it does not.
-  useEffect(
-    () =>
-      window.tet.commands.onChanged((payload) => {
-        if (payload.projectId === project.id) {
-          setExplorerVersion((count) => count + 1);
-        }
-      }),
-    [project.id]
-  );
-  const changesKey = useMemo(
-    () =>
-      changes
-        .filter((entry) => entry.status !== "modified")
-        .map((entry) => entry.path)
-        .join("\n"),
-    [changes]
-  );
-  useEffect(() => {
-    let cancelled = false;
-    setListing(true);
-    void window.tet.repository.listExplorer(project.id).then((result) => {
-      if (!cancelled) {
-        setExplorerListing(result);
-        setListing(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [project.id, changesKey, explorerVersion]);
+  const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, changes);
 
   // Takes the keyboard while it is up and hands it back: xterm swallows every key it is given,
   // arrows first of all, so a terminal left focused would eat ↑/↓.
@@ -327,7 +238,7 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
               selected={path}
               onOpen={(next) => void requestOpen(next)}
               act={act}
-              onExplorerChanged={() => setExplorerVersion((count) => count + 1)}
+              onExplorerChanged={refreshExplorer}
             />
           </div>
           <Sash orientation="horizontal" size={treeHeight} min={MIN_PANE_HEIGHT} minOther={MIN_PANE_HEIGHT} onResize={setTreeHeight} />
@@ -442,3 +353,130 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
     </div>
   );
 });
+
+
+/**
+ * The file's diff, reloaded on the file, the repository state, the whitespace switch or a save.
+ * A file with nothing to diff costs no git process just for being looked at.
+ */
+function useDiff(
+  projectId: string,
+  path: string | null,
+  diffable: boolean,
+  ignoreWhitespace: boolean,
+  version: string,
+  savedAt: number
+): { diff: FileDiff | null; loading: boolean } {
+  const [diff, setDiff] = useState<FileDiff | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!path || !diffable) {
+      setDiff(null);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    void window.tet.repository.diff(projectId, path, { ignoreWhitespace }).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      if (result.error) {
+        notify("error", `${result.path}: ${result.error}`);
+      }
+      setDiff(result);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, path, version, ignoreWhitespace, diffable, savedAt]);
+  return { diff, loading };
+}
+
+/**
+ * The file as it is on disk, read only while `wanted`. Not keyed on the repository state: a change
+ * from outside is folded into the open editor model in place, and a save updates what is held
+ * here — hence `setFile`.
+ */
+function useFileContent(
+  projectId: string,
+  path: string | null,
+  wanted: boolean
+): { file: FileContent | null; setFile: Dispatch<SetStateAction<FileContent | null>>; loading: boolean } {
+  const [file, setFile] = useState<FileContent | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!path || !wanted) {
+      setFile(null);
+      return;
+    }
+    let cancelled = false;
+    // Cleared before every read: switching A→B and back fast enough lands here with `file` still
+    // holding A's earlier read, and an editor mounted from that copy but handed the fresh read's
+    // mtime would save stale text right past the mtime guard.
+    setFile(null);
+    setLoading(true);
+    void window.tet.repository.readFile(projectId, path).then((result) => {
+      if (cancelled) {
+        return;
+      }
+      if (result.error) {
+        notify("error", `${result.path}: ${result.error}`);
+      }
+      setFile(result);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, path, wanted]);
+  return { file, setFile, loading };
+}
+
+/**
+ * The Explorer tree's listing, which carries the `folders`, `exclude` and sort settings with it.
+ * Re-read whenever a file starts or stops existing, when tet.json changed, and through
+ * `refreshExplorer` after the tree's own create/rename/delete — an empty new folder never touches
+ * git status, and a plain edit leaves `changes` at "modified", so neither shows up there.
+ */
+function useExplorerListing(
+  projectId: string,
+  changes: FileChange[]
+): { explorerListing: ExplorerListing | undefined; listing: boolean; refreshExplorer: () => void } {
+  const [explorerListing, setExplorerListing] = useState<ExplorerListing | undefined>(undefined);
+  const [listing, setListing] = useState(false);
+  const [explorerVersion, setExplorerVersion] = useState(0);
+  const refreshExplorer = useCallback(() => setExplorerVersion((count) => count + 1), []);
+  useEffect(
+    () =>
+      window.tet.commands.onChanged((payload) => {
+        if (payload.projectId === projectId) {
+          setExplorerVersion((count) => count + 1);
+        }
+      }),
+    [projectId]
+  );
+  const changesKey = useMemo(
+    () =>
+      changes
+        .filter((entry) => entry.status !== "modified")
+        .map((entry) => entry.path)
+        .join("\n"),
+    [changes]
+  );
+  useEffect(() => {
+    let cancelled = false;
+    setListing(true);
+    void window.tet.repository.listExplorer(projectId).then((result) => {
+      if (!cancelled) {
+        setExplorerListing(result);
+        setListing(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, changesKey, explorerVersion]);
+  return { explorerListing, listing, refreshExplorer };
+}

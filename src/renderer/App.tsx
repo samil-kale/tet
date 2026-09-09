@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types";
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
@@ -25,21 +25,8 @@ import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-view
 import { PlusIcon } from "./ui/icons";
 import { sameList } from "./identity";
 import { matchesShortcut } from "./shortcuts";
-import {
-  activateTab as activateTabLayout,
-  applyPreset,
-  collapseClosed,
-  collapseEmpty,
-  defaultLayout,
-  loadLayout,
-  paneOf,
-  placeCommandTab,
-  saveLayout,
-  serializeLayout,
-  snapTab as snapTabLayout,
-  visibleTabIds
-} from "./terminal/pane-layout";
-import type { PaneId, ProjectLayout, SnapTransition, SplitPreset } from "./terminal/pane-layout";
+import { defaultLayout, paneOf, visibleTabIds } from "./terminal/pane-layout";
+import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 
 /** A little over `.git-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const GIT_SLIDE_MS = 180;
@@ -64,20 +51,9 @@ function lastDiffPathKey(projectId: string): string {
   return `tet.layout.diff.${projectId}.lastPath`;
 }
 
-/** Shared instances, so a pane's props stay identical for a project that has none. */
-const NO_TABS: TerminalDescriptor[] = [];
+/** Shared instance, so a pane's props stay identical for a project with none. */
 const NO_IDS: string[] = [];
 const DEFAULT_LAYOUT = defaultLayout();
-
-/**
- * A project's layout: what is held, else what the last run left on disk. Loaded at first sight,
- * not up front: a project's tabs can arrive before the project list, and a layout written for them
- * then would overwrite a later restore. `localStorage` is synchronous, so reading it in an updater
- * is safe.
- */
-function layoutOf(layouts: Record<string, ProjectLayout>, projectId: string): ProjectLayout {
-  return layouts[projectId] ?? loadLayout(projectId);
-}
 
 export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -92,18 +68,18 @@ export function App() {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   /**
-   * Each project's split state: preset, focused pane, tab→pane, and each pane's active tab. Held
-   * here because the shortcuts and the marks/seen logic need what is on screen across every pane —
-   * see "Split view" in CLAUDE.md.
-   */
-  const [layouts, setLayouts] = useState<Record<string, ProjectLayout>>({});
-  /** The tab list `layouts` was last normalized against, per project — see `normalizeLayout`. */
-  const previousTabsRef = useRef<Record<string, TerminalDescriptor[]>>({});
-  /**
    * Which projects still have something starting up (bootstrap listing, a CLI booting). Read by
-   * the active project's progress bar and by the layout persistence (see `settledProjects`).
+   * the active project's progress bar and by the layout persistence.
    */
   const [starting, setStarting] = useState<Record<string, boolean>>({});
+  /**
+   * Each project's split state, held here rather than in `TerminalsPane` because the shortcuts and
+   * the marks/seen logic need what is on screen across every pane — see "Split view" in CLAUDE.md.
+   */
+  const { layouts, activateTab, snapTab, focusPane, setPreset, placeTab, forgetLayout } = useProjectLayouts(
+    tabs,
+    starting
+  );
   /**
    * Projects with a branch command in flight. Per project, not one slot for the window: a fetch
    * finishing in A must not free B's tree.
@@ -237,79 +213,6 @@ export function App() {
     []
   );
 
-  /**
-   * Reconciles every project's layout with its tab list: a closed tab drops out of its pane, a pane
-   * left empty goes to null, an unassigned tab settles into the focused pane (`normalizeLayout`;
-   * `previousTabsRef` tells "closed" from "not created yet").
-   *
-   * A layout effect: a project's first tabs are its layout's first sight (`layoutOf`), and a
-   * passive effect would paint one frame with `DEFAULT_LAYOUT`. Cheap: an unchanged layout is the
-   * same object.
-   */
-  useLayoutEffect(() => {
-    // Advanced outside the updater, which may run later than queued and must carry no side effect.
-    const previousTabs = previousTabsRef.current;
-    previousTabsRef.current = tabs;
-    setLayouts((current) => {
-      let next: Record<string, ProjectLayout> | undefined;
-      for (const projectId of Object.keys(tabs)) {
-        // The close trigger of the collapse; the move trigger is `activateTab` below.
-        const layout = collapseClosed(
-          layoutOf(current, projectId),
-          tabs[projectId] ?? NO_TABS,
-          previousTabs[projectId] ?? NO_TABS
-        );
-        if (layout !== current[projectId]) {
-          next ??= { ...current };
-          next[projectId] = layout;
-        }
-      }
-      return next ?? current;
-    });
-  }, [tabs]);
-
-  /**
-   * Persists every project's layout when what would be written changes. On `tabs` too: the output
-   * is keyed by session id (`serializeLayout`), so a push adding one to a tab changes it without
-   * touching the layout. Compared as the written string — a spinner tick changes `tabs` many
-   * times a minute.
-   */
-  const savedLayoutsRef = useRef<Record<string, string>>({});
-  /**
-   * Projects whose bootstrap has once finished. Tabs arrive agent by agent while it runs, and
-   * `serializeLayout` trims to the tabs that exist — written during that window, the layout would
-   * drop every pane whose sessions had not been listed yet, permanently on quit. From the first
-   * settle on it is written regardless: a CLI booting is not a listing in flight.
-   */
-  const settledProjects = useRef(new Set<string>());
-  useEffect(() => {
-    for (const [projectId, isStarting] of Object.entries(starting)) {
-      if (isStarting || settledProjects.current.has(projectId)) {
-        continue;
-      }
-      settledProjects.current.add(projectId);
-      // Every pane of a restored layout now either has its sessions or never will: collapse what is
-      // empty before the layout is first written.
-      setLayouts((current) => {
-        const layout = layoutOf(current, projectId);
-        const collapsed = collapseEmpty(layout, tabsRef.current[projectId] ?? NO_TABS);
-        return collapsed === layout ? current : { ...current, [projectId]: collapsed };
-      });
-    }
-  }, [starting]);
-  useEffect(() => {
-    for (const [projectId, layout] of Object.entries(layouts)) {
-      if (!settledProjects.current.has(projectId)) {
-        continue;
-      }
-      const serialized = serializeLayout(layout, tabs[projectId] ?? NO_TABS);
-      if (savedLayoutsRef.current[projectId] !== serialized) {
-        savedLayoutsRef.current[projectId] = serialized;
-        saveLayout(projectId, serialized);
-      }
-    }
-  }, [layouts, tabs, starting]);
-
   /** What the add-repository dialog ends in, whichever tab produced the project. */
   const projectAdded = useCallback((project: Project) => {
     setProjects((current) => (current.some((entry) => entry.id === project.id) ? current : [...current, project]));
@@ -320,16 +223,13 @@ export function App() {
   const forgetProject = useCallback((projectId: string) => {
     setStates((current) => forget(current, projectId));
     setTabs((current) => forget(current, projectId));
-    setLayouts((current) => forget(current, projectId));
     setStarting((current) => forget(current, projectId));
     setSandboxed((current) => forget(current, projectId));
-    delete previousTabsRef.current[projectId];
-    delete savedLayoutsRef.current[projectId];
-    settledProjects.current.delete(projectId);
+    forgetLayout(projectId);
     busyCursor.current = forget(busyCursor.current, projectId);
     // The xterm instances live outside React; this is the one moment a project ends for good.
     disposeProjectTerminals(projectId);
-  }, []);
+  }, [forgetLayout]);
 
   const closeProject = useCallback(
     async (projectId: string) => {
@@ -405,69 +305,13 @@ export function App() {
     []
   );
 
-  /**
-   * Makes a tab the active one of a pane — a click, a move, a new tab. `paneId` pins the pane;
-   * left out, it resolves through `paneOf` (a tab shown from a project row's mark, a saved
-   * command, `showTab`): where it already lives, else the focused pane. The move and the collapse
-   * when it empties a pane are the model's `activateTab`; the other collapse trigger is a close, in
-   * the reconcile effect. A snap (`snapTab`) is neither.
-   */
-  const activateTab = useCallback((projectId: string, tabId: string, paneId?: PaneId) => {
-    setLayouts((current) => {
-      const layout = layoutOf(current, projectId);
-      return {
-        ...current,
-        [projectId]: activateTabLayout(layout, tabId, paneId ?? paneOf(layout, tabId), tabsRef.current[projectId] ?? [])
-      };
-    });
-  }, []);
-
-  /** A tab dropped on a snap zone: preset switch and move in one write — see `snapTab`. */
-  const snapTab = useCallback((projectId: string, tabId: string, transition: SnapTransition) => {
-    setLayouts((current) => ({
-      ...current,
-      [projectId]: snapTabLayout(layoutOf(current, projectId), tabId, transition, tabsRef.current[projectId] ?? [])
-    }));
-  }, []);
-
-  /** A pane taking focus without its active tab changing — a click on its terminal. */
-  const focusPane = useCallback((projectId: string, paneId: PaneId) => {
-    setLayouts((current) => {
-      const layout = layoutOf(current, projectId);
-      return layout.focusedPane === paneId ? current : { ...current, [projectId]: { ...layout, focusedPane: paneId } };
-    });
-  }, []);
-
-  /** The layout dropdown: switches a project's preset, redistributing panes that no longer exist. */
-  const setPreset = useCallback(
-    (projectId: string, preset: SplitPreset) => {
-      setLayouts((current) => ({
-        ...current,
-        [projectId]: applyPreset(layoutOf(current, projectId), preset, tabsRef.current[projectId] ?? [])
-      }));
-    },
-    []
-  );
-
-  /**
-   * Shows a tab opened from outside its own pane. A saved command's tab goes to the pane that
-   * command last ran in (`placeCommandTab`); the command line comes with the call, or off the tab
-   * list for one the control channel opened (its push precedes the show).
-   */
+  /** Shows a tab opened from outside its own pane, bringing its project to the front first. */
   const showTab = useCallback(
     (projectId: string, tabId: string, command?: string) => {
       setActiveProjectId(projectId);
-      const line = command ?? tabsRef.current[projectId]?.find((tab) => tab.tabId === tabId)?.command;
-      if (line === undefined) {
-        activateTab(projectId, tabId);
-        return;
-      }
-      setLayouts((current) => ({
-        ...current,
-        [projectId]: placeCommandTab(layoutOf(current, projectId), tabId, line, tabsRef.current[projectId] ?? [])
-      }));
+      placeTab(projectId, tabId, command);
     },
-    [activateTab]
+    [placeTab]
   );
 
   // A tab the control channel opened, shown like a saved command's: drawing it starts its process.

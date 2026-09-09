@@ -206,10 +206,10 @@ export class ProjectSessionManager {
   private readonly sessions = new Map<string, TerminalSession>();
   private readonly runtimes = new Map<AgentId, AgentRuntime>();
   /** Tabs whose session is being constructed; a second resize must not start a second one. */
-  private readonly starting = new Map<string, { cols: number; rows: number }>();
+  private readonly starting = new Set<string>();
   /**
-   * The last size the renderer fitted each tab to. `this.starting` holds one only while a start
-   * is underway; a restart happens later, and no fit follows it (the element is already laid out).
+   * The last size the renderer fitted each tab to, and the size every spawn uses. A restart
+   * happens later than the fit, and none follows it — the element is already laid out.
    */
   private readonly lastSizes = new Map<string, { cols: number; rows: number }>();
   /** Session ids whose removal is still in flight — reconcile must not re-claim them. */
@@ -566,27 +566,28 @@ export class ProjectSessionManager {
     if (!tab) {
       return;
     }
-    this.startTab(tab, cols, rows);
+    this.startTab(tab);
   }
 
   /**
    * Everything one tab's first spawn needs: the agent's setup, its sandbox, then the process at
-   * the size given. Shared by `handleResize` and `restartTab`.
+   * the tab's last fitted size. Shared by `handleResize` and `restartTab`, both of which have
+   * put that size in `lastSizes` first.
    */
-  private startTab(tab: TabState, cols: number, rows: number): void {
+  private startTab(tab: TabState): void {
     const tabId = tab.tabId;
-    // The agent's setup may still be running; remember the size and start once it settles.
-    const pending = this.starting.get(tabId);
-    this.starting.set(tabId, { cols, rows });
-    if (pending) {
+    // The agent's setup may still be running; the resize that found it underway has already
+    // updated `lastSizes`, so the spawn below picks up the newest size.
+    if (this.starting.has(tabId)) {
       return;
     }
+    this.starting.add(tabId);
     // Released *after* the session is started: `startSession` acquires the same tab's next
     // indicator, and releasing first would flicker the bar off and on.
     this.acquireIndicator(tabId);
     void Promise.all([this.runtimeFor(tab.agentId).ready, this.resolveSbxRun(tab)])
       .then(([, sbxArgs]) => {
-        const dims = this.starting.get(tabId);
+        const dims = this.lastSizes.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
           // Closed while the setup ran: nothing left to start.
           return;
@@ -948,15 +949,14 @@ export class ProjectSessionManager {
       this.sessions.get(tabId)?.restart();
       return;
     }
-    const size = this.lastSizes.get(tabId);
-    if (!size || (tab.status !== "stopped" && tab.status !== "error")) {
+    if (!this.lastSizes.has(tabId) || (tab.status !== "stopped" && tab.status !== "error")) {
       return;
     }
     // `startTab` gives up on a tab that already has a session.
     this.sessions.delete(tabId);
     // The status stays until the new process reports its own, so a start that gives up again
     // still offers Restart.
-    this.startTab(tab, size.cols, size.rows);
+    this.startTab(tab);
   }
 
   /**

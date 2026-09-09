@@ -78,3 +78,59 @@ export async function readLinesBackwards(
     end = start;
   }
 }
+
+/**
+ * The per-agent half of a cached tail scan. Everything about the transcript's own format lives
+ * here at the call site; `scanTranscriptTail` owns only the file handling.
+ */
+export interface TailScan<T> {
+  /** Bytes read per chunk, and how far below an earlier scan the next one restarts. */
+  byteLimit: number;
+  /** Names the agent in the message a failed scan logs. */
+  label: string;
+  /** An empty result to fill. */
+  create: () => T;
+  /** Takes one chunk's lines into `tail`; true once nothing further is wanted. */
+  read: (lines: string[], tail: T) => boolean;
+  /** Runs after the backward read, before the merge below. */
+  finish?: (tail: T) => void;
+  /** Fills what this scan did not find from the scan before it. */
+  merge: (tail: T, previous: T) => void;
+}
+
+/**
+ * Reads a transcript backwards for whatever the agent's `read` is after, answering an unchanged
+ * file from `cache`. A file scanned before is only read from a chunk below where that scan
+ * ended, and what the new stretch does not hold comes from the old answer through `merge` — the
+ * overlap covers a line the earlier read may have caught half-written. The cache stays the
+ * caller's, which also evicts from it.
+ */
+export async function scanTranscriptTail<T>(
+  filePath: string,
+  cache: Map<string, { size: number; tail: T }>,
+  scan: TailScan<T>
+): Promise<T> {
+  const tail = scan.create();
+  let handle: fs.promises.FileHandle | undefined;
+  try {
+    handle = await fs.promises.open(filePath, "r");
+    const { size } = await handle.stat();
+    const cached = cache.get(filePath);
+    if (cached?.size === size) {
+      return cached.tail;
+    }
+    const previous = cached && cached.size < size ? cached : undefined;
+    const floor = previous ? Math.max(0, previous.size - scan.byteLimit) : 0;
+    await readLinesBackwards(handle, size, floor, scan.byteLimit, (lines) => scan.read(lines, tail));
+    scan.finish?.(tail);
+    if (previous) {
+      scan.merge(tail, previous.tail);
+    }
+    cache.set(filePath, { size, tail });
+  } catch (error) {
+    console.error(`[tet] ${scan.label} transcript scan failed:`, error);
+  } finally {
+    await handle?.close();
+  }
+  return tail;
+}

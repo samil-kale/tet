@@ -185,7 +185,7 @@ export function watchMarkers(
 }
 
 /** What a turn's three markers report into — the agent's callbacks on `AgentPaths`. */
-export interface TurnReporter {
+interface TurnReporter {
   onSessionBusy: (sessionId: string, at: number) => void;
   onSessionFinished: (sessionId: string, at: number) => void;
   onSessionWaiting: (sessionId: string, at: number) => void;

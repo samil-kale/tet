@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
 import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../../shared/types";
@@ -7,7 +7,6 @@ import type {
   AppSettings,
   ExplorerSettings,
   ExplorerSortOrder,
-  GitActionResult,
   NotificationSettings,
   Project,
   PromptId
@@ -61,6 +60,9 @@ const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "modified", label: "Modified" }
 ];
 
+/** The Files tab's own keys, one write each — in the order Save goes through them. */
+const EXPLORER_KEYS: (keyof ExplorerSettings)[] = ["excludeGitIgnore", "compactFolders", "sortOrder"];
+
 /** The Info tab's rows: tet, then what it runs on. */
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
   { key: "version", label: "TET" },
@@ -72,14 +74,18 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 
 /**
  * Everything tet keeps about itself rather than about one repository. Not part of Dialog.tsx:
- * this asks nothing — every switch applies the moment it is flipped.
+ * this asks nothing — it edits its own copy of the settings and writes on Save, like every
+ * other dialog. Cancel and Escape drop what was edited.
  */
 export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
+  const [saving, setSaving] = useState(false);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
+  /** What tet.json held when the dialog opened: Save writes only the keys that differ from it. */
+  const loadedExplorer = useRef<ExplorerSettings | null>(null);
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
@@ -87,33 +93,25 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     void window.tet.app.info().then(setInfo);
   }, []);
 
-  // The active project's Explorer settings — read on open and again whenever its tet.json
-  // changes underneath, whoever wrote it.
+  // Read once, on open. Nothing follows tet.json while the dialog stands: Save reaches the file
+  // through patchSetting (commands.ts), which reads it fresh and leaves every other key alone.
   useEffect(() => {
     if (!activeProject) {
+      loadedExplorer.current = null;
       setExplorerSettings(null);
       return;
     }
-    const projectId = activeProject.id;
-    void window.tet.repository.explorerSettings(projectId).then(setExplorerSettings);
-    return window.tet.commands.onChanged((payload) => {
-      if (payload.projectId === projectId) {
-        void window.tet.repository.explorerSettings(projectId).then(setExplorerSettings);
-      }
+    void window.tet.repository.explorerSettings(activeProject.id).then((view) => {
+      loadedExplorer.current = view;
+      setExplorerSettings(view);
     });
   }, [activeProject]);
 
   useEscape(onClose);
 
-  /** Applies a change the moment it is made: shown at once, written whole (see settings.ts). */
-  const patch = (change: (current: AppSettings) => Partial<AppSettings>): void => {
-    if (!settings) {
-      return;
-    }
-    const next: AppSettings = { ...settings, ...change(settings) };
-    setSettings(next);
-    void window.tet.settings.save(next);
-  };
+  /** Edits the dialog's own copy; settings.json is written whole on Save (see settings.ts). */
+  const patch = (change: (current: AppSettings) => Partial<AppSettings>): void =>
+    setSettings((current) => (current ? { ...current, ...change(current) } : current));
 
   const flip = (key: keyof NotificationSettings, value: boolean): void =>
     patch((current) => ({ notifications: { ...current.notifications, [key]: value } }));
@@ -126,20 +124,31 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyPrompt = (id: PromptId, text: string): void =>
     patch((current) => ({ prompts: { ...current.prompts, [id]: text === DEFAULT_PROMPTS[id] ? "" : text } }));
 
-  const updateExplorerSettings = <K extends keyof ExplorerSettings>(
-    key: K,
-    value: ExplorerSettings[K],
-    save: (projectId: string, value: ExplorerSettings[K]) => Promise<GitActionResult>
-  ): void => {
-    if (!activeProject || !explorerSettings) {
-      return;
+  const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
+    setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
+
+  /** One write of settings.json, then one of tet.json per Explorer key the dialog changed. */
+  const save = async (): Promise<void> => {
+    setSaving(true);
+    if (settings) {
+      await window.tet.settings.save(settings);
     }
-    setExplorerSettings({ ...explorerSettings, [key]: value });
-    void save(activeProject.id, value).then((result) => {
-      if (!result.ok) {
-        notify("error", result.error ?? "Could not update tet.json");
+    const loaded = loadedExplorer.current;
+    if (activeProject && explorerSettings && loaded) {
+      for (const key of EXPLORER_KEYS) {
+        if (explorerSettings[key] === loaded[key]) {
+          continue;
+        }
+        const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
+        if (!result.ok) {
+          notify("error", result.error ?? "Could not update tet.json");
+          setSaving(false);
+          return;
+        }
       }
-    });
+    }
+    setSaving(false);
+    onClose();
   };
 
   return (
@@ -148,9 +157,14 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       header={{ tabs: TABS, active: tab, onSelect: setTab }}
       className="wide settings-dialog"
       buttons={
-        <button type="button" className="button" onClick={onClose}>
-          Close
-        </button>
+        <>
+          <button type="button" className="button secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="button" disabled={saving} onClick={() => void save()}>
+            Save
+          </button>
+        </>
       }
     >
       {tab === "appearance" && (
@@ -214,13 +228,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <input
                   type="checkbox"
                   checked={explorerSettings.excludeGitIgnore}
-                  onChange={(event) =>
-                    updateExplorerSettings(
-                      "excludeGitIgnore",
-                      event.target.checked,
-                      window.tet.repository.setExcludeGitIgnore
-                    )
-                  }
+                  onChange={(event) => editExplorerSetting("excludeGitIgnore", event.target.checked)}
                 />
                 <span>Hide what git ignores too</span>
               </label>
@@ -228,13 +236,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <input
                   type="checkbox"
                   checked={explorerSettings.compactFolders}
-                  onChange={(event) =>
-                    updateExplorerSettings(
-                      "compactFolders",
-                      event.target.checked,
-                      window.tet.repository.setCompactFolders
-                    )
-                  }
+                  onChange={(event) => editExplorerSetting("compactFolders", event.target.checked)}
                 />
                 <span>Compact folders that only contain another folder into one row</span>
               </label>
@@ -242,13 +244,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <span>Sort order</span>
                 <Dropdown
                   value={explorerSettings.sortOrder}
-                  onChange={(order) =>
-                    updateExplorerSettings(
-                      "sortOrder",
-                      order as ExplorerSortOrder,
-                      window.tet.repository.setSortOrder
-                    )
-                  }
+                  onChange={(order) => editExplorerSetting("sortOrder", order as ExplorerSortOrder)}
                   options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
                 />
               </label>
@@ -279,8 +275,9 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               Reset to default
             </button>
           </div>
-          {/* Always the text the agent will get, never a placeholder. Live — read when the
-              commit-message suggestion is requested, unlike everything else here. */}
+          {/* Always the text the agent will get, never a placeholder. Read at the moment the
+              commit-message suggestion is asked for, so Save is all it takes — unlike
+              everything else here. */}
           <textarea
             className="settings-prompt"
             spellCheck={false}

@@ -11,7 +11,6 @@ import { installTuiConfig } from "./tui-config";
 
 /** What a background question's session is called, so it can be found and removed again. */
 const ASK_TITLE = "tet: background question";
-const OLD_ASK_TITLE = "tet: project commands";
 
 /** The host's plugin directory, shared across repositories — see plugin.ts for why. */
 function hostConfigDir(storageRoot: string): string {
@@ -42,7 +41,7 @@ export const opencodeAgent: AgentDefinition = {
     const output = await runOpencode(executable, cwd, null, ["session", "list", "--format", "json"]);
     const entries = (output.trim() ? JSON.parse(output) : []) as { id?: unknown; title?: unknown }[];
     for (const entry of entries) {
-      if (typeof entry.id === "string" && [ASK_TITLE, OLD_ASK_TITLE].includes(String(entry.title))) {
+      if (typeof entry.id === "string" && String(entry.title) === ASK_TITLE) {
         await runOpencode(executable, cwd, null, ["session", "delete", entry.id]).catch(() => undefined);
       }
     }

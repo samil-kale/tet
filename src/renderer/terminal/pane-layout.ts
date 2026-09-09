@@ -12,11 +12,11 @@ export type SplitPreset = "single" | "cols2" | "split-right" | "grid2x2";
 /** Every preset, in the order the layout menu lists them. */
 export const PRESETS: readonly SplitPreset[] = ["single", "cols2", "split-right", "grid2x2"];
 
-export function isPaneId(value: unknown): value is PaneId {
+function isPaneId(value: unknown): value is PaneId {
   return PANE_IDS.includes(value as PaneId);
 }
 
-export function isSplitPreset(value: unknown): value is SplitPreset {
+function isSplitPreset(value: unknown): value is SplitPreset {
   return PRESETS.includes(value as SplitPreset);
 }
 

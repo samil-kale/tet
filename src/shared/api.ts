@@ -9,7 +9,6 @@ import type {
   DiffOptions,
   ExplorerListing,
   ExplorerSettings,
-  ExplorerSortOrder,
   FileContent,
   FileDiff,
   FileWriteResult,
@@ -23,6 +22,7 @@ import type {
   RepositoryState,
   Requirements,
   SbxProjectConfig,
+  SbxStatus,
   StashCommand,
   TerminalDescriptor,
   TerminalOutput,
@@ -48,18 +48,13 @@ export interface TETApi {
   };
   /** Docker Sandboxes, opt-in per project — see the project row's "Enable sbx" entry. */
   sbx: {
-    /** Never cached, PATH re-read first — the dialog's "Check again"; never part of `Requirements.met`. */
-    checkInstalled(): Promise<boolean>;
-    /** Never cached — signing in or out happens outside tet at any time. */
-    checkLoggedIn(): Promise<boolean>;
+    /** Everything the dialog asks before showing its fields, in one call. Never cached, PATH
+     *  re-read first — "Check again" is pressed right after installing. */
+    status(): Promise<SbxStatus>;
     /** Opens the OAuth page in the user's browser and waits for it; no terminal of its own. */
     login(): Promise<boolean>;
-    /** Whether the machine-wide network policy has ever been set — never cached. */
-    checkPolicyInitialized(): Promise<boolean>;
-    /** Sets it to "balanced", Docker's own recommended default. */
+    /** Sets the machine-wide network policy to "balanced", Docker's own recommended default. */
     initPolicy(): Promise<boolean>;
-    /** Whether an organization manages any of the account's policies; then the dialog shows a wall. */
-    checkGoverned(): Promise<boolean>;
     /** Kills whichever of `login`/`initPolicy` is currently running — the Cancel button. */
     cancelSetup(): void;
     /** What the dialog's fields reopen with — tet.json, the hosts from the sandboxes themselves. */
@@ -158,10 +153,12 @@ export interface TETApi {
     removeFolder(projectId: string, path: string): Promise<GitActionResult>;
     /** Adds the path to the project's `exclude` map in tet.json — "Exclude from Files". */
     excludePath(projectId: string, path: string): Promise<GitActionResult>;
-    /** The three file-only view settings, set from the settings dialog's Files tab. */
-    setExcludeGitIgnore(projectId: string, value: boolean): Promise<GitActionResult>;
-    setCompactFolders(projectId: string, value: boolean): Promise<GitActionResult>;
-    setSortOrder(projectId: string, value: ExplorerSortOrder): Promise<GitActionResult>;
+    /** One of the file-only view settings, set from the settings dialog's Files tab. */
+    setExplorerSetting<K extends keyof ExplorerSettings>(
+      projectId: string,
+      key: K,
+      value: ExplorerSettings[K]
+    ): Promise<GitActionResult>;
     diff(projectId: string, path: string, options: DiffOptions): Promise<FileDiff>;
     /** Lines `from` to `to` of the file as it is now, for a gap the diff view opens. */
     fileLines(projectId: string, path: string, from: number, to: number): Promise<string[]>;

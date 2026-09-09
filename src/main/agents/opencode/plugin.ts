@@ -126,9 +126,6 @@ export function writeOpencodePlugin(
     fs.writeFileSync(temp, contents);
     fs.renameSync(temp, file);
   }
-  // A `context-<hash>.ts` left in the shared dir would append the context a second time.
-  const stale = path.join(pluginsDir, `context-${pluginName(cwd).slice("tet-".length)}`);
-  fs.rmSync(stale, { force: true });
   return { OPENCODE_CONFIG_DIR: target.embed(configDir), [PROJECT_ROOT_ENV]: target.embed(cwd) };
 }
 

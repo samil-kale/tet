@@ -245,10 +245,13 @@ The watcher reports every write of `tet.json` as `commands:changed`.
 
 ## Settings
 
-One dialog for everything TET keeps about *itself*, opened from pane "a"'s strip. It asks
-nothing — a switch applies the moment it's flipped. Tabbed (Appearance, Notifications, Shortcuts,
-Files, Prompts, Info) with a tab strip in place of a title. Values live in `settings.json` in
-`userData` (`src/main/settings.ts`), written whole and read back defensively.
+One dialog for everything TET keeps about *itself*, opened from pane "a"'s strip. **Nothing is
+written until Save**, as everywhere else — Cancel and Escape drop what was edited. Tabbed
+(Appearance, Notifications, Shortcuts, Files, Prompts, Info) with a tab strip in place of a title.
+Values live in `settings.json` in `userData` (`src/main/settings.ts`), written whole and read back
+defensively. The Files tab alone writes elsewhere — one `setExplorerSetting` into the active
+project's `tet.json` per key Save finds changed. It reads that file once, on open: `patchSetting`
+reads it fresh at write time and leaves every other key standing.
 
 **A setting reaches an agent through `AgentPaths`**, handed over at `prepareSpawn`. An agent gets
 its setup once per project, so a change applies to projects opened after it — and the dialog says
@@ -408,7 +411,7 @@ agent, not one shared constant — and what goes in that field is what was measu
 
 Every `opencode` on a machine opens the same `opencode.db`, and a listing through the CLI boots a
 process (~1.5 s) that writes to it (measured, 1.18.4). So the listing is the plugin's records, and
-the CLI is only ever run for a one-off (delete, export, the one-time seeding in `sessions.ts`),
+the CLI is only ever run for a one-off (delete, export, the background question's cleanup),
 never from a timer or a tab's output. Codex's `$CODEX_HOME` state db has a write-lock race between
 instances, so there is no persistent `codex app-server`: rename and delete go through a
 short-lived JSON-RPC call (`src/main/agents/codex/app-server-client.ts`), never two at once.
@@ -479,7 +482,7 @@ made.
 - **`tet-ctl` inside a sandbox** is the same bundle written into the sandbox's `~/.local/bin`,
   reaching the control server at `host.docker.internal` (`TET_CONTROL_HOST`) through an
   `sbx policy allow` for `localhost:<port>`. An account whose policies an organization manages
-  gets a wall in the sbx dialog instead of the fields (`checkSbxGoverned`, unverified against a
+  gets a wall in the sbx dialog instead of the fields (`readSbxStatus`, unverified against a
   real managed account).
 
 ## Never touch the user's agent configuration
