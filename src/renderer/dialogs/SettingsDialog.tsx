@@ -196,8 +196,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             ))}
           {/* Said out loud because it is not what a switch usually promises: an agent is handed
               its notification setup once per project, when its first terminal there starts —
-              Claude Code as the settings file it reads once, opencode as what its event stream
-              is wired to — and neither can be reached afterwards. */}
+              Claude Code as the settings file it reads once, opencode as the plugin it loads
+              once — and neither can be reached afterwards. */}
           <p className="dialog-detail">
             Handed to an agent when its first terminal in a project starts - a change reaches
             already-open projects only after tet is restarted.

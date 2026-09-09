@@ -83,14 +83,14 @@ export type PromptId = "commitMessage";
 
 export type PromptSettings = Record<PromptId, string>;
 
-/** The two agents that run in an sbx sandbox: the ones Docker ships a sandbox kit for whose
- *  process is the tab's own. opencode is client/server with its server on the host (see
- *  src/main/agents/opencode/server.ts), and pi has no sbx kit at all. Kept as its own union
- *  rather than a subset check against `AgentId` everywhere the sandbox config is read. */
-export type SbxAgentId = "claude" | "codex";
+/** The agents that run in an sbx sandbox: the ones Docker ships a sandbox kit for (`sbx run
+ *  --help` lists them; pi is not among them, verified 2026-09-08 against sbx 0.39.0). Kept as
+ *  its own union rather than a subset check against `AgentId` everywhere the sandbox config is
+ *  read. */
+export type SbxAgentId = "claude" | "codex" | "opencode";
 
-/** The same two as a list, for everything that walks them — sbx.ts's save path, the dialog's text. */
-export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex"];
+/** The same three as a list, for everything that walks them — sbx.ts's save path, the dialog's text. */
+export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex", "opencode"];
 
 export function isSbxAgent(agentId: string): agentId is SbxAgentId {
   return (SBX_AGENT_IDS as readonly string[]).includes(agentId);

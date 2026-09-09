@@ -28,8 +28,8 @@ export interface SpawnOptions {
  * tet started from one of its own shell tabs (`npm start`, while developing) inherits the
  * outer app's values in `process.env`, and its terminals must reach the inner one.
  *
- * Kept here rather than written into `process.env`, so only the terminals carry it — not the
- * opencode server, git, or anything else main.ts spawns with the machine's environment.
+ * Kept here rather than written into `process.env`, so only the terminals carry it — not
+ * git, or anything else main.ts spawns with the machine's environment.
  */
 let controlEnv: Record<string, string> = {};
 /** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */

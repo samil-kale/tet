@@ -26,10 +26,12 @@ The same goes for anything that tears down a project's terminals.
 The rationale for these lives only in the code comments at their sites, so treat them as
 measured, not obvious: session listing/resume/rename/delete and the reconcile loop
 (`src/main/agents/*/sessions.ts`, `src/main/terminals/session-manager.ts`); how each agent is driven
-(Claude Code reads `<uuid>.jsonl` transcripts off disk; opencode is client/server and
-**everything** goes through the one server TET runs, `src/main/agents/opencode/server.ts` — never
-its CLI or its SQLite file); `extractTitle`'s precedence rules for Claude Code titles (a regression
-there silently shows the wrong tab title); the modifier-gated link providers
+(Claude Code reads `<uuid>.jsonl` transcripts off disk; opencode is client/server inside, but
+TET never runs a server of its own: each tab is the plain `opencode`, and a generated plugin
+writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — never its SQLite
+file, and its CLI only for the one-off actions); `extractTitle`'s precedence rules for Claude
+Code titles (a regression there silently shows the wrong tab title); the modifier-gated link
+providers
 (`src/renderer/terminal/links/`); OS notifications and the `background_tasks` stop guard
 (`src/main/terminals/os-notify.ts`, `src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
@@ -354,15 +356,15 @@ through their sessions. All three are `--vscode-focusBorder` under one `.session
 error mark alone is `--vscode-errorForeground`, not a fourth turn state.
 
 **Nothing here is read off the terminal.** Each agent reports its own turn through
-`AgentPaths.onSessionBusy` / `onSessionWaiting` / `onSessionFinished`: opencode on the event
-stream TET already subscribes to (`session.status`, `permission.asked`, `question.asked`); Claude
-Code and Codex through hook processes that `touch` a marker named after the session id into
-`<agentDir>/busy/`, `finished/` and `waiting/` (a sandboxed tab's under `<agentDir>/sandbox/`,
-watched alongside), and pi through a generated `-e` extension writing the same markers from
-inside its process — all picked up by `watchMarkers` (`src/main/terminals/marker-watch.ts`, watch
+`AgentPaths.onSessionBusy` / `onSessionWaiting` / `onSessionFinished`: Claude Code and Codex
+through hook processes that `touch` a marker named after the session id into `<agentDir>/busy/`,
+`finished/` and `waiting/` (a sandboxed tab's under `<agentDir>/sandbox/`, watched alongside),
+opencode through a generated plugin and pi through a generated `-e` extension, each writing the
+same markers from inside its own process (opencode's sandboxed tab into the same agentDir,
+through the mount) — all picked up by `watchMarkers` (`src/main/terminals/marker-watch.ts`, watch
 *plus* a timer sweep — win32 `fs.watch` misses files). The hooks register regardless of
-notification settings; only their toast is optional, and for Claude Code and Codex it is
-`tet-ctl notify` — the main process shows it, since a sandboxed hook has no desktop session
+notification settings; only their toast is optional, and for Claude Code, Codex and opencode it
+is `tet-ctl notify` — the main process shows it, since a sandboxed hook has no desktop session
 (`showDesktopNotification` in `main.ts`). Reusing the Stop hook is the point: it carries the
 `background_tasks` guard, so a turn that only launched a subagent isn't "finished". Markers found
 at startup are deleted unreported.
@@ -414,10 +416,9 @@ folder; it calls the definition's callbacks — a new agent is a new folder, one
   commented in its `index.ts`)
 - `runArgs` — one command run *in* a terminal; only the shell has it
 - `sessions` — listing, resume args, rename, delete, optional `watch`
-- `prepareApp` — run once before any project opens, for what a killed run left behind
 - `prepareSpawn` — async setup before the first spawn, **the only place an agent may write
   anything**; a rejection marks the agent unstartable, so only reject for what truly makes it
-  unusable (opencode's server, not a failed notification script)
+  unusable (not a failed notification script)
 - `resolveUrlPrefix` — completes a url the agent's TUI wrapped across rows
 - `createIsSessionReady` — the per-agent guess at "the CLI drew its first real frame"
 - `quitPresses` — how many Ctrl+C bytes make it quit by itself
@@ -447,9 +448,10 @@ docs, and never by reasoning from one agent to another:
   (one of its built-in themes, never a custom one in tet's colors — it draws a dark frame while
   a custom theme loads, see `src/main/agents/claude/hooks.ts`); pi paints truecolor only and
   takes `--use-theme dark|light` for one run.
-- Turn signals: opencode has an event stream, Claude Code and Codex need hook processes touching
-  marker files, Codex only runs a hook it has hashed and decided to trust, and pi loads a
-  TypeScript extension and exits outright when it fails to load.
+- Turn signals: Claude Code and Codex need hook processes touching marker files, Codex only
+  runs a hook it has hashed and decided to trust, opencode loads a TypeScript plugin whose
+  `event` hook is its whole event bus (and bun-installs its dependency into the config dir the
+  first time), and pi loads a TypeScript extension and exits outright when it fails to load.
 - Ctrl+C: Claude Code, opencode and pi read `\x03` as an ordinary byte; to a Codex in cooked mode it
   is a process-level `CTRL_C_EVENT` that kills it, so it is never sent there (`plainCtrlCKills`
   draws the line).
@@ -470,13 +472,13 @@ next to it is a guess wearing a number.
 
 ### One SQLite database under every opencode and Codex process
 
-TET runs one `opencode serve` per repository, but every instance shares one machine-wide
-`opencode.db`. So servers come up one at a time (`OpencodeServer.queue` — parallel boot lost the
-write-lock race), and what a killed run left running is taken down before the first of them starts
-(`server-registry.ts` — never by pid alone, only once it answers on its recorded url with its
-recorded password). That cleanup is what `prepareApp` is for. Codex's `$CODEX_HOME` state db has
-the identical race, reproduced rather than avoided, which is why there is no persistent
-`codex app-server`: rename and delete go through a short-lived JSON-RPC call instead
+Every `opencode` on a machine — each tab's own, and every `opencode session list` — opens the
+same `opencode.db`, and a listing through the CLI boots a process (~1.5 s) that writes to it
+(measured, 1.18.4). That is why the listing is the plugin's records and the CLI is only ever
+run for a one-off (delete, export, the one-time seeding in `sessions.ts`), never from a timer
+or a tab's output. Codex's `$CODEX_HOME` state db has a write-lock race between instances,
+reproduced rather than avoided, which is why there is no persistent `codex app-server`: rename
+and delete go through a short-lived JSON-RPC call instead
 (`src/main/agents/codex/app-server-client.ts`), never two at once.
 
 ### Codex's hook trust
@@ -505,8 +507,8 @@ and the verb list are
 in `userData/bin` under tet's own electron as node. What reaches a terminal is decided in
 `spawnAgentProcess` (`pty.ts`), in layers **above** `process.env`: the port, a per-run token, the
 launcher directory on PATH, and the tab's own project and tab id — above, because a tet started
-from one of its own shell tabs inherits the outer one's values. Only ptys get them; the opencode
-server and git do not. The agent learns the command from the context file (`shell-context.ts`),
+from one of its own shell tabs inherits the outer one's values. Only ptys get them; git does
+not. The agent learns the command from the context file (`shell-context.ts`),
 which is never empty for that reason.
 
 `restart-app` is the one verb that ends sessions — every one in every project, the caller's
@@ -524,8 +526,8 @@ change.
 
 ## sbx: an agent tab inside a Docker sandbox
 
-Opt-in per project through the project row's "SBX Settings", for Claude Code and Codex only
-(`SbxAgentId`: opencode's server is on the host, pi has no sbx kit). `src/main/sbx.ts` drives
+Opt-in per project through the project row's "SBX Settings", for Claude Code, Codex and
+opencode (`SbxAgentId`: the ones sbx ships a kit for; pi has none). `src/main/sbx.ts` drives
 the `sbx` CLI the way `git.ts` drives git — every call a plain spawn, never a shell — and every
 fact in it about sbx was measured against the real binary (sandbox names, mount grammar, what
 survives a stop, the first-run wizard); its comments are the record. The config is the `sbx`
@@ -553,11 +555,13 @@ Everything TET generates lives under its own `userData` and is pointed at from o
 
 - Claude Code: a generated settings file passed as `--settings`. `~/.claude/settings.json` is
   never read, written or replaced.
-- opencode: `OPENCODE_CONFIG_DIR` on the **server** process, additive and shared across
-  repositories (an unfamiliar config dir costs a minutes-long install) — so each repository's
-  generated plugin needs a unique filename *and* a runtime guard on `TET_PROJECT_ROOT`, and is
-  only written when its content changes. `OPENCODE_TUI_CONFIG` on the **terminal** process
-  carries nothing but `"theme": "system"` (`tui-config.ts`), layered over the user's own.
+- opencode: `OPENCODE_CONFIG_DIR` on the tab's process, additive and shared across
+  repositories on the host (an unfamiliar config dir costs an install, into that dir) — so each
+  repository's generated plugin needs a unique filename *and* a runtime guard on
+  `TET_PROJECT_ROOT`, and is only written when its content changes; a sandbox gets a config dir
+  of its own under agentDir, since the install is a Linux one. Never an `opencode.json` in
+  there: it would override the user's (measured: `permission`). `OPENCODE_TUI_CONFIG` carries
+  nothing but `"theme": "system"` (`tui-config.ts`), layered over the user's own.
 - Codex: `-c key=value` overrides for that one process only — verified nothing is written back.
   `~/.codex/config.toml` and `~/.codex/hooks.json` are never read, written or replaced.
 - pi: a generated extension under `userData` passed as `-e`, `--use-theme` for that one process;

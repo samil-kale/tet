@@ -25,12 +25,19 @@ export interface AgentSessionInfo {
    * the one place it is read, and only ever to end a turn.
    */
   turnEndedAt?: number;
+  /**
+   * The sbx sandbox this session lives in, by name, for an agent whose listing covers its
+   * sandboxed sessions too (opencode's, written by its plugin from inside the sandbox). Such a
+   * session can only be resumed there — see resolveSbxRun. Unset for one on the host, and for
+   * every session of an agent whose sandboxed sessions stay out of sight.
+   */
+  sandbox?: string;
 }
 
 /**
  * Agent-specific session enumeration/resume/deletion, living in the agent's own folder
- * since it speaks that agent's protocol (Claude: transcript files on disk; opencode: its
- * HTTP API).
+ * since it speaks that agent's protocol (Claude: transcript files on disk; opencode: the
+ * session records its plugin writes, and its CLI).
  */
 export interface SessionProvider {
   /** All sessions of this repository, in creation order (oldest first). Must resolve [] on any failure. */
@@ -77,7 +84,7 @@ export interface AgentPaths {
    * What this agent may notify the OS about, as the settings dialog last left it. Handed over
    * rather than imported, so the one persisted copy stays the only one — and read here, at
    * setup, because that is where each agent bakes it in: Claude Code into the settings file it
-   * reads once at startup, opencode into the notifier around its event stream.
+   * reads once at startup, opencode into the plugin it loads once.
    */
   notifications: NotificationSettings;
   /**
@@ -127,17 +134,18 @@ export interface SpawnPreparation {
    */
   executable?: string;
   dispose(): void;
+}
+
+/** What an agent hands a sandboxed tab — see AgentDefinition.prepareSandboxSpawn. */
+export interface SandboxPreparation {
+  /** Extra CLI arguments, appended after `sbx run`'s own "--". */
+  args: string[];
   /**
-   * Whether this may be disposed again while the project has no session and no open tab of
-   * this agent, and prepared afresh once it does. Set it when the preparation costs while it
-   * sits idle — opencode's is a server process per repository, started only so its sessions
-   * could be listed. One that is just a generated file is cheaper to keep than to redo, and
-   * leaves this unset.
-   *
-   * Whatever the agent's `watch` holds goes with it, since it may well be a subscription on
-   * the very thing being disposed.
+   * Environment for the sandboxed process, passed as `sbx run -e KEY=VALUE` — values in the
+   * sandbox's own view (container paths). Only for what is decided per repository; a constant
+   * belongs in `sandboxEnv`.
    */
-  releaseWhenIdle?: boolean;
+  env?: Record<string, string>;
 }
 
 /**
@@ -179,23 +187,12 @@ export interface AgentDefinition {
    * by an agent that can be told not to persist one in the first place.
    */
   cleanupAsk?: (executable: string, cwd: string) => Promise<void>;
-  /**
-   * One-time setup for the app rather than for a repository, run before any project opens and
-   * therefore before anything asks this agent for a session listing. What it is for is what a
-   * killed run left behind: opencode takes down the servers of one, since no dispose of ours
-   * runs when the process is killed. An agent with nothing to reclaim leaves it out.
-   *
-   * Synchronous, and nothing here waits for what it started: only the agent's own code knows
-   * which of its calls have to, and it is that code which holds the promise.
-   */
-  prepareApp?: (storageRoot: string) => void;
   /** Session enumeration/resume/deletion; a missing provider means "this agent has no sessions". */
   sessions?: SessionProvider;
   /**
    * Async setup that has to finish before any session of this agent is spawned, for agents
-   * whose spawn arguments aren't known up front — opencode brings up the server its TUI then
-   * attaches to and only then knows the URL, and Claude Code's hooks are generated into a
-   * settings file it is pointed at.
+   * whose spawn arguments aren't known up front — Claude Code's hooks are generated into a
+   * settings file it is pointed at, opencode's plugin into a config directory.
    *
    * Also where an agent arranges for the repository's context file to reach the model, which
    * each does its own way — see AgentPaths.
@@ -211,14 +208,16 @@ export interface AgentDefinition {
    * os-notify.ts's buildHookNotifyCommand — so the toast itself is always shown by the process
    * that actually has a desktop session, never by the sandbox.
    *
-   * Returns just the extra CLI arguments appended after `sbx run`'s own "--" — unlike
-   * SpawnPreparation there is no executable to override, since the sandbox's own bundled
-   * agent binary is what runs (see `sandboxEnv` for the one thing it can still set). `cwd` is
-   * the project's own path, for a notify message's repository name. Synchronous: unlike
+   * Returns the extra CLI arguments appended after `sbx run`'s own "--" and, where the setup
+   * is pointed at by a variable rather than an argument, the environment for it — unlike
+   * SpawnPreparation there is no executable to override, since the sandbox's own bundled agent
+   * binary is what runs (see `sandboxEnv` for a constant). `cwd` is the project's own path, for
+   * a notify message's repository name; `sandbox` is the sandbox's name, for an agent whose
+   * sessions record where they live (AgentSessionInfo.sandbox). Synchronous: unlike
    * prepareSpawn, nothing here waits on external setup. Omitted by an agent with no sbx kit at
-   * all (opencode, pi) or that needs no hooks (the shell).
+   * all (pi) or that needs no hooks (the shell).
    */
-  prepareSandboxSpawn?: (cwd: string, paths: AgentPaths) => string[];
+  prepareSandboxSpawn?: (cwd: string, paths: AgentPaths, sandbox: string) => SandboxPreparation;
   /**
    * "KEY=VALUE" entries passed as `sbx run -e` — for a fact that only differs inside the
    * sandbox. Claude Code's own fullscreen-by-default rollout reads feature flags from

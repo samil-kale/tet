@@ -70,7 +70,7 @@ describe("the context file", () => {
     const context = new ShellContext(dir, "repo");
     const read = (): string => {
       const raw = fs.readFileSync(context.contextFile, "utf8");
-      // The win32 BOM, stripped the way context-plugin.ts does.
+      // The win32 BOM, stripped the way opencode's generated plugin does.
       return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
     };
     await eventually("the first write", () => fs.existsSync(context.contextFile));

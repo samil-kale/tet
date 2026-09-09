@@ -5,11 +5,12 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSessionProvider } from "../src/main/agents/codex/sessions";
+import { opencodeSessionProvider, registerAgentDir, sessionSandbox } from "../src/main/agents/opencode/sessions";
 import { encodeCwd, piSessionProvider } from "../src/main/agents/pi/sessions";
 
 /**
- * The three agents whose sessions are read off disk, against transcripts written the way the
- * CLIs write them. The title rules and the turn forensics are what CLAUDE.md warns about: a
+ * The four agents whose sessions are read off disk, against transcripts written the way the
+ * CLIs write them — and, for opencode, records written the way its plugin writes them. The title rules and the turn forensics are what CLAUDE.md warns about: a
  * regression there shows the wrong title, or a spinner that never stops, with nothing to
  * catch it but this.
  */
@@ -315,5 +316,68 @@ describe("pi's transcripts", () => {
   it("lists nothing where pi has never run", async () => {
     process.env.PI_CODING_AGENT_DIR = path.join(os.tmpdir(), "tet-pi-never");
     assert.deepEqual(await piSessionProvider.list("pi", cwd), []);
+  });
+});
+
+describe("opencode's session records", () => {
+  /** An agentDir of its own per case, registered for a cwd of its own, already seeded: the
+   *  seeding runs opencode itself, which these tests never do. */
+  function records(files: Record<string, unknown>): { cwd: string; dir: string } {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-"));
+    const cwd = path.join(agentDir, "repo");
+    registerAgentDir(cwd, agentDir);
+    const dir = path.join(agentDir, "sessions");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, ".seeded"), "");
+    for (const [name, record] of Object.entries(files)) {
+      fs.writeFileSync(path.join(dir, name), typeof record === "string" ? record : JSON.stringify(record));
+    }
+    return { cwd, dir };
+  }
+
+  it("lists the records oldest first, with where each session lives", async () => {
+    const { cwd } = records({
+      "ses_b.json": { id: "ses_b", title: "Second", created: 2, updated: 5, sandbox: "tet-opencode-abc" },
+      "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null },
+      "ses_c.json.tmp": "{",
+      "ses_d.json": "not json"
+    });
+    const listed = await opencodeSessionProvider.list("opencode", cwd);
+    assert.deepEqual(
+      listed.map((info) => [info.id, info.title, info.createdAt, info.updatedAt, info.sandbox]),
+      [
+        ["ses_a", "First", 1, 3, undefined],
+        ["ses_b", "Second", 2, 5, "tet-opencode-abc"]
+      ]
+    );
+    assert.equal(sessionSandbox(cwd, "ses_b"), "tet-opencode-abc");
+    assert.equal(sessionSandbox(cwd, "ses_a"), null);
+    assert.equal(sessionSandbox(cwd, "ses_none"), null, "an unrecorded session can only be on the host");
+  });
+
+  it("lists nothing for a repository that was never prepared", async () => {
+    assert.deepEqual(await opencodeSessionProvider.list("opencode", path.join(os.tmpdir(), "never")), []);
+  });
+
+  it("resumes by id and renames through the session's own process", async () => {
+    assert.deepEqual(opencodeSessionProvider.resumeArgs("ses_a"), ["--session", "ses_a"]);
+    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null } });
+    const requests = path.join(path.dirname(dir), "rename");
+    // The plugin's side of it: the request appears, the record follows.
+    const plugin = setInterval(() => {
+      const request = path.join(requests, "ses_a");
+      if (fs.existsSync(request)) {
+        const title = fs.readFileSync(request, "utf8");
+        fs.rmSync(request);
+        fs.writeFileSync(path.join(dir, "ses_a.json"), JSON.stringify({ id: "ses_a", title, created: 1, updated: 4, sandbox: null }));
+      }
+    }, 50);
+    try {
+      await opencodeSessionProvider.rename("opencode", cwd, "ses_a", "  Renamed ");
+    } finally {
+      clearInterval(plugin);
+    }
+    assert.equal((await opencodeSessionProvider.list("opencode", cwd))[0].title, "Renamed");
+    await assert.rejects(opencodeSessionProvider.rename("opencode", cwd, "ses_a", "  "), /non-empty/);
   });
 });

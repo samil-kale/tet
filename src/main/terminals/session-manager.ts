@@ -17,7 +17,7 @@ import type {
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig, writeSbxConfig } from "../git/commands";
-import { checkSbxGoverned, prepareSbxRun, sbxNotReady, type SandboxPaths } from "../sbx";
+import { checkSbxGoverned, prepareSbxRun, sandboxName, sbxNotReady, type SandboxPaths } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -60,6 +60,8 @@ interface TabState extends TerminalDescriptor {
   spawnedAt?: number;
   /** Mirrors AgentSessionInfo.provisionalTitle for this tab's session. */
   provisionalTitle?: boolean;
+  /** Mirrors AgentSessionInfo.sandbox: the sbx sandbox this tab's session lives in, if any. */
+  sandbox?: string;
   /** When the running turn was reported as started — what a turn end is dated against. */
   busySince?: number;
   /**
@@ -88,10 +90,8 @@ interface AgentRuntime {
   ready: Promise<void>;
   preparation?: SpawnPreparation;
   prepareFailed: boolean;
-  /** One setup at a time: two tabs opened at once must not bring up two opencode servers. */
+  /** One setup at a time: two tabs opened at once must not write the same setup twice. */
   preparing?: Promise<boolean>;
-  /** Its setup and watcher are let go because nothing in this project is using them. */
-  released: boolean;
   stopWatching?: () => void;
   reconciling?: Promise<void>;
   reconcileTimer?: ReturnType<typeof setTimeout>;
@@ -227,12 +227,6 @@ export class ProjectSessionManager {
   private readonly deletingSessionIds = new Set<string>();
   /** Tabs already removed from the UI that still need their persisted session claimed for deletion. */
   private readonly detachedTabs: TabState[] = [];
-  /**
-   * How many `closeTabs` calls are still tearing down — the renderer fires them without
-   * waiting, so two can overlap, and a runtime must not be released while the other one's
-   * tab is still claiming its session (see releaseIdleRuntime).
-   */
-  private closing = 0;
   private newTabCounter = 0;
   /** The project was closed; nothing that was still in flight may start anything back up. */
   private disposed = false;
@@ -355,8 +349,7 @@ export class ProjectSessionManager {
   /** Restores one tab per persisted session of every installed agent. */
   async bootstrap(): Promise<void> {
     // Covers the version checks and session listings too, not just the first tab's CLI
-    // startup: opencode's server start and listing take seconds that would otherwise show
-    // nothing at all.
+    // startup: a setup and a listing take long enough to show nothing at all otherwise.
     this.acquireIndicator();
     try {
       await Promise.all(AGENTS.map((agent) => this.runtimeFor(agent.id).ready));
@@ -399,7 +392,6 @@ export class ProjectSessionManager {
       installed: agent.versionArgs === undefined,
       ready: Promise.resolve(),
       prepareFailed: false,
-      released: false,
       reconcileRetriesLeft: 0,
       pendingTurns: new Map()
     };
@@ -424,8 +416,8 @@ export class ProjectSessionManager {
       return;
     }
 
-    // Before anything that could lead to a spawn: opencode's listing already needs the
-    // server this brings up, and the terminal's own arguments come out of it too.
+    // Before anything that could lead to a spawn: the listing may need what this sets up
+    // (opencode's records directory), and the terminal's own arguments come out of it too.
     if (!(await this.prepare(runtime))) {
       return;
     }
@@ -447,6 +439,7 @@ export class ProjectSessionManager {
         updatedAt: info.updatedAt,
         createdAt: info.createdAt,
         provisionalTitle: info.provisionalTitle,
+        sandbox: info.sandbox,
         status: "ready"
       });
     }
@@ -455,19 +448,12 @@ export class ProjectSessionManager {
     }
     // Started after the initial listing so its first event can't race the bootstrap.
     this.startWatching(runtime);
-    // Nothing was found and nothing has been opened while we were listing, so whatever the
-    // setup is holding is serving no one.
-    if (infos.length === 0) {
-      this.releaseIdleRuntime(runtime);
-    }
   }
 
   /**
    * Runs the agent's setup, at most one at a time. False means it failed and the agent must
    * not be started at all — one that asks for preparation cannot run without it in any
-   * meaningful way (opencode would start a second instance sharing only the database: no
-   * events, renames invisible to it). Better to start nothing than a terminal that quietly
-   * misbehaves.
+   * meaningful way. Better to start nothing than a terminal that quietly misbehaves.
    */
   private prepare(runtime: AgentRuntime): Promise<boolean> {
     runtime.preparing ??= this.doPrepare(runtime).finally(() => {
@@ -487,17 +473,17 @@ export class ProjectSessionManager {
     try {
       markStartup(`prepare ${agent.id}`);
       const preparation = await agent.prepareSpawn(executable, this.project.path, this.pathsFor(runtime));
-      // The project may have been closed while that ran — opencode's server boot takes seconds
-      // — and `dispose` has already been past `runtime.preparation`, so what arrives now would
-      // outlive the project (a server, the marker watchers) with nothing left to end it.
+      // The project may have been closed while that ran, and `dispose` has already been past
+      // `runtime.preparation`, so what arrives now would outlive the project (the marker
+      // watchers) with nothing left to end it.
       if (this.disposed) {
         preparation.dispose();
         return false;
       }
       runtime.preparation = preparation;
       // A setup that worked clears the earlier failure: `canStart` reads this flag and nothing
-      // else puts it back, so one failed preparation (opencode's port taken, say) would leave
-      // the agent unstartable for the rest of the session.
+      // else puts it back, so one failed preparation would leave the agent unstartable for the
+      // rest of the session.
       runtime.prepareFailed = false;
       return true;
     } catch (error) {
@@ -515,43 +501,6 @@ export class ProjectSessionManager {
     runtime.stopWatching = runtime.agent.sessions?.watch?.(runtime.executable, this.project.path, () =>
       this.scheduleReconcile(runtime, WATCH_DEBOUNCE_MS)
     );
-  }
-
-  /**
-   * Lets go of what this agent keeps running for a project that has no session and no tab of
-   * it — but only if its own preparation says that is allowed (see releaseWhenIdle). The
-   * watcher goes too: for opencode it is a subscription on the very server being stopped and
-   * would bring it straight back up. ensurePrepared restores both.
-   *
-   * Never while a close is still underway, whoever asks: a closed tab is spliced out of `tabs`
-   * up front, but claiming its session for deletion is a reconcile that a released runtime
-   * skips — so a release landing between the two would leave that session behind, back as a
-   * tab on the next start. The last close to finish releases instead.
-   */
-  private releaseIdleRuntime(runtime: AgentRuntime): void {
-    if (!runtime.preparation?.releaseWhenIdle || this.tabsOf(runtime).length > 0 || this.closing > 0) {
-      return;
-    }
-    runtime.stopWatching?.();
-    runtime.stopWatching = undefined;
-    runtime.preparation.dispose();
-    runtime.preparation = undefined;
-    runtime.released = true;
-  }
-
-  /**
-   * The agent's setup, brought back if it was released. Everything that spawns waits on this:
-   * without the preparation the CLI would be started with the wrong arguments entirely.
-   */
-  private async ensurePrepared(runtime: AgentRuntime): Promise<void> {
-    await runtime.ready;
-    if (!runtime.released) {
-      return;
-    }
-    if (await this.prepare(runtime)) {
-      runtime.released = false;
-      this.startWatching(runtime);
-    }
   }
 
   createTab(agentId: AgentId): TerminalDescriptor {
@@ -625,26 +574,24 @@ export class ProjectSessionManager {
     if (!tab) {
       return;
     }
-    // The agent's setup may still be running (version check, opencode's server). Remember
+    // The agent's setup may still be running (version check, the generated hooks). Remember
     // the size and start once it settles — the first resize is what spawns the process.
     const pending = this.starting.get(tabId);
     this.starting.set(tabId, { cols, rows });
     if (pending) {
       return;
     }
-    // Bringing a released setup back can mean starting opencode's server, which takes
-    // seconds — the bar under the tab strip is what says so. Released *after* the session is
-    // started, not before: `startSession` acquires the same tab's next indicator (its CLI's
-    // first frame), and releasing first would drop both counts to zero for a moment — the bar
-    // flickering off and on between two pushes for what is one wait to the user.
+    // The wait for the setup and the sandbox is the bar under the tab strip. Released *after*
+    // the session is started, not before: `startSession` acquires the same tab's next
+    // indicator (its CLI's first frame), and releasing first would drop both counts to zero
+    // for a moment — the bar flickering off and on between two pushes for what is one wait to
+    // the user.
     this.acquireIndicator(tabId);
-    void Promise.all([this.ensurePrepared(this.runtimeFor(tab.agentId)), this.resolveSbxRun(tab)])
+    void Promise.all([this.runtimeFor(tab.agentId).ready, this.resolveSbxRun(tab)])
       .then(([, sbxArgs]) => {
         const dims = this.starting.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
-          // Closed while the setup ran: what it brought back has no tab to serve, and the
-          // close that would have let it go found nothing to release yet.
-          this.releaseIdleRuntime(this.runtimeFor(tab.agentId));
+          // Closed while the setup ran: nothing left to start.
           return;
         }
         this.startSession(tab, sbxArgs).ensureStarted(dims.cols, dims.rows);
@@ -667,20 +614,22 @@ export class ProjectSessionManager {
    * fresh read on every spawn costs nothing worth avoiding, and it is the same "no cache, read at
    * the moment it matters" choice `readCommands` already makes for saved commands.
    *
-   * Only claude/codex — the two agents the sbx-settings dialog has real fields for — and only a
-   * plain agent tab, never a saved command's: a saved command is not "this agent's process" in
-   * the first place (see startSession), so wrapping it in a sandbox would run the wrong thing.
+   * Only the agents with an sbx kit (isSbxAgent) — and only a plain agent tab, never a saved
+   * command's: a saved command is not "this agent's process" in the first place (see
+   * startSession), so wrapping it in a sandbox would run the wrong thing.
    *
-   * A tab that already has a `sessionId` also stays on the host, sandbox or not: a sandboxed
-   * session's transcript lives only inside its container (sbx.ts's SbxFixedPaths — the agent's
-   * own config directory, where it would sit, is deliberately never mounted), invisible to the
-   * reconcile loop's host filesystem listing above, which is the only thing that ever assigns a
-   * tab's `sessionId` in the first place. So a `sessionId` that exists at all was necessarily
-   * read off the host, and `--resume`ing it inside a sandbox that has never seen it fails outright
-   * ("No conversation found with session ID: …", measured live, 2026-09-08) — reproducible for any
-   * session that predates this tab's sandbox, not only ones that predate SBX itself (a sandbox
-   * rebuild after an Allowed-folders change orphans every session that was already sandboxed too).
-   * Only a tab spawning for the very first time, with no `sessionId` yet, is sandboxed.
+   * A session runs where it lives. For Claude Code and Codex that is always the host once a
+   * tab has a `sessionId`: a sandboxed session's transcript lives only inside its container
+   * (sbx.ts's computeWorkspaces — the agent's own config directory, where it would sit, is
+   * deliberately never mounted), invisible to the reconcile loop's host filesystem listing,
+   * which is the only thing that ever assigns a tab's `sessionId`. So a `sessionId` that exists
+   * at all was read off the host, and `--resume`ing it inside a sandbox that has never seen it
+   * fails outright ("No conversation found with session ID: …", measured live, 2026-09-08) —
+   * for any session that predates this tab's sandbox, not only ones that predate SBX itself (a
+   * sandbox rebuild after an Allowed-folders change orphans every session that was already
+   * sandboxed too). opencode's listing records where each session ran (AgentSessionInfo.sandbox,
+   * from its plugin), so its sandboxed sessions are resumed in their sandbox and its host
+   * sessions on the host. A tab with no `sessionId` yet is sandboxed either way.
    *
    * Sbx not being ready — not installed, not signed in, or its network policy never
    * initialized — turns sandboxing off outright for the project (writes `enabled: false`), not
@@ -724,7 +673,7 @@ export class ProjectSessionManager {
     }
     const runtime = this.runtimeFor(tab.agentId);
     const { agent } = runtime;
-    if (tab.sessionId) {
+    if (tab.sessionId && !tab.sandbox) {
       if (!this.sbxPreexistingSaid) {
         this.sbxPreexistingSaid = true;
         this.callbacks.onNotice(
@@ -735,15 +684,17 @@ export class ProjectSessionManager {
       return null;
     }
     const paths = this.pathsFor(runtime);
-    const hookArgs = agent.prepareSandboxSpawn?.(this.project.path, paths) ?? [];
+    const sandbox = sandboxName(this.project.id, tab.agentId);
+    const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
+    const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
     const { args, missing } = await prepareSbxRun({
       agentId: tab.agentId,
       projectId: this.project.id,
       projectPath: this.project.path,
       config,
       paths,
-      agentArgs: [...hookArgs, ...(tab.runArgs ?? [])],
-      env: agent.sandboxEnv,
+      agentArgs: [...hooks.args, ...resumeArgs, ...(tab.runArgs ?? [])],
+      env: [...(agent.sandboxEnv ?? []), ...Object.entries(hooks.env ?? {}).map(([key, value]) => `${key}=${value}`)],
       onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
     });
     if (missing.length > 0) {
@@ -909,19 +860,8 @@ export class ProjectSessionManager {
     for (const tab of tabs) {
       void this.sessions.get(tab.tabId)?.stop();
     }
-    this.closing++;
-    try {
-      for (const tab of tabs) {
-        await this.destroyTab(tab, indices.get(tab.tabId) ?? this.tabs.length);
-      }
-    } finally {
-      this.closing--;
-    }
-    // Closing a tab deleted its session too, so this may have been the last thing keeping the
-    // agent's setup up — the same state the project was in when it had nothing to show. An
-    // overlapping close still tearing down leaves this to itself (releaseIdleRuntime).
-    for (const runtime of this.runtimes.values()) {
-      this.releaseIdleRuntime(runtime);
+    for (const tab of tabs) {
+      await this.destroyTab(tab, indices.get(tab.tabId) ?? this.tabs.length);
     }
   }
 
@@ -1126,8 +1066,7 @@ export class ProjectSessionManager {
 
   private armReconcileTimer(runtime: AgentRuntime, delayMs: number): void {
     // The retry below re-arms this timer after every run, so a reconcile in flight when the
-    // project closed would put a fresh one in place behind dispose's back — and opencode's
-    // listing brings its server back up, leaving a process nobody owns.
+    // project closed would put a fresh one in place behind dispose's back.
     if (this.disposed) {
       return;
     }
@@ -1166,9 +1105,8 @@ export class ProjectSessionManager {
   private async doReconcile(runtime: AgentRuntime): Promise<void> {
     countActivity("reconcile");
     const { agent, executable } = runtime;
-    // A released runtime has nothing to reconcile, and listing would start its server back up.
-    // A disposed project is the same case: the listing is what would revive it.
-    if (this.disposed || runtime.released || !agent.sessions || !this.canStart(runtime)) {
+    // A disposed project has nothing to reconcile into.
+    if (this.disposed || !agent.sessions || !this.canStart(runtime)) {
       return;
     }
     // Wall time, not pure blocking time: the listing's own I/O is async. But for local
@@ -1204,6 +1142,7 @@ export class ProjectSessionManager {
       tab.updatedAt = match.updatedAt;
       tab.createdAt = match.createdAt;
       tab.provisionalTitle = match.provisionalTitle;
+      tab.sandbox = match.sandbox;
       // Detached tabs are gone from the UI — claiming their id is all that's needed.
       changed ||= this.tabs.includes(tab);
     }

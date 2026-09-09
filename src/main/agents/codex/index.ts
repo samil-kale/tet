@@ -67,17 +67,19 @@ export const codexAgent: AgentDefinition = {
   },
   prepareSandboxSpawn: (cwd, paths) => {
     try {
-      return setupCodexHooks(
-        sandboxHookDir(paths.agentDir),
-        "Codex",
-        paths.notifications,
-        path.basename(cwd),
-        paths.contextFile,
-        sandboxTarget()
-      );
+      return {
+        args: setupCodexHooks(
+          sandboxHookDir(paths.agentDir),
+          "Codex",
+          paths.notifications,
+          path.basename(cwd),
+          paths.contextFile,
+          sandboxTarget()
+        )
+      };
     } catch (error) {
       console.error("[tet] could not set up Codex sandbox hooks:", error);
-      return [];
+      return { args: [] };
     }
   },
   // No documented readiness signal (no port, no log line, no flag) — a plain byte count, tuned

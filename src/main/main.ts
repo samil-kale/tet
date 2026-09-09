@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
-import { AGENTS, prepareAgents } from "./agents";
+import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
@@ -298,9 +298,6 @@ if (!app.requestSingleInstanceLock()) {
     // nvm in the profile takes a good part of a second, and the window needs as long to load
     // before it asks anything. The requirements re-check (ipc.ts) joins the same run.
     const pathReady = augmentAgentPath();
-    // Before a project opens, since opening one is what asks an agent for its sessions: what
-    // a run that was killed left running is taken down here. See AgentDefinition.prepareApp.
-    prepareAgents(app.getPath("userData"));
     sweepTempFiles();
     // The control channel's token and address, into every terminal's environment before the
     // first one can spawn (openWorkspace, below). The token lives in this process only — never

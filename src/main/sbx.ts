@@ -101,6 +101,21 @@ function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
 }
 
 /**
+ * One command run to completion inside a sandbox, from `cwd` as the sandbox sees it — a plain
+ * argument list through `sbx exec`, no shell (`-w` is docker exec's own working-directory
+ * flag, verified in `sbx exec --help`). Starts a stopped sandbox first, as every exec does.
+ * Resolves with stdout on exit code 0 and rejects otherwise — for the agent-side one-off
+ * actions (opencode's `session delete`, `export`) whose session lives in that sandbox.
+ */
+export async function execInSandbox(name: string, cwd: string, command: string[]): Promise<string> {
+  const result = await runSbx(["exec", "-i", "-w", toContainerPath(cwd), name, ...command]);
+  if (!result.ok) {
+    throw new Error(`${command[0]} failed in sandbox ${name}`);
+  }
+  return result.stdout;
+}
+
+/**
  * Kills whichever `sbx` step (`login` or `policy init`, the two slow ones) is currently running,
  * for the dialog's Cancel button. Plain `kill()`, not the `taskkill /T /F` some other spawns
  * need on win32 (see `ask.ts`) — that workaround is for an npm shim running under cmd.exe;
@@ -427,8 +442,8 @@ export function computeWorkspaces(projectPath: string, paths: SandboxPaths): str
   return [projectPath, paths.agentDir, `${path.dirname(paths.contextFile)}:ro`];
 }
 
-/** Every sandbox template's non-root user, and its home — verified live, 2026-09-08, for both
- *  a Claude and a Codex sandbox (`$HOME` and `whoami`). `sbx mount`'s target must be an absolute
+/** Every sandbox template's non-root user, and its home — verified live, 2026-09-08, for a
+ *  Claude, a Codex and an opencode sandbox (`$HOME` and `whoami`). `sbx mount`'s target must be an absolute
  *  path (its own `--help`): it is not passed through a shell, so `~` never expands there. */
 const SANDBOX_HOME = "/home/agent";
 
@@ -457,6 +472,13 @@ interface KnowledgeEntry {
  * same as Claude's. Codex's own instructions file is `~/.codex/AGENTS.md` — preferring
  * `AGENTS.override.md` when present is Codex's own documented load order (OpenAI's docs), not
  * itself verified live here, since neither file exists on the machine this was measured on.
+ * opencode's are its own documented locations (opencode.ai/docs/skills and /rules, read
+ * 2026-09-09, not verified live): skills from `~/.config/opencode/skills` and, for Claude Code
+ * compatibility, `~/.claude/skills` and `~/.agents/skills`; plugins from
+ * `~/.config/opencode/plugins`; rules from `~/.config/opencode/AGENTS.md`, else
+ * `~/.claude/CLAUDE.md` — each mounted where opencode reads it, never the config directory
+ * itself, which holds `opencode.json` with the user's providers. Its auth is elsewhere
+ * (`~/.local/share/opencode/auth.json`, its data directory) and stays out.
  */
 function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, KnowledgeEntry[]> {
   const home = os.homedir();
@@ -465,6 +487,21 @@ function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, K
       skills: [{ host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
       plugins: [{ host: path.join(home, ".claude", "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
       instructions: [{ host: path.join(home, ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }]
+    };
+  }
+  if (agentId === "opencode") {
+    const rules = [
+      { host: path.join(home, ".config", "opencode", "AGENTS.md"), target: `${SANDBOX_HOME}/.config/opencode/AGENTS.md` },
+      { host: path.join(home, ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }
+    ].find((entry) => statOf(entry.host));
+    return {
+      skills: [
+        { host: path.join(home, ".config", "opencode", "skills"), target: `${SANDBOX_HOME}/.config/opencode/skills` },
+        { host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` },
+        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
+      ],
+      plugins: [{ host: path.join(home, ".config", "opencode", "plugins"), target: `${SANDBOX_HOME}/.config/opencode/plugins` }],
+      instructions: rules ? [rules] : []
     };
   }
   const instructionsHost = [path.join(home, ".codex", "AGENTS.override.md"), path.join(home, ".codex", "AGENTS.md")].find(statOf);

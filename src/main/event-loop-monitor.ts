@@ -27,7 +27,7 @@ const MAX_LOG_BYTES = 1_000_000;
  * The main process's continuous work, in the places it happens. Nothing here is a guess about
  * cost — the point is to find out which of them the loop is actually sitting in.
  */
-export type Activity = "output" | "input" | "sse" | "reconcile" | "git" | "emit" | "startup";
+export type Activity = "output" | "input" | "reconcile" | "git" | "emit" | "startup";
 
 const counts = new Map<Activity, number>();
 /**

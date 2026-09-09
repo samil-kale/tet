@@ -1,5 +1,6 @@
 import { findUrls } from "../../../shared/urls";
-import { runningServer } from "./server";
+import { runOpencode } from "./cli";
+import { sessionSandbox } from "./sessions";
 
 /**
  * A url too long for the terminal width is broken across rows by opencode's TUI at the last "."
@@ -57,19 +58,21 @@ function longestStartingWith(urls: string[], prefix: string): string | undefined
   return best;
 }
 
+/**
+ * `opencode export <id>` prints the whole session as json on stdout (its banner goes to
+ * stderr, measured) — a process of its own (~1.5 s), affordable here: only on hover, at most
+ * once per fragment (see resolveUrlPrefix), and where the session lives, host or sandbox, as
+ * its record says.
+ */
 async function fetchSessionUrls(executable: string, cwd: string, sessionId: string): Promise<string[]> {
-  const server = await runningServer(executable, cwd);
-  if (!server) {
-    return [];
-  }
-  const response = await server.request(`/session/${encodeURIComponent(sessionId)}/message`, cwd);
+  const output = await runOpencode(executable, cwd, sessionSandbox(cwd, sessionId), ["export", sessionId]);
   // Every string in the response, whatever its shape: a url can sit in a message part, a
   // tool result or a summary, and this way no part of opencode's message schema has to be
   // tracked here. Parsed rather than scanned as raw text, though — json escapes would
   // otherwise end up inside the urls: a "\n" before one turns it into "nhttps://...", and
   // an escaped "\/" cuts it short, neither of which can ever match what's on screen.
   const strings: string[] = [];
-  collectStrings(await response.json(), strings);
+  collectStrings(JSON.parse(output), strings);
   const urls = findUrls(strings.join("\n"));
   cache.set(sessionId, { at: Date.now(), urls });
   return urls;

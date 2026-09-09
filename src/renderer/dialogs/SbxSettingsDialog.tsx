@@ -154,9 +154,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               </p>
             ) : (
               <p className="dialog-detail">
-                Claude and Codex tabs in {project.name} run in their own isolated Docker sandbox
-                instead of directly on this machine. OpenCode (its server runs on the host) and
-                pi (no SBX kit) stay outside.
+                Claude, Codex and OpenCode tabs in {project.name} run in their own isolated Docker
+                sandbox instead of directly on this machine. Pi (no SBX kit) stays outside.
               </p>
             )}
           </span>

@@ -6,8 +6,10 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
+import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension } from "../src/main/agents/pi/extension";
 import { watchMarkers } from "../src/main/terminals/marker-watch";
+import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { toContainerPath } from "../src/main/terminals/hook-target";
 import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
@@ -208,6 +210,27 @@ describe("the stores", () => {
   });
 });
 
+describe("session readiness checks", () => {
+  it("counts plain bytes across chunks", () => {
+    const ready = createByteThresholdCheck(10);
+    assert.equal(ready("12345"), false);
+    assert.equal(ready("12345"), false);
+    assert.equal(ready("1"), true);
+  });
+
+  it("counts only non-ASCII characters, ignoring escape codes and blank fills", () => {
+    const ready = createNonAsciiThresholdCheck(1);
+    // opencode's blank full-screen repaint while it waits on its model list: all ASCII —
+    // escape codes and spaces — however many bytes of it arrive.
+    assert.equal(ready("\x1b[38;2;255;255;255m\x1b[H" + " ".repeat(4800)), false);
+    assert.equal(ready("\x1b[38;2;255;255;255m\x1b[H" + " ".repeat(4800)), false);
+    // The frame that actually has something on it: two box-drawing characters clear the
+    // threshold, one does not.
+    assert.equal(ready("▄"), false);
+    assert.equal(ready("▄"), true);
+  });
+});
+
 describe("the marker watch", () => {
   it("drains what a previous run left unreported, and reports what arrives, watcher or not", async () => {
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-markers-"));
@@ -295,6 +318,112 @@ describe("pi's extension", () => {
     }
     handlers.agent_start({}, { sessionManager: { getSessionId: () => "../escape" } });
     assert.deepEqual(fs.readdirSync(markers.busy), ["0000-aaaa"], "only a session id becomes a filename");
+  });
+});
+
+describe("opencode's plugin", () => {
+  const nasty = "C:\\Users\\it's $x `y\\ctx.md";
+  type Hooks = Record<string, (...args: unknown[]) => Promise<void>>;
+  const options = (dir: string, sandbox: string | null = null): OpencodePluginOptions => ({
+    projectRoot: dir,
+    contextFile: path.join(dir, "context.md"),
+    markers: { busy: path.join(dir, "busy"), finished: path.join(dir, "finished"), waiting: path.join(dir, "waiting") },
+    sessionsDir: path.join(dir, "sessions"),
+    renameDir: path.join(dir, "rename"),
+    sandbox,
+    notify: { finished: false, waiting: false },
+    notifyCommand: { command: "tet-ctl", args: ["notify"] },
+    displayName: "OpenCode",
+    repositoryName: "repo"
+  });
+
+  /** Compiles the plugin and returns its hooks, with a fake client that records renames. */
+  async function load(dir: string, sandbox: string | null = null): Promise<{ hooks: Hooks; renames: unknown[] }> {
+    const source = renderOpencodePlugin(options(dir, sandbox));
+    const compiled = path.join(dir, "tet.js");
+    fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
+    const renames: unknown[] = [];
+    const client = { session: { update: async (request: unknown) => void renames.push(request) } };
+    const module = createRequire(__filename)(compiled) as { TETPlugin: (input: unknown) => Promise<Hooks> };
+    return { hooks: await module.TETPlugin({ client, directory: dir }), renames };
+  }
+
+  const session = (id: string, extra: Record<string, unknown> = {}): unknown => ({
+    type: "session.created",
+    properties: { info: { id, title: "First prompt", time: { created: 1, updated: 2 }, ...extra } }
+  });
+
+  it("compiles as TypeScript whatever the paths hold", () => {
+    const source = renderOpencodePlugin({ ...options(nasty), contextFile: nasty });
+    assert.doesNotThrow(() => esbuild.transformSync(source, { loader: "ts" }));
+    assert.ok(source.includes(JSON.stringify(nasty)), "baked in as a JS literal, never spliced raw");
+  });
+
+  it("does nothing for another repository's process", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
+    process.env.TET_PROJECT_ROOT = "elsewhere";
+    const { hooks } = await load(dir);
+    await hooks.event({ event: session("ses_a") });
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
+    assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
+    assert.equal(fs.existsSync(path.join(dir, "finished", "ses_a")), false);
+  });
+
+  it("records root sessions, marks the turns, and appends the context file", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
+    process.env.TET_PROJECT_ROOT = dir;
+    const { hooks } = await load(dir, "tet-opencode-abc");
+
+    await hooks.event({ event: session("ses_a") });
+    await hooks.event({ event: session("ses_child", { parentID: "ses_a" }) });
+    const record = JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8"));
+    assert.deepEqual(record, { id: "ses_a", title: "First prompt", created: 1, updated: 2, sandbox: "tet-opencode-abc" });
+    assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_child.json")), false, "a subagent's session is no tab");
+    await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
+    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
+
+    await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_a", status: { type: "busy" } } } });
+    await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_child", status: { type: "busy" } } } });
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
+    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_child" } } });
+    await hooks.event({ event: { type: "question.asked", properties: { sessionID: "ses_a" } } });
+    await hooks.event({ event: { type: "session.status", properties: { sessionID: "../escape", status: { type: "busy" } } } });
+    assert.deepEqual(fs.readdirSync(path.join(dir, "busy")), ["ses_a"], "only a root session's id becomes a marker");
+    assert.deepEqual(fs.readdirSync(path.join(dir, "finished")), ["ses_a"]);
+    assert.deepEqual(fs.readdirSync(path.join(dir, "waiting")), ["ses_a"]);
+
+    await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_a" } } } });
+    assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
+
+    fs.writeFileSync(path.join(dir, "context.md"), "\uFEFFhello\n");
+    const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as { text: string; synthetic: boolean }[] };
+    await hooks["chat.message"]({}, output);
+    assert.equal(output.parts.length, 1);
+    assert.equal(output.parts[0].text, "hello\n");
+    assert.equal(output.parts[0].synthetic, true);
+  });
+
+  it("holds a permission back until opencode had its chance to approve it itself", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
+    process.env.TET_PROJECT_ROOT = dir;
+    const { hooks } = await load(dir);
+    await hooks.event({ event: { type: "permission.asked", properties: { id: "per_1", sessionID: "ses_a" } } });
+    await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_1", sessionID: "ses_a" } } });
+    await hooks.event({ event: { type: "permission.asked", properties: { id: "per_2", sessionID: "ses_b" } } });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    assert.deepEqual(fs.readdirSync(path.join(dir, "waiting")), ["ses_b"], "the auto-approved one never counted as a question");
+  });
+
+  it("applies a rename request through the session's own process", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
+    process.env.TET_PROJECT_ROOT = dir;
+    const { renames } = await load(dir);
+    fs.mkdirSync(path.join(dir, "rename"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "rename", "ses_a"), "New title\n");
+    fs.writeFileSync(path.join(dir, "rename", "..escape"), "nope");
+    await eventually("the request is picked up", () => renames.length === 1, 3000);
+    assert.deepEqual(renames, [{ path: { id: "ses_a" }, body: { title: "New title" } }]);
+    assert.equal(fs.existsSync(path.join(dir, "rename", "ses_a")), false, "consumed");
   });
 });
 

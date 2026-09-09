@@ -11,16 +11,6 @@ import { shellAgent } from "./shell";
 export const AGENTS: AgentDefinition[] = [claudeAgent, opencodeAgent, codexAgent, piAgent, shellAgent];
 
 /**
- * Every agent's one-time setup, before the first project opens — see AgentDefinition.prepareApp.
- * The one call the main process makes into this layer that is about no repository at all.
- */
-export function prepareAgents(storageRoot: string): void {
-  for (const agent of AGENTS) {
-    agent.prepareApp?.(storageRoot);
-  }
-}
-
-/**
  * The first installed agent that can be asked a question without a terminal, in registration
  * order — the shell has no `askArgs` and is skipped by that alone. Which one it is stays this
  * registry's knowledge: a caller only wants *someone* to put a question to.

@@ -22,11 +22,13 @@ export type Marker = "busy" | "finished" | "waiting";
 const MARKER_SWEEP_MS = 2000;
 
 /**
- * The characters a session id may consist of — every agent's ids are uuids or hex — and so
- * the only ones that may ever reach a marker's filename. Written once here, spelled into each
- * guard below and into pi's generated extension, so nothing but a session id becomes a path.
+ * The characters a session id may consist of — uuids or hex for Claude Code, Codex and pi,
+ * `ses_` plus base62 for opencode — and so the only ones that may ever reach a marker's
+ * filename: no separator, no dot, nothing that could leave the directory. Written once here,
+ * spelled into each guard below and into the generated pi extension and opencode plugin, so
+ * nothing but a session id becomes a path.
  */
-export const SESSION_ID_CHARS = "0-9a-fA-F-";
+export const SESSION_ID_CHARS = "0-9A-Za-z_-";
 
 export function markerDir(storageDir: string, kind: Marker): string {
   return path.join(storageDir, kind);

@@ -12,28 +12,11 @@ export interface ScriptInvocation {
 }
 
 /**
- * Builds a shell command that shows a native OS notification through each platform's built-in
- * notifier — no extra dependency, no registry writes, no installs. Notification-only, no click
- * action: making a toast act on a click requires registering an app identity, which would mean
- * writing to the registry. `id` must be unique per call site — it names the generated script
- * file, so two events do not overwrite each other's.
- *
- * For opencode's and pi's own notify paths only, which run directly on the host process itself
- * with no sandbox to consider — see buildHookNotifyCommand for the Claude/Codex hooks, which do.
- */
-export function buildNotifyCommand(storageDir: string, id: string, title: string, body: string): string {
-  const scriptFile = writeNotifyScript(storageDir, id, title, body);
-  // The same invocation as a command line: only the path, the last argument, can hold a space.
-  const { command, args } = scriptInvocation(scriptFile);
-  return [command, ...args.slice(0, -1), `"${scriptFile}"`].join(" ");
-}
-
-/**
- * The one way a Claude/Codex hook shows a toast, host or sandboxed alike: `tet-ctl notify`,
- * never a script invoked directly. Only the process actually holding the desktop session can
- * show a real notification, and for a sandboxed hook that is never the sandbox itself — but
- * `tet-ctl` already reaches the host over the control channel (see control-server.ts's own
- * `notify` verb, which does what `buildNotifyCommand` above does directly, on the host's behalf).
+ * The one way a Claude/Codex hook — and opencode's plugin — shows a toast, host or sandboxed
+ * alike: `tet-ctl notify`, never a script invoked directly. Only the process actually holding
+ * the desktop session can show a real notification, and for a sandboxed hook that is never the
+ * sandbox itself — but `tet-ctl` already reaches the host over the control channel (see
+ * control-server.ts's own `notify` verb, which runs the script below on the host's behalf).
  * Routing every hook through the same relay, host tabs included, means there is exactly one
  * mechanism to reason about instead of a host/sandbox split repeated at every call site — the
  * cost is that a Stop/Waiting toast now depends on the control server being reachable, same as
@@ -45,9 +28,12 @@ export function buildHookNotifyCommand(target: HookTarget, title: string, body: 
 }
 
 /**
- * The script behind buildNotifyCommand, on its own: written and its path returned, for an agent
- * that starts it from inside its own process (pi's extension, through child_process) rather
- * than handing a command line to a hook shell.
+ * A script that shows a native OS notification through each platform's built-in notifier — no
+ * extra dependency, no registry writes, no installs. Notification-only, no click action: making
+ * a toast act on a click requires registering an app identity, which would mean writing to the
+ * registry. `id` must be unique per call site — it names the script file, so two events do not
+ * overwrite each other's. Written and its path returned, for the process that starts it: the
+ * control server's `notify` verb, and pi's extension from inside pi's own process.
  */
 export function writeNotifyScript(storageDir: string, id: string, title: string, body: string): string {
   if (process.platform === "win32") {

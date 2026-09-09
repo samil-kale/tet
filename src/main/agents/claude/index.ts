@@ -39,10 +39,10 @@ export const claudeAgent: AgentDefinition = {
   },
   prepareSandboxSpawn: (cwd, paths) => {
     try {
-      return setupClaudeHooks(sandboxHookDir(paths.agentDir), cwd, "Claude", paths.notifications, paths, paths.theme.kind, sandboxTarget());
+      return { args: setupClaudeHooks(sandboxHookDir(paths.agentDir), cwd, "Claude", paths.notifications, paths, paths.theme.kind, sandboxTarget()) };
     } catch (error) {
       console.error("[tet] could not write Claude sandbox hook settings:", error);
-      return [];
+      return { args: [] };
     }
   },
   // See AgentDefinition.sandboxEnv: the sandbox can't reach the feature-flag service that
