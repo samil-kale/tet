@@ -291,6 +291,14 @@ export const TETPlugin = async (input: any) => {
   return {
     "chat.message": async (_input: any, output: any) => {
       if (!mine) return;
+      // The turn starts here, once, the way it does for every other agent tet drives: a prompt
+      // was submitted. Not from session.status, which is raised again for every step of the turn
+      // — twenty tool calls used to be twenty reports, each ~100 ms on the way out of a sandbox,
+      // and the last of them raced its own turn's session.idle. The mark is a state, not a
+      // pulse: once set it stands until the end of the turn reports.
+      if (!children.has(String(output?.message?.sessionID))) {
+        report("prompt-submit");
+      }
       try {
         let text = fs.readFileSync(CONTEXT_FILE, "utf8");
         if (text.charCodeAt(0) === 0xfeff) {
@@ -328,15 +336,6 @@ export const TETPlugin = async (input: any) => {
           return;
         case "session.deleted":
           onSession(props.info, true);
-          return;
-        // Raised for every step of a turn — a retry, the next model call — and the mark is
-        // simply set again. The other statuses (idle, retry) are not a start. \`prompt-submit\`
-        // is what a turn starting is called on the channel; opencode takes the context file
-        // itself, in chat.message, so it has no use for what the answer carries.
-        case "session.status":
-          if (isSessionId(props.sessionID) && !children.has(props.sessionID) && props.status?.type === "busy") {
-            report("prompt-submit");
-          }
           return;
         // The end of the turn as the tab sees it — also after an error and after an abort
         // (measured), and sometimes twice for one turn, which the mark absorbs.

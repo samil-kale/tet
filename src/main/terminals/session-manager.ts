@@ -242,6 +242,7 @@ export class ProjectSessionManager {
       contextFile: this.shellContext.contextFile,
       contextReadPaths: [this.shellContext.logFile],
       storageRoot: this.storageRoot,
+      idleReminder: this.settings.get().notifications.idleReminder,
       theme: currentTheme(this.settings)
     };
   }

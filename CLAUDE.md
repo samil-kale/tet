@@ -325,7 +325,10 @@ session no tab has claimed yet.
 sees on stdout: the context file's text for `prompt-submit` — which is why Claude and Codex need
 only one `UserPromptSubmit` hook — and `{}` for the rest, since Codex reads its Stop hook's
 stdout as JSON. The toast is composed there too, off the settings **as they stand at that
-moment**: a notification switch applies to the next turn of every open project. `stop` asks
+moment**: a notification switch applies to the next turn of every open project. The exception is
+the idle reminder, the one event with no mark behind it — its hook is registered only when the
+switch is on (`AgentPaths.idleReminder`), rather than starting a process per idle prompt to have
+the answer thrown away, so that switch alone waits for a new tab. `stop` asks
 `AgentDefinition.holdsTurnEnd` first, which is where Claude Code's `background_tasks` guard
 lives, so a turn that only launched a subagent isn't "finished".
 

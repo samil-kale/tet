@@ -37,7 +37,7 @@ export function claudeHoldsTurnEnd(payload: string): boolean {
  */
 export function setupClaudeHooks(
   storageDir: string,
-  context: { contextReadPaths: string[] },
+  paths: { contextReadPaths: string[]; idleReminder: boolean },
   themeName: string,
   target: HookTarget = HOST_TARGET
 ): string[] {
@@ -50,12 +50,13 @@ export function setupClaudeHooks(
     Stop: [{ hooks: command("stop") }],
     // The two Notification events that mean Claude Code is blocked on the user, and the one that
     // means it has been waiting a while. Not `idle_prompt` as a question: it fires after a turn
-    // ended, which the bubble already stands for — it is a reminder, and the settings decide
-    // whether it is heard (session-manager's `toast`). No guard: these events are raised only
-    // when it has actually stopped.
+    // ended, which the bubble already stands for — it is a reminder and nothing else, so it is
+    // the one hook registered only when its toast is wanted (AgentPaths.idleReminder); every
+    // other hook leaves a mark whatever the settings say. No guard on the two below: those
+    // events are raised only when Claude Code has actually stopped.
     Notification: [
       { matcher: "permission_prompt|elicitation_dialog", hooks: command("permission") },
-      { matcher: "idle_prompt", hooks: command("idle") }
+      ...(paths.idleReminder ? [{ matcher: "idle_prompt", hooks: command("idle") }] : [])
     ],
     // `AskUserQuestion` is a tool rather than a Notification event, so the same condition needs
     // a second hook to be seen at all.
@@ -64,7 +65,7 @@ export function setupClaudeHooks(
 
   // The shell transcript sits outside the repository, where reads are denied unless granted.
   // Per file, not the directory (which also holds this settings file).
-  const permissions = { allow: context.contextReadPaths.map((file) => `Read(${target.embed(file)})`) };
+  const permissions = { allow: paths.contextReadPaths.map((file) => `Read(${target.embed(file)})`) };
 
   // Claude Code paints dark unless told otherwise; `theme` here outranks `~/.claude.json` for
   // this process alone (measured). A built-in theme name, not a custom one: custom themes load

@@ -45,7 +45,9 @@ const PROMPT_LABELS: Record<PromptId, string> = {
 const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
   { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
-  { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only)" }
+  // The one switch that is not live: its hook is registered per tab, since nothing but the
+  // toast comes of it (AgentPaths.idleReminder).
+  { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only, from the next tab on)" }
 ];
 
 /**

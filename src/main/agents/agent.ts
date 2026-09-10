@@ -110,6 +110,14 @@ export interface AgentPaths {
   /** TET's user-data root, for anything an agent has to install machine-wide. */
   storageRoot: string;
   /**
+   * Whether the idle reminder is wanted. The one notification setting an agent is handed:
+   * every other one is read when the report arrives (session-manager's `toast`), but this one
+   * has no mark behind it, so a hook registered for it would start a process per idle prompt
+   * only to have the answer thrown away. Registered or not, therefore — which is why this one
+   * switch reaches a project only through a tab started after it.
+   */
+  idleReminder: boolean;
+  /**
    * The window's color theme, handed over the same way: an agent that cannot read the terminal's
    * colors (Codex on win32 reads the console's) is told them at setup.
    */

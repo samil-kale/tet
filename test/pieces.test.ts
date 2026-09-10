@@ -394,8 +394,18 @@ describe("opencode's plugin", () => {
       await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
 
+      // The prompt being composed is the turn's one start, and the same call takes the context in.
+      fs.writeFileSync(path.join(dir, "context.md"), "\uFEFFhello\n");
+      const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as { text: string; synthetic: boolean }[] };
+      await hooks["chat.message"]({}, output);
+      assert.equal(output.parts.length, 1);
+      assert.equal(output.parts[0].text, "hello\n");
+      assert.equal(output.parts[0].synthetic, true);
+      await hooks["chat.message"]({}, { message: { id: "msg_2", sessionID: "ses_child" }, parts: [] });
+
+      // Every step of the turn raises this, and reporting each was twenty round trips for one
+      // turn \u2014 the last of them racing the idle below.
       await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_a", status: { type: "busy" } } } });
-      await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_child", status: { type: "busy" } } } });
       await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
       await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_child" } } });
       await hooks.event({ event: { type: "question.asked", properties: { sessionID: "ses_a" } } });
@@ -406,13 +416,6 @@ describe("opencode's plugin", () => {
 
       await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_a" } } } });
       assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
-
-      fs.writeFileSync(path.join(dir, "context.md"), "\uFEFFhello\n");
-      const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as { text: string; synthetic: boolean }[] };
-      await hooks["chat.message"]({}, output);
-      assert.equal(output.parts.length, 1);
-      assert.equal(output.parts[0].text, "hello\n");
-      assert.equal(output.parts[0].synthetic, true);
     } finally {
       await channel.close();
     }
