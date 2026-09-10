@@ -131,6 +131,11 @@ export function shellInvocation(shell: string): string[] {
  * interactive shell ignores SIGTERM — measured, a bash whose profile hung sat through the whole
  * timeout and died only when something else signalled it 40 s later, with the requirements check
  * waiting on it all that time. With the default killSignal the timeout above ends nothing.
+ *
+ * The signal is all it takes, though: measured, the timeout settles the call whatever the shell
+ * left running — a profile's background process still holding stdout, still writing to it, or in
+ * a session of its own, all came back at the 5 s mark, output collected. So no killing of the
+ * process group, which would take down whatever that profile deliberately started.
  */
 function loginShellPath(): Promise<string[]> {
   return new Promise((resolve, reject) => {
