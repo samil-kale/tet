@@ -1033,15 +1033,19 @@ export class ProjectSessionManager {
    * composed here, where the settings are read at the moment of the event rather than baked
    * into a generated script at setup. Whether a mark is *shown* stays the renderer's decision.
    */
-  hookEvent(tabId: string, event: HookEvent, payload: string): HookOutcome {
+  hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined): HookOutcome {
     const tab = this.disposed ? undefined : this.tabs.find((candidate) => candidate.tabId === tabId);
     if (!tab) {
       return {};
     }
-    const at = Date.now();
-    // Two of an agent's hooks can be in flight at once, each its own process racing the other
-    // to the channel; the one that lost has nothing left to say. The toast still goes out —
-    // it was true when the hook fired, as it was when the toast sat in the hook script itself.
+    // When the hook *fired*, not when it arrived: two hooks of the same turn are two requests
+    // racing each other, and out of a sandbox each spends ~100 ms on the way while the events
+    // behind them can be milliseconds apart. Ordering by arrival lets the older one win and
+    // leaves a tab both finished and working. Every report about one tab comes from that tab's
+    // own agent, so one clock decides throughout.
+    const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
+    // The one that lost the race has nothing left to say. The toast still goes out — it was true
+    // when the hook fired, as it was when the toast sat in the hook script itself.
     const fresh = at >= (tab.signalAt ?? 0);
     switch (event) {
       case "prompt-submit":

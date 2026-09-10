@@ -76,9 +76,10 @@ export interface ControlTerminals {
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   renameTab(tabId: string, title: string): Promise<void>;
-  /** A turn reported by one tab's own agent hook. An unknown tab is not an error — the tab can
-   *  have been closed while its CLI was still ending its turn. */
-  hookEvent(tabId: string, event: HookEvent, payload: string): HookOutcome;
+  /** A turn reported by one tab's own agent hook, `at` being when the hook fired rather than
+   *  when it arrived (ControlRequest.at). An unknown tab is not an error — the tab can have been
+   *  closed while its CLI was still ending its turn. */
+  hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined): HookOutcome;
 }
 
 class ControlError extends Error {
@@ -97,7 +98,12 @@ interface Answer {
   after?: () => void;
 }
 
-type Handler = (args: Record<string, unknown>, caller: ControlRequest["caller"]) => Promise<Answer> | Answer;
+type Handler = (
+  args: Record<string, unknown>,
+  caller: ControlRequest["caller"],
+  /** When the caller spoke — see ControlRequest.at. */
+  at: number | undefined
+) => Promise<Answer> | Answer;
 
 function text(args: Record<string, unknown>, name: string, what: string): string {
   const value = args[name];
@@ -312,7 +318,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { notified: true } };
     },
 
-    hook: (args, caller) => {
+    hook: (args, caller, at) => {
       const event = text(args, "event", "hook event");
       if (!HOOK_EVENTS.some((candidate) => candidate === event)) {
         throw new ControlError("bad_args", `unknown hook event: ${event} (one of ${HOOK_EVENTS.join(", ")})`);
@@ -321,7 +327,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", "a hook reports for the tab it runs in, and this is not one");
       }
       const payload = typeof args.payload === "string" ? args.payload : "";
-      const outcome = terminals(project(args, caller)).hookEvent(caller.tabId, event as HookEvent, payload);
+      const outcome = terminals(project(args, caller)).hookEvent(caller.tabId, event as HookEvent, payload, at);
       if (outcome.toast) {
         deps.notify(outcome.toast.title, outcome.toast.body);
       }
@@ -373,7 +379,7 @@ export async function startControlServer(
       return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
     }
     try {
-      const answer = await handler(request.args ?? {}, request.caller ?? {});
+      const answer = await handler(request.args ?? {}, request.caller ?? {}, request.at);
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {
       if (error instanceof ControlError) {

@@ -28,6 +28,13 @@ export interface ControlRequest {
   /** The tab the CLI was run from, off its environment — what "the project" means when no
    *  `--project` was given, and what a verb must answer *before* acting on, if it is the target. */
   caller: { projectId?: string; tabId?: string };
+  /**
+   * When the caller spoke, by its own clock — what a turn signal is *ordered* by, since two
+   * hooks of the same turn are two requests racing each other and the one that arrives second
+   * is not always the one that happened second. Every report about one tab comes from the same
+   * place (that tab's agent, host or sandbox), so one clock decides throughout.
+   */
+  at?: number;
 }
 
 export type ControlResponse =

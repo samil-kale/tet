@@ -40,6 +40,8 @@ interface Calls {
   shutdown: boolean[];
   notified: [string, string][];
   hooks: [string, string, string][];
+  /** What each hook said its own time was — see ControlRequest.at. */
+  hookTimes: (number | undefined)[];
 }
 
 let tempDir: string;
@@ -66,8 +68,9 @@ function terminalsOf(projectId: string): ControlTerminals {
     renameTab: async (tabId, title) => {
       calls.renamed.push([tabId, title]);
     },
-    hookEvent: (tabId, event, payload) => {
+    hookEvent: (tabId, event, payload, at) => {
       calls.hooks.push([tabId, event, payload]);
+      calls.hookTimes.push(at);
       if (tabId !== OWN_TAB) {
         return {};
       }
@@ -152,7 +155,8 @@ describe("tet-ctl against the control server", () => {
       changed: [],
       shutdown: [],
       notified: [],
-      hooks: []
+      hooks: [],
+      hookTimes: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -387,11 +391,16 @@ describe("tet-ctl against the control server", () => {
   // person's: verbatim, and never a word of tet's own on top.
   it("hands a hook's payload over and answers with what the agent must see", async () => {
     const payload = '{"session_id":"abc","background_tasks":[]}';
+    const before = Date.now();
     const run = await tetCtl(["hook", "prompt-submit"], {}, payload);
     assert.equal(run.status, EXIT_CODES.ok);
     assert.equal(run.stdout, "<tet_context>the repository</tet_context>\n", "the answer, and nothing else");
     assert.deepEqual(calls.hooks, [[OWN_TAB, "prompt-submit", payload]]);
     assert.deepEqual(calls.notified, [], "nothing to toast about a prompt");
+    // When the hook fired, not when it was handled: what two racing reports of one turn are
+    // ordered by, and the whole reason a finished turn does not go back to working.
+    const [at] = calls.hookTimes;
+    assert.ok(typeof at === "number" && at >= before && at <= Date.now(), `own time carried through, got ${String(at)}`);
   });
 
   it("answers one JSON value where the event has nothing to say, and shows its toast", async () => {

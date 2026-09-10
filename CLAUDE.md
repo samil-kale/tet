@@ -329,6 +329,12 @@ moment**: a notification switch applies to the next turn of every open project. 
 `AgentDefinition.holdsTurnEnd` first, which is where Claude Code's `background_tasks` guard
 lives, so a turn that only launched a subagent isn't "finished".
 
+**A report is ordered by when it was *made*, never by when it arrived** (`ControlRequest.at`):
+two hooks of one turn are two requests racing each other, out of a sandbox ~100 ms each while the
+events behind them are milliseconds apart — order them by arrival and a `busy` overtakes its own
+turn's `stop`, leaving a tab finished *and* working. All of a tab's reports come from that tab's
+own agent, so one clock decides throughout.
+
 Measured, and the reason the command is a bare `tet-ctl`: Claude Code runs its win32 hooks under
 `/usr/bin/bash`, where `cmd.exe /c` is mangled by MSYS and a `.cmd` on PATH does not resolve —
 hence the second, extensionless launcher (`control-launcher.ts`). A hook must never fail its own

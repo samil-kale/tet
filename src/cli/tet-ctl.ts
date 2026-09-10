@@ -169,7 +169,9 @@ async function main(): Promise<void> {
     token,
     verb,
     args,
-    caller: { projectId: process.env[CONTROL_ENV.projectId], tabId: process.env[CONTROL_ENV.tabId] }
+    caller: { projectId: process.env[CONTROL_ENV.projectId], tabId: process.env[CONTROL_ENV.tabId] },
+    // This process started when the hook fired, which is what a turn signal is ordered by.
+    at: Date.now()
   };
   let response: ControlResponse;
   try {

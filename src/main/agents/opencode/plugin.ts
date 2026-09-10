@@ -159,7 +159,9 @@ function report(event: string): void {
     token,
     verb: "hook",
     args: { event },
-    caller: { projectId: process.env[CONTROL.projectId], tabId: process.env[CONTROL.tabId] }
+    caller: { projectId: process.env[CONTROL.projectId], tabId: process.env[CONTROL.tabId] },
+    // Now, not when it arrives: nothing here is awaited, so two reports of one turn race.
+    at: Date.now()
   });
   try {
     const request = http.request(

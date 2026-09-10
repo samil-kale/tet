@@ -305,6 +305,12 @@ describe("pi's extension", () => {
       // The tab is the address; no session id is involved at all any more.
       assert.deepEqual(channel.reports[0].caller, { projectId: "p1", tabId: "tab-1" });
       assert.equal(channel.reports[0].verb, "hook");
+      // Nothing here is awaited, so two reports of one turn race — each carries its own time,
+      // which is what tet orders them by.
+      assert.ok(
+        channel.reports.every((report) => typeof report.at === "number" && report.at > 0),
+        "every report says when it was made"
+      );
     } finally {
       await channel.close();
     }
