@@ -24,7 +24,7 @@
     "@shikijs/langs": "^4.4.3",
     "@shikijs/monaco": "^4.4.3",
     "@shikijs/themes": "^4.4.3",
-    "@types/node": "^20.19.0",
+    "@types/node": "^24.13.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@xterm/addon-clipboard": "^0.2.0",
