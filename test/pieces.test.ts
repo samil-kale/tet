@@ -445,6 +445,15 @@ describe("opencode's plugin", () => {
       await hooks.event({ event: { type: "permission.asked", properties: { id: "per_2", sessionID: "ses_b" } } });
       await new Promise((resolve) => setTimeout(resolve, 700));
       assert.deepEqual(reported(channel.reports), ["permission"], "the auto-approved one never counted as a question");
+
+      // The slow one did stand as a question, so its answer has to take the mark away again —
+      // nothing else would before the turn ended.
+      await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_2", sessionID: "ses_b" } } });
+      await eventually("the question taken back", () => channel.reports.length === 2, 3000);
+      assert.deepEqual(reported(channel.reports), ["permission", "prompt-submit"]);
+      await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_2", sessionID: "ses_b" } } });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      assert.equal(channel.reports.length, 2, "and only once, however often the reply is seen");
     } finally {
       await channel.close();
     }

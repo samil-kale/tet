@@ -209,20 +209,24 @@ export const TETPlugin = async (input: any) => {
   // seen counts as a root.
   const children = new Set<string>();
   const pendingPermissions = new Map<string, ReturnType<typeof setTimeout>>();
+  // Permissions that got as far as a question mark, so their reply knows to take it away again.
+  const markedPermissions = new Set<string>();
   const lastWaiting = new Map<string, number>();
 
   // Both of opencode's ways of stopping for the user report as \`permission\`: its question tool
-  // is one more thing it is blocked on, and the wording tet toasts is the same for both.
-  const waiting = (sessionId: unknown): void => {
+  // is one more thing it is blocked on, and the wording tet toasts is the same for both. Answers
+  // whether this tab now has a question standing — a repeat inside the gap counts, since the one
+  // reported a moment ago is still there.
+  const waiting = (sessionId: unknown): boolean => {
     if (!isSessionId(sessionId) || children.has(sessionId)) {
-      return;
+      return false;
     }
     const now = Date.now();
-    if (now - (lastWaiting.get(sessionId) ?? 0) <= WAITING_GAP_MS) {
-      return;
+    if (now - (lastWaiting.get(sessionId) ?? 0) > WAITING_GAP_MS) {
+      lastWaiting.set(sessionId, now);
+      report("permission");
     }
-    lastWaiting.set(sessionId, now);
-    report("permission");
+    return true;
   };
 
   const onSession = (info: any, deleted: boolean): void => {
@@ -351,7 +355,9 @@ export const TETPlugin = async (input: any) => {
           }
           const timer = setTimeout(() => {
             pendingPermissions.delete(key);
-            waiting(props.sessionID);
+            if (waiting(props.sessionID)) {
+              markedPermissions.add(key);
+            }
           }, PERMISSION_SETTLE_MS);
           timer.unref?.();
           pendingPermissions.set(key, timer);
@@ -363,6 +369,12 @@ export const TETPlugin = async (input: any) => {
           if (timer) {
             clearTimeout(timer);
             pendingPermissions.delete(key);
+          }
+          // One that did stand as a question is answered now, by whoever — opencode itself where
+          // its own approval took longer than the settle above. The session is working again, and
+          // saying so is what takes the mark away; nothing else would until the turn ended.
+          if (markedPermissions.delete(key)) {
+            report("prompt-submit");
           }
           return;
         }
