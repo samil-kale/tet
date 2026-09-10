@@ -336,7 +336,9 @@ lives, so a turn that only launched a subagent isn't "finished".
 two hooks of one turn are two requests racing each other, out of a sandbox ~100 ms each while the
 events behind them are milliseconds apart — order them by arrival and a `busy` overtakes its own
 turn's `stop`, leaving a tab finished *and* working. All of a tab's reports come from that tab's
-own agent, so one clock decides throughout.
+own agent, so one clock decides throughout — and a report *much* older than the last one is that
+clock having moved rather than a race, so it is taken (`turn-order.ts`), or a container corrected
+after the host slept would freeze a tab's marks until real time caught up.
 
 Measured, and the reason the command is a bare `tet-ctl`: Claude Code runs its win32 hooks under
 `/usr/bin/bash`, where `cmd.exe /c` is mangled by MSYS and a `.cmd` on PATH does not resolve —
