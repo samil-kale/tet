@@ -374,6 +374,11 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.notified, [["Codex: Finished", "Finished in repo"]]);
   });
 
+  it("takes a notification that is a title and nothing more", async () => {
+    assert.deepEqual((await tetCtl(["notify", "Build finished"])).result, { notified: true });
+    assert.deepEqual(calls.notified, [["Build finished", ""]]);
+  });
+
   it("refuses to restart without --confirm", async () => {
     const run = await tetCtl(["restart-app"]);
     assert.equal(run.status, EXIT_CODES.usage);

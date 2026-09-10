@@ -145,8 +145,8 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   },
   {
     verb: "notify",
-    usage: "notify <title> <body>",
-    summary: "Show a desktop notification from TET's own process — used by Claude/Codex hooks so a sandboxed one shows a real toast too.",
+    usage: "notify <title> [body]",
+    summary: "Show a desktop notification from TET's own process — the one with a desktop session, so a sandboxed agent gets a real toast too.",
     positionals: ["title", "body"]
   },
   {

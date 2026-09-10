@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import * as crypto from "node:crypto";
-import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
@@ -18,7 +17,7 @@ import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
 import { configureSandboxes } from "./sbx";
 import { augmentAgentPath } from "./terminals/agent-path";
-import { scriptInvocation, writeNotifyScript } from "./terminals/os-notify";
+import { ensureNotifyScript, NOTIFY_ENV } from "./terminals/os-notify";
 import { setControlEnv } from "./terminals/pty";
 import { installUncaughtHandler } from "./uncaught";
 import { isAgentInstalled } from "./terminals/terminal-session";
@@ -131,19 +130,58 @@ let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
 /**
- * The real desktop toast behind the control channel's `notify` verb — this process is the one
- * holding the desktop session (a sandboxed hook has none; see os-notify.ts's
- * the `hook` and `notify` verbs). `unref` so a toast never keeps the event loop alive, but **not**
+ * The window's notices drop "an identical message already standing" (Notices.tsx), and a toast
+ * gets the same rule with the span a notice stands for as its window — two tabs of one agent
+ * finishing together, or an agent calling `notify` in a loop, is one toast and one PowerShell.
+ * A dropped repeat does not extend the window: what stands is still the first one's.
+ */
+const TOAST_REPEAT_MS = 8000;
+const recentToasts = new Map<string, number>();
+
+function repeatedToast(title: string, body: string): boolean {
+  const now = Date.now();
+  for (const [seen, at] of recentToasts) {
+    if (now - at >= TOAST_REPEAT_MS) {
+      recentToasts.delete(seen);
+    }
+  }
+  const key = `${title}\u0000${body}`;
+  if (recentToasts.has(key)) {
+    return true;
+  }
+  recentToasts.set(key, now);
+  return false;
+}
+
+/**
+ * The real desktop toast behind the control channel's `hook` and `notify` verbs — this process is
+ * the one holding the desktop session (a sandboxed hook has none). The two strings travel in the
+ * child's environment, so every toast runs the same script file (os-notify.ts). Nothing here
+ * throws: the `hook` verb shows its toast on the way to answering, and an agent's turn must not
+ * hang on a notification. `unref` so a toast never keeps the event loop alive, but **not**
  * `detached`: measured, a detached `powershell -File` of the exact same script never got past
  * `CreateToastNotifier`/`ToastNotification.Show()` (alive but idle, no error, no toast, forever),
  * while the same script non-detached completes in well under a second.
  */
 function showDesktopNotification(title: string, body: string): void {
-  const dir = path.join(app.getPath("userData"), "notify");
-  fs.mkdirSync(dir, { recursive: true });
-  const scriptFile = writeNotifyScript(dir, "relay", title, body);
-  const { command, args } = scriptInvocation(scriptFile);
-  spawn(command, args, { stdio: "ignore", windowsHide: true }).unref();
+  if (repeatedToast(title, body)) {
+    return;
+  }
+  try {
+    const { command, args } = ensureNotifyScript(path.join(app.getPath("userData"), "notify"));
+    const child = spawn(command, args, {
+      stdio: "ignore",
+      windowsHide: true,
+      env: { ...process.env, [NOTIFY_ENV.title]: title, [NOTIFY_ENV.body]: body }
+    });
+    // A notifier that cannot be started at all (no powershell on PATH, no `sh`) reaches a spawn
+    // as an `error` event, and an unhandled one is an uncaught exception in the process every
+    // terminal's output goes through.
+    child.once("error", () => undefined);
+    child.unref();
+  } catch (error) {
+    console.error("[tet] notification not shown:", error);
+  }
 }
 
 /**

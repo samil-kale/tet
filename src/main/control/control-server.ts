@@ -52,7 +52,8 @@ export interface ControlDeps {
   /** Tells the window the project list changed under it, and which entry to activate or forget. */
   projectsChanged(change: { added?: string; removed?: string }): void;
   /** Shows a real desktop notification from this process, the one holding the desktop session. A
-   *  sandboxed Claude/Codex hook has none, so it asks this process instead. Fire-and-forget. */
+   *  sandboxed hook has none, so its report is toasted here instead. Fire-and-forget, and it must
+   *  never throw: `hook` shows its toast on the way to answering, and that answer is a turn. */
   notify(title: string, body: string): void;
 }
 
@@ -314,7 +315,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     notify: (args) => {
-      deps.notify(text(args, "title", "title"), text(args, "body", "body"));
+      // A title alone is a notification; the body is for what does not fit in one. Every toast
+      // tet composes itself has both, so only a caller of the verb ever leaves it out.
+      const body = args.body;
+      deps.notify(text(args, "title", "title"), typeof body === "string" ? body : "");
       return { result: { notified: true } };
     },
 

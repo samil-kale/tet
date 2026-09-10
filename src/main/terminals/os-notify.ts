@@ -11,107 +11,94 @@ export interface ScriptInvocation {
 }
 
 /**
- * A script that shows a native OS notification through each platform's built-in notifier — no
- * extra dependency, no registry writes, no installs. No click action: that needs a registered app
- * identity. `id` names the script file and must be unique per call site; its path is returned.
+ * Where the notifier reads its two strings: the environment of the process running the script,
+ * never the script itself. That is what makes one file serve every toast — measured, rewriting
+ * the script while a PowerShell still had it open fails outright (`EBUSY`), and that failure
+ * travelled up the `hook` verb and swallowed the answer the reporting agent was waiting for. It
+ * also ends every quoting question at once: no shell, no script parser and no markup literal
+ * ever sees what a user or an agent wrote.
  */
-export function writeNotifyScript(storageDir: string, id: string, title: string, body: string): string {
+export const NOTIFY_ENV = { title: "TET_NOTIFY_TITLE", body: "TET_NOTIFY_BODY" } as const;
+
+/**
+ * The script that shows a native OS notification through each platform's built-in notifier — no
+ * extra dependency, no registry writes, no installs. No click action: that needs a registered app
+ * identity. Written on first use and whenever its content changed (a tet update), and returned as
+ * the plain spawn that runs it. `-File` rather than `-Command`, so the path is never re-parsed by
+ * PowerShell; measured through pi's extension on win32 as exactly this shape.
+ */
+export function ensureNotifyScript(storageDir: string): ScriptInvocation {
+  fs.mkdirSync(storageDir, { recursive: true });
   if (process.platform === "win32") {
-    return writeWindowsScript(storageDir, id, title, body);
+    const file = path.join(storageDir, "notify.ps1");
+    replaceIfChanged(file, WIN_BOM + WINDOWS_SCRIPT);
+    return { command: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file] };
   }
-  if (process.platform === "darwin") {
-    return writeMacScript(storageDir, id, title, body);
-  }
-  return writeLinuxScript(storageDir, id, title, body);
+  const file = path.join(storageDir, "notify.sh");
+  // sh chokes on CRLF, whatever this source file is stored with — see writePosixScript.
+  replaceIfChanged(file, (process.platform === "darwin" ? MAC_SCRIPT : LINUX_SCRIPT).replace(/\r\n/g, "\n"));
+  return { command: "sh", args: [file] };
 }
 
-/** How such a script is started as a plain spawn. `-File` rather than `-Command`, so the path is
- *  never re-parsed by PowerShell. Measured through pi's extension on win32 as exactly this shape. */
-export function scriptInvocation(scriptFile: string): ScriptInvocation {
-  if (process.platform === "win32") {
-    return { command: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptFile] };
-  }
-  return { command: "sh", args: [scriptFile] };
-}
+/** Well-known AUMID Windows registers by default for its own PowerShell Start Menu shortcut.
+ *  Reusing it creates no registry entry, at the price of attributing the toast to PowerShell. */
+const WINDOWS_APP_ID = String.raw`{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe`;
 
-function writeWindowsScript(storageDir: string, id: string, title: string, body: string): string {
-  const scriptFile = path.join(storageDir, `notify-${id}.ps1`);
-  // Well-known AUMID Windows registers by default for its own PowerShell Start Menu shortcut.
-  // Reusing it creates no registry entry, at the price of attributing the toast to PowerShell.
-  const appId = String.raw`{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe`;
-  fs.writeFileSync(
-    scriptFile,
-    WIN_BOM +
-      `[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
+/**
+ * Single-quoted literals throughout: the interpolating string would read a title as code, and a
+ * folder named `cost$analysis` or one with `$(...)` in it is a real name. The toast is markup, so
+ * both values are XML-escaped where they are read — `SecurityElement::Escape` covers `& < > " '`.
+ * `activationType="protocol"` with an empty launch URI makes the click a no-op; without it the
+ * click activates the app behind the AUMID, which pops a dialog about an external application.
+ */
+const WINDOWS_SCRIPT = `[void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
 [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
 
-# @'...'@, not @"..."@: the literal here-string. The interpolating one reads the text below as
-# code — a folder named "cost$analysis" loses half its name to an empty variable, one with
-# $(...) in it runs whatever that says.
-$template = @'
-<toast activationType="protocol" launch="">
-  <visual>
-    <binding template="ToastGeneric">
-      <text>${escapeXml(title)}</text>
-      <text>${escapeXml(body)}</text>
-    </binding>
-  </visual>
-</toast>
-'@
-
-# activationType="protocol" with an empty launch URI makes the click a no-op. Without it the
-# click activates the app behind $appId, which pops a dialog about an external application.
-$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-$xml.LoadXml($template)
 try {
-  $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${appId}')
+  $title = [System.Security.SecurityElement]::Escape($env:${NOTIFY_ENV.title})
+  $body = [System.Security.SecurityElement]::Escape($env:${NOTIFY_ENV.body})
+  $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+  $xml.LoadXml('<toast activationType="protocol" launch=""><visual><binding template="ToastGeneric"><text>' + $title + '</text><text>' + $body + '</text></binding></visual></toast>')
+  $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('${WINDOWS_APP_ID}')
   $notifier.Show([Windows.UI.Notifications.ToastNotification]::new($xml))
 } catch {}
-`
-  );
-  return scriptFile;
-}
+`;
 
-function writeMacScript(storageDir: string, id: string, title: string, body: string): string {
-  const scriptFile = path.join(storageDir, `notify-${id}.sh`);
-  // The values go through env vars read via AppleScript's `system attribute` rather than into
-  // the -e string, so no AppleScript string-literal escaping is needed for any title/body.
-  writePosixScript(
-    scriptFile,
-    `#!/bin/sh
-TET_TITLE=${shellSingleQuote(title)} TET_BODY=${shellSingleQuote(body)} osascript -e 'display notification (system attribute "TET_BODY") with title (system attribute "TET_TITLE")' >/dev/null 2>&1
+/** `system attribute` reads osascript's own environment, so no AppleScript string literal is
+ *  built around either value and nothing in them needs escaping. */
+const MAC_SCRIPT = `#!/bin/sh
+osascript -e 'display notification (system attribute "${NOTIFY_ENV.body}") with title (system attribute "${NOTIFY_ENV.title}")' >/dev/null 2>&1
 exit 0
-`
-  );
-  return scriptFile;
-}
+`;
 
-function writeLinuxScript(storageDir: string, id: string, title: string, body: string): string {
-  const scriptFile = path.join(storageDir, `notify-${id}.sh`);
-  // Guarded with `command -v`: notify-send ships with most desktop distros but not
-  // minimal/headless ones, and a missing binary must fail silently rather than as a hook error.
-  writePosixScript(
-    scriptFile,
-    `#!/bin/sh
-command -v notify-send >/dev/null 2>&1 && notify-send ${shellSingleQuote(title)} ${shellSingleQuote(body)}
+/** Guarded with `command -v`: notify-send ships with most desktop distros but not minimal or
+ *  headless ones, and a missing binary must fail silently rather than as a hook error. `--` so a
+ *  title that happens to start with a dash stays a title. */
+const LINUX_SCRIPT = `#!/bin/sh
+command -v notify-send >/dev/null 2>&1 && notify-send -- "$${NOTIFY_ENV.title}" "$${NOTIFY_ENV.body}"
 exit 0
-`
-  );
-  return scriptFile;
+`;
+
+/** Written beside the target and renamed into place, and only when it would differ: the file is
+ *  read by another process, and on Windows a read landing mid-write fails outright. */
+function replaceIfChanged(file: string, contents: string): void {
+  let existing: string | undefined;
+  try {
+    existing = fs.readFileSync(file, "utf8");
+  } catch {
+    existing = undefined;
+  }
+  if (existing === contents) {
+    return;
+  }
+  const temp = `${file}.tmp`;
+  fs.writeFileSync(temp, contents);
+  fs.renameSync(temp, file);
 }
 
 /** sh chokes on CRLF (`then\r`, `fi\r`), whatever line endings the source file was stored with. */
 export function writePosixScript(file: string, contents: string): void {
   fs.writeFileSync(file, contents.replace(/\r\n/g, "\n"));
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
 }
 
 /** Wraps a value as a POSIX sh single-quoted string, safe for any content. */

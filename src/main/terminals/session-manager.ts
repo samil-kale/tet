@@ -1066,8 +1066,8 @@ export class ProjectSessionManager {
     // own agent, so one clock decides throughout.
     const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
     // The one that lost the race has nothing left to say; one that is *much* older is a clock
-    // that moved, not a race (turn-order.ts). The toast still goes out either way — it was true
-    // when the hook fired, as it was when the toast sat in the hook script itself.
+    // that moved, not a race (turn-order.ts). No mark and no toast either: a report the marks
+    // decline would toast what they contradict — "Finished" over a tab already working again.
     const fresh = reportApplies(tab.signalAt, at);
     switch (event) {
       case "prompt-submit":
@@ -1076,6 +1076,7 @@ export class ProjectSessionManager {
           this.postTabs();
         }
         // What tet has to say about the repository, for the agent to put in front of the model.
+        // Answered whatever the report's age: it is this prompt that the text goes into.
         return { stdout: this.shellContext.text };
       case "stop": {
         const agent = getAgent(tab.agentId);
@@ -1083,28 +1084,30 @@ export class ProjectSessionManager {
         if (agent.holdsTurnEnd?.(payload)) {
           return {};
         }
+        if (!fresh) {
+          return {};
+        }
         // Read before the turn ends, since that is what may clear it.
         const asked = endLeavesQuestion(tab, agent);
-        if (fresh) {
-          setTurn(tab, false, at, asked);
-          this.postTabs();
-        }
+        setTurn(tab, false, at, asked);
+        this.postTabs();
         // The question's own toast went out moments ago; a second one about the same moment is
         // the toast half of the double mark setTurn declines to leave.
         return asked ? {} : { toast: this.toast(tab, "finished") };
       }
       case "permission":
       case "question":
-        // Not through setTurn: the turn is still open, `busy` is untouched.
-        if (fresh) {
-          tab.waitingAt = at;
-          tab.signalAt = at;
-          this.postTabs();
+        if (!fresh) {
+          return {};
         }
+        // Not through setTurn: the turn is still open, `busy` is untouched.
+        tab.waitingAt = at;
+        tab.signalAt = at;
+        this.postTabs();
         return { toast: this.toast(tab, event) };
       case "idle":
         // A reminder about a turn that already ended — nothing to mark, the bubble stands.
-        return { toast: this.toast(tab, "idle") };
+        return fresh ? { toast: this.toast(tab, "idle") } : {};
     }
   }
 
@@ -1119,16 +1122,20 @@ export class ProjectSessionManager {
       return undefined;
     }
     const name = getAgent(tab.agentId).displayName;
+    // Which tab, not just which repository: two tabs of one agent in one project would otherwise
+    // send word for word the same toast. A session with no title yet (listed only after the CLI
+    // wrote its transcript) leaves the repository to say it alone.
     const repository = path.basename(this.project.path);
+    const where = tab.title ? `${repository} — ${tab.title}` : repository;
     switch (kind) {
       case "finished":
-        return { title: `${name}: Finished`, body: `Finished in ${repository}` };
+        return { title: `${name}: Finished`, body: `Finished in ${where}` };
       case "permission":
-        return { title: `${name}: Action needed`, body: `Waiting for input in ${repository}` };
+        return { title: `${name}: Action needed`, body: `Waiting for input in ${where}` };
       case "question":
-        return { title: `${name}: Question`, body: `Waiting for your answer in ${repository}` };
+        return { title: `${name}: Question`, body: `Waiting for your answer in ${where}` };
       case "idle":
-        return { title: `${name}: Still waiting`, body: `No response yet in ${repository}` };
+        return { title: `${name}: Still waiting`, body: `No response yet in ${where}` };
     }
   }
 
