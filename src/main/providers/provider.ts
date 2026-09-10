@@ -1,3 +1,4 @@
+import { net } from "electron";
 import type { RemoteRepository } from "../../shared/types";
 
 /** What a repository host offers tet: authenticate and list repositories, with the clone url in the
@@ -9,13 +10,17 @@ export interface GitProvider {
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
 }
 
+/** `net.fetch`, never the global one: it goes through Chromium, so the machine's proxy settings
+ *  and its certificate store apply. Node's own stack knows neither, and behind a company proxy or
+ *  a private root certificate every listing would fail with nothing the user could configure. */
+
 /** Pages are followed through the RFC 5988 `Link` header, which GitHub and GitLab both send; the
  *  cap bounds an account that can reach thousands of repositories. */
 const PAGE_CAP = 10;
 
 /** One GET as JSON; a non-2xx status becomes an Error carrying what the API said. */
 export async function getJson(url: string, headers: Record<string, string>): Promise<unknown> {
-  const response = await fetch(url, { headers });
+  const response = await net.fetch(url, { headers });
   if (!response.ok) {
     throw new Error(await apiError(response));
   }
@@ -28,7 +33,7 @@ export async function getJson(url: string, headers: Record<string, string>): Pro
  * spends that many seconds in a row. Without a `rel="last"` it follows `rel="next"` instead.
  */
 export async function getPaged(first: string, headers: Record<string, string>): Promise<unknown[]> {
-  const response = await fetch(first, { headers });
+  const response = await net.fetch(first, { headers });
   if (!response.ok) {
     throw new Error(await apiError(response));
   }
@@ -39,7 +44,7 @@ export async function getPaged(first: string, headers: Record<string, string>): 
   if (last === undefined || lastPage === undefined) {
     let url = relLink(link, "next");
     for (let page = 1; url !== undefined && page < PAGE_CAP; page++) {
-      const rest = await fetch(url, { headers });
+      const rest = await net.fetch(url, { headers });
       if (!rest.ok) {
         throw new Error(await apiError(rest));
       }
@@ -54,7 +59,7 @@ export async function getPaged(first: string, headers: Record<string, string>): 
   }
   const bodies = await Promise.all(
     urls.map(async (url) => {
-      const rest = await fetch(url, { headers });
+      const rest = await net.fetch(url, { headers });
       if (!rest.ok) {
         throw new Error(await apiError(rest));
       }
