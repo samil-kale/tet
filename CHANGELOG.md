@@ -3,6 +3,37 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.4.0 (2026-09-10)
+
+- Agent tabs can run inside a Docker sandbox (sbx), opt-in per project from the project row's
+  "SBX Settings": Claude Code, Codex, opencode and pi each start in a container that sees the
+  repository and nothing else, with the ports, the allowed folders and single files, and the
+  skills, plugins and instructions to mount picked in the dialog and stored in the project's
+  own `tet.json`. Past sessions of a sandboxed agent are listed, resumed, renamed and deleted
+  like any other, `tet-ctl` works from inside, and a project whose agent isn't installed on the
+  machine at all can still be worked in through the sandbox. Where sbx isn't ready the tab
+  falls back to a plain local run instead of failing, and an organization-managed policy is
+  said out loud in the dialog rather than silently ignored.
+- Both ends of a turn now travel over tet's control channel instead of files on disk: the
+  working, waiting and finished marks are quicker and no longer overtake each other, a question
+  asked asynchronously keeps standing until it is really answered, opencode takes its question
+  mark back when a permission is answered, and a question that outlives its turn no longer
+  leaves a bubble beside it.
+- Desktop notifications go through Electron's own notifier.
+- The idle reminder registers its hook only when the switch is on, so nothing is run per idle
+  prompt while it is off.
+- Cloning and the provider accounts ask GitHub and GitLab through Chromium's network stack,
+  which is what makes them work behind a system proxy.
+- Every agent draws in tet's theme; the per-agent theme switches in Settings are gone.
+- The project row's changes icon toggles the git pane when its project is already selected.
+- Right-clicking a project opens its menu without selecting it.
+- The saved commands' wand is gone, and with it its prompt in Settings.
+- opencode sessions are listed from the plugin's own records, so opening the list no longer
+  boots an `opencode` process.
+- Codex takes Ctrl+C again: an empty composer quits it, a full one is cleared.
+- A window whose renderer dies is loaded again instead of staying blank.
+- Startup spreads its requirement checks out, so the first frame comes up sooner.
+
 ## 0.3.10 (2026-09-06)
 
 - pi (pi.dev) joins Claude Code, opencode and Codex as a fourth agent: a terminal tab of its
