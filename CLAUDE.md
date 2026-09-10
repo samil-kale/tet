@@ -349,7 +349,10 @@ turn, so the CLI answers a hook that cannot be delivered with silence and exit 0
 answer (`answersQuestion` in `session-manager.ts`) or either end of its turn — except where the
 asking outlives the turn, which is a measured per-agent fact (`questionOutlivesTurn`: Claude
 Code's `AskUserQuestion` blocks its turn, Codex's `request_user_input_async` answers at once and
-leaves the question queued in its composer). **No hook fires for a turn the user cut short**;
+leaves the question queued in its composer). Such an end leaves **no bubble beside the
+question** and no second toast: one moment, one notice — the tab would hide the bubble behind
+the higher-ranked mark anyway, but the project row has a button per condition and would step
+through that one tab twice. **No hook fires for a turn the user cut short**;
 the net is each agent's own transcript (`turnEndedAt` in `src/main/agents/*/sessions.ts`).
 
 State lives as `TerminalDescriptor.busy` / `waitingAt` / `finishedAt` per tab in the main

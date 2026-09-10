@@ -120,21 +120,37 @@ function titleUnsettled(tab: TabState): boolean {
 /**
  * A turn started or ended: the spinner follows, and an end leaves the mark that outlives it.
  * Either end clears `waitingAt` — a question stands open within its turn, and a new turn is a
- * new question — unless the agent's questions outlive their turn (`keepQuestion`, see
- * AgentDefinition.questionOutlivesTurn). No agent reports that a question was answered, so a
- * permission granted mid-turn leaves the mark until the tab is looked at.
+ * new question.
+ *
+ * `keepQuestion` is the exception, for an agent whose questions outlive their turn
+ * (AgentDefinition.questionOutlivesTurn): the question stays, **and the end leaves no bubble
+ * beside it**. Both would be about the same moment, and while a tab shows only the higher-ranked
+ * of the two, the project row has a button per condition and would step the user through that
+ * one tab twice. A question is the more urgent of the two anyway, and the one that says what to
+ * do about it.
+ *
+ * No agent reports that a question was answered, so a permission granted mid-turn leaves the
+ * mark until the tab is looked at.
  */
 function setTurn(tab: TabState, busy: boolean, at: number, keepQuestion = false): void {
   tab.busy = busy;
-  if (!keepQuestion) {
-    tab.waitingAt = undefined;
-  }
   tab.signalAt = at;
   if (busy) {
+    tab.waitingAt = undefined;
     tab.busySince = at;
-  } else {
-    tab.finishedAt = at;
+    return;
   }
+  if (keepQuestion && tab.waitingAt !== undefined) {
+    return;
+  }
+  tab.waitingAt = undefined;
+  tab.finishedAt = at;
+}
+
+/** Whether the end of this turn is the tab's own news, or whether a question it left standing
+ *  has already said it — see setTurn. */
+function endLeavesQuestion(tab: TabState, agent: AgentDefinition): boolean {
+  return agent.questionOutlivesTurn === true && tab.waitingAt !== undefined;
 }
 
 /**
@@ -1067,11 +1083,15 @@ export class ProjectSessionManager {
         if (agent.holdsTurnEnd?.(payload)) {
           return {};
         }
+        // Read before the turn ends, since that is what may clear it.
+        const asked = endLeavesQuestion(tab, agent);
         if (fresh) {
-          setTurn(tab, false, at, agent.questionOutlivesTurn === true);
+          setTurn(tab, false, at, asked);
           this.postTabs();
         }
-        return { toast: this.toast(tab, "finished") };
+        // The question's own toast went out moments ago; a second one about the same moment is
+        // the toast half of the double mark setTurn declines to leave.
+        return asked ? {} : { toast: this.toast(tab, "finished") };
       }
       case "permission":
       case "question":
