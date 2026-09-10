@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { WIN_BOM } from "./os-notify";
+import { WIN_BOM } from "./script-text";
 
 /** Collapses the burst of chunks a single command's output arrives in into one write. */
 const WRITE_DEBOUNCE_MS = 250;

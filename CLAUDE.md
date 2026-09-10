@@ -26,9 +26,9 @@ sites: session listing/resume/rename/delete and the reconcile loop (`src/main/ag
 plugin that writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — TET never
 runs an opencode server, never reads its SQLite file, and runs its CLI only for one-off actions);
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
-(`src/renderer/terminal/links/`); OS notifications and the `background_tasks` stop guard
-(`src/main/terminals/os-notify.ts`, `src/main/agents/claude/hooks.ts`); the `--vscode-*` theming
-layer.
+(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs and the
+`background_tasks` stop guard (`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the
+`--vscode-*` theming layer.
 
 An agent gets no editor context and no quick fix. What it gets is the shell transcript
 (`src/main/terminals/shell-context.ts`), a capped file it is pointed at; every shell tab of a
@@ -375,7 +375,7 @@ waiting on any.
 `src/` is the process list — `main/`, `renderer/`, `preload/`, `cli/` — plus `shared/`, the only
 folder any of them may import from another. `src/main/` is split by process boundary and by half:
 `git/` (the git process and everything that talks to it, `commands.ts` included), `terminals/`
-(pty, sessions, hooks, notifications), `control/` (the `tet-ctl` channel), `agents/`,
+(pty, sessions, hooks), `control/` (the `tet-ctl` channel), `agents/`,
 `providers/`; what stays flat is the app itself — window, ipc, settings. The process borders are
 lint rules (`no-restricted-imports` in `eslint.config.mjs`).
 
@@ -557,9 +557,9 @@ the others.
 
 - Build paths with `path.join`; route process spawning through `resolveCommand`
   (`src/main/terminals/pty.ts`).
-- Generated `.ps1` files need a UTF-8 BOM; generated `sh` scripts must be LF.
+- A generated file PowerShell will read needs a UTF-8 BOM; generated `sh` scripts must be LF.
 - Anything written *into* a generated script needs literal quoting (`shellSingleQuote` in
-  `os-notify.ts`): a repo folder or user name may hold a `$`.
+  `script-text.ts`): a repo folder or user name may hold a `$`.
 - A hook command is run by whichever shell the agent picked, and that is not ours to pick
   (measured on win32: Claude Code uses `/usr/bin/bash`; PowerShell and cmd.exe have been seen
   too). Keep it a bare name plus arguments — `tet-ctl hook <event>` and nothing else. Which is

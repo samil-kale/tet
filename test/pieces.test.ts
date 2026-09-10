@@ -12,7 +12,7 @@ import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/exten
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
-import { ensureNotifyScript, NOTIFY_ENV, shellSingleQuote } from "../src/main/terminals/os-notify";
+import { shellSingleQuote } from "../src/main/terminals/script-text";
 import { ProjectStore } from "../src/main/projects";
 import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
@@ -160,23 +160,6 @@ describe("sbx sandbox naming and mounts", () => {
 describe("the quoting helpers", () => {
   it("make any value one literal word in their shell", () => {
     assert.equal(shellSingleQuote("it's $HOME"), `'it'\\''s $HOME'`);
-  });
-});
-
-describe("the notification script", () => {
-  it("takes its text from the environment, and is written once", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-notify-"));
-    const first = ensureNotifyScript(dir);
-    const file = first.args[first.args.length - 1];
-    const written = fs.readFileSync(file, "utf8");
-    // One file for every toast is only safe while no toast's own text goes into it: a second
-    // notification rewriting the script fails outright where the first still has it open.
-    assert.ok(written.includes(NOTIFY_ENV.title), "reads the title from the environment");
-    assert.ok(written.includes(NOTIFY_ENV.body), "reads the body from the environment");
-    const writtenAt = fs.statSync(file).mtimeMs;
-    assert.deepEqual(ensureNotifyScript(dir), first);
-    assert.equal(fs.statSync(file).mtimeMs, writtenAt, "unchanged content is not written again");
-    assert.deepEqual(fs.readdirSync(dir), [path.basename(file)], "nothing left beside it");
   });
 });
 

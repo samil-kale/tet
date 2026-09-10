@@ -1,8 +1,7 @@
-import { spawn } from "node:child_process";
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu, Notification } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
@@ -17,7 +16,6 @@ import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
 import { configureSandboxes } from "./sbx";
 import { augmentAgentPath } from "./terminals/agent-path";
-import { ensureNotifyScript, NOTIFY_ENV } from "./terminals/os-notify";
 import { setControlEnv } from "./terminals/pty";
 import { installUncaughtHandler } from "./uncaught";
 import { isAgentInstalled } from "./terminals/terminal-session";
@@ -71,6 +69,24 @@ const USER_DATA_ARG = "--user-data-dir=";
 const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
+}
+
+/**
+ * Who Windows says a toast is from. The name and icon above every notification are the Start Menu
+ * shortcut's that carries this id — never anything the notification holds, which is why a toast
+ * needs no icon of its own. The installer puts `appId` from electron-builder.yml on that
+ * shortcut; the two strings have to stay in step, and Electron sets none of it by itself.
+ *
+ * A development run has no shortcut and reads "Electron" — and Windows keeps what it once decided
+ * about an id, so one such toast under the shipped id leaves the *installed* build reading that
+ * too, until the id is cleared from Windows' own notification database. Hence the second id: what
+ * `npm start` spends is its own. Naming that one is a `DisplayName` under
+ * `HKCU\Software\Classes\AppUserModelId\<id>`, per machine and not tet's to write. Set before the
+ * workspace, since a hook can report a turn as soon as the first terminal is up.
+ */
+const APP_USER_MODEL_ID = "com.samilkale.tet";
+if (process.platform === "win32") {
+  app.setAppUserModelId(app.isPackaged ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
 }
 
 // Before the stores, and before anything that could throw asynchronously: an uncaught exception
@@ -129,12 +145,9 @@ function openWorkspace(): void {
 let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
-/**
- * The window's notices drop "an identical message already standing" (Notices.tsx), and a toast
- * gets the same rule with the span a notice stands for as its window — two tabs of one agent
- * finishing together, or an agent calling `notify` in a loop, is one toast and one PowerShell.
- * A dropped repeat does not extend the window: what stands is still the first one's.
- */
+/** A toast follows the rule the window's notices follow — an identical message already standing
+ *  is dropped (Notices.tsx) — with the span a notice stands for as its window. A dropped repeat
+ *  does not extend that window. */
 const TOAST_REPEAT_MS = 8000;
 const recentToasts = new Map<string, number>();
 
@@ -155,33 +168,16 @@ function repeatedToast(title: string, body: string): boolean {
 
 /**
  * The real desktop toast behind the control channel's `hook` and `notify` verbs — this process is
- * the one holding the desktop session (a sandboxed hook has none). The two strings travel in the
- * child's environment, so every toast runs the same script file (os-notify.ts). Nothing here
- * throws: the `hook` verb shows its toast on the way to answering, and an agent's turn must not
- * hang on a notification. `unref` so a toast never keeps the event loop alive, but **not**
- * `detached`: measured, a detached `powershell -File` of the exact same script never got past
- * `CreateToastNotifier`/`ToastNotification.Show()` (alive but idle, no error, no toast, forever),
- * while the same script non-detached completes in well under a second.
+ * the one holding the desktop session (a sandboxed hook has none), and a platform without a
+ * notifier of its own simply shows nothing. No `icon`: Windows heads the toast with tet's already
+ * (APP_USER_MODEL_ID). No click action either — that needs a ToastActivatorCLSID on the shortcut,
+ * which the installer does not put there.
  */
 function showDesktopNotification(title: string, body: string): void {
-  if (repeatedToast(title, body)) {
+  if (!Notification.isSupported() || repeatedToast(title, body)) {
     return;
   }
-  try {
-    const { command, args } = ensureNotifyScript(path.join(app.getPath("userData"), "notify"));
-    const child = spawn(command, args, {
-      stdio: "ignore",
-      windowsHide: true,
-      env: { ...process.env, [NOTIFY_ENV.title]: title, [NOTIFY_ENV.body]: body }
-    });
-    // A notifier that cannot be started at all (no powershell on PATH, no `sh`) reaches a spawn
-    // as an `error` event, and an unhandled one is an uncaught exception in the process every
-    // terminal's output goes through.
-    child.once("error", () => undefined);
-    child.unref();
-  } catch (error) {
-    console.error("[tet] notification not shown:", error);
-  }
+  new Notification({ title, body }).show();
 }
 
 /**
