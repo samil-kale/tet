@@ -192,6 +192,15 @@ export interface AgentDefinition {
    */
   holdsTurnEnd?: (payload: string) => boolean;
   /**
+   * Whether a question this agent asked is still standing after the turn that asked it ended.
+   * Claude Code's `AskUserQuestion` blocks its turn, so its question cannot outlive it and the
+   * end of the turn is the end of the question. Codex's is the other kind (measured, 0.154.0:
+   * `request_user_input_async` answers `{"accepted":true}` at once, the turn runs on and ends,
+   * and the question waits in its composer as a queued follow-up) — clearing it there would
+   * take the one mark that says the tab wants something from the user.
+   */
+  questionOutlivesTurn?: boolean;
+  /**
    * Async setup before any session of this agent is spawned: generated hooks, settings files,
    * plugins, and however the repository's context file reaches the model (see AgentPaths).
    * A rejection marks the agent unstartable, so a failed optional write (a notification script)

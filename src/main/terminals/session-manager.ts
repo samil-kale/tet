@@ -119,13 +119,16 @@ function titleUnsettled(tab: TabState): boolean {
 
 /**
  * A turn started or ended: the spinner follows, and an end leaves the mark that outlives it.
- * Either end clears `waitingAt`, since a question can only stand open within a turn. No agent
- * reports that a question was answered, so a permission granted mid-turn leaves the mark until
- * the tab is looked at.
+ * Either end clears `waitingAt` — a question stands open within its turn, and a new turn is a
+ * new question — unless the agent's questions outlive their turn (`keepQuestion`, see
+ * AgentDefinition.questionOutlivesTurn). No agent reports that a question was answered, so a
+ * permission granted mid-turn leaves the mark until the tab is looked at.
  */
-function setTurn(tab: TabState, busy: boolean, at: number): void {
+function setTurn(tab: TabState, busy: boolean, at: number, keepQuestion = false): void {
   tab.busy = busy;
-  tab.waitingAt = undefined;
+  if (!keepQuestion) {
+    tab.waitingAt = undefined;
+  }
   tab.signalAt = at;
   if (busy) {
     tab.busySince = at;
@@ -1058,16 +1061,18 @@ export class ProjectSessionManager {
         }
         // What tet has to say about the repository, for the agent to put in front of the model.
         return { stdout: this.shellContext.text };
-      case "stop":
+      case "stop": {
+        const agent = getAgent(tab.agentId);
         // Only the agent's own payload knows whether the turn it just ended is really over.
-        if (getAgent(tab.agentId).holdsTurnEnd?.(payload)) {
+        if (agent.holdsTurnEnd?.(payload)) {
           return {};
         }
         if (fresh) {
-          setTurn(tab, false, at);
+          setTurn(tab, false, at, agent.questionOutlivesTurn === true);
           this.postTabs();
         }
         return { toast: this.toast(tab, "finished") };
+      }
       case "permission":
       case "question":
         // Not through setTurn: the turn is still open, `busy` is untouched.

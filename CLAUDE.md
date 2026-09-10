@@ -346,9 +346,11 @@ hence the second, extensionless launcher (`control-launcher.ts`). A hook must ne
 turn, so the CLI answers a hook that cannot be delivered with silence and exit 0.
 
 **No agent reports that a question was answered**: a question clears on input that can be an
-answer (`answersQuestion` in `session-manager.ts`) or either end of a turn — one rule for all four
-agents. **No hook fires for a turn the user cut short**; the net is each agent's own transcript
-(`turnEndedAt` in `src/main/agents/*/sessions.ts`).
+answer (`answersQuestion` in `session-manager.ts`) or either end of its turn — except where the
+asking outlives the turn, which is a measured per-agent fact (`questionOutlivesTurn`: Claude
+Code's `AskUserQuestion` blocks its turn, Codex's `request_user_input_async` answers at once and
+leaves the question queued in its composer). **No hook fires for a turn the user cut short**;
+the net is each agent's own transcript (`turnEndedAt` in `src/main/agents/*/sessions.ts`).
 
 State lives as `TerminalDescriptor.busy` / `waitingAt` / `finishedAt` per tab in the main
 process. The **main process** sets it, never asking whether it should; the **renderer** decides
@@ -387,6 +389,7 @@ folder. A new agent is a new folder, one entry in that index, one case in `Agent
 - `runArgs` — one command run *in* a terminal; only the shell has it
 - `sessions` — listing, resume args, rename, delete, optional `watch`
 - `holdsTurnEnd` — reads this agent's own end-of-turn payload for a reason the turn is not over
+- `questionOutlivesTurn` — its questions are asked asynchronously and still stand once the turn ends
 - `prepareSpawn` — async setup before the first spawn, **the only place an agent may write
   anything**; a rejection marks the agent unstartable, so only reject for what truly makes it
   unusable

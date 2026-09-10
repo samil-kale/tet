@@ -66,6 +66,8 @@ export const codexAgent: AgentDefinition = {
   // onboarding chunks total a few hundred bytes before the first real redraw, itself a single
   // ~700-900 byte chunk. Unverified against a logged-in start, which may draw less — revisit.
   createIsSessionReady: () => createByteThresholdCheck(600),
+  // Its question tool is the asynchronous one — see AgentDefinition.questionOutlivesTurn.
+  questionOutlivesTurn: true,
   // One: a second byte would land mid-shutdown and kill it instead.
   quitPresses: 1
   // Measured through this pty at 0.153.4: Codex runs raw and reads \x03 as an ordinary byte — with
