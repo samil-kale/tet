@@ -10,6 +10,7 @@ import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
+import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
 import { shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
@@ -265,6 +266,18 @@ async function controlChannel(): Promise<{ reports: ControlRequest[]; close: () 
 function reported(reports: ControlRequest[]): string[] {
   return reports.map((report) => String(report.args.event));
 }
+
+describe("which of two turn reports counts", () => {
+  // The direction of this comparison is what a finished turn going back to working hangs on.
+  it("drops the one that lost the race, and takes one whose clock jumped backwards", () => {
+    const now = Date.now();
+    assert.equal(reportApplies(undefined, now), true, "nothing has been applied here yet");
+    assert.equal(reportApplies(now, now), true, "the same moment still counts");
+    assert.equal(reportApplies(now, now + 5), true, "newer than the last one");
+    assert.equal(reportApplies(now, now - 200), false, "still in flight when the newer one landed");
+    assert.equal(reportApplies(now, now - SIGNAL_STALE_MS - 1), true, "a clock that moved, not a race");
+  });
+});
 
 describe("pi's extension", () => {
   // Every path tet generates has the user's own name in it, and any of these characters could be

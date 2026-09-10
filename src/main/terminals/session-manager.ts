@@ -23,6 +23,7 @@ import type { SettingsStore } from "../settings";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
 import { sandboxSessionDir, toContainerPath } from "./hook-target";
+import { reportApplies } from "./turn-order";
 import { currentTheme } from "../theme";
 
 const RECONCILE_DEBOUNCE_MS = 5000;
@@ -1045,9 +1046,10 @@ export class ProjectSessionManager {
     // leaves a tab both finished and working. Every report about one tab comes from that tab's
     // own agent, so one clock decides throughout.
     const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
-    // The one that lost the race has nothing left to say. The toast still goes out — it was true
+    // The one that lost the race has nothing left to say; one that is *much* older is a clock
+    // that moved, not a race (turn-order.ts). The toast still goes out either way — it was true
     // when the hook fired, as it was when the toast sat in the hook script itself.
-    const fresh = at >= (tab.signalAt ?? 0);
+    const fresh = reportApplies(tab.signalAt, at);
     switch (event) {
       case "prompt-submit":
         if (fresh) {
