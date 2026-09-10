@@ -56,10 +56,13 @@ export const piAgent: AgentDefinition = {
       // The file is written at its host path and read at the sandbox's — agentDir is mounted
       // whole (sbx.ts's fixedMountSpecs) and this sits inside it. On a failed write pi is started
       // without the argument, never pointed at a file that is not there.
-      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind] };
+      // `-a`/`--approve` skips the project-trust dialog (pi has no other permission gate): the
+      // sandbox is the safety boundary, same reasoning as Claude Code's and opencode's own flag.
+      // The community pi-kit does not set this itself (measured, docker/sbx-kits-contrib pi/spec.yaml).
+      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind, "-a"] };
     } catch (error) {
       console.error("[tet] could not write pi's sandbox extension:", error);
-      return { args: ["--use-theme", paths.theme.kind] };
+      return { args: ["--use-theme", paths.theme.kind, "-a"] };
     }
   },
   // Measured startup: ~130 B of handshake by 120 ms, a 1037 B chunk at ~680 ms, ~3 KB in 0.9 s.

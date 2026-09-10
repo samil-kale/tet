@@ -80,7 +80,11 @@ export const opencodeAgent: AgentDefinition = {
       for (const [key, file] of Object.entries(installTuiConfig(configDir))) {
         env[key] = SANDBOX_TARGET.embed(file);
       }
-      return { args: [], env };
+      // The sandbox is the safety boundary here, same reasoning as Claude Code's own kit
+      // (--dangerously-skip-permissions): opencode's permission prompts add nothing inside it.
+      // Unlike Claude's kit, sbx's opencode kit does not set this itself (measured, 0.42.1) —
+      // drop this flag if a future kit version does.
+      return { args: ["--auto"], env };
     } catch (error) {
       console.error("[tet] could not write opencode's sandbox plugin:", error);
       return { args: [] };
