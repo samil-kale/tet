@@ -29,6 +29,10 @@ const OUTPUT_FLUSH_MS = 8;
 
 let window: BrowserWindow | undefined;
 
+/** How long a rebuilt window must hold before another crash is answered with another rebuild. */
+const RENDERER_REBUILD_GAP_MS = 60_000;
+let rendererRebuiltAt = 0;
+
 function send(channel: string, payload: unknown): void {
   if (window && !window.isDestroyed()) {
     window.webContents.send(channel, payload);
@@ -271,6 +275,34 @@ function createWindow(): void {
   window.once("ready-to-show", () => window?.show());
   window.on("closed", () => {
     window = undefined;
+  });
+
+  const crashed = window;
+  window.webContents.on("render-process-gone", (_event, details) => {
+    // `clean-exit` is a window on its way out, not a fault.
+    if (details.reason === "clean-exit" || crashed.isDestroyed()) {
+      return;
+    }
+    console.error(`[tet] renderer gone (${details.reason}); rebuilding the window`);
+    // A renderer that dies takes the view and nothing else: every pty lives in this process and
+    // keeps running behind the blank window, so the way back to the sessions is to load the
+    // window again. It re-asks for the projects and their tabs, and the terminals it draws are
+    // the ones that never stopped — what is lost is the scrollback, which the renderer held.
+    // Never twice in a row without a pause: a renderer failing on load would reload forever.
+    const now = Date.now();
+    if (now - rendererRebuiltAt < RENDERER_REBUILD_GAP_MS) {
+      return;
+    }
+    rendererRebuiltAt = now;
+    // Only once the new renderer is listening; anything sent before that is spoken into a
+    // process that no longer exists.
+    crashed.webContents.once("did-finish-load", () =>
+      send("app:notice", {
+        severity: "warning",
+        message: "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone."
+      })
+    );
+    crashed.webContents.reload();
   });
 
   // No application menu (the title bar is our own), so wire the devtools shortcuts by hand.
