@@ -41,7 +41,25 @@ export interface ControlVerb {
   /** The names the CLI gives its positional arguments, in order; `--project`, `--agent` and
    *  `--confirm` are flags and go in as `project`, `agent` and `confirm`. */
   positionals: string[];
+  /** Sends whatever the caller wrote to stdin as `args.payload` — an agent's hook payload. */
+  stdin?: true;
+  /**
+   * The answer is text for the calling agent rather than a result for a person: the CLI writes
+   * `result.stdout` verbatim and nothing else, and never fails the caller — a hook exiting
+   * non-zero can hold back the very prompt it was reporting.
+   */
+  stdout?: true;
 }
+
+/**
+ * What an agent's hook reports, in tet's own vocabulary rather than any CLI's: each agent's
+ * setup maps its own events onto these (each agent's own hooks.ts), and the session manager
+ * gives all of them the same meaning. `permission` and `question` are one mark with two toasts —
+ * the wording is the only difference, and it belongs where the event is named.
+ */
+export const HOOK_EVENTS = ["prompt-submit", "stop", "permission", "question", "idle"] as const;
+
+export type HookEvent = (typeof HOOK_EVENTS)[number];
 
 /** Every verb, with the one line `tet-ctl help` prints for it. The CLI answers `help` by itself; the
  *  server refuses anything not in this list as `unknown_verb`. */
@@ -123,6 +141,14 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "notify <title> <body>",
     summary: "Show a desktop notification from TET's own process — used by Claude/Codex hooks so a sandboxed one shows a real toast too.",
     positionals: ["title", "body"]
+  },
+  {
+    verb: "hook",
+    usage: "hook <event>",
+    summary: `TET's own plumbing: an agent's hook reports a turn (${HOOK_EVENTS.join("|")}). Not for you to call.`,
+    positionals: ["event"],
+    stdin: true,
+    stdout: true
   }
 ];
 

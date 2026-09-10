@@ -18,9 +18,12 @@ export interface Run {
  * Asynchronously, and not for style: in control.test.ts the server it talks to runs on this
  * very event loop, and a `spawnSync` would hold that loop until the child gave up waiting.
  */
-export function tetCtl(args: string[], env: Record<string, string | undefined>): Promise<Run> {
+export function tetCtl(args: string[], env: Record<string, string | undefined>, input = ""): Promise<Run> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI, ...args], { env: { ...process.env, ...env } });
+    // Always closed, whether or not the verb reads it: a hook's payload arrives this way, and one
+    // left open would have the CLI wait for an end that never comes.
+    child.stdin.end(input);
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));

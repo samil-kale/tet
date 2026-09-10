@@ -46,7 +46,7 @@ import { countActivity, markStartup, reportRendererTask } from "./event-loop-mon
 import { git } from "./git/git-client";
 import { addProject, removeProject, type ProjectStore } from "./projects";
 import type { Repository, RepositoryManager } from "./git/repository";
-import { checkRequirements } from "./requirements";
+import { anyAgentInstalled, checkRequirements } from "./requirements";
 import { augmentAgentPath } from "./terminals/agent-path";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 import type { SettingsStore } from "./settings";
@@ -122,8 +122,8 @@ export function registerIpc({
   openWorkspace
 }: IpcDeps): void {
   /**
-   * The gate the window opens with: nothing is restored until git and an agent are there. Asked
-   * again after every re-check, and passing is what starts the app.
+   * The gate the window opens with: nothing is restored until git and either an agent or sbx are
+   * there. Asked again after every re-check, and passing is what starts the app.
    */
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
     // A manager's bin directory that did not exist at startup is on PATH only once looked for
@@ -137,6 +137,10 @@ export function registerIpc({
     }
     return requirements;
   });
+
+  // Not the check above: that one opens the workspace when it passes, which belongs to startup
+  // alone. This is the same question asked mid-session — see anyAgentInstalled.
+  ipcMain.handle("startup:any-agent-installed", () => anyAgentInstalled());
 
   ipcMain.on("startup:quit", () => app.quit());
 

@@ -126,15 +126,43 @@ async function sendWhenUp(host: string, port: number, request: ControlRequest): 
   }
 }
 
+/**
+ * Everything the caller piped in, for a verb that takes a payload. A hook writes its JSON and
+ * closes stdin — the same assumption the generated hook scripts made when they read it with
+ * `cat`. Run by hand there is no pipe at all, and a TTY would block forever instead of ending.
+ */
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) {
+    return "";
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 async function main(): Promise<void> {
   const { verb, args } = parse(process.argv.slice(2));
   if (verb === HELP_VERB) {
     process.stdout.write(usage() + "\n");
     return;
   }
+  const entry = CONTROL_VERBS.find((candidate) => candidate.verb === verb);
+  // A hook's channel: it speaks for the agent, so it says nothing of its own and never fails.
+  // A non-zero exit or a stray line on stdout is not this process's to spend — Claude Code
+  // appends a UserPromptSubmit hook's stdout to the prompt and can hold the prompt back on a
+  // failure, and Codex reads its Stop hook's stdout as JSON.
+  const quiet = entry?.stdout === true;
+  if (entry?.stdin) {
+    args.payload = await readStdin();
+  }
   const portVar = process.env[CONTROL_ENV.port];
   const token = process.env[CONTROL_ENV.token];
   if (!portVar || !token) {
+    if (quiet) {
+      return;
+    }
     fail("not inside a TET terminal (TET_CONTROL_PORT is not set)", EXIT_CODES.internal);
   }
   const request: ControlRequest = {
@@ -147,14 +175,25 @@ async function main(): Promise<void> {
   try {
     response = await sendWhenUp(process.env[CONTROL_ENV.host] || "127.0.0.1", Number(portVar), request);
   } catch (error) {
+    if (quiet) {
+      return;
+    }
     fail(`could not reach TET: ${error instanceof Error ? error.message : String(error)}`, EXIT_CODES.internal);
   }
   if (!response.ok) {
+    if (quiet) {
+      return;
+    }
     const { code, message } = response.error;
     fail(
       message,
       code === "unauthorized" ? EXIT_CODES.unauthorized : code === "internal" ? EXIT_CODES.internal : EXIT_CODES.usage
     );
+  }
+  if (quiet) {
+    const answer = (response.result as { stdout?: unknown } | null)?.stdout;
+    process.stdout.write(typeof answer === "string" ? answer : "");
+    return;
   }
   process.stdout.write(JSON.stringify(response.result, null, 2) + "\n");
 }

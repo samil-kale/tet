@@ -199,12 +199,9 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <span>{label}</span>
               </label>
             ))}
-          {/* An agent is handed its notification setup once per project, when its first
-              terminal there starts, and cannot be reached afterwards. */}
-          <p className="dialog-detail">
-            Handed to an agent when its first terminal in a project starts - a change reaches
-            already-open projects only after tet is restarted.
-          </p>
+          {/* No caveat to make: an agent's hooks report every turn either way, and the toast is
+              composed when the report arrives (session-manager's `toast`), off the settings as
+              they stand at that moment. */}
         </>
       )}
       {tab === "shortcuts" && (

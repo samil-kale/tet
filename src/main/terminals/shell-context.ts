@@ -145,6 +145,12 @@ export class ShellContext {
     return path.join(this.directory, "context.md");
   }
 
+  /** The same text the file holds, for an agent that asks over the control channel rather than
+   *  reading it (`prompt-submit`). Never the BOM: that is the file's, for PowerShell's sake. */
+  get text(): string {
+    return this.written ?? "";
+  }
+
   /** `label` is what a section header calls the tab — its title, or its id where it has none. */
   append(tabId: string, label: string, data: string): void {
     const whole = (this.carries.get(tabId) ?? "") + data;

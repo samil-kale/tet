@@ -19,7 +19,7 @@ import { SANDBOX_HOME } from "../../terminals/hook-target";
  *   and an ISO `timestamp`; `message` entries carry `message.role` and, for the assistant,
  *   `stopReason` — an Escape-abort is persisted as `"aborted"`
  * - the file is created only with the first assistant message; until then the id exists in pi's
- *   memory alone, so a fresh session's first `busy` marker waits in pendingTurns
+ *   memory alone — which costs nothing, since a turn is reported for the tab, not the session
  * - the display name is the LAST `session_info` entry in file order, whatever its tree position,
  *   a blank one being an explicit clear; without one pi shows the first user message
  */

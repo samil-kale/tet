@@ -51,12 +51,23 @@ export function takeOutputStats(): { writes: number; tabs: number; hidden: numbe
   return stats;
 }
 
+/**
+ * Output that arrives before a tab's view exists — a saved command's process starts at the same
+ * moment as its tab, and can write (a fast `echo` ahead of the command itself) before React has
+ * mounted the container that makes attachTerminal build the xterm. Held here and replayed once,
+ * in createView. Capped per tab so one that is never attached (removed before ever being shown)
+ * cannot grow this without bound.
+ */
+const earlyOutput = new Map<string, string>();
+const MAX_EARLY_OUTPUT = 64 * 1024;
+
 // One batch per flush, in the order the main process collected it.
 window.tet.terminals.onOutput((batch) => {
   for (const { projectId, tabId, data } of batch) {
     const key = viewKey(projectId, tabId);
     const view = views.get(key);
     if (!view) {
+      earlyOutput.set(key, ((earlyOutput.get(key) ?? "") + data).slice(-MAX_EARLY_OUTPUT));
       continue;
     }
     outputWrites += 1;
@@ -292,7 +303,13 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
   });
 
   const view: TerminalView = { term, fit };
-  views.set(viewKey(projectId, tabId), view);
+  const key = viewKey(projectId, tabId);
+  views.set(key, view);
+  const buffered = earlyOutput.get(key);
+  if (buffered) {
+    earlyOutput.delete(key);
+    term.write(buffered);
+  }
   return view;
 }
 
@@ -401,6 +418,7 @@ export function clearTerminal(projectId: string, tabId: string): void {
 
 export function disposeTerminal(projectId: string, tabId: string): void {
   const key = viewKey(projectId, tabId);
+  earlyOutput.delete(key);
   const view = views.get(key);
   if (!view) {
     return;
@@ -424,6 +442,11 @@ export function disposeTerminal(projectId: string, tabId: string): void {
 export function disposeProjectTerminals(projectId: string): void {
   // Project ids are uuids, so nothing else can start with one followed by the separator.
   const prefix = viewKey(projectId, "");
+  for (const key of [...earlyOutput.keys()]) {
+    if (key.startsWith(prefix)) {
+      earlyOutput.delete(key);
+    }
+  }
   for (const [key, view] of [...views]) {
     if (key.startsWith(prefix)) {
       views.delete(key);

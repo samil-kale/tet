@@ -1,6 +1,5 @@
 import * as path from "node:path";
 import { HOST_TARGET, SANDBOX_TARGET } from "../../terminals/hook-target";
-import { watchTurnMarkers } from "../../terminals/marker-watch";
 import { createNonAsciiThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { runOpencode } from "./cli";
@@ -29,7 +28,6 @@ export const opencodeAgent: AgentDefinition = {
   displayName: "OpenCode",
   executable: () => "opencode",
   versionArgs: ["--version"],
-  installUrl: "https://opencode.ai/docs/",
   /*
    * Its own non-interactive mode: prints the reply and exits. It has no way to skip persisting
    * the session, so the run is titled and `cleanupAsk` deletes it again by that title.
@@ -51,12 +49,8 @@ export const opencodeAgent: AgentDefinition = {
   prepareSpawn: (_executable, cwd, paths) => {
     registerAgentDir(cwd, paths.agentDir);
     let env: Record<string, string> = {};
-    const watchers: (() => void)[] = [];
     try {
-      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, "OpenCode", paths.notifications, paths.contextFile, HOST_TARGET, null);
-      // One watch serves host and sandboxed tabs: the sandbox's plugin writes its markers into
-      // the same agentDir, through the mount.
-      watchers.push(watchTurnMarkers(paths.agentDir, paths));
+      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, paths.contextFile, HOST_TARGET, null);
     } catch (error) {
       // A plugin that could not be written costs the turn marks, the records and the context —
       // not the CLI. See prepareSpawn: swallow, never reject.
@@ -66,16 +60,15 @@ export const opencodeAgent: AgentDefinition = {
       args: [],
       // Passed as defaults, so a user who sets OPENCODE_CONFIG_DIR or OPENCODE_TUI_CONFIG
       // themselves keeps their own (see spawnAgentProcess).
-      env: { ...env, ...installTuiConfig(paths.storageRoot) },
-      dispose: () => watchers.forEach((stop) => stop())
+      env: { ...env, ...installTuiConfig(paths.storageRoot) }
     });
   },
   prepareSandboxSpawn: (cwd, paths, sandbox) => {
     try {
-      // Its own config dir (a Linux bun install), but the markers, records and rename requests
+      // Its own config dir (a Linux bun install), but the records and rename requests
       // are agentDir's own, shared with a host tab — a session is a session wherever it ran.
       const configDir = sandboxConfigDir(paths.agentDir);
-      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, "OpenCode", paths.notifications, paths.contextFile, SANDBOX_TARGET, sandbox);
+      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, paths.contextFile, SANDBOX_TARGET, sandbox);
       // The tui config too goes under the mounted dir: storageRoot's copy is not in the sandbox.
       for (const [key, file] of Object.entries(installTuiConfig(configDir))) {
         env[key] = SANDBOX_TARGET.embed(file);

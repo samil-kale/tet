@@ -1,8 +1,7 @@
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
-import { watchTurnMarkers } from "../../terminals/marker-watch";
 import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
-import { setupClaudeHooks } from "./hooks";
+import { claudeHoldsTurnEnd, setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
 
 export const claudeAgent: AgentDefinition = {
@@ -10,33 +9,23 @@ export const claudeAgent: AgentDefinition = {
   displayName: "Claude",
   executable: () => "claude",
   versionArgs: ["--version"],
-  installUrl: "https://docs.claude.com/en/docs/claude-code/setup",
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   askArgs: ["-p", "--no-session-persistence"],
   sessions: claudeSessionProvider,
-  prepareSpawn: (_executable, cwd, paths) => {
+  holdsTurnEnd: claudeHoldsTurnEnd,
+  prepareSpawn: (_executable, _cwd, paths) => {
     let args: string[] = [];
-    const watchers: (() => void)[] = [];
     try {
-      args = setupClaudeHooks(
-        paths.agentDir,
-        cwd,
-        "Claude",
-        paths.notifications,
-        paths,
-        paths.theme.kind
-      );
-      watchers.push(watchTurnMarkers(paths.agentDir, paths));
-      watchers.push(watchTurnMarkers(sandboxHookDir(paths.agentDir), paths));
+      args = setupClaudeHooks(paths.agentDir, paths, paths.theme.kind);
     } catch (error) {
       // Swallowed, never rejected — see AgentDefinition.prepareSpawn.
       console.error("[tet] could not write Claude hook settings:", error);
     }
-    return Promise.resolve({ args, dispose: () => watchers.forEach((stop) => stop()) });
+    return Promise.resolve({ args });
   },
-  prepareSandboxSpawn: (cwd, paths) => {
+  prepareSandboxSpawn: (_cwd, paths) => {
     try {
-      return { args: setupClaudeHooks(sandboxHookDir(paths.agentDir), cwd, "Claude", paths.notifications, paths, paths.theme.kind, SANDBOX_TARGET) };
+      return { args: setupClaudeHooks(sandboxHookDir(paths.agentDir), paths, paths.theme.kind, SANDBOX_TARGET) };
     } catch (error) {
       console.error("[tet] could not write Claude sandbox hook settings:", error);
       return { args: [] };

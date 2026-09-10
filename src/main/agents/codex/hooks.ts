@@ -1,8 +1,6 @@
 import * as crypto from "node:crypto";
-import { buildBusyCommand, buildMarkCommand, buildWaitingCommand } from "../../terminals/marker-watch";
+import { hookCommand } from "../../terminals/hook-command";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
-import { buildHookNotifyCommand, buildReadFileCommand } from "../../terminals/os-notify";
-import type { NotificationSettings } from "../../../shared/types";
 
 /**
  * Codex only runs a hook once it is *trusted* — a sha256 over a normalized form of its event
@@ -115,59 +113,27 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
 }
 
 /**
- * Builds the Stop hook's command line: marks the session finished, then notifies where
- * notifications are on. Codex needs no `background_tasks` guard — a turn that only spawns a
- * subagent is reported through `SubagentStop`, which tet does not hook.
+ * Returns the `-c` argument that registers this repository's Codex hooks, pre-trusted. Nothing
+ * is written anywhere: each hook is one `tet-ctl hook <event>` (hook-command.ts), and `-c`
+ * overrides apply to this one process only and are never persisted — Codex's own
+ * `config.toml` and `hooks.json` are neither read nor touched.
+ *
+ * One command per event, `UserPromptSubmit` included: a hook's plain, non-JSON stdout is
+ * appended to the prompt (`hooks/src/events/user_prompt_submit.rs`), which is exactly what the
+ * `prompt-submit` answer is. Stop is the stricter one — a successful command must write one
+ * JSON value to stdout — and gets `{}` from the same channel (control-server.ts's `hook`).
+ *
+ * Codex needs no end-of-turn guard: a turn that only spawns a subagent is reported through
+ * `SubagentStop`, which tet does not hook.
  */
-function buildStopCommand(storageDir: string, notifyCommand: string | undefined, target: HookTarget): string {
-  // Stop is stricter than the other events: a successful command must write one JSON value to
-  // stdout, so tet-ctl's own result is kept out of that channel and an empty object returned.
-  return buildMarkCommand(storageDir, "stop", "finished", notifyCommand, target, "{}");
-}
-
-/**
- * Generates this repository's Codex hook scripts and returns the `-c` argument that registers
- * them, pre-trusted. Everything is scoped to `storageDir`; nothing is written to Codex's own
- * configuration — `-c` overrides apply to this one process only and are never persisted.
- */
-export function setupCodexHooks(
-  storageDir: string,
-  displayName: string,
-  notifications: NotificationSettings,
-  repositoryName: string,
-  contextFile: string,
-  target: HookTarget = HOST_TARGET
-): string[] {
-  // Two commands on the one event: a hook's plain, non-JSON stdout is appended to the prompt
-  // (`hooks/src/events/user_prompt_submit.rs`), and the marker says the session started working;
-  // the second must print nothing. Codex's sandbox restricts writes and network, not reads.
-  const readContextCommand = buildReadFileCommand(storageDir, "read-context", contextFile, target);
-  const busyCommand = buildBusyCommand(storageDir, target);
-
-  // The toast is optional per the notification settings; the command is `tet-ctl notify` either
-  // way (buildHookNotifyCommand), so the toast is always shown by the control channel's process.
-  const finishedNotify = notifications.finished
-    ? buildHookNotifyCommand(target, `${displayName}: Finished`, `Finished in ${repositoryName}`)
-    : undefined;
-  const stopCommand = buildStopCommand(storageDir, finishedNotify, target);
-
-  // Waiting is registered for both PermissionRequest (an approval is about to be asked) and
-  // PreToolUse matched to `request_user_input` (a question tool is about to run).
-  const permissionNotify = notifications.needsYou
-    ? buildHookNotifyCommand(target, `${displayName}: Action needed`, `Waiting for input in ${repositoryName}`)
-    : undefined;
-  const permissionCommand = buildWaitingCommand(storageDir, "needs-you", permissionNotify, target);
-
-  const questionNotify = notifications.needsYou
-    ? buildHookNotifyCommand(target, `${displayName}: Question`, `Waiting for your answer in ${repositoryName}`)
-    : undefined;
-  const questionCommand = buildWaitingCommand(storageDir, "question", questionNotify, target);
-
+export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
   const entries: HookEntry[] = [
-    { event: "UserPromptSubmit", label: "user_prompt_submit", commands: [readContextCommand, busyCommand] },
-    { event: "Stop", label: "stop", commands: [stopCommand] },
-    { event: "PermissionRequest", label: "permission_request", commands: [permissionCommand] },
-    { event: "PreToolUse", label: "pre_tool_use", commands: [questionCommand], matcher: "request_user_input" }
+    { event: "UserPromptSubmit", label: "user_prompt_submit", commands: [hookCommand("prompt-submit")] },
+    { event: "Stop", label: "stop", commands: [hookCommand("stop")] },
+    // Waiting is registered for both PermissionRequest (an approval is about to be asked) and
+    // PreToolUse matched to `request_user_input` (a question tool is about to run).
+    { event: "PermissionRequest", label: "permission_request", commands: [hookCommand("permission")] },
+    { event: "PreToolUse", label: "pre_tool_use", commands: [hookCommand("question")], matcher: "request_user_input" }
   ];
 
   return ["-c", buildHooksArg(entries, target)];

@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { watchTurnMarkers } from "../../terminals/marker-watch";
-import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
+import { SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";
@@ -33,14 +32,12 @@ export const codexAgent: AgentDefinition = {
   displayName: "Codex",
   executable: () => "codex",
   versionArgs: ["--version"],
-  installUrl: "https://github.com/openai/codex",
   // `--ephemeral` skips the rollout file entirely, so there is nothing for cleanupAsk to remove.
   askArgs: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
   sessions: codexSessionProvider,
-  prepareSpawn: (executable, cwd, paths) => {
+  prepareSpawn: (executable, _cwd, paths) => {
     let args: string[] = [];
     let launcher: string | undefined;
-    const watchers: (() => void)[] = [];
     if (process.platform === "win32") {
       try {
         launcher = writeConsoleColorLauncher(paths.agentDir, executable, paths.theme);
@@ -50,27 +47,16 @@ export const codexAgent: AgentDefinition = {
       }
     }
     try {
-      args = setupCodexHooks(paths.agentDir, "Codex", paths.notifications, path.basename(cwd), paths.contextFile);
-      watchers.push(watchTurnMarkers(paths.agentDir, paths));
-      watchers.push(watchTurnMarkers(sandboxHookDir(paths.agentDir), paths));
+      args = setupCodexHooks();
     } catch (error) {
       // See prepareSpawn: swallow, never reject.
       console.error("[tet] could not set up Codex hooks:", error);
     }
-    return Promise.resolve({ args, executable: launcher, dispose: () => watchers.forEach((stop) => stop()) });
+    return Promise.resolve({ args, executable: launcher });
   },
-  prepareSandboxSpawn: (cwd, paths) => {
+  prepareSandboxSpawn: () => {
     try {
-      return {
-        args: setupCodexHooks(
-          sandboxHookDir(paths.agentDir),
-          "Codex",
-          paths.notifications,
-          path.basename(cwd),
-          paths.contextFile,
-          SANDBOX_TARGET
-        )
-      };
+      return { args: setupCodexHooks(SANDBOX_TARGET) };
     } catch (error) {
       console.error("[tet] could not set up Codex sandbox hooks:", error);
       return { args: [] };

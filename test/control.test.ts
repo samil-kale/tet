@@ -39,6 +39,7 @@ interface Calls {
   changed: { added?: string; removed?: string }[];
   shutdown: boolean[];
   notified: [string, string][];
+  hooks: [string, string, string][];
 }
 
 let tempDir: string;
@@ -64,6 +65,15 @@ function terminalsOf(projectId: string): ControlTerminals {
     },
     renameTab: async (tabId, title) => {
       calls.renamed.push([tabId, title]);
+    },
+    hookEvent: (tabId, event, payload) => {
+      calls.hooks.push([tabId, event, payload]);
+      if (tabId !== OWN_TAB) {
+        return {};
+      }
+      return event === "prompt-submit"
+        ? { stdout: "<tet_context>the repository</tet_context>\n" }
+        : { toast: { title: "Claude: Finished", body: "Finished in one" } };
     }
   };
 }
@@ -113,14 +123,18 @@ function deps(): ControlDeps {
 }
 
 /** The CLI as run from the caller's own tab of PROJECT; `env` overrides that. */
-function tetCtl(args: string[], env: Record<string, string | undefined> = {}): Promise<Run> {
-  return runCli(args, {
-    [CONTROL_ENV.port]: String(port),
-    [CONTROL_ENV.token]: TOKEN,
-    [CONTROL_ENV.projectId]: PROJECT.id,
-    [CONTROL_ENV.tabId]: OWN_TAB,
-    ...env
-  });
+function tetCtl(args: string[], env: Record<string, string | undefined> = {}, input = ""): Promise<Run> {
+  return runCli(
+    args,
+    {
+      [CONTROL_ENV.port]: String(port),
+      [CONTROL_ENV.token]: TOKEN,
+      [CONTROL_ENV.projectId]: PROJECT.id,
+      [CONTROL_ENV.tabId]: OWN_TAB,
+      ...env
+    },
+    input
+  );
 }
 
 describe("tet-ctl against the control server", () => {
@@ -137,7 +151,8 @@ describe("tet-ctl against the control server", () => {
       removed: [],
       changed: [],
       shutdown: [],
-      notified: []
+      notified: [],
+      hooks: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -366,5 +381,55 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["restart-app", "--confirm"])).result, { restarting: true });
     await eventually("what the answer was followed by", () => calls.shutdown.length === 1);
     assert.deepEqual(calls.shutdown, [true]);
+  });
+
+  // The hook verb is the one an agent's own hooks run, so its stdout is the agent's, not a
+  // person's: verbatim, and never a word of tet's own on top.
+  it("hands a hook's payload over and answers with what the agent must see", async () => {
+    const payload = '{"session_id":"abc","background_tasks":[]}';
+    const run = await tetCtl(["hook", "prompt-submit"], {}, payload);
+    assert.equal(run.status, EXIT_CODES.ok);
+    assert.equal(run.stdout, "<tet_context>the repository</tet_context>\n", "the answer, and nothing else");
+    assert.deepEqual(calls.hooks, [[OWN_TAB, "prompt-submit", payload]]);
+    assert.deepEqual(calls.notified, [], "nothing to toast about a prompt");
+  });
+
+  it("answers one JSON value where the event has nothing to say, and shows its toast", async () => {
+    const run = await tetCtl(["hook", "stop"], {}, "{}");
+    assert.equal(run.status, EXIT_CODES.ok);
+    assert.equal(run.stdout, "{}", "Codex reads its Stop hook's stdout as JSON");
+    assert.deepEqual(calls.notified, [["Claude: Finished", "Finished in one"]]);
+  });
+
+  // A prompt's answer is the prompt's own text, so a tab that is gone must add nothing to it —
+  // not even the `{}` every other event answers with.
+  it("says nothing at all into a prompt it has nothing for", async () => {
+    const run = await tetCtl(["hook", "prompt-submit"], { [CONTROL_ENV.tabId]: "tab-gone" });
+    assert.equal(run.status, EXIT_CODES.ok);
+    assert.equal(run.stdout, "");
+    assert.deepEqual(calls.hooks, [["tab-gone", "prompt-submit", ""]]);
+  });
+
+  it("carries a payload far bigger than any answer a person would read", async () => {
+    // A Stop payload holds the whole last assistant message; 200 KB is a long but ordinary one.
+    const payload = JSON.stringify({ session_id: "abc", last_assistant_message: "ü".repeat(200_000) });
+    const run = await tetCtl(["hook", "stop"], {}, payload);
+    assert.equal(run.status, EXIT_CODES.ok);
+    assert.deepEqual(calls.hooks, [[OWN_TAB, "stop", payload]], "whole and unmangled");
+  });
+
+  // Never the agent's problem: a non-zero exit or a stray line on stdout would land in the very
+  // turn the hook was reporting.
+  it("says nothing and fails nothing when the event, the tab or TET itself is not there", async () => {
+    for (const [what, run] of [
+      ["an unknown event", await tetCtl(["hook", "wat"])],
+      ["no tab of its own", await tetCtl(["hook", "stop"], { [CONTROL_ENV.tabId]: undefined })],
+      ["no TET at all", await tetCtl(["hook", "stop"], { [CONTROL_ENV.port]: undefined })]
+    ] as const) {
+      assert.equal(run.status, EXIT_CODES.ok, what);
+      assert.equal(run.stdout, "", what);
+      assert.equal(run.stderr, "", what);
+    }
+    assert.deepEqual(calls.hooks, [], "none of them reached a tab");
   });
 });

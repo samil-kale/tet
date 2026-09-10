@@ -18,16 +18,18 @@ export interface Requirement {
   /** The executable that was looked for, so the user can try it in their own terminal. */
   command: string;
   installed: boolean;
-  /** Where to get it; the dialog links there, since tet installs nothing itself. */
-  url: string;
 }
 
-/** What the startup check found; `met` is git *and* at least one agent, or the app does not open. */
+/** What the startup check found; `met` is git *and* either an agent or sbx, or the app does not
+ *  open. sbx suffices because a sandboxed tab runs the agent's CLI inside its container, never on
+ *  this machine — see requirements.ts. */
 export interface Requirements {
   met: boolean;
   git: Requirement;
   /** The agents that have to be installed; one of them is enough. */
   agents: Requirement[];
+  /** The other way in: the sandbox runs the agents, so none of them has to be here. */
+  sbx: Requirement;
 }
 
 export interface Project {

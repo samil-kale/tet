@@ -37,6 +37,9 @@ export interface TETApi {
   startup: {
     /** Runs the check and, when it passes, brings the stored projects up. */
     check(): Promise<Requirements>;
+    /** Whether any agent CLI is on this machine right now — what makes a project sbx-only. Spawns
+     *  the checks fresh, so ask it where tet already refreshes host state, never on a timer. */
+    anyAgentInstalled(): Promise<boolean>;
     /** Leaves, for the user who would rather install first. */
     quit(): void;
   };

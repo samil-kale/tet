@@ -292,9 +292,9 @@ interface TranscriptTail {
   agentName?: string;
   aiTitle?: string;
   /** When the last turn ended *without* its Stop hooks ever running for it — the one case the
-   *  markers cannot report. A turn whose Stop hooks did run is left out even when they wrote no
-   *  `finished` marker (the `background_tasks` guard in stop-guard.ps1): the marker mechanism is
-   *  authoritative for that turn. Resolved via `pendingTurnEnd` below. */
+   *  hooks cannot report. A turn whose Stop hooks did run is left out even when they left no
+   *  mark (claudeHoldsTurnEnd's `background_tasks` guard): the hook is authoritative for that
+   *  turn. Resolved via `pendingTurnEnd` below. */
   turnEndedAt?: number;
   /** Set once a `turn_duration` entry's Stop-hook parentage has been checked — see
    * readTailEntries. Distinct from `turnEndedAt` being undefined, which says nothing about
@@ -367,7 +367,7 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
       entry.subtype === "turn_duration" &&
       entry.isSidechain !== true &&
       // Written as well when the turn returns with subagents still running in the background
-      // — the case the Stop hook holds its marker back for, so this must not end it either.
+      // — the case the Stop hook holds its report back for, so this must not end it either.
       !(typeof entry.pendingBackgroundAgentCount === "number" && entry.pendingBackgroundAgentCount > 0)
     ) {
       const ms = Date.parse(nonEmptyString(entry.timestamp) ?? "");

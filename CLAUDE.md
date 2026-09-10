@@ -92,15 +92,19 @@ picker, settings — regardless of preset.
   a snap, and never a pane that was never filled. Once a project's bootstrap has listed every
   session (`settledProjects`), *every* empty pane counts as emptied (`collapseEmpty`).
 
-## Nothing starts without git and an agent
+## Nothing starts without git, and an agent or sbx
 
-`src/main/requirements.ts` checks git and every agent with `versionArgs` before anything opens;
-passing (`startup:check`) is what calls `openWorkspace`. Missing something, `Startup` shows
-`RequirementsDialog` instead of mounting `App` — a wall (no Escape), and **it installs nothing**.
+`src/main/requirements.ts` checks git, every agent with `versionArgs`, and sbx before anything
+opens; passing (`startup:check`) is what calls `openWorkspace`. **sbx alone is enough** — a
+sandboxed tab runs the agent's CLI inside the container, so a machine with none of them installed
+still works (`AgentRuntime.sbxOnly`). Missing everything, `Startup` shows `RequirementsDialog`
+instead of mounting `App` — a wall (no Escape), and **it installs nothing**, not even a link.
 `--version` results are remembered (`isAgentInstalled`); `npm start -- --simulate=git,claude`
 makes the dialog reachable on a machine that has everything. `--allow-shell-only` lets a runner
 with no agent open, and `--user-data-dir=<dir>` gives that run a profile of its own (and, only
 then, a control token from its environment) — `test/app.test.ts` is the one user of both.
+`anyAgentInstalled` asks the same question mid-session, where a *project* decides whether it is
+sbx-only: nothing is stored for that, it is derived at each of tet's own refresh points.
 
 **`process.env.PATH` is not the one tet was launched with.** `augmentAgentPath`
 (`src/main/terminals/agent-path.ts`) rewrites it before the check and on every re-check: on
@@ -308,17 +312,27 @@ finished** (reasoned in `Pane.tsx`). In the project row the three turn marks are
 through their sessions. All three are `--vscode-focusBorder` under one `.session-mark` rule; the
 error mark alone is `--vscode-errorForeground`.
 
-**Nothing here is read off the terminal.** Each agent reports its own turn through
-`AgentPaths.onSessionBusy` / `onSessionWaiting` / `onSessionFinished`: Claude Code and Codex
-through hook processes that `touch` a marker named after the session id into `<agentDir>/busy/`,
-`finished/` and `waiting/` (a sandboxed tab's under `<agentDir>/sandbox/`), opencode through a
-generated plugin and pi through a generated `-e` extension — all picked up by `watchMarkers`
-(`src/main/terminals/marker-watch.ts`, watch *plus* a timer sweep — win32 `fs.watch` misses
-files). The hooks register regardless of notification settings; only their toast is optional, and
-everywhere but a pi tab on the host that toast is `tet-ctl notify` — the main process shows it,
-since a sandboxed hook has no desktop session. Reusing the Stop hook carries the `background_tasks`
-guard, so a turn that only launched a subagent isn't "finished". Markers found at startup are
-deleted unreported.
+**Nothing here is read off the terminal, and nothing goes through a file.** Each agent reports
+its own turn over the control channel — `tet-ctl hook <event>`, one verb for all four, five
+events in tet's own vocabulary (`HOOK_EVENTS`: `prompt-submit`, `stop`, `permission`, `question`,
+`idle`). Claude Code and Codex register it as their hook command, plain and constant, and speak
+their payload on its stdin; opencode's plugin and pi's extension post the same request from
+inside their own process, no `tet-ctl` involved. The **tab** is the address, off `TET_TAB_ID` in
+the hook's own environment (sbx passes it into the sandbox), so a turn is never reported for a
+session no tab has claimed yet.
+
+`SessionManager.hookEvent` is where an event becomes a mark, a toast and the answer the agent
+sees on stdout: the context file's text for `prompt-submit` — which is why Claude and Codex need
+only one `UserPromptSubmit` hook — and `{}` for the rest, since Codex reads its Stop hook's
+stdout as JSON. The toast is composed there too, off the settings **as they stand at that
+moment**: a notification switch applies to the next turn of every open project. `stop` asks
+`AgentDefinition.holdsTurnEnd` first, which is where Claude Code's `background_tasks` guard
+lives, so a turn that only launched a subagent isn't "finished".
+
+Measured, and the reason the command is a bare `tet-ctl`: Claude Code runs its win32 hooks under
+`/usr/bin/bash`, where `cmd.exe /c` is mangled by MSYS and a `.cmd` on PATH does not resolve —
+hence the second, extensionless launcher (`control-launcher.ts`). A hook must never fail its own
+turn, so the CLI answers a hook that cannot be delivered with silence and exit 0.
 
 **No agent reports that a question was answered**: a question clears on input that can be an
 answer (`answersQuestion` in `session-manager.ts`) or either end of a turn — one rule for all four
@@ -326,10 +340,9 @@ agents. **No hook fires for a turn the user cut short**; the net is each agent's
 (`turnEndedAt` in `src/main/agents/*/sessions.ts`).
 
 State lives as `TerminalDescriptor.busy` / `waitingAt` / `finishedAt` per tab in the main
-process. The **main process** sets it, never asking whether it should (a turn reported before any
-tab claims its session waits in `pendingTurns` on a timer); the **renderer** decides what's
-*shown* and clears what was seen, the rule living once in `App.markedTabs`. `App` holds every
-project's tabs because the project list needs all of them at once.
+process. The **main process** sets it, never asking whether it should; the **renderer** decides
+what's *shown* and clears what was seen, the rule living once in `App.markedTabs`. `App` holds
+every project's tabs because the project list needs all of them at once.
 
 ## Ending a session
 
@@ -346,7 +359,7 @@ waiting on any.
 `src/` is the process list — `main/`, `renderer/`, `preload/`, `cli/` — plus `shared/`, the only
 folder any of them may import from another. `src/main/` is split by process boundary and by half:
 `git/` (the git process and everything that talks to it, `commands.ts` included), `terminals/`
-(pty, sessions, markers, notifications), `control/` (the `tet-ctl` channel), `agents/`,
+(pty, sessions, hooks, notifications), `control/` (the `tet-ctl` channel), `agents/`,
 `providers/`; what stays flat is the app itself — window, ipc, settings. The process borders are
 lint rules (`no-restricted-imports` in `eslint.config.mjs`).
 
@@ -362,6 +375,7 @@ folder. A new agent is a new folder, one entry in that index, one case in `Agent
   a session behind (`cleanupAsk` for an agent that persists one either way)
 - `runArgs` — one command run *in* a terminal; only the shell has it
 - `sessions` — listing, resume args, rename, delete, optional `watch`
+- `holdsTurnEnd` — reads this agent's own end-of-turn payload for a reason the turn is not over
 - `prepareSpawn` — async setup before the first spawn, **the only place an agent may write
   anything**; a rejection marks the agent unstartable, so only reject for what truly makes it
   unusable
@@ -392,10 +406,11 @@ agent to another:
   otherwise, so tet passes `theme` in its `--settings` file (a built-in theme, never a custom one —
   it draws a dark frame while a custom theme loads); pi paints truecolor only and takes
   `--use-theme dark|light` for one run.
-- Turn signals: Claude Code and Codex need hook processes touching marker files, Codex only runs
-  a hook it has hashed and decided to trust, opencode loads a TypeScript plugin whose `event` hook
-  is its whole event bus (and bun-installs its dependency into the config dir the first time), and
-  pi loads a TypeScript extension and exits outright when it fails to load.
+- Turn signals: Claude Code and Codex need hook processes, and only Codex insists on a hash it
+  has decided to trust; opencode loads a TypeScript plugin whose `event` hook is its whole event
+  bus (and bun-installs its dependency into the config dir the first time), and pi loads a
+  TypeScript extension and exits outright when it fails to load. All four end up on the same
+  control-channel verb; what differs is how they are made to call it.
 - Ctrl+C: all four read `\x03` as an ordinary byte and decide for themselves what it means — Codex
   clears its composer, or quits when it is empty (0.153.4; it once sat in cooked mode, where win32
   turned the byte into a `CTRL_C_EVENT` that killed it, and tet swallowed Ctrl+C for it).
@@ -441,6 +456,11 @@ started from one of its own shell tabs inherits the outer one's values. Only pty
 does not. The agent learns the command from the context file (`shell-context.ts`), which is never
 empty for that reason.
 
+`hook` is the one verb that is not for an agent to call: tet registers it as each agent's own
+hook command, and it is the whole of how a turn reaches the app ("Both ends of a turn"). It is
+also the one verb whose stdout belongs to the caller — the CLI prints the answer verbatim and
+exits 0 whatever happened, since a hook that fails takes its own turn down with it.
+
 `restart-app` is the one verb that ends sessions and takes `--confirm`, which an agent passes
 only when the user asked. A theme change answers `restartRequired`; that is a fact for the agent
 to relay, never a reason to restart on its own. A verb that ends its caller replies before it
@@ -463,12 +483,16 @@ binary; its comments are the record. The config is the `sbx` key of the reposito
 and which of the agent's skills/plugins/instructions to mount); the tab-time decision is
 `resolveSbxRun` in `session-manager.ts`, which skips the sandbox for the one spawn when sbx is
 not ready — never writing the project's switch off — and sends each session back where it was
-made.
+made. Skipping needs somewhere to skip *to*: an agent that is not installed here at all is
+startable only through the sandbox (`AgentRuntime.sbxOnly`, decided with the project's config at
+bootstrap and again whenever `tet.json` is written, `sbxConfigChanged`), and its tab is left in
+`error` rather than spawning an executable that does not exist.
 
-- **A hook is generated for where it runs**, not for `process.platform`: `HookTarget`
-  (`src/main/terminals/hook-target.ts`) says whether the shell is POSIX and how a host path reads
+- **A setup is generated for where it runs**, not for `process.platform`: `HookTarget`
+  (`src/main/terminals/hook-target.ts`) says whether the target is POSIX and how a host path reads
   inside the sandbox (`C:\Users\x` → `/c/Users/x`). Each agent's `prepareSandboxSpawn` writes its
-  sandbox hooks under `<agentDir>/sandbox/`, beside the host ones, and both are watched.
+  sandbox setup under `<agentDir>/sandbox/`, beside the host one. The hook commands themselves are
+  the same either way — a sandboxed `tet-ctl` reaches the host through `TET_CONTROL_HOST`.
 - **The sandbox never sees the agent's own config directory** — its sign-in is its own. The
   project is the one `sbx create` workspace (only a create-time workspace decides the agent's
   working directory). Everything else — `agentDir` and the context file's directory included
@@ -504,9 +528,10 @@ Everything TET generates lives under its own `userData` and is pointed at from o
 
 ## Files other processes read
 
-The context file and shell transcript are written by TET and read by a separate process. Write
-beside the target and `rename` into place, never in place — on Windows a read landing mid-write
-fails outright. Marker files sit outside that rule: the *filename* is the whole message.
+The context file, the shell transcript, opencode's session records and its rename requests are
+written by TET or by a generated plugin and read by a separate process. Write beside the target
+and `rename` into place, never in place — on Windows a read landing mid-write fails outright.
+Nothing about a *turn* is a file: that goes over the control channel.
 
 ## Cross-platform requirement
 
@@ -516,10 +541,12 @@ the others.
 - Build paths with `path.join`; route process spawning through `resolveCommand`
   (`src/main/terminals/pty.ts`).
 - Generated `.ps1` files need a UTF-8 BOM; generated `sh` scripts must be LF.
-- Anything written *into* a generated script needs literal quoting (`os-notify.ts` has the two
-  helpers): a repo folder or user name may hold a `$`.
-- Claude Code's hook shell on win32 varies (PowerShell, cmd.exe, Git Bash all observed). Avoid
-  shell builtins and nested quoting; invoke a plain exe with `-File "<script>.ps1"`.
+- Anything written *into* a generated script needs literal quoting (`shellSingleQuote` in
+  `os-notify.ts`): a repo folder or user name may hold a `$`.
+- A hook command is run by whichever shell the agent picked, and that is not ours to pick
+  (measured on win32: Claude Code uses `/usr/bin/bash`; PowerShell and cmd.exe have been seen
+  too). Keep it a bare name plus arguments — `tet-ctl hook <event>` and nothing else. Which is
+  why the win32 launcher is written twice, `.cmd` and extensionless.
 
 ## The keyboard belongs to the terminal
 
@@ -614,8 +641,8 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   (`sessions.test.ts`); `tet.json` reading and writing (`commands.test.ts`); the command-line
   reading (`command.test.ts`); the split view's rules (`pane-layout.test.ts`); the background
   question and the commit message (`ask.test.ts`); the measured pieces — Codex's hook hash,
-  `resolveCommand`, the quoting helpers, the stores, the marker watch (`pieces.test.ts`), env
-  layering, launcher and context file (`unit.test.ts`). Nothing looks into the window. The Linux
+  `resolveCommand`, the quoting helper, the stores, the generated plugin and extension
+  (`pieces.test.ts`), env layering, launcher and context file (`unit.test.ts`). Nothing looks into the window. The Linux
   side is testable from Windows in WSL: clone onto the Linux filesystem, `npm install` there,
   Electron's libraries via `wsl -u root apt-get`, launch with `env -i … PATH=/usr/bin:/bin`,
   drive it through `tet-ctl`.

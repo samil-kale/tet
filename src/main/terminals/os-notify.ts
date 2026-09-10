@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { HookTarget } from "./hook-target";
 
 /** PowerShell 5.1 decodes BOM-less files as ANSI, so generated .ps1 files need this. */
 export const WIN_BOM = "﻿";
@@ -9,17 +8,6 @@ export const WIN_BOM = "﻿";
 export interface ScriptInvocation {
   command: string;
   args: string[];
-}
-
-/**
- * The one way a Claude/Codex hook — and opencode's plugin — shows a toast, host or sandboxed
- * alike: `tet-ctl notify`, never a script invoked directly. Only the process holding the desktop
- * session can show a real notification, which a sandboxed hook never is; `tet-ctl` reaches the
- * host, whose `notify` verb runs the script below. So a toast needs a reachable control server.
- */
-export function buildHookNotifyCommand(target: HookTarget, title: string, body: string): string {
-  const quote = target.posix ? shellSingleQuote : powershellSingleQuote;
-  return `tet-ctl notify ${quote(title)} ${quote(body)}`;
 }
 
 /**
@@ -117,33 +105,6 @@ export function writePosixScript(file: string, contents: string): void {
   fs.writeFileSync(file, contents.replace(/\r\n/g, "\n"));
 }
 
-/**
- * Builds a hook command that prints a file's contents on stdout — the context file, for the
- * `UserPromptSubmit` hook whose plain stdout an agent appends to the prompt; Claude Code and Codex
- * treat non-JSON stdout alike, so one script serves both. Which shell a hook runs under on win32
- * varies (PowerShell, cmd.exe and Git Bash all observed), so builtins like `type` are unreliable;
- * an explicit `powershell -File` invocation is parsed identically by all three.
- */
-export function buildReadFileCommand(
-  storageDir: string,
-  scriptName: string,
-  targetFile: string,
-  target: HookTarget
-): string {
-  if (target.posix) {
-    return `cat ${shellSingleQuote(target.embed(targetFile))}`;
-  }
-  const scriptFile = path.join(storageDir, `${scriptName}.ps1`);
-  // Quoted the literal way: every path we generate holds the user's own name, and a "$" in that
-  // would otherwise be read as a variable.
-  fs.writeFileSync(
-    scriptFile,
-    WIN_BOM +
-      `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\nGet-Content -Raw ${powershellSingleQuote(target.embed(targetFile))}\n`
-  );
-  return `powershell -NoProfile -ExecutionPolicy Bypass -File "${target.embed(scriptFile)}"`;
-}
-
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -156,10 +117,4 @@ function escapeXml(value: string): string {
 /** Wraps a value as a POSIX sh single-quoted string, safe for any content. */
 export function shellSingleQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
-}
-
-/** The same for PowerShell, whose single-quoted strings are literal too: `$` and `$(...)` in a
- *  path would otherwise be read as a variable or a command substitution. */
-export function powershellSingleQuote(value: string): string {
-  return "'" + value.replace(/'/g, "''") + "'";
 }

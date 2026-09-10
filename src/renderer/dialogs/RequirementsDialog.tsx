@@ -2,26 +2,15 @@ import type { Requirement, Requirements } from "../../shared/types";
 import { DialogFrame } from "../ui/DialogFrame";
 import { SpinnerIcon } from "../ui/icons";
 
-/** Name on the left, what the check found on the right, and where to get it when it is missing. */
+/** Name on the left, what the check found on the right. */
 function RequirementRow({ requirement }: { requirement: Requirement }) {
   return (
     <div className="requirement-item">
       <span className="requirement-name">{requirement.name}</span>
       <span className="requirement-command">{requirement.command}</span>
-      {requirement.installed ? (
-        <span className="requirement-state found">Installed</span>
-      ) : (
-        <>
-          <span className="requirement-state">Missing</span>
-          <button
-            type="button"
-            className="requirement-link"
-            onClick={() => void window.tet.shell.openUrl(requirement.url)}
-          >
-            Get it
-          </button>
-        </>
-      )}
+      <span className={requirement.installed ? "requirement-state found" : "requirement-state"}>
+        {requirement.installed ? "Installed" : "Missing"}
+      </span>
     </div>
   );
 }
@@ -54,8 +43,8 @@ export function RequirementsDialog({ requirements, checking, onRecheck }: Requir
       }
     >
       <p className="dialog-message">
-        Git runs the whole git side, and an agent is what the terminals are for. Install what is
-        missing, then check again.
+        Git runs the whole git side, and an agent is what the terminals are for — on this machine
+        or in a sandbox. Install what is missing, then check again.
       </p>
       <div className="requirement-list">
         <RequirementRow requirement={requirements.git} />
@@ -65,6 +54,13 @@ export function RequirementsDialog({ requirements, checking, onRecheck }: Requir
         {requirements.agents.map((agent) => (
           <RequirementRow key={agent.name} requirement={agent} />
         ))}
+      </div>
+      <p className="dialog-detail">
+        …or SBX alone, which runs the agents in a container, so none of them has to be installed
+        here:
+      </p>
+      <div className="requirement-list">
+        <RequirementRow requirement={requirements.sbx} />
       </div>
       <p className="dialog-detail">
         A program installed somewhere outside its package manager's usual place may only be

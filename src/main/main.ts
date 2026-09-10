@@ -87,7 +87,15 @@ const accounts = new AccountStore(app.getPath("userData"));
 const repositories = new RepositoryManager(
   (projectId, state) => send("repo:state-changed", { projectId, state }),
   (severity, message) => send("app:notice", { severity, message }),
-  (projectId) => send("commands:changed", { projectId })
+  (projectId) => {
+    send("commands:changed", { projectId });
+    // The same file carries the project's sbx switch, and an agent that is only startable inside
+    // the sandbox has to hear that it was turned on — see ProjectSessionManager.sbxConfigChanged.
+    void sessions
+      .get(projectId)
+      ?.sbxConfigChanged()
+      .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
+  }
 );
 const sessions = new SessionManagerRegistry(app.getPath("userData"), settings, {
   onTabs: (projectId, tabs) => send("terminal:tabs", { projectId, tabs }),
@@ -125,7 +133,7 @@ let controlServer: { close: () => Promise<void> } | undefined;
 /**
  * The real desktop toast behind the control channel's `notify` verb — this process is the one
  * holding the desktop session (a sandboxed hook has none; see os-notify.ts's
- * buildHookNotifyCommand). `unref` so a toast never keeps the event loop alive, but **not**
+ * the `hook` and `notify` verbs). `unref` so a toast never keeps the event loop alive, but **not**
  * `detached`: measured, a detached `powershell -File` of the exact same script never got past
  * `CreateToastNotifier`/`ToastNotification.Show()` (alive but idle, no error, no toast, forever),
  * while the same script non-detached completes in well under a second.

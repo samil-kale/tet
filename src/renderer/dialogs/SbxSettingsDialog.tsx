@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import type { Project } from "../../shared/types";
 import { SbxSettingsFields, fromConfig, toConfig, type FieldsState } from "./SbxSettingsFields";
@@ -51,6 +51,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   };
   useEscape(close);
   const [enabled, setEnabled] = useState(false);
+  /** No agent on this machine: the sandbox is the only way this project runs one, so sandboxing
+   *  cannot be switched off here. Derived on every open rather than stored — install an agent and
+   *  the next open is an ordinary one. */
+  const [locked, setLocked] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
@@ -61,7 +65,16 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  the kind of thing that changes the answer. */
   const setup = async (): Promise<void> => {
     setPhase({ kind: "checking" });
-    let status = await window.tet.sbx.status();
+    // Asked beside the status: both re-read PATH, and a call joining one already running costs
+    // nothing (augmentAgentPath). The local answer is what the rest of this run reads — the state
+    // set here is not visible until the next render.
+    const [initialStatus, anyAgent] = await Promise.all([
+      window.tet.sbx.status(),
+      window.tet.startup.anyAgentInstalled()
+    ]);
+    const isLocked = !anyAgent;
+    setLocked(isLocked);
+    let status = initialStatus;
     if (!status.installed) {
       setPhase({ kind: "not-installed" });
       return;
@@ -89,7 +102,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     // Read once setup is done, so Save writes on top of what is on disk rather than the blank
     // defaults this component mounted with.
     const config = await window.tet.sbx.getConfig(project.id);
-    setEnabled(config.enabled);
+    setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
     setPhase({ kind: "ready" });
   };
@@ -113,12 +126,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   };
 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
+  // What an agent may bring in from this machine is meaningless where none is installed.
+  const tabs = useMemo(() => (locked ? TABS.filter((entry) => entry.id !== "knowledge") : TABS), [locked]);
 
   return (
     <DialogFrame
       header={
         phase.kind === "ready"
-          ? { tabs: TABS, active: tab, onSelect: setTab, onClose: close }
+          ? { tabs, active: tab, onSelect: setTab, onClose: close }
           : { title: `SBX Settings - ${project.name}`, onClose: close }
       }
       className={phase.kind === "ready" ? "wide sbx-settings-dialog" : "sbx-settings-dialog"}
@@ -156,12 +171,18 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       )}
       {phase.kind === "ready" && tab === "general" && (
         <label className="dialog-checkbox">
-          <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={locked}
+            onChange={(event) => setEnabled(event.target.checked)}
+          />
           <span>
             <strong>Enable SBX sandboxing for this project</strong>
             <p className="dialog-detail">
               Claude, Codex, OpenCode and Pi tabs in {project.name} run in their own isolated Docker
               sandbox instead of directly on this machine.
+              {locked && " No agent is installed on this machine, so this is the only way to run one here."}
             </p>
           </span>
         </label>

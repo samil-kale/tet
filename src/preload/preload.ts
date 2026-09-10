@@ -15,6 +15,7 @@ const initialTheme = process.argv.find((arg) => arg.startsWith(THEME_ARG))?.slic
 const api: TETApi = {
   startup: {
     check: () => ipcRenderer.invoke("startup:check"),
+    anyAgentInstalled: () => ipcRenderer.invoke("startup:any-agent-installed"),
     quit: () => ipcRenderer.send("startup:quit")
   },
   app: {

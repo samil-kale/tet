@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
+import * as http from "node:http";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -8,10 +9,9 @@ import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
-import { watchMarkers } from "../src/main/terminals/marker-watch";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
-import { SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
-import { powershellSingleQuote, shellSingleQuote } from "../src/main/terminals/os-notify";
+import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
+import { shellSingleQuote } from "../src/main/terminals/os-notify";
 import { ProjectStore } from "../src/main/projects";
 import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
 import { resolveCommand } from "../src/main/terminals/pty";
@@ -19,6 +19,8 @@ import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
 import { THEMES } from "../src/shared/themes";
+import { CONTROL_ENV } from "../src/shared/control";
+import type { ControlRequest } from "../src/shared/control";
 import { DEFAULT_KEYBINDING_PRESET_ID } from "../src/shared/types";
 import { eventually } from "./helpers";
 
@@ -40,8 +42,7 @@ describe("Codex's hook trust", () => {
   });
 
   it("hands every hook in as one TOML value with its trust entry, quoted literally", () => {
-    const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-codex-hooks-"));
-    const args = setupCodexHooks(storageDir, "Codex", { finished: true, needsYou: true, idleReminder: false }, "repo", path.join(storageDir, "context.md"));
+    const args = setupCodexHooks();
     const hooks = args[args.indexOf("-c") + 1];
     assert.match(hooks, /^hooks=\{UserPromptSubmit=\[/);
     for (const event of ["Stop", "PermissionRequest", "PreToolUse"]) {
@@ -49,25 +50,18 @@ describe("Codex's hook trust", () => {
     }
     assert.match(hooks, /matcher='request_user_input'/);
     const trusted = hooks.match(/trusted_hash='sha256:[0-9a-f]{64}'/g) ?? [];
-    assert.equal(trusted.length, 5, "two on UserPromptSubmit, one on each of the other three");
-    assert.match(hooks, /:user_prompt_submit:0:1'=\{trusted_hash=/, "the second handler is trusted on its own");
+    assert.equal(trusted.length, 4, "one per event, each its own handler");
     assert.ok(!args.some((arg) => arg.startsWith("hooks.")), "one value, never key paths");
   });
 
-  it("returns one JSON value from the Stop hook and silences notification output", () => {
-    for (const posix of [false, true]) {
-      const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-codex-stop-"));
-      setupCodexHooks(
-        storageDir,
-        "Codex",
-        { finished: true, needsYou: true, idleReminder: false },
-        "repo",
-        path.join(storageDir, "context.md"),
-        { posix, sandbox: false, embed: (value) => value }
-      );
-      const script = fs.readFileSync(path.join(storageDir, posix ? "stop.sh" : "stop.ps1"), "utf8");
-      assert.match(script, posix ? />\/dev\/null/ : /\| Out-Null/);
-      assert.match(script, posix ? /printf '%s\\n' '\{\}'/ : /Out\.WriteLine\('\{\}'\)/);
+  it("registers one plain tet-ctl call per event, host and sandbox alike", () => {
+    for (const target of [HOST_TARGET, SANDBOX_TARGET]) {
+      const hooks = setupCodexHooks(target)[1];
+      for (const event of ["prompt-submit", "stop", "permission", "question"]) {
+        assert.ok(hooks.includes(`command='tet-ctl hook ${event}'`), `${event} on ${target.posix ? "posix" : "win32"}`);
+      }
+      // Nothing of the host's shows through into a sandbox's trust key, and nothing is written.
+      assert.match(hooks, target.posix ? /'\/<session-flags>\/config\.toml:/ : /'C:\\<session-flags>\\config\.toml:/);
     }
   });
 });
@@ -165,7 +159,6 @@ describe("sbx sandbox naming and mounts", () => {
 describe("the quoting helpers", () => {
   it("make any value one literal word in their shell", () => {
     assert.equal(shellSingleQuote("it's $HOME"), `'it'\\''s $HOME'`);
-    assert.equal(powershellSingleQuote("it's $env:X"), `'it''s $env:X'`);
   });
 });
 
@@ -240,49 +233,38 @@ describe("session readiness checks", () => {
   });
 });
 
-describe("the marker watch", () => {
-  it("drains what a previous run left unreported, and reports what arrives, watcher or not", async () => {
-    const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-markers-"));
-    const dir = path.join(storageDir, "finished");
-    fs.mkdirSync(dir);
-    fs.writeFileSync(path.join(dir, "stale-1"), "");
-    const seen: [string, number][] = [];
-    const stop = watchMarkers(storageDir, "finished", (id, at) => void seen.push([id, at]));
-    await eventually("the stale marker gone", () => !fs.existsSync(path.join(dir, "stale-1")));
-    assert.deepEqual(seen, []);
-    const before = Date.now() - 1000;
-    fs.writeFileSync(path.join(dir, "abc-123"), "");
-    await eventually("the new marker reported", () => seen.length === 1, 4000);
-    assert.equal(seen[0][0], "abc-123");
-    assert.ok(seen[0][1] >= before, "dated by its mtime");
-    assert.ok(!fs.existsSync(path.join(dir, "abc-123")), "taken away once reported");
-    stop();
+/**
+ * A stand-in for the control server plus the environment a tab's process carries: what a
+ * generated plugin or extension reports lands here. They report fire-and-forget, so a test waits
+ * for what it expects rather than awaiting the call itself.
+ */
+async function controlChannel(): Promise<{ reports: ControlRequest[]; close: () => Promise<void> }> {
+  const reports: ControlRequest[] = [];
+  const server = http.createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk: string) => (body += chunk));
+    request.on("end", () => {
+      reports.push(JSON.parse(body) as ControlRequest);
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({ ok: true, result: { stdout: "{}" } }));
+    });
   });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+  process.env[CONTROL_ENV.port] = String((server.address() as { port: number }).port);
+  process.env[CONTROL_ENV.token] = "test-token";
+  process.env[CONTROL_ENV.projectId] = "p1";
+  process.env[CONTROL_ENV.tabId] = "tab-1";
+  return {
+    reports,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve()))
+  };
+}
 
-  it("creates its own directory rather than failing to watch it, for a kind no hook has run yet", async () => {
-    // The sandbox marker dir specifically: watchTurnMarkers watches it from every prepareSpawn
-    // regardless of whether sbx is ever used for this project, so setupClaudeHooks/
-    // setupCodexHooks (the only other thing that would create it) may never have run.
-    const storageDir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-markers-")), "sandbox");
-    assert.ok(!fs.existsSync(storageDir));
-    const seen: [string, number][] = [];
-    const stop = watchMarkers(storageDir, "busy", (id, at) => void seen.push([id, at]));
-    try {
-      assert.ok(fs.existsSync(path.join(storageDir, "busy")), "created synchronously, before returning");
-      // The startup drain (queueDrain(false), draining whatever a previous run left behind
-      // unreported) is still pending on the microtask queue at this point — writing the marker
-      // here, with nothing awaited yet, would race it and be silently swept as "stale" rather
-      // than reported, the same reason the test above writes its own second marker only after
-      // an earlier `await`.
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      fs.writeFileSync(path.join(storageDir, "busy", "abc-123"), "");
-      await eventually("the new marker reported", () => seen.length === 1, 4000);
-      assert.equal(seen[0][0], "abc-123");
-    } finally {
-      stop();
-    }
-  });
-});
+/** The events reported so far, in order. */
+function reported(reports: ControlRequest[]): string[] {
+  return reports.map((report) => String(report.args.event));
+}
 
 describe("pi's extension", () => {
   // Every path tet generates has the user's own name in it, and any of these characters could be
@@ -290,61 +272,55 @@ describe("pi's extension", () => {
   const nasty = "C:\\Users\\it's $x `y\\ctx.md";
 
   it("compiles as TypeScript whatever the paths hold", () => {
-    const source = renderPiExtension({
-      contextFile: nasty,
-      markers: { busy: nasty + "/busy", finished: nasty + "/finished", waiting: nasty + "/waiting" },
-      notify: { finished: { command: "powershell", args: ["-NoProfile", "-File", nasty] }, waiting: undefined }
-    });
+    const source = renderPiExtension({ contextFile: nasty });
     assert.doesNotThrow(() => esbuild.transformSync(source, { loader: "ts" }));
     assert.ok(source.includes(JSON.stringify(nasty)), "baked in as a JS literal, never spliced raw");
   });
 
-  it("marks busy, finished and waiting by session id and appends the context file to the prompt", () => {
+  it("reports both ends of a turn and a question, and appends the context file to the prompt", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-ext-"));
     const contextFile = path.join(dir, "context.md");
-    const markers = { busy: path.join(dir, "busy"), finished: path.join(dir, "finished"), waiting: path.join(dir, "waiting") };
-    const source = renderPiExtension({ contextFile, markers, notify: {} });
-    const compiled = path.join(dir, "tet.js");
-    fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
-    const handlers: Record<string, (event: unknown, ctx: unknown) => unknown> = {};
-    (createRequire(__filename)(compiled) as { default: (pi: unknown) => void }).default({
-      on: (event: string, handler: (event: unknown, ctx: unknown) => unknown) => {
-        handlers[event] = handler;
-      }
-    });
-    const ctx = { sessionManager: { getSessionId: () => "0000-aaaa" } };
+    const channel = await controlChannel();
+    try {
+      const source = renderPiExtension({ contextFile });
+      const compiled = path.join(dir, "tet.js");
+      fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
+      const handlers: Record<string, (event: unknown, ctx: unknown) => unknown> = {};
+      (createRequire(__filename)(compiled) as { default: (pi: unknown) => void }).default({
+        on: (event: string, handler: (event: unknown, ctx: unknown) => unknown) => {
+          handlers[event] = handler;
+        }
+      });
 
-    fs.writeFileSync(contextFile, "\uFEFFhello\n");
-    assert.deepEqual(handlers.before_agent_start({ systemPrompt: "base" }, ctx), { systemPrompt: "base\n\nhello" });
-    fs.writeFileSync(contextFile, "  \n");
-    assert.equal(handlers.before_agent_start({ systemPrompt: "base" }, ctx), undefined, "blank means nothing to say");
+      fs.writeFileSync(contextFile, "﻿hello\n");
+      assert.deepEqual(handlers.before_agent_start({ systemPrompt: "base" }, {}), { systemPrompt: "base\n\nhello" });
+      fs.writeFileSync(contextFile, "  \n");
+      assert.equal(handlers.before_agent_start({ systemPrompt: "base" }, {}), undefined, "blank means nothing to say");
 
-    handlers.agent_start({}, ctx);
-    handlers.agent_settled({}, ctx);
-    handlers.ui_prompt_start({}, ctx);
-    for (const kind of ["busy", "finished", "waiting"] as const) {
-      assert.ok(fs.existsSync(path.join(markers[kind], "0000-aaaa")), `${kind} marker named after the session`);
+      handlers.agent_start({}, {});
+      handlers.agent_settled({}, {});
+      handlers.ui_prompt_start({}, {});
+      await eventually("all three reported", () => channel.reports.length === 3, 3000);
+      assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
+      // The tab is the address; no session id is involved at all any more.
+      assert.deepEqual(channel.reports[0].caller, { projectId: "p1", tabId: "tab-1" });
+      assert.equal(channel.reports[0].verb, "hook");
+    } finally {
+      await channel.close();
     }
-    handlers.agent_start({}, { sessionManager: { getSessionId: () => "../escape" } });
-    assert.deepEqual(fs.readdirSync(markers.busy), ["0000-aaaa"], "only a session id becomes a filename");
   });
 
   // The file is written on the host and read inside the container: every path in it is the
-  // sandbox's own, and the toast cannot be a script — there is no desktop session in there.
-  it("writes a sandbox one with container paths and tet-ctl for the toast", () => {
+  // sandbox's own, and there is nothing else in there to translate.
+  it("writes a sandbox one with container paths and nothing beside it", () => {
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-sbx-"));
     const contextFile = path.join(storageDir, "context.md");
-    const notifications = { finished: true, needsYou: true, idleReminder: false };
-    const file = writePiExtension(storageDir, "repo", "Pi", notifications, contextFile, SANDBOX_TARGET);
+    const file = writePiExtension(storageDir, contextFile, SANDBOX_TARGET);
     const source = fs.readFileSync(file, "utf8");
 
     assert.ok(source.includes(JSON.stringify(toContainerPath(contextFile))), "the context file as the container sees it");
-    assert.ok(source.includes(JSON.stringify(toContainerPath(path.join(storageDir, "busy")))), "and every marker directory");
-    assert.deepEqual(fs.readdirSync(storageDir).filter((name) => name.startsWith("notify-")), [], "no notify script for a sandbox");
-    assert.match(source, /"command":\s*"tet-ctl","args":\s*\["notify"/, "the toast goes through the control channel");
-    for (const kind of ["busy", "finished", "waiting"]) {
-      assert.ok(fs.existsSync(path.join(storageDir, kind)), `${kind} directory created on the host, for the watcher`);
-    }
+    assert.deepEqual(fs.readdirSync(storageDir), ["tet.ts"], "no notify script, no marker directories");
+    assert.ok(source.includes(JSON.stringify(CONTROL_ENV)), "the channel is read from the environment, not baked in");
   });
 });
 
@@ -354,14 +330,9 @@ describe("opencode's plugin", () => {
   const options = (dir: string, sandbox: string | null = null): OpencodePluginOptions => ({
     projectRoot: dir,
     contextFile: path.join(dir, "context.md"),
-    markers: { busy: path.join(dir, "busy"), finished: path.join(dir, "finished"), waiting: path.join(dir, "waiting") },
     sessionsDir: path.join(dir, "sessions"),
     renameDir: path.join(dir, "rename"),
-    sandbox,
-    notify: { finished: false, waiting: false },
-    notifyCommand: { command: "tet-ctl", args: ["notify"] },
-    displayName: "OpenCode",
-    repositoryName: "repo"
+    sandbox
   });
 
   /** Compiles the plugin and returns its hooks, with a fake client that records renames. */
@@ -389,56 +360,72 @@ describe("opencode's plugin", () => {
   it("does nothing for another repository's process", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
     process.env.TET_PROJECT_ROOT = "elsewhere";
-    const { hooks } = await load(dir);
-    await hooks.event({ event: session("ses_a") });
-    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
-    assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
-    assert.equal(fs.existsSync(path.join(dir, "finished", "ses_a")), false);
+    const channel = await controlChannel();
+    try {
+      const { hooks } = await load(dir);
+      await hooks.event({ event: session("ses_a") });
+      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
+      assert.deepEqual(channel.reports, []);
+    } finally {
+      await channel.close();
+    }
   });
 
-  it("records root sessions, marks the turns, and appends the context file", async () => {
+  it("records root sessions, reports the turns, and appends the context file", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
     process.env.TET_PROJECT_ROOT = dir;
-    const { hooks } = await load(dir, "tet-opencode-abc");
+    const channel = await controlChannel();
+    try {
+      const { hooks } = await load(dir, "tet-opencode-abc");
 
-    await hooks.event({ event: session("ses_a") });
-    await hooks.event({ event: session("ses_child", { parentID: "ses_a" }) });
-    const record = JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8"));
-    assert.deepEqual(record, { id: "ses_a", title: "First prompt", created: 1, updated: 2, sandbox: "tet-opencode-abc" });
-    assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_child.json")), false, "a subagent's session is no tab");
-    await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
-    assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
+      await hooks.event({ event: session("ses_a") });
+      await hooks.event({ event: session("ses_child", { parentID: "ses_a" }) });
+      const record = JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8"));
+      assert.deepEqual(record, { id: "ses_a", title: "First prompt", created: 1, updated: 2, sandbox: "tet-opencode-abc" });
+      assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_child.json")), false, "a subagent's session is no tab");
+      await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
 
-    await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_a", status: { type: "busy" } } } });
-    await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_child", status: { type: "busy" } } } });
-    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
-    await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_child" } } });
-    await hooks.event({ event: { type: "question.asked", properties: { sessionID: "ses_a" } } });
-    await hooks.event({ event: { type: "session.status", properties: { sessionID: "../escape", status: { type: "busy" } } } });
-    assert.deepEqual(fs.readdirSync(path.join(dir, "busy")), ["ses_a"], "only a root session's id becomes a marker");
-    assert.deepEqual(fs.readdirSync(path.join(dir, "finished")), ["ses_a"]);
-    assert.deepEqual(fs.readdirSync(path.join(dir, "waiting")), ["ses_a"]);
+      await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_a", status: { type: "busy" } } } });
+      await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_child", status: { type: "busy" } } } });
+      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
+      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_child" } } });
+      await hooks.event({ event: { type: "question.asked", properties: { sessionID: "ses_a" } } });
+      // A subagent's own turns are none of the tab's business, and neither is anything that is
+      // not a session id at all.
+      await eventually("the root session's three", () => channel.reports.length === 3, 3000);
+      assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
 
-    await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_a" } } } });
-    assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
+      await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_a" } } } });
+      assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
 
-    fs.writeFileSync(path.join(dir, "context.md"), "\uFEFFhello\n");
-    const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as { text: string; synthetic: boolean }[] };
-    await hooks["chat.message"]({}, output);
-    assert.equal(output.parts.length, 1);
-    assert.equal(output.parts[0].text, "hello\n");
-    assert.equal(output.parts[0].synthetic, true);
+      fs.writeFileSync(path.join(dir, "context.md"), "\uFEFFhello\n");
+      const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as { text: string; synthetic: boolean }[] };
+      await hooks["chat.message"]({}, output);
+      assert.equal(output.parts.length, 1);
+      assert.equal(output.parts[0].text, "hello\n");
+      assert.equal(output.parts[0].synthetic, true);
+    } finally {
+      await channel.close();
+    }
   });
 
   it("holds a permission back until opencode had its chance to approve it itself", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
     process.env.TET_PROJECT_ROOT = dir;
-    const { hooks } = await load(dir);
-    await hooks.event({ event: { type: "permission.asked", properties: { id: "per_1", sessionID: "ses_a" } } });
-    await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_1", sessionID: "ses_a" } } });
-    await hooks.event({ event: { type: "permission.asked", properties: { id: "per_2", sessionID: "ses_b" } } });
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    assert.deepEqual(fs.readdirSync(path.join(dir, "waiting")), ["ses_b"], "the auto-approved one never counted as a question");
+    const channel = await controlChannel();
+    try {
+      const { hooks } = await load(dir);
+      await hooks.event({ event: { type: "permission.asked", properties: { id: "per_1", sessionID: "ses_a" } } });
+      await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_1", sessionID: "ses_a" } } });
+      await hooks.event({ event: { type: "permission.asked", properties: { id: "per_2", sessionID: "ses_b" } } });
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      assert.deepEqual(reported(channel.reports), ["permission"], "the auto-approved one never counted as a question");
+    } finally {
+      await channel.close();
+    }
   });
 
   it("applies a rename request through the session's own process", async () => {

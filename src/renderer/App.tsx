@@ -213,10 +213,17 @@ export function App() {
     []
   );
 
-  /** What the add-repository dialog ends in, whichever tab produced the project. */
+  /** What the add-repository dialog ends in, whichever tab produced the project. A machine with no
+   *  agent on it can only run this project in a sandbox, so its sbx settings open right away —
+   *  locked, the dialog deriving that from the same question (see SbxSettingsDialog). */
   const projectAdded = useCallback((project: Project) => {
     setProjects((current) => (current.some((entry) => entry.id === project.id) ? current : [...current, project]));
     setActiveProjectId(project.id);
+    void window.tet.startup.anyAgentInstalled().then((installed) => {
+      if (!installed) {
+        setSbxSettingsProject(project);
+      }
+    });
   }, []);
 
   /** Everything held for a project, let go of; the project list itself is the caller's. */

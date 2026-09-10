@@ -14,7 +14,7 @@ const RELEASES_URL = "https://github.com/samil-kale/tet/releases/latest";
  *  the app start: that costs only the small manifest fetch, never a re-download. */
 const PENDING_UPDATE_TIMEOUT_MS = 8000;
 
-/** The filename is the whole message, same idiom as the session turn markers in marker-watch.ts. */
+/** The filename is the whole message: a reader never races a half-written file. */
 function pendingUpdateMarkerPath(): string {
   return path.join(app.getPath("userData"), "update-pending-install");
 }

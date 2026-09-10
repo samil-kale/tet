@@ -138,6 +138,36 @@ ${stderr.slice(uncaught)}`);
     await eventually("the tab gone", async () => !(await tabs()).some((entry) => entry.tabId === tab.tabId), 10_000);
   });
 
+  // The whole chain an agent's hook takes, end to end in the real app: the CLI off a tab's own
+  // environment, the control server, the session manager, and back out through tabs-list. No
+  // agent can be driven in a test, so a shell tab stands in for one — the verb is about the tab,
+  // not about who is running in it.
+  it("marks a tab's turn from its own hook, and answers with the context", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    const open = async (): Promise<string> =>
+      ((await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TerminalDescriptor).tabId;
+    const tab = await open();
+    // A second tab takes the front, so the first one's finished turn is one the user has not
+    // seen — the mark only stands out of sight, and the renderer clears what is in front of it.
+    const inFront = await open();
+    const hook = (event: string): Promise<{ status: number; stdout: string }> =>
+      tetCtl(["hook", event], { ...env, [CONTROL_ENV.projectId]: project.id, [CONTROL_ENV.tabId]: tab }, "{}");
+    const state = async (): Promise<TerminalDescriptor | undefined> =>
+      ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).find((entry) => entry.tabId === tab);
+
+    const start = await hook("prompt-submit");
+    assert.equal(start.status, 0);
+    assert.match(start.stdout, /<tet_context>/, "the answer is what the agent puts in front of the model");
+    await eventually("the tab busy", async () => (await state())?.busy === true, 10_000);
+
+    assert.equal((await hook("stop")).status, 0);
+    await eventually("the turn ended", async () => (await state())?.busy === false, 10_000);
+    assert.notEqual((await state())?.finishedAt, undefined, "and left the mark that outlives it");
+    for (const id of [tab, inFront]) {
+      assert.equal((await ctl("tabs-close", id, "--project", project.id)).status, 0);
+    }
+  });
+
   it("writes the shell's output into the context file the agents read", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const contextFile = path.join(userData, "projects", project.id, "context.md");

@@ -1,5 +1,5 @@
 import type { ThemeDefinition } from "../../shared/themes";
-import type { AgentId, NotificationSettings } from "../../shared/types";
+import type { AgentId } from "../../shared/types";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid; opencode: "ses_..."). */
@@ -18,7 +18,7 @@ export interface AgentSessionInfo {
   provisionalTitle?: boolean;
   /**
    * When this session's last turn ended, ms since epoch, per the agent's own record; undefined
-   * where it keeps none. A net under AgentPaths.onSessionFinished for ends that signal cannot
+   * where it keeps none. A net under the `stop` hook for the ends that signal cannot
    * carry (Claude Code runs no Stop hook for a turn the user cut short). Read only in reconcile,
    * only to end a turn.
    */
@@ -94,7 +94,7 @@ export interface SessionProvider {
 export interface AgentPaths {
   /**
    * This agent's own scratch directory for this repository, already created. Per repository,
-   * since what is generated in there (notification texts, hook settings) names the one it belongs to.
+   * since what is generated in there (hook settings, a plugin, its records) is that repository's.
    */
   agentDir: string;
   /**
@@ -110,40 +110,16 @@ export interface AgentPaths {
   /** TET's user-data root, for anything an agent has to install machine-wide. */
   storageRoot: string;
   /**
-   * What this agent may notify the OS about, as the settings dialog last left it. Handed over
-   * rather than imported so the persisted copy stays the only one; read at setup because that
-   * is where each agent bakes it in.
-   */
-  notifications: NotificationSettings;
-  /**
    * The window's color theme, handed over the same way: an agent that cannot read the terminal's
    * colors (Codex on win32 reads the console's) is told them at setup.
    */
   theme: ThemeDefinition;
-  /**
-   * The two ends of a turn, as the agent itself reports them — never guessed from output.
-   * `busy` puts the spinner on the tab, `finished` takes it off and leaves the mark; see "Both
-   * ends of a turn" in CLAUDE.md.
-   *
-   * A session id, not a tab id. A session with no tab yet is held until the next reconcile
-   * claims it. `at` is when the agent made the report (a marker file's mtime); a report older
-   * than the last one applied is dropped, since the three marker kinds are watched separately
-   * and can arrive out of order. Left out, it is now.
-   */
-  onSessionBusy(sessionId: string, at?: number): void;
-  onSessionFinished(sessionId: string, at?: number): void;
-  /**
-   * The turn stopped on a question only the user can answer (permission prompt, elicitation,
-   * `AskUserQuestion`). Not an end: the turn is still open, so it takes the spinner's place.
-   * No agent reports "answered" (it would cost a hook process per tool call); the mark clears
-   * on being looked at and on either end of the turn — see setTurn.
-   */
-  onSessionWaiting(sessionId: string, at?: number): void;
 }
 
 /**
  * Result of an agent's async spawn preparation — see AgentDefinition.prepareSpawn. `args`
- * and `env` are merged into every session the manager starts, `dispose` runs at shutdown.
+ * and `env` are merged into every session the manager starts. Nothing to close: what a setup
+ * leaves behind is files, and what an agent reports it reports over the control channel.
  */
 export interface SpawnPreparation {
   args: string[];
@@ -154,7 +130,6 @@ export interface SpawnPreparation {
    * it; listing, renaming and the version check still go to the agent itself.
    */
   executable?: string;
-  dispose(): void;
 }
 
 /** What an agent hands a sandboxed tab — see AgentDefinition.prepareSandboxSpawn. */
@@ -182,8 +157,6 @@ export interface AgentDefinition {
    * that failed for another reason. Omitted for agents that always exist (the shell).
    */
   versionArgs?: string[];
-  /** Where this agent is installed from, for the startup check's dialog. Goes with `versionArgs`. */
-  installUrl?: string;
   /**
    * Args that put one question to the agent without a terminal, answered on stdout. The
    * question arrives on stdin (see `askAgent`), so these name the mode and nothing else.
@@ -203,6 +176,14 @@ export interface AgentDefinition {
   /** Session enumeration/resume/deletion; a missing provider means "this agent has no sessions". */
   sessions?: SessionProvider;
   /**
+   * Whether this agent's own end-of-turn payload says the turn is not over after all, so the
+   * `stop` hook leaves no mark: Claude Code runs Stop for a turn that merely launched a
+   * background job and lists it in `background_tasks`. The raw payload, parsed by the one agent
+   * that knows its shape. Omitted where an end is always an end (Codex reports a subagent
+   * through `SubagentStop`, which tet does not hook; opencode and pi have no such event).
+   */
+  holdsTurnEnd?: (payload: string) => boolean;
+  /**
    * Async setup before any session of this agent is spawned: generated hooks, settings files,
    * plugins, and however the repository's context file reaches the model (see AgentPaths).
    * A rejection marks the agent unstartable, so a failed optional write (a notification script)
@@ -212,8 +193,8 @@ export interface AgentDefinition {
   /**
    * prepareSpawn's hook wiring for an sbx sandbox: generated for a POSIX host regardless of
    * `process.platform`, every embedded path in the sandbox's own view (`SANDBOX_TARGET` in
-   * hook-target.ts). Notifications go through `tet-ctl notify` over the control channel
-   * (os-notify.ts's buildHookNotifyCommand), so the toast is shown by the host process.
+   * hook-target.ts). What the hooks report goes over the control channel like a host tab's, so
+   * the toast is shown by the host process, the one with a desktop session.
    *
    * Returns the extra CLI arguments after `sbx run`'s "--" and, where the setup is pointed at
    * by a variable, the environment for it. No executable override: the sandbox's own bundled

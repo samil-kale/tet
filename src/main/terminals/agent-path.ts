@@ -126,12 +126,17 @@ export function shellInvocation(shell: string): string[] {
  * version-managed ones (nvm's per-version `node/<v>/bin`) can be known no other way. `$SHELL`
  * names it, else the account's shell. Timeout-bounded so a hanging profile cannot hold startup;
  * `TET_RESOLVING_ENVIRONMENT` lets such a profile skip its slow part.
+ *
+ * The kill has to be SIGKILL: the shell is asked to be *interactive* (shellInvocation), and an
+ * interactive shell ignores SIGTERM — measured, a bash whose profile hung sat through the whole
+ * timeout and died only when something else signalled it 40 s later, with the requirements check
+ * waiting on it all that time. With the default killSignal the timeout above ends nothing.
  */
 function loginShellPath(): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const shell = process.env.SHELL || os.userInfo().shell || "/bin/sh";
     const env = { ...process.env, TET_RESOLVING_ENVIRONMENT: "1" };
-    execFile(shell, shellInvocation(shell), { timeout: 5000, encoding: "utf8", env }, (error, stdout) => {
+    execFile(shell, shellInvocation(shell), { timeout: 5000, killSignal: "SIGKILL", encoding: "utf8", env }, (error, stdout) => {
       if (error) {
         reject(error);
         return;

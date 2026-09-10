@@ -114,7 +114,7 @@ export function cancelSbxSetup(): void {
 }
 
 /** `version` is a subcommand; `sbx --version` fails with "unknown flag". */
-function isSbxInstalled(): Promise<boolean> {
+export function isSbxInstalled(): Promise<boolean> {
   return checkAgentInstalled("sbx", ["version"], os.tmpdir());
 }
 
@@ -355,7 +355,7 @@ export type SandboxPaths = Pick<AgentPaths, "agentDir" | "contextFile">;
 
 /**
  * The two paths of tet's own that every sandboxed tab needs, as `sbx mount` specs: `agentDir`
- * (hook settings and marker files, read-write) and the shell-context file's directory
+ * (hook settings and each agent's own records, read-write) and the shell-context file's directory
  * (read-only). Live mounts, not `sbx create` positionals: a create-time positional cannot be
  * changed afterwards ("already exists and can't be given new workspaces"), so anything on that
  * list turns every change into a rebuild. The project itself stays create-time: `sbx run` has
@@ -878,8 +878,8 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // row is mounted for merely *being there* — a folder and a plain file mount the same way
   // (pathMountSpecs); only a path that is gone from this host is reported back as missing.
   // fixedMountSpecs leads the list as the one part of it that is not optional: without it the
-  // agent still starts and still works on the project, but with no hook settings, no turn
-  // markers and no shell transcript. Best-effort all the same — by here everything it needs is
+  // agent still starts and still works on the project, but with no hook settings and no shell
+  // transcript. Best-effort all the same — by here everything it needs is
   // in place (a directory tet created itself, a sandbox mountAll is about to start), so a
   // failure means something is wrong that refusing to start the tab would not fix. The Allowed
   // hosts follow the mounts for the same reason, but only into a sandbox this call created:

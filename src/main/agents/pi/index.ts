@@ -1,6 +1,4 @@
-import * as path from "node:path";
 import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
-import { watchTurnMarkers } from "../../terminals/marker-watch";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { writePiExtension } from "./extension";
@@ -23,19 +21,15 @@ export const piAgent: AgentDefinition = {
   executable: () => "pi",
   // On win32 the npm install is a `pi.cmd` shim, which resolveCommand routes through cmd.exe.
   versionArgs: ["--version"],
-  installUrl: "https://pi.dev",
   // Print mode: stdin alone is the prompt, the answer comes on stdout (~2.6 s measured).
   // `--no-session` leaves no transcript behind, so there is no cleanupAsk.
   askArgs: ["-p", "--no-session"],
   sessions: piSessionProvider,
-  prepareSpawn: (_executable, cwd, paths) => {
+  prepareSpawn: (_executable, _cwd, paths) => {
     const args: string[] = [];
-    const watchers: (() => void)[] = [];
     try {
-      const extension = writePiExtension(paths.agentDir, path.basename(cwd), "Pi", paths.notifications, paths.contextFile);
+      const extension = writePiExtension(paths.agentDir, paths.contextFile);
       args.push("-e", extension);
-      watchers.push(watchTurnMarkers(paths.agentDir, paths));
-      watchers.push(watchTurnMarkers(sandboxHookDir(paths.agentDir), paths));
     } catch (error) {
       // A `-e` file pi cannot load is fatal to it (measured: it prints "Failed to load
       // extension" and exits), so a file that failed to write is not passed at all and the
@@ -45,14 +39,11 @@ export const piAgent: AgentDefinition = {
     // pi's built-in themes are named after the background's kind, `dark` and `light`, and
     // `--use-theme` sets one for this run only — its settings.json stays untouched (measured).
     args.push("--use-theme", paths.theme.kind);
-    // A fresh session's first busy marker waits in session-manager's pendingTurns until pi writes
-    // the transcript, which it does only with the first assistant message; a first answer taking
-    // longer than that queue's TTL loses its spinner. The finished mark still lands.
-    return Promise.resolve({ args, dispose: () => watchers.forEach((stop) => stop()) });
+    return Promise.resolve({ args });
   },
-  prepareSandboxSpawn: (cwd, paths) => {
+  prepareSandboxSpawn: (_cwd, paths) => {
     try {
-      const extension = writePiExtension(sandboxHookDir(paths.agentDir), path.basename(cwd), "Pi", paths.notifications, paths.contextFile, SANDBOX_TARGET);
+      const extension = writePiExtension(sandboxHookDir(paths.agentDir), paths.contextFile, SANDBOX_TARGET);
       // The file is written at its host path and read at the sandbox's — agentDir is mounted
       // whole (sbx.ts's fixedMountSpecs) and this sits inside it. On a failed write pi is started
       // without the argument, never pointed at a file that is not there.

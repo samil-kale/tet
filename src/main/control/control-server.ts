@@ -1,8 +1,8 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import * as net from "node:net";
-import { CONTROL_VERBS, HELP_VERB } from "../../shared/control";
-import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/control";
+import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
+import type { ControlErrorCode, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
 import { PROMPT_IDS } from "../../shared/types";
 import type {
@@ -56,6 +56,19 @@ export interface ControlDeps {
   notify(title: string, body: string): void;
 }
 
+/** What a hook's report leaves for the server to do — see ControlTerminals.hookEvent. */
+export interface HookToast {
+  title: string;
+  body: string;
+}
+
+export interface HookOutcome {
+  /** What the reporting agent is to see on the hook's stdout; the verb's own default otherwise. */
+  stdout?: string;
+  /** The toast to show, or nothing where the notification settings say so. */
+  toast?: HookToast;
+}
+
 /** The slice of ProjectSessionManager the verbs use. */
 export interface ControlTerminals {
   snapshot(): TerminalDescriptor[];
@@ -63,6 +76,9 @@ export interface ControlTerminals {
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   renameTab(tabId: string, title: string): Promise<void>;
+  /** A turn reported by one tab's own agent hook. An unknown tab is not an error — the tab can
+   *  have been closed while its CLI was still ending its turn. */
+  hookEvent(tabId: string, event: HookEvent, payload: string): HookOutcome;
 }
 
 class ControlError extends Error {
@@ -294,6 +310,27 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     notify: (args) => {
       deps.notify(text(args, "title", "title"), text(args, "body", "body"));
       return { result: { notified: true } };
+    },
+
+    hook: (args, caller) => {
+      const event = text(args, "event", "hook event");
+      if (!HOOK_EVENTS.some((candidate) => candidate === event)) {
+        throw new ControlError("bad_args", `unknown hook event: ${event} (one of ${HOOK_EVENTS.join(", ")})`);
+      }
+      if (!caller.tabId) {
+        throw new ControlError("bad_args", "a hook reports for the tab it runs in, and this is not one");
+      }
+      const payload = typeof args.payload === "string" ? args.payload : "";
+      const outcome = terminals(project(args, caller)).hookEvent(caller.tabId, event as HookEvent, payload);
+      if (outcome.toast) {
+        deps.notify(outcome.toast.title, outcome.toast.body);
+      }
+      // `{}` where the event has nothing to say, rather than nothing at all: Codex reads its Stop
+      // hook's stdout as one JSON value, and every agent whose hooks tet registers takes JSON on
+      // the channels it does not append to the prompt (measured — the toast's own result used to
+      // land there). `prompt-submit` is the exception at both ends: its answer is the prompt's
+      // own text, so having nothing to say there means saying nothing.
+      return { result: { stdout: outcome.stdout ?? (event === "prompt-submit" ? "" : "{}") } };
     }
   };
 }

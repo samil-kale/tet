@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
-import { mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
+import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ShellContext } from "../src/main/terminals/shell-context";
 import { CLI, eventually } from "./helpers";
@@ -161,5 +161,32 @@ describe("the agent PATH", () => {
     ]);
     // A bare environment contributes only what it can name — no empty entries.
     assert.deepEqual(win32AgentDirs({}, undefined), []);
+  });
+
+  // What the timeout around the login shell is worth depends on the signal behind it: the shell is
+  // asked to be interactive, and an interactive one ignores SIGTERM. Measured before the fix: the
+  // call never came back, and with the requirements check waiting on it the app never opened.
+  it("gives up on a login shell that ignores being asked to stop", { skip: process.platform === "win32" && "posix only", timeout: 30_000 }, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-shell-"));
+    const shell = path.join(dir, "hanging-shell");
+    // Ignores SIGTERM and blocks in the shell itself — no child that could be killed in its place.
+    fs.writeFileSync(shell, ["#!/bin/sh", 'trap "" TERM', "read ignored", ""].join("\n"), { mode: 0o755 });
+    const shellBefore = process.env.SHELL;
+    const pathBefore = process.env.PATH;
+    process.env.SHELL = shell;
+    const started = Date.now();
+    try {
+      await augmentAgentPath();
+    } finally {
+      if (shellBefore === undefined) {
+        delete process.env.SHELL;
+      } else {
+        process.env.SHELL = shellBefore;
+      }
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    const took = Date.now() - started;
+    assert.ok(took < 20_000, `it waited ${took}ms on a shell it had given up on`);
+    assert.equal(process.env.PATH, pathBefore, "a shell that answered nothing changes nothing");
   });
 });
