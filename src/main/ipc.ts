@@ -543,6 +543,11 @@ export function registerIpc({
     sessions.get(projectId)?.markSeen(tabId);
   });
 
+  /** The tabs in front of the user, which a turn does not toast about. Only the renderer knows. */
+  ipcMain.on("terminal:in-front", (_event, projectId: string | null, tabIds: string[]) => {
+    sessions.setInFront(projectId, tabIds);
+  });
+
   ipcMain.on("terminal:input", (_event, projectId: string, tabId: string, data: string) => {
     countActivity("input");
     sessions.get(projectId)?.write(tabId, data);

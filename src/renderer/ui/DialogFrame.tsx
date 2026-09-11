@@ -1,5 +1,6 @@
 import { CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
+import { useCoversWindow } from "./window-covered";
 
 export interface DialogTab<T extends string> {
   id: T;
@@ -48,8 +49,11 @@ interface DialogFrameProps<T extends string> {
  *
  * Escape is the caller's: a question listens on `window`, the others on `document`
  * (`useEscape`), and RequirementsDialog takes none at all.
+ *
+ * While one is up, no tab is in front of the user (`window-covered.ts`).
  */
 export function DialogFrame<T extends string>({ header, busy, className, onSubmit, buttons, children }: DialogFrameProps<T>) {
+  useCoversWindow();
   const cardClass = className ? `dialog ${className}` : "dialog";
   const content = (
     <>

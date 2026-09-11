@@ -15,6 +15,7 @@ import {
   serializeLayout,
   snapTab,
   snapZoneAt,
+  tabsInFront,
   visibleTabIds
 } from "../src/renderer/terminal/pane-layout";
 import type { ProjectLayout } from "../src/renderer/terminal/pane-layout";
@@ -27,6 +28,20 @@ function tab(tabId: string, updatedAt?: number, sessionId?: string): TerminalDes
 }
 
 const NONE: TerminalDescriptor[] = [];
+
+describe("tabsInFront", () => {
+  it("is every pane's shown tab, and none without the focus or under a dialog", () => {
+    const layout: ProjectLayout = {
+      ...defaultLayout(),
+      preset: "cols2",
+      tabPane: { t1: "a", t2: "b", t3: "b" },
+      activeTab: { a: "t1", b: "t2" }
+    };
+    assert.deepEqual(tabsInFront(layout, true, false), ["t1", "t2"]);
+    assert.deepEqual(tabsInFront(layout, false, false), [], "another window in front, or minimized");
+    assert.deepEqual(tabsInFront(layout, true, true), [], "a dialog over the window");
+  });
+});
 
 describe("normalizeLayout", () => {
   it("settles a new tab in the focused pane and opens on the most recently used one", () => {

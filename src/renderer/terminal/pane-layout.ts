@@ -83,6 +83,14 @@ export function visibleTabIds(layout: ProjectLayout): string[] {
   return Object.values(layout.activeTab).filter((id): id is string => id != null);
 }
 
+/**
+ * The tabs in front of the user: those shown, but none while the window lacks the focus (another
+ * window in front, or minimized) or a dialog covers it — a turn ending then was out of sight.
+ */
+export function tabsInFront(layout: ProjectLayout, focused: boolean, covered: boolean): string[] {
+  return focused && !covered ? visibleTabIds(layout) : [];
+}
+
 /** The tab a pane keeps active once `wanted` (its previous active tab) is gone from `list`. */
 function pickActive(
   list: TerminalDescriptor[],

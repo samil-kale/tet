@@ -18,6 +18,7 @@ import {
 import { confirm } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
+import { useCoversWindow } from "../ui/window-covered";
 import { ProgressBar } from "../ui/ProgressBar";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePaneSize } from "../ui/Sash";
 
@@ -48,6 +49,7 @@ async function confirmDiscardEdit(path: string): Promise<boolean> {
 /** One file over the whole window: a diff, or an editor for it. EXPLORER over LOCAL CHANGES on
  *  the left mirrors the git pane's shape. Its one question goes through `Dialog.tsx`. */
 export const DiffDialog = memo(function DiffDialog({ project, path, version, state, onOpenDiff, onClose }: DiffDialogProps) {
+  useCoversWindow();
   const { changes } = state;
   const change = path ? changes.find((entry) => entry.path === path) : undefined;
   const diffable = change !== undefined;

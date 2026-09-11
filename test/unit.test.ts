@@ -6,11 +6,65 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
+import { SettingsStore } from "../src/main/settings";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
+import { ProjectSessionManager } from "../src/main/terminals/session-manager";
 import { ShellContext } from "../src/main/terminals/shell-context";
+import type { HookEvent } from "../src/shared/control";
+import type { TerminalDescriptor } from "../src/shared/types";
 import { CLI, eventually } from "./helpers";
 
 /** The pieces around the control channel that need no app and no server: pure, or a file. */
+
+describe("a turn's toast", () => {
+  // A shell tab stands in for an agent, as in app.test.ts: it has no version check and no
+  // sessions to list, so the manager starts nothing, and the hook is about the tab.
+  it("is left out for a tab in front of the user, and only while it is", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-toast-"));
+    const settings = new SettingsStore(root);
+    settings.save({ ...settings.get(), notifications: { finished: true, needsYou: true, idleReminder: true } });
+    let pushed: TerminalDescriptor[] = [];
+    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, settings, {
+      onTabs: (_projectId, tabs) => (pushed = tabs),
+      onOutput: () => undefined,
+      onStatus: () => undefined,
+      onStartupProgress: () => undefined,
+      onNotice: () => undefined
+    });
+    const { tabId } = manager.createTab("shell");
+    let at = Date.now();
+    const hook = (event: HookEvent) => manager.hookEvent(tabId, event, "{}", (at += 1000));
+    const needsYou = ["permission", "question", "idle"] as const;
+    try {
+      manager.setInFront([tabId]);
+      assert.notEqual(hook("prompt-submit").stdout, undefined, "the agent still gets its context");
+      assert.equal(hook("stop").toast, undefined, "a turn finished in front of the user");
+      assert.notEqual(
+        pushed.find((tab) => tab.tabId === tabId)?.finishedAt,
+        undefined,
+        "the mark is still set: whether it shows is the renderer's call"
+      );
+      for (const event of needsYou) {
+        assert.equal(hook(event).toast, undefined, event);
+      }
+
+      // The renderer reports another tab in front, or none (focus lost, a dialog up).
+      for (const inFront of [["new-other"], []]) {
+        manager.setInFront(inFront);
+        hook("prompt-submit");
+        assert.match(hook("stop").toast?.title ?? "", /Finished/, `in front: [${inFront}]`);
+        for (const event of needsYou) {
+          assert.notEqual(hook(event).toast, undefined, `${event}, in front: [${inFront}]`);
+        }
+      }
+    } finally {
+      // The manager writes its context file on its own time; removed under it, the write logs.
+      await eventually("the context file written", () => fs.existsSync(path.join(root, "projects", "p", "context.md")));
+      await manager.dispose();
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
+    }
+  });
+});
 
 describe("a terminal's environment", () => {
   it("puts tet's own above the machine's, and a saved command's above all", () => {

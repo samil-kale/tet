@@ -114,6 +114,7 @@ const api: TETApi = {
     rename: (projectId, tabId, title) => ipcRenderer.invoke("terminal:rename", projectId, tabId, title),
     restart: (projectId, tabId) => ipcRenderer.invoke("terminal:restart", projectId, tabId),
     seen: (projectId, tabId) => ipcRenderer.send("terminal:seen", projectId, tabId),
+    inFront: (projectId, tabIds) => ipcRenderer.send("terminal:in-front", projectId, tabIds),
     input: (projectId, tabId, data) => ipcRenderer.send("terminal:input", projectId, tabId, data),
     resize: (projectId, tabId, cols, rows) => ipcRenderer.send("terminal:resize", projectId, tabId, cols, rows),
     resolveUrl: (projectId, tabId, fragment) =>

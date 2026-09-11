@@ -203,6 +203,9 @@ export interface TETApi {
     /** The tab is on screen, clearing the `finishedAt` a finished turn left on it — the renderer's
      *  half of the mark, the main process not being able to tell which tab is in front. */
     seen(projectId: string, tabId: string): void;
+    /** The tabs in front of the user — on screen, in a focused window no dialog covers — of the
+     *  one project shown; a turn there raises no toast. Sent whenever that set changes. */
+    inFront(projectId: string | null, tabIds: string[]): void;
     input(projectId: string, tabId: string, data: string): void;
     /** The first resize of a tab is what starts its process (lazy spawn). */
     resize(projectId: string, tabId: string, cols: number, rows: number): void;

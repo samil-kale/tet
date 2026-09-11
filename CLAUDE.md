@@ -360,8 +360,9 @@ the net is each agent's own transcript (`turnEndedAt` in `src/main/agents/*/sess
 
 State lives as `TerminalDescriptor.busy` / `waitingAt` / `finishedAt` per tab in the main
 process. The **main process** sets it, never asking whether it should; the **renderer** decides
-what's *shown* and clears what was seen, the rule living once in `App.markedTabs`. `App` holds
-every project's tabs because the project list needs all of them at once.
+what's *shown* and clears what was seen, the rule living once in `App.markedTabs`. "In front of
+the user" is `App.inFront`: a visible pane of the shown project in a focused window no dialog
+covers (`window-covered.ts`). The toast goes by it too, reported through `terminals.inFront`.
 
 ## Ending a session
 
@@ -659,10 +660,10 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   (`app.test.ts` — needs a display, `xvfb-run` on Linux); `git.ts` against the real git
   (`git.test.ts`); the session providers against transcripts written the way the CLIs write them
   (`sessions.test.ts`); `tet.json` reading and writing (`commands.test.ts`); the command-line
-  reading (`command.test.ts`); the split view's rules (`pane-layout.test.ts`); the background
+  reading (`command.test.ts`); the split view's rules and `tabsInFront` (`pane-layout.test.ts`); the background
   question and the commit message (`ask.test.ts`); the measured pieces — Codex's hook hash,
   `resolveCommand`, the quoting helper, the stores, the generated plugin and extension
-  (`pieces.test.ts`), env layering, launcher and context file (`unit.test.ts`). Nothing looks into the window. The Linux
+  (`pieces.test.ts`), env layering, launcher, context file and the toast rule (`unit.test.ts`). Nothing looks into the window. The Linux
   side is testable from Windows in WSL: clone onto the Linux filesystem, `npm install` there,
   Electron's libraries via `wsl -u root apt-get`, launch with `env -i … PATH=/usr/bin:/bin`,
   drive it through `tet-ctl`.

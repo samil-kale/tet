@@ -23,10 +23,11 @@ import {
 import { TerminalsPane } from "./terminal/TerminalsPane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
+import { useWindowCovered } from "./ui/window-covered";
 import { sameList } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
-import { defaultLayout, paneOf, visibleTabIds } from "./terminal/pane-layout";
+import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 
 /** A little over `.git-pane.sliding`'s 0.15s, so the class outlives the transition. */
@@ -335,20 +336,49 @@ export function App() {
   // A tab the control channel opened, shown like a saved command's: drawing it starts its process.
   useEffect(() => window.tet.terminals.onShow(({ projectId, tabId }) => showTab(projectId, tabId)), [showTab]);
 
+  const [focused, setFocused] = useState(() => document.hasFocus());
+  useEffect(() => {
+    const onFocus = (): void => setFocused(true);
+    const onBlur = (): void => setFocused(false);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
+  const covered = useWindowCovered();
+
   /**
-   * Finished and waiting sessions not on screen, oldest first — the tab strip's marks, and what the
-   * project row's marks step through. Leaves out the tab in front of the user: a turn that finished
-   * or a question asked there was never out of sight. Decided here, once: the main process holds
-   * the mark but cannot know what is on screen, and two views must not each decide.
+   * The active project's tabs in front of the user (`tabsInFront`). The one definition the marks,
+   * `seen` and the toasts (`terminals.inFront`) all go by; identity-stable, since it is reported
+   * on change.
+   */
+  const inFrontRef = useRef<string[]>(NO_IDS);
+  const inFront = useMemo(() => {
+    const next = activeProjectId ? tabsInFront(layouts[activeProjectId] ?? DEFAULT_LAYOUT, focused, covered) : NO_IDS;
+    inFrontRef.current = sameList(inFrontRef.current, next, NO_IDS);
+    return inFrontRef.current;
+  }, [focused, covered, activeProjectId, layouts]);
+
+  useEffect(() => {
+    window.tet.terminals.inFront(activeProjectId, inFront);
+  }, [activeProjectId, inFront]);
+
+  /**
+   * Finished and waiting sessions not in front of the user, oldest first — the tab strip's marks,
+   * and what the project row's marks step through. Leaves out the tabs in front: a turn that
+   * finished or a question asked there was never out of sight. Decided here, once: the main process
+   * holds the mark but cannot know what is on screen, and two views must not each decide.
    */
   const markedTabs = useCallback(
     (projectId: string, field: "finishedAt" | "waitingAt"): TerminalDescriptor[] => {
-      const onScreen = projectId === activeProjectId ? visibleTabIds(layouts[projectId] ?? DEFAULT_LAYOUT) : NO_IDS;
+      const onScreen = projectId === activeProjectId ? inFront : NO_IDS;
       return (tabs[projectId] ?? [])
         .filter((tab) => tab[field] !== undefined && !onScreen.includes(tab.tabId))
         .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
     },
-    [tabs, layouts, activeProjectId]
+    [tabs, inFront, activeProjectId]
   );
 
   /**
@@ -474,21 +504,22 @@ export function App() {
   );
 
   /**
-   * Every tab on screen (one per pane) has been seen, so its mark goes. The main process holds
-   * the mark but never learns what is on screen. Only the bubble: a standing question is hidden
-   * while on screen (`markedTabs`), not cleared, so reporting it would be an IPC per push.
+   * Every tab in front of the user (`inFront`) has been seen, so its mark goes — a turn that
+   * finished behind a dialog or while another window was in front keeps its bubble until the user
+   * is back. The main process holds the mark but never learns what is on screen. Only the bubble: a
+   * standing question is hidden while in front (`markedTabs`), not cleared, so reporting it would
+   * be an IPC per push.
    */
   useEffect(() => {
     if (!activeProjectId) {
       return;
     }
-    const onScreen = visibleTabIds(layouts[activeProjectId] ?? DEFAULT_LAYOUT);
     for (const tab of tabs[activeProjectId] ?? []) {
-      if (onScreen.includes(tab.tabId) && tab.finishedAt !== undefined) {
+      if (inFront.includes(tab.tabId) && tab.finishedAt !== undefined) {
         window.tet.terminals.seen(activeProjectId, tab.tabId);
       }
     }
-  }, [activeProjectId, layouts, tabs]);
+  }, [activeProjectId, inFront, tabs]);
 
   /** Opens a shell tab in that project, which is what a project row offers as "terminal". */
   const openTerminal = useCallback(

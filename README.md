@@ -7,7 +7,7 @@
 <h1 align="center">TET</h1>
 
 <p align="center">
-  <strong>A desktop workspace for coding agents.</strong>
+  <strong>An agent IDE.</strong>
 </p>
 
 <p align="center">
@@ -20,9 +20,24 @@
 
 <p align="center">
   <a href="https://github.com/samil-kale/tet/releases/latest"><strong>Download</strong></a> &bull;
-  <a href="#get-started"><strong>Build from source</strong></a> &bull;
-  <a href="CLAUDE.md"><strong>Architecture notes</strong></a>
+  <a href="#get-started"><strong>Build from source</strong></a>
 </p>
+
+---
+
+## Simple and lightweight
+
+Use Claude Code, Codex, opencode or pi, or all four together.
+
+TET deliberately does few things. Git is for navigation and control; the work happens in the
+terminals. If a git task cannot be done in two clicks, I leave it to an agent or a shell.
+
+The git view has no staging area, history or graph, rebase or cherry-pick, and no conflict
+resolution beyond aborting.
+
+The agents are their real CLIs, not a chat UI around them.
+
+**TET never reads or changes their configuration.**
 
 ---
 
@@ -33,6 +48,8 @@
 ---
 
 ## Why
+
+tl;dr: Traditional IDEs are no longer where I do the work. I work with the prompt, not the code.
 
 I've spent more than 15 years working in IDEs, usually with a clear favourite. But as coding
 agents became part of my workflow, I spent less time editing code directly and more time moving
@@ -49,60 +66,19 @@ straight into an agent session.
 
 ---
 
-## Features
+## What it does
 
-### Real terminals, several agents
-
-**Claude Code**, **opencode**, **Codex CLI** and **pi** run as first-class terminal tabs. These are
-the actual CLIs in real ptys, not wrapped chat interfaces. TET uses each agent's own session state
-to show whether a turn is **working**, **waiting for an answer**, or **finished out of sight**.
-You can list, resume, rename and delete previous sessions from the tab menu, drop files or images
-onto a terminal, and Ctrl-click paths in the output to open them.
-
-### Multiple terminals, one glance
-
-Split a project's terminals into up to four panes. Drag a tab to a snap zone to create a split;
-empty panes collapse automatically. Keep an agent, a development server and a shell visible at
-the same time instead of cycling through tabs.
-
-### The git pane
-
-Open the git pane from the tab strip to keep the repository and a terminal on screen together.
-Check out branches, fetch, pull, push, commit all changes, discard files and update `.gitignore`
-without leaving the workspace. You can also clone repositories from GitHub or GitLab.
-
-### A diff dialog that's also an editor
-
-Double-click a changed file or Ctrl-click a path in a terminal to open it in a full-window diff.
-Image changes are shown visually, and hidden context can be expanded on demand. The same view
-includes a lightweight Monaco editor for quick fixes without leaving TET.
-
-### Notifications you can act on
-
-Get a desktop notification when a turn finishes or needs input. Project rows keep the same state
-visible inside TET, so you can immediately find sessions that are **waiting** or **finished out
-of sight**.
-
-### Saved commands per project
-
-Save project-specific commands in the sidebar and run them in their own terminal tabs. Commands
-are stored in `tet.json` at the repository root, so they can travel with the project and be
-committed.
-
-### An agent can drive TET
-
-Every terminal tab has access to `tet-ctl`, a small CLI for controlling the surrounding app. An
-agent can inspect open projects and their git state, manage projects and terminal tabs, run saved
-commands, and read or change TET's settings. It also receives the path to the project's shell
-context, so recent terminal output does not have to be copied into the prompt.
-
-### Sandboxed agents
-
-Enable a Docker sandbox for any project from **SBX Settings**. **Claude Code** and **Codex** then
-run inside the container while keeping the same tabs, turn tracking and notifications. You
-control which folders are available and can include your skills, plugins and instruction files.
-Authentication stays inside the sandbox, so no agent credentials or trust settings are shared
-with the host.
+- **Claude Code**, **opencode**, **Codex CLI** and **pi** run in terminal tabs. TET
+  shows when a turn is working, waiting or finished out of sight.
+- A project's terminals can be split into up to four panes. Files and images can be dropped into
+  an agent session.
+- The git pane handles branches, fetch, pull, push, commit, discard and `.gitignore`. A changed
+  file opens in a full-window diff with visual image changes, expandable context and a small
+  Monaco editor. Repositories can be cloned from GitHub or GitLab.
+- Desktop notifications and project marks point to sessions that need attention.
+- `tet-ctl` lets an agent inspect the workspace and git state, manage projects and tabs, run saved
+  commands, change TET's settings and read recent shell context.
+- A project can run **Claude Code**, **opencode**, **Codex CLI** or **pi** in a Docker sandbox.
 
 ---
 
@@ -125,24 +101,17 @@ npm start
 
 ### Requirements
 
-TET requires **`git`** on your `PATH` and **at least one supported agent**: Claude Code,
-opencode, Codex CLI or pi. A startup check tells you if anything is missing.
+TET requires **`git`** on your `PATH`. It also needs either a supported agent on the host
+(Claude Code, opencode, Codex CLI or pi) or **`sbx`**. `sbx` alone is enough because sandboxed
+tabs run the agent CLI inside their containers. A startup check tells you if anything is missing.
 
 ---
 
-## How it works
-
-TET is built with Electron, React and xterm.js. It uses your local `git` CLI in a separate process
-instead of reimplementing git, so repository operations do not interfere with terminal input.
-
-Agents run as their real CLIs in real ptys. TET does not infer their state from terminal output;
-each agent reports its turns through its own integration.
-**Your Claude Code, Codex, opencode and pi configuration is never read or modified.**
-
 ## Contributing
 
-Issues and pull requests are welcome. Before opening a pull request, run `npm run typecheck`,
-`npm run lint` and `npm test`. App tests on Linux require a display such as `xvfb-run`.
+Issues and pull requests are welcome. [CLAUDE.md](CLAUDE.md) contains the notes used when working
+on the codebase. Before opening a pull request, run `npm run typecheck`, `npm run lint` and
+`npm test`. App tests on Linux require a display such as `xvfb-run`.
 
 ## License
 

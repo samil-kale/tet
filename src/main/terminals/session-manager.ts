@@ -236,6 +236,8 @@ export class ProjectSessionManager {
    * balance its acquire — `closeTabs` can put a tab back after a failed delete.
    */
   private readonly tabIndicators = new Map<string, number>();
+  /** The tabs in front of the user, as the renderer last reported them (`setInFront`). */
+  private inFront: ReadonlySet<string> = new Set();
 
   private readonly shellContext: ShellContext;
 
@@ -1052,7 +1054,8 @@ export class ProjectSessionManager {
    *
    * Answers what the agent is to see on stdout, and the toast for the control server to show —
    * composed here, where the settings are read at the moment of the event rather than baked
-   * into a generated script at setup. Whether a mark is *shown* stays the renderer's decision.
+   * into a generated script at setup. Whether a mark is *shown* stays the renderer's decision, and
+   * the toast follows it: none for a tab the renderer reports in front of the user (`setInFront`).
    */
   hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined): HookOutcome {
     const tab = this.disposed ? undefined : this.tabs.find((candidate) => candidate.tabId === tabId);
@@ -1115,6 +1118,11 @@ export class ProjectSessionManager {
    *  a switch flipped in the dialog applies to the next turn of every project, not the next one
    *  opened. */
   private toast(tab: TabState, kind: "finished" | "permission" | "question" | "idle"): HookToast | undefined {
+    // The rule the marks follow: what happened in the tab the user is looking at was never out
+    // of sight.
+    if (this.inFront.has(tab.tabId)) {
+      return undefined;
+    }
     const { notifications } = this.settings.get();
     const wanted =
       kind === "finished" ? notifications.finished : kind === "idle" ? notifications.idleReminder : notifications.needsYou;
@@ -1151,6 +1159,15 @@ export class ProjectSessionManager {
     }
     tab.finishedAt = undefined;
     this.postTabs();
+  }
+
+  /**
+   * The renderer says which of this project's tabs are in front of the user — on screen, in a
+   * focused window no dialog covers — so that a turn there raises no toast. Only the renderer
+   * knows, as with `markSeen`.
+   */
+  setInFront(tabIds: readonly string[]): void {
+    this.inFront = new Set(tabIds);
   }
 
   private scheduleReconcile(runtime: AgentRuntime, delayMs = RECONCILE_DEBOUNCE_MS): void {
@@ -1331,6 +1348,13 @@ export class SessionManagerRegistry {
 
   get(projectId: string): ProjectSessionManager | undefined {
     return this.managers.get(projectId);
+  }
+
+  /** The tabs in front of the user belong to one project at most; every other one has none. */
+  setInFront(projectId: string | null, tabIds: readonly string[]): void {
+    for (const [id, manager] of this.managers) {
+      manager.setInFront(id === projectId ? tabIds : []);
+    }
   }
 
   async close(projectId: string): Promise<void> {
