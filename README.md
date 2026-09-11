@@ -15,7 +15,6 @@
   <a href="https://github.com/samil-kale/tet/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/samil-kale/tet/build.yml?style=flat-square&label=build" alt="Build"></a>
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat-square" alt="Platform">
-  <img src="https://img.shields.io/badge/built%20with-Electron%20%2B%20React%20%2B%20xterm.js-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron">
 </p>
 
 <p align="center">
@@ -27,17 +26,14 @@
 
 ## Simple and lightweight
 
-Use Claude Code, Codex, opencode or pi, or all four together.
+Use Claude Code, Codex, OpenCode or Pi, or all four together.
 
 TET deliberately does few things. Git is for navigation and control; the work happens in the
 terminals. If a git task cannot be done in two clicks, I leave it to an agent or a shell.
 
-The git view has no staging area, history or graph, rebase or cherry-pick, and no conflict
-resolution beyond aborting.
-
 The agents are their real CLIs, not a chat UI around them.
 
-**TET never reads or changes their configuration.**
+**TET never changes your agents configurations nor does it install plugins.**
 
 ---
 
@@ -49,7 +45,7 @@ The agents are their real CLIs, not a chat UI around them.
 
 ## Why
 
-tl;dr: Traditional IDEs are no longer where I do the work. I work with the prompt, not the code.
+tldr: IDEs are dead. Why show the code when the prompt is the thing you are working with?
 
 I've spent more than 15 years working in IDEs, usually with a clear favourite. But as coding
 agents became part of my workflow, I spent less time editing code directly and more time moving
@@ -68,7 +64,7 @@ straight into an agent session.
 
 ## What it does
 
-- **Claude Code**, **opencode**, **Codex CLI** and **pi** run in terminal tabs. TET
+- **Claude Code**, **OpenCode**, **Codex CLI** and **Pi** run in terminal tabs. TET
   shows when a turn is working, waiting or finished out of sight.
 - A project's terminals can be split into up to four panes. Files and images can be dropped into
   an agent session.
@@ -78,7 +74,7 @@ straight into an agent session.
 - Desktop notifications and project marks point to sessions that need attention.
 - `tet-ctl` lets an agent inspect the workspace and git state, manage projects and tabs, run saved
   commands, change TET's settings and read recent shell context.
-- A project can run **Claude Code**, **opencode**, **Codex CLI** or **pi** in a Docker sandbox.
+- A project can run **Claude Code**, **OpenCode**, **Codex CLI** or **Pi** in a Docker sandbox.
 
 ---
 
@@ -102,8 +98,8 @@ npm start
 ### Requirements
 
 TET requires **`git`** on your `PATH`. It also needs either a supported agent on the host
-(Claude Code, opencode, Codex CLI or pi) or **`sbx`**. `sbx` alone is enough because sandboxed
-tabs run the agent CLI inside their containers. A startup check tells you if anything is missing.
+(Claude Code, OpenCode, Codex CLI or Pi) or **`sbx`**. `sbx` alone is enough.
+A startup check tells you if anything is missing.
 
 ---
 
