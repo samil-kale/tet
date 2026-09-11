@@ -20,7 +20,8 @@ const api: TETApi = {
   },
   app: {
     info: () => ipcRenderer.invoke("app:info"),
-    reportLongTask: (ms, context) => ipcRenderer.send("app:long-task", ms, context)
+    reportLongTask: (ms, context) => ipcRenderer.send("app:long-task", ms, context),
+    reportSlow: (label, ms) => ipcRenderer.send("app:slow", label, ms)
   },
   sbx: {
     status: () => ipcRenderer.invoke("sbx:status"),

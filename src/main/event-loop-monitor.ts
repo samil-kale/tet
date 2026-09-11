@@ -117,6 +117,14 @@ export function reportRendererTask(ms: number, context: string): void {
   }
 }
 
+/** A block of the renderer's own work, named — its half of `logSlow`. Filtered in the renderer
+ *  already (slow-report.ts), so an ordinary render costs no message. */
+export function reportRendererSlow(label: string, ms: number): void {
+  if (ms >= SLOW_MS) {
+    append?.(`renderer:${label} took ${Math.round(ms)}ms`);
+  }
+}
+
 /** Names a block of work directly instead of leaving it to a stall sample's "ran last" guess.
  *  Callers still call `countActivity` themselves for the tally. */
 export function logSlow(activity: Activity, ms: number): void {

@@ -42,7 +42,7 @@ import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
 import { DEFAULT_EXPLORER_VIEW, readCommands, writeCommands } from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
-import { countActivity, markStartup, reportRendererTask } from "./event-loop-monitor";
+import { countActivity, markStartup, reportRendererSlow, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
 import { addProject, removeProject, type ProjectStore } from "./projects";
 import type { Repository, RepositoryManager } from "./git/repository";
@@ -189,6 +189,12 @@ export function registerIpc({
   ipcMain.on("app:long-task", (_event, ms: number, context: string) => {
     if (typeof ms === "number" && Number.isFinite(ms)) {
       reportRendererTask(ms, typeof context === "string" ? context : "");
+    }
+  });
+
+  ipcMain.on("app:slow", (_event, label: string, ms: number) => {
+    if (typeof label === "string" && typeof ms === "number" && Number.isFinite(ms)) {
+      reportRendererSlow(label, ms);
     }
   });
 

@@ -48,6 +48,8 @@ export interface TETApi {
     info(): Promise<AppInfo>;
     /** A task that held the renderer's thread — into the main process's event loop log. */
     reportLongTask(ms: number, context: string): void;
+    /** A named block of the renderer's own work that ran long — into the same log. */
+    reportSlow(label: string, ms: number): void;
   };
   /** Docker Sandboxes, opt-in per project — see the project row's "Enable sbx" entry. */
   sbx: {

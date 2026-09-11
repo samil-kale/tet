@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types";
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
@@ -25,6 +25,7 @@ import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-view
 import { PlusIcon } from "./ui/icons";
 import { sameList } from "./identity";
 import { matchesShortcut } from "./shortcuts";
+import { reportSlow } from "./slow-report";
 import { defaultLayout, paneOf, visibleTabIds } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 
@@ -55,7 +56,17 @@ function lastDiffPathKey(projectId: string): string {
 const NO_IDS: string[] = [];
 const DEFAULT_LAYOUT = defaultLayout();
 
+/** When App's current render began — read by the layout effect at the top of App. */
+let renderStartedAt = 0;
+
 export function App() {
+  renderStartedAt = performance.now();
+  // From App's render to its commit: the whole tree that re-rendered with it, which is what a
+  // state change here costs (React's Profiler reports nothing in a production build). A subtree
+  // re-rendering on its own is not seen.
+  useLayoutEffect(() => {
+    reportSlow("render", performance.now() - renderStartedAt);
+  });
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [states, setStates] = useState<Record<string, RepositoryState>>({});

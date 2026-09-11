@@ -6,6 +6,7 @@ import { createFileLinkProvider } from "./links/file-links";
 import type { WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isMac, isModifierHeld } from "../platform";
+import { reportSlow } from "../slow-report";
 import { buildXtermTheme } from "./theme";
 
 interface TerminalView {
@@ -40,12 +41,16 @@ function viewKey(projectId: string, tabId: string): string {
  * than the write it counts.
  */
 let outputWrites = 0;
+/** The longest single write, in characters: xterm parses one write in a piece, so a single huge
+ *  one can hold the thread where many small ones would not. */
+let largestWrite = 0;
 const writingTabs = new Set<string>();
 const writingHiddenTabs = new Set<string>();
 
-export function takeOutputStats(): { writes: number; tabs: number; hidden: number } {
-  const stats = { writes: outputWrites, tabs: writingTabs.size, hidden: writingHiddenTabs.size };
+export function takeOutputStats(): { writes: number; tabs: number; hidden: number; largest: number } {
+  const stats = { writes: outputWrites, tabs: writingTabs.size, hidden: writingHiddenTabs.size, largest: largestWrite };
   outputWrites = 0;
+  largestWrite = 0;
   writingTabs.clear();
   writingHiddenTabs.clear();
   return stats;
@@ -71,6 +76,7 @@ window.tet.terminals.onOutput((batch) => {
       continue;
     }
     outputWrites += 1;
+    largestWrite = Math.max(largestWrite, data.length);
     writingTabs.add(key);
     if (view.term.element?.parentElement?.classList.contains("hidden")) {
       writingHiddenTabs.add(key);
@@ -396,7 +402,10 @@ export function fitTerminal(projectId: string, tabId: string): void {
   if (!view) {
     return;
   }
+  // Timed: a change of columns reflows the whole scrollback, synchronously.
+  const fitStart = performance.now();
   view.fit.fit();
+  reportSlow("fit", performance.now() - fitStart);
   // Every tab and project switch fits twice — the effect that follows the selection and the
   // ResizeObserver's initial notification — and a same-size resize still repaints the CLI.
   const { cols, rows } = view.term;

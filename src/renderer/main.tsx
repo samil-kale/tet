@@ -27,11 +27,22 @@ document.addEventListener("drop", swallowStrayDrop);
 // doing just before it (takeOutputStats), whose window is the sweep below, since the stats are
 // only ever taken here.
 const OUTPUT_STATS_WINDOW_MS = 2000;
+
+/** Chromium's own, non-standard: how full this thread's heap is, so a long task that is a major
+ *  garbage collection shows as one on a heap near its size. */
+function rendererHeap(): string {
+  const { memory } = performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } };
+  return memory ? `${Math.round(memory.usedJSHeapSize / 1_048_576)}/${Math.round(memory.totalJSHeapSize / 1_048_576)}MB` : "?";
+}
+
 try {
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
-      const { writes, tabs, hidden } = takeOutputStats();
-      window.tet.app.reportLongTask(entry.duration, `${tabs} tabs writing, ${hidden} hidden, ${writes} writes`);
+      const { writes, tabs, hidden, largest } = takeOutputStats();
+      window.tet.app.reportLongTask(
+        entry.duration,
+        `${tabs} tabs writing, ${hidden} hidden, ${writes} writes, largest ${largest} chars, heap ${rendererHeap()}`
+      );
     }
   }).observe({ entryTypes: ["longtask"] });
   setInterval(takeOutputStats, OUTPUT_STATS_WINDOW_MS);
