@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
-import type { ControlDeps, ControlTerminals } from "../src/main/control/control-server";
+import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
 import { CONTROL_ENV, EXIT_CODES } from "../src/shared/control";
 import { EMPTY_REPOSITORY_STATE } from "../src/shared/types";
 import type { AppSettings, Project, ProjectCommand, TerminalDescriptor } from "../src/shared/types";
@@ -38,7 +38,7 @@ interface Calls {
   removed: string[];
   changed: { added?: string; removed?: string }[];
   shutdown: boolean[];
-  notified: [string, string][];
+  notified: [string, string, ToastTarget | undefined][];
   hooks: [string, string, string][];
   /** What each hook said its own time was — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
@@ -119,8 +119,8 @@ function deps(): ControlDeps {
     projectsChanged: (change) => {
       calls.changed.push(change);
     },
-    notify: (title, body) => {
-      calls.notified.push([title, body]);
+    notify: (title, body, target) => {
+      calls.notified.push([title, body, target]);
     }
   };
 }
@@ -371,12 +371,17 @@ describe("tet-ctl against the control server", () => {
 
   it("relays a notification to the process behind the control channel", async () => {
     assert.deepEqual((await tetCtl(["notify", "Codex: Finished", "Finished in repo"])).result, { notified: true });
-    assert.deepEqual(calls.notified, [["Codex: Finished", "Finished in repo"]]);
+    assert.deepEqual(calls.notified, [["Codex: Finished", "Finished in repo", { projectId: PROJECT.id, tabId: OWN_TAB }]]);
   });
 
   it("takes a notification that is a title and nothing more", async () => {
     assert.deepEqual((await tetCtl(["notify", "Build finished"])).result, { notified: true });
-    assert.deepEqual(calls.notified, [["Build finished", ""]]);
+    assert.deepEqual(calls.notified, [["Build finished", "", { projectId: PROJECT.id, tabId: OWN_TAB }]]);
+  });
+
+  it("is about no tab when the caller is not one", async () => {
+    assert.deepEqual((await tetCtl(["notify", "Build finished"], { [CONTROL_ENV.tabId]: undefined })).result, { notified: true });
+    assert.deepEqual(calls.notified, [["Build finished", "", undefined]], "a click then brings only the window forward");
   });
 
   it("refuses to restart without --confirm", async () => {
@@ -412,7 +417,11 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["hook", "stop"], {}, "{}");
     assert.equal(run.status, EXIT_CODES.ok);
     assert.equal(run.stdout, "{}", "Codex reads its Stop hook's stdout as JSON");
-    assert.deepEqual(calls.notified, [["Claude: Finished", "Finished in one"]]);
+    assert.deepEqual(
+      calls.notified,
+      [["Claude: Finished", "Finished in one", { projectId: PROJECT.id, tabId: OWN_TAB }]],
+      "about the tab that reported, which a click on it brings to the front"
+    );
   });
 
   // A prompt's answer is the prompt's own text, so a tab that is gone must add nothing to it —

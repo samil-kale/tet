@@ -53,8 +53,15 @@ export interface ControlDeps {
   projectsChanged(change: { added?: string; removed?: string }): void;
   /** Shows a real desktop notification from this process, the one holding the desktop session. A
    *  sandboxed hook has none, so its report is toasted here instead. Fire-and-forget, and it must
-   *  never throw: `hook` shows its toast on the way to answering, and that answer is a turn. */
-  notify(title: string, body: string): void;
+   *  never throw: `hook` shows its toast on the way to answering, and that answer is a turn.
+   *  `target` is the tab it is about, which a click on it brings to the front. */
+  notify(title: string, body: string, target?: ToastTarget): void;
+}
+
+/** Which tab a toast is about. */
+export interface ToastTarget {
+  projectId: string;
+  tabId: string;
 }
 
 /** What a hook's report leaves for the server to do — see ControlTerminals.hookEvent. */
@@ -314,11 +321,13 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { restarting: true }, after: () => deps.shutdown(true) };
     },
 
-    notify: (args) => {
+    notify: (args, caller) => {
       // A title alone is a notification; the body is for what does not fit in one. Every toast
       // tet composes itself has both, so only a caller of the verb ever leaves it out.
       const body = args.body;
-      deps.notify(text(args, "title", "title"), typeof body === "string" ? body : "");
+      // Called from one of tet's own terminals, the toast is about that tab.
+      const target = caller.projectId && caller.tabId ? { projectId: caller.projectId, tabId: caller.tabId } : undefined;
+      deps.notify(text(args, "title", "title"), typeof body === "string" ? body : "", target);
       return { result: { notified: true } };
     },
 
@@ -331,9 +340,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", "a hook reports for the tab it runs in, and this is not one");
       }
       const payload = typeof args.payload === "string" ? args.payload : "";
-      const outcome = terminals(project(args, caller)).hookEvent(caller.tabId, event as HookEvent, payload, at);
+      const where = project(args, caller);
+      const outcome = terminals(where).hookEvent(caller.tabId, event as HookEvent, payload, at);
       if (outcome.toast) {
-        deps.notify(outcome.toast.title, outcome.toast.body);
+        deps.notify(outcome.toast.title, outcome.toast.body, { projectId: where.id, tabId: caller.tabId });
       }
       // `{}` where the event has nothing to say, rather than nothing at all: Codex reads its Stop
       // hook's stdout as one JSON value, and every agent whose hooks tet registers takes JSON on

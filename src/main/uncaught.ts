@@ -20,7 +20,28 @@ export const UNCAUGHT_MARKER = "[tet] uncaught exception";
 /** One notice per distinct error per run; every occurrence is still logged, numbered. */
 const seen = new Map<string, number>();
 
+/** `errors.log`, once installUncaughtHandler has named it. */
+let errorLog: string | undefined;
+
+/**
+ * One line into `errors.log` for a failure that is no exception but would otherwise go unseen — a
+ * toast Windows refused, say. Console first, as for an uncaught one; never throws.
+ */
+export function logError(line: string): void {
+  const entry = `[tet] ${line} ${new Date().toISOString()}\n`;
+  console.error(entry);
+  if (!errorLog) {
+    return;
+  }
+  try {
+    fs.appendFileSync(errorLog, entry);
+  } catch {
+    // The console copy is all there is then.
+  }
+}
+
 export function installUncaughtHandler(logFile: string, notify: (severity: NoticeSeverity, message: string) => void): void {
+  errorLog = logFile;
   try {
     if (fs.statSync(logFile).size >= MAX_LOG_BYTES) {
       fs.renameSync(logFile, `${logFile}.1`);

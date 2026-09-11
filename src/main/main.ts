@@ -10,6 +10,7 @@ import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
 import { writeLaunchers } from "./control/control-launcher";
 import { findControlPort, startControlServer } from "./control/control-server";
+import type { ToastTarget } from "./control/control-server";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
@@ -17,7 +18,7 @@ import { addProject, ProjectStore, removeProject } from "./projects";
 import { configureSandboxes } from "./sbx";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv } from "./terminals/pty";
-import { installUncaughtHandler } from "./uncaught";
+import { installUncaughtHandler, logError } from "./uncaught";
 import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
@@ -170,17 +171,85 @@ function repeatedToast(title: string, body: string): boolean {
 }
 
 /**
+ * Every toast still clickable, held so its click handler is not collected with it. Not let go on
+ * `close`: on win32 that is the toast leaving the screen for the notification center, where a
+ * click still arrives (measured). The oldest go once there are more than anyone scrolls back to.
+ */
+const LIVE_TOASTS_MAX = 50;
+const liveToasts = new Set<Notification>();
+
+function holdToast(toast: Notification): void {
+  liveToasts.add(toast);
+  const oldest = liveToasts.size > LIVE_TOASTS_MAX ? liveToasts.values().next().value : undefined;
+  if (oldest) {
+    liveToasts.delete(oldest);
+  }
+}
+
+/**
  * The real desktop toast behind the control channel's `hook` and `notify` verbs — this process is
  * the one holding the desktop session (a sandboxed hook has none), and a platform without a
  * notifier of its own simply shows nothing. No `icon`: Windows heads the toast with tet's already
- * (APP_USER_MODEL_ID). No click action either — that needs a ToastActivatorCLSID on the shortcut,
- * which the installer does not put there.
+ * (APP_USER_MODEL_ID).
+ *
+ * A click brings the window, and the tab the toast is about, to the front. Measured on win32
+ * (Electron 43; tet writes no CLSID anywhere, Electron makes its own): `click` arrives while tet
+ * runs, on the toast and from the notification center alike. Clicked once tet has quit, the
+ * *installed* build is started again by COM (`TET.exe -Embedding`, spawned by svchost) and comes
+ * up as it always does — the tab that toast named is gone with the process that showed it; a dev
+ * run, whose id has no shortcut, does nothing at all.
  */
-function showDesktopNotification(title: string, body: string): void {
-  if (!Notification.isSupported() || repeatedToast(title, body)) {
+function showDesktopNotification(title: string, body: string, target?: ToastTarget): void {
+  if (repeatedToast(title, body)) {
     return;
   }
-  new Notification({ title, body }).show();
+  attractAttention();
+  if (!Notification.isSupported()) {
+    return;
+  }
+  const toast = new Notification({ title, body });
+  holdToast(toast);
+  toast.on("click", () => {
+    liveToasts.delete(toast);
+    revealWindow();
+    // A tab closed since is not there to show; the window alone comes forward.
+    if (target && sessions.get(target.projectId)?.snapshot().some((tab) => tab.tabId === target.tabId)) {
+      send("terminal:show", target);
+    }
+  });
+  // Shown nothing and said nothing else: a switch off in Windows' own notification settings reads
+  // "Settings prevent the notification from being delivered" here and nowhere else (measured).
+  toast.on("failed", (_event, error) => {
+    liveToasts.delete(toast);
+    logError(`toast not delivered: ${error}`);
+  });
+  toast.show();
+}
+
+/**
+ * A toast disappears; the window's own entry asks for a look until the window has the focus again
+ * (the `focus` handler in createWindow). One call for all three: Windows flashes the taskbar
+ * button, macOS bounces the dock icon, Linux sets the urgency hint — whose look is the desktop's
+ * call. No count on the icon: only macOS has a badge that holds one everywhere.
+ *
+ * `isMinimized` as well: minimized from its own button, a win32 window still answers `isFocused`
+ * with true (measured), while its page has long had its `blur`.
+ */
+function attractAttention(): void {
+  if (window && !window.isDestroyed() && (!window.isFocused() || window.isMinimized())) {
+    window.flashFrame(true);
+  }
+}
+
+/** The window brought to the front, restored first if it was minimized. */
+function revealWindow(): void {
+  if (!window || window.isDestroyed()) {
+    return;
+  }
+  if (window.isMinimized()) {
+    window.restore();
+  }
+  window.focus();
 }
 
 /**
@@ -272,6 +341,8 @@ function createWindow(): void {
   });
 
   window.once("ready-to-show", () => window?.show());
+  // Looked at: what attractAttention asked for is answered.
+  window.on("focus", () => window?.flashFrame(false));
   window.on("closed", () => {
     window = undefined;
   });
@@ -327,14 +398,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   // Started again is a request to look at it: bring what is already there to the front.
-  app.on("second-instance", () => {
-    if (window) {
-      if (window.isMinimized()) {
-        window.restore();
-      }
-      window.focus();
-    }
-  });
+  app.on("second-instance", revealWindow);
 
   app.whenReady().then(async () => {
     // Before anything else opens: a download finished last session installs here, with nothing

@@ -26,9 +26,10 @@ sites: session listing/resume/rename/delete and the reconcile loop (`src/main/ag
 plugin that writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — TET never
 runs an opencode server, never reads its SQLite file, and runs its CLI only for one-off actions);
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
-(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs and the
-`background_tasks` stop guard (`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the
-`--vscode-*` theming layer.
+(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs, that its click
+arrives while tet runs (and after, restarting the installed build through COM) without a CLSID of
+tet's own, and the `background_tasks` stop guard
+(`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
 An agent gets no editor context and no quick fix. What it gets is the shell transcript
 (`src/main/terminals/shell-context.ts`), a capped file it is pointed at; every shell tab of a
