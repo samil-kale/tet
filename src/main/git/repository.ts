@@ -377,9 +377,32 @@ export class Repository {
     return this.runAction(() => git.commitAll(this.project.path, message));
   }
 
+  /** Commits these files alone, untracked ones included; the rest stays as it is. */
+  commitPaths(message: string, paths: string[]): Promise<GitActionResult> {
+    return this.runAction(() => {
+      const untracked = paths.filter((filePath) =>
+        this.state.changes.some((change) => change.path === filePath && change.status === "untracked")
+      );
+      return git.commitPaths(this.project.path, message, this.pathspec(paths), untracked);
+    });
+  }
+
   /** Puts the working tree away, untracked files and all, and leaves it clean. */
   stashPush(message: string): Promise<GitActionResult> {
     return this.runAction(() => git.stashPush(this.project.path, message));
+  }
+
+  /** These paths plus each rename's old one: a rename is one entry over two paths, and a commit
+   *  handed only the new one would take half of it. */
+  pathspec(paths: string[]): string[] {
+    const expanded = [...paths];
+    for (const filePath of paths) {
+      const origPath = this.state.changes.find((change) => change.path === filePath)?.origPath;
+      if (origPath && !expanded.includes(origPath)) {
+        expanded.push(origPath);
+      }
+    }
+    return expanded;
   }
 
   /** One of the three commands that take a stash. The ref is a *position* — dropping one renumbers

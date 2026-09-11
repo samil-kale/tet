@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import type { Project, RepositoryState } from "../../shared/types";
 import { BranchTree, type BranchActions } from "./BranchTree";
-import { askCommitAll, ChangesList, confirmDiscard, type FileAct } from "./ChangesList";
+import { askCommit, ChangesList, confirmDiscard, type FileAct } from "./ChangesList";
 import { notify } from "../ui/Notices";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIcon } from "../ui/icons";
@@ -111,7 +111,7 @@ export const GitPane = memo(function GitPane({ project, state, branch, treeHeigh
               className="icon-button"
               title="Commit all changes"
               disabled={branch.busy || acting || state.changes.length === 0}
-              onClick={() => void askCommitAll(project, state, act)}
+              onClick={() => void askCommit(project, state, undefined, act)}
             >
               <CommitIcon />
             </button>
@@ -137,7 +137,7 @@ export const GitPane = memo(function GitPane({ project, state, branch, treeHeigh
           {/* This section's own bar — everything `act` covers. */}
           {acting && <ProgressBar />}
         </div>
-        <ChangesList project={project} changes={state.changes} act={act} onOpenDiff={onOpenDiff} />
+        <ChangesList project={project} state={state} act={act} onOpenDiff={onOpenDiff} />
       </div>
     </div>
   );

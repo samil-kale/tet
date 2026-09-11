@@ -596,6 +596,25 @@ export async function commitAll(cwd: string, message: string): Promise<GitAction
   return added.ok ? run(cwd, ["commit", "--message", message]) : added;
 }
 
+/** The same for these files alone: `commit -- <paths>` takes their working-tree state, whatever
+ *  else is staged, but only for paths git knows — so the untracked ones are added first. Not
+ *  `add --all -- <paths>`: a rename's old path is in neither the index nor the tree, and `add`
+ *  refuses a path that matches nothing. */
+export async function commitPaths(
+  cwd: string,
+  message: string,
+  paths: string[],
+  untracked: string[]
+): Promise<GitActionResult> {
+  if (untracked.length > 0) {
+    const added = await run(cwd, ["add", "--", ...untracked]);
+    if (!added.ok) {
+      return added;
+    }
+  }
+  return run(cwd, ["commit", "--message", message, "--", ...paths]);
+}
+
 /** How many subjects are enough to read a repository's commit style off. */
 const RECENT_SUBJECTS = 20;
 /** What the diff and the untracked files together may contribute to a commit-message question;
@@ -610,16 +629,18 @@ function capped(text: string, budget: number): string {
 
 /**
  * Everything an agent needs to write a commit message without going looking: the recent subjects
- * for the repository's style, and what `git add --all` would commit. Three invocations plus a read
- * per untracked file — more than the refresh path may spend, but this runs on a wand press.
- * Measured with `claude -p`: asked to run git itself the agent took several times as long, every
- * status, diff and log being a round trip. Empty strings where there is no HEAD yet.
+ * for the repository's style, and what the commit would take — every change, or only `selection`.
+ * Three invocations plus a read per untracked file — more than the refresh path may spend, but
+ * this runs on a wand press. Measured with `claude -p`: asked to run git itself the agent took
+ * several times as long, every status, diff and log being a round trip. Empty strings where there
+ * is no HEAD yet.
  */
-export async function readCommitContext(cwd: string): Promise<string> {
+export async function readCommitContext(cwd: string, selection?: string[]): Promise<string> {
+  const pathspec = selection ? ["--", ...selection] : [];
   const [subjects, diff, untracked] = await Promise.all([
     git(cwd, ["log", `-${RECENT_SUBJECTS}`, "--format=%s"]),
-    git(cwd, ["diff", "HEAD"]),
-    git(cwd, ["ls-files", "--others", "--exclude-standard", "-z"])
+    git(cwd, ["diff", "HEAD", ...pathspec]),
+    git(cwd, ["ls-files", "--others", "--exclude-standard", "-z", ...pathspec])
   ]);
   const sections: string[] = [];
   if (subjects.code === 0 && subjects.stdout.trim() !== "") {

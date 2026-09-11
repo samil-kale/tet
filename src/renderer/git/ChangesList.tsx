@@ -16,7 +16,8 @@ export type FileAct = (action: () => Promise<GitActionResult>) => void;
 
 interface ChangesListProps {
   project: Project;
-  changes: FileChange[];
+  /** Its changes are the list; the rest is what a commit from the menu asks with. */
+  state: RepositoryState;
   act: FileAct;
   /** A file to look at. */
   onOpenDiff: (path: string) => void;
@@ -48,22 +49,31 @@ export async function confirmDiscard(projectId: string, paths: string[], act: Fi
   }
 }
 
-/** Stages and commits everything the changes list shows, with an optional push in the same
- *  action: one message asked, `add --all` then `commit`. */
-export async function askCommitAll(project: Project, state: RepositoryState, act: FileAct): Promise<void> {
+/** Stages and commits everything the changes list shows, or only `paths`, with an optional push
+ *  in the same action: one message asked, `add` then `commit`. */
+export async function askCommit(
+  project: Project,
+  state: RepositoryState,
+  paths: string[] | undefined,
+  act: FileAct
+): Promise<void> {
   const remote = state.remotes[0]?.name;
   const canSync = remote !== undefined && !state.detached;
   const answer = await prompt({
-    title: "Commit all changes",
+    title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
     label: "Message",
-    detail: `Stages and commits all ${state.changes.length} changed files, untracked ones included.`,
+    detail: !paths
+      ? `Stages and commits all ${state.changes.length} changed files, untracked ones included.`
+      : paths.length === 1
+        ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
+        : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
     value: "",
     confirmLabel: "Commit",
     // The saved commands' width: 420px shows too little of the suggest row and the history list.
     wide: true,
     suggestion: {
       title: "Suggest a commit message",
-      run: () => window.tet.repository.suggestCommitMessage(project.id)
+      run: () => window.tet.repository.suggestCommitMessage(project.id, paths)
     },
     // No remote or a detached HEAD: nothing to offer, so no checkbox either.
     checkboxLabel: canSync
@@ -83,7 +93,9 @@ export async function askCommitAll(project: Project, state: RepositoryState, act
     recordCommitMessage(project.id, answer.value);
     // The push only runs when the commit went through.
     act(async () => {
-      const committed = await window.tet.repository.commitAll(project.id, answer.value);
+      const committed = await (paths
+        ? window.tet.repository.commitPaths(project.id, answer.value, paths)
+        : window.tet.repository.commitAll(project.id, answer.value));
       return committed.ok && answer.checked ? window.tet.repository.push(project.id) : committed;
     });
   }
@@ -92,7 +104,8 @@ export async function askCommitAll(project: Project, state: RepositoryState, act
 /** The changed files with a filter and a per-file menu — the same list under LOCAL CHANGES in
  *  the git pane and beside the diff in its dialog. Each owner hands in its own `act`, so the
  *  action runs on that owner's bar. */
-export function ChangesList({ project, changes, act, onOpenDiff, active }: ChangesListProps) {
+export function ChangesList({ project, state, act, onOpenDiff, active }: ChangesListProps) {
+  const { changes } = state;
   const [filter, setFilter] = useState("");
   /** Ctrl- and shift-click extend it, so one discard can cover several files. */
   const [selected, setSelected] = useState<string[]>(() => (active ? [active] : []));
@@ -212,6 +225,11 @@ export function ChangesList({ project, changes, act, onOpenDiff, active }: Chang
         run: one ? () => void window.tet.shell.openFileExternally(project.id, change.path) : undefined
       },
       SEPARATOR,
+      {
+        label: one ? "Commit changes..." : `Commit ${paths.length} selected changes...`,
+        // git refuses a commit of some paths while a merge is being concluded.
+        run: state.operation === undefined ? () => void askCommit(project, state, paths, act) : undefined
+      },
       { label: one ? "Discard changes..." : `Discard ${paths.length} selected changes...`, run: discard(paths) },
       {
         label: "Discard all changes...",

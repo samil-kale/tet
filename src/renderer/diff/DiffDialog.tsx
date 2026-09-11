@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import type { ExplorerListing, FileChange, FileContent, FileDiff, Project } from "../../shared/types";
+import type { ExplorerListing, FileChange, FileContent, FileDiff, Project, RepositoryState } from "../../shared/types";
 import { ChangesList, confirmDiscard, type FileAct } from "../git/ChangesList";
 import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
 import { DiffView } from "./DiffView";
@@ -28,8 +28,8 @@ interface DiffDialogProps {
   path: string | null;
   /** What the diff depends on besides the file — a change to it reloads while the dialog is open. */
   version: string;
-  /** The repository's changed files — the list beside the diff and its header's discard-all. */
-  changes: FileChange[];
+  /** The repository — its changed files are the list beside the diff and its header's discard-all. */
+  state: RepositoryState;
   /** The list's own choice of file — the same call the git pane's list makes. */
   onOpenDiff: (projectId: string, path: string) => void;
   onClose: () => void;
@@ -47,7 +47,8 @@ async function confirmDiscardEdit(path: string): Promise<boolean> {
 
 /** One file over the whole window: a diff, or an editor for it. EXPLORER over LOCAL CHANGES on
  *  the left mirrors the git pane's shape. Its one question goes through `Dialog.tsx`. */
-export const DiffDialog = memo(function DiffDialog({ project, path, version, changes, onOpenDiff, onClose }: DiffDialogProps) {
+export const DiffDialog = memo(function DiffDialog({ project, path, version, state, onOpenDiff, onClose }: DiffDialogProps) {
+  const { changes } = state;
   const change = path ? changes.find((entry) => entry.path === path) : undefined;
   const diffable = change !== undefined;
 
@@ -263,7 +264,7 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, cha
             </div>
             <ChangesList
               project={project}
-              changes={changes}
+              state={state}
               act={act}
               onOpenDiff={(next) => void requestOpen(next)}
               active={path}

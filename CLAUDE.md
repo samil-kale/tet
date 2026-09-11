@@ -131,8 +131,10 @@ emits when state actually changed. Diffs load on file selection, never up front.
 command needing a checkbox list, a message field, or conflict resolution is one the pane doesn't
 offer. Of what fits, we take GitHub Desktop's set — the branch tree (branches, remotes, tags,
 stashes) with per-ref menus, checkout, status, per-file diff, discard, `.gitignore`,
-fetch/pull/push (push doubles as "publish", `--set-upstream`), "commit all" (one message asked,
-`add --all` then `commit` — no staging), and cloning from the add-repository dialog. The commit
+fetch/pull/push (push doubles as "publish", `--set-upstream`), commit (one message asked, `add`
+then `commit` — of every change, or of the changes list's selection; no staging), discard of all
+or the selection, stash of all only (as in GitHub Desktop; `stash push -- <paths>` mishandles a
+staged rename), and cloning from the add-repository dialog. The commit
 prompt's suggest button asks the first installed agent with `askArgs` for the message
 (`src/main/git/commit-message.ts`), handing it the diff and recent subjects up front. Cloning
 goes through one `GitProvider` interface for GitHub and GitLab (`src/main/providers/`); providers
@@ -178,7 +180,8 @@ curated preset (`keybinding-presets.ts`, chosen in Settings → Files) over tet'
 
 ### What the git view deliberately does not do
 
-Don't add without being asked: a commit UI with per-file/per-line staging; history, graph,
+Don't add without being asked: a staging area or per-line staging (a selection handed to one
+commit is not that); history, graph,
 cherry-pick, revert, squash, reorder; bisect, submodules; conflict resolution beyond aborting;
 side-by-side text diff; discarding single lines; pull with rebase and force push. A git command
 needing a list, a message or a per-line decision is what an agent should be asked to do.

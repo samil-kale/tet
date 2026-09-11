@@ -375,7 +375,10 @@ export function registerIpc({
   );
   onRepository("repo:checkout-tag", (repository, name: string) => repository.checkoutTag(name));
   onRepository("repo:commit-all", (repository, message: string) => repository.commitAll(message));
-  ipcMain.handle("repo:suggest-commit-message", async (_event, projectId: string): Promise<string> => {
+  onRepository("repo:commit-paths", (repository, message: string, paths: string[]) =>
+    repository.commitPaths(message, paths)
+  );
+  ipcMain.handle("repo:suggest-commit-message", async (_event, projectId: string, paths?: string[]): Promise<string> => {
     const project = store.get(projectId);
     if (!project) {
       return "";
@@ -393,7 +396,9 @@ export function registerIpc({
     }
     const { executable, agent } = askable;
     try {
-      const context = await git.readCommitContext(project.path);
+      // The same paths the commit will take, a rename's old one included.
+      const pathspec = paths && (repositories.get(projectId)?.pathspec(paths) ?? paths);
+      const context = await git.readCommitContext(project.path, pathspec);
       const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
       const message = await suggestCommitMessage(project.path, executable, agent.askArgs!, prompt, context);
       if (message.length === 0) {

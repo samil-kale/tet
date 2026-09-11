@@ -772,7 +772,7 @@ export function App() {
           project={diffProject}
           path={diffFile.path}
           version={diffVersion(states[diffFile.projectId], diffFile.path ?? "")}
-          changes={(states[diffFile.projectId] ?? EMPTY_REPOSITORY_STATE).changes}
+          state={states[diffFile.projectId] ?? EMPTY_REPOSITORY_STATE}
           onOpenDiff={openDiff}
           onClose={closeDiff}
         />

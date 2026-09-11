@@ -7,6 +7,7 @@ import { before, describe, it } from "node:test";
 import {
   abortOperation,
   commitAll,
+  commitPaths,
   createBranch,
   createTag,
   discard,
@@ -15,6 +16,7 @@ import {
   listIgnored,
   merge,
   push,
+  readCommitContext,
   readDiff,
   readFileLines,
   readState,
@@ -199,5 +201,45 @@ describe("a repository, from init on", () => {
     // does, so the two disagree on a path that still names the same directory.
     assert.equal(await resolveRoot(sub), await resolveRoot(cwd));
     assert.equal(await resolveRoot(os.tmpdir()), undefined);
+  });
+});
+
+describe("a selection of the changes, as the list's menu hands it over", () => {
+  const changed = async (): Promise<string[]> =>
+    (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
+
+  before(() => {
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-selection-"));
+    run("init", "-q");
+    run("symbolic-ref", "HEAD", "refs/heads/main");
+    write("a.txt", "a\n");
+    write("b.txt", "b\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "base");
+  });
+
+  it("reads the commit context of the selection alone", async () => {
+    write("a.txt", "a changed\n");
+    write("b.txt", "b changed\n");
+    write("new.txt", "new\n");
+    write("other.txt", "other\n");
+    const context = await readCommitContext(cwd, ["a.txt", "new.txt"]);
+    assert.match(context, /a changed/);
+    assert.match(context, /=== untracked: new\.txt ===/);
+    assert.doesNotMatch(context, /b changed/);
+    assert.doesNotMatch(context, /other\.txt/);
+  });
+
+  it("commits the selection, untracked files included, and leaves what is already staged", async () => {
+    run("add", "b.txt");
+    assert.deepEqual(await commitPaths(cwd, "selection", ["a.txt", "new.txt"], ["new.txt"]), { ok: true });
+    assert.equal(run("show", "--name-only", "--format=", "HEAD"), "a.txt\nnew.txt");
+    assert.deepEqual(await changed(), ["modified b.txt", "untracked other.txt"]);
+  });
+
+  it("commits a rename handed over by both its paths", async () => {
+    run("mv", "a.txt", "renamed.txt");
+    assert.deepEqual(await commitPaths(cwd, "rename", ["renamed.txt", "a.txt"], []), { ok: true });
+    assert.deepEqual(await changed(), ["modified b.txt", "untracked other.txt"]);
   });
 });
