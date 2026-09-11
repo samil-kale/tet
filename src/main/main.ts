@@ -151,18 +151,20 @@ let controlServer: { close: () => Promise<void> } | undefined;
 
 /** A toast follows the rule the window's notices follow — an identical message already standing
  *  is dropped (Notices.tsx) — with the span a notice stands for as its window. A dropped repeat
- *  does not extend that window. */
+ *  does not extend that window. The tab it is about is part of what makes it identical: two tabs
+ *  of one agent in one repository read the same until their sessions have titles, and dropping
+ *  the second would leave its click pointing at the first one's tab. */
 const TOAST_REPEAT_MS = 8000;
 const recentToasts = new Map<string, number>();
 
-function repeatedToast(title: string, body: string): boolean {
+function repeatedToast(title: string, body: string, target?: ToastTarget): boolean {
   const now = Date.now();
   for (const [seen, at] of recentToasts) {
     if (now - at >= TOAST_REPEAT_MS) {
       recentToasts.delete(seen);
     }
   }
-  const key = `${title}\u0000${body}`;
+  const key = `${title}\u0000${body}\u0000${target?.projectId ?? ""}\u0000${target?.tabId ?? ""}`;
   if (recentToasts.has(key)) {
     return true;
   }
@@ -179,11 +181,14 @@ const LIVE_TOASTS_MAX = 50;
 const liveToasts = new Set<Notification>();
 
 function holdToast(toast: Notification): void {
-  liveToasts.add(toast);
-  const oldest = liveToasts.size > LIVE_TOASTS_MAX ? liveToasts.values().next().value : undefined;
-  if (oldest) {
-    liveToasts.delete(oldest);
+  if (liveToasts.size >= LIVE_TOASTS_MAX) {
+    // Insertion order, so this is the one held longest.
+    const oldest = liveToasts.values().next().value;
+    if (oldest) {
+      liveToasts.delete(oldest);
+    }
   }
+  liveToasts.add(toast);
 }
 
 /**
@@ -200,7 +205,7 @@ function holdToast(toast: Notification): void {
  * run, whose id has no shortcut, does nothing at all.
  */
 function showDesktopNotification(title: string, body: string, target?: ToastTarget): void {
-  if (repeatedToast(title, body)) {
+  if (repeatedToast(title, body, target)) {
     return;
   }
   attractAttention();

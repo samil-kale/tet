@@ -59,7 +59,10 @@ describe("a turn's toast", () => {
       }
     } finally {
       // The manager writes its context file on its own time; removed under it, the write logs.
-      await eventually("the context file written", () => fs.existsSync(path.join(root, "projects", "p", "context.md")));
+      // Never the reason this test fails: this runs after the assertions, as cleanup.
+      await eventually("the context file written", () =>
+        fs.existsSync(path.join(root, "projects", "p", "context.md"))
+      ).catch(() => undefined);
       await manager.dispose();
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
     }

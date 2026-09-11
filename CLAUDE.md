@@ -26,10 +26,9 @@ sites: session listing/resume/rename/delete and the reconcile loop (`src/main/ag
 plugin that writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — TET never
 runs an opencode server, never reads its SQLite file, and runs its CLI only for one-off actions);
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
-(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs, that its click
-arrives while tet runs (and after, restarting the installed build through COM) without a CLSID of
-tet's own, and the `background_tasks` stop guard
-(`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
+(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs and where a click on
+one arrives, with no CLSID of tet's own; the `background_tasks` stop guard (`src/main/main.ts`,
+`src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
 An agent gets no editor context and no quick fix. What it gets is the shell transcript
 (`src/main/terminals/shell-context.ts`), a capped file it is pointed at; every shell tab of a
@@ -661,13 +660,13 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   (`app.test.ts` — needs a display, `xvfb-run` on Linux); `git.ts` against the real git
   (`git.test.ts`); the session providers against transcripts written the way the CLIs write them
   (`sessions.test.ts`); `tet.json` reading and writing (`commands.test.ts`); the command-line
-  reading (`command.test.ts`); the split view's rules and `tabsInFront` (`pane-layout.test.ts`); the background
-  question and the commit message (`ask.test.ts`); the measured pieces — Codex's hook hash,
-  `resolveCommand`, the quoting helper, the stores, the generated plugin and extension
-  (`pieces.test.ts`), env layering, launcher, context file and the toast rule (`unit.test.ts`). Nothing looks into the window. The Linux
-  side is testable from Windows in WSL: clone onto the Linux filesystem, `npm install` there,
-  Electron's libraries via `wsl -u root apt-get`, launch with `env -i … PATH=/usr/bin:/bin`,
-  drive it through `tet-ctl`.
+  reading (`command.test.ts`); the split view's rules and `tabsInFront` (`pane-layout.test.ts`);
+  the background question and the commit message (`ask.test.ts`); the measured pieces — Codex's
+  hook hash, `resolveCommand`, the quoting helper, the stores, the generated plugin and extension
+  (`pieces.test.ts`), env layering, launcher, context file and the toast rule (`unit.test.ts`).
+  Nothing looks into the window. The Linux side is testable from Windows in WSL: clone onto the
+  Linux filesystem, `npm install` there, Electron's libraries via `wsl -u root apt-get`, launch
+  with `env -i … PATH=/usr/bin:/bin`, drive it through `tet-ctl`.
 - `npm start` — typecheck, compile, then launch (see "Do not restart the app yourself" first).
   The typecheck is there because esbuild only bundles: an unimported identifier is a global to
   it, and the app dies on load with a `ReferenceError`.

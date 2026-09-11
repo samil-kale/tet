@@ -1326,6 +1326,9 @@ export class ProjectSessionManager {
 /** The open projects' session managers. */
 export class SessionManagerRegistry {
   private readonly managers = new Map<string, ProjectSessionManager>();
+  /** The renderer's last report, since it only sends when its answer changes — a project opened
+   *  after it (removed and added again, say) would otherwise toast about a tab in front. */
+  private inFront: { projectId: string | null; tabIds: readonly string[] } = { projectId: null, tabIds: [] };
 
   constructor(
     private readonly storageRoot: string,
@@ -1339,6 +1342,7 @@ export class SessionManagerRegistry {
       return existing;
     }
     const manager = new ProjectSessionManager(project, this.storageRoot, this.settings, this.callbacks);
+    manager.setInFront(project.id === this.inFront.projectId ? this.inFront.tabIds : []);
     this.managers.set(project.id, manager);
     manager.bootstrap().catch((error: unknown) => {
       this.callbacks.onNotice("error", `${project.name} could not be opened: ${String(error)}`);
@@ -1352,6 +1356,7 @@ export class SessionManagerRegistry {
 
   /** The tabs in front of the user belong to one project at most; every other one has none. */
   setInFront(projectId: string | null, tabIds: readonly string[]): void {
+    this.inFront = { projectId, tabIds };
     for (const [id, manager] of this.managers) {
       manager.setInFront(id === projectId ? tabIds : []);
     }
