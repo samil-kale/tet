@@ -183,8 +183,8 @@ cherry-pick, revert, squash, reorder; bisect, submodules; conflict resolution be
 side-by-side text diff; discarding single lines; pull with rebase and force push. A git command
 needing a list, a message or a per-line decision is what an agent should be asked to do.
 
-PRs and CI status are still open. Provider accounts live in the add-repository dialog, the one
-place talking to a host rather than a repository.
+Provider accounts live in the add-repository dialog, the one place talking to a host rather than
+a repository.
 
 ### Keep git off the main process, and count its invocations
 
