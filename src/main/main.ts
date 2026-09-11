@@ -141,8 +141,7 @@ function openWorkspace(): void {
   for (const project of store.list()) {
     timeStartup(`open ${project.name}`, () => openProject(project));
   }
-  markStartup("control");
-  void startControl();
+  void markStartup("control", startControl);
 }
 
 /** What the control channel needs from the process; set before any terminal can spawn. */
@@ -377,8 +376,9 @@ if (!app.requestSingleInstanceLock()) {
     // front rather than on the first repository, the renderer being busy loading meanwhile.
     await pathReady;
     timeStartup("git-process", startGitProcess);
-    markStartup("auto-update");
-    startAutoUpdate((severity, message, progress) => send("app:notice", { severity, message, progress }));
+    timeStartup("auto-update", () =>
+      startAutoUpdate((severity, message, progress) => send("app:notice", { severity, message, progress }))
+    );
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

@@ -128,10 +128,8 @@ export function registerIpc({
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
     // A manager's bin directory that did not exist at startup is on PATH only once looked for
     // again — that is what makes "Check again" find it.
-    markStartup("path");
-    await augmentAgentPath();
-    markStartup("requirements");
-    const requirements = await checkRequirements();
+    await markStartup("path", augmentAgentPath);
+    const requirements = await markStartup("requirements", checkRequirements);
     if (requirements.met) {
       openWorkspace();
     }

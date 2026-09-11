@@ -24,31 +24,56 @@ const counts = new Map<Activity, number>();
  *  just before is the likeliest thing to have blocked it. */
 let lastActivity: Activity | undefined;
 /**
- * Which stretch of "startup" ran last: the one activity that is a sequence of different things,
- * each run once and none of them counted elsewhere — so a stall before the first output or
- * refresh, which the tally alone can only call "nothing", is put to the stretch it fell in.
+ * The stretches of "startup" running now, each with how many are running (every project runs its
+ * own `list claude`): the one activity that is a set of different things, none of them counted
+ * elsewhere — so a stall before the first output or refresh, which the tally alone can only call
+ * "nothing", is put to the stretches it fell in. All of them, since projects and agents start side
+ * by side: the stretch entered last is only the last in line, not the one that blocked.
  */
-let startupPhase: string | undefined;
+const startupPhases = new Map<string, number>();
+/** The stretch entered last, for a stall after every stretch has ended. */
+let lastStartupPhase: string | undefined;
 
 export function countActivity(activity: Activity): void {
   counts.set(activity, (counts.get(activity) ?? 0) + 1);
   lastActivity = activity;
 }
 
-/** Enters a stretch of startup — what a stall from here on is attributed to, until the next. */
-export function markStartup(phase: string): void {
+/** Enters a stretch of startup; the returned function leaves it. */
+function enterStartup(phase: string): () => void {
   countActivity("startup");
-  startupPhase = phase;
+  lastStartupPhase = phase;
+  startupPhases.set(phase, (startupPhases.get(phase) ?? 0) + 1);
+  return () => {
+    const running = (startupPhases.get(phase) ?? 1) - 1;
+    if (running > 0) {
+      startupPhases.set(phase, running);
+    } else {
+      startupPhases.delete(phase);
+    }
+  };
+}
+
+/** A stretch of startup that runs asynchronously, from `run`'s call until its promise settles;
+ *  returns that promise. For the synchronous ones, `timeStartup`. */
+export async function markStartup<T>(phase: string, run: () => Promise<T>): Promise<T> {
+  const leave = enterStartup(phase);
+  try {
+    return await run();
+  } finally {
+    leave();
+  }
 }
 
 /** A stretch of startup that runs synchronously, timed as `logSlow` times a block; returns what
- *  `run` returns. For the async ones, `markStartup` alone. */
+ *  `run` returns. For the async ones, `markStartup`. */
 export function timeStartup<T>(phase: string, run: () => T): T {
-  markStartup(phase);
+  const leave = enterStartup(phase);
   const start = performance.now();
   try {
     return run();
   } finally {
+    leave();
     const ms = performance.now() - start;
     if (ms >= SLOW_MS) {
       append?.(`startup:${phase} took ${Math.round(ms)}ms`);
@@ -60,7 +85,13 @@ function lastLabel(): string {
   if (lastActivity === undefined) {
     return "nothing";
   }
-  return lastActivity === "startup" && startupPhase ? `startup:${startupPhase}` : lastActivity;
+  if (lastActivity !== "startup") {
+    return lastActivity;
+  }
+  if (startupPhases.size > 0) {
+    return `startup:${[...startupPhases.keys()].join(", ")}`;
+  }
+  return `startup:${lastStartupPhase ?? "?"} (ended)`;
 }
 
 function tally(): string {
@@ -147,10 +178,14 @@ export function startEventLoopMonitor(logFile: string): void {
     if (now >= reportAt) {
       reportAt = now + REPORT_MS;
       if (stalls > 0 || rendererTasks > 0) {
+        // A stall no activity accounts for, regular and growing, is garbage collection on a heap
+        // that is filling up — which only the heap's own numbers can tell from a busy loop.
+        const { heapUsed, heapTotal } = process.memoryUsage();
         append?.(
           `loop: ${stalls} stalls in ${REPORT_MS / 1000}s, ${stalledMs}ms lost,` +
             ` worst ${worst}ms after ${worstAfter ?? "nothing"}` +
             ` | renderer: ${rendererTasks} long tasks, ${Math.round(rendererMs)}ms, worst ${Math.round(rendererWorst)}ms` +
+            ` | heap ${Math.round(heapUsed / 1_048_576)}/${Math.round(heapTotal / 1_048_576)}MB` +
             ` | ${tally()}`
         );
       }

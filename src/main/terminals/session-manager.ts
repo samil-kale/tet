@@ -427,10 +427,9 @@ export class ProjectSessionManager {
     if (!runtime.startable || !agent.sessions) {
       return;
     }
-    // Here, not in bringUp: the label stands until the next activity, and a stall long after this
-    // must not be written to event-loop.log as a startup phase.
-    markStartup(`list ${agent.id}`);
-    await this.bringUp(runtime);
+    // Here, not in bringUp: sbxConfigChanged runs that mid-session, and a stall then must not be
+    // written to event-loop.log as a startup phase.
+    await markStartup(`list ${agent.id}`, () => this.bringUp(runtime));
   }
 
   /** Everything an agent that can be started needs before its tabs exist: its setup, the sessions
@@ -541,8 +540,9 @@ export class ProjectSessionManager {
       return !runtime.prepareFailed;
     }
     try {
-      markStartup(`prepare ${agent.id}`);
-      const preparation = await agent.prepareSpawn(executable, this.project.path, this.pathsFor(runtime));
+      const preparation = await markStartup(`prepare ${agent.id}`, () =>
+        agent.prepareSpawn!(executable, this.project.path, this.pathsFor(runtime))
+      );
       // Closed while that ran: nothing of it may be kept, since nothing may spawn from here on.
       if (this.disposed) {
         return false;
