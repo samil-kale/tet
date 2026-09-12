@@ -3,6 +3,33 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.5.0 (2026-09-12)
+
+- The diff and the editor are one widget now: the file stands there whole, with the changes
+  marked in place and its right-hand side editable, so reading a change and making one no longer
+  mean two different views. Whitespace-only changes are never counted, the strip beside the
+  scrollbar shows where the changes sit and scrolls there on a click, and HEAD's side is read the
+  way git would check it out, so it reads like the file rather than like its stored bytes. An
+  image still shows both versions side by side or over each other; a deleted, binary or very
+  large file opens read-only. The old whitespace toggle and the folded gaps are gone with the
+  view they belonged to.
+- An open diff keeps its base in step: committing or checking out under it no longer leaves the
+  file marked as changed against what HEAD held before.
+- The changes list commits what is selected in it, from its context menu — the whole message
+  prompt as before, only for the files you picked. Discarding works on the selection too;
+  stashing stays all-or-nothing.
+- No toast for the tab you are looking at, and the marks follow the same rule: a turn that ends
+  in a visible tab of the project in front of you, in a focused window with no dialog over it,
+  leaves neither a toast nor a speech bubble. Ends it behind a dialog, in another window or with
+  tet minimized, and both stand until you are back.
+- A click on a toast brings tet forward and puts the tab it is about in front, whether the toast
+  is still on screen or already in the notification center. While tet is not in front, the
+  taskbar entry (dock icon on macOS) asks for a look until it is.
+- A toast the system refuses to show is no longer silent: the reason goes to `errors.log` in
+  TET's data folder, which is where a notification switched off in the OS shows up.
+- Closing a tab whose agent session is already gone works instead of failing and putting the tab
+  back.
+
 ## 0.4.0 (2026-09-10)
 
 - Agent tabs can run inside a Docker sandbox (sbx), opt-in per project from the project row's
