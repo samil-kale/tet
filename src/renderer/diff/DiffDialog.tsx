@@ -81,14 +81,13 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
       if (cancelled || result.error) {
         return;
       }
-      const head = result.head;
-      if (head && head.content !== file.head?.content) {
-        editorRef.current?.setOriginal(head.content);
-        // Held here too, even while dirty: otherwise every later refresh compares against the
-        // side this one already replaced and writes it again.
-        setFile((current) => (current ? { ...current, head } : current));
-      }
+      // Without a HEAD side the file is its own original — and that is the case a commit under the
+      // open file lands in, where git stops reporting a change and the marks have to go.
+      editorRef.current?.setOriginal(result.head?.content ?? result.content);
       if (dirty || result.mtimeMs === file.mtimeMs) {
+        // The edited side stays as it is; what HEAD has of it is carried in regardless, or the
+        // render keeps deciding binary, image and original off the side already replaced.
+        setFile((current) => (current ? { ...current, head: result.head } : current));
         return;
       }
       setFile(result);

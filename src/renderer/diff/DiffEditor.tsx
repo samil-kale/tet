@@ -72,7 +72,14 @@ export function DiffEditor({
       savedVersionId.current = model.getAlternativeVersionId();
       onDirtyRef.current(false);
     },
-    setOriginal: (text) => editorRef.current?.getModel()?.original.setValue(text)
+    setOriginal: (text) => {
+      // Asked on every refresh, so the no-op lands here: setting the same text again would throw
+      // the computed diff away and have the worker rebuild the identical one.
+      const model = editorRef.current?.getModel()?.original;
+      if (model && model.getValue() !== text) {
+        model.setValue(text);
+      }
+    }
   }));
 
   useEffect(() => {

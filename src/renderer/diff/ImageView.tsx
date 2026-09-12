@@ -11,16 +11,12 @@ export interface ImageSides {
 /**
  * A changed image, the one file the diff editor cannot show: the committed version beside the
  * current one, or the two laid over each other. Either side is absent when the file was added or
- * deleted, and both are when neither version fits in a data URL.
+ * deleted; the dialog draws this only once at least one of them is there.
  */
 export function ImageView({ image }: { image: ImageSides }) {
   const [overlay, setOverlay] = useState(false);
   // 0 shows the old version, 100 the new one, the middle an onion-skin overlay.
   const [blend, setBlend] = useState(50);
-
-  if (!image.before && !image.after) {
-    return <div className="placeholder">Image too large to show.</div>;
-  }
 
   // Only a modified image has two versions to lay over each other.
   const both = Boolean(image.before && image.after);

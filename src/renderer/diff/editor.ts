@@ -11,7 +11,7 @@ export type Monaco = typeof import("./monaco-core");
 
 let monacoPromise: Promise<Monaco> | undefined;
 
-/** Loads monaco once, sharing the promise across every `CodeEditor` mount. */
+/** Loads monaco once, sharing the promise across every `DiffEditor` mount. */
 export function loadMonaco(): Promise<Monaco> {
   if (!monacoPromise) {
     // Set once, before the first editor. `getWorker`, not `getWorkerUrl`: monaco makes a module
@@ -101,11 +101,14 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
  * what leaves the overview ruler beside the scrollbar as the way to find the changes: it is drawn
  * into its own strip there, and a click on it scrolls like a click on the scrollbar itself.
  *
- * Whitespace-only differences never count (`ignoreTrimWhitespace`, monaco's own default), and the
- * hunk boundaries are monaco's (`advanced`), not git's. What is left at its default on purpose:
- * `renderGutterMenu`, whose "Revert Block" button takes one block back in the editor — a save away
- * from disk, and never a git discard; `maxFileSize`, 50 MB and below the 4 MB both sides are read
- * under anyway; and `renderMarginRevertIcon`, which inline mode ignores outright.
+ * Whitespace-only differences never count (`ignoreTrimWhitespace`), and the hunk boundaries are
+ * monaco's (`advanced`), not git's. Left at its default on purpose: `renderGutterMenu`, whose
+ * "Revert Block" button takes one block back in the editor — a save away from disk, and never a
+ * git discard; `maxFileSize`, whose 50 MB our own 4 MB ceiling keeps out of reach; and
+ * `renderMarginRevertIcon`, which inline mode ignores outright.
+ *
+ * Several of these are monaco's defaults too, and they are spelled out anyway: each one is a
+ * decision this dialog rests on, and a default is not a promise across upgrades.
  */
 export function diffEditorOptions(): Record<string, unknown> {
   return {
@@ -114,8 +117,6 @@ export function diffEditorOptions(): Record<string, unknown> {
     diffAlgorithm: "advanced",
     hideUnchangedRegions: { enabled: false },
     renderOverviewRuler: true,
-    renderIndicators: true,
-    originalEditable: false,
-    diffCodeLens: false
+    originalEditable: false
   };
 }

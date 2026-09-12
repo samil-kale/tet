@@ -781,22 +781,20 @@ const IMAGE_TYPES: Record<string, string> = {
   webp: "image/webp"
 };
 
-/** Both versions of an image go into the renderer as data URLs; a large one would not. */
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
 function imageType(filePath: string): string | undefined {
   return IMAGE_TYPES[path.extname(filePath).slice(1).toLowerCase()];
 }
 
-/** Also used by `Repository.readFile` (Explorer preview) to tell an image from any other binary. */
+/** Also used by `Repository.readFile` to tell an image from any other binary. */
 export function isImage(filePath: string): boolean {
   return imageType(filePath) !== undefined;
 }
 
+/** One version of an image for the renderer, or nothing for an empty file. No ceiling of its own:
+ *  both callers refuse a file past the one the editor reads under, and a second number for the
+ *  same thing is a number that goes stale. */
 export function toDataUrl(filePath: string, content: Buffer): string | undefined {
-  return content.length > 0 && content.length <= MAX_IMAGE_BYTES
-    ? `data:${imageType(filePath)};base64,${content.toString("base64")}`
-    : undefined;
+  return content.length > 0 ? `data:${imageType(filePath)};base64,${content.toString("base64")}` : undefined;
 }
 
 export interface HeadBlobOptions {

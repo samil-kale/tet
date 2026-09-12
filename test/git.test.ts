@@ -107,6 +107,16 @@ describe("a repository, from init on", () => {
     assert.deepEqual((await readState(cwd)).changes, []);
   });
 
+  it("calls a blob past the cap binary, the way node reports the overflow", async () => {
+    // The cap is maxBuffer, so the answer to "too large" is node killing git mid-stream and
+    // reporting a code of its own — which is what tells it apart from a path HEAD does not have.
+    assert.deepEqual(await readHeadBlob(cwd, "a.txt", { maxBytes: 4 }), {
+      content: "",
+      binary: true,
+      missing: false
+    });
+  });
+
   it("calls a blob with a NUL byte binary, and reads an image as a data url", async () => {
     fs.writeFileSync(path.join(cwd, "blob.bin"), Buffer.from([1, 0, 2]));
     fs.writeFileSync(path.join(cwd, "pic.png"), Buffer.from([137, 80, 78, 71]));
