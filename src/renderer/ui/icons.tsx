@@ -523,45 +523,6 @@ export function SyncIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `unfold-vertical`, vendored on its own native 24-unit grid. Measured via `getBBox`:
- *  22 by 22, extent 22, centered at (12, 12). */
-export function UnfoldIcon(props: IconProps) {
-  return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(22, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(22, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 22v-6" />
-      <path d="M12 8V2" />
-      <path d="M4 12H2" />
-      <path d="M10 12H8" />
-      <path d="M16 12h-2" />
-      <path d="M22 12h-2" />
-      <path d="m15 19-3 3-3-3" />
-      <path d="m15 5-3-3-3 3" />
-    </svg>
-  );
-}
-
-/** The whitespace toggle: the row of dots an editor puts where the spaces are. */
-export function WhitespaceIcon(props: IconProps) {
-  return (
-    <Svg {...props} extent={11.08}>
-      <circle cx="3.6" cy="8" r="1.6" fill="currentColor" stroke="none" />
-      <circle cx="8" cy="8" r="1.6" fill="currentColor" stroke="none" />
-      <circle cx="12.4" cy="8" r="1.6" fill="currentColor" stroke="none" />
-    </Svg>
-  );
-}
-
 /**
  * A session stopped mid-turn on a question nobody has answered — on its tab and on its project's
  * row. It shares the one mark slot with the bubble and the spinner, so the three have to be told
@@ -780,28 +741,6 @@ export function CollapseAllIcon(props: IconProps) {
       <line x1="12" x2="18" y1="15" y2="15" />
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-    </svg>
-  );
-}
-
-/** Lucide's `pencil`, vendored on its own native 24-unit grid — the diff dialog's Diff/Edit
- *  toggle. Measured via `getBBox`: 22 by 22, extent 22, centered at (12, 12). */
-export function PencilIcon(props: IconProps) {
-  return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(22, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(22, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
-      <path d="m15 5 4 4" />
     </svg>
   );
 }

@@ -299,50 +299,34 @@ export interface Notice {
   progress?: number;
 }
 
-export type DiffLineType = "context" | "add" | "del" | "hunk";
-
-export interface DiffLine {
-  type: DiffLineType;
-  /** Line number in the old file; absent for added lines. On a hunk header, where it starts. */
-  oldLine?: number;
-  /** Line number in the new file; absent for deleted lines. On a hunk header, where it starts. */
-  newLine?: number;
-  text: string;
-}
-
-/** Both versions of an image as data URLs; either is absent when the file was added or deleted. */
-export interface ImageDiff {
-  before?: string;
-  after?: string;
-}
-
-export interface FileDiff {
-  path: string;
-  lines: DiffLine[];
+/** The file as HEAD has it — the diff editor's original side, beside the working tree's own text. */
+export interface HeadBlob {
+  content: string;
+  /** A binary blob, an image, or one too large to hand over; `content` is empty either way. */
   binary: boolean;
-  /** True when `lines` was cut off because the diff is very large. */
-  truncated: boolean;
-  /** Set instead of `lines` when the file is an image git could only call binary. */
-  image?: ImageDiff;
-  error?: string;
+  /** HEAD has no such path: untracked, newly added, or an unborn branch. Diffs as an all-new file. */
+  missing: boolean;
+  /** Set instead of `content` for an image, the committed version as a data URL. */
+  image?: string;
 }
 
-/** How a diff is read; the view's own switches, not anything about the file. */
-export interface DiffOptions {
-  /** `git diff -w`: lines that differ only in spacing stop counting as changes. */
-  ignoreWhitespace?: boolean;
-}
-
-/** A file's content for the diff dialog's editor — read once per open, not streamed. */
+/** A file for the diff dialog — the working tree's text, and what HEAD has of it. Read once per
+ *  open, not streamed. */
 export interface FileContent {
   path: string;
   content: string;
-  /** Compared against on save, so a write started here never clobbers an outside edit. */
+  /** Compared against on save, so a write started here never clobbers an outside edit. 0 for a file
+   *  that is not in the working tree at all, which is a deleted one and never saved. */
   mtimeMs: number;
   binary: boolean;
   tooLarge: boolean;
-  /** Set instead of `content` when the file is an image git diffs would also call binary. */
+  /** Set instead of `content` when the file is an image. */
   image?: string;
+  /** Absent for a file git reports no change to: the diff editor mirrors its own content then, and
+   *  nothing is marked. */
+  head?: HeadBlob;
+  /** True where the working tree has no such file — a deleted one. The editor is read-only. */
+  deleted?: boolean;
   error?: string;
 }
 

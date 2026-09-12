@@ -6,11 +6,9 @@ import type {
   AppInfo,
   AppSettings,
   CheckoutTarget,
-  DiffOptions,
   ExplorerListing,
   ExplorerSettings,
   FileContent,
-  FileDiff,
   FileWriteResult,
   GitActionResult,
   ListRepositoriesResult,
@@ -167,14 +165,11 @@ export interface TETApi {
       key: K,
       value: ExplorerSettings[K]
     ): Promise<GitActionResult>;
-    diff(projectId: string, path: string, options: DiffOptions): Promise<FileDiff>;
-    /** Lines `from` to `to` of the file as it is now, for a gap the diff view opens. */
-    fileLines(projectId: string, path: string, from: number, to: number): Promise<string[]>;
     /** Every file in the repository plus any directory nothing else implies — the Explorer tree. */
     listExplorer(projectId: string): Promise<ExplorerListing>;
     /** Just the settings dialog's Files tab needs — no filesystem walk, tet.json alone. */
     explorerSettings(projectId: string): Promise<ExplorerSettings>;
-    /** A file's content for the diff dialog's editor. */
+    /** A file for the diff dialog: the working tree's text, and what HEAD has of it. */
     readFile(projectId: string, path: string): Promise<FileContent>;
     /** Writes a file's content; `expectedMtimeMs` must match what's on disk or nothing is written. */
     writeFile(projectId: string, path: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult>;

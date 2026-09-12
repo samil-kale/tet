@@ -6,23 +6,16 @@ import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type {
   CheckoutTarget,
   ChangeStatus,
-  DiffLine,
-  DiffOptions,
   FileChange,
-  FileDiff,
   GitActionResult,
   GitOperation,
-  ImageDiff,
+  HeadBlob,
   RemoteInfo,
   RepositoryState,
   StashEntry
 } from "../../shared/types";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
-/** Rendering a whole huge diff would stall the renderer; the viewer shows a hint instead. */
-const MAX_DIFF_LINES = 5000;
-/** Untracked files are read to synthesise their diff — do not pull a huge file into memory. */
-const MAX_UNTRACKED_BYTES = 2 * 1024 * 1024;
 
 export interface GitResult {
   stdout: string;
@@ -776,49 +769,6 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
   }
 }
 
-const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
-
-function parseUnifiedDiff(text: string): { lines: DiffLine[]; truncated: boolean } {
-  const lines: DiffLine[] = [];
-  let oldLine = 0;
-  let newLine = 0;
-  let inHunk = false;
-
-  for (const raw of text.split("\n")) {
-    // A second file section starts with headers again, whose `---`/`+++` must not read as content.
-    if (raw.startsWith("diff --git ")) {
-      inHunk = false;
-      continue;
-    }
-    const header = HUNK_HEADER.exec(raw);
-    if (header) {
-      oldLine = Number(header[1]);
-      newLine = Number(header[2]);
-      inHunk = true;
-      // Carried on the header so the view knows where the gap in front of it ends.
-      lines.push({ type: "hunk", oldLine, newLine, text: raw });
-      continue;
-    }
-    if (!inHunk) {
-      continue;
-    }
-    if (raw.startsWith("+")) {
-      lines.push({ type: "add", newLine: newLine++, text: raw.slice(1) });
-    } else if (raw.startsWith("-")) {
-      lines.push({ type: "del", oldLine: oldLine++, text: raw.slice(1) });
-    } else if (raw.startsWith(" ")) {
-      lines.push({ type: "context", oldLine: oldLine++, newLine: newLine++, text: raw.slice(1) });
-    }
-    // "\ No newline at end of file" and any trailing empty line are not part of the content.
-
-    if (lines.length >= MAX_DIFF_LINES) {
-      return { lines, truncated: true };
-    }
-  }
-
-  return { lines, truncated: false };
-}
-
 /** What the diff view shows side by side instead of "binary file". SVG stays text on purpose. */
 const IMAGE_TYPES: Record<string, string> = {
   avif: "image/avif",
@@ -849,90 +799,63 @@ export function toDataUrl(filePath: string, content: Buffer): string | undefined
     : undefined;
 }
 
-/** The committed and the current version of an image; either may be missing and is left out. */
-async function readImageDiff(cwd: string, filePath: string, origPath?: string): Promise<ImageDiff> {
-  const image: ImageDiff = {};
-  // Buffer encoding: utf8 would replace every invalid byte and leave an image nothing can decode.
-  const committed = await new Promise<Buffer>((resolve) => {
+export interface HeadBlobOptions {
+  /** The rename's source path — without it HEAD is asked for a path it does not have. */
+  origPath?: string;
+  /** Past this the blob counts as binary: the same ceiling the editor reads a file under, since
+   *  both sides end up in the one editor. */
+  maxBytes: number;
+}
+
+/**
+ * What HEAD has of a file, the diff editor's original side. A path HEAD does not know — untracked,
+ * newly added, or an unborn branch — is `missing` rather than an error: it diffs as an all-new file.
+ *
+ * `cat-file --filters`, not `show`: it puts the blob through the smudge filters and the eol
+ * conversion `.gitattributes` and `core.autocrlf` ask for, so the text is what the working tree
+ * would hold. `show` hands back the stored blob, which under an LFS or `ident` filter is not the
+ * file at all. Buffer encoding for the reason `readFile` uses it too: utf8 replaces every invalid
+ * byte and would leave an image nothing can decode.
+ */
+export async function readHeadBlob(cwd: string, filePath: string, options: HeadBlobOptions): Promise<HeadBlob> {
+  // A rename is one entry over two paths, and only the old one is in HEAD.
+  const at = (options.origPath ?? filePath).replace(/\\/g, "/");
+  const read = await new Promise<{ blob: Buffer | null; tooLarge: boolean }>((resolve) => {
     execFile(
       "git",
-      ["show", `HEAD:${(origPath ?? filePath).replace(/\\/g, "/")}`],
-      { cwd, maxBuffer: MAX_BUFFER, windowsHide: true, encoding: "buffer" },
-      (error, stdout) => resolve(error ? Buffer.alloc(0) : stdout)
+      ["cat-file", "--filters", `HEAD:${at}`],
+      {
+        cwd,
+        // One byte over the cap is all that has to arrive: node kills the child there and reports
+        // it under a code of its own, which is how a blob too large is told from one HEAD lacks.
+        maxBuffer: options.maxBytes + 1,
+        windowsHide: true,
+        encoding: "buffer",
+        // `--filters` runs the repository's own smudge filter, and an LFS one fetches. Without this
+        // git would stop for credentials, in a process with no terminal to type them into.
+        env: { ...process.env, ...NETWORK_ENV }
+      },
+      (error, stdout) =>
+        resolve({
+          blob: error ? null : stdout,
+          tooLarge: (error as NodeJS.ErrnoException | null)?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
+        })
     );
   });
-  image.before = toDataUrl(origPath ?? filePath, committed);
-
-  try {
-    image.after = toDataUrl(filePath, await fs.readFile(path.join(cwd, filePath)));
-  } catch {
-    // Deleted in the working tree: there is no "after" to show.
+  // Too large, an image, or a NUL byte anywhere: no text side to show, and the dialog says so.
+  if (read.tooLarge) {
+    return { content: "", binary: true, missing: false };
   }
-  return image;
-}
-
-/** An untracked file has nothing to diff against, so its content becomes an all-added diff. */
-async function readUntrackedDiff(cwd: string, filePath: string): Promise<FileDiff> {
-  const absolute = path.join(cwd, filePath);
-  const base: FileDiff = { path: filePath, lines: [], binary: false, truncated: false };
-  try {
-    const stat = await fs.stat(absolute);
-    if (stat.size > MAX_UNTRACKED_BYTES) {
-      return { ...base, truncated: true };
-    }
-    const content = await fs.readFile(absolute);
-    if (content.includes(0)) {
-      return { ...base, binary: true };
-    }
-    const text = content.toString("utf8");
-    const rows = text.split("\n");
-    if (rows.at(-1) === "") {
-      rows.pop();
-    }
-    const lines: DiffLine[] = rows
-      .slice(0, MAX_DIFF_LINES)
-      .map((row, index) => ({ type: "add" as const, newLine: index + 1, text: row }));
-    return { ...base, lines, truncated: rows.length > MAX_DIFF_LINES };
-  } catch (error) {
-    return { ...base, error: error instanceof Error ? error.message : String(error) };
+  if (read.blob === null) {
+    return { content: "", binary: false, missing: true };
   }
-}
-
-export interface ReadDiffOptions extends DiffOptions {
-  untracked: boolean;
-  /** The rename's source path — without it git diffs the new path as a wholly new file. */
-  origPath?: string;
-}
-
-/** The diff of one file against HEAD — index and worktree combined, as "Local Changes" shows it. */
-export async function readDiff(cwd: string, filePath: string, options: ReadDiffOptions): Promise<FileDiff> {
-  const base: FileDiff = { path: filePath, lines: [], binary: false, truncated: false };
-  if (isImage(filePath)) {
-    return { ...base, binary: true, image: await readImageDiff(cwd, filePath, options.origPath) };
+  if (isImage(at)) {
+    return { content: "", binary: true, missing: false, image: toDataUrl(at, read.blob) };
   }
-  if (options.untracked) {
-    return readUntrackedDiff(cwd, filePath);
+  if (read.blob.includes(0)) {
+    return { content: "", binary: true, missing: false };
   }
-
-  const paths = options.origPath ? [options.origPath, filePath] : [filePath];
-  const flags = options.ignoreWhitespace ? ["--ignore-all-space"] : [];
-  try {
-    let result = await git(cwd, ["diff", "HEAD", "--no-color", ...flags, "--", ...paths]);
-    if (result.code !== 0) {
-      // No HEAD yet (unborn branch): compare against the index instead.
-      result = await git(cwd, ["diff", "--no-color", ...flags, "--", ...paths]);
-      if (result.code !== 0) {
-        return { ...base, error: (result.stderr || result.stdout).trim() };
-      }
-    }
-    if (/^Binary files /m.test(result.stdout)) {
-      return { ...base, binary: true };
-    }
-    const { lines, truncated } = parseUnifiedDiff(result.stdout);
-    return { ...base, lines, truncated };
-  } catch (error) {
-    return { ...base, error: error instanceof Error ? error.message : String(error) };
-  }
+  return { content: read.blob.toString("utf8"), binary: false, missing: false };
 }
 
 /** Every path the exclude chain hides — files and, with `--directory`, whole ignored directories
@@ -944,20 +867,4 @@ export async function listIgnored(cwd: string): Promise<string[]> {
     return [];
   }
   return result.stdout.split("\0").filter((entry) => entry !== "");
-}
-
-/** Lines `from` to `to` of the file as it is now, 1-based and inclusive, for a gap the diff view
- *  opens. Context lines are the same in both versions, so the working tree is enough. */
-export async function readFileLines(cwd: string, filePath: string, from: number, to: number): Promise<string[]> {
-  try {
-    const content = await fs.readFile(path.join(cwd, filePath), "utf8");
-    const rows = content.split("\n");
-    if (rows.at(-1) === "") {
-      rows.pop();
-    }
-    return rows.slice(Math.max(0, from - 1), to);
-  } catch {
-    // A file that cannot be read has no context to add; the gap simply stays closed.
-    return [];
-  }
 }

@@ -114,8 +114,13 @@ export function buildShikiColors(): Record<string, string> {
 
 /**
  * monaco color id to the --vscode-* variable it reads, for chrome shiki's theme has no notion of
- * (menus, inputs, lists). The editor surface is not repeated here: it comes from shiki's own
- * theme, already patched with `EDITOR_CSS_VARS`.
+ * (menus, inputs, lists) and for the diff. The editor surface is not repeated here: it comes from
+ * shiki's own theme, already patched with `EDITOR_CSS_VARS`.
+ *
+ * The diff colors have to travel this way rather than through CSS alone: monaco writes its own
+ * `--vscode-*` block onto `.monaco-editor, .monaco-diff-editor` (its `standaloneThemeService`),
+ * which is more specific than our `:root` and shadows every variable inside the widget. A theme
+ * value only reaches the diff through `defineTheme`'s colors, which is what this map feeds.
  */
 const MONACO_CSS_VARS: Record<string, string> = {
   "input.background": "--vscode-input-background",
@@ -138,7 +143,18 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "menu.separatorBackground": "--vscode-menu-separatorBackground",
   "list.hoverBackground": "--vscode-list-hoverBackground",
   "list.activeSelectionBackground": "--vscode-list-activeSelectionBackground",
-  "list.activeSelectionForeground": "--vscode-list-activeSelectionForeground"
+  "list.activeSelectionForeground": "--vscode-list-activeSelectionForeground",
+  // The diff, inline: a changed line's ground, the changed words within it, the same tone in the
+  // gutter beside a removed-line view zone, and the overview ruler beside the scrollbar — which is
+  // how a change is found at all, so it is set rather than left to monaco's doubled-alpha fallback.
+  "diffEditor.insertedLineBackground": "--vscode-diffEditor-insertedLineBackground",
+  "diffEditor.removedLineBackground": "--vscode-diffEditor-removedLineBackground",
+  "diffEditor.insertedTextBackground": "--vscode-diffEditor-insertedTextBackground",
+  "diffEditor.removedTextBackground": "--vscode-diffEditor-removedTextBackground",
+  "diffEditorGutter.insertedLineBackground": "--vscode-diffEditor-insertedLineBackground",
+  "diffEditorGutter.removedLineBackground": "--vscode-diffEditor-removedLineBackground",
+  "diffEditorOverview.insertedForeground": "--vscode-diffEditorOverview-insertedForeground",
+  "diffEditorOverview.removedForeground": "--vscode-diffEditorOverview-removedForeground"
 };
 
 /**

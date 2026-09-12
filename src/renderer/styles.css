@@ -1109,16 +1109,6 @@ textarea:focus {
   font-size: 13px;
 }
 
-/* `min-height: 0` matters: a flex item defaults to its content's height, and a long diff would
-   push its scroll container past the bottom of the dialog. */
-.diff-view {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
 .icon-button.active {
   opacity: 1;
   color: var(--vscode-button-background);
@@ -1244,70 +1234,6 @@ textarea:focus {
   border-radius: 50%;
   background: var(--vscode-foreground);
   cursor: pointer;
-}
-
-.diff-body {
-  flex: 1;
-  overflow: auto;
-  font-family: var(--vscode-editor-font-family);
-  font-size: 13px;
-  line-height: 18px;
-  user-select: text;
-}
-
-.diff-line {
-  display: flex;
-  white-space: pre;
-}
-
-.diff-line.add {
-  background: var(--vscode-diffEditor-insertedLineBackground);
-}
-
-.diff-line.del {
-  background: var(--vscode-diffEditor-removedLineBackground);
-}
-
-.diff-line.hunk {
-  color: var(--vscode-descriptionForeground);
-  font-style: italic;
-}
-
-.diff-gutter {
-  flex: none;
-  width: 46px;
-  padding-right: 8px;
-  text-align: right;
-  color: var(--vscode-editorLineNumber-foreground);
-  user-select: none;
-}
-
-/* Sits where the old line number would be on a hunk header, which has none of its own. */
-.diff-unfold {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex: none;
-  width: 46px;
-  padding-right: 8px;
-  color: var(--vscode-editorLineNumber-foreground);
-}
-
-.diff-unfold:hover {
-  color: var(--vscode-foreground);
-  background: var(--vscode-toolbar-hoverBackground);
-}
-
-.diff-marker {
-  flex: none;
-  width: 14px;
-  text-align: center;
-  color: var(--vscode-editorLineNumber-foreground);
-  user-select: none;
-}
-
-.diff-text {
-  flex: 1;
 }
 
 /* Sashes --------------------------------------------------------------------------------- */

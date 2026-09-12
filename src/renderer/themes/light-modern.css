@@ -97,6 +97,10 @@
   /* The registry's defaultInsertColor/defaultRemoveColor serve both grounds. */
   --vscode-diffEditor-insertedLineBackground: #2ea04326;
   --vscode-diffEditor-removedLineBackground: #f8514926;
+  --vscode-diffEditor-insertedTextBackground: #2ea04340;
+  --vscode-diffEditor-removedTextBackground: #f8514940;
+  --vscode-diffEditorOverview-insertedForeground: #2ea04380;
+  --vscode-diffEditorOverview-removedForeground: #f8514980;
   --vscode-editorLineNumber-foreground: #6e7681;
   --vscode-editorLineNumber-activeForeground: #171184;
   --vscode-editorCursor-foreground: #000000;

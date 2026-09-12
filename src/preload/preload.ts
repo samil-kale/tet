@@ -91,9 +91,6 @@ const api: TETApi = {
     excludePath: (projectId, relPath) => ipcRenderer.invoke("repo:exclude-path", projectId, relPath),
     setExplorerSetting: (projectId, key, value) =>
       ipcRenderer.invoke("repo:set-explorer-setting", projectId, key, value),
-    diff: (projectId, filePath, options) => ipcRenderer.invoke("repo:diff", projectId, filePath, options),
-    fileLines: (projectId, filePath, from, to) =>
-      ipcRenderer.invoke("repo:file-lines", projectId, filePath, from, to),
     listExplorer: (projectId) => ipcRenderer.invoke("repo:explorer", projectId),
     explorerSettings: (projectId) => ipcRenderer.invoke("repo:explorer-settings", projectId),
     readFile: (projectId, filePath) => ipcRenderer.invoke("repo:file-read", projectId, filePath),

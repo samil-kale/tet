@@ -17,8 +17,7 @@ import {
   merge,
   push,
   readCommitContext,
-  readDiff,
-  readFileLines,
+  readHeadBlob,
   readState,
   resolveRoot,
   stashDrop,
@@ -55,6 +54,10 @@ function run(...args: string[]): string {
 
 const write = (name: string, content: string): void => fs.writeFileSync(path.join(cwd, name), content);
 
+/** The cap the diff dialog reads both sides of a file under; `readHeadBlob` takes it per call. */
+const MAX_BYTES = 4 * 1024 * 1024;
+const head = (name: string, origPath?: string) => readHeadBlob(cwd, name, { origPath, maxBytes: MAX_BYTES });
+
 describe("a repository, from init on", () => {
   before(() => {
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-"));
@@ -73,17 +76,14 @@ describe("a repository, from init on", () => {
     assert.equal(state.operation, undefined);
     assert.equal(await isRepository(cwd), true);
     assert.equal(await isRepository(os.tmpdir()), false);
+    // The one point where HEAD does not resolve at all: every file reads as one HEAD never had.
+    assert.deepEqual(await head("a.txt"), { content: "", binary: false, missing: true });
   });
 
-  it("shows a new file as untracked, with the file itself as its diff", async () => {
+  it("shows a new file as untracked, with nothing in HEAD to diff it against", async () => {
     write("a.txt", "one\ntwo\nthree\n");
     assert.deepEqual((await readState(cwd)).changes, [{ path: "a.txt", status: "untracked" }]);
-    const diff = await readDiff(cwd, "a.txt", { untracked: true });
-    assert.equal(diff.binary, false);
-    assert.deepEqual(
-      diff.lines.filter((entry) => entry.type === "add").map((entry) => entry.text),
-      ["one", "two", "three"]
-    );
+    assert.deepEqual(await head("a.txt"), { content: "", binary: false, missing: true });
   });
 
   it("commits everything and is clean again", async () => {
@@ -93,29 +93,46 @@ describe("a repository, from init on", () => {
     assert.deepEqual(state.localBranches, ["main"]);
   });
 
-  it("reads a modification as a unified diff with line numbers, and discards it", async () => {
+  it("reads the committed version of a modified file, whole, and discards the change", async () => {
     write("a.txt", "one\n2\nthree\n");
     assert.deepEqual((await readState(cwd)).changes, [{ path: "a.txt", status: "modified" }]);
-    const diff = await readDiff(cwd, "a.txt", { untracked: false });
-    const [hunk, ...rest] = diff.lines;
-    assert.equal(hunk.type, "hunk");
-    assert.deepEqual(
-      rest.map((entry) => [entry.type, entry.oldLine, entry.newLine, entry.text]),
-      [
-        ["context", 1, 1, "one"],
-        ["del", 2, undefined, "two"],
-        ["add", undefined, 2, "2"],
-        ["context", 3, 3, "three"]
-      ]
-    );
+    // Byte for byte, the trailing newline included: this text is one side of the diff editor, and
+    // a newline it invented would read as a change of its own.
+    assert.deepEqual(await head("a.txt"), {
+      content: "one\ntwo\nthree\n",
+      binary: false,
+      missing: false
+    });
     assert.deepEqual(await discard(cwd, { restore: ["a.txt"], drop: [] }), { ok: true });
-    assert.deepEqual(await readFileLines(cwd, "a.txt", 2, 2), ["two"]);
     assert.deepEqual((await readState(cwd)).changes, []);
+  });
+
+  it("calls a blob with a NUL byte binary, and reads an image as a data url", async () => {
+    fs.writeFileSync(path.join(cwd, "blob.bin"), Buffer.from([1, 0, 2]));
+    fs.writeFileSync(path.join(cwd, "pic.png"), Buffer.from([137, 80, 78, 71]));
+    assert.deepEqual(await commitAll(cwd, "a binary and an image"), { ok: true });
+    assert.deepEqual(await head("blob.bin"), { content: "", binary: true, missing: false });
+    const image = await head("pic.png");
+    assert.equal(image.binary, true);
+    assert.match(image.image ?? "", /^data:image\/png;base64,/);
+  });
+
+  it("puts the blob through the checkout filters, so it reads like the working tree", async () => {
+    // The reason `cat-file --filters` is what reads HEAD and `show` is not: git stores this file
+    // with LF whatever the platform, and the working tree has CRLF. Only the filtered text can be
+    // compared against what the editor holds.
+    write(".gitattributes", "crlf.txt text eol=crlf\n");
+    write("crlf.txt", "one\ntwo\n");
+    assert.deepEqual(await commitAll(cwd, "a file checked out with crlf"), { ok: true });
+    assert.equal((await head("crlf.txt")).content, "one\r\ntwo\r\n");
   });
 
   it("reads a staged rename as one change with its old path", async () => {
     run("mv", "a.txt", "b.txt");
     assert.deepEqual((await readState(cwd)).changes, [{ path: "b.txt", status: "renamed", origPath: "a.txt" }]);
+    // HEAD knows the old path only, so without it every line of the file would read as new.
+    assert.equal((await head("b.txt", "a.txt")).content, "one\ntwo\nthree\n");
+    assert.equal((await head("b.txt")).missing, true);
     assert.deepEqual(await commitAll(cwd, "rename"), { ok: true });
   });
 

@@ -97,6 +97,10 @@
 
   --vscode-diffEditor-insertedLineBackground: #82b65d26;
   --vscode-diffEditor-removedLineBackground: #db576126;
+  --vscode-diffEditor-insertedTextBackground: #82b65d40;
+  --vscode-diffEditor-removedTextBackground: #db576140;
+  --vscode-diffEditorOverview-insertedForeground: #82b65d80;
+  --vscode-diffEditorOverview-removedForeground: #db576180;
   --vscode-editorLineNumber-foreground: #5a626f;
   --vscode-editorLineNumber-activeForeground: #dde2e9;
   --vscode-editorCursor-foreground: #dde2e9;

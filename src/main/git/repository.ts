@@ -4,13 +4,13 @@ import { shell } from "electron";
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type {
   CheckoutTarget,
-  DiffOptions,
   ExplorerListing,
   ExplorerSettings,
+  FileChange,
   FileContent,
-  FileDiff,
   FileWriteResult,
   GitActionResult,
+  HeadBlob,
   NoticeSeverity,
   Project,
   RepositoryState,
@@ -452,23 +452,6 @@ export class Repository {
     return this.runAction(() => git.ignorePath(this.project.path, filePath, scope));
   }
 
-  async diff(filePath: string, options: DiffOptions): Promise<FileDiff> {
-    const change = this.state.changes.find((candidate) => candidate.path === filePath);
-    return git
-      .readDiff(this.project.path, filePath, {
-        ...options,
-        untracked: change?.status === "untracked",
-        origPath: change?.origPath
-      })
-      .catch((error: Error) => ({ path: filePath, lines: [], binary: false, truncated: false, error: error.message }));
-  }
-
-  /** The file's own lines, for a gap the diff view was asked to open. */
-  fileLines(filePath: string, from: number, to: number): Promise<string[]> {
-    // Same as when the file cannot be read: no lines, so the gap simply stays closed.
-    return git.readFileLines(this.project.path, filePath, from, to).catch(() => []);
-  }
-
   /**
    * Every file in the repository, plus any directory nothing else implies — see `ExplorerListing`.
    * A real scan rather than a git process: off the index lock `runAction` serialises, and
@@ -672,15 +655,25 @@ export class Repository {
     return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? absolute : undefined;
   }
 
-  /** A file's content for the diff dialog's editor. */
+  /** A file for the diff dialog: the working tree's text, and what HEAD has of it wherever git
+   *  reports a change — that second text is the diff editor's original side, and a file git sees no
+   *  change to needs none. */
   async readFile(filePath: string): Promise<FileContent> {
     const base = { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false };
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
       return { ...base, error: "Path is outside the repository" };
     }
+    const change = this.state.changes.find((candidate) => candidate.path === filePath);
     try {
-      const stat = await fs.promises.stat(absolute);
+      const stat = await fs.promises.stat(absolute).catch(() => null);
+      if (!stat) {
+        // Nothing in the working tree: a file git reports as deleted is shown as all removed, any
+        // other missing path is simply not a file to open.
+        return change?.status === "deleted"
+          ? { ...base, deleted: true, head: await this.headBlob(filePath, change) }
+          : { ...base, error: "Not a file" };
+      }
       if (!stat.isFile()) {
         return { ...base, error: "Not a file" };
       }
@@ -690,10 +683,34 @@ export class Repository {
       const buffer = await fs.promises.readFile(absolute);
       const binary = buffer.includes(0);
       const image = isImage(filePath) ? toDataUrl(filePath, buffer) : undefined;
-      return { ...base, mtimeMs: stat.mtimeMs, binary, image, content: binary ? "" : buffer.toString("utf8") };
+      return {
+        ...base,
+        mtimeMs: stat.mtimeMs,
+        binary,
+        image,
+        content: binary ? "" : buffer.toString("utf8"),
+        // No side to compare where there is no text and no image either: a binary file shows as
+        // one, and starting git for that is a process spent on nothing.
+        head: binary && !image ? undefined : await this.headBlob(filePath, change)
+      };
     } catch (error) {
       return { ...base, error: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  /** The diff editor's original side, for a file git reports a change to. An untracked one costs no
+   *  git process: HEAD has nothing of it by definition. A git process that died leaves the side out
+   *  rather than failing the open — the file still reads, it just carries no marks. */
+  private headBlob(filePath: string, change: FileChange | undefined): Promise<HeadBlob | undefined> {
+    if (!change) {
+      return Promise.resolve(undefined);
+    }
+    if (change.status === "untracked") {
+      return Promise.resolve({ content: "", binary: false, missing: true });
+    }
+    return git
+      .readHeadBlob(this.project.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES })
+      .catch(() => undefined);
   }
 
   /** Writes a file's content, refusing when it changed on disk since it was read — the mtime is all

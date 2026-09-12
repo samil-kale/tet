@@ -2,18 +2,18 @@ import {
   createHighlighterCore,
   type HighlighterCore,
   type LanguageRegistration,
-  type ThemedToken,
   type ThemeRegistration
 } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
 import { buildShikiColors } from "../terminal/theme";
-import type { DiffLine, FileDiff } from "../../shared/types";
 
-/** Syntax colors for the diff, through Shiki. Per-token colors are the one thing not from a
- *  --vscode-* variable: a theme assigns them per grammar scope and Shiki hands them back per
- *  token. The theme is the token half of the one picked in Settings (Dark Modern's tokens come
- *  from Dark+, Light Modern's from Light+); its editor-surface colors are patched in `loadTheme`. */
+/** Syntax colors for the diff editor, through Shiki: monaco carries no grammar of its own here
+ *  (see monaco-core.ts), and `ensureLanguage` hands it shiki's tokenizer and shiki's theme.
+ *  Per-token colors are the one thing not from a --vscode-* variable: a theme assigns them per
+ *  grammar scope and Shiki hands them back per token. The theme is the token half of the one picked
+ *  in Settings (Dark Modern's tokens come from Dark+, Light Modern's from Light+); its
+ *  editor-surface colors are patched in `loadTheme`. */
 export const THEME = resolveTheme(window.tet.initialTheme).shikiTheme;
 
 /** One import per theme, spelled out: esbuild can only bundle an import whose path it can read
@@ -186,75 +186,4 @@ export function loadGrammar(shiki: HighlighterCore, language: string): Promise<v
 export function languageForPath(filePath: string): string | undefined {
   const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
   return EXTENSIONS[name.slice(name.lastIndexOf(".") + 1)];
-}
-
-/** A run of lines that were contiguous in one version of the file, and their code. */
-interface Block {
-  /** Index in the diff's line list for each line of `code`, in order. */
-  indices: number[];
-  code: string;
-}
-
-/** A diff holds fragments of two versions of a file, interleaved: as written, the old and the
- *  new half of a changed line read as consecutive code, which goes wrong wherever a construct
- *  spans lines. So each hunk is tokenized twice, once as the file was and once as it is;
- *  context lines are in both passes and take the colors of the second. */
-function blocksOf(lines: readonly DiffLine[]): Block[] {
-  const blocks: Block[] = [];
-  let old: Block = { indices: [], code: "" };
-  let fresh: Block = { indices: [], code: "" };
-
-  const flush = (): void => {
-    blocks.push(old, fresh);
-    old = { indices: [], code: "" };
-    fresh = { indices: [], code: "" };
-  };
-  const push = (block: Block, index: number, text: string): void => {
-    block.code += block.indices.length === 0 ? text : `\n${text}`;
-    block.indices.push(index);
-  };
-
-  lines.forEach((line, index) => {
-    if (line.type === "hunk") {
-      // The lines around a hunk header are not adjacent in the file, so nothing carries over.
-      flush();
-      return;
-    }
-    if (line.type !== "add") {
-      push(old, index, line.text);
-    }
-    if (line.type !== "del") {
-      push(fresh, index, line.text);
-    }
-  });
-  flush();
-
-  return blocks.filter((block) => block.indices.length > 0);
-}
-
-/** Colors a diff, one token list per line. Lines the grammar had nothing to say about stay
- *  undefined and render as plain text; undefined means nothing could be colored at all. */
-export async function highlightDiff(diff: FileDiff): Promise<(ThemedToken[] | undefined)[] | undefined> {
-  const language = languageForPath(diff.path);
-  if (!language) {
-    return undefined;
-  }
-
-  try {
-    const shiki = await highlighter();
-    await loadGrammar(shiki, language);
-    const colored: (ThemedToken[] | undefined)[] = [];
-    for (const block of blocksOf(diff.lines)) {
-      const { tokens } = shiki.codeToTokens(block.code, { lang: language, theme: THEME });
-      // One array per line of the block, but only if the tokenizer split it the way it was
-      // joined: a mismatch leaves those lines plain instead of coloring them out of step.
-      if (tokens.length === block.indices.length) {
-        block.indices.forEach((index, line) => (colored[index] = tokens[line]));
-      }
-    }
-    return colored;
-  } catch (error) {
-    console.error("[tet] could not highlight the diff:", error);
-    return undefined;
-  }
 }

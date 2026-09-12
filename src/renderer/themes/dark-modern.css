@@ -93,8 +93,15 @@
   --vscode-gitDecoration-addedResourceForeground: #81b88b;
   --vscode-gitDecoration-conflictingResourceForeground: #e4676b;
 
+  /* Three weights of the same two hues: a changed line's ground, the changed words inside it (so
+     they read against that ground), and the overview ruler, which is 15px against the editor's own
+     background and disappears at anything lighter. */
   --vscode-diffEditor-insertedLineBackground: #2ea04326;
   --vscode-diffEditor-removedLineBackground: #f8514926;
+  --vscode-diffEditor-insertedTextBackground: #2ea04340;
+  --vscode-diffEditor-removedTextBackground: #f8514940;
+  --vscode-diffEditorOverview-insertedForeground: #2ea04380;
+  --vscode-diffEditorOverview-removedForeground: #f8514980;
   --vscode-editorLineNumber-foreground: #6e7681;
   --vscode-editorLineNumber-activeForeground: #cccccc;
   --vscode-editorCursor-foreground: #aeafad;

@@ -1,9 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import type { ExplorerListing, FileChange, FileContent, FileDiff, Project, RepositoryState } from "../../shared/types";
+import type { ExplorerListing, FileChange, FileContent, Project, RepositoryState } from "../../shared/types";
 import { ChangesList, confirmDiscard, type FileAct } from "../git/ChangesList";
-import { CodeEditor, type CodeEditorHandle } from "./CodeEditor";
-import { DiffView } from "./DiffView";
+import { DiffEditor, type DiffEditorHandle } from "./DiffEditor";
+import { ImageView } from "./ImageView";
 import { Explorer, type ExplorerHandle } from "./Explorer";
 import {
   CloseIcon,
@@ -11,9 +11,7 @@ import {
   DiscardIcon,
   NewFileIcon,
   NewFolderIcon,
-  PencilIcon,
-  SaveIcon,
-  WhitespaceIcon
+  SaveIcon
 } from "../ui/icons";
 import { confirm } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
@@ -46,60 +44,51 @@ async function confirmDiscardEdit(path: string): Promise<boolean> {
   return answer.confirmed;
 }
 
-/** One file over the whole window: a diff, or an editor for it. EXPLORER over LOCAL CHANGES on
- *  the left mirrors the git pane's shape. Its one question goes through `Dialog.tsx`. */
+/** One file over the whole window, in the one widget that shows its changes and edits them.
+ *  EXPLORER over LOCAL CHANGES on the left mirrors the git pane's shape. Its one question goes
+ *  through `Dialog.tsx`. */
 export const DiffDialog = memo(function DiffDialog({ project, path, version, state, onOpenDiff, onClose }: DiffDialogProps) {
   useCoversWindow();
   const { changes } = state;
-  const change = path ? changes.find((entry) => entry.path === path) : undefined;
-  const diffable = change !== undefined;
 
-  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
-  /** `DiffView`'s two waits: reading the diff and colouring it. */
-  const [diffBusy, setDiffBusy] = useState(false);
   /** A file action started from the list beside the diff — that pane's own bar. */
   const [acting, setActing] = useState(false);
-
-  /** The user's Diff/Edit choice, reset on a `path` change only: a save can flip `diffable` from
-   *  false to true without the file leaving Edit mode. */
-  const [mode, setMode] = useState<"diff" | "edit">(diffable ? "diff" : "edit");
-  const [modeForPath, setModeForPath] = useState(path);
-  if (modeForPath !== path) {
-    setModeForPath(path);
-    setMode(diffable ? "diff" : "edit");
-  }
 
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editorLoading, setEditorLoading] = useState(false);
-  const editorRef = useRef<CodeEditorHandle>(null);
+  const editorRef = useRef<DiffEditorHandle>(null);
   const explorerRef = useRef<ExplorerHandle>(null);
-
-  /** Bumped after a successful save: `Repository.emit` only pushes a changed state, and
-   *  modified→modified isn't one, so the watcher alone would not reload the diff. */
-  const [savedAt, setSavedAt] = useState(0);
 
   const [treeHeight, setTreeHeight] = usePaneSize("diff-explorer", 300, MIN_PANE_HEIGHT);
   const [filesWidth, setFilesWidth] = usePaneSize("diff-files", 260, MIN_PANE_WIDTH);
   const root = useRef<HTMLDivElement>(null);
 
-  const { diff, loading } = useDiff(project.id, path, diffable, ignoreWhitespace, version, savedAt);
-  // The file is read when there is nothing to diff or the user switched to Edit.
-  const wantsFile = path !== null && (!diffable || mode === "edit");
-  const { file, setFile, loading: fileLoading } = useFileContent(project.id, path, wantsFile);
+  const { file, setFile, loading: fileLoading } = useFileContent(project.id, path);
 
-  const canEdit = diffable ? change?.status !== "deleted" && !diff?.binary : !file?.binary && !file?.tooLarge;
-  const effective: "diff" | "edit" = diffable ? (canEdit ? mode : "diff") : "edit";
+  /** Nothing to save: a file that is gone, or one there is no editor for. */
+  const readOnly = Boolean(file?.deleted || file?.binary || file?.tooLarge || file?.error);
 
-  // An outside edit while the file sits clean in the editor, folded into the model in place so
-  // undo history and the cursor survive. Left alone while dirty; keyed on `version` alone.
+  // What changed outside, folded in on a HEAD or status change. The edited side only while it is
+  // clean, in place so undo history and the cursor survive; HEAD's side always, because a commit
+  // or a checkout under an open edit moves what the marks are against.
   useEffect(() => {
-    if (!path || effective !== "edit" || dirty || !file || file.error) {
+    if (!path || !file || file.error) {
       return;
     }
     let cancelled = false;
     void window.tet.repository.readFile(project.id, path).then((result) => {
-      if (cancelled || result.error || result.mtimeMs === file.mtimeMs) {
+      if (cancelled || result.error) {
+        return;
+      }
+      const head = result.head;
+      if (head && head.content !== file.head?.content) {
+        editorRef.current?.setOriginal(head.content);
+        // Held here too, even while dirty: otherwise every later refresh compares against the
+        // side this one already replaced and writes it again.
+        setFile((current) => (current ? { ...current, head } : current));
+      }
+      if (dirty || result.mtimeMs === file.mtimeMs) {
         return;
       }
       setFile(result);
@@ -124,13 +113,6 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
     };
   }, []);
 
-  // Back from Edit to Diff: refocus the root so ↑/↓ reach `ChangesList` again.
-  useEffect(() => {
-    if (effective === "diff") {
-      root.current?.focus();
-    }
-  }, [effective]);
-
   const guardDirty = async (): Promise<boolean> => !dirty || (path !== null && (await confirmDiscardEdit(path)));
 
   const requestOpen = async (next: string): Promise<void> => {
@@ -139,14 +121,6 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
     }
     setDirty(false);
     onOpenDiff(project.id, next);
-  };
-
-  const requestToggle = async (): Promise<void> => {
-    if (!(await guardDirty())) {
-      return;
-    }
-    setDirty(false);
-    setMode((current) => (current === "edit" ? "diff" : "edit"));
   };
 
   const requestClose = async (): Promise<void> => {
@@ -168,7 +142,6 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
     if (result.ok) {
       setFile((current) => (current ? { ...current, content, mtimeMs: result.mtimeMs ?? current.mtimeMs } : current));
       editorRef.current.markSaved();
-      setSavedAt((count) => count + 1);
     } else {
       notify("error", result.error ?? "Could not save the file");
     }
@@ -195,7 +168,7 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
       .finally(() => setActing(false));
   };
 
-  const busy = diffBusy || fileLoading || editorLoading || saving;
+  const busy = fileLoading || editorLoading || saving;
 
   return (
     <div className="diff-dialog-overlay">
@@ -284,25 +257,7 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
           <div className="diff-dialog-bar">
             {dirty && <span className="diff-dialog-dirty">●</span>}
             <span className="diff-dialog-path">{path ?? "No file open"}</span>
-            {effective === "diff" && diff && !diff.binary && (
-              <button
-                className={`icon-button${ignoreWhitespace ? " active" : ""}`}
-                title={ignoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
-                onClick={() => setIgnoreWhitespace(!ignoreWhitespace)}
-              >
-                <WhitespaceIcon />
-              </button>
-            )}
-            {diffable && canEdit && (
-              <button
-                className={`icon-button${effective === "edit" ? " active" : ""}`}
-                title={effective === "edit" ? "Show diff" : "Edit file"}
-                onClick={() => void requestToggle()}
-              >
-                <PencilIcon />
-              </button>
-            )}
-            {path !== null && effective === "edit" && (
+            {path !== null && !readOnly && (
               <button
                 className="icon-button"
                 title="Save (Ctrl+S)"
@@ -319,33 +274,24 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
           </div>
           {path === null ? (
             <div className="placeholder">Select a file.</div>
-          ) : effective === "diff" ? (
-            <DiffView
-              projectId={project.id}
-              diff={diff}
-              loading={loading}
-              onBusy={setDiffBusy}
-              ignoreWhitespace={ignoreWhitespace}
-            />
           ) : !file || file.path !== path ? null : file.error ? (
             <div className="placeholder">{file.error}</div>
-          ) : file.image ? (
-            <div className="image-diff">
-              <figure>
-                <img src={file.image} alt="" />
-              </figure>
-            </div>
-          ) : file.binary ? (
+          ) : file.image || file.head?.image ? (
+            <ImageView image={{ before: file.head?.image, after: file.image }} />
+          ) : file.binary || file.head?.binary ? (
             <div className="placeholder">Binary file.</div>
           ) : file.tooLarge ? (
             <div className="placeholder">File too large to edit.</div>
           ) : (
             // Mounted only once `file` belongs to `path`: mounting before the fetch lands would seed a
-            // fresh model with the previous file's text under the new file's path.
-            <CodeEditor
+            // fresh model with the previous file's text under the new file's path. With no HEAD side
+            // the file is its own original, which leaves nothing marked — a plain editor.
+            <DiffEditor
               ref={editorRef}
               path={path}
               content={file.content}
+              original={file.head?.content ?? file.content}
+              readOnly={readOnly}
               onDirty={setDirty}
               onSave={() => void save()}
               onBusy={setEditorLoading}
@@ -359,58 +305,18 @@ export const DiffDialog = memo(function DiffDialog({ project, path, version, sta
 
 
 /**
- * The file's diff, reloaded on the file, the repository state, the whitespace switch or a save.
- * A file with nothing to diff costs no git process just for being looked at.
- */
-function useDiff(
-  projectId: string,
-  path: string | null,
-  diffable: boolean,
-  ignoreWhitespace: boolean,
-  version: string,
-  savedAt: number
-): { diff: FileDiff | null; loading: boolean } {
-  const [diff, setDiff] = useState<FileDiff | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    if (!path || !diffable) {
-      setDiff(null);
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    void window.tet.repository.diff(projectId, path, { ignoreWhitespace }).then((result) => {
-      if (cancelled) {
-        return;
-      }
-      if (result.error) {
-        notify("error", `${result.path}: ${result.error}`);
-      }
-      setDiff(result);
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, path, version, ignoreWhitespace, diffable, savedAt]);
-  return { diff, loading };
-}
-
-/**
- * The file as it is on disk, read only while `wanted`. Not keyed on the repository state: a change
- * from outside is folded into the open editor model in place, and a save updates what is held
- * here — hence `setFile`.
+ * The file as it is on disk and as HEAD has it — the diff editor's two sides, in one read. Not
+ * keyed on the repository state: a change from outside is folded into the open models in place,
+ * and a save updates what is held here — hence `setFile`.
  */
 function useFileContent(
   projectId: string,
-  path: string | null,
-  wanted: boolean
+  path: string | null
 ): { file: FileContent | null; setFile: Dispatch<SetStateAction<FileContent | null>>; loading: boolean } {
   const [file, setFile] = useState<FileContent | null>(null);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
-    if (!path || !wanted) {
+    if (!path) {
       setFile(null);
       return;
     }
@@ -433,7 +339,7 @@ function useFileContent(
     return () => {
       cancelled = true;
     };
-  }, [projectId, path, wanted]);
+  }, [projectId, path]);
   return { file, setFile, loading };
 }
 

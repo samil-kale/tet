@@ -71,8 +71,9 @@ async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void
 }
 
 /**
- * Options shared by every editor, matched to the diff view: `.diff-body`'s 13px/18px font
- * metrics, no bracket-pair colors, no suggestions, no sticky scroll, no minimap.
+ * Options for the one editor the dialog has, 13px/18px and stripped of everything a code editor
+ * offers that this one does not: no bracket-pair colors, no suggestions, no sticky scroll, no
+ * minimap. The diff half is `diffEditorOptions`; both go into the same construction call.
  */
 export function editorOptions(fontFamily: string): Record<string, unknown> {
   return {
@@ -91,5 +92,30 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
     scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
     quickSuggestions: false,
     wordBasedSuggestions: "off"
+  };
+}
+
+/**
+ * The diff half of the same editor. Inline, never two columns — a side-by-side text diff is one of
+ * the things the git half deliberately does not do — and the whole file rather than hunks, which is
+ * what leaves the overview ruler beside the scrollbar as the way to find the changes: it is drawn
+ * into its own strip there, and a click on it scrolls like a click on the scrollbar itself.
+ *
+ * Whitespace-only differences never count (`ignoreTrimWhitespace`, monaco's own default), and the
+ * hunk boundaries are monaco's (`advanced`), not git's. What is left at its default on purpose:
+ * `renderGutterMenu`, whose "Revert Block" button takes one block back in the editor — a save away
+ * from disk, and never a git discard; `maxFileSize`, 50 MB and below the 4 MB both sides are read
+ * under anyway; and `renderMarginRevertIcon`, which inline mode ignores outright.
+ */
+export function diffEditorOptions(): Record<string, unknown> {
+  return {
+    renderSideBySide: false,
+    ignoreTrimWhitespace: true,
+    diffAlgorithm: "advanced",
+    hideUnchangedRegions: { enabled: false },
+    renderOverviewRuler: true,
+    renderIndicators: true,
+    originalEditable: false,
+    diffCodeLens: false
   };
 }

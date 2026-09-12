@@ -12,11 +12,9 @@ import type {
   AppInfo,
   AppSettings,
   CheckoutTarget,
-  DiffOptions,
   ExplorerListing,
   ExplorerSettings,
   FileContent,
-  FileDiff,
   FileWriteResult,
   GitActionResult,
   ListRepositoriesResult,
@@ -433,24 +431,6 @@ export function registerIpc({
     "repo:set-explorer-setting",
     (repository, key: keyof ExplorerSettings, value: ExplorerSettings[keyof ExplorerSettings]) =>
       repository.setExplorerSetting(key, value)
-  );
-
-  ipcMain.handle(
-    "repo:diff",
-    async (_event, projectId: string, filePath: string, options: DiffOptions): Promise<FileDiff> => {
-      const repository = repositories.get(projectId);
-      if (!repository) {
-        return { path: filePath, lines: [], binary: false, truncated: false, error: MISSING_REPOSITORY.error };
-      }
-      return repository.diff(filePath, options);
-    }
-  );
-
-  ipcMain.handle(
-    "repo:file-lines",
-    async (_event, projectId: string, filePath: string, from: number, to: number): Promise<string[]> => {
-      return (await repositories.get(projectId)?.fileLines(filePath, from, to)) ?? [];
-    }
   );
 
   ipcMain.handle("repo:explorer", async (_event, projectId: string): Promise<ExplorerListing> => {

@@ -37,8 +37,8 @@ header at each change of writer.
 
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI (tab
 semantics, close actions, theme names, the sash) — the classic layout and Dark Modern's palette,
-not the pill-shaped Modern UI. **Monaco** is the diff dialog's file editor only; the diff itself
-is `DiffView`'s own unified render. Not adopted: Octokit/GitBeaker for the providers.
+not the pill-shaped Modern UI. **Monaco** is the diff dialog, diff and editor in one widget. Not
+adopted: Octokit/GitBeaker for the providers.
 
 ## The layout
 
@@ -158,18 +158,25 @@ the add-repository dialog's `CloneAuth` acts on; the per-variable reasons are in
 
 ### The diff and the editor
 
-A diff is read with `--ignore-all-space` only while the dialog's whitespace toggle is on, and
-synthesised for an untracked file. Unfolding a gap asks `repo:file-lines` for exactly those lines
-from the working tree. An image is not "Binary file.": `readDiff` hands both versions to the
-renderer as data URLs, shown side by side or as an onion-skin overlay; SVG stays text.
+**The diff and the editor are one widget**: monaco's diff editor inline, its right-hand side
+editable (`DiffEditor.tsx`, `diffEditorOptions` in `editor.ts`). tet never diffs — the whole file
+stands there with monaco's marks and monaco's hunk boundaries, whitespace-only changes never
+counted, and the overview ruler beside the scrollbar is how a change is found: monaco's own strip,
+and a click on it scrolls there. What tet brings is the two texts, in one read
+(`Repository.readFile`): the working tree's, and HEAD's through
+`readHeadBlob` — `git cat-file --filters`, not `show`, so the checkout filters and the eol
+conversion are applied and the text reads like the file (pinned in `git.test.ts`). A path HEAD
+lacks is `missing`, not an error, and diffs as all new; a file git reports no change to gets no
+HEAD side and is its own original, which is a plain editor. An image is not "Binary file.": both
+versions travel as data URLs and `ImageView` lays them side by side or over each other.
 
-The diff dialog doubles as a plain code editor (`CodeEditor.tsx`, one Monaco model for the
-dialog's whole time on that file). `monaco-core.ts` reproduces `editor.main.js`'s import list
-minus every language and language service — re-diff it on a monaco upgrade. Coloring goes through
-the **same shiki instance and theme the diff view uses** (`ensureLanguage` in `editor.ts`). Saving
-goes through `Repository.writeFile`, guarded by the mtime the file was read at. Keybindings are a
-curated preset (`keybinding-presets.ts`, chosen in Settings → Files) over tet's own defaults
-(`keybindings.ts`): no chords, no provider-dependent commands, no format command.
+`monaco-core.ts` reproduces `editor.main.js`'s import list minus every language and language
+service — re-diff it on a monaco upgrade. Coloring goes through shiki (`ensureLanguage`), and the
+diff's own colors reach monaco only through `buildMonacoColors`: monaco writes its own
+`--vscode-*` block onto `.monaco-editor`, shadowing `:root` inside the widget. Saving goes through
+`Repository.writeFile`, guarded by the mtime the file was read at; a deleted, binary or too-large
+file is read-only. Keybindings are a curated preset (`keybinding-presets.ts`, Settings → Files)
+over tet's own defaults (`keybindings.ts`): no chords, no provider-dependent commands, no format.
 
 ### Where we follow GitHub Desktop rather than git's default
 
@@ -294,8 +301,8 @@ Every pane that can be slow carries its own `.progress-bar` showing only what is
 `position: relative`. **Never add a second bar inside one pane** — a new slow reason there feeds
 the one it already has. Today: each terminal pane (`Pane`'s `showProgress`, from
 `TerminalDescriptor.starting`; the bootstrap listing falls to pane "a"), the git pane's two
-sections (`branch.busy` under BRANCHES, `acting` under LOCAL CHANGES), the diff dialog
-(`DiffView`'s `onBusy`) and its changes list.
+sections (`branch.busy` under BRANCHES, `acting` under LOCAL CHANGES), the diff dialog (reading
+the file and building the editor) and its changes list.
 
 **A spinner in place of an icon is not a second one of these.** A spinner is about the one thing
 the icon stands for, and takes its place — a tab's agent icon while its session works a turn. An
@@ -634,9 +641,10 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   the changes list's status letters (`gitDecoration-*`) and the error mark
   (`--vscode-errorForeground`) — both colours Dark Modern already names for that meaning.
 - Colors come from `--vscode-*` variables only (`src/renderer/themes/`); add a new variable under
-  VS Code's own name rather than hardcoding. Exception: the diff's syntax colors, which Shiki
-  hands back per token (`diff-highlight.ts`). Shiki's editor-surface colors are patched with
-  those variables at load (`buildShikiColors`) and monaco takes its theme from shiki's.
+  VS Code's own name rather than hardcoding. Exception: the syntax colors, which Shiki hands back
+  per token (`diff-highlight.ts`). Shiki's editor-surface colors are patched with those variables
+  at load (`buildShikiColors`), monaco takes its theme from shiki's, and what shiki has no notion
+  of — the chrome and every diff color — is added over it from `buildMonacoColors`.
 - **A theme is one stylesheet in `src/renderer/themes/<id>.css`** — a `:root[data-theme="<id>"]`
   block naming the **complete** variable list (`pieces.test.ts` holds the lists equal; Dark
   Modern doubles as the bare `:root`) — plus an entry in `src/shared/themes.ts` for what lives
