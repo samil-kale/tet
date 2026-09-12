@@ -24,16 +24,16 @@
 
 ---
 
-## Simple and lightweight
+## Lightweight by design
 
 Use Claude Code, Codex, OpenCode or Pi, or all four together.
 
-TET deliberately does few things. Git is for navigation and control; the work happens in the
-terminals. If a git task cannot be done in two clicks, I leave it to an agent or a shell.
+TET deliberately does only a few things. Tasks that take one or two clicks belong in TET.
+For everything else, you have an agent or a shell. The agent does the work; Git is for navigation
+and control.
 
-The agents are their real CLIs, not a chat UI around them.
-
-**TET never changes your agents configurations nor does it install plugins.**
+TET gives you the real agent CLIs, with a few quality-of-life features around them. It never
+changes your agents' configuration or installs plugins.
 
 ---
 
