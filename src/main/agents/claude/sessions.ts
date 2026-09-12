@@ -88,13 +88,16 @@ async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
   }
 }
 
+/** No project directory and no transcript both mean the session is already gone — resolved, not
+ *  rejected, per SessionProvider.remove. A transcript can disappear behind tet's back, and the
+ *  tab still holding its id was then unclosable. */
 async function removeIn(root: string, cwd: string, sessionId: string): Promise<void> {
   const projectDir = await findProjectDir(root, cwd);
   if (!projectDir) {
-    throw new Error("Claude project directory not found");
+    return;
   }
   const filePath = path.join(projectDir, `${sessionId}.jsonl`);
-  await fs.promises.rm(filePath);
+  await fs.promises.rm(filePath, { force: true });
   // Claude Code keeps subagent transcripts and tool results beside it under the same id.
   await fs.promises.rm(path.join(projectDir, sessionId), { recursive: true, force: true });
   scanCache.delete(filePath);

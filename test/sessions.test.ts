@@ -98,6 +98,8 @@ describe("Claude Code's transcripts", () => {
     fs.mkdirSync(path.join(dir, "s", "subagents"), { recursive: true });
     await claudeSessionProvider.remove("claude", cwd, "s");
     assert.deepEqual(fs.readdirSync(dir), []);
+    // A session that is already gone resolves — see SessionProvider.remove.
+    await claudeSessionProvider.remove("claude", cwd, "s");
     await assert.rejects(claudeSessionProvider.rename("claude", cwd, "s", "  "), /non-empty/);
   });
 
@@ -296,7 +298,8 @@ describe("pi's transcripts", () => {
     await assert.rejects(piSessionProvider.rename("pi", cwd, "s1", "  "), /non-empty/);
     await piSessionProvider.remove("pi", cwd, "s1");
     assert.deepEqual(fs.readdirSync(dir), []);
-    await assert.rejects(piSessionProvider.remove("pi", cwd, "s1"), /not found/);
+    // A session that is already gone resolves — see SessionProvider.remove.
+    await piSessionProvider.remove("pi", cwd, "s1");
   });
 
   it("skips a .jsonl that is no pi transcript, and reads past a broken line", async () => {

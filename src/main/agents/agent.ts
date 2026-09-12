@@ -71,7 +71,10 @@ export interface SessionProvider {
   list(executable: string, cwd: string): Promise<AgentSessionInfo[]>;
   /** CLI args that open the given session. */
   resumeArgs(sessionId: string): string[];
-  /** Permanently deletes the session. Rejects on failure (caller surfaces the error). */
+  /** Permanently deletes the session. Rejects on failure (caller surfaces the error) — but a
+   *  session that is already gone is not a failure and must resolve: a tab whose removal rejects
+   *  is put back (ProjectSessionManager.destroyTab), so one bound to a vanished session could
+   *  never be closed. */
   remove(executable: string, cwd: string, sessionId: string): Promise<void>;
   /** Renames the session's persisted title. Rejects on failure (caller surfaces the error). */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;

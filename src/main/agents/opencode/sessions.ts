@@ -96,11 +96,19 @@ export const opencodeSessionProvider: SessionProvider = {
 
   /** `opencode session delete`, run where the session is — the record says whether that is a
    *  sandbox. The record goes whatever opencode said: a session whose sandbox was removed is
-   *  gone with it, and the record is all that is left. */
+   *  gone with it, and the record is all that is left.
+   *
+   *  A session opencode no longer knows is already deleted — resolved, not rejected, per
+   *  SessionProvider.remove. Measured (1.18.4): `session delete <unknown id>` exits 1 with
+   *  `Session not found: <id>` on stderr. */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     const dir = recordsDir(cwd);
     try {
       await runOpencode(executable, cwd, sessionSandbox(cwd, sessionId), ["session", "delete", sessionId]);
+    } catch (error) {
+      if (!String(error).includes("Session not found")) {
+        throw error;
+      }
     } finally {
       if (dir) {
         fs.rmSync(path.join(dir, `${sessionId}.json`), { force: true });

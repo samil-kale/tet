@@ -102,14 +102,20 @@ async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
   }
 }
 
+/** No session directory and no transcript both mean the session is already gone — resolved, not
+ *  rejected, per SessionProvider.remove. A transcript can disappear behind tet's back, and the
+ *  tab still holding its id was then unclosable. */
 async function removeIn(root: string, cwd: string, sessionId: string): Promise<void> {
   const dir = await findSessionDir(root, cwd);
   if (!dir) {
-    throw new Error("pi session directory not found");
+    return;
   }
   const filePath = await findSessionFile(dir, sessionId);
+  if (!filePath) {
+    return;
+  }
   // Nothing beside the transcript: pi keeps no per-session directory.
-  await fs.promises.rm(filePath);
+  await fs.promises.rm(filePath, { force: true });
   headCache.delete(filePath);
   scanCache.delete(filePath);
 }
@@ -130,6 +136,9 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
     throw new Error("pi session directory not found");
   }
   const filePath = await findSessionFile(dir, sessionId);
+  if (!filePath) {
+    throw new Error("pi session not found");
+  }
   // The whole file, not just its tail: the new entry's id has to be unique across all of it (pi
   // keys its tree by id), and a rename is a rare, user-initiated action.
   const text = await fs.promises.readFile(filePath, "utf8");
@@ -182,7 +191,8 @@ function findSessionDir(root: string, cwd: string): Promise<string | undefined> 
 
 /** The transcript holding a session, by the uuid in its filename — or, for a file pi renamed or
  *  forked into place, by the header's id. */
-async function findSessionFile(dir: string, sessionId: string): Promise<string> {
+/** Undefined when no transcript carries this id — a removal takes that for "already gone". */
+async function findSessionFile(dir: string, sessionId: string): Promise<string | undefined> {
   const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
   const named = files.find((file) => file.endsWith(`_${sessionId}.jsonl`));
   if (named) {
@@ -195,7 +205,7 @@ async function findSessionFile(dir: string, sessionId: string): Promise<string> 
       return filePath;
     }
   }
-  throw new Error("pi session not found");
+  return undefined;
 }
 
 /** Drops the caches of transcripts that are gone — a session deleted by pi itself. */

@@ -123,6 +123,18 @@ export async function renameThread(executable: string, cwd: string, threadId: st
   await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } }, home);
 }
 
+/**
+ * A thread whose rollout is gone is already deleted — resolved, not rejected, per
+ * SessionProvider.remove. Measured (codex-cli 0.154.0): `thread/delete` for an unknown id answers
+ * `-32600 no rollout found for thread id <id>`. Matched on the message because -32600 is the
+ * generic "invalid request"; should the wording change, the worst is today's behaviour back.
+ */
 export async function deleteThread(executable: string, cwd: string, threadId: string, home?: string): Promise<void> {
-  await callAppServer(executable, cwd, { method: "thread/delete", params: { threadId } }, home);
+  try {
+    await callAppServer(executable, cwd, { method: "thread/delete", params: { threadId } }, home);
+  } catch (error) {
+    if (!String(error).includes("no rollout found")) {
+      throw error;
+    }
+  }
 }
