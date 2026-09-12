@@ -684,7 +684,8 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 When asked for a release, run it:
 
 1. Write the release's section at the top of `CHANGELOG.md` — `## <version> (<date>)`, then one
-   bullet per change a user would notice, read off `git log <last tag>..HEAD`. Say what changed
+   bullet per change a user would notice, read off `git log <last tag>..HEAD`. Keep each bullet
+   short: a bold title of a few words, then a sentence or two of explanation. Say what changed
    for the user, not what the commits say; leave out refactors, docs and fixes to unreleased
    work. Commit it on its own (`changelog for <version>`).
 2. `npm version patch` (or `minor` / `major`), then `git push && git push --tags`.
