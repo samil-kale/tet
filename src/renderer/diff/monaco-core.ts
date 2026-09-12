@@ -22,7 +22,7 @@ import "monaco-editor/editor/browser/widget/diffEditor/diffEditor.contribution.j
 import "monaco-editor/editor/contrib/diffEditorBreadcrumbs/browser/contribution.js";
 import "monaco-editor/editor/contrib/dnd/browser/dnd.js";
 import "monaco-editor/features/find/register.js";
-import "monaco-editor/editor/contrib/floatingMenu/browser/floatingMenu.contribution.js";
+// floatingMenu.contribution.js left out: nothing in monaco contributes to MenuId.EditorContent.
 import "monaco-editor/editor/contrib/folding/browser/folding.js";
 import "monaco-editor/editor/contrib/fontZoom/browser/fontZoom.js";
 import "monaco-editor/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js";
@@ -34,14 +34,14 @@ import "monaco-editor/editor/contrib/linesOperations/browser/linesOperations.js"
 import "monaco-editor/editor/contrib/links/browser/links.js";
 import "monaco-editor/editor/contrib/longLinesHelper/browser/longLinesHelper.js";
 import "monaco-editor/editor/contrib/multicursor/browser/multicursor.js";
-import "monaco-editor/editor/contrib/placeholderText/browser/placeholderText.contribution.js";
-// standaloneCommandsQuickAccess.js (F1's command palette) deliberately left out.
-import "monaco-editor/editor/standalone/browser/quickAccess/standaloneHelpQuickAccess.js";
-import "monaco-editor/editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js";
+// placeholderText.contribution.js left out: no editor here sets a placeholder.
+// standaloneCommandsQuickAccess.js (F1's command palette) deliberately left out, and with it
+// standaloneHelpQuickAccess.js, which would only list go-to-line; standaloneGotoSymbolQuickAccess.js
+// needs a document symbol provider, which only a language service registers.
 import "monaco-editor/editor/contrib/readOnlyMessage/browser/contribution.js";
 import "monaco-editor/editor/contrib/sectionHeaders/browser/sectionHeaders.js";
 import "monaco-editor/editor/contrib/smartSelect/browser/smartSelect.js";
-import "monaco-editor/editor/contrib/snippet/browser/snippetController2.js";
+// snippetController2.js left out: snippets only arrive through suggestions, which are off.
 import "monaco-editor/editor/contrib/toggleTabFocusMode/browser/toggleTabFocusMode.js";
 import "monaco-editor/editor/contrib/tokenization/browser/tokenization.js";
 import "monaco-editor/editor/contrib/unicodeHighlighter/browser/unicodeHighlighter.js";

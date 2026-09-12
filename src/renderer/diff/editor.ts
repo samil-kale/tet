@@ -1,11 +1,12 @@
 import { buildMonacoColors } from "../terminal/theme";
 import { highlighter, loadGrammar, THEME } from "./diff-highlight";
+import type { languages } from "monaco-editor";
 import type { HighlighterCore } from "shiki/core";
 
 /**
  * `monaco-core.ts`, not monaco's `editor.main`: colouring goes through the diff view's shiki
- * instance (`@shikijs/monaco`), so no language or language service is loaded. Nothing here is
- * evaluated until an editor is opened.
+ * instance (`@shikijs/monaco`), so no language service is loaded and no Monarch tokenizer is
+ * registered. Nothing here is evaluated until an editor is opened.
  */
 export type Monaco = typeof import("./monaco-core");
 
@@ -24,6 +25,53 @@ export function loadMonaco(): Promise<Monaco> {
   return monacoPromise;
 }
 
+/**
+ * Comment tokens, brackets, auto-closing pairs, on-enter rules and folding markers per grammar
+ * (`GRAMMARS` in diff-highlight.ts), read off monaco's own language definitions: shiki only
+ * colours, and without these toggle comment, bracket matching and auto-closing do nothing. Spelled
+ * out per import for esbuild, like `GRAMMARS`; a grammar monaco has no definition for gets none.
+ */
+const LANGUAGE_CONFIGURATIONS: Record<string, () => Promise<{ conf: languages.LanguageConfiguration }>> = {
+  bat: () => import("monaco-editor/languages/definitions/bat/bat.js"),
+  c: () => import("monaco-editor/languages/definitions/cpp/cpp.js"),
+  cpp: () => import("monaco-editor/languages/definitions/cpp/cpp.js"),
+  csharp: () => import("monaco-editor/languages/definitions/csharp/csharp.js"),
+  css: () => import("monaco-editor/languages/definitions/css/css.js"),
+  dart: () => import("monaco-editor/languages/definitions/dart/dart.js"),
+  docker: () => import("monaco-editor/languages/definitions/dockerfile/dockerfile.js"),
+  go: () => import("monaco-editor/languages/definitions/go/go.js"),
+  graphql: () => import("monaco-editor/languages/definitions/graphql/graphql.js"),
+  html: () => import("monaco-editor/languages/definitions/html/html.js"),
+  ini: () => import("monaco-editor/languages/definitions/ini/ini.js"),
+  java: () => import("monaco-editor/languages/definitions/java/java.js"),
+  javascript: () => import("monaco-editor/languages/definitions/javascript/javascript.js"),
+  jsx: () => import("monaco-editor/languages/definitions/javascript/javascript.js"),
+  kotlin: () => import("monaco-editor/languages/definitions/kotlin/kotlin.js"),
+  less: () => import("monaco-editor/languages/definitions/less/less.js"),
+  lua: () => import("monaco-editor/languages/definitions/lua/lua.js"),
+  markdown: () => import("monaco-editor/languages/definitions/markdown/markdown.js"),
+  "objective-c": () => import("monaco-editor/languages/definitions/objective-c/objective-c.js"),
+  "objective-cpp": () => import("monaco-editor/languages/definitions/objective-c/objective-c.js"),
+  perl: () => import("monaco-editor/languages/definitions/perl/perl.js"),
+  php: () => import("monaco-editor/languages/definitions/php/php.js"),
+  powershell: () => import("monaco-editor/languages/definitions/powershell/powershell.js"),
+  proto: () => import("monaco-editor/languages/definitions/protobuf/protobuf.js"),
+  python: () => import("monaco-editor/languages/definitions/python/python.js"),
+  r: () => import("monaco-editor/languages/definitions/r/r.js"),
+  ruby: () => import("monaco-editor/languages/definitions/ruby/ruby.js"),
+  rust: () => import("monaco-editor/languages/definitions/rust/rust.js"),
+  scala: () => import("monaco-editor/languages/definitions/scala/scala.js"),
+  scss: () => import("monaco-editor/languages/definitions/scss/scss.js"),
+  shellscript: () => import("monaco-editor/languages/definitions/shell/shell.js"),
+  sql: () => import("monaco-editor/languages/definitions/sql/sql.js"),
+  swift: () => import("monaco-editor/languages/definitions/swift/swift.js"),
+  terraform: () => import("monaco-editor/languages/definitions/hcl/hcl.js"),
+  tsx: () => import("monaco-editor/languages/definitions/typescript/typescript.js"),
+  typescript: () => import("monaco-editor/languages/definitions/typescript/typescript.js"),
+  xml: () => import("monaco-editor/languages/definitions/xml/xml.js"),
+  yaml: () => import("monaco-editor/languages/definitions/yaml/yaml.js")
+};
+
 /** Languages already wired into monaco. */
 const registered = new Set<string>();
 /** Whether `applyChrome` has run and still stands — false again after `shikiToMonaco` re-themes. */
@@ -39,8 +87,11 @@ let chromeApplied = false;
 export async function ensureLanguage(monaco: Monaco, language: string | null): Promise<void> {
   const shiki = await highlighter();
   if (language && !registered.has(language)) {
-    await loadGrammar(shiki, language);
+    const [, definition] = await Promise.all([loadGrammar(shiki, language), LANGUAGE_CONFIGURATIONS[language]?.()]);
     monaco.languages.register({ id: language });
+    if (definition) {
+      monaco.languages.setLanguageConfiguration(language, definition.conf);
+    }
     registered.add(language);
     const { shikiToMonaco } = await import("@shikijs/monaco");
     // @shikijs/monaco is typed against `monaco-editor-core`, not `monaco-editor`'s re-export of
