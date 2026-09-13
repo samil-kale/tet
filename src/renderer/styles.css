@@ -1010,8 +1010,14 @@ textarea:focus {
   background: var(--vscode-editor-background);
 }
 
-.editor-tab.hidden {
-  visibility: hidden;
+/* Descendants too, and `!important`: monaco's diff editor writes `visibility: visible` inline on
+   both of its editors (for its accessible diff viewer), which would show them through a hidden
+   ancestor. */
+.editor-tab.hidden,
+.editor-tab.hidden *,
+.editor-frame.hidden,
+.editor-frame.hidden * {
+  visibility: hidden !important;
 }
 
 /* The file below the bar: a placeholder or the image view in flow, the editor's frame over them. */
@@ -1028,10 +1034,6 @@ textarea:focus {
 .editor-frame {
   position: absolute;
   inset: 0;
-}
-
-.editor-frame.hidden {
-  visibility: hidden;
 }
 
 /* Where monaco mounts itself. Not clipped with `overflow: hidden`: monaco contains its own

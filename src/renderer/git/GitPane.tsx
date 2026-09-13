@@ -1,18 +1,20 @@
-import { memo, useRef, useState } from "react";
+// TRIAL: the EXPLORER section is commented out to see whether the pane does without it; restore
+// everything marked TRIAL to bring it back.
+import { memo, /* TRIAL: useRef, */ useState } from "react";
 import type { Project, RepositoryState } from "../../shared/types";
 import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommit, ChangesList, confirmDiscard, type FileAct } from "./ChangesList";
-import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
+// TRIAL: import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { notify } from "../ui/Notices";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  CollapseAllIcon,
+  // TRIAL: CollapseAllIcon,
   CommitIcon,
   DiscardIcon,
-  NewFileIcon,
-  NewFolderIcon,
+  // TRIAL: NewFileIcon,
+  // TRIAL: NewFolderIcon,
   StashIcon,
   SyncIcon
 } from "../ui/icons";
@@ -67,15 +69,15 @@ export const GitPane = memo(function GitPane({
   branch,
   treeHeight,
   onTreeHeight,
-  changesHeight,
-  onChangesHeight,
-  onOpenDiff,
-  openPath
+  // TRIAL: changesHeight,
+  // TRIAL: onChangesHeight,
+  onOpenDiff
+  // TRIAL: openPath
 }: GitPaneProps) {
   const { acting, act } = useFileAct(project.id);
-  const { acting: explorerActing, act: explorerAct } = useFileAct(project.id);
-  const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes);
-  const explorerRef = useRef<ExplorerHandle>(null);
+  // TRIAL: const { acting: explorerActing, act: explorerAct } = useFileAct(project.id);
+  // TRIAL: const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes);
+  // TRIAL: const explorerRef = useRef<ExplorerHandle>(null);
 
   // Fetch, pull and push share the one action slot a discard or a stash uses.
   const remote = state.remotes[0]?.name;
@@ -127,15 +129,17 @@ export const GitPane = memo(function GitPane({
         <BranchTree projectId={project.id} state={state} branch={branch} />
       </div>
       {/* Both sashes clamp against the whole pane, so what the other side needs is the fixed
-          section beyond them plus the floor of the one that grows. */}
+          section beyond them plus the floor of the one that grows.
+          TRIAL: minOther={changesHeight + MIN_PANE_HEIGHT} */}
       <Sash
         orientation="horizontal"
         size={treeHeight}
         min={MIN_PANE_HEIGHT}
-        minOther={changesHeight + MIN_PANE_HEIGHT}
+        minOther={MIN_PANE_HEIGHT}
         onResize={onTreeHeight}
       />
-      <div className="section" style={{ height: changesHeight }}>
+      {/* TRIAL: <div className="section" style={{ height: changesHeight }}> */}
+      <div className="section grows">
         <div className="section-header">
           <span>
             LOCAL CHANGES <span className="count-badge">({state.changes.length})</span>
@@ -175,6 +179,7 @@ export const GitPane = memo(function GitPane({
         </div>
         <ChangesList project={project} state={state} act={act} onOpenDiff={onOpenDiff} />
       </div>
+      {/* TRIAL: the EXPLORER section
       <Sash
         orientation="horizontal"
         size={changesHeight}
@@ -213,11 +218,11 @@ export const GitPane = memo(function GitPane({
               <CollapseAllIcon />
             </button>
           </span>
-          {/* This section's own bar — the listing, and the tree's own edits. */}
+          // This section's own bar — the listing, and the tree's own edits.
           {(listing || explorerActing) && <ProgressBar />}
         </div>
-        {/* Keyed by project: one mounted tree serves every project, and its fold and filter state
-            is keyed by paths that repeat across repositories. */}
+        // Keyed by project: one mounted tree serves every project, and its fold and filter state
+        // is keyed by paths that repeat across repositories.
         <Explorer
           key={project.id}
           ref={explorerRef}
@@ -229,6 +234,7 @@ export const GitPane = memo(function GitPane({
           onExplorerChanged={refreshExplorer}
         />
       </div>
+      */}
     </div>
   );
 });
