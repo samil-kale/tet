@@ -50,6 +50,30 @@ const cliConfig = {
   format: "cjs"
 };
 
+/** The `tet` command npm puts on PATH (package.json's `bin`): starts electron with the app. Plain
+ *  node like the CLI above, run by the node that npm installed it for. */
+/** @type {import('esbuild').BuildOptions} */
+const launcherConfig = {
+  ...common,
+  entryPoints: [path.join(__dirname, "src", "cli", "tet.ts")],
+  outfile: path.join(dist, "tet.js"),
+  platform: "node",
+  target: "node22",
+  format: "cjs",
+  banner: { js: "#!/usr/bin/env node" }
+};
+
+/** The update that runs once tet has quit (src/main/auto-update.ts), under the same plain node. */
+/** @type {import('esbuild').BuildOptions} */
+const updaterConfig = {
+  ...common,
+  entryPoints: [path.join(__dirname, "src", "cli", "tet-update.ts")],
+  outfile: path.join(dist, "tet-update.js"),
+  platform: "node",
+  target: "node22",
+  format: "cjs"
+};
+
 /** @type {import('esbuild').BuildOptions} */
 const preloadConfig = {
   ...common,
@@ -112,9 +136,24 @@ function copyStaticAssets() {
 }
 
 async function build() {
+  // What npm publishes is dist/ whole (package.json's `files`), so a production build must not
+  // carry a development build's source maps along.
+  if (production) {
+    fs.rmSync(dist, { recursive: true, force: true });
+  }
   copyStaticAssets();
 
-  const configs = [mainConfig, gitHostConfig, cliConfig, preloadConfig, rendererConfig, editorWorkerConfig, testConfig];
+  const configs = [
+    mainConfig,
+    gitHostConfig,
+    cliConfig,
+    launcherConfig,
+    updaterConfig,
+    preloadConfig,
+    rendererConfig,
+    editorWorkerConfig,
+    testConfig
+  ];
   if (watch) {
     const contexts = await Promise.all(configs.map((config) => esbuild.context(config)));
     await Promise.all(contexts.map((context) => context.watch()));

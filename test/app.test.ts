@@ -69,8 +69,8 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     if (process.platform === "linux") {
       // The GitHub-hosted ubuntu-latest runner ships chrome-sandbox without the setuid bit, and
       // its AppArmor profile also blocks the unprivileged-userns fallback — Electron aborts on
-      // launch rather than run unsandboxed. Only this test's own driving of the app is affected;
-      // a real install's chrome-sandbox has normal permissions.
+      // launch rather than run unsandboxed. The `tet` command passes the same flag on Linux for
+      // the same reason (launchArgs in src/shared/launch.ts).
       args.push("--no-sandbox");
     }
     child = spawn(electronPath, args, {

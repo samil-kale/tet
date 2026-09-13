@@ -11,14 +11,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/samil-kale/tet/releases/latest"><img src="https://img.shields.io/github/v/release/samil-kale/tet?style=flat-square&color=blue" alt="Release"></a>
+  <a href="https://www.npmjs.com/package/tet-ide"><img src="https://img.shields.io/npm/v/tet-ide?style=flat-square&color=blue" alt="npm"></a>
   <a href="https://github.com/samil-kale/tet/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/samil-kale/tet/build.yml?style=flat-square&label=build" alt="Build"></a>
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat-square" alt="Platform">
 </p>
 
 <p align="center">
-  <a href="https://github.com/samil-kale/tet/releases/latest"><strong>Download</strong></a> &bull;
+  <a href="#install"><strong>Install</strong></a> &bull;
   <a href="#get-started"><strong>Build from source</strong></a>
 </p>
 
@@ -80,11 +80,18 @@ straight into an agent session.
 
 ## Get started
 
-### Download
+### Install
 
-**[Download the latest release](https://github.com/samil-kale/tet/releases/latest)** for Windows,
-Linux (AppImage or `.deb`) or macOS. Windows and AppImage builds install updates when you quit the
-app. Updates are never forced while terminal sessions are running.
+TET is installed with npm, on Windows, macOS and Linux alike (Node.js 22 or newer):
+
+```bash
+npm install -g tet-ide
+tet
+```
+
+The first start downloads Electron once. When a new version is out, TET tells you and installs it
+after you quit, never while terminal sessions are running. On Linux, TET runs without Chromium's
+sandbox, which a package manager cannot set up.
 
 ### Build from source
 

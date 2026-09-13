@@ -26,8 +26,8 @@ sites: session listing/resume/rename/delete and the reconcile loop (`src/main/ag
 plugin that writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — TET never
 runs an opencode server, never reads its SQLite file, and runs its CLI only for one-off actions);
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
-(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs and where a click on
-one arrives, with no CLSID of tet's own; the `background_tasks` stop guard (`src/main/main.ts`,
+(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs, named in the registry for want of a
+shortcut (`src/main/toast-identity.ts`), and where a click on one arrives, with no CLSID of tet's own; the `background_tasks` stop guard (`src/main/main.ts`,
 `src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
 
 An agent gets no editor context and no quick fix. What it gets is the shell transcript
@@ -692,8 +692,14 @@ When asked for a release, run it:
 
 `npm version` bumps `package.json` and tags in one step, and refuses on a dirty tree — hence the
 changelog commit first. The tag push triggers `.github/workflows/build.yml`, which takes the
-version's section of `CHANGELOG.md` as the release notes, builds all three platforms and
-publishes to a GitHub Release; the repo is public so `electron-updater` (`src/main/auto-update.ts`)
-can read releases without a token. Windows and Linux (AppImage) auto-install on the next quit —
-never forced, since a terminal tab is a live agent session. macOS and the `.deb` build only get a
-notice linking to the release.
+version's section of `CHANGELOG.md` as the release notes of a GitHub Release, runs the tests on
+all three platforms and publishes the `tet-ide` package to npm (`NPM_TOKEN` secret).
+
+**tet ships through npm and nothing else** — no installer, no bundle (Sophos blocked the NSIS
+setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.ts`) starts
+electron with the package and hands it `--tet-node=<node>` (`src/shared/launch.ts`): that argument
+is how the app tells an install from `npm start`, and the node is what the update runs under. On
+macOS the command renames electron's bundle to TET and re-signs it ad hoc; on Linux it passes
+`--no-sandbox`. An update (`src/main/auto-update.ts`) is found on npm's registry and installed by
+`src/cli/tet-update.ts` once tet has quit — never mid-session, a terminal tab being a live agent
+session.

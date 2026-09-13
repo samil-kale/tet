@@ -135,7 +135,7 @@ export function logSlow(activity: Activity, ms: number): void {
 
 /**
  * Records how long the main process's event loop is blocked and what was running when it was.
- * Writes to a file and nowhere else: the app is normally started from a shortcut, where stdout
+ * Writes to a file and nowhere else: the `tet` command starts the app detached, where stdout
  * goes nowhere. Runs in every session rather than behind a switch — by the time a stall is worth
  * investigating, the run that produced it is over. A sample every 20ms is the price.
  */

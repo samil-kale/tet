@@ -7,9 +7,10 @@ import * as path from "node:path";
  * Puts the directories the agents actually land in on this process's PATH, at startup and on every
  * re-check of the requirements. Both halves of tet read `process.env.PATH`: the startup check
  * spawns `<agent> --version`, and every terminal derives its env from it (buildEnv). Idempotent,
- * and a call while one runs joins it rather than starting a second shell. Launched from the dock
- * or the Start menu, tet gets the OS's PATH for GUI programs, which the login shell has not yet
- * extended (nvm, Homebrew, `~/.local/bin` live in `.zshrc`/`.bashrc`).
+ * and a call while one runs joins it rather than starting a second shell. Started by its `tet`
+ * command, tet inherits the PATH of whatever ran that — a terminal's, but just as well a desktop
+ * launcher's, which the login shell has not yet extended (nvm, Homebrew, `~/.local/bin` live in
+ * `.zshrc`/`.bashrc`).
  *
  * On macOS/Linux the login shell's PATH *replaces* the inherited one (what was inherited and not in
  * it goes last): an npm-installed agent is a `#!/usr/bin/env node` shim, and with the shell's

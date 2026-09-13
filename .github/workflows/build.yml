@@ -1,6 +1,7 @@
-# The release: one runner per platform, since a dmg is only built on macOS, an AppImage and a
-# deb only on Linux, and node-pty's prebuilt binary is picked per platform as well. Publishing
-# straight to a GitHub Release is the only release path there is — a tag is what makes one.
+# The release: a tag makes one. tet ships as the `tet-ide` package on npm and nothing else — one
+# package for every platform, since electron fetches its own binary on first start and node-pty
+# carries prebuilt files for all of them. The tests still run on each platform before anything is
+# published; the GitHub Release carries the notes.
 name: Build
 
 on:
@@ -12,11 +13,10 @@ permissions:
   contents: write
 
 jobs:
-  # electron-builder's GitHub publisher creates the release for a tag if it doesn't find one
-  # yet, once per artifact — a macOS build alone already races itself over the .dmg and its
-  # .blockmap, and the three platforms publish as three concurrent jobs on top of that. Creating
-  # it here first, before any of them, means every "always" step below just finds it (matching
-  # what electron-builder itself would have named it — no "v", empty notes).
+  # The GitHub Release for the tag, named after the bare version (no "v"), as the installer
+  # releases before it were. Never marked latest: the installers up to 0.5.x ask GitHub's
+  # /releases/latest for their update, and a release without their files would leave them there
+  # for good instead of on 0.5.2, the last installer, which tells them to move to npm.
   prepare-release:
     runs-on: ubuntu-latest
     steps:
@@ -27,17 +27,15 @@ jobs:
         # The notes are the version's section of CHANGELOG.md, written by hand before the tag
         # (see "Releasing" in CLAUDE.md): everything between its "## <version>" heading and the
         # next one. A version without a section gets empty notes, as before.
-        # electron-builder names a release it creates itself after the bare version, no "v" —
-        # matched here so this pre-created one reads the same way.
         run: |
           version="${GITHUB_REF_NAME#v}"
           awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md --latest=false
 
-  build:
+  test:
     needs: prepare-release
     strategy:
-      # One platform failing must not take the other two installers with it.
+      # All three platforms report, even when one fails: a publish waits for every one of them.
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
@@ -70,6 +68,25 @@ jobs:
       - run: npm test
         if: runner.os != 'Linux'
 
-      - run: npm run dist -- --publish always
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # npm's provenance statement, which ties the published package to this workflow run.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      # prepublishOnly builds dist/ for production first; `files` in package.json is what goes in.
+      - run: npm publish --provenance --access public
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

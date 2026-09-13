@@ -1,110 +1,128 @@
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { app } from "electron";
-import { autoUpdater } from "electron-updater";
+import { app, net } from "electron";
+import { NPM_PACKAGE } from "../shared/launch";
+import type { UpdateResult } from "../shared/launch";
 import type { NoticeSeverity } from "../shared/types";
+import { installPrefix, isNewerVersion, isWritable } from "./npm-install";
 
-/** How often to check after the first, startup check. An update only installs at the start of the
- *  next launch, so nothing is urgent about finding one. */
+/** How often to look again after the check at startup. Nothing is urgent: an update installs only
+ *  once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
 
-const RELEASES_URL = "https://github.com/samil-kale/tet/releases/latest";
+const LATEST_URL = `https://registry.npmjs.org/${NPM_PACKAGE}/latest`;
+const MANUAL_COMMAND = `npm install -g ${NPM_PACKAGE}`;
 
-/** How long `installPendingUpdate` waits for the cached download to be re-validated before letting
- *  the app start: that costs only the small manifest fetch, never a re-download. */
-const PENDING_UPDATE_TIMEOUT_MS = 8000;
+/** The package tet runs from: main.js sits in its dist/. */
+const PACKAGE_DIR = path.join(__dirname, "..");
 
-/** The filename is the whole message: a reader never races a half-written file. */
-function pendingUpdateMarkerPath(): string {
-  return path.join(app.getPath("userData"), "update-pending-install");
+type Notify = (severity: NoticeSeverity, message: string) => void;
+
+/** Set by `startAutoUpdate`: the node to run the update under and the version it installs. */
+let node: string | undefined;
+let pendingVersion: string | undefined;
+
+function updateDir(): string {
+  return path.join(app.getPath("userData"), "update");
 }
 
-function canInstallOnThisPlatform(): boolean {
-  return process.platform === "win32" || Boolean(process.env.APPIMAGE);
+function resultPath(): string {
+  return path.join(updateDir(), "result.json");
 }
 
-/**
- * Installs an update that finished downloading in a previous session, before the first window
- * opens. Not through `autoInstallOnAppQuit`: its detached installer, spawned on quit and left
- * running after the app exited, raced a user reopening tet — which launched the not-yet-replaced
- * binary the installer then force-closed. Here no project or terminal exists yet to lose, and
- * quitAndInstall's own relaunch brings up the new version.
- *
- * Returns true if it quit the app to install; the caller must stop startup right there.
- */
-export async function installPendingUpdate(): Promise<boolean> {
-  if (!app.isPackaged) {
-    return false;
-  }
-  const marker = pendingUpdateMarkerPath();
-  if (!fs.existsSync(marker)) {
-    return false;
-  }
-  fs.rmSync(marker, { force: true });
-  if (!canInstallOnThisPlatform()) {
-    return false;
-  }
-
-  autoUpdater.autoDownload = true;
-  const downloaded = await new Promise<boolean>((resolve) => {
-    const settle = (result: boolean) => {
-      clearTimeout(timer);
-      resolve(result);
-    };
-    const timer = setTimeout(() => settle(false), PENDING_UPDATE_TIMEOUT_MS);
-    autoUpdater.once("update-downloaded", () => settle(true));
-    autoUpdater.once("update-not-available", () => settle(false));
-    autoUpdater.once("error", () => settle(false));
-    void autoUpdater.checkForUpdates().catch(() => settle(false));
-  });
-
-  if (downloaded) {
-    autoUpdater.quitAndInstall();
-  }
-  return downloaded;
-}
-
-/**
- * Runs only in a packaged build: electron-updater reads `app-update.yml`, which esbuild's dev
- * output never has. `autoInstallOnAppQuit` is off (see `installPendingUpdate`), so a download
- * finishing here only drops the marker acted on at the start of the next launch; never
- * `quitAndInstall` mid-session, a terminal tab being a live agent session.
- *
- * Two platforms can only be told, not updated, and fall back to "update-available" plus a link:
- * - macOS: Squirrel.Mac refuses to replace an unsigned, unnotarized bundle, which this one is.
- * - Linux outside the AppImage: electron-updater's Linux updater only replaces an AppImage
- *   (recognised by the `APPIMAGE` env var electron-builder's AppImage sets at launch); a deb
- *   install would otherwise fail every check behind the silent error handler below.
- */
-export function startAutoUpdate(
-  notify: (severity: NoticeSeverity, message: string, progress?: number) => void
-): void {
-  if (!app.isPackaged) {
+/** What the last update left behind, reported once and deleted. */
+function reportLastUpdate(notify: Notify): void {
+  const file = resultPath();
+  let result: UpdateResult;
+  try {
+    result = JSON.parse(fs.readFileSync(file, "utf8")) as UpdateResult;
+  } catch {
     return;
   }
-
-  const canInstall = canInstallOnThisPlatform();
-  autoUpdater.autoDownload = canInstall;
-  autoUpdater.autoInstallOnAppQuit = false;
-
-  if (canInstall) {
-    // Ticks the same notice's progress in place — Notices.tsx tracks the in-flight one by id.
-    autoUpdater.on("download-progress", (info) => {
-      notify("info", `Downloading update ${Math.round(info.percent)}%`, info.percent);
-    });
-    autoUpdater.on("update-downloaded", (info) => {
-      fs.writeFileSync(pendingUpdateMarkerPath(), "");
-      notify("info", `Update ${info.version} downloaded, installs on next restart`, 100);
-    });
+  fs.rmSync(file, { force: true });
+  if (result.ok) {
+    notify("info", `Updated to ${result.version}`);
   } else {
-    autoUpdater.on("update-available", (info) => {
-      notify("info", `Update ${info.version} available: ${RELEASES_URL}`);
-    });
+    console.error(`[tet] update to ${result.version} failed:\n${result.output}`);
+    notify("error", `Update to ${result.version} failed, update with: ${MANUAL_COMMAND}`);
   }
-  // Silent: an offline machine or a rate-limited check would otherwise put the same notice up
-  // every four hours for something nobody asked for.
-  autoUpdater.on("error", () => undefined);
+}
 
-  void autoUpdater.checkForUpdates().catch(() => undefined);
-  setInterval(() => void autoUpdater.checkForUpdates().catch(() => undefined), CHECK_INTERVAL_MS);
+async function latestVersion(): Promise<string | undefined> {
+  const response = await net.fetch(LATEST_URL);
+  if (!response.ok) {
+    return undefined;
+  }
+  const { version } = (await response.json()) as { version?: unknown };
+  return typeof version === "string" ? version : undefined;
+}
+
+/**
+ * Only for tet started by its `tet` command (the node it passes along), never `npm start`. Asks
+ * npm's registry at startup and every four hours; a newer version is announced once and, where
+ * tet can install it by itself, installed when tet quits (`installPendingUpdate`) — never in the
+ * middle of a session, a terminal tab being a live agent session. Where it cannot (pnpm, yarn,
+ * bun, or a prefix that needs more rights), the notice carries the command instead.
+ */
+export function startAutoUpdate(launcherNode: string | undefined, notify: Notify): void {
+  if (!launcherNode) {
+    return;
+  }
+  const prefix = installPrefix(PACKAGE_DIR);
+  const canInstall = prefix !== undefined && isWritable(path.dirname(PACKAGE_DIR));
+  let announced: string | undefined;
+
+  const check = async () => {
+    // Silent: an offline machine or a failing registry would otherwise put the same notice up
+    // every four hours for something nobody asked for.
+    const latest = await latestVersion().catch(() => undefined);
+    if (!latest || !isNewerVersion(latest, app.getVersion()) || latest === announced) {
+      return;
+    }
+    announced = latest;
+    if (canInstall) {
+      node = launcherNode;
+      pendingVersion = latest;
+      notify("info", `Update ${latest} available, installs when you quit TET`);
+    } else {
+      notify("info", `Update ${latest} available, update with: ${MANUAL_COMMAND}`);
+    }
+  };
+
+  // After the first check rather than right away: the window is still loading at this point, and
+  // a notice sent before it listens is lost.
+  void check().finally(() => reportLastUpdate(notify));
+  setInterval(() => void check(), CHECK_INTERVAL_MS);
+}
+
+/**
+ * Starts the update found this session, to run once this process is gone: called at the very end
+ * of a quit, not a restart (a relaunched tet would hold the very files npm replaces). The script
+ * is copied out of the package first, since npm replaces the package directory it came from.
+ */
+export function installPendingUpdate(): void {
+  if (!node || !pendingVersion) {
+    return;
+  }
+  const prefix = installPrefix(PACKAGE_DIR);
+  if (!prefix) {
+    return;
+  }
+  try {
+    const dir = updateDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const script = path.join(dir, "tet-update.js");
+    fs.copyFileSync(path.join(__dirname, "tet-update.js"), script);
+    const child = spawn(node, [script, String(process.pid), pendingVersion, prefix, resultPath()], {
+      cwd: dir,
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true
+    });
+    child.on("error", (error) => console.error("[tet] could not start the update:", error));
+    child.unref();
+  } catch (error) {
+    console.error("[tet] could not start the update:", error);
+  }
 }

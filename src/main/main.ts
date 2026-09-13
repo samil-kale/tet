@@ -5,6 +5,7 @@ import { app, BrowserWindow, Menu, Notification } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
+import { launcherNode } from "../shared/launch";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
@@ -24,6 +25,7 @@ import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
 import { currentTheme } from "./theme";
+import { writeToastIdentity } from "./toast-identity";
 
 /** Terminal output arrives in many small chunks; one IPC message per chunk is wasteful. */
 const OUTPUT_FLUSH_MS = 8;
@@ -77,21 +79,22 @@ if (userDataArg) {
 }
 
 /**
- * Who Windows says a toast is from. The name and icon above every notification are the Start Menu
- * shortcut's that carries this id — never anything the notification holds, which is why a toast
- * needs no icon of its own. The installer puts `appId` from electron-builder.yml on that
- * shortcut; the two strings have to stay in step, and Electron sets none of it by itself.
+ * Who Windows says a toast is from. The name and icon above every notification are those Windows
+ * finds for this id — never anything the notification holds, which is why a toast needs no icon
+ * of its own. Electron sets none of it by itself; an install writes them (`writeToastIdentity`,
+ * started in whenReady below), since it has no Start Menu shortcut to carry them.
  *
- * A development run has no shortcut and reads "Electron" — and Windows keeps what it once decided
- * about an id, so one such toast under the shipped id leaves the *installed* build reading that
- * too, until the id is cleared from Windows' own notification database. Hence the second id: what
- * `npm start` spends is its own. Naming that one is a `DisplayName` under
- * `HKCU\Software\Classes\AppUserModelId\<id>`, per machine and not tet's to write. Set before the
- * workspace, since a hook can report a turn as soon as the first terminal is up.
+ * A development run writes nothing and reads "Electron" — and Windows keeps what it once decided
+ * about an id, so one such toast under the shipped id leaves the *installed* tet reading that too,
+ * until the id is cleared from Windows' own notification database. Hence the second id: what
+ * `npm start` spends is its own. Set before the workspace, since a hook can report a turn as soon
+ * as the first terminal is up. The id was the installers' `appId`, kept so a machine that had one
+ * keeps what Windows decided about it.
  */
 const APP_USER_MODEL_ID = "com.samilkale.tet";
+const installedNode = launcherNode(process.argv);
 if (process.platform === "win32") {
-  app.setAppUserModelId(app.isPackaged ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
+  app.setAppUserModelId(installedNode ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
 }
 
 // Before the stores, and before anything that could throw asynchronously: an uncaught exception
@@ -199,10 +202,9 @@ function holdToast(toast: Notification): void {
  *
  * A click brings the window, and the tab the toast is about, to the front. Measured on win32
  * (Electron 43; tet writes no CLSID anywhere, Electron makes its own): `click` arrives while tet
- * runs, on the toast and from the notification center alike. Clicked once tet has quit, the
- * *installed* build is started again by COM (`TET.exe -Embedding`, spawned by svchost) and comes
- * up as it always does — the tab that toast named is gone with the process that showed it; a dev
- * run, whose id has no shortcut, does nothing at all.
+ * runs, on the toast and from the notification center alike. Clicked once tet has quit, it does
+ * nothing: measured for a run without a Start Menu shortcut, which is what every run is since tet
+ * ships through npm (the installers' shortcut had COM start `TET.exe -Embedding` again).
  */
 function showDesktopNotification(title: string, body: string, target?: ToastTarget): void {
   if (repeatedToast(title, body, target)) {
@@ -406,12 +408,12 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", revealWindow);
 
   app.whenReady().then(async () => {
-    // Before anything else opens: a download finished last session installs here, with nothing
-    // yet running to lose. See installPendingUpdate.
-    if (await installPendingUpdate()) {
-      return;
-    }
     Menu.setApplicationMenu(null);
+    if (installedNode && process.platform === "win32") {
+      writeToastIdentity(APP_USER_MODEL_ID, path.join(__dirname, "icon.png"), app.getPath("userData")).catch((error) =>
+        logError(`could not name tet's toasts: ${String(error)}`)
+      );
+    }
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
     // Before anything reads PATH — the requirements check and every terminal do — add where agents
     // actually install to it, since tet is launched with the OS's barer GUI PATH. Awaited only
@@ -424,9 +426,7 @@ if (!app.requestSingleInstanceLock()) {
     const controlToken =
       (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
     const port = await findControlPort(app.getPath("userData"));
-    // Packaged, dist/ sits in app.asar, which a process other than electron cannot read into;
-    // tet-ctl.js is unpacked beside it (electron-builder.yml).
-    const cliPath = path.join(app.isPackaged ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
+    const cliPath = path.join(__dirname, "tet-ctl.js");
     let binDir: string | undefined;
     try {
       binDir = writeLaunchers(app.getPath("userData"), cliPath);
@@ -446,7 +446,7 @@ if (!app.requestSingleInstanceLock()) {
     await pathReady;
     timeStartup("git-process", startGitProcess);
     timeStartup("auto-update", () =>
-      startAutoUpdate((severity, message, progress) => send("app:notice", { severity, message, progress }))
+      startAutoUpdate(installedNode, (severity, message) => send("app:notice", { severity, message }))
     );
 
     app.on("activate", () => {
@@ -492,6 +492,8 @@ function shutdown(relaunch: boolean): void {
     await controlServer?.close();
     if (relaunch) {
       app.relaunch();
+    } else {
+      installPendingUpdate();
     }
     app.quit();
   });
