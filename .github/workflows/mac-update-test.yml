@@ -69,8 +69,9 @@ jobs:
           screencapture -x "$RUNNER_TEMP/available.png" || true
           main=$(pgrep -f "Electron.*--tet-installed" | head -1)
           echo "tet running: $main"
-          kill -TERM "$main"
-          for i in $(seq 1 30); do kill -0 "$main" 2>/dev/null || break; sleep 0.5; done
+          # The quit a user gives with Cmd+Q: an Apple Event to the app, not a signal.
+          osascript -e 'tell application id "com.github.Electron" to quit' || echo "quit event failed"
+          for i in $(seq 1 60); do kill -0 "$main" 2>/dev/null || break; sleep 0.5; done
           echo "tet gone: $(kill -0 "$main" 2>/dev/null && echo no || echo yes)"
           pgrep -afl tet-update || echo "no updater seen"
           for i in $(seq 1 180); do [ -f "$RUNNER_TEMP/ud/update/result.json" ] && break; sleep 1; done

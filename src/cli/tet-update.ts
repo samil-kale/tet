@@ -68,6 +68,13 @@ function main(): void {
   while (alive(pid) && Date.now() < deadline) {
     sleep(POLL_MS);
   }
+  // Never under a tet that is still there: measured on macOS, a quit can leave the process
+  // standing without a window, and npm would replace the files it runs from. The version is found
+  // again at its next start, and installed at its next quit.
+  if (alive(pid)) {
+    writeResult(resultFile, { version, ok: false, output: `tet (pid ${pid}) was still running after ${EXIT_WAIT_MS / 1000}s` });
+    return;
+  }
 
   // No install scripts: electron downloads its binary on first use and node-pty loads its
   // prebuilt files directly, so none are needed — and none run with the user's rights unasked.
