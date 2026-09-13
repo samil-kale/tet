@@ -106,9 +106,9 @@ jobs:
       - run: npm publish --access public --loglevel verbose
 
   # The GitHub Release for the tag, once the package is out, named after the bare version (no "v")
-  # as the installer releases before it were. Never marked latest: the installers up to 0.5.x ask
-  # GitHub's /releases/latest for their update, and a release without their files would leave them
-  # there for good instead of on 0.5.2, the last installer, which tells them to move to npm.
+  # as the installer releases before it were. It carries the notes and nothing to download; the
+  # installer releases up to 0.5.1 had their files removed too, so an installed 0.5.x finds no
+  # update and its user learns of npm from the README.
   release:
     needs: publish
     runs-on: ubuntu-latest
@@ -125,4 +125,4 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md --latest=false
+          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md
