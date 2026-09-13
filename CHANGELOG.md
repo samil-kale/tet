@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.5.1 (2026-09-13)
+
+- **Installer no longer blocked by Sophos.** Opened from a browser, the Windows installer was
+  stopped as "Lockdown" by Sophos' exploit protection. It no longer checks for a running TET,
+  so close TET yourself before installing over it.
+- **Editing basics in the editor.** Toggle comments, matching brackets are highlighted, and
+  brackets and quotes close as you type.
+
 ## 0.5.0 (2026-09-12)
 
 - The diff and the editor are one widget now: the file stands there whole, with the changes
