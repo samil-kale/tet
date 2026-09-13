@@ -37,6 +37,12 @@ let registry: ChildProcess | undefined;
 let env: NodeJS.ProcessEnv;
 let current: string;
 let next: string;
+/**
+ * Worked out once, before tet first starts, as app.test.ts does: `findControlPort` looks for a
+ * free port, and asked again while tet listens it names the one after. Both starts share the
+ * profile, so tet takes the same port again.
+ */
+let port: number;
 
 function run(executable: string, args: string[], options: { cwd?: string } = {}): SpawnSyncReturns<string> {
   const { command, args: resolved } = resolveCommand(executable, args);
@@ -67,10 +73,7 @@ function startTet(): void {
 }
 
 async function version(): Promise<{ version: string; pid: number } | undefined> {
-  const answer = await tetCtl(["version"], {
-    [CONTROL_ENV.port]: String(await findControlPort(userData)),
-    [CONTROL_ENV.token]: TOKEN
-  });
+  const answer = await tetCtl(["version"], { [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: TOKEN });
   return answer.status === 0 ? (answer.result as { version: string; pid: number }) : undefined;
 }
 
@@ -173,6 +176,7 @@ describe("tet installed from a registry, and updated", { skip: !ENABLED, timeout
     for (const name of fs.readdirSync(packed)) {
       npm(["publish", path.join(packed, name), "--ignore-scripts"]);
     }
+    port = await findControlPort(userData);
   });
 
   after(async () => {
