@@ -700,9 +700,9 @@ all three platforms and publishes the `tet-ide` package to npm (`NPM_TOKEN` secr
 setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.ts`) starts
 electron with the package and hands it `--tet-node=<node>` (`src/shared/launch.ts`): that argument
 is how the app tells an install from `npm start`, and the node is what the update runs under. On
-macOS the command renames electron's bundle to TET and re-signs it ad hoc; on Linux it passes
-`--no-sandbox`. What an installer used to set up — shortcuts, and on Windows the toasts' name in
-the registry — the command has a detached script put in place once tet is starting
+Linux it passes `--no-sandbox`. electron's own bundle is never modified or re-signed, so on macOS
+the Dock and the menu bar read "Electron". What an installer used to set up — shortcuts, and on
+Windows the toasts' name in the registry — the command has a script put in place once tet is starting
 (`src/cli/shortcuts.ts`): a virus scanner refusing it costs those, never tet. Once per node and
 prefix, so a deleted shortcut stays deleted and a refusal is not repeated at every start. An update
 (`src/main/auto-update.ts`) is found on npm's registry and installed by `src/cli/tet-update.ts`

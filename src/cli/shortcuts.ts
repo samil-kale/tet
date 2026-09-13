@@ -58,6 +58,15 @@ staged=$1
 log=$2
 failed=
 if [ -d "$staged/TET.app" ]; then
+  # The icon only for this wrapper, tet's own bundle: electron's, which runs the window, is left as
+  # it came, so its Dock entry reads Electron. sips and iconutil ship with every macOS.
+  iconset="$staged/tet.iconset"
+  ( mkdir -p "$iconset" &&
+    for size in 16 32 128 256 512; do
+      sips -z $size $size "$staged/icon.png" --out "$iconset/icon_\${size}x\${size}.png" >/dev/null &&
+      sips -z $((size * 2)) $((size * 2)) "$staged/icon.png" --out "$iconset/icon_\${size}x\${size}@2x.png" >/dev/null || exit 1
+    done &&
+    iconutil -c icns "$iconset" -o "$staged/TET.app/Contents/Resources/tet.icns" ) || failed="$failed app icon;"
   { mkdir -p "$HOME/Applications" && rm -rf "$HOME/Applications/TET.app" && cp -R "$staged/TET.app" "$HOME/Applications/"; } || failed="$failed applications entry;"
 else
   apps="\${XDG_DATA_HOME:-$HOME/.local/share}/applications"
@@ -126,8 +135,9 @@ export function macInfoPlist(): string {
 }
 
 /** Lays out what the POSIX script copies into place. */
-function stage(dir: string, electronPath: string, node: string, launcher: string): void {
+function stage(dir: string, node: string, launcher: string): void {
   fs.rmSync(dir, { recursive: true, force: true });
+  const icon = path.join(path.dirname(launcher), "icon.png");
   if (process.platform === "darwin") {
     const contents = path.join(dir, "TET.app", "Contents");
     fs.mkdirSync(path.join(contents, "MacOS"), { recursive: true });
@@ -136,14 +146,11 @@ function stage(dir: string, electronPath: string, node: string, launcher: string
     const executable = path.join(contents, "MacOS", "tet");
     writePosixScript(executable, macLauncherScript(node, launcher));
     fs.chmodSync(executable, 0o755);
-    // The icon the command just put into electron's own bundle (brandMacBundle in tet.ts).
-    const icon = path.resolve(electronPath, "..", "..", "Resources", "electron.icns");
-    if (fs.existsSync(icon)) {
-      fs.copyFileSync(icon, path.join(contents, "Resources", "tet.icns"));
-    }
+    // Turned into the bundle's tet.icns by the script.
+    fs.copyFileSync(icon, path.join(dir, "icon.png"));
   } else {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "tet-ide.desktop"), desktopEntry(node, launcher, path.join(path.dirname(launcher), "icon.png")));
+    fs.writeFileSync(path.join(dir, "tet-ide.desktop"), desktopEntry(node, launcher, icon));
   }
 }
 
@@ -174,7 +181,7 @@ export function installShortcuts(userData: string, electronPath: string, package
     args = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, electronPath, packageDir, node, APP_USER_MODEL_ID, log];
   } else {
     const staged = path.join(dir, "files");
-    stage(staged, electronPath, node, path.join(packageDir, "dist", "tet.js"));
+    stage(staged, node, path.join(packageDir, "dist", "tet.js"));
     const script = path.join(dir, "install.sh");
     writePosixScript(script, INSTALL_SH);
     command = "/bin/sh";
