@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.6.1 (2026-09-13)
+
+- **No changes for you.** The release itself is what is new: it reaches npm through trusted
+  publishing, with no token involved.
+
 ## 0.6.0 (2026-09-13)
 
 - **Installed with npm.** TET now ships as the `tet-ide` package: `npm install -g tet-ide`, then
