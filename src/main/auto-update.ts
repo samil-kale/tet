@@ -66,10 +66,10 @@ export function startAutoUpdate(installed: boolean, notify: Notify): void {
   let announced: string | undefined;
 
   const check = async () => {
-    // Silent: an offline machine or a failing registry would otherwise put the same notice up
-    // every four hours for something nobody asked for.
     // Asked of the registry npm itself installs from — the user's .npmrc or npm_config_registry,
-    // a company mirror included — so what is announced is what the update can fetch.
+    // a company mirror included — so what is announced is what the update can fetch. Silent on
+    // failure: an offline machine would otherwise put the same notice up every four hours for
+    // something nobody asked for.
     const latest = await latestVersion(NPM_PACKAGE).catch(() => undefined);
     if (!latest || !semver.valid(latest) || !semver.gt(latest, app.getVersion()) || latest === announced) {
       return;

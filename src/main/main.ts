@@ -223,9 +223,10 @@ function holdToast(toast: Notification): void {
  *
  * A click brings the window, and the tab the toast is about, to the front. Measured on win32
  * (Electron 43; tet writes no CLSID anywhere, Electron makes its own): `click` arrives while tet
- * runs, on the toast and from the notification center alike. Clicked once tet has quit, it does
- * nothing: measured for a run without a Start Menu shortcut, which is what every run is since tet
- * ships through npm (the installers' shortcut had COM start `TET.exe -Embedding` again).
+ * runs, on the toast and from the notification center alike. Clicked once tet has quit: measured
+ * to do nothing for a run without a Start menu entry carrying the id. Not measured with the entry
+ * an install now writes — the installers' entry had COM start `TET.exe -Embedding` again, and the
+ * same for electron.exe would come up as electron's own default app, not as tet.
  */
 function showDesktopNotification(title: string, body: string, target?: ToastTarget): void {
   if (repeatedToast(title, body, target)) {
