@@ -410,12 +410,13 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
-    if (installedNode && process.platform === "win32") {
-      writeToastIdentity(APP_USER_MODEL_ID, path.join(__dirname, "icon.png"), app.getPath("userData")).catch((error) =>
-        logError(`could not name tet's toasts: ${String(error)}`)
-      );
-    }
+    // What an installer would have set up, and neither may cost the window.
     if (installedNode) {
+      if (process.platform === "win32") {
+        writeToastIdentity(APP_USER_MODEL_ID, path.join(__dirname, "icon.png"), app.getPath("userData")).catch((error) =>
+          logError(`could not name tet's toasts: ${String(error)}`)
+        );
+      }
       try {
         writeShortcuts(installedNode, APP_USER_MODEL_ID);
       } catch (error) {

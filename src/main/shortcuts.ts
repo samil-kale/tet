@@ -22,7 +22,7 @@ const LAUNCHER = path.join(__dirname, "tet.js");
  */
 export function writeShortcuts(node: string, appUserModelId: string): void {
   const marker = path.join(app.getPath("userData"), "shortcuts");
-  const stamp = JSON.stringify({ node, packageDir: PACKAGE_DIR, electron: process.execPath });
+  const stamp = JSON.stringify({ node, packageDir: PACKAGE_DIR });
   try {
     if (fs.readFileSync(marker, "utf8") === stamp) {
       return;

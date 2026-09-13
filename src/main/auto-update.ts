@@ -10,6 +10,8 @@ import { installPrefix, isNewerVersion, isWritable } from "./npm-install";
 /** How often to look again after the check at startup. Nothing is urgent: an update installs only
  *  once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
+/** A registry that answers slowly must not hold up the report of the last update below. */
+const FETCH_TIMEOUT_MS = 10_000;
 
 const LATEST_URL = `https://registry.npmjs.org/${NPM_PACKAGE}/latest`;
 const MANUAL_COMMAND = `npm install -g ${NPM_PACKAGE}`;
@@ -19,9 +21,9 @@ const PACKAGE_DIR = path.join(__dirname, "..");
 
 type Notify = (severity: NoticeSeverity, message: string) => void;
 
-/** Set by `startAutoUpdate`: the node to run the update under and the version it installs. */
-let node: string | undefined;
-let pendingVersion: string | undefined;
+/** The update found this session, for `installPendingUpdate` to run: the version, the node to run
+ *  it under, and the prefix npm installs into. */
+let pending: { version: string; node: string; prefix: string } | undefined;
 
 function updateDir(): string {
   return path.join(app.getPath("userData"), "update");
@@ -50,7 +52,7 @@ function reportLastUpdate(notify: Notify): void {
 }
 
 async function latestVersion(): Promise<string | undefined> {
-  const response = await net.fetch(LATEST_URL);
+  const response = await net.fetch(LATEST_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!response.ok) {
     return undefined;
   }
@@ -70,7 +72,7 @@ export function startAutoUpdate(launcherNode: string | undefined, notify: Notify
     return;
   }
   const prefix = installPrefix(PACKAGE_DIR);
-  const canInstall = prefix !== undefined && isWritable(path.dirname(PACKAGE_DIR));
+  const installable = prefix !== undefined && isWritable(path.dirname(PACKAGE_DIR)) ? prefix : undefined;
   let announced: string | undefined;
 
   const check = async () => {
@@ -81,9 +83,8 @@ export function startAutoUpdate(launcherNode: string | undefined, notify: Notify
       return;
     }
     announced = latest;
-    if (canInstall) {
-      node = launcherNode;
-      pendingVersion = latest;
+    if (installable) {
+      pending = { version: latest, node: launcherNode, prefix: installable };
       notify("info", `Update ${latest} available, installs when you quit TET`);
     } else {
       notify("info", `Update ${latest} available, update with: ${MANUAL_COMMAND}`);
@@ -102,11 +103,7 @@ export function startAutoUpdate(launcherNode: string | undefined, notify: Notify
  * is copied out of the package first, since npm replaces the package directory it came from.
  */
 export function installPendingUpdate(): void {
-  if (!node || !pendingVersion) {
-    return;
-  }
-  const prefix = installPrefix(PACKAGE_DIR);
-  if (!prefix) {
+  if (!pending) {
     return;
   }
   try {
@@ -114,7 +111,7 @@ export function installPendingUpdate(): void {
     fs.mkdirSync(dir, { recursive: true });
     const script = path.join(dir, "tet-update.js");
     fs.copyFileSync(path.join(__dirname, "tet-update.js"), script);
-    const child = spawn(node, [script, String(process.pid), pendingVersion, prefix, resultPath()], {
+    const child = spawn(pending.node, [script, String(process.pid), pending.version, pending.prefix, resultPath()], {
       cwd: dir,
       detached: true,
       stdio: "ignore",

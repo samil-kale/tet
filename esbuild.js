@@ -38,41 +38,23 @@ const gitHostConfig = {
   external: ["electron"]
 };
 
-/** The `tet-ctl` CLI an agent runs from a terminal, under tet's own electron as node (see
- *  src/main/control/control-launcher.ts). Plain node, nothing from electron in it. */
-/** @type {import('esbuild').BuildOptions} */
-const cliConfig = {
-  ...common,
-  entryPoints: [path.join(__dirname, "src", "cli", "tet-ctl.ts")],
-  outfile: path.join(dist, "tet-ctl.js"),
-  platform: "node",
-  target: "node22",
-  format: "cjs"
-};
-
-/** The `tet` command npm puts on PATH (package.json's `bin`): starts electron with the app. Plain
- *  node like the CLI above, run by the node that npm installed it for. */
-/** @type {import('esbuild').BuildOptions} */
-const launcherConfig = {
-  ...common,
-  entryPoints: [path.join(__dirname, "src", "cli", "tet.ts")],
-  outfile: path.join(dist, "tet.js"),
-  platform: "node",
-  target: "node22",
-  format: "cjs",
-  banner: { js: "#!/usr/bin/env node" }
-};
-
-/** The update that runs once tet has quit (src/main/auto-update.ts), under the same plain node. */
-/** @type {import('esbuild').BuildOptions} */
-const updaterConfig = {
-  ...common,
-  entryPoints: [path.join(__dirname, "src", "cli", "tet-update.ts")],
-  outfile: path.join(dist, "tet-update.js"),
-  platform: "node",
-  target: "node22",
-  format: "cjs"
-};
+/** The scripts under src/cli, each bundled on its own for plain node, nothing from electron in
+ *  them: `tet-ctl`, which an agent runs from a terminal under tet's own electron as node (see
+ *  src/main/control/control-launcher.ts); `tet`, the command npm puts on PATH (package.json's
+ *  `bin`, hence the shebang), run by the node npm installed it for; and `tet-update`, which that
+ *  node runs once tet has quit (src/main/auto-update.ts). */
+/** @returns {import('esbuild').BuildOptions} */
+function cliConfig(name, banner) {
+  return {
+    ...common,
+    entryPoints: [path.join(__dirname, "src", "cli", `${name}.ts`)],
+    outfile: path.join(dist, `${name}.js`),
+    platform: "node",
+    target: "node22",
+    format: "cjs",
+    ...(banner ? { banner: { js: banner } } : {})
+  };
+}
 
 /** @type {import('esbuild').BuildOptions} */
 const preloadConfig = {
@@ -146,9 +128,9 @@ async function build() {
   const configs = [
     mainConfig,
     gitHostConfig,
-    cliConfig,
-    launcherConfig,
-    updaterConfig,
+    cliConfig("tet-ctl"),
+    cliConfig("tet", "#!/usr/bin/env node"),
+    cliConfig("tet-update"),
     preloadConfig,
     rendererConfig,
     editorWorkerConfig,
