@@ -155,9 +155,12 @@ describe("tet installed from a registry, and updated", { skip: !ENABLED, timeout
       ].join("\n")
     );
     const { command, args } = resolveCommand("npx", ["-y", "verdaccio@6.10.3", "--config", "./config.yaml", "--listen", "127.0.0.1:4873"]);
-    registry = spawn(command, args, { cwd: storage, env, stdio: "ignore", windowsHide: true });
+    // The machine's own environment: verdaccio itself comes from the public registry, not from the
+    // local one it is about to be.
+    const log = fs.openSync(path.join(work, "registry.log"), "w");
+    registry = spawn(command, args, { cwd: storage, stdio: ["ignore", log, log], windowsHide: true });
     await eventually(
-      "the local registry answering",
+      () => `the local registry answering\n${fs.readFileSync(path.join(work, "registry.log"), "utf8")}`,
       async () => {
         try {
           return (await fetch(`${REGISTRY}-/ping`)).ok;
