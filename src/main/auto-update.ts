@@ -1,19 +1,18 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { app, net } from "electron";
+import { app } from "electron";
+import latestVersion from "latest-version";
+import * as semver from "semver";
 import { NPM_PACKAGE } from "../shared/launch";
 import type { UpdateResult } from "../shared/launch";
 import type { NoticeSeverity } from "../shared/types";
-import { installPrefix, isNewerVersion, isWritable } from "./npm-install";
+import { installPrefix, isWritable } from "./npm-install";
 
 /** How often to look again after the check at startup. Nothing is urgent: an update installs only
  *  once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
-/** A registry that answers slowly must not hold up the report of the last update below. */
-const FETCH_TIMEOUT_MS = 10_000;
 
-const LATEST_URL = `https://registry.npmjs.org/${NPM_PACKAGE}/latest`;
 const MANUAL_COMMAND = `npm install -g ${NPM_PACKAGE}`;
 
 /** The package tet runs from: main.js sits in its dist/. */
@@ -51,15 +50,6 @@ function reportLastUpdate(notify: Notify): void {
   }
 }
 
-async function latestVersion(): Promise<string | undefined> {
-  const response = await net.fetch(LATEST_URL, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!response.ok) {
-    return undefined;
-  }
-  const { version } = (await response.json()) as { version?: unknown };
-  return typeof version === "string" ? version : undefined;
-}
-
 /**
  * Only for tet started as an install (`--tet-installed`), never `npm start`. Asks
  * npm's registry at startup and every four hours; a newer version is announced once and, where
@@ -78,8 +68,10 @@ export function startAutoUpdate(installed: boolean, notify: Notify): void {
   const check = async () => {
     // Silent: an offline machine or a failing registry would otherwise put the same notice up
     // every four hours for something nobody asked for.
-    const latest = await latestVersion().catch(() => undefined);
-    if (!latest || !isNewerVersion(latest, app.getVersion()) || latest === announced) {
+    // Asked of the registry npm itself installs from — the user's .npmrc or npm_config_registry,
+    // a company mirror included — so what is announced is what the update can fetch.
+    const latest = await latestVersion(NPM_PACKAGE).catch(() => undefined);
+    if (!latest || !semver.valid(latest) || !semver.gt(latest, app.getVersion()) || latest === announced) {
       return;
     }
     announced = latest;
@@ -91,9 +83,8 @@ export function startAutoUpdate(installed: boolean, notify: Notify): void {
     }
   };
 
-  // After the first check rather than right away: the window is still loading at this point, and
-  // a notice sent before it listens is lost.
-  void check().finally(() => reportLastUpdate(notify));
+  reportLastUpdate(notify);
+  void check();
   setInterval(() => void check(), CHECK_INTERVAL_MS);
 }
 

@@ -34,19 +34,3 @@ export function isWritable(dir: string): boolean {
     return false;
   }
 }
-
-/** `x.y.z` against `x.y.z`, numerically. A prerelease or otherwise odd version is never newer. */
-export function isNewerVersion(candidate: string, current: string): boolean {
-  const parse = (version: string) => (/^\d+\.\d+\.\d+$/.test(version) ? version.split(".").map(Number) : undefined);
-  const next = parse(candidate);
-  const now = parse(current);
-  if (!next || !now) {
-    return false;
-  }
-  for (let i = 0; i < 3; i++) {
-    if (next[i] !== now[i]) {
-      return next[i] > now[i];
-    }
-  }
-  return false;
-}

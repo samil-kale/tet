@@ -141,7 +141,12 @@ const api: TETApi = {
       ipcRenderer.invoke("shell:open-file-externally", projectId, filePath),
     openProject: (projectId) => ipcRenderer.invoke("shell:open-project", projectId)
   },
-  onNotice: (listener) => subscribe("app:notice", listener),
+  // Tells main it may hand over the notices it held until now (see `send` in main.ts).
+  onNotice: (listener) => {
+    const unsubscribe = subscribe("app:notice", listener);
+    ipcRenderer.send("app:notice-listening");
+    return unsubscribe;
+  },
   initialTheme
 };
 

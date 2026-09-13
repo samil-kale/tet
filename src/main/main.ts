@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as os from "node:os";
 import * as path from "node:path";
-import { app, BrowserWindow, Menu, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Notification } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
@@ -36,11 +36,31 @@ let window: BrowserWindow | undefined;
 const RENDERER_REBUILD_GAP_MS = 60_000;
 let rendererRebuiltAt = 0;
 
+/**
+ * Notices said before the window listens are held, not lost: `App` subscribes only once the
+ * requirements check passed, and a check that answers fast — the update's, against a quick
+ * registry — beat it (measured: "Updated to" never showed). The renderer says when it listens
+ * (`app:notice-listening`, preload's `onNotice`); every load of the page starts over deaf.
+ */
+let noticesHeard = false;
+const heldNotices: unknown[] = [];
+
 function send(channel: string, payload: unknown): void {
+  if (channel === "app:notice" && !noticesHeard) {
+    heldNotices.push(payload);
+    return;
+  }
   if (window && !window.isDestroyed()) {
     window.webContents.send(channel, payload);
   }
 }
+
+ipcMain.on("app:notice-listening", () => {
+  noticesHeard = true;
+  for (const notice of heldNotices.splice(0)) {
+    send("app:notice", notice);
+  }
+});
 
 const pendingOutput = new Map<string, TerminalOutput>();
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
@@ -348,6 +368,10 @@ function createWindow(): void {
     }
   });
 
+  // A load — the first, or a reload after the renderer died — has no listener until App subscribes.
+  window.webContents.on("did-start-loading", () => {
+    noticesHeard = false;
+  });
   window.once("ready-to-show", () => window?.show());
   // Looked at: what attractAttention asked for is answered.
   window.on("focus", () => window?.flashFrame(false));
