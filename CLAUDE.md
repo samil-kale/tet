@@ -700,6 +700,7 @@ setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.t
 electron with the package and hands it `--tet-node=<node>` (`src/shared/launch.ts`): that argument
 is how the app tells an install from `npm start`, and the node is what the update runs under. On
 macOS the command renames electron's bundle to TET and re-signs it ad hoc; on Linux it passes
-`--no-sandbox`. An update (`src/main/auto-update.ts`) is found on npm's registry and installed by
+`--no-sandbox`. The shortcuts an installer used to make are written by the app itself
+(`src/main/shortcuts.ts`), once per node and prefix, so a deleted one stays deleted. An update (`src/main/auto-update.ts`) is found on npm's registry and installed by
 `src/cli/tet-update.ts` once tet has quit — never mid-session, a terminal tab being a live agent
 session.

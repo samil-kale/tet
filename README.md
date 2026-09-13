@@ -89,7 +89,8 @@ npm install -g tet-ide
 tet
 ```
 
-The first start downloads Electron once. When a new version is out, TET tells you and installs it
+The first start downloads Electron once and adds TET to the Start menu, the application menu or
+`~/Applications`, plus an icon on the desktop on Windows and Linux. When a new version is out, TET tells you and installs it
 after you quit, never while terminal sessions are running. On Linux, TET runs without Chromium's
 sandbox, which a package manager cannot set up.
 
