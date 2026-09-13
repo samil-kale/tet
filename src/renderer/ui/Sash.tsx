@@ -40,6 +40,36 @@ export function usePaneToggle(key: string, initial: boolean): [boolean, (open: b
 }
 
 /**
+ * Which sections of a tree the user has folded, restored on the next start — the same storage,
+ * since which of a pane's sections stand open is as much layout as whether the pane shows.
+ * `initial` names what starts folded; a key that was never toggled stands open.
+ */
+export function useCollapsedSections(key: string, initial: string[]): [(section: string) => boolean, (section: string) => void] {
+  const storageKey = STORAGE_PREFIX + key;
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored !== null) {
+        return JSON.parse(stored) as Record<string, boolean>;
+      }
+    } catch {
+      // Unreadable storage is the initial state.
+    }
+    return Object.fromEntries(initial.map((section) => [section, true]));
+  });
+  const isCollapsed = useCallback((section: string) => collapsed[section] ?? false, [collapsed]);
+  const toggle = useCallback(
+    (section: string) => {
+      const next = { ...collapsed, [section]: !(collapsed[section] ?? false) };
+      setCollapsed(next);
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    },
+    [collapsed, storageKey]
+  );
+  return [isCollapsed, toggle];
+}
+
+/**
  * A number the user sets by dragging, restored on the next start. `restore` turns what storage
  * holds (`NaN` when nothing) into the value to start from. Written once the drag has settled
  * rather than per pointer move: the write is synchronous and a drag delivers sixty and more

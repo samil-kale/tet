@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from "react";
 import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry } from "../../shared/types";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
+import { useCollapsedSections } from "../ui/Sash";
 import { ArrowDownIcon, ArrowUpIcon, BranchIcon, ChevronIcon, RemoteIcon, SearchIcon, StashIcon, TagIcon } from "../ui/icons";
 
 /** How the tree starts a git command: one at a time per project, named while it runs. The tree
@@ -28,7 +29,8 @@ type BranchMenu = MenuTarget & { x: number; y: number };
 
 export const BranchTree = memo(function BranchTree({ projectId, state, branch }: BranchTreeProps) {
   const [filter, setFilter] = useState("");
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Only the local branches start open, as in GitHub Desktop; what the user folds stays folded.
+  const [isCollapsed, toggle] = useCollapsedSections("branch-tree", ["remotes", "tags", "stashes"]);
   const [menu, setMenu] = useState<BranchMenu | null>(null);
 
   const query = filter.trim().toLowerCase();
@@ -41,9 +43,6 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
   );
   // The filter is named for branches but reads as "find a ref", so tags go through it too.
   const tags = useMemo(() => state.tags.filter(matches), [state.tags, query]);
-
-  const isCollapsed = (key: string): boolean => collapsed[key] ?? false;
-  const toggle = (key: string): void => setCollapsed((current) => ({ ...current, [key]: !isCollapsed(key) }));
 
   const isCurrent = (name: string): boolean => !state.detached && name === state.head;
 
