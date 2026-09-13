@@ -1,7 +1,7 @@
 {
   "name": "tet-ide",
   "productName": "TET",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Git workspace for coding agents",
   "author": "Samil Kale",
   "license": "MIT",
