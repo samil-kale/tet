@@ -1,0 +1,58 @@
+# Temporary: checks the npm install on macOS (the `tet` command renaming electron's bundle).
+name: mac bundle test
+
+on:
+  push:
+    branches:
+      - feature/npm-distribution
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run compile -- --production
+
+      - name: pack and install
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/prefix" "$RUNNER_TEMP"/tet-ide-*.tgz
+
+      - name: start tet
+        env:
+          TET_CONTROL_TOKEN: mac-test-token
+        run: |
+          "$RUNNER_TEMP/prefix/bin/tet" --user-data-dir="$RUNNER_TEMP/ud" --allow-shell-only
+          sleep 25
+
+      - name: inspect
+        run: |
+          set -x
+          pkg="$RUNNER_TEMP/prefix/lib/node_modules/tet-ide"
+          bundle="$pkg/node_modules/electron/dist/Electron.app"
+          pgrep -afl "tet-ide" || true
+          plutil -extract CFBundleName raw "$bundle/Contents/Info.plist"
+          plutil -extract CFBundleDisplayName raw "$bundle/Contents/Info.plist"
+          cat "$bundle/Contents/Resources/tet-bundle"
+          ls -la "$bundle/Contents/Resources/"*.icns
+          codesign --verify --deep --strict --verbose=2 "$bundle"
+          osascript -e 'tell application "System Events" to get name of every process whose background only is false' || true
+          pid=$(pgrep -f "Electron.app/Contents/MacOS/Electron --tet-node" | head -1 || true)
+          [ -z "$pid" ] && pid=$(pgrep -f "tet-node" | head -1)
+          port=$(lsof -nP -a -p "$pid" -iTCP -sTCP:LISTEN | awk 'NR==2 {split($9, a, ":"); print a[2]}')
+          TET_CONTROL_PORT="$port" TET_CONTROL_TOKEN=mac-test-token node "$pkg/dist/tet-ctl.js" version
+          screencapture -x "$RUNNER_TEMP/screen.png" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-screen
+          path: ${{ runner.temp }}/screen.png
