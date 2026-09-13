@@ -30,7 +30,7 @@ type BranchMenu = MenuTarget & { x: number; y: number };
 export const BranchTree = memo(function BranchTree({ projectId, state, branch }: BranchTreeProps) {
   const [filter, setFilter] = useState("");
   // Only the local branches start open, as in GitHub Desktop; what the user folds stays folded.
-  const [isCollapsed, toggle] = useCollapsedSections("branch-tree", ["remotes", "tags", "stashes"]);
+  const [isCollapsed, toggle] = useCollapsedSections("branch-tree.sections", ["remotes", "tags", "stashes"]);
   const [menu, setMenu] = useState<BranchMenu | null>(null);
 
   const query = filter.trim().toLowerCase();
