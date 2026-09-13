@@ -1,0 +1,53 @@
+# Temporary: checks the npm install on macOS (bundle naming and ~/Applications/TET.app).
+name: mac bundle test
+
+on:
+  push:
+    branches:
+      - feature/npm-distribution
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run compile -- --production
+
+      - name: pack and install
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          npm install -g --ignore-scripts --prefix "$RUNNER_TEMP/prefix" "$RUNNER_TEMP"/tet-ide-*.tgz
+
+      - name: start tet
+        run: |
+          "$RUNNER_TEMP/prefix/bin/tet" --user-data-dir="$RUNNER_TEMP/ud" --allow-shell-only
+          sleep 25
+
+      - name: inspect the app wrapper
+        run: |
+          set -x
+          ls -laR ~/Applications/TET.app
+          cat ~/Applications/TET.app/Contents/Info.plist
+          cat ~/Applications/TET.app/Contents/MacOS/tet
+          plutil -lint ~/Applications/TET.app/Contents/Info.plist
+          pkill -f "tet-node" || true
+          sleep 3
+          open ~/Applications/TET.app
+          sleep 25
+          pgrep -afl "tet-node" || { echo "TET did not start from the app wrapper"; exit 1; }
+          osascript -e 'tell application "System Events" to get name of every process whose background only is false' || true
+          screencapture -x "$RUNNER_TEMP/screen.png" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-screen
+          path: ${{ runner.temp }}/screen.png
