@@ -3,7 +3,6 @@ import { describe, it } from "node:test";
 import {
   SNAP_TRANSITIONS,
   activateTab,
-  applyPreset,
   collapseClosed,
   collapseEmptied,
   collapseEmpty,
@@ -83,23 +82,6 @@ describe("normalizeLayout", () => {
     const next = normalizeLayout(layout, NONE, NONE);
     assert.deepEqual(next.tabPane, { later: "b" }, "a pane the preset does not have is dropped");
     assert.equal(next.focusedPane, "a");
-  });
-});
-
-describe("applyPreset", () => {
-  it("hands the tabs of vanished panes to pane a and re-normalizes", () => {
-    const tabs = [tab("t1", 1), tab("t2", 2), tab("t3", 3)];
-    const grid = normalizeLayout(
-      { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "a", t2: "c", t3: "d" }, activeTab: {}, commandPane: {} },
-      tabs,
-      NONE
-    );
-    const cols = applyPreset(grid, "cols2", tabs);
-    assert.equal(cols.preset, "cols2");
-    assert.equal(cols.focusedPane, "a");
-    assert.deepEqual(cols.tabPane, { t1: "a", t2: "a", t3: "a" });
-    assert.deepEqual(cols.activeTab, { a: "t1", b: null }, "pane a keeps what it was showing");
-    assert.equal(applyPreset(cols, "cols2", tabs), cols, "the same preset is no change");
   });
 });
 

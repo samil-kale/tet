@@ -101,7 +101,7 @@ export function App() {
    * Each project's split state, held here rather than in `TerminalsPane` because the shortcuts and
    * the marks/seen logic need what is on screen across every pane — see "Split view" in CLAUDE.md.
    */
-  const { layouts, activateTab, snapTab, focusPane, setPreset, placeTab, forgetLayout } = useProjectLayouts(
+  const { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout } = useProjectLayouts(
     stripTabs,
     starting
   );
@@ -817,7 +817,6 @@ export function App() {
               onActivateTab={activateTab}
               onSnapTab={snapTab}
               onFocusPane={focusPane}
-              onPresetChange={setPreset}
               onOpenSettings={openSettings}
               markedTabIds={marks[project.id]?.finished ?? NO_IDS}
               waitingTabIds={marks[project.id]?.waiting ?? NO_IDS}

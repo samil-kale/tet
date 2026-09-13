@@ -63,8 +63,9 @@ One project's terminals can be split into up to four panes, each with its own ta
 Code's editor groups cut down to **four fixed presets** (single, two columns, two columns with the
 right one split, 2×2), not a nestable tree. `src/renderer/terminal/pane-layout.ts` holds the model
 and every rule about it; `TerminalsPane` lays the panes out; `Pane` is one strip-and-stack. Pane
-"a" (always top-left) carries the one row of icon buttons — git toggle, layout picker,
-settings — regardless of preset.
+"a" (always top-left) carries the one row of icon buttons — git toggle and settings —
+regardless of preset. There is no layout picker: a preset is only ever reached by dragging a tab
+onto a snap zone, and left by a pane collapsing.
 
 - **The layout lives in `App`** (`layouts: Record<projectId, ProjectLayout>`): the tab shortcuts
   and `markedTabs`/`seen` need "the tab on screen" — one *per pane* with a split (`visibleTabIds`).

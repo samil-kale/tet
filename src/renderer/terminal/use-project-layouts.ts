@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   activateTab as activateTabLayout,
-  applyPreset,
   collapseClosed,
   collapseEmpty,
   loadLayout,
@@ -11,7 +10,7 @@ import {
   serializeLayout,
   snapTab as snapTabLayout
 } from "./pane-layout";
-import type { LayoutTab, PaneId, ProjectLayout, SnapTransition, SplitPreset } from "./pane-layout";
+import type { LayoutTab, PaneId, ProjectLayout, SnapTransition } from "./pane-layout";
 import type { PaneTab } from "./editor-tab";
 
 /** Shared instance, so a pane's props stay identical for a project that has none. */
@@ -33,7 +32,6 @@ export interface ProjectLayouts {
   activateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
   snapTab: (projectId: string, tabId: string, transition: SnapTransition) => void;
   focusPane: (projectId: string, paneId: PaneId) => void;
-  setPreset: (projectId: string, preset: SplitPreset) => void;
   placeTab: (projectId: string, tabId: string, command?: string) => void;
   forgetLayout: (projectId: string) => void;
 }
@@ -164,14 +162,6 @@ export function useProjectLayouts(
     });
   }, []);
 
-  /** The layout dropdown: switches a project's preset, redistributing panes that no longer exist. */
-  const setPreset = useCallback((projectId: string, preset: SplitPreset) => {
-    setLayouts((current) => ({
-      ...current,
-      [projectId]: applyPreset(layoutOf(current, projectId), preset, tabsRef.current[projectId] ?? [])
-    }));
-  }, []);
-
   /**
    * Puts a tab opened from outside its own pane in front of the user. A saved command's tab goes to
    * the pane that command last ran in (`placeCommandTab`); the command line comes with the call, or
@@ -204,5 +194,5 @@ export function useProjectLayouts(
     settledProjects.current.delete(projectId);
   }, []);
 
-  return { layouts, activateTab, snapTab, focusPane, setPreset, placeTab, forgetLayout };
+  return { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout };
 }

@@ -3,7 +3,7 @@ import type { Project } from "../../shared/types";
 import { sameList } from "../identity";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
-import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone, SplitPreset } from "./pane-layout";
+import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
 import { isEditorTab, type PaneTab } from "./editor-tab";
@@ -88,8 +88,7 @@ interface TerminalsPaneProps {
   /** A tab dropped on one of the snap zones below — the preset switch and the move in one. */
   onSnapTab: (projectId: string, tabId: string, transition: SnapTransition) => void;
   onFocusPane: (projectId: string, paneId: PaneId) => void;
-  onPresetChange: (projectId: string, preset: SplitPreset) => void;
-  /** The settings dialog — opened from the pane the layout picker sits on, beside it. */
+  /** The settings dialog — opened from pane "a"'s row of icon buttons. */
   onOpenSettings: () => void;
   /** Tabs whose finished turn is still waiting to be looked at — App decides, this draws it. */
   markedTabIds: string[];
@@ -116,7 +115,6 @@ export const TerminalsPane = memo(function TerminalsPane({
   onActivateTab,
   onSnapTab,
   onFocusPane,
-  onPresetChange,
   onOpenSettings,
   markedTabIds,
   waitingTabIds,
@@ -203,8 +201,8 @@ export const TerminalsPane = memo(function TerminalsPane({
     setRightRowFraction(HALF);
   }, [setColFraction, setLeftRowFraction, setRightRowFraction]);
 
-  // On the preset arriving at "single", wherever the switch came from: the picker, or a pane
-  // emptied and collapsed away (`collapseEmptied`, decided in `App`).
+  // On the preset arriving at "single" — a pane emptied and collapsed away (`collapseEmptied`,
+  // decided in `App`).
   const previousPreset = useRef(layout.preset);
   useEffect(() => {
     if (layout.preset === "single" && previousPreset.current !== "single") {
@@ -213,18 +211,13 @@ export const TerminalsPane = memo(function TerminalsPane({
     previousPreset.current = layout.preset;
   }, [layout.preset, resetDividerFractions]);
 
-  const onPresetChangeHere = useCallback(
-    (preset: SplitPreset) => onPresetChange(project.id, preset),
-    [onPresetChange, project.id]
-  );
   const chrome = useMemo<PaneChrome>(
     () => ({
       gitOpen,
       onToggleGit,
-      onPresetChange: onPresetChangeHere,
       onOpenSettings
     }),
-    [gitOpen, onToggleGit, onPresetChangeHere, onOpenSettings]
+    [gitOpen, onToggleGit, onOpenSettings]
   );
   const onActivate = useCallback(
     (paneId: PaneId, tabId: string) => onActivateTab(project.id, tabId, paneId),

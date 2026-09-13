@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { AgentId, AgentInfo, TerminalDescriptor } from "../../shared/types";
 import { fitTerminal, focusTerminal } from "./terminal-views";
-import { PANE_LABELS, PRESETS, PRESET_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
+import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -16,10 +16,6 @@ import {
   FilesIcon,
   GearIcon,
   GitIcon,
-  LayoutCols2Icon,
-  LayoutGrid2x2Icon,
-  LayoutSingleIcon,
-  LayoutSplitRightIcon,
   PlusIcon,
   QuestionIcon,
   SpinnerIcon
@@ -30,20 +26,6 @@ import { ProgressBar } from "../ui/ProgressBar";
 const RESIZE_DEBOUNCE_MS = 100;
 /** What VS Code's own tab rename accepts. */
 const MAX_TITLE_LENGTH = 50;
-
-/** The layout dropdown's own glyph, and each preset's icon in its menu. */
-function PresetIcon({ preset, className }: { preset: SplitPreset; className?: string }) {
-  switch (preset) {
-    case "single":
-      return <LayoutSingleIcon className={className} />;
-    case "cols2":
-      return <LayoutCols2Icon className={className} />;
-    case "split-right":
-      return <LayoutSplitRightIcon className={className} />;
-    case "grid2x2":
-      return <LayoutGrid2x2Icon className={className} />;
-  }
-}
 
 /** ISO 8601 date/time, space instead of "T", local time, seconds precision. */
 function formatIso(ms: number): string {
@@ -59,14 +41,13 @@ function formatIso(ms: number): string {
 export interface PaneChrome {
   gitOpen: boolean;
   onToggleGit: () => void;
-  onPresetChange: (preset: SplitPreset) => void;
   onOpenSettings: () => void;
 }
 
 interface PaneProps {
   projectId: string;
   paneId: PaneId;
-  /** The whole project's preset — needed to know this pane's siblings for "move to" and the picker. */
+  /** The whole project's preset — needed to know this pane's siblings for "move to". */
   preset: SplitPreset;
   /** Already filtered to this pane, in the project's own tab order — the editor tab last. */
   tabs: PaneTab[];
@@ -138,7 +119,6 @@ export const Pane = memo(function Pane({
   onDragEnd
 }: PaneProps) {
   const [plusMenu, setPlusMenu] = useState<{ x: number; y: number } | null>(null);
-  const [layoutMenu, setLayoutMenu] = useState<{ x: number; y: number } | null>(null);
   const [tabMenu, setTabMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
   const stack = useRef<HTMLDivElement>(null);
   const strip = useRef<HTMLDivElement>(null);
@@ -372,15 +352,6 @@ export const Pane = memo(function Pane({
       run: () => void createTab(agent.id)
     }));
 
-  const presetEntries = (): ContextMenuEntry[] =>
-    chrome
-      ? PRESETS.map((value) => ({
-          label: PRESET_LABELS[value],
-          icon: <PresetIcon preset={value} className="tab-icon" />,
-          run: () => chrome.onPresetChange(value)
-        }))
-      : [];
-
   return (
     <div
       className={`terminal-pane${width === undefined && height === undefined ? " fill" : ""}${dragOver ? " drag-over" : ""}`}
@@ -433,20 +404,6 @@ export const Pane = memo(function Pane({
               title={chrome.gitOpen ? "Hide the repository" : "Show the repository"}
             >
               <GitIcon />
-            </button>
-            <button
-              className="icon-button"
-              title="Split layout"
-              onMouseDown={(event) => {
-                event.stopPropagation();
-                if (layoutMenu) {
-                  return;
-                }
-                const rect = event.currentTarget.getBoundingClientRect();
-                setLayoutMenu({ x: rect.left, y: rect.bottom + 6 });
-              }}
-            >
-              <PresetIcon preset={preset} />
             </button>
             <button className="icon-button" title="Settings" onClick={chrome.onOpenSettings}>
               <GearIcon />
@@ -583,15 +540,6 @@ export const Pane = memo(function Pane({
           y={plusMenu.y}
           entries={newSessionEntries()}
           onClose={() => setPlusMenu(null)}
-          className="new-session-menu"
-        />
-      )}
-      {layoutMenu && (
-        <ContextMenu
-          x={layoutMenu.x}
-          y={layoutMenu.y}
-          entries={presetEntries()}
-          onClose={() => setLayoutMenu(null)}
           className="new-session-menu"
         />
       )}

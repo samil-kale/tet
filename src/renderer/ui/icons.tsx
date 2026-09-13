@@ -605,47 +605,6 @@ export function GearIcon(props: IconProps) {
   );
 }
 
-/**
- * The five split-layout presets: a rounded frame plus whatever dividers a preset adds. All five
- * share one frame and one `extent`, so they read as one family. Run through the `getBBox` audit:
- * the frame measures 14.5 by 13.5 with its stroke, and — wider than tall like `CommitIcon` —
- * takes the long-side cap rather than the geometric mean: 13.33.
- */
-export function LayoutSingleIcon(props: IconProps) {
-  return (
-    <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
-    </Svg>
-  );
-}
-
-export function LayoutCols2Icon(props: IconProps) {
-  return (
-    <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
-      <path d="M8 2v12" />
-    </Svg>
-  );
-}
-
-export function LayoutSplitRightIcon(props: IconProps) {
-  return (
-    <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
-      <path d="M8 2v12M8 8h6.5" />
-    </Svg>
-  );
-}
-
-export function LayoutGrid2x2Icon(props: IconProps) {
-  return (
-    <Svg {...props} extent={13.33} cx={8} cy={8}>
-      <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
-      <path d="M8 2v12M1.5 8h13" />
-    </Svg>
-  );
-}
-
 /** Lucide's `file-braces` (lucide.dev, ISC), vendored on its own native 24-unit grid — browsing
  *  the repository's files. Measured via `getBBox`: 18 by 22; the geometric mean would clip the
  *  bottom, so extent is the long-axis cap: 20.23, centered at (12, 12). */

@@ -9,7 +9,7 @@ export type PaneId = "a" | "b" | "c" | "d";
 export const PANE_IDS: readonly PaneId[] = ["a", "b", "c", "d"];
 
 export type SplitPreset = "single" | "cols2" | "split-right" | "grid2x2";
-/** Every preset, in the order the layout menu lists them. */
+/** Every preset — what a persisted layout is checked against. */
 export const PRESETS: readonly SplitPreset[] = ["single", "cols2", "split-right", "grid2x2"];
 
 function isPaneId(value: unknown): value is PaneId {
@@ -29,13 +29,6 @@ export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
   cols2: ["a", "b"],
   "split-right": ["a", "b", "c"],
   grid2x2: ["a", "b", "c", "d"]
-};
-
-export const PRESET_LABELS: Record<SplitPreset, string> = {
-  single: "Single",
-  cols2: "Two Columns",
-  "split-right": "Two Columns, Right Split",
-  grid2x2: "Grid (2x2)"
 };
 
 /** A position-based name for a pane, for "move to" entries and tooltips. */
@@ -189,17 +182,6 @@ export function normalizeLayout(
     return layout;
   }
   return { preset: layout.preset, focusedPane, tabPane: nextTabPane, activeTab: nextActiveTab, commandPane };
-}
-
-/**
- * A preset switch: panes that no longer exist hand their tabs to pane "a", present in every
- * preset. Re-normalized at once, so the new panes have a valid active tab before the next push.
- */
-export function applyPreset(layout: ProjectLayout, preset: SplitPreset, tabs: LayoutTab[]): ProjectLayout {
-  if (preset === layout.preset) {
-    return layout;
-  }
-  return retarget(layout, preset, {}, tabs);
 }
 
 /** Which pane of the new preset each pane of the old one becomes; one left out keeps its letter. */
