@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.6.2 (2026-09-13)
+
+- **The first start says what it is waiting for.** Before fetching Electron (over 100 MB, once),
+  `tet` now prints what it downloads and where, instead of staying silent until a progress bar
+  appears half a minute later.
+
 ## 0.6.1 (2026-09-13)
 
 - **No changes for you.** The release itself is what is new: it reaches npm through trusted
