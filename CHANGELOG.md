@@ -3,6 +3,21 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.6.0 (2026-09-13)
+
+- **Installed with npm.** TET now ships as the `tet-ide` package: `npm install -g tet-ide`, then
+  `tet`. No more installers or app bundles — nothing for a virus scanner or macOS to refuse. On
+  Windows the first start adds a Start menu entry and a desktop icon. On Linux, TET runs without
+  Chromium's sandbox, which a package manager cannot set up.
+- **Updates install when you quit.** A newer version on npm is announced once and installed after
+  TET closes, never while terminal sessions are running; the next start says so. Where TET
+  cannot install by itself (pnpm, yarn, bun, a prefix without write access), the notice carries
+  the command instead.
+- **A turn cut short counts as ended.** A Claude Code turn interrupted with Escape no longer
+  leaves its tab spinning.
+- **Startup notices are no longer lost.** A message from the first seconds of a start now waits
+  until the window can show it.
+
 ## 0.5.1 (2026-09-13)
 
 - **Installer no longer blocked by Sophos.** Opened from a browser, the Windows installer was
