@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { launchArgs } from "../shared/launch";
@@ -13,12 +14,32 @@ import { installDesktopIcon } from "./shortcuts";
  * also what downloads that binary the first time: the package has no install script, so neither
  * does tet (an `--ignore-scripts` install starts the same). Required rather than imported, so
  * esbuild leaves it to the installed package.
+ *
+ * That first download is over 100 MB, and all electron says about it is "Downloading Electron
+ * binary..." with a progress bar after 30 seconds (@electron/get). So the first start is announced
+ * before it, the way nativefier warns before fetching electron: what is being fetched, why, and
+ * that it happens once. The check is electron's own (`isInstalled` in its install.js): the binary
+ * `path.txt` names under `dist/`.
  */
 
 const PACKAGE_DIR = path.join(__dirname, "..");
 
+function announceFirstStart(resolve: NodeJS.Require): void {
+  const electronDir = path.dirname(resolve.resolve("electron/package.json"));
+  const pathFile = path.join(electronDir, "path.txt");
+  if (fs.existsSync(pathFile) && fs.existsSync(path.join(electronDir, "dist", fs.readFileSync(pathFile, "utf8")))) {
+    return;
+  }
+  const { version } = resolve("electron/package.json") as { version: string };
+  process.stdout.write(
+    `tet: first start. Fetching Electron ${version} into ${electronDir} (over 100 MB, once) - this takes seconds to minutes depending on the connection.\n`
+  );
+}
+
 function main(): void {
-  const electronPath: string = createRequire(__filename)("electron");
+  const resolve = createRequire(__filename);
+  announceFirstStart(resolve);
+  const electronPath: string = resolve("electron");
   // The variable that turns electron into node: set in one of tet's own terminals (tet-ctl's
   // launcher) or anywhere else, it would start a node here instead of the app.
   const env = { ...process.env };
