@@ -1,7 +1,7 @@
 # The release: a tag makes one. tet ships as the `tet-ide` package on npm and nothing else — one
 # package for every platform, since electron fetches its own binary on first start and node-pty
-# carries prebuilt files for all of them. The tests still run on each platform before anything is
-# published; the GitHub Release carries the notes.
+# carries prebuilt files for all of them. Nothing is published unless every platform passed both
+# the tests and the install test; the GitHub Release with the notes comes last.
 name: Build
 
 on:
@@ -10,30 +10,10 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  # The GitHub Release for the tag, named after the bare version (no "v"), as the installer
-  # releases before it were. Never marked latest: the installers up to 0.5.x ask GitHub's
-  # /releases/latest for their update, and a release without their files would leave them there
-  # for good instead of on 0.5.2, the last installer, which tells them to move to npm.
-  prepare-release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # The notes are the version's section of CHANGELOG.md, written by hand before the tag
-        # (see "Releasing" in CLAUDE.md): everything between its "## <version>" heading and the
-        # next one. A version without a section gets empty notes, as before.
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md --latest=false
-
   test:
-    needs: prepare-release
     strategy:
       # All three platforms report, even when one fails: a publish waits for every one of them.
       fail-fast: false
@@ -68,8 +48,36 @@ jobs:
       - run: npm test
         if: runner.os != 'Linux'
 
+  # What a user does, on each platform: install the package from a registry, start it, let it
+  # update itself on quit, start the new version (test/install.test.ts). Built for production, as
+  # prepublishOnly builds what is published.
+  install-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      TET_INSTALL_TEST: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run compile -- --production
+
+      - run: xvfb-run -a node --test dist-test/install.test.js
+        if: runner.os == 'Linux'
+      - run: node --test dist-test/install.test.js
+        if: runner.os != 'Linux'
+
   publish:
-    needs: test
+    needs: [test, install-test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,3 +98,25 @@ jobs:
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # The GitHub Release for the tag, once the package is out, named after the bare version (no "v")
+  # as the installer releases before it were. Never marked latest: the installers up to 0.5.x ask
+  # GitHub's /releases/latest for their update, and a release without their files would leave them
+  # there for good instead of on 0.5.2, the last installer, which tells them to move to npm.
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # The notes are the version's section of CHANGELOG.md, written by hand before the tag
+        # (see "Releasing" in CLAUDE.md): everything between its "## <version>" heading and the
+        # next one. A version without a section gets empty notes, as before.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md --latest=false

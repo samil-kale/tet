@@ -324,8 +324,26 @@ const TAIL_ENTRY_TYPES = [
   '"agent-name"',
   '"ai-title"',
   '"turn_duration"',
-  '"stop_hook_summary"'
+  '"stop_hook_summary"',
+  '"[Request interrupted by user'
 ];
+
+/** The user entry Claude appends when Escape cuts a turn short. Measured (2.1.270): cut short
+ *  while a tool runs ("… for tool use]"), a `turn_duration` follows it; cut short anywhere else,
+ *  this entry is all the transcript gets. */
+function isInterruptEntry(entry: Record<string, unknown>): boolean {
+  if (entry.type !== "user" || entry.isSidechain === true) {
+    return false;
+  }
+  const content = (entry.message as { content?: unknown } | undefined)?.content;
+  return (
+    Array.isArray(content) &&
+    content.some(
+      (part: { type?: unknown; text?: unknown }) =>
+        part.type === "text" && typeof part.text === "string" && part.text.startsWith("[Request interrupted by user")
+    )
+  );
+}
 
 /** Reads the entries in one stretch of a transcript from the end, into what is still unknown. */
 function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTail): void {
@@ -342,13 +360,14 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
     }
     // A pending turn_duration is resolved by the next *turn* entry below it: a stop_hook_summary
     // it names as its parent means Stop hooks ran (nothing to report); any other summary or an
-    // earlier turn's own turn_duration means this turn had none, i.e. it was cut short. A title
-    // entry between the two is skipped — a rename appends a custom-title at any moment.
+    // earlier turn's own turn_duration or an interrupt means this turn had none, i.e. it was cut
+    // short. A title entry between the two is skipped — a rename appends a custom-title at any moment.
     if (tail.pendingTurnEnd !== undefined) {
       if (
-        entry.type === "system" &&
-        entry.isSidechain !== true &&
-        (entry.subtype === "stop_hook_summary" || entry.subtype === "turn_duration")
+        (entry.type === "system" &&
+          entry.isSidechain !== true &&
+          (entry.subtype === "stop_hook_summary" || entry.subtype === "turn_duration")) ||
+        isInterruptEntry(entry)
       ) {
         if (!(entry.subtype === "stop_hook_summary" && entry.uuid === tail.pendingTurnEnd.parentUuid)) {
           tail.turnEndedAt = tail.pendingTurnEnd.ms;
@@ -381,6 +400,13 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
       } else {
         tail.pendingTurnEnd = { ms, parentUuid };
       }
+    } else if (tail.turnEndResolved === undefined && tail.pendingTurnEnd === undefined && isInterruptEntry(entry)) {
+      // Below every turn_duration: a turn cut short with no turn_duration of its own.
+      const ms = Date.parse(nonEmptyString(entry.timestamp) ?? "");
+      if (!Number.isNaN(ms)) {
+        tail.turnEndedAt = ms;
+      }
+      tail.turnEndResolved = true;
     }
   }
 }
@@ -392,9 +418,9 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
 /** Reads the transcript backwards for the entries that can sit anywhere in it and of which the
  *  *last* one counts: custom-title, the agent-name and ai-title Claude re-appends on a resume,
  *  and when the last turn ended. It runs to the beginning of the file where a session has none
- *  of them, since a rename made 300 KB of transcript ago is still the name. Claude writes a
- *  `turn_duration` entry when a turn ends whichever way it ended; sidechain entries are a
- *  subagent's own turns. */
+ *  of them, since a rename made 300 KB of transcript ago is still the name. A turn's end is its
+ *  `turn_duration` entry or, for most turns cut short, its interrupt entry (isInterruptEntry);
+ *  sidechain entries are a subagent's own turns. */
 function scanTail(filePath: string, sessionId: string): Promise<TranscriptTail> {
   return scanTranscriptTail(filePath, scanCache, {
     byteLimit: TITLE_SCAN_BYTE_LIMIT,

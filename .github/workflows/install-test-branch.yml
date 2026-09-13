@@ -1,0 +1,33 @@
+# Temporary: build.yml's install-test job on this branch, which only runs on tags otherwise.
+name: install test (branch)
+
+on:
+  push:
+    branches:
+      - feature/npm-distribution
+
+jobs:
+  install-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      TET_INSTALL_TEST: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run compile -- --production
+
+      - run: xvfb-run -a node --test dist-test/install.test.js
+        if: runner.os == 'Linux'
+      - run: node --test dist-test/install.test.js
+        if: runner.os != 'Linux'

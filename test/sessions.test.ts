@@ -112,6 +112,12 @@ describe("Claude Code's transcripts", () => {
       uuid: "t",
       ...extra
     });
+    const interrupt = (text: string, timestamp = LATER, extra: Record<string, unknown> = {}): unknown => ({
+      type: "user",
+      timestamp,
+      message: { role: "user", content: [{ type: "text", text }] },
+      ...extra
+    });
     transcripts({
       hooked: [prompt("p"), { type: "system", subtype: "stop_hook_summary", uuid: "h1" }, turn("h1")],
       cut: [prompt("p"), turn("nothing-below")],
@@ -128,7 +134,22 @@ describe("Claude Code's transcripts", () => {
         turn("h1")
       ],
       background: [prompt("p"), turn("none", { pendingBackgroundAgentCount: 1 })],
-      sidechain: [prompt("p"), turn("none", { isSidechain: true })]
+      sidechain: [prompt("p"), turn("none", { isSidechain: true })],
+      escaped: [
+        prompt("p"),
+        { type: "system", subtype: "stop_hook_summary", uuid: "h0" },
+        turn("h0", { timestamp: AT }),
+        prompt("q"),
+        interrupt("[Request interrupted by user]")
+      ],
+      escapedInTool: [
+        prompt("p"),
+        { type: "system", subtype: "stop_hook_summary", uuid: "h0" },
+        turn("h0", { timestamp: AT }),
+        interrupt("[Request interrupted by user for tool use]", AT),
+        turn("i1")
+      ],
+      escapedInSidechain: [prompt("p"), interrupt("[Request interrupted by user]", LATER, { isSidechain: true })]
     });
     const ends = Object.fromEntries(
       (await claudeSessionProvider.list("claude", cwd)).map((s) => [s.id, s.turnEndedAt])
@@ -139,6 +160,9 @@ describe("Claude Code's transcripts", () => {
     assert.equal(ends.renamedBetween, undefined, "a rename between the two says nothing");
     assert.equal(ends.background, undefined, "subagents still running — the Stop hook holds back too");
     assert.equal(ends.sidechain, undefined, "a subagent's turn is not the session's");
+    assert.equal(ends.escaped, ms(LATER), "Escape outside a tool writes no turn_duration, only the interrupt");
+    assert.equal(ends.escapedInTool, ms(LATER), "Escape during a tool writes both; the turn_duration dates it");
+    assert.equal(ends.escapedInSidechain, undefined, "a subagent's interrupt is not the session's");
   });
 
   it("orders by creation and survives a line that is not JSON", async () => {
