@@ -1,3 +1,5 @@
+import * as path from "node:path";
+
 /**
  * What the `tet` command (src/cli/tet.ts) and the app it starts agree on. tet is installed with
  * `npm install -g`, and nothing else installs it: `npm start` runs the same app without the
@@ -36,6 +38,26 @@ export interface UpdateResult {
   version: string;
   ok: boolean;
   output: string;
+}
+
+/**
+ * Where electron will put tet's userData, worked out by the `tet` command before electron runs:
+ * the platform's per-user app data directory plus the `productName` from package.json, unless a
+ * `--user-data-dir=` says otherwise (main.ts reads the same argument).
+ */
+export function userDataDir(argv: readonly string[], env: NodeJS.ProcessEnv, platform: string, home: string): string {
+  const paths = platform === "win32" ? path.win32 : path.posix;
+  const explicit = argv.find((arg) => arg.startsWith("--user-data-dir="))?.slice("--user-data-dir=".length);
+  if (explicit) {
+    return paths.resolve(explicit);
+  }
+  if (platform === "win32") {
+    return paths.join(env.APPDATA || paths.join(home, "AppData", "Roaming"), "TET");
+  }
+  if (platform === "darwin") {
+    return paths.join(home, "Library", "Application Support", "TET");
+  }
+  return paths.join(env.XDG_CONFIG_HOME || paths.join(home, ".config"), "TET");
 }
 
 /** The node the `tet` command ran under, or undefined for a run without it (`npm start`). */

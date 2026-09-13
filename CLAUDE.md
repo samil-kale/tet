@@ -26,9 +26,10 @@ sites: session listing/resume/rename/delete and the reconcile loop (`src/main/ag
 plugin that writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — TET never
 runs an opencode server, never reads its SQLite file, and runs its CLI only for one-off actions);
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
-(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs, named in the registry for want of a
-shortcut (`src/main/toast-identity.ts`), and where a click on one arrives, with no CLSID of tet's own; the `background_tasks` stop guard (`src/main/main.ts`,
-`src/main/agents/claude/hooks.ts`); the `--vscode-*` theming layer.
+(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs, named in the registry
+(`src/cli/shortcuts.ts`), and where a click on one arrives, with no CLSID of tet's own; the
+`background_tasks` stop guard (`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the
+`--vscode-*` theming layer.
 
 An agent gets no editor context and no quick fix. What it gets is the shell transcript
 (`src/main/terminals/shell-context.ts`), a capped file it is pointed at; every shell tab of a
@@ -700,7 +701,9 @@ setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.t
 electron with the package and hands it `--tet-node=<node>` (`src/shared/launch.ts`): that argument
 is how the app tells an install from `npm start`, and the node is what the update runs under. On
 macOS the command renames electron's bundle to TET and re-signs it ad hoc; on Linux it passes
-`--no-sandbox`. The shortcuts an installer used to make are written by the app itself
-(`src/main/shortcuts.ts`), once per node and prefix, so a deleted one stays deleted. An update
+`--no-sandbox`. What an installer used to set up — shortcuts, and on Windows the toasts' name in
+the registry — the command has a detached script put in place once tet is starting
+(`src/cli/shortcuts.ts`): a virus scanner refusing it costs those, never tet. Once per node and
+prefix, so a deleted shortcut stays deleted and a refusal is not repeated at every start. An update
 (`src/main/auto-update.ts`) is found on npm's registry and installed by `src/cli/tet-update.ts`
 once tet has quit — never mid-session, a terminal tab being a live agent session.

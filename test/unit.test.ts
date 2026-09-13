@@ -8,12 +8,12 @@ import { writeLaunchers } from "../src/main/control/control-launcher";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { installPrefix, isNewerVersion } from "../src/main/npm-install";
 import { SettingsStore } from "../src/main/settings";
-import { desktopEntry, macLauncherScript } from "../src/main/shortcut-files";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager } from "../src/main/terminals/session-manager";
 import { ShellContext } from "../src/main/terminals/shell-context";
 import type { HookEvent } from "../src/shared/control";
-import { launchArgs, launcherNode } from "../src/shared/launch";
+import { desktopEntry, macLauncherScript } from "../src/cli/shortcuts";
+import { launchArgs, launcherNode, userDataDir } from "../src/shared/launch";
 import type { TerminalDescriptor } from "../src/shared/types";
 import { CLI, eventually } from "./helpers";
 
@@ -130,6 +130,14 @@ describe("the tet command and its update", () => {
     assert.deepEqual(launchArgs("linux", "pkg", "/usr/bin/node"), ["pkg", "--tet-node=/usr/bin/node", "--no-sandbox"]);
     assert.equal(launcherNode(["electron", "pkg", "--tet-node=/usr/bin/node"]), "/usr/bin/node");
     assert.equal(launcherNode(["electron", "."]), undefined);
+  });
+
+  it("finds the userData electron will use, before electron runs", () => {
+    assert.equal(userDataDir([], { APPDATA: "C:\\Users\\a\\AppData\\Roaming" }, "win32", "C:\\Users\\a"), "C:\\Users\\a\\AppData\\Roaming\\TET");
+    assert.equal(userDataDir([], {}, "darwin", "/Users/a"), "/Users/a/Library/Application Support/TET");
+    assert.equal(userDataDir([], { XDG_CONFIG_HOME: "/x" }, "linux", "/home/a"), "/x/TET");
+    assert.equal(userDataDir([], {}, "linux", "/home/a"), "/home/a/.config/TET");
+    assert.equal(userDataDir(["--user-data-dir=/tmp/p"], {}, "linux", "/home/a"), "/tmp/p");
   });
 
   it("installs into the prefix npm put tet in, and leaves other package managers alone", () => {

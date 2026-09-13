@@ -5,7 +5,7 @@ import { app, BrowserWindow, Menu, Notification } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
-import { launcherNode } from "../shared/launch";
+import { launcherNode, NODE_ARG } from "../shared/launch";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
@@ -25,8 +25,6 @@ import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
 import { currentTheme } from "./theme";
-import { writeShortcuts } from "./shortcuts";
-import { writeToastIdentity } from "./toast-identity";
 
 /** Terminal output arrives in many small chunks; one IPC message per chunk is wasteful. */
 const OUTPUT_FLUSH_MS = 8;
@@ -82,8 +80,8 @@ if (userDataArg) {
 /**
  * Who Windows says a toast is from. The name and icon above every notification are those Windows
  * finds for this id — never anything the notification holds, which is why a toast needs no icon
- * of its own. Electron sets none of it by itself; an install writes them (`writeToastIdentity`,
- * started in whenReady below), since it has no Start Menu shortcut to carry them.
+ * of its own. Electron sets none of it by itself; the `tet` command has them written into the
+ * registry (src/cli/shortcuts.ts), and a refusal there leaves the toasts reading "Electron".
  *
  * A development run writes nothing and reads "Electron" — and Windows keeps what it once decided
  * about an id, so one such toast under the shipped id leaves the *installed* tet reading that too,
@@ -348,6 +346,16 @@ function createWindow(): void {
     }
   });
 
+  // What the taskbar pins: electron alone would start its own default app. The shortcuts the `tet`
+  // command has written cannot carry the id (src/cli/shortcuts.ts), so the window names it.
+  if (installedNode && process.platform === "win32") {
+    window.setAppDetails({
+      appId: APP_USER_MODEL_ID,
+      appIconPath: path.join(__dirname, "icon.ico"),
+      relaunchCommand: `"${process.execPath}" "${path.join(__dirname, "..")}" ${NODE_ARG}"${installedNode}"`,
+      relaunchDisplayName: "TET"
+    });
+  }
   window.once("ready-to-show", () => window?.show());
   // Looked at: what attractAttention asked for is answered.
   window.on("focus", () => window?.flashFrame(false));
@@ -410,19 +418,6 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
-    // What an installer would have set up, and neither may cost the window.
-    if (installedNode) {
-      if (process.platform === "win32") {
-        writeToastIdentity(APP_USER_MODEL_ID, path.join(__dirname, "icon.png"), app.getPath("userData")).catch((error) =>
-          logError(`could not name tet's toasts: ${String(error)}`)
-        );
-      }
-      try {
-        writeShortcuts(installedNode, APP_USER_MODEL_ID);
-      } catch (error) {
-        logError(`could not write tet's shortcuts: ${String(error)}`);
-      }
-    }
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
     // Before anything reads PATH — the requirements check and every terminal do — add where agents
     // actually install to it, since tet is launched with the OS's barer GUI PATH. Awaited only

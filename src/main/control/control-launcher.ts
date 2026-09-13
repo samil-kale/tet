@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { shellSingleQuote, writePosixScript } from "../terminals/script-text";
+import { shellSingleQuote, writePosixScript } from "../../shared/script-text";
 
 /**
  * The `tet-ctl` command a terminal finds on its PATH: one launcher per platform, written into

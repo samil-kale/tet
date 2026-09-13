@@ -3,8 +3,8 @@ import * as fs from "node:fs";
 /**
  * What a file tet generates for another process to run has to get right whatever is in it: how
  * PowerShell decodes it, how `sh` reads its line endings, and how a path or a name written into
- * one stays a single word. Used by the control launchers and the shell transcript; nothing here
- * knows what it is writing.
+ * one stays a single word. Used by the control launchers, the shell transcript and the `tet`
+ * command's shortcut scripts; nothing here knows what it is writing.
  */
 
 /** PowerShell 5.1 decodes a BOM-less file as ANSI, so anything it will read needs this. */
