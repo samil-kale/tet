@@ -1,9 +1,8 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import * as os from "node:os";
 import * as path from "node:path";
-import { launchArgs, userDataDir } from "../shared/launch";
-import { installShortcuts } from "./shortcuts";
+import { launchArgs } from "../shared/launch";
+import { installDesktopIcon } from "./shortcuts";
 
 /**
  * `tet`: the command `npm install -g tet-ide` puts on PATH. It starts electron with the package
@@ -24,7 +23,7 @@ function main(): void {
   // launcher) or anywhere else, it would start a node here instead of the app.
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  const args = [...launchArgs(process.platform, PACKAGE_DIR, process.execPath), ...process.argv.slice(2)];
+  const args = [...launchArgs(process.platform, PACKAGE_DIR), ...process.argv.slice(2)];
   const child = spawn(electronPath, args, {
     detached: true,
     stdio: "ignore",
@@ -32,12 +31,13 @@ function main(): void {
   });
   child.on("spawn", () => {
     child.unref();
-    // Only once tet is on its way: whatever becomes of the shortcuts, it is not tet's start.
-    try {
-      const userData = userDataDir(process.argv.slice(2), process.env, process.platform, os.homedir());
-      installShortcuts(userData, electronPath, PACKAGE_DIR, process.execPath);
-    } catch (error) {
-      process.stderr.write(`tet: could not set up the shortcuts (${String(error)})\n`);
+    // Only once tet is on its way: whatever becomes of the script, it is not tet's start.
+    if (process.platform === "win32") {
+      try {
+        installDesktopIcon(process.argv.slice(2), electronPath, PACKAGE_DIR);
+      } catch (error) {
+        process.stderr.write(`tet: could not set up the desktop icon (${String(error)})\n`);
+      }
     }
     process.exit(0);
   });

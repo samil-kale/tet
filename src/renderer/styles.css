@@ -855,6 +855,10 @@ textarea:focus {
      padding box. */
   inset: 6px;
   background: var(--vscode-terminal-background);
+  /* Keeps the DOM renderer's row updates from invalidating style and layout of the whole
+     window: the renderer logged 0.7-1.2s long tasks on writes of ~100 chars. No `paint`
+     containment, which would clip the drag-over frame reaching past the host. */
+  contain: size layout style;
 }
 
 /* visibility, not display: xterm needs a laid-out element to measure itself. */

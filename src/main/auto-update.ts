@@ -21,9 +21,9 @@ const PACKAGE_DIR = path.join(__dirname, "..");
 
 type Notify = (severity: NoticeSeverity, message: string) => void;
 
-/** The update found this session, for `installPendingUpdate` to run: the version, the node to run
- *  it under, and the prefix npm installs into. */
-let pending: { version: string; node: string; prefix: string } | undefined;
+/** The update found this session, for `installPendingUpdate` to run: the version and the prefix
+ *  npm installs into. */
+let pending: { version: string; prefix: string } | undefined;
 
 function updateDir(): string {
   return path.join(app.getPath("userData"), "update");
@@ -61,14 +61,14 @@ async function latestVersion(): Promise<string | undefined> {
 }
 
 /**
- * Only for tet started by its `tet` command (the node it passes along), never `npm start`. Asks
+ * Only for tet started as an install (`--tet-installed`), never `npm start`. Asks
  * npm's registry at startup and every four hours; a newer version is announced once and, where
  * tet can install it by itself, installed when tet quits (`installPendingUpdate`) — never in the
  * middle of a session, a terminal tab being a live agent session. Where it cannot (pnpm, yarn,
  * bun, or a prefix that needs more rights), the notice carries the command instead.
  */
-export function startAutoUpdate(launcherNode: string | undefined, notify: Notify): void {
-  if (!launcherNode) {
+export function startAutoUpdate(installed: boolean, notify: Notify): void {
+  if (!installed) {
     return;
   }
   const prefix = installPrefix(PACKAGE_DIR);
@@ -84,7 +84,7 @@ export function startAutoUpdate(launcherNode: string | undefined, notify: Notify
     }
     announced = latest;
     if (installable) {
-      pending = { version: latest, node: launcherNode, prefix: installable };
+      pending = { version: latest, prefix: installable };
       notify("info", `Update ${latest} available, installs when you quit TET`);
     } else {
       notify("info", `Update ${latest} available, update with: ${MANUAL_COMMAND}`);
@@ -111,7 +111,9 @@ export function installPendingUpdate(): void {
     fs.mkdirSync(dir, { recursive: true });
     const script = path.join(dir, "tet-update.js");
     fs.copyFileSync(path.join(__dirname, "tet-update.js"), script);
-    const child = spawn(pending.node, [script, String(process.pid), pending.version, pending.prefix, resultPath()], {
+    // Whichever node the PATH has: npm is told the prefix, so it need not be the one that ran `tet`.
+    // Not electron as node, since electron's own binary is among the files npm replaces.
+    const child = spawn("node", [script, String(process.pid), pending.version, pending.prefix, resultPath()], {
       cwd: dir,
       detached: true,
       stdio: "ignore",

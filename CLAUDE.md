@@ -26,8 +26,9 @@ sites: session listing/resume/rename/delete and the reconcile loop (`src/main/ag
 plugin that writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — TET never
 runs an opencode server, never reads its SQLite file, and runs its CLI only for one-off actions);
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
-(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast needs, named in the registry
-(`src/cli/shortcuts.ts`), and where a click on one arrives, with no CLSID of tet's own; the
+(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast and a pinned window need — a
+registry entry for the one (`src/cli/shortcuts.ts`), the Start menu entry for the other
+(`src/main/start-menu.ts`) — and where a click on a toast arrives, with no CLSID of tet's own; the
 `background_tasks` stop guard (`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the
 `--vscode-*` theming layer.
 
@@ -698,12 +699,13 @@ all three platforms and publishes the `tet-ide` package to npm (`NPM_TOKEN` secr
 
 **tet ships through npm and nothing else** — no installer, no bundle (Sophos blocked the NSIS
 setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.ts`) starts
-electron with the package and hands it `--tet-node=<node>` (`src/shared/launch.ts`): that argument
-is how the app tells an install from `npm start`, and the node is what the update runs under. On
-Linux it passes `--no-sandbox`. electron's own bundle is never modified or re-signed, so on macOS
-the Dock and the menu bar read "Electron". What an installer used to set up — shortcuts, and on
-Windows the toasts' name in the registry — the command has a script put in place once tet is starting
-(`src/cli/shortcuts.ts`): a virus scanner refusing it costs those, never tet. Once per node and
-prefix, so a deleted shortcut stays deleted and a refusal is not repeated at every start. An update
+electron with the package and hands it `--tet-installed` (`src/shared/launch.ts`), which is how the
+app tells an install from `npm start`. On Linux it passes `--no-sandbox`. electron's own bundle is
+never modified or re-signed, so on macOS the Dock and the menu bar read "Electron". Shortcuts exist
+on Windows alone. The Start menu entry is the app's own (`src/main/start-menu.ts`): only a shell
+API puts the AppUserModelID on it, and without that pinning the window pins a bare electron.exe.
+The desktop icon and the toasts' name in the registry are put in place by a PowerShell script the
+command runs once tet is starting (`src/cli/shortcuts.ts`) — a virus scanner refusing it costs
+those, never tet; once per package directory, so a deleted icon stays deleted. An update
 (`src/main/auto-update.ts`) is found on npm's registry and installed by `src/cli/tet-update.ts`
 once tet has quit — never mid-session, a terminal tab being a live agent session.

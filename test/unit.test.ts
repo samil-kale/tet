@@ -12,8 +12,7 @@ import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager } from "../src/main/terminals/session-manager";
 import { ShellContext } from "../src/main/terminals/shell-context";
 import type { HookEvent } from "../src/shared/control";
-import { desktopEntry, macLauncherScript } from "../src/cli/shortcuts";
-import { launchArgs, launcherNode, userDataDir } from "../src/shared/launch";
+import { launchArgs } from "../src/shared/launch";
 import type { TerminalDescriptor } from "../src/shared/types";
 import { CLI, eventually } from "./helpers";
 
@@ -125,19 +124,9 @@ describe("the tet-ctl launcher", () => {
 });
 
 describe("the tet command and its update", () => {
-  it("hands electron the package, its node, and on Linux no sandbox", () => {
-    assert.deepEqual(launchArgs("win32", "pkg", "node.exe"), ["pkg", "--tet-node=node.exe"]);
-    assert.deepEqual(launchArgs("linux", "pkg", "/usr/bin/node"), ["pkg", "--tet-node=/usr/bin/node", "--no-sandbox"]);
-    assert.equal(launcherNode(["electron", "pkg", "--tet-node=/usr/bin/node"]), "/usr/bin/node");
-    assert.equal(launcherNode(["electron", "."]), undefined);
-  });
-
-  it("finds the userData electron will use, before electron runs", () => {
-    assert.equal(userDataDir([], { APPDATA: "C:\\Users\\a\\AppData\\Roaming" }, "win32", "C:\\Users\\a"), "C:\\Users\\a\\AppData\\Roaming\\TET");
-    assert.equal(userDataDir([], {}, "darwin", "/Users/a"), "/Users/a/Library/Application Support/TET");
-    assert.equal(userDataDir([], { XDG_CONFIG_HOME: "/x" }, "linux", "/home/a"), "/x/TET");
-    assert.equal(userDataDir([], {}, "linux", "/home/a"), "/home/a/.config/TET");
-    assert.equal(userDataDir(["--user-data-dir=/tmp/p"], {}, "linux", "/home/a"), "/tmp/p");
+  it("hands electron the package, the install flag, and on Linux no sandbox", () => {
+    assert.deepEqual(launchArgs("win32", "pkg"), ["pkg", "--tet-installed"]);
+    assert.deepEqual(launchArgs("linux", "pkg"), ["pkg", "--tet-installed", "--no-sandbox"]);
   });
 
   it("installs into the prefix npm put tet in, and leaves other package managers alone", () => {
@@ -145,13 +134,6 @@ describe("the tet command and its update", () => {
     assert.equal(installPrefix("/usr/local/lib/node_modules/tet-ide", "linux"), "/usr/local");
     assert.equal(installPrefix("/home/me/tet", "linux"), undefined);
     assert.equal(installPrefix("/home/me/.local/share/pnpm/global/5/node_modules/tet-ide", "linux"), undefined);
-  });
-
-  it("writes shortcuts that run the tet command, quoted for their readers", () => {
-    const entry = desktopEntry("/opt/my node/bin/node", '/home/a"b/$x/dist/tet.js', "/p/icon.png");
-    assert.match(entry, /^Exec="\/opt\/my node\/bin\/node" "\/home\/a\\"b\/\\\$x\/dist\/tet\.js"$/m);
-    assert.match(entry, /^Icon=\/p\/icon\.png$/m);
-    assert.equal(macLauncherScript("/usr/bin/node", "/it's/tet.js"), "#!/bin/sh\nexec '/usr/bin/node' '/it'\\''s/tet.js'\n");
   });
 
   it("counts only a plain higher version as newer", () => {

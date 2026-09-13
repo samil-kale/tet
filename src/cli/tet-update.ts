@@ -6,10 +6,9 @@ import type { UpdateResult } from "../shared/launch";
 
 /**
  * The update, run once tet has quit: `node tet-update.js <pid> <version> <prefix> <result file>`.
- * Started detached by the app's auto-update.ts from a copy outside the package, under the node
- * the `tet` command ran with — never electron's own binary, which is among the files npm
- * replaces, and which win32 keeps locked, like node-pty's native files, until tet's process is
- * gone. Hence the wait first.
+ * Started detached by the app's auto-update.ts from a copy outside the package, under the `node`
+ * on PATH — never electron's own binary, which is among the files npm replaces, and which win32
+ * keeps locked, like node-pty's native files, until tet's process is gone. Hence the wait first.
  */
 
 const EXIT_WAIT_MS = 60_000;

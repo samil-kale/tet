@@ -5,7 +5,7 @@ import { app, BrowserWindow, Menu, Notification } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
-import { launcherNode, NODE_ARG } from "../shared/launch";
+import { INSTALLED_ARG } from "../shared/launch";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
@@ -24,6 +24,7 @@ import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
+import { writeStartMenuShortcut } from "./start-menu";
 import { currentTheme } from "./theme";
 
 /** Terminal output arrives in many small chunks; one IPC message per chunk is wasteful. */
@@ -80,8 +81,9 @@ if (userDataArg) {
 /**
  * Who Windows says a toast is from. The name and icon above every notification are those Windows
  * finds for this id — never anything the notification holds, which is why a toast needs no icon
- * of its own. Electron sets none of it by itself; the `tet` command has them written into the
- * registry (src/cli/shortcuts.ts), and a refusal there leaves the toasts reading "Electron".
+ * of its own. Electron sets none of it by itself: for an install the `tet` command writes them
+ * into the registry (src/cli/shortcuts.ts), and without that the toasts read "Electron". The
+ * taskbar button takes its name from the Start menu entry instead (writeStartMenuShortcut below).
  *
  * A development run writes nothing and reads "Electron" — and Windows keeps what it once decided
  * about an id, so one such toast under the shipped id leaves the *installed* tet reading that too,
@@ -91,9 +93,9 @@ if (userDataArg) {
  * keeps what Windows decided about it.
  */
 const APP_USER_MODEL_ID = "com.samilkale.tet";
-const installedNode = launcherNode(process.argv);
+const installed = process.argv.includes(INSTALLED_ARG);
 if (process.platform === "win32") {
-  app.setAppUserModelId(installedNode ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
+  app.setAppUserModelId(installed ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
 }
 
 // Before the stores, and before anything that could throw asynchronously: an uncaught exception
@@ -346,16 +348,6 @@ function createWindow(): void {
     }
   });
 
-  // What the taskbar pins: electron alone would start its own default app. The shortcuts the `tet`
-  // command has written cannot carry the id (src/cli/shortcuts.ts), so the window names it.
-  if (installedNode && process.platform === "win32") {
-    window.setAppDetails({
-      appId: APP_USER_MODEL_ID,
-      appIconPath: path.join(__dirname, "icon.ico"),
-      relaunchCommand: `"${process.execPath}" "${path.join(__dirname, "..")}" ${NODE_ARG}"${installedNode}"`,
-      relaunchDisplayName: "TET"
-    });
-  }
   window.once("ready-to-show", () => window?.show());
   // Looked at: what attractAttention asked for is answered.
   window.on("focus", () => window?.flashFrame(false));
@@ -418,6 +410,13 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    if (installed && process.platform === "win32") {
+      try {
+        writeStartMenuShortcut(APP_USER_MODEL_ID);
+      } catch (error) {
+        logError(`could not write the Start menu entry: ${String(error)}`);
+      }
+    }
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
     // Before anything reads PATH — the requirements check and every terminal do — add where agents
     // actually install to it, since tet is launched with the OS's barer GUI PATH. Awaited only
@@ -450,7 +449,7 @@ if (!app.requestSingleInstanceLock()) {
     await pathReady;
     timeStartup("git-process", startGitProcess);
     timeStartup("auto-update", () =>
-      startAutoUpdate(installedNode, (severity, message) => send("app:notice", { severity, message }))
+      startAutoUpdate(installed, (severity, message) => send("app:notice", { severity, message }))
     );
 
     app.on("activate", () => {
