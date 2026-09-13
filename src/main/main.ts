@@ -25,6 +25,7 @@ import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
 import { currentTheme } from "./theme";
+import { writeShortcuts } from "./shortcuts";
 import { writeToastIdentity } from "./toast-identity";
 
 /** Terminal output arrives in many small chunks; one IPC message per chunk is wasteful. */
@@ -413,6 +414,13 @@ if (!app.requestSingleInstanceLock()) {
       writeToastIdentity(APP_USER_MODEL_ID, path.join(__dirname, "icon.png"), app.getPath("userData")).catch((error) =>
         logError(`could not name tet's toasts: ${String(error)}`)
       );
+    }
+    if (installedNode) {
+      try {
+        writeShortcuts(installedNode, APP_USER_MODEL_ID);
+      } catch (error) {
+        logError(`could not write tet's shortcuts: ${String(error)}`);
+      }
     }
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
     // Before anything reads PATH — the requirements check and every terminal do — add where agents

@@ -83,6 +83,19 @@ function main(): void {
     output = `${run.stdout ?? ""}${run.stderr ?? ""}${run.error ? String(run.error) : ""}`;
     ok = run.status === 0;
   }
+  if (ok) {
+    // electron fetches its binary on first use, and the install left the new copy without one:
+    // fetched here, since tet's Windows shortcuts start that binary directly (shortcuts.ts).
+    const packageDir =
+      process.platform === "win32"
+        ? path.join(prefix, "node_modules", NPM_PACKAGE)
+        : path.join(prefix, "lib", "node_modules", NPM_PACKAGE);
+    const fetch = spawnSync(process.execPath, ["-e", "require(process.argv[1])", path.join(packageDir, "node_modules", "electron")], {
+      encoding: "utf8",
+      windowsHide: true
+    });
+    output += `${fetch.stdout ?? ""}${fetch.stderr ?? ""}`;
+  }
   writeResult(resultFile, { version, ok, output: output.slice(-OUTPUT_TAIL) });
 }
 

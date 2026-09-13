@@ -8,6 +8,7 @@ import { writeLaunchers } from "../src/main/control/control-launcher";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { installPrefix, isNewerVersion } from "../src/main/npm-install";
 import { SettingsStore } from "../src/main/settings";
+import { desktopEntry, macLauncherScript } from "../src/main/shortcut-files";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager } from "../src/main/terminals/session-manager";
 import { ShellContext } from "../src/main/terminals/shell-context";
@@ -136,6 +137,13 @@ describe("the tet command and its update", () => {
     assert.equal(installPrefix("/usr/local/lib/node_modules/tet-ide", "linux"), "/usr/local");
     assert.equal(installPrefix("/home/me/tet", "linux"), undefined);
     assert.equal(installPrefix("/home/me/.local/share/pnpm/global/5/node_modules/tet-ide", "linux"), undefined);
+  });
+
+  it("writes shortcuts that run the tet command, quoted for their readers", () => {
+    const entry = desktopEntry("/opt/my node/bin/node", '/home/a"b/$x/dist/tet.js', "/p/icon.png");
+    assert.match(entry, /^Exec="\/opt\/my node\/bin\/node" "\/home\/a\\"b\/\\\$x\/dist\/tet\.js"$/m);
+    assert.match(entry, /^Icon=\/p\/icon\.png$/m);
+    assert.equal(macLauncherScript("/usr/bin/node", "/it's/tet.js"), "#!/bin/sh\nexec '/usr/bin/node' '/it'\\''s/tet.js'\n");
   });
 
   it("counts only a plain higher version as newer", () => {
