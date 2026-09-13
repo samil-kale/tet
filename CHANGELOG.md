@@ -3,6 +3,24 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.7.0 (2026-09-14)
+
+- **Installed by a script, no npm needed.** On macOS and Linux run
+  `curl -fsSL https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.sh | sh`,
+  on Windows `irm https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.ps1 | iex`.
+  TET is installed for your user alone, with a Start menu entry, a desktop icon and `tet` on the
+  PATH on Windows, `tet` and a desktop entry on Linux. The npm package is no longer updated.
+- **Notifications come from TET.** No more "Electron" entry in the Start menu after the first
+  notification. Clicking a notification brings TET to the front on the session it is about, and
+  one clicked after TET was closed starts it.
+- **Updates come from the GitHub release.** A new version is downloaded in the background and
+  installed after you quit, never while terminal sessions are running.
+- **Files open in an editor tab.** Double-click a changed file or ctrl-click a path in a terminal,
+  and it opens in the project's editor tab; the next file reuses it.
+- **Split by dragging.** The layout picker is gone: drag a tab onto the right side or the lower left of
+  the terminals to split them.
+- **The branch tree remembers what you folded.** Only local branches are open at first.
+
 ## 0.6.2 (2026-09-13)
 
 - **The first start says what it is waiting for.** Before fetching Electron (over 100 MB, once),
