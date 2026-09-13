@@ -88,11 +88,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `registry-url`: with it, setup-node writes an .npmrc taking the token from
+      # NODE_AUTH_TOKEN and sets that to a placeholder — npm then sends the placeholder as its
+      # credential instead of the OIDC token, and the registry answers 404 (measured).
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       # Node 22 ships npm 10; trusted publishing needs 11.5.1 or later.
       - run: npm install -g npm@latest
