@@ -667,7 +667,9 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 - `npm test` — compile, then node's own runner over `dist-test/`, one file per seam: the control
   server with its electron-side dependencies faked, driven through the built `tet-ctl`
   (`control.test.ts`); the real app on a throwaway profile, driven through `tet-ctl` alone
-  (`app.test.ts` — needs a display, `xvfb-run` on Linux); `git.ts` against the real git
+  (`app.test.ts` — needs a display, `xvfb-run` on Linux); the package installed from a local
+  registry, started by `tet` and updated on quit (`install.test.ts`, skipped unless
+  `TET_INSTALL_TEST=1` — it writes Windows shortcuts for the account); `git.ts` against the real git
   (`git.test.ts`); the session providers against transcripts written the way the CLIs write them
   (`sessions.test.ts`); `tet.json` reading and writing (`commands.test.ts`); the command-line
   reading (`command.test.ts`); the split view's rules and `tabsInFront` (`pane-layout.test.ts`);
@@ -693,9 +695,9 @@ When asked for a release, run it:
 2. `npm version patch` (or `minor` / `major`), then `git push && git push --tags`.
 
 `npm version` bumps `package.json` and tags in one step, and refuses on a dirty tree — hence the
-changelog commit first. The tag push triggers `.github/workflows/build.yml`, which takes the
-version's section of `CHANGELOG.md` as the release notes of a GitHub Release, runs the tests on
-all three platforms and publishes the `tet-ide` package to npm (`NPM_TOKEN` secret).
+changelog commit first. The tag push triggers `.github/workflows/build.yml`: the tests and the
+install test on all three platforms, and only when every one passed, the `tet-ide` package to npm
+(`NPM_TOKEN` secret) and then a GitHub Release with the version's section of `CHANGELOG.md`.
 
 **tet ships through npm and nothing else** — no installer, no bundle (Sophos blocked the NSIS
 setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.ts`) starts
