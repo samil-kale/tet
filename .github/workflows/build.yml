@@ -102,7 +102,8 @@ jobs:
       - run: npm ci
 
       # prepublishOnly builds dist/ for production first; `files` in package.json is what goes in.
-      - run: npm publish --access public
+      # Verbose, so a refused OIDC exchange shows in the log rather than as a bare "need auth".
+      - run: npm --version && npm publish --access public --loglevel verbose
 
   # The GitHub Release for the tag, once the package is out, named after the bare version (no "v")
   # as the installer releases before it were. Never marked latest: the installers up to 0.5.x ask
