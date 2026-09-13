@@ -1,22 +1,19 @@
-import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as path from "node:path";
-import { NPM_PACKAGE } from "../shared/launch";
-import type { UpdateResult } from "../shared/launch";
+import type { UpdateResult } from "../shared/release";
 
 /**
- * The update, run once tet has quit: `node tet-update.js <pid> <version> <prefix> <result file>`.
- * Started detached by the app's auto-update.ts from a copy outside the package, under the `node`
- * on PATH — never electron's own binary, which is among the files npm replaces, and which win32
- * keeps locked, like node-pty's native files, until tet's process is gone. Hence the wait first.
+ * The update, run once tet has quit: `tet-update.js <pid> <version> <staged root> <install root>
+ * <result file>`. Started detached by the app's auto-update.ts under the *new* version's binary as
+ * node, from the folder that version was unpacked into — never the installed binary, which is what
+ * gets replaced, and which win32 keeps locked, like node-pty's native files, until tet's process is
+ * gone. Hence the wait first.
  */
 
 const EXIT_WAIT_MS = 60_000;
 const POLL_MS = 250;
-/** A handle outliving the process by a moment (a pty's console host) fails npm with EBUSY. */
-const ATTEMPTS = 3;
-const RETRY_MS = 3000;
-const OUTPUT_TAIL = 4000;
+/** A handle outliving the process by a moment (a pty's console host) fails a rename with EBUSY. */
+const ATTEMPTS = 5;
+const RETRY_MS = 2000;
 
 function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -32,26 +29,18 @@ function alive(pid: number): boolean {
   }
 }
 
-/**
- * npm itself, run by this node without a shell: `npm-cli.js` sits beside every node that ships
- * npm (`node_modules/npm` next to node.exe on win32, `../lib/node_modules/npm` elsewhere). Only
- * where it is not found does `npm` go through PATH, and on win32 through cmd.exe, its `npm.cmd`
- * being a shim.
- */
-function npmCommand(args: string[]): { command: string; args: string[] } {
-  const nodeDir = path.dirname(process.execPath);
-  const candidates = [
-    path.join(nodeDir, "node_modules", "npm", "bin", "npm-cli.js"),
-    path.join(nodeDir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js")
-  ];
-  const cli = candidates.find((candidate) => fs.existsSync(candidate));
-  if (cli) {
-    return { command: process.execPath, args: [cli, ...args] };
+function retried(action: () => void): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      action();
+      return;
+    } catch (error) {
+      if (attempt >= ATTEMPTS) {
+        throw error;
+      }
+      sleep(RETRY_MS);
+    }
   }
-  if (process.platform === "win32") {
-    return { command: "cmd.exe", args: ["/d", "/s", "/c", "npm", ...args] };
-  }
-  return { command: "npm", args };
 }
 
 /** Beside the target and renamed into place: the app may be starting again and reading it. */
@@ -62,47 +51,48 @@ function writeResult(file: string, result: UpdateResult): void {
 }
 
 function main(): void {
-  const [pidArg, version, prefix, resultFile] = process.argv.slice(2);
+  const [pidArg, version, staged, root, resultFile] = process.argv.slice(2);
   const pid = Number(pidArg);
   const deadline = Date.now() + EXIT_WAIT_MS;
   while (alive(pid) && Date.now() < deadline) {
     sleep(POLL_MS);
   }
   // Never under a tet that is still there: measured on macOS, a quit can leave the process
-  // standing without a window, and npm would replace the files it runs from. The version is found
+  // standing without a window, and its folder would be replaced under it. The version is found
   // again at its next start, and installed at its next quit.
   if (alive(pid)) {
     writeResult(resultFile, { version, ok: false, output: `tet (pid ${pid}) was still running after ${EXIT_WAIT_MS / 1000}s` });
     return;
   }
 
-  // No install scripts: electron downloads its binary on first use and node-pty loads its
-  // prebuilt files directly, so none are needed — and none run with the user's rights unasked.
-  const { command, args } = npmCommand(["install", "-g", "--ignore-scripts", `--prefix=${prefix}`, `${NPM_PACKAGE}@${version}`]);
-  let output = "";
-  let ok = false;
-  for (let attempt = 1; attempt <= ATTEMPTS && !ok; attempt++) {
-    if (attempt > 1) {
-      sleep(RETRY_MS);
+  // The installed folder is moved aside rather than deleted first, so a failure can put it back.
+  const old = `${root}.old`;
+  try {
+    fs.rmSync(old, { recursive: true, force: true });
+    retried(() => fs.renameSync(root, old));
+  } catch (error) {
+    writeResult(resultFile, { version, ok: false, output: `could not move ${root} aside: ${String(error)}` });
+    return;
+  }
+  try {
+    try {
+      fs.renameSync(staged, root);
+    } catch {
+      // A rename cannot take the folder this process runs from on win32, nor cross a volume.
+      fs.cpSync(staged, root, { recursive: true, verbatimSymlinks: true });
     }
-    const run = spawnSync(command, args, { encoding: "utf8", windowsHide: true });
-    output = `${run.stdout ?? ""}${run.stderr ?? ""}${run.error ? String(run.error) : ""}`;
-    ok = run.status === 0;
+  } catch (error) {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.renameSync(old, root);
+    writeResult(resultFile, { version, ok: false, output: `could not put ${version} in place: ${String(error)}` });
+    return;
   }
-  if (ok) {
-    // electron fetches its binary on first use, and the install left the new copy without one:
-    // fetched here, since tet's Windows shortcuts start that binary directly (shortcuts.ts).
-    const packageDir =
-      process.platform === "win32"
-        ? path.join(prefix, "node_modules", NPM_PACKAGE)
-        : path.join(prefix, "lib", "node_modules", NPM_PACKAGE);
-    const fetch = spawnSync(process.execPath, ["-e", "require(process.argv[1])", path.join(packageDir, "node_modules", "electron")], {
-      encoding: "utf8",
-      windowsHide: true
-    });
-    output += `${fetch.stdout ?? ""}${fetch.stderr ?? ""}`;
+  writeResult(resultFile, { version, ok: true, output: "" });
+  try {
+    fs.rmSync(old, { recursive: true, force: true, maxRetries: ATTEMPTS });
+  } catch {
+    // Left for the next update's rmSync above; the new version is in place either way.
   }
-  writeResult(resultFile, { version, ok, output: output.slice(-OUTPUT_TAIL) });
 }
 
 main();

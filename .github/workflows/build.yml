@@ -1,7 +1,7 @@
-# The release: a tag makes one. tet ships as the `tet-ide` package on npm and nothing else — one
-# package for every platform, since electron fetches its own binary on first start and node-pty
-# carries prebuilt files for all of them. Nothing is published unless every platform passed both
-# the tests and the install test; the GitHub Release with the notes comes last.
+# The release: a tag makes one. tet ships as one archive per platform and architecture on the
+# GitHub Release, which scripts/install.sh and scripts/install.ps1 install from and the app updates
+# itself from. Nothing is released unless every platform passed both the tests and the install
+# test of the very archives it built.
 name: Build
 
 on:
@@ -15,7 +15,7 @@ permissions:
 jobs:
   test:
     strategy:
-      # All three platforms report, even when one fails: a publish waits for every one of them.
+      # All three platforms report, even when one fails: a release waits for every one of them.
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
@@ -48,10 +48,10 @@ jobs:
       - run: npm test
         if: runner.os != 'Linux'
 
-  # What a user does, on each platform: install the package from a registry, start it, let it
-  # update itself on quit, start the new version (test/install.test.ts). Built for production, as
-  # prepublishOnly builds what is published.
-  install-test:
+  # The archives, one runner per platform, and what a user does with the one for this runner's
+  # architecture: install it with the script, start it, let it update itself on quit, start the
+  # new version (test/install.test.ts).
+  package:
     strategy:
       fail-fast: false
       matrix:
@@ -69,53 +69,37 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run compile -- --production
+      - run: node -e "require('electron')"
+
+      - run: npm run dist
 
       - run: xvfb-run -a node --test dist-test/install.test.js
         if: runner.os == 'Linux'
       - run: node --test dist-test/install.test.js
         if: runner.os != 'Linux'
 
-  # Trusted publishing: npm takes this workflow's OIDC token as the credential, no secret held
-  # anywhere — the package's settings on npmjs.com name this repository and this file.
-  publish:
-    needs: [test, install-test]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # The OIDC token, which is also what signs the provenance statement.
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-
-      # No `registry-url`: with it, setup-node writes an .npmrc taking the token from
-      # NODE_AUTH_TOKEN and sets that to a placeholder — npm then sends the placeholder as its
-      # credential instead of the OIDC token, and the registry answers 404 (measured).
-      - uses: actions/setup-node@v4
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: 22
-          cache: npm
+          name: archives-${{ runner.os }}
+          path: |
+            release/TET-*.zip
+            release/TET-*.tar.gz
+          if-no-files-found: error
 
-      # Node 22 ships npm 10; trusted publishing needs 11.5.1 or later.
-      - run: npm install -g npm@latest
-
-      - run: npm ci
-
-      # prepublishOnly builds dist/ for production first; `files` in package.json is what goes in.
-      # Verbose, so a refused OIDC exchange shows in the log rather than as a bare "need auth".
-      - run: npm publish --access public --loglevel verbose
-
-  # The GitHub Release for the tag, once the package is out, named after the bare version (no "v")
-  # as the installer releases before it were. It carries the notes and nothing to download; the
-  # installer releases up to 0.5.1 had their files removed too, so an installed 0.5.x finds no
-  # update and its user learns of npm from the README.
+  # The GitHub Release for the tag, named after the bare version (no "v"), carrying the notes and
+  # every archive. Marked latest: `releases/latest` is what the scripts and the update ask.
   release:
-    needs: publish
+    needs: [test, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: archives
+          merge-multiple: true
 
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -125,4 +109,4 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "${{ github.repository }}" --title "$version" --notes-file notes.md archives/*

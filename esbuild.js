@@ -39,20 +39,18 @@ const gitHostConfig = {
 };
 
 /** The scripts under src/cli, each bundled on its own for plain node, nothing from electron in
- *  them: `tet-ctl`, which an agent runs from a terminal under tet's own electron as node (see
- *  src/main/control/control-launcher.ts); `tet`, the command npm puts on PATH (package.json's
- *  `bin`, hence the shebang), run by the node npm installed it for; and `tet-update`, which that
- *  node runs once tet has quit (src/main/auto-update.ts). */
+ *  them, and each run under tet's own electron as node: `tet-ctl`, which an agent runs from a
+ *  terminal (see src/main/control/control-launcher.ts), and `tet-update`, which a new version's
+ *  binary runs once tet has quit (src/main/auto-update.ts). */
 /** @returns {import('esbuild').BuildOptions} */
-function cliConfig(name, banner) {
+function cliConfig(name) {
   return {
     ...common,
     entryPoints: [path.join(__dirname, "src", "cli", `${name}.ts`)],
     outfile: path.join(dist, `${name}.js`),
     platform: "node",
     target: "node22",
-    format: "cjs",
-    ...(banner ? { banner: { js: banner } } : {})
+    format: "cjs"
   };
 }
 
@@ -118,8 +116,8 @@ function copyStaticAssets() {
 }
 
 async function build() {
-  // What npm publishes is dist/ whole (package.json's `files`), so a production build must not
-  // carry a development build's source maps along.
+  // What electron-builder packages is dist/ whole (electron-builder.yml's `files`), so a production
+  // build must not carry a development build's source maps along.
   if (production) {
     fs.rmSync(dist, { recursive: true, force: true });
   }
@@ -129,7 +127,6 @@ async function build() {
     mainConfig,
     gitHostConfig,
     cliConfig("tet-ctl"),
-    cliConfig("tet", "#!/usr/bin/env node"),
     cliConfig("tet-update"),
     preloadConfig,
     rendererConfig,

@@ -26,9 +26,8 @@ sites: session listing/resume/rename/delete and the reconcile loop (`src/main/ag
 plugin that writes the session records TET lists, `src/main/agents/opencode/plugin.ts` — TET never
 runs an opencode server, never reads its SQLite file, and runs its CLI only for one-off actions);
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
-(`src/renderer/terminal/links/`); the AppUserModelID a Windows toast and a pinned window need — a
-registry entry for the one (`src/cli/shortcuts.ts`), the Start menu entry for the other
-(`src/main/start-menu.ts`) — and where a click on a toast arrives, with no CLSID of tet's own; the
+(`src/renderer/terminal/links/`); the AppUserModelID and toast activator CLSID a Windows toast needs, the
+Start menu entry Electron writes for them, and where a click on a toast arrives (`src/main/main.ts`); the
 `background_tasks` stop guard (`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the
 `--vscode-*` theming layer.
 
@@ -665,14 +664,16 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 ## npm scripts
 
 - `npm run compile` — bundle main, preload and renderer
+- `npm run dist` — compile for production, then package this platform's archives into `release/`
 - `npm run typecheck`
 - `npm run lint`
 - `npm test` — compile, then node's own runner over `dist-test/`, one file per seam: the control
   server with its electron-side dependencies faked, driven through the built `tet-ctl`
   (`control.test.ts`); the real app on a throwaway profile, driven through `tet-ctl` alone
-  (`app.test.ts` — needs a display, `xvfb-run` on Linux); the package installed from a local
-  registry, started by `tet` and updated on quit (`install.test.ts`, skipped unless
-  `TET_INSTALL_TEST=1` — it writes Windows shortcuts for the account); `git.ts` against the real git
+  (`app.test.ts` — needs a display, `xvfb-run` on Linux); the archive `npm run dist` built,
+  installed by its script from releases served locally, started and updated on quit
+  (`install.test.ts`, skipped unless `TET_INSTALL_TEST=1` — it writes Windows shortcuts and the
+  PATH entry for the account); `git.ts` against the real git
   (`git.test.ts`); the session providers against transcripts written the way the CLIs write them
   (`sessions.test.ts`); `tet.json` reading and writing (`commands.test.ts`); the command-line
   reading (`command.test.ts`); the split view's rules and `tabsInFront` (`pane-layout.test.ts`);
@@ -698,20 +699,22 @@ When asked for a release, run it:
 2. `npm version patch` (or `minor` / `major`), then `git push && git push --tags`.
 
 `npm version` bumps `package.json` and tags in one step, and refuses on a dirty tree — hence the
-changelog commit first. The tag push triggers `.github/workflows/build.yml`: the tests and the
-install test on all three platforms, and only when every one passed, the `tet-ide` package to npm
-(trusted publishing: npm trusts this workflow's OIDC token, configured in the package's settings on
-npmjs.com — no secret) and then a GitHub Release with the version's section of `CHANGELOG.md`.
+changelog commit first. The tag push triggers `.github/workflows/build.yml`: the tests on all three
+platforms, the archives built there (`npm run dist`) and the install test run against them, and
+only when every one passed, a GitHub Release with the version's section of `CHANGELOG.md` and the
+archives.
 
-**tet ships through npm and nothing else** — no installer, no bundle (Sophos blocked the NSIS
-setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.ts`) starts
-electron with the package and hands it `--tet-installed` (`src/shared/launch.ts`), which is how the
-app tells an install from `npm start`. On Linux it passes `--no-sandbox`. electron's own bundle is
-never modified or re-signed, so on macOS the Dock and the menu bar read "Electron". Shortcuts exist
-on Windows alone. The Start menu entry is the app's own (`src/main/start-menu.ts`): only a shell
-API puts the AppUserModelID on it, and without that pinning the window pins a bare electron.exe.
-The desktop icon and the toasts' name in the registry are put in place by a PowerShell script the
-command runs once tet is starting (`src/cli/shortcuts.ts`) — a virus scanner refusing it costs
-those, never tet; once per package directory, so a deleted icon stays deleted. An update
-(`src/main/auto-update.ts`) is found on npm's registry and installed by `src/cli/tet-update.ts`
-once tet has quit — never mid-session, a terminal tab being a live agent session.
+**tet ships as archives on the GitHub Release, installed by a script** — no installer (Sophos
+blocked the NSIS setup, macOS called the unsigned dmg damaged), no npm package. electron-builder
+(`electron-builder.yml`) packages one archive per platform and architecture; `scripts/install.sh`
+and `scripts/install.ps1` fetch and unpack it for the user alone, with curl and
+`Invoke-WebRequest`, neither of which marks the download quarantined — which is what lets macOS run
+the **ad-hoc signed** bundle without Gatekeeper asking. The executable is the app's own (`TET.exe`,
+`TET.app`, `tet`), never a bare electron: Electron names the Start menu entry it writes on the
+first toast after the executable's ProductName (main.ts's `APP_USER_MODEL_ID`), and a bare
+electron.exe put an "Electron" into the Start menu. `app.isPackaged` is how the app tells an
+install from `npm start`. On Linux the `tet` command and the desktop entry pass `--no-sandbox`. An
+update (`src/main/auto-update.ts`) is found through `releases/latest`, fetched and unpacked while
+tet runs, and put in place by `src/cli/tet-update.ts` — run by the new version's binary as node —
+once tet has quit, never mid-session, a terminal tab being a live agent session. The scripts carry
+their own copy of `src/shared/release.ts`'s asset names.

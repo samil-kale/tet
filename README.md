@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/tet-ide"><img src="https://img.shields.io/npm/v/tet-ide?style=flat-square&color=blue" alt="npm"></a>
+  <a href="https://github.com/samil-kale/tet/releases/latest"><img src="https://img.shields.io/github/v/release/samil-kale/tet?style=flat-square&color=blue" alt="Release"></a>
   <a href="https://github.com/samil-kale/tet/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/samil-kale/tet/build.yml?style=flat-square&label=build" alt="Build"></a>
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat-square" alt="Platform">
@@ -82,17 +82,25 @@ straight into an agent session.
 
 ### Install
 
-TET is installed with npm, on Windows, macOS and Linux alike (Node.js 22 or newer):
+**macOS / Linux**
 
-```bash
-npm install -g tet-ide
-tet
+```sh
+curl -fsSL https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.sh | sh
 ```
 
-The first start downloads Electron once; on Windows it also adds TET to the Start menu and the
-desktop. When a new version is out, TET tells you and installs it after you quit, never while
-terminal sessions are running. On Linux, TET runs without Chromium's sandbox, which a package
-manager cannot set up.
+**Windows** (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.ps1 | iex
+```
+
+Then start TET from the Start menu, the desktop icon, or by typing `tet`.
+
+The script installs TET for your user alone: `~/Applications/TET.app` on macOS,
+`~/.local/share/tet` on Linux, `%LOCALAPPDATA%\Programs\TET` on Windows. Run it again to
+reinstall. When a new version is out, TET downloads it and installs it after you quit, never
+while terminal sessions are running. On Linux, TET runs without Chromium's sandbox, which an
+install without root cannot set up.
 
 ### Build from source
 

@@ -6,13 +6,11 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
-import { installPrefix } from "../src/main/npm-install";
 import { SettingsStore } from "../src/main/settings";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager } from "../src/main/terminals/session-manager";
 import { ShellContext } from "../src/main/terminals/shell-context";
 import type { HookEvent } from "../src/shared/control";
-import { launchArgs } from "../src/shared/launch";
 import type { TerminalDescriptor } from "../src/shared/types";
 import { CLI, eventually } from "./helpers";
 
@@ -120,20 +118,6 @@ describe("the tet-ctl launcher", () => {
     fs.rmSync(dir, { recursive: true, force: true });
     assert.equal(run.status, 0);
     assert.match(run.stdout, /tet-ctl — control the TET app/);
-  });
-});
-
-describe("the tet command and its update", () => {
-  it("hands electron the package, the install flag, and on Linux no sandbox", () => {
-    assert.deepEqual(launchArgs("win32", "pkg"), ["pkg", "--tet-installed"]);
-    assert.deepEqual(launchArgs("linux", "pkg"), ["pkg", "--tet-installed", "--no-sandbox"]);
-  });
-
-  it("installs into the prefix npm put tet in, and leaves other package managers alone", () => {
-    assert.equal(installPrefix("C:\\npm\\node_modules\\tet-ide", "win32"), "C:\\npm");
-    assert.equal(installPrefix("/usr/local/lib/node_modules/tet-ide", "linux"), "/usr/local");
-    assert.equal(installPrefix("/home/me/tet", "linux"), undefined);
-    assert.equal(installPrefix("/home/me/.local/share/pnpm/global/5/node_modules/tet-ide", "linux"), undefined);
   });
 });
 

@@ -1,0 +1,2 @@
+# Run by sh on macOS and Linux, and fetched from the repository as is.
+scripts/*.sh text eol=lf

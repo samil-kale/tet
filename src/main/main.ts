@@ -5,7 +5,7 @@ import { app, BrowserWindow, ipcMain, Menu, Notification } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
-import { INSTALLED_ARG } from "../shared/launch";
+import { RELEASES_URL } from "../shared/release";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
@@ -24,7 +24,6 @@ import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
-import { writeStartMenuShortcut } from "./start-menu";
 import { currentTheme } from "./theme";
 
 /** Terminal output arrives in many small chunks; one IPC message per chunk is wasteful. */
@@ -101,22 +100,36 @@ if (userDataArg) {
 /**
  * Who Windows says a toast is from. The name and icon above every notification are those Windows
  * finds for this id — never anything the notification holds, which is why a toast needs no icon
- * of its own. Electron sets none of it by itself: for an install the `tet` command writes them
- * into the registry (src/cli/shortcuts.ts), and without that the toasts read "Electron". The
- * taskbar button takes its name from the Start menu entry instead (writeStartMenuShortcut below).
+ * of its own. They come from the Start menu entry carrying the id, and Electron writes that entry
+ * itself on the first toast (windows_toast_activator.cc): named after the executable's own
+ * ProductName, pointing at the executable, with the id and the toast activator's CLSID on it. An
+ * install's executable is `TET.exe` (electron-builder.yml), so that entry is the very `TET.lnk`
+ * install.ps1 put there, rewritten in place. A development run's is electron.exe, whose entry reads
+ * "Electron".
  *
- * A development run writes nothing and reads "Electron" — and Windows keeps what it once decided
- * about an id, so one such toast under the shipped id leaves the *installed* tet reading that too,
- * until the id is cleared from Windows' own notification database. Hence the second id: what
- * `npm start` spends is its own. Set before the workspace, since a hook can report a turn as soon
- * as the first terminal is up. The id was the installers' `appId`, kept so a machine that had one
- * keeps what Windows decided about it.
+ * Windows keeps what it once decided about an id, so one development toast under the shipped id
+ * would leave the *installed* tet reading "Electron" too. Hence the second id: what `npm start`
+ * spends is its own. The CLSID is fixed rather than Electron's per-run random one, so a toast
+ * clicked after tet has quit starts the COM server the entry still names. Both are set before the
+ * workspace, since a hook can report a turn as soon as the first terminal is up. The id was the
+ * installers' `appId`, kept so a machine that had one keeps what Windows decided about it.
  */
 const APP_USER_MODEL_ID = "com.samilkale.tet";
-const installed = process.argv.includes(INSTALLED_ARG);
+const TOAST_ACTIVATOR_CLSID = "{8DA9BB54-C0A5-4BEC-AF76-BE3568344852}";
+const installed = app.isPackaged;
 if (process.platform === "win32") {
   app.setAppUserModelId(installed ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
+  if (installed) {
+    app.setToastActivatorCLSID(TOAST_ACTIVATOR_CLSID);
+  }
 }
+
+/**
+ * The releases the update asks: GitHub's, but for the install test (test/install.test.ts), which
+ * serves its own — taken from the environment only with a profile of its own, as the control token
+ * is, so a normal start never reads it.
+ */
+const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_URL;
 
 // Before the stores, and before anything that could throw asynchronously: an uncaught exception
 // shows a notice and keeps every terminal alive instead of freezing them all behind Electron's
@@ -142,7 +155,10 @@ const repositories = new RepositoryManager(
   }
 );
 const sessions = new SessionManagerRegistry(app.getPath("userData"), settings, {
-  onTabs: (projectId, tabs) => send("terminal:tabs", { projectId, tabs }),
+  onTabs: (projectId, tabs) => {
+    send("terminal:tabs", { projectId, tabs });
+    awaitedToastTab(projectId);
+  },
   onOutput: queueOutput,
   onStatus: (projectId, tabId, status: TerminalStatus) => send("terminal:status", { projectId, tabId, status }),
   onStartupProgress: (projectId, show) => send("terminal:startup-progress", { projectId, show }),
@@ -197,9 +213,10 @@ function repeatedToast(title: string, body: string, target?: ToastTarget): boole
 }
 
 /**
- * Every toast still clickable, held so its click handler is not collected with it. Not let go on
- * `close`: on win32 that is the toast leaving the screen for the notification center, where a
- * click still arrives (measured). The oldest go once there are more than anyone scrolls back to.
+ * Every toast still clickable, held so its click handler is not collected with it — outside win32,
+ * whose clicks all arrive through `Notification.handleActivation`. Not let go on `close`: that can
+ * be the toast leaving the screen for the notification center, where a click still arrives
+ * (measured on win32). The oldest go once there are more than anyone scrolls back to.
  */
 const LIVE_TOASTS_MAX = 50;
 const liveToasts = new Set<Notification>();
@@ -216,17 +233,102 @@ function holdToast(toast: Notification): void {
 }
 
 /**
+ * A clicked toast's tab, once it is there: a toast clicked after tet had quit starts tet, whose
+ * tabs are restored only after the window is up. Looked for at every tab report of its project
+ * (`onTabs`), and given up on when a later click asks for another.
+ */
+let toastTargetAwaited: { projectId: string; tabId: string; sessionId?: string } | undefined;
+
+/**
+ * The tab a toast is about, brought to the front with the window. Found by its tab id while the
+ * tab lives, or by its session id, which is the tab id of a tab restored since (TerminalDescriptor).
+ * Returns whether it was there; a tab closed since is not, and the window alone comes forward.
+ */
+function showToastTarget(target: { projectId: string; tabId: string; sessionId?: string }): boolean {
+  const tab = sessions
+    .get(target.projectId)
+    ?.snapshot()
+    .find((candidate) => candidate.tabId === target.tabId || (target.sessionId !== undefined && candidate.tabId === target.sessionId));
+  if (tab) {
+    send("terminal:show", { projectId: target.projectId, tabId: tab.tabId });
+  }
+  return tab !== undefined;
+}
+
+/** A tab report, for a toast clicked before its tab was restored. */
+function awaitedToastTab(projectId: string): void {
+  if (toastTargetAwaited?.projectId === projectId && showToastTarget(toastTargetAwaited)) {
+    toastTargetAwaited = undefined;
+  }
+}
+
+/**
+ * On win32 every click on a toast arrives here, clicked while tet runs or the reason it was just
+ * started (`Notification.handleActivation`), carrying the `launch` string `windowsToastXml` put
+ * on the toast — Electron's own toast has none, and a click starting tet would not know its tab.
+ */
+if (process.platform === "win32") {
+  void app.whenReady().then(() => {
+    // Electron registers the COM activator a click is delivered through only once its notification
+    // presenter exists, which the first Notification — or this question — creates. Asked at once:
+    // a click that started tet has nothing to show yet, and would otherwise reach no one. An install
+    // alone: creating the presenter also writes the Start menu entry, which for a development run
+    // is electron.exe's "Electron".
+    if (installed) {
+      Notification.isSupported();
+    }
+    Notification.handleActivation((details) => {
+      revealWindow();
+      const launch = new URLSearchParams(details.arguments);
+      const projectId = launch.get("project");
+      const tabId = launch.get("tab");
+      if (!projectId || !tabId) {
+        return;
+      }
+      const target = { projectId, tabId, sessionId: launch.get("session") || undefined };
+      toastTargetAwaited = showToastTarget(target) ? undefined : target;
+    });
+  });
+}
+
+function escapeXml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/**
+ * The toast Electron would have built, plus the `launch` string Windows hands back on a click.
+ * `type` and `tag` are Electron's own keys: with them it still finds the Notification behind a
+ * click while tet runs. The session id is what outlives tet quitting (showToastTarget).
+ */
+function windowsToastXml(id: string, title: string, body: string, target?: ToastTarget): string {
+  const launch = new URLSearchParams({ type: "click", tag: id });
+  if (target) {
+    launch.set("project", target.projectId);
+    launch.set("tab", target.tabId);
+    const sessionId = sessions
+      .get(target.projectId)
+      ?.snapshot()
+      .find((tab) => tab.tabId === target.tabId)?.sessionId;
+    if (sessionId) {
+      launch.set("session", sessionId);
+    }
+  }
+  return (
+    `<toast launch="${escapeXml(launch.toString())}"><visual><binding template="ToastGeneric">` +
+    `<text>${escapeXml(title)}</text><text>${escapeXml(body)}</text>` +
+    `</binding></visual></toast>`
+  );
+}
+
+/**
  * The real desktop toast behind the control channel's `hook` and `notify` verbs — this process is
  * the one holding the desktop session (a sandboxed hook has none), and a platform without a
  * notifier of its own simply shows nothing. No `icon`: Windows heads the toast with tet's already
  * (APP_USER_MODEL_ID).
  *
- * A click brings the window, and the tab the toast is about, to the front. Measured on win32
- * (Electron 43; tet writes no CLSID anywhere, Electron makes its own): `click` arrives while tet
- * runs, on the toast and from the notification center alike. Clicked once tet has quit: measured
- * to do nothing for a run without a Start menu entry carrying the id. Not measured with the entry
- * an install now writes — the installers' entry had COM start `TET.exe -Embedding` again, and the
- * same for electron.exe would come up as electron's own default app, not as tet.
+ * A click brings the window, and the tab the toast is about, to the front — on win32 through
+ * `Notification.handleActivation` above, which also takes a click from the notification center
+ * after tet has quit, elsewhere through the toast's own `click`.
  */
 function showDesktopNotification(title: string, body: string, target?: ToastTarget): void {
   if (repeatedToast(title, body, target)) {
@@ -236,16 +338,20 @@ function showDesktopNotification(title: string, body: string, target?: ToastTarg
   if (!Notification.isSupported()) {
     return;
   }
-  const toast = new Notification({ title, body });
-  holdToast(toast);
-  toast.on("click", () => {
-    liveToasts.delete(toast);
-    revealWindow();
-    // A tab closed since is not there to show; the window alone comes forward.
-    if (target && sessions.get(target.projectId)?.snapshot().some((tab) => tab.tabId === target.tabId)) {
-      send("terminal:show", target);
-    }
-  });
+  const id = crypto.randomUUID();
+  const toast = new Notification(
+    process.platform === "win32" ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body }
+  );
+  if (process.platform !== "win32") {
+    holdToast(toast);
+    toast.on("click", () => {
+      liveToasts.delete(toast);
+      revealWindow();
+      if (target) {
+        showToastTarget(target);
+      }
+    });
+  }
   // Shown nothing and said nothing else: a switch off in Windows' own notification settings reads
   // "Settings prevent the notification from being delivered" here and nowhere else (measured).
   toast.on("failed", (_event, error) => {
@@ -435,13 +541,6 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
-    if (installed && process.platform === "win32") {
-      try {
-        writeStartMenuShortcut(APP_USER_MODEL_ID);
-      } catch (error) {
-        logError(`could not write the Start menu entry: ${String(error)}`);
-      }
-    }
     startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
     // Before anything reads PATH — the requirements check and every terminal do — add where agents
     // actually install to it, since tet is launched with the OS's barer GUI PATH. Awaited only
@@ -454,7 +553,9 @@ if (!app.requestSingleInstanceLock()) {
     const controlToken =
       (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
     const port = await findControlPort(app.getPath("userData"));
-    const cliPath = path.join(__dirname, "tet-ctl.js");
+    // Installed, dist/ sits in app.asar, which a process other than electron cannot read into;
+    // electron-builder.yml unpacks the CLI beside it.
+    const cliPath = path.join(installed ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
     let binDir: string | undefined;
     try {
       binDir = writeLaunchers(app.getPath("userData"), cliPath);
@@ -474,7 +575,7 @@ if (!app.requestSingleInstanceLock()) {
     await pathReady;
     timeStartup("git-process", startGitProcess);
     timeStartup("auto-update", () =>
-      startAutoUpdate(installed, (severity, message) => send("app:notice", { severity, message }))
+      startAutoUpdate(installed, releasesUrl, (severity, message) => send("app:notice", { severity, message }))
     );
 
     app.on("activate", () => {

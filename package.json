@@ -2,6 +2,7 @@
   "name": "tet-ide",
   "productName": "TET",
   "version": "0.6.2",
+  "private": true,
   "description": "Git workspace for coding agents",
   "author": "Samil Kale",
   "license": "MIT",
@@ -10,16 +11,7 @@
     "url": "git+https://github.com/samil-kale/tet.git"
   },
   "homepage": "https://github.com/samil-kale/tet",
-  "engines": {
-    "node": ">=22"
-  },
   "main": "./dist/main.js",
-  "bin": {
-    "tet": "dist/tet.js"
-  },
-  "files": [
-    "dist/**"
-  ],
   "scripts": {
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
@@ -27,10 +19,9 @@
     "typecheck": "tsc --noEmit -p .",
     "lint": "eslint .",
     "test": "npm run compile && node --test \"dist-test/*.test.js\"",
-    "prepublishOnly": "npm run compile -- --production"
+    "dist": "npm run compile -- --production && electron-builder --publish never"
   },
   "dependencies": {
-    "electron": "43.4.0",
     "node-pty": "1.2.0-beta.14"
   },
   "devDependencies": {
@@ -45,9 +36,10 @@
     "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "electron": "43.4.0",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "eslint": "^10.8.0",
-    "latest-version": "^9.0.0",
     "monaco-editor": "^0.56.0",
     "monaco-editor-core": "^0.56.0",
     "react": "^19.2.0",

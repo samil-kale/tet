@@ -1,0 +1,71 @@
+# What turns the compiled dist/ into the app the install scripts unpack, per platform. No
+# installer: an archive per platform and architecture, attached to the GitHub Release, which
+# scripts/install.sh and scripts/install.ps1 fetch and unpack, and which the app's own update
+# (src/main/auto-update.ts) fetches the same way. The names are src/shared/release.ts's
+# `assetName`, and the scripts' own copy of it.
+appId: com.samilkale.tet
+productName: TET
+artifactName: "TET-${os}-${arch}.${ext}"
+
+directories:
+  # esbuild already owns dist/, and electron-builder would write its archives into the same
+  # folder it is packaging.
+  output: release
+
+# Everything the app needs at runtime. node_modules is not listed: electron-builder takes the
+# production dependencies by itself, which is node-pty alone.
+files:
+  - dist/**
+  - package.json
+
+asarUnpack:
+  # node-pty is a native addon, and a .node inside the asar archive cannot be loaded — the
+  # platform's dynamic linker only opens real files.
+  - "**/node_modules/node-pty/**"
+  # The tet-ctl CLI is run by a separate process (electron as node, from a terminal) that
+  # cannot read inside the archive — see src/main/control/control-launcher.ts. The update is
+  # run the same way, by the new version's binary (src/cli/tet-update.ts).
+  - dist/tet-ctl.js
+  - dist/tet-update.js
+
+# Nothing to compile: node-pty ships prebuilt binaries for all six platform/arch pairs and is
+# built on node-addon-api, so the same file works under Electron's ABI as under Node's. This is
+# also what keeps a rebuild toolchain off the build machine.
+npmRebuild: false
+
+win:
+  icon: src/renderer/icon.ico
+  target:
+    - target: zip
+      arch: [x64, arm64]
+  # `tet` on the PATH: install.ps1 adds this folder to the user's PATH. Inside the archive, so an
+  # update replacing the folder brings it along.
+  extraFiles:
+    - from: build/win/tet.cmd
+      to: bin/tet.cmd
+
+mac:
+  # Generated from the 1200px png; macOS wants at least 512.
+  icon: src/renderer/icon.png
+  category: public.app-category.developer-tools
+  target:
+    - target: tar.gz
+      arch: [arm64, x64]
+  # Ad-hoc: Apple silicon runs no unsigned code, and without a Developer ID this is the signature
+  # there is. Gatekeeper never judges it, since neither curl nor the update marks the download as
+  # quarantined. The hardened runtime would refuse electron's own frameworks under an ad-hoc
+  # signature (library validation), and only notarization asks for it.
+  identity: "-"
+  hardenedRuntime: false
+
+linux:
+  icon: src/renderer/icon.png
+  category: Development
+  executableName: tet
+  target:
+    - target: tar.gz
+      arch: [x64, arm64]
+  # For the .desktop entry install.sh writes; electron-builder puts no icon beside a tar.gz's binary.
+  extraFiles:
+    - from: src/renderer/icon.png
+      to: icon.png
