@@ -1,9 +1,9 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 /**
- * Whether a dialog covers the window — a card dialog (`DialogFrame`) or the diff dialog. While one
- * does, no tab is in front of the user: a turn ending behind it keeps its mark and raises a toast.
- * A count, not a flag: a question can stand over the diff dialog.
+ * Whether a dialog covers the window — a card dialog (`DialogFrame`). While one does, no tab is in
+ * front of the user: a turn ending behind it keeps its mark and raises a toast. A count, not a
+ * flag: a question can stand over another dialog, the settings or the add-repository one.
  */
 let covering = 0;
 const listeners = new Set<() => void>();

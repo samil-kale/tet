@@ -1,8 +1,8 @@
-import { useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder, Project } from "../../shared/types";
-import { languageForPath } from "./diff-highlight";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder, FileChange, Project } from "../../shared/types";
+import { languageForPath } from "../diff/diff-highlight";
 import { absolutePath, revealLabel } from "../platform";
-import { type FileAct } from "../git/ChangesList";
+import { type FileAct } from "./ChangesList";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import {
@@ -367,8 +367,8 @@ export interface ExplorerHandle {
 }
 
 /**
- * The diff dialog's file browser: every file in the repository, not just the changed ones under
- * LOCAL CHANGES beside it. No ↑/↓ of its own — that stays with `ChangesList`. How it is shown
+ * The git pane's file browser: every file in the repository, not just the changed ones under
+ * LOCAL CHANGES above it. No ↑/↓ of its own — that stays with `ChangesList`. How it is shown
  * comes from the project's tet.json, carried in by the listing: `folders` make it a multi-root
  * explorer, overlapping allowed; `exclude`/`excludeGitIgnore` have already thinned it, and
  * `sortOrder`/`compactFolders` are applied on the way to the screen.
@@ -388,7 +388,7 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
     return files?.compactFolders ? compactTree(filtered) : filtered;
   }, [tree, query, filtering, files?.compactFolders]);
 
-  // Reveals the file the rest of the dialog opened, in the innermost root containing it.
+  // Reveals the file the editor tab shows, in the innermost root containing it.
   const roots = files?.roots;
   const pendingReveal = useRef<string | null>(null);
   useEffect(() => {
@@ -638,4 +638,54 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.node)} onClose={() => setMenu(null)} />}
     </div>
   );
+}
+
+/**
+ * The Explorer tree's listing, which carries the `folders`, `exclude` and sort settings with it.
+ * Re-read whenever a file starts or stops existing, when tet.json changed, and through
+ * `refreshExplorer` after the tree's own create/rename/delete — an empty new folder never touches
+ * git status, and a plain edit leaves `changes` at "modified", so neither shows up there.
+ *
+ * Held with the project it was read for: one git pane serves every project, and a switch must not
+ * show the previous project's tree until the new listing lands.
+ */
+export function useExplorerListing(
+  projectId: string,
+  changes: FileChange[]
+): { explorerListing: ExplorerListing | undefined; listing: boolean; refreshExplorer: () => void } {
+  const [held, setHeld] = useState<{ projectId: string; listing: ExplorerListing } | undefined>(undefined);
+  const [listing, setListing] = useState(false);
+  const [explorerVersion, setExplorerVersion] = useState(0);
+  const refreshExplorer = useCallback(() => setExplorerVersion((count) => count + 1), []);
+  useEffect(
+    () =>
+      window.tet.commands.onChanged((payload) => {
+        if (payload.projectId === projectId) {
+          setExplorerVersion((count) => count + 1);
+        }
+      }),
+    [projectId]
+  );
+  const changesKey = useMemo(
+    () =>
+      changes
+        .filter((entry) => entry.status !== "modified")
+        .map((entry) => entry.path)
+        .join("\n"),
+    [changes]
+  );
+  useEffect(() => {
+    let cancelled = false;
+    setListing(true);
+    void window.tet.repository.listExplorer(projectId).then((result) => {
+      if (!cancelled) {
+        setHeld({ projectId, listing: result });
+        setListing(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, changesKey, explorerVersion]);
+  return { explorerListing: held?.projectId === projectId ? held.listing : undefined, listing, refreshExplorer };
 }

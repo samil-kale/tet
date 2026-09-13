@@ -12,7 +12,7 @@ export type Monaco = typeof import("./monaco-core");
 
 let monacoPromise: Promise<Monaco> | undefined;
 
-/** Loads monaco once, sharing the promise across every `DiffEditor` mount. */
+/** Loads monaco once, sharing the promise across every project's editor (`editor-views.ts`). */
 export function loadMonaco(): Promise<Monaco> {
   if (!monacoPromise) {
     // Set once, before the first editor. `getWorker`, not `getWorkerUrl`: monaco makes a module
@@ -122,7 +122,7 @@ async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void
 }
 
 /**
- * Options for the one editor the dialog has, 13px/18px and stripped of everything a code editor
+ * Options for the editor tab's editor, 13px/18px and stripped of everything a code editor
  * offers that this one does not: no bracket-pair colors, no suggestions, no sticky scroll, no
  * minimap. The diff half is `diffEditorOptions`; both go into the same construction call.
  */
@@ -159,7 +159,7 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
  * `renderMarginRevertIcon`, which inline mode ignores outright.
  *
  * Several of these are monaco's defaults too, and they are spelled out anyway: each one is a
- * decision this dialog rests on, and a default is not a promise across upgrades.
+ * decision the editor tab rests on, and a default is not a promise across upgrades.
  */
 export function diffEditorOptions(): Record<string, unknown> {
   return {

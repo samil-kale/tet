@@ -655,7 +655,7 @@ export class Repository {
     return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? absolute : undefined;
   }
 
-  /** A file for the diff dialog: the working tree's text, and what HEAD has of it wherever git
+  /** A file for the editor tab: the working tree's text, and what HEAD has of it wherever git
    *  reports a change — that second text is the diff editor's original side, and a file git sees no
    *  change to needs none. */
   async readFile(filePath: string): Promise<FileContent> {

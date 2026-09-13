@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
 import { absolutePath, revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -19,11 +19,8 @@ interface ChangesListProps {
   /** Its changes are the list; the rest is what a commit from the menu asks with. */
   state: RepositoryState;
   act: FileAct;
-  /** A file to look at. */
+  /** A file to look at, on a double-click. */
   onOpenDiff: (path: string) => void;
-  /** The file whose diff is open — the diff dialog's list. Given (including `null`), a plain click
-   *  and ↑/↓ open a file; the git pane's list opens on a double-click instead. */
-  active?: string | null;
 }
 
 const STATUS_LETTER: Record<ChangeStatus, string> = {
@@ -101,16 +98,15 @@ export async function askCommit(
   }
 }
 
-/** The changed files with a filter and a per-file menu — the same list under LOCAL CHANGES in
- *  the git pane and beside the diff in its dialog. Each owner hands in its own `act`, so the
- *  action runs on that owner's bar. */
-export function ChangesList({ project, state, act, onOpenDiff, active }: ChangesListProps) {
+/** The changed files with a filter and a per-file menu, under LOCAL CHANGES in the git pane. The
+ *  owner hands in its `act`, so an action runs on that section's bar. */
+export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
   /** Ctrl- and shift-click extend it, so one discard can cover several files. */
-  const [selected, setSelected] = useState<string[]>(() => (active ? [active] : []));
+  const [selected, setSelected] = useState<string[]>([]);
   /** Where a shift-click measures its range from: the row that was clicked plainly last. */
-  const [anchor, setAnchor] = useState<string | null>(active ?? null);
+  const [anchor, setAnchor] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; change: FileChange } | null>(null);
 
   const query = filter.trim().toLowerCase();
@@ -119,8 +115,8 @@ export function ChangesList({ project, state, act, onOpenDiff, active }: Changes
     [changes, query]
   );
 
-  // Another project's files: nothing chosen yet. Compared in render rather than in an effect,
-  // which would also run on mount and drop the file the dialog's list starts with.
+  // Another project's files: nothing chosen yet. Compared in render, so the previous project's
+  // selection never paints.
   const [projectId, setProjectId] = useState(project.id);
   if (projectId !== project.id) {
     setProjectId(project.id);
@@ -136,52 +132,6 @@ export function ChangesList({ project, state, act, onOpenDiff, active }: Changes
       return kept.length === current.length ? current : kept;
     });
   }, [changes]);
-
-  // The dialog's choice of file can move without a click here; the highlight follows it.
-  useEffect(() => {
-    if (active) {
-      setSelected([active]);
-      setAnchor(active);
-    }
-  }, [active]);
-
-  /** Chooses one file the way a plain click does, and opens it. */
-  const open = (path: string): void => {
-    setSelected([path]);
-    setAnchor(path);
-    onOpenDiff(path);
-  };
-
-  // ↑/↓ step through the list as filtered, from the open file, or from either end when it is not
-  // in the list. Three guards: a question's own keys come first; a menu acts on the selection this
-  // would move from under it; and an editor either claimed the key (`defaultPrevented`) or is
-  // about to for a monaco widget (find, suggest). What a keystroke reads is held in a ref, so the
-  // listener is registered once rather than swapped on every keystroke and every push.
-  const stepState = useRef({ visible, active, open });
-  stepState.current = { visible, active, open };
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const { visible, active, open } = stepState.current;
-      if (
-        active === undefined ||
-        (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
-        event.defaultPrevented ||
-        document.querySelector(".dialog-overlay, .context-menu") ||
-        (event.target instanceof Element && event.target.closest(".monaco-editor"))
-      ) {
-        return;
-      }
-      const index = visible.findIndex((change) => change.path === active);
-      const next = event.key === "ArrowDown" ? (index < 0 ? 0 : index + 1) : index < 0 ? visible.length - 1 : index - 1;
-      const target = visible[next];
-      if (target) {
-        event.preventDefault();
-        open(target.path);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   /** VS Code's list selection: plain replaces, ctrl toggles, shift takes the range. */
   const select = (event: React.MouseEvent, path: string): void => {
@@ -202,9 +152,6 @@ export function ChangesList({ project, state, act, onOpenDiff, active }: Changes
       return;
     }
     setSelected([path]);
-    if (active !== undefined) {
-      onOpenDiff(path);
-    }
   };
 
   /** The changed-file menu. It acts on the whole selection where that makes sense and on the one
@@ -283,9 +230,7 @@ export function ChangesList({ project, state, act, onOpenDiff, active }: Changes
               }
               setMenu({ x: event.clientX, y: event.clientY, change });
             }}
-            title={`${change.origPath ? `${change.origPath} → ${change.path}` : change.path}${
-              active === undefined ? "\nDouble-click to see the diff" : ""
-            }`}
+            title={`${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`}
           >
             <span className={`change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>
             <span className="change-path">{change.path}</span>

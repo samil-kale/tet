@@ -54,7 +54,7 @@ function run(...args: string[]): string {
 
 const write = (name: string, content: string): void => fs.writeFileSync(path.join(cwd, name), content);
 
-/** The cap the diff dialog reads both sides of a file under; `readHeadBlob` takes it per call. */
+/** The cap the editor tab reads both sides of a file under; `readHeadBlob` takes it per call. */
 const MAX_BYTES = 4 * 1024 * 1024;
 const head = (name: string, origPath?: string) => readHeadBlob(cwd, name, { origPath, maxBytes: MAX_BYTES });
 

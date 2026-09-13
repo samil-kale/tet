@@ -24,8 +24,8 @@ interface TerminalView {
 const views = new Map<string, TerminalView>();
 
 /**
- * Per project, what to do when a ctrl-clicked file turns out to have local changes: the diff
- * dialog opens on it. Registered by the pane.
+ * Per project, what to do when a ctrl-clicked file turns out to lie inside the repository: the
+ * project's editor tab opens on it. Registered by the pane.
  */
 const revealHandlers = new Map<string, (path: string) => void>();
 

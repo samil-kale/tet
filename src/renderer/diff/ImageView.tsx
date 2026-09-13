@@ -11,7 +11,7 @@ export interface ImageSides {
 /**
  * A changed image, the one file the diff editor cannot show: the committed version beside the
  * current one, or the two laid over each other. Either side is absent when the file was added or
- * deleted; the dialog draws this only once at least one of them is there.
+ * deleted; the editor tab draws this only once at least one of them is there.
  */
 export function ImageView({ image }: { image: ImageSides }) {
   const [overlay, setOverlay] = useState(false);

@@ -7,6 +7,8 @@ import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { TerminalHost } from "./TerminalHost";
+import { EDITOR_TAB_ID, isEditorTab, type PaneTab } from "./editor-tab";
+import { EditorHost, useEditorBusy } from "../diff/EditorHost";
 import {
   CloseIcon,
   CommentIcon,
@@ -57,7 +59,6 @@ function formatIso(ms: number): string {
 export interface PaneChrome {
   gitOpen: boolean;
   onToggleGit: () => void;
-  onBrowseFiles: () => void;
   onPresetChange: (preset: SplitPreset) => void;
   onOpenSettings: () => void;
 }
@@ -67,8 +68,8 @@ interface PaneProps {
   paneId: PaneId;
   /** The whole project's preset — needed to know this pane's siblings for "move to" and the picker. */
   preset: SplitPreset;
-  /** Already filtered to this pane, in the project's own tab order. */
-  tabs: TerminalDescriptor[];
+  /** Already filtered to this pane, in the project's own tab order — the editor tab last. */
+  tabs: PaneTab[];
   activeTabId: string | null;
   agents: AgentInfo[];
   visible: boolean;
@@ -79,6 +80,8 @@ interface PaneProps {
   focused: boolean;
   onActivate: (paneId: PaneId, tabId: string) => void;
   onFocus: (paneId: PaneId) => void;
+  /** Closes the project's editor tab — a renderer-only tab, not one `terminals.close` knows. */
+  onCloseEditor: () => void;
   markedTabIds: string[];
   waitingTabIds: string[];
   /** Present only on pane "a", which carries the project's shared chrome — see `PaneChrome`. */
@@ -123,6 +126,7 @@ export const Pane = memo(function Pane({
   height,
   onActivate,
   onFocus,
+  onCloseEditor,
   markedTabIds,
   waitingTabIds,
   chrome,
@@ -167,13 +171,18 @@ export const Pane = memo(function Pane({
     tabElements.current.get(activeTabId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeTabId]);
 
+  // The editor tab has no pty to fit and focuses itself (`EditorHost`); monaco measures itself.
+  const activeTerminalId = activeTabId === EDITOR_TAB_ID ? null : activeTabId;
+  const holdsEditor = tabs.some(isEditorTab);
+  const editorBusy = useEditorBusy(projectId);
+
   // Refit whenever the terminal becomes the visible one: while its pane was hidden it had no
   // layout, so its last measured size is stale. The resize is also what starts its process.
   useEffect(() => {
-    if (visible && activeTabId) {
-      fitTerminal(projectId, activeTabId);
+    if (visible && activeTerminalId) {
+      fitTerminal(projectId, activeTerminalId);
     }
-  }, [visible, activeTabId, projectId]);
+  }, [visible, activeTerminalId, projectId]);
 
   // Keyboard focus follows the focused pane's active tab. Only the focused pane's: with several
   // panes each doing this, whichever effect ran last would win. Separate from the refit above —
@@ -182,12 +191,12 @@ export const Pane = memo(function Pane({
   // A freshly created tab is activated before its own push arrives, so its TerminalHost has not
   // mounted yet and there is no view to focus. `activeTabReady` retriggers this once the tab
   // shows up in `tabs`, without reacting to unrelated tab updates that would steal focus back.
-  const activeTabReady = activeTabId !== null && tabs.some((tab) => tab.tabId === activeTabId);
+  const activeTabReady = activeTerminalId !== null && tabs.some((tab) => tab.tabId === activeTerminalId);
   useEffect(() => {
-    if (visible && focused && activeTabId) {
-      focusTerminal(projectId, activeTabId);
+    if (visible && focused && activeTerminalId) {
+      focusTerminal(projectId, activeTerminalId);
     }
-  }, [visible, focused, activeTabId, projectId, activeTabReady]);
+  }, [visible, focused, activeTerminalId, projectId, activeTabReady]);
 
   useEffect(() => {
     const element = stack.current;
@@ -200,18 +209,18 @@ export const Pane = memo(function Pane({
     // does not know about yet (see `fitTerminal`). A dragged sash shows background until it
     // settles; that is the trade.
     const observer = new ResizeObserver(() => {
-      if (!visible || !activeTabId) {
+      if (!visible || !activeTerminalId) {
         return;
       }
       clearTimeout(timer);
-      timer = setTimeout(() => fitTerminal(projectId, activeTabId), RESIZE_DEBOUNCE_MS);
+      timer = setTimeout(() => fitTerminal(projectId, activeTerminalId), RESIZE_DEBOUNCE_MS);
     });
     observer.observe(element);
     return () => {
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [visible, activeTabId, projectId]);
+  }, [visible, activeTerminalId, projectId]);
 
   const createTab = useCallback(
     async (agentId: AgentId) => {
@@ -221,9 +230,21 @@ export const Pane = memo(function Pane({
     [projectId, paneId, onActivate]
   );
 
+  /**
+   * The editor tab is closed in the renderer, the rest by the main process. Its unsaved-edit
+   * question may keep it open while the terminals of the same "Close All" go.
+   */
   const closeTabs = useCallback(
-    (tabIds: string[]) => void window.tet.terminals.close(projectId, tabIds),
-    [projectId]
+    (tabIds: string[]) => {
+      const terminalIds = tabIds.filter((tabId) => tabId !== EDITOR_TAB_ID);
+      if (terminalIds.length < tabIds.length) {
+        onCloseEditor();
+      }
+      if (terminalIds.length > 0) {
+        void window.tet.terminals.close(projectId, terminalIds);
+      }
+    },
+    [projectId, onCloseEditor]
   );
 
   const restartTab = useCallback(
@@ -252,8 +273,12 @@ export const Pane = memo(function Pane({
   const agentName = (agentId: AgentId): string =>
     agents.find((agent) => agent.id === agentId)?.displayName ?? agentId;
 
-  /** Agents label their tab with the session title; a shell tab has no session to name. */
-  const tabLabel = (tab: TerminalDescriptor): string => {
+  /** Agents label their tab with the session title; a shell tab has no session to name; the
+   *  editor tab takes its file's name. */
+  const tabLabel = (tab: PaneTab): string => {
+    if (isEditorTab(tab)) {
+      return tab.path.split("/").at(-1) ?? tab.path;
+    }
     if (tab.title) {
       return tab.title;
     }
@@ -262,7 +287,10 @@ export const Pane = memo(function Pane({
       : "New session";
   };
 
-  const tabTooltip = (tab: TerminalDescriptor): string => {
+  const tabTooltip = (tab: PaneTab): string => {
+    if (isEditorTab(tab)) {
+      return tab.path;
+    }
     const lines =
       tab.status === "missing"
         ? [`${agentName(tab.agentId)} was not found — install it and reopen the project`]
@@ -280,16 +308,18 @@ export const Pane = memo(function Pane({
 
   /**
    * The close actions plus rename, and — once this project has more than one pane — where else
-   * this tab could live. A close action with nothing to close renders disabled.
+   * this tab could live. A close action with nothing to close renders disabled. The editor tab has
+   * nothing to restart or rename: its menu is the close and the moves.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
-    const renamable = tabs.find((tab) => tab.tabId === tabId && tab.sessionId !== undefined);
+    const terminal = tabs.find((tab): tab is TerminalDescriptor => tab.tabId === tabId && !isEditorTab(tab));
+    const renamable = terminal?.sessionId !== undefined ? terminal : undefined;
     // A saved command can be run again whenever; anything else only once its process is gone. A
     // running tab is ended by closing it, not by this.
-    const restartable = tabs.some(
-      (tab) => tab.tabId === tabId && (tab.savedCommand === true || tab.status === "stopped" || tab.status === "error")
-    );
+    const restartable =
+      terminal !== undefined &&
+      (terminal.savedCommand === true || terminal.status === "stopped" || terminal.status === "error");
     const closeAction = (label: string, targets: string[]): ContextMenuEntry => ({
       label,
       run: targets.length > 0 ? () => closeTabs(targets) : undefined
@@ -306,6 +336,9 @@ export const Pane = memo(function Pane({
             )
           ]
         : [];
+    if (!terminal) {
+      return [closeAction("Close", [tabId]), ...moveEntries];
+    }
     return [
       {
         label: "Restart",
@@ -401,9 +434,6 @@ export const Pane = memo(function Pane({
             >
               <GitIcon />
             </button>
-            <button className="icon-button" title="Browse files" onClick={chrome.onBrowseFiles}>
-              <FilesIcon />
-            </button>
             <button
               className="icon-button"
               title="Split layout"
@@ -434,7 +464,7 @@ export const Pane = memo(function Pane({
                   tabElements.current.delete(tab.tabId);
                 }
               }}
-              className={`tab${tab.tabId === activeTabId ? " active" : ""}${tab.status === "stopped" ? " inactive" : ""}`}
+              className={`tab${tab.tabId === activeTabId ? " active" : ""}${!isEditorTab(tab) && tab.status === "stopped" ? " inactive" : ""}`}
               // Always: even the only pane has the snap zones to drop on.
               draggable
               onDragStart={(event) => {
@@ -443,7 +473,7 @@ export const Pane = memo(function Pane({
                 onDragStart(paneId);
               }}
               onClick={() => onActivate(paneId, tab.tabId)}
-              onDoubleClick={() => tab.sessionId !== undefined && void askRename(tab)}
+              onDoubleClick={() => !isEditorTab(tab) && tab.sessionId !== undefined && void askRename(tab)}
               // Keeps the terminal focused across the right-click: without this, mousedown's
               // default focus handling blurs xterm's textarea (the tab isn't focusable, so focus
               // falls back to <body>) and the user cannot type once the menu closes.
@@ -459,8 +489,10 @@ export const Pane = memo(function Pane({
               title={tabTooltip(tab)}
             >
               {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
-                  > finished. See "Both ends of a turn" in CLAUDE.md. */}
-              {tab.status === "missing" || tab.status === "error" ? (
+                  > finished. See "Both ends of a turn" in CLAUDE.md. The editor tab has no turns. */}
+              {isEditorTab(tab) ? (
+                <FilesIcon className="tab-icon" />
+              ) : tab.status === "missing" || tab.status === "error" ? (
                 <ExclamationIcon className="tab-icon session-mark session-mark-error" />
               ) : waitingTabIds.includes(tab.tabId) ? (
                 <QuestionIcon className="tab-icon session-mark" />
@@ -477,7 +509,13 @@ export const Pane = memo(function Pane({
               <span className="tab-label">{tabLabel(tab)}</span>
               <button
                 className="icon-button"
-                title={tab.sessionId !== undefined ? "Close tab and delete its session" : "Close tab"}
+                title={
+                  isEditorTab(tab)
+                    ? "Close file"
+                    : tab.sessionId !== undefined
+                      ? "Close tab and delete its session"
+                      : "Close tab"
+                }
                 onClick={(event) => {
                   event.stopPropagation();
                   closeTabs([tab.tabId]);
@@ -488,9 +526,10 @@ export const Pane = memo(function Pane({
             </div>
           ))}
         </div>
-        {/* This pane's own progress bar — a new agent starting here, or, in pane "a" alone, the
-            project-wide reason with no tab to point at (the session listing at bootstrap). */}
-        {showProgress && <ProgressBar />}
+        {/* This pane's own progress bar — a new agent starting here, the editor tab reading or
+            saving its file here, or, in pane "a" alone, the project-wide reason with no tab to
+            point at (the session listing at bootstrap). */}
+        {(showProgress || (holdsEditor && editorBusy)) && <ProgressBar />}
         <div className="new-tab">
           <button
             className="icon-button"
@@ -512,16 +551,26 @@ export const Pane = memo(function Pane({
       </div>
 
       <div className="terminal-stack" ref={stack}>
-        {tabs.map((tab) => (
-          <TerminalHost
-            key={tab.tabId}
-            projectId={projectId}
-            tabId={tab.tabId}
-            agent={agents.find((agent) => agent.id === tab.agentId)}
-            active={tab.tabId === activeTabId}
-            visible={visible}
-          />
-        ))}
+        {tabs.map((tab) =>
+          isEditorTab(tab) ? (
+            <EditorHost
+              key={tab.tabId}
+              projectId={projectId}
+              active={tab.tabId === activeTabId}
+              visible={visible}
+              focused={focused}
+            />
+          ) : (
+            <TerminalHost
+              key={tab.tabId}
+              projectId={projectId}
+              tabId={tab.tabId}
+              agent={agents.find((agent) => agent.id === tab.agentId)}
+              active={tab.tabId === activeTabId}
+              visible={visible}
+            />
+          )
+        )}
         {tabs.length === 0 && <div className="placeholder">No sessions open.</div>}
       </div>
 

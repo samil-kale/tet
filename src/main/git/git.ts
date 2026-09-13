@@ -840,7 +840,7 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
         })
     );
   });
-  // Too large, an image, or a NUL byte anywhere: no text side to show, and the dialog says so.
+  // Too large, an image, or a NUL byte anywhere: no text side to show, and the editor tab says so.
   if (read.tooLarge) {
     return { content: "", binary: true, missing: false };
   }

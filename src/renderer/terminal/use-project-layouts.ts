@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { TerminalDescriptor } from "../../shared/types";
 import {
   activateTab as activateTabLayout,
   applyPreset,
@@ -12,10 +11,11 @@ import {
   serializeLayout,
   snapTab as snapTabLayout
 } from "./pane-layout";
-import type { PaneId, ProjectLayout, SnapTransition, SplitPreset } from "./pane-layout";
+import type { LayoutTab, PaneId, ProjectLayout, SnapTransition, SplitPreset } from "./pane-layout";
+import type { PaneTab } from "./editor-tab";
 
 /** Shared instance, so a pane's props stay identical for a project that has none. */
-export const NO_TABS: TerminalDescriptor[] = [];
+export const NO_TABS: PaneTab[] = [];
 
 /**
  * A project's layout: what is held, else what the last run left on disk. Loaded at first sight,
@@ -45,12 +45,12 @@ export interface ProjectLayouts {
  * persisted from the first time `starting` reports a project not starting.
  */
 export function useProjectLayouts(
-  tabs: Record<string, TerminalDescriptor[]>,
+  tabs: Record<string, LayoutTab[]>,
   starting: Record<string, boolean>
 ): ProjectLayouts {
   const [layouts, setLayouts] = useState<Record<string, ProjectLayout>>({});
   /** The tab list `layouts` was last normalized against, per project — see `normalizeLayout`. */
-  const previousTabsRef = useRef<Record<string, TerminalDescriptor[]>>({});
+  const previousTabsRef = useRef<Record<string, LayoutTab[]>>({});
   /**
    * For the callbacks that only read it on a click: depending on `tabs` would remake them, and
    * every pane's props, on every push from any project.

@@ -20,6 +20,7 @@ import {
 } from "../src/renderer/terminal/pane-layout";
 import type { ProjectLayout } from "../src/renderer/terminal/pane-layout";
 import type { TerminalDescriptor } from "../src/shared/types";
+import { EDITOR_TAB_ID, type EditorTab } from "../src/renderer/terminal/editor-tab";
 
 /** The split view's rules — pure functions, the one part of the renderer that needs no window. */
 
@@ -540,5 +541,47 @@ describe("what is persisted", () => {
       JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { s: "z", t: "b" } })
     );
     assert.deepEqual(loadLayout("q").tabPane, { t: "b" }, "an unknown pane is dropped, the rest kept");
+  });
+});
+
+describe("an editor tab", () => {
+  const editor: EditorTab = { tabId: EDITOR_TAB_ID, projectId: "p", path: "src/index.ts" };
+  const cols2 = (tabPane: Record<string, "a" | "b">, tabs: (TerminalDescriptor | EditorTab)[]): ProjectLayout =>
+    normalizeLayout({ preset: "cols2", focusedPane: "a", tabPane, activeTab: {}, commandPane: {} }, tabs, NONE);
+
+  it("settles in the focused pane like any tab", () => {
+    const layout = normalizeLayout(
+      { preset: "cols2", focusedPane: "b", tabPane: { t1: "a" }, activeTab: {}, commandPane: {} },
+      [tab("t1"), editor],
+      NONE
+    );
+    assert.equal(layout.tabPane[EDITOR_TAB_ID], "b");
+    assert.equal(layout.activeTab.b, EDITOR_TAB_ID);
+  });
+
+  it("is never written to disk, having no session", () => {
+    const tabs = [tab("t1", 0, "s1"), editor];
+    assert.deepEqual(JSON.parse(serializeLayout(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs)).tabPane, { s1: "a" });
+  });
+
+  it("holds its pane: closing it collapses the pane, closing a neighbour beside it does not", () => {
+    const alone = [tab("t1", 1), editor];
+    assert.equal(collapseClosed(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, alone), [tab("t1", 1)], alone).preset, "single");
+    const beside = [tab("t1", 1), tab("t2", 2), editor];
+    const layout = cols2({ t1: "a", t2: "b", [EDITOR_TAB_ID]: "b" }, beside);
+    assert.equal(collapseClosed(layout, [tab("t1", 1), editor], beside).preset, "cols2");
+  });
+
+  it("empties its pane when moved out as the last tab, and keeps it standing otherwise", () => {
+    const alone = [tab("t1", 1), editor];
+    assert.equal(activateTab(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, alone), EDITOR_TAB_ID, "a", alone).preset, "single");
+    const beside = [tab("t1", 1), tab("t2", 2), editor];
+    const layout = cols2({ t1: "a", t2: "b", [EDITOR_TAB_ID]: "b" }, beside);
+    assert.equal(activateTab(layout, "t2", "a", beside).preset, "cols2");
+  });
+
+  it("counts as occupying its pane at startup", () => {
+    const tabs = [tab("t1", 1), editor];
+    assert.equal(collapseEmpty(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs).preset, "cols2");
   });
 });

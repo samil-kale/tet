@@ -1,11 +1,12 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Project, TerminalDescriptor } from "../../shared/types";
+import type { Project } from "../../shared/types";
 import { sameList } from "../identity";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone, SplitPreset } from "./pane-layout";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
+import { isEditorTab, type PaneTab } from "./editor-tab";
 import { useAgents } from "../ui/use-agents";
 
 /**
@@ -51,7 +52,7 @@ function pixelsFor(fraction: number, min: number, minOther: number, containerSiz
 const HALF = 1 / 2;
 
 /** The tabs of a pane that has none — one shared instance, so an empty pane's prop is stable. */
-const NO_PANE_TABS: TerminalDescriptor[] = [];
+const NO_PANE_TABS: PaneTab[] = [];
 
 /** The pane a dragged tab is over, and the snap zone the pointer is in, if any — see `dragTarget`. */
 interface DragTarget {
@@ -68,8 +69,9 @@ function percentStyle(box: FractionBox): { left: string; top: string; width: str
 
 interface TerminalsPaneProps {
   project: Project;
-  /** This project's tabs. Held by App, since the project list needs every project's. */
-  tabs: TerminalDescriptor[];
+  /** This project's tabs, its editor tab last. Held by App, since the project list needs every
+   *  project's. */
+  tabs: PaneTab[];
   visible: boolean;
   /** Whether the git pane beside this one is open; the button in the strip shows which. */
   gitOpen: boolean;
@@ -77,8 +79,9 @@ interface TerminalsPaneProps {
   /** Bootstrap's own session listing: the one project-wide reason with no tab of its own to show
       on, so it falls to pane "a". */
   externalBusy: boolean;
-  /** The diff dialog. Without a path it opens with nothing chosen yet ("Browse files"). */
-  onOpenDiff: (projectId: string, path?: string) => void;
+  /** A file to look at, in the project's editor tab — here, a path ctrl-clicked in a terminal. */
+  onOpenDiff: (projectId: string, path: string) => void;
+  onCloseEditor: (projectId: string) => void;
   /** This project's split state — preset, focus, and which pane every tab and its selection live in. */
   layout: ProjectLayout;
   onActivateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
@@ -108,6 +111,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   onToggleGit,
   externalBusy,
   onOpenDiff,
+  onCloseEditor,
   layout,
   onActivateTab,
   onSnapTab,
@@ -128,13 +132,12 @@ export const TerminalsPane = memo(function TerminalsPane({
   const [dragTarget, setDragTargetState] = useState<DragTarget | null>(null);
   const dragTargetRef = useRef<DragTarget | null>(null);
   const dragSource = useRef<PaneId | null>(null);
-  const knownTabs = useRef<TerminalDescriptor[]>([]);
+  const knownTabs = useRef<PaneTab[]>([]);
 
-  // Ctrl+clicking a changed file in a terminal opens that file's diff over everything.
+  // Ctrl+clicking a file in a terminal opens it in the project's editor tab.
   useEffect(() => setRevealHandler(project.id, (path) => onOpenDiff(project.id, path)), [project.id, onOpenDiff]);
 
-  /** "Browse files": the same dialog, opened with nothing chosen yet. */
-  const browseFiles = useCallback(() => onOpenDiff(project.id), [project.id, onOpenDiff]);
+  const onCloseEditorHere = useCallback(() => onCloseEditor(project.id), [onCloseEditor, project.id]);
 
   // The xterm instances live outside React, keyed by tab id. Let go of only for a tab gone for
   // good, not one moved to another pane.
@@ -143,7 +146,8 @@ export const TerminalsPane = memo(function TerminalsPane({
     knownTabs.current = tabs;
     const ids = new Set(tabs.map((tab) => tab.tabId));
     for (const tab of previous) {
-      if (!ids.has(tab.tabId)) {
+      // The editor tab has no xterm; its editor is let go of where it closes (App).
+      if (!ids.has(tab.tabId) && !isEditorTab(tab)) {
         disposeTerminal(project.id, tab.tabId);
       }
     }
@@ -217,11 +221,10 @@ export const TerminalsPane = memo(function TerminalsPane({
     () => ({
       gitOpen,
       onToggleGit,
-      onBrowseFiles: browseFiles,
       onPresetChange: onPresetChangeHere,
       onOpenSettings
     }),
-    [gitOpen, onToggleGit, browseFiles, onPresetChangeHere, onOpenSettings]
+    [gitOpen, onToggleGit, onPresetChangeHere, onOpenSettings]
   );
   const onActivate = useCallback(
     (paneId: PaneId, tabId: string) => onActivateTab(project.id, tabId, paneId),
@@ -304,9 +307,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   // `paneOf` reads rather than the whole layout: a selection change must not hand every pane a
   // fresh list.
   const { tabPane, focusedPane } = layout;
-  const paneTabsRef = useRef<Partial<Record<PaneId, TerminalDescriptor[]>>>({});
+  const paneTabsRef = useRef<Partial<Record<PaneId, PaneTab[]>>>({});
   const paneTabs = useMemo(() => {
-    const next: Partial<Record<PaneId, TerminalDescriptor[]>> = {};
+    const next: Partial<Record<PaneId, PaneTab[]>> = {};
     for (const paneId of PANE_IDS) {
       next[paneId] = sameList(
         paneTabsRef.current[paneId],
@@ -357,6 +360,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       height={size.height}
       onActivate={onActivate}
       onFocus={onFocus}
+      onCloseEditor={onCloseEditorHere}
       markedTabIds={markedTabIds}
       waitingTabIds={waitingTabIds}
       chrome={first ? chrome : undefined}

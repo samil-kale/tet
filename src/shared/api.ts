@@ -169,7 +169,7 @@ export interface TETApi {
     listExplorer(projectId: string): Promise<ExplorerListing>;
     /** Just the settings dialog's Files tab needs — no filesystem walk, tet.json alone. */
     explorerSettings(projectId: string): Promise<ExplorerSettings>;
-    /** A file for the diff dialog: the working tree's text, and what HEAD has of it. */
+    /** A file for the editor tab: the working tree's text, and what HEAD has of it. */
     readFile(projectId: string, path: string): Promise<FileContent>;
     /** Writes a file's content; `expectedMtimeMs` must match what's on disk or nothing is written. */
     writeFile(projectId: string, path: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult>;

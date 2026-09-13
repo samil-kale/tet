@@ -557,7 +557,7 @@ export function registerIpc({
 
   /**
    * A path the user ctrl-clicked in a terminal. A file inside the repository is answered with its
-   * repository-relative path, which the renderer opens in the diff dialog; anything else is handed
+   * repository-relative path, which the renderer opens in the editor tab; anything else is handed
    * to the OS here.
    */
   ipcMain.handle("shell:open-file", async (_event, projectId: string, rawPath: string): Promise<string | null> => {

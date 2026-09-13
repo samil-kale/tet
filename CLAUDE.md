@@ -39,22 +39,21 @@ header at each change of writer.
 
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI (tab
 semantics, close actions, theme names, the sash) — the classic layout and Dark Modern's palette,
-not the pill-shaped Modern UI. **Monaco** is the diff dialog, diff and editor in one widget. Not
+not the pill-shaped Modern UI. **Monaco** is the editor tab, diff and editor in one widget. Not
 adopted: Octokit/GitBeaker for the providers.
 
 ## The layout
 
-- projects live in the left sidebar; the tab strip is one project's terminals only
+- projects live in the left sidebar; the tab strip is one project's terminals, plus its editor tab
 - git is **not** a tab. The strip's git toggle slides out a pane between navigation and terminals —
-  branches over changed files, nothing else — and stays out until pressed again (`usePaneToggle`).
-  One git pane for all projects.
-- the diff is a **dialog** over the whole window (double-click a changed file, ctrl-click a path
-  in a terminal, or "Browse files", which reopens the file last shown for that project). Its left
-  side is the git pane's `ChangesList` with only "Discard all" in its header. `DiffDialog` and
-  `SettingsDialog` are not part of `Dialog.tsx`, which is for questions (a form with two buttons).
-  Every card dialog — the questions and everything under `dialogs/` — is drawn in `DialogFrame`
-  (`src/renderer/ui/DialogFrame.tsx`), headed by a title bar or a tab strip; the diff dialog alone
-  has a frame of its own.
+  branches over changed files over the Explorer — and stays out until pressed again
+  (`usePaneToggle`). One git pane for all projects.
+- a file opens in the project's one **editor tab** (double-click a changed file, click one in the
+  Explorer, ctrl-click a path in a terminal) — VS Code's preview editor: the next file reuses it.
+  No pty, never persisted, renderer-only (`editor-tab.ts`). `SettingsDialog` is not part of
+  `Dialog.tsx`, which is for questions (a form with two buttons). Every card dialog — the questions
+  and everything under `dialogs/` — is drawn in `DialogFrame` (`src/renderer/ui/DialogFrame.tsx`),
+  headed by a title bar or a tab strip.
 - git commands go in an ordinary terminal tab, not a console of the pane's own
 - panes are draggable (`src/renderer/ui/Sash.tsx`)
 
@@ -64,24 +63,25 @@ One project's terminals can be split into up to four panes, each with its own ta
 Code's editor groups cut down to **four fixed presets** (single, two columns, two columns with the
 right one split, 2×2), not a nestable tree. `src/renderer/terminal/pane-layout.ts` holds the model
 and every rule about it; `TerminalsPane` lays the panes out; `Pane` is one strip-and-stack. Pane
-"a" (always top-left) carries the one row of icon buttons — git toggle, browse-files, layout
-picker, settings — regardless of preset.
+"a" (always top-left) carries the one row of icon buttons — git toggle, layout picker,
+settings — regardless of preset.
 
 - **The layout lives in `App`** (`layouts: Record<projectId, ProjectLayout>`): the tab shortcuts
   and `markedTabs`/`seen` need "the tab on screen" — one *per pane* with a split (`visibleTabIds`).
   A pane asks for a selection change through `onActivateTab`.
 - **A tab belongs to exactly one pane**, assigned lazily to the focused pane on first sight
   (`normalizeLayout`, the one place a layout is reconciled with the tab list). One xterm per tab,
-  so the same tab in two panes is not a thing.
+  so the same tab in two panes is not a thing. The editor tab is a tab like any other to the layout,
+  which reads only `LayoutTab`; having no session id, it is never written.
 - **Dividers are fractions** of `.panes-grid`'s live measurement (`useDividerFraction`), never
   pixels; "single" is the one preset that resets them.
 - **Persistence**: preset, focused pane, divider shares, and tab→pane keyed by **session id**
   (`serializeLayout`). Not persisted: each pane's active tab, and any focus frame. The layout is
   loaded on *first sight* of a project (`layoutOf`), and nothing is written until its bootstrap
   has once reported not starting (`settledProjects`) — both commented in `App.tsx`.
-- **A tab moved between panes gets a new host**, so `attachTerminal` moves the xterm element
-  rather than calling `open()` again (which silently no-ops). Only the **focused** pane focuses
-  its terminal; a focus change alone must never resize the pty.
+- **A tab moved between panes gets a new host**, so `attachTerminal` and `attachEditor` move
+  their element rather than calling `open()` again (which silently no-ops). Only the **focused**
+  pane focuses its terminal; a focus change alone must never resize the pty.
 - **A tab dragged onto a snap zone lays out the preset that has a pane there.** The zones
   (`SNAP_ZONES`: the right quarter in thirds, the lower left quarter) are the same for every
   preset; what each does per preset is `SNAP_TRANSITIONS`. Panes the preset adds beyond the target
@@ -161,7 +161,7 @@ the add-repository dialog's `CloneAuth` acts on; the per-variable reasons are in
 ### The diff and the editor
 
 **The diff and the editor are one widget**: monaco's diff editor inline, its right-hand side
-editable (`DiffEditor.tsx`, `diffEditorOptions` in `editor.ts`). tet never diffs — the whole file
+editable (`editor-views.ts`, `diffEditorOptions` in `editor.ts`). tet never diffs — the whole file
 stands there with monaco's marks and monaco's hunk boundaries, whitespace-only changes never
 counted, and the overview ruler beside the scrollbar is how a change is found: monaco's own strip,
 and a click on it scrolls there. What tet brings is the two texts, in one read
@@ -170,7 +170,9 @@ and a click on it scrolls there. What tet brings is the two texts, in one read
 conversion are applied and the text reads like the file (pinned in `git.test.ts`). A path HEAD
 lacks is `missing`, not an error, and diffs as all new; a file git reports no change to gets no
 HEAD side and is its own original, which is a plain editor. An image is not "Binary file.": both
-versions travel as data URLs and `ImageView` lays them side by side or over each other.
+versions travel as data URLs and `ImageView` lays them side by side or over each other. The
+editor and the file it shows live outside React, one per project, as the xterms do; `EditorHost.tsx`
+draws the bar and the placeholders off them.
 
 `monaco-core.ts` reproduces `editor.main.js`'s import list minus every language and language
 service — re-diff it on a monaco upgrade. Coloring goes through shiki (`ensureLanguage`), and the
@@ -242,7 +244,7 @@ serves every project; rows are added with `+` and can be edited, deleted or reor
 
 ## Explorer
 
-The diff dialog's Explorer tree (`Explorer.tsx`, fed by `Repository.listExplorer`) is configured
+The git pane's Explorer tree (`git/Explorer.tsx`, fed by `Repository.listExplorer`) is configured
 from the same `tet.json`, shaped like a VS Code `.code-workspace` and read by `readExplorerView`
 in `commands.ts` as defensively as the commands:
 
@@ -302,9 +304,9 @@ Every pane that can be slow carries its own `.progress-bar` showing only what is
 *it*. One component serves all (`ProgressBar.tsx`), dropped into whichever header declares
 `position: relative`. **Never add a second bar inside one pane** — a new slow reason there feeds
 the one it already has. Today: each terminal pane (`Pane`'s `showProgress`, from
-`TerminalDescriptor.starting`; the bootstrap listing falls to pane "a"), the git pane's two
-sections (`branch.busy` under BRANCHES, `acting` under LOCAL CHANGES), the diff dialog (reading
-the file and building the editor) and its changes list.
+`TerminalDescriptor.starting`, and the editor tab reading, building or saving; the bootstrap
+listing falls to pane "a"), and the git pane's three sections (`branch.busy` under BRANCHES,
+`acting` under LOCAL CHANGES, the listing and the tree's own edits under EXPLORER).
 
 **A spinner in place of an icon is not a second one of these.** A spinner is about the one thing
 the icon stands for, and takes its place — a tab's agent icon while its session works a turn. An
@@ -591,7 +593,7 @@ from it; Ctrl+C with a selection always copies, and its per-agent rules are abov
 ## The renderer
 
 `src/renderer/` is split by surface: `terminal/` (xterm, the split, the link providers), `git/`
-(the pane and `ChangesList`), `diff/` (the dialog, the editor, shiki and monaco), `sidebar/`,
+(the pane, `ChangesList`, the Explorer), `diff/` (the editor tab, shiki and monaco), `sidebar/`,
 `dialogs/` (the ones that are not questions), `ui/` (what every surface uses). What stays flat is
 the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 
@@ -601,7 +603,7 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 - An xterm is built the first time its tab is in front of the user, not on mount — building each
   at startup was most of the window's start.
 - **The views under `App` are memoized, and `App` hands them stable props.** `React.memo` on
-  `TerminalsPane`, `ProjectList`, `CommandList`, `GitPane`, `BranchTree` and `DiffDialog` only
+  `TerminalsPane`, `ProjectList`, `CommandList`, `GitPane`, `BranchTree` and `EditorHost` only
   holds while props stay stable: a callback is a `useCallback`, an object a `useMemo`, an empty
   list a shared constant (`NO_TABS`, `NO_IDS`).
 - A merely hidden terminal keeps its layout (`visibility`, not `display`) — xterm needs a laid-out
@@ -623,7 +625,7 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
   expensive, no logging, in that path.
 - A terminal's xterm theme is built **per terminal**, not once for the window (`buildXtermTheme`).
 - Measurements are shared, not invented per view: a bar along an edge is 35px (tab strip, title
-  bar, `.section-header`, the diff dialog's bar); the action button is 22px; the border between
+  bar, `.section-header`, the editor tab's bar); the action button is 22px; the border between
   panes is 1px `--vscode-panel-border`. Check the neighbouring view before inventing a size.
 - **An icon is one size everywhere, and it takes two numbers.** The box is `--icon-size` (13px);
   the other is how much of its grid the path covers — every icon declares the `extent` it was

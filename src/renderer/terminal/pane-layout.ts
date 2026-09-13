@@ -46,6 +46,13 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
   grid2x2: { a: "Top Left", b: "Top Right", c: "Bottom Left", d: "Bottom Right" }
 };
 
+/**
+ * What the layout reads of a tab: its id, its session (persistence), its saved command
+ * (`placeCommandTab`) and when it was last used (`pickActive`). A terminal's descriptor, or the
+ * editor tab (`editor-tab.ts`), which carries the id alone and so is never written to disk.
+ */
+export type LayoutTab = Pick<TerminalDescriptor, "tabId" | "sessionId" | "command" | "updatedAt">;
+
 /** A project's split state — held in `App`, not in `TerminalsPane` (see CLAUDE.md). */
 export interface ProjectLayout {
   preset: SplitPreset;
@@ -93,8 +100,8 @@ export function tabsInFront(layout: ProjectLayout, focused: boolean, covered: bo
 
 /** The tab a pane keeps active once `wanted` (its previous active tab) is gone from `list`. */
 function pickActive(
-  list: TerminalDescriptor[],
-  previousList: TerminalDescriptor[],
+  list: LayoutTab[],
+  previousList: LayoutTab[],
   wanted: string | null | undefined
 ): string | null {
   if (wanted && list.some((tab) => tab.tabId === wanted)) {
@@ -134,8 +141,8 @@ function pickActive(
  */
 export function normalizeLayout(
   layout: ProjectLayout,
-  tabs: TerminalDescriptor[],
-  previousTabs: TerminalDescriptor[]
+  tabs: LayoutTab[],
+  previousTabs: LayoutTab[]
 ): ProjectLayout {
   const panes = PRESET_PANES[layout.preset];
   const previousIds = new Set(previousTabs.map((tab) => tab.tabId));
@@ -152,7 +159,7 @@ export function normalizeLayout(
   for (const tab of tabs) {
     tabPane[tab.tabId] ??= layout.focusedPane;
   }
-  const listOf = (source: TerminalDescriptor[], paneId: PaneId): TerminalDescriptor[] =>
+  const listOf = (source: LayoutTab[], paneId: PaneId): LayoutTab[] =>
     source.filter((tab) => (tabPane[tab.tabId] ?? layout.focusedPane) === paneId);
   const activeTab: Partial<Record<PaneId, string | null>> = {};
   for (const paneId of panes) {
@@ -188,7 +195,7 @@ export function normalizeLayout(
  * A preset switch: panes that no longer exist hand their tabs to pane "a", present in every
  * preset. Re-normalized at once, so the new panes have a valid active tab before the next push.
  */
-export function applyPreset(layout: ProjectLayout, preset: SplitPreset, tabs: TerminalDescriptor[]): ProjectLayout {
+export function applyPreset(layout: ProjectLayout, preset: SplitPreset, tabs: LayoutTab[]): ProjectLayout {
   if (preset === layout.preset) {
     return layout;
   }
@@ -203,7 +210,7 @@ type PaneRemap = Partial<Record<PaneId, PaneId>>;
  * `remap`; a pane the new preset lacks and `remap` does not name hands everything to "a".
  * Re-normalized at once.
  */
-function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, tabs: TerminalDescriptor[]): ProjectLayout {
+function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, tabs: LayoutTab[]): ProjectLayout {
   const panes = PRESET_PANES[preset];
   const paneFor = (paneId: PaneId): PaneId => remap[paneId] ?? (panes.includes(paneId) ? paneId : "a");
   const tabPane = Object.fromEntries(Object.entries(layout.tabPane).map(([tabId, paneId]) => [tabId, paneFor(paneId)]));
@@ -231,7 +238,7 @@ function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, 
  * focus follows it. The pane that loses its active tab falls back to the tab before it in its own
  * order, else the first, else null.
  */
-export function moveTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: TerminalDescriptor[]): ProjectLayout {
+export function moveTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: LayoutTab[]): ProjectLayout {
   const source = paneOf(layout, tabId);
   let activeTab = layout.activeTab;
   if (target !== source && layout.activeTab[source] === tabId) {
@@ -249,7 +256,7 @@ export function moveTab(layout: ProjectLayout, tabId: string, target: PaneId, ta
 }
 
 /** The panes holding at least one of `tabs`, in reading order. */
-function occupiedPanes(layout: ProjectLayout, tabs: TerminalDescriptor[]): PaneId[] {
+function occupiedPanes(layout: ProjectLayout, tabs: LayoutTab[]): PaneId[] {
   const held = new Set(tabs.map((tab) => paneOf(layout, tab.tabId)));
   return PRESET_PANES[layout.preset].filter((paneId) => held.has(paneId));
 }
@@ -281,7 +288,7 @@ export const COLLAPSE_TRANSITIONS: Record<SplitPreset, Partial<Record<PaneId, { 
  * tab moved into RU stays bottom right. Run after the emptied pane has gone, and again after
  * each removal: taking LU out of the grid is what brings RO and RU into a split-right.
  */
-function collapseTrailing(layout: ProjectLayout, tabs: TerminalDescriptor[]): ProjectLayout {
+function collapseTrailing(layout: ProjectLayout, tabs: LayoutTab[]): ProjectLayout {
   let next = layout;
   for (;;) {
     const last = PRESET_PANES[next.preset].at(-1)!;
@@ -294,7 +301,7 @@ function collapseTrailing(layout: ProjectLayout, tabs: TerminalDescriptor[]): Pr
 }
 
 /** The whole collapse for one emptied pane: its own transition, then whatever trails. */
-export function collapseEmptied(layout: ProjectLayout, emptied: PaneId, tabs: TerminalDescriptor[]): ProjectLayout {
+export function collapseEmptied(layout: ProjectLayout, emptied: PaneId, tabs: LayoutTab[]): ProjectLayout {
   const transition = COLLAPSE_TRANSITIONS[layout.preset][emptied];
   return transition ? collapseTrailing(retarget(layout, transition.preset, transition.remap, tabs), tabs) : layout;
 }
@@ -305,7 +312,7 @@ export function collapseEmptied(layout: ProjectLayout, emptied: PaneId, tabs: Te
  * resolves through `paneOf` to the focused pane, which may be empty without this move. A snap
  * (`snapTab`) is the same move without the collapse.
  */
-export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: TerminalDescriptor[]): ProjectLayout {
+export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: LayoutTab[]): ProjectLayout {
   const source = paneOf(layout, tabId);
   const moved = moveTab(layout, tabId, target, tabs);
   const emptied = occupiedPanes(layout, tabs).includes(source) && !occupiedPanes(moved, tabs).includes(source);
@@ -319,8 +326,8 @@ export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId
  */
 export function collapseClosed(
   layout: ProjectLayout,
-  tabs: TerminalDescriptor[],
-  previousTabs: TerminalDescriptor[]
+  tabs: LayoutTab[],
+  previousTabs: LayoutTab[]
 ): ProjectLayout {
   const held = new Set(tabs.map((tab) => paneOf(layout, tab.tabId)));
   const emptied = PRESET_PANES[layout.preset].filter(
@@ -334,7 +341,7 @@ export function collapseClosed(
  * restored layout has nothing for counts as emptied, a snap's empty pane included. Stricter than
  * a run; what the transitions cannot take (the grid's b or d) still stays.
  */
-export function collapseEmpty(layout: ProjectLayout, tabs: TerminalDescriptor[]): ProjectLayout {
+export function collapseEmpty(layout: ProjectLayout, tabs: LayoutTab[]): ProjectLayout {
   const occupied = occupiedPanes(layout, tabs);
   return collapsePanes(
     layout,
@@ -347,7 +354,7 @@ export function collapseEmpty(layout: ProjectLayout, tabs: TerminalDescriptor[])
  * Several panes emptied at once, in reading order, each later letter translated through the
  * collapse before it; what trails is taken once at the end. `layout` itself when nothing collapsed.
  */
-function collapsePanes(layout: ProjectLayout, emptied: PaneId[], tabs: TerminalDescriptor[]): ProjectLayout {
+function collapsePanes(layout: ProjectLayout, emptied: PaneId[], tabs: LayoutTab[]): ProjectLayout {
   let next = layout;
   let pending = emptied;
   while (pending.length > 0) {
@@ -472,7 +479,7 @@ export function snapTab(
   layout: ProjectLayout,
   tabId: string,
   transition: SnapTransition,
-  tabs: TerminalDescriptor[]
+  tabs: LayoutTab[]
 ): ProjectLayout {
   return moveTab(retarget(layout, transition.preset, transition.remap, tabs), tabId, transition.target, tabs);
 }
@@ -503,7 +510,7 @@ export function placeCommandTab(
   layout: ProjectLayout,
   tabId: string,
   command: string,
-  tabs: TerminalDescriptor[]
+  tabs: LayoutTab[]
 ): ProjectLayout {
   const open = tabs.find((tab) => tab.command === command && tab.tabId !== tabId);
   const place = open ? { preset: layout.preset, pane: paneOf(layout, open.tabId) } : layout.commandPane[command];
@@ -587,6 +594,7 @@ interface PersistedLayout {
 /**
  * Read back defensively, like `settings.json`: a shape that does not parse falls back to a fresh
  * layout. Entries naming sessions that no longer exist are left in (see `normalizeLayout`).
+ * Session ids come back as tab ids here, which is why the editor tab's id looks like none.
  */
 export function loadLayout(projectId: string): ProjectLayout {
   const fallback = defaultLayout();
@@ -630,7 +638,7 @@ export function loadLayout(projectId: string): ProjectLayout {
  * The persisted form, given the tabs it describes — only those with a session are written, under
  * it (see `PersistedLayout`), so disk never names an id the next run could hand to another tab.
  */
-export function serializeLayout(layout: ProjectLayout, tabs: TerminalDescriptor[]): string {
+export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): string {
   const tabPane: Record<string, PaneId> = {};
   // The open command tabs' panes over the recorded ones.
   const commandPane = { ...layout.commandPane };

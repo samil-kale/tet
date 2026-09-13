@@ -4,7 +4,6 @@ import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } fr
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
 import type { BranchActions } from "./git/BranchTree";
-import { DiffDialog } from "./diff/DiffDialog";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { GitPane } from "./git/GitPane";
@@ -29,6 +28,8 @@ import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
 import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
+import { EDITOR_TAB_ID, type EditorTab, type PaneTab } from "./terminal/editor-tab";
+import { canDiscardEdit, disposeEditor, openEditorFile, setEditorVersion } from "./diff/editor-views";
 
 /** A little over `.git-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const GIT_SLIDE_MS = 180;
@@ -43,14 +44,9 @@ function forget<T>(record: Record<string, T>, projectId: string): Record<string,
   return rest;
 }
 
-/** What an open diff has to be re-read for: HEAD, and the status of the file it shows. */
+/** What an open file has to be re-read for: HEAD, and the status of the file it shows. */
 function diffVersion(state: RepositoryState | undefined, filePath: string): string {
   return `${state?.head}:${state?.changes.find((change) => change.path === filePath)?.status}`;
-}
-
-/** Per project, under the `tet.layout.` namespace `Sash.tsx` and `pane-layout.ts` use for window state. */
-function lastDiffPathKey(projectId: string): string {
-  return `tet.layout.diff.${projectId}.lastPath`;
 }
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
@@ -79,6 +75,23 @@ export function App() {
    */
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+  /** Each project's editor tab, once a file is open — renderer-only, see `editor-tab.ts`. */
+  const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab>>({});
+  const editorTabsRef = useRef(editorTabs);
+  editorTabsRef.current = editorTabs;
+  /**
+   * What each project's tab strip holds: its terminals, and its editor tab last. What the layout
+   * is reconciled against, what the panes draw and what next/previous tab step through; the marks
+   * and `seen` stay on `tabs`, the editor tab having no turns. The same list as `tabs` for a project
+   * with no file open, so the panes' props keep their identity.
+   */
+  const stripTabs = useMemo(() => {
+    const next: Record<string, PaneTab[]> = { ...tabs };
+    for (const [projectId, editor] of Object.entries(editorTabs)) {
+      next[projectId] = [...(tabs[projectId] ?? []), editor];
+    }
+    return next;
+  }, [tabs, editorTabs]);
   /**
    * Which projects still have something starting up (bootstrap listing, a CLI booting). Read by
    * the active project's progress bar and by the layout persistence.
@@ -89,7 +102,7 @@ export function App() {
    * the marks/seen logic need what is on screen across every pane — see "Split view" in CLAUDE.md.
    */
   const { layouts, activateTab, snapTab, focusPane, setPreset, placeTab, forgetLayout } = useProjectLayouts(
-    tabs,
+    stripTabs,
     starting
   );
   /**
@@ -99,10 +112,11 @@ export function App() {
   const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
   /** The same, read synchronously: a second double-click can land before a re-render does. */
   const branchActionsRef = useRef(new Set<string>());
-  // Defaults and limits of the draggable panes; the one git pane shares the two below.
+  // Defaults and limits of the draggable panes; the one git pane shares the three below.
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
   const [gitPanelsWidth, setGitPanelsWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
+  const [changesHeight, setChangesHeight] = usePaneSize("changes-list", 260, MIN_PANE_HEIGHT);
   // 40% of the window it first opens in.
   const [commandsHeight, setCommandsHeight] = usePaneSize(
     "commands",
@@ -148,8 +162,6 @@ export function App() {
     }, GIT_SLIDE_MS);
     return () => clearTimeout(stop);
   }, [gitOpen]);
-  /** The diff dialog, if any — `path` null once it's open with nothing chosen. */
-  const [diffFile, setDiffFile] = useState<{ projectId: string; path: string | null } | null>(null);
   /** Whether the add-repository dialog (clone, add, create) is up. */
   const [addOpen, setAddOpen] = useState(false);
   /** Whether the settings are up; they belong to the window, not to a project. */
@@ -244,6 +256,8 @@ export function App() {
     setTabs((current) => forget(current, projectId));
     setStarting((current) => forget(current, projectId));
     setSandboxed((current) => forget(current, projectId));
+    setEditorTabs((current) => forget(current, projectId));
+    disposeEditor(projectId);
     forgetLayout(projectId);
     busyCursor.current = forget(busyCursor.current, projectId);
     // The xterm instances live outside React; this is the one moment a project ends for good.
@@ -361,6 +375,7 @@ export function App() {
     return inFrontRef.current;
   }, [focused, covered, activeProjectId, layouts]);
 
+  // May name the editor tab, which the main process never matches against a tab of its own.
   useEffect(() => {
     window.tet.terminals.inFront(activeProjectId, inFront);
   }, [activeProjectId, inFront]);
@@ -552,7 +567,7 @@ export function App() {
         return;
       }
       const layout = layouts[activeProjectId] ?? DEFAULT_LAYOUT;
-      const list = (tabs[activeProjectId] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane);
+      const list = (stripTabs[activeProjectId] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane);
       if (list.length === 0) {
         return;
       }
@@ -560,7 +575,7 @@ export function App() {
       const next = list[(at + direction + list.length) % list.length];
       activateTab(activeProjectId, next.tabId, layout.focusedPane);
     },
-    [activeProjectId, tabs, layouts, activateTab]
+    [activeProjectId, stripTabs, layouts, activateTab]
   );
 
   /** Ctrl/Cmd+Shift+T — a shell tab in the project on screen. */
@@ -622,8 +637,6 @@ export function App() {
   }, []);
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
-  /** The project whose file the diff dialog shows — gone, the dialog goes with it. */
-  const diffProject = diffFile ? projects.find((project) => project.id === diffFile.projectId) : undefined;
   const activeState = (activeProjectId ? states[activeProjectId] : undefined) ?? EMPTY_REPOSITORY_STATE;
 
   // Stable handles, so a memoized view re-renders for a change in what it shows only.
@@ -637,7 +650,6 @@ export function App() {
     [projects]
   );
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
-  const closeDiff = useCallback(() => setDiffFile(null), []);
   const toggleGit = useCallback(() => setGitOpen(!gitOpen), [gitOpen, setGitOpen]);
   /**
    * The project row's git mark: switches to that project and slides the git pane out. On the
@@ -650,25 +662,50 @@ export function App() {
     },
     [activeProjectId, gitOpen, setGitOpen]
   );
-  /** No explicit path — "Browse files" itself — reopens whatever this project last showed. */
-  const openDiff = useCallback((projectId: string, path?: string) => {
-    const resolved = path ?? localStorage.getItem(lastDiffPathKey(projectId));
-    setDiffFile({ projectId, path: resolved });
-  }, []);
-  // Remembers every file the dialog is pointed at, however it got there, across close and reopen.
-  useEffect(() => {
-    if (diffFile?.path !== null && diffFile?.path !== undefined) {
-      localStorage.setItem(lastDiffPathKey(diffFile.projectId), diffFile.path);
-    }
-  }, [diffFile]);
+  /**
+   * Shows a file in the project's editor tab, which the next file reuses. The editor is told
+   * before the tab is drawn, since the tab attaches what it made; the tab is activated ahead of
+   * its own appearance in `stripTabs`, the way a new terminal tab is.
+   */
+  const openDiff = useCallback(
+    async (projectId: string, path: string) => {
+      if (editorTabsRef.current[projectId]?.path !== path) {
+        if (!(await canDiscardEdit(projectId))) {
+          return;
+        }
+        openEditorFile(projectId, path);
+        setEditorTabs((current) => ({ ...current, [projectId]: { tabId: EDITOR_TAB_ID, projectId, path } }));
+      }
+      activateTab(projectId, EDITOR_TAB_ID);
+    },
+    [activateTab]
+  );
+  const openDiffSync = useCallback((projectId: string, path: string) => void openDiff(projectId, path), [openDiff]);
   const openActiveDiff = useCallback(
     (path: string) => {
       if (activeProjectId) {
-        setDiffFile({ projectId: activeProjectId, path });
+        void openDiff(activeProjectId, path);
       }
     },
-    [activeProjectId]
+    [activeProjectId, openDiff]
   );
+  /** Closing the tab lets go of its editor; the layout collapses a pane it leaves empty. */
+  const closeEditor = useCallback((projectId: string) => {
+    void canDiscardEdit(projectId).then((discard) => {
+      if (discard) {
+        setEditorTabs((current) => forget(current, projectId));
+        disposeEditor(projectId);
+      }
+    });
+  }, []);
+  // Folds a change of HEAD or of the file's status into the open file — not on every push: a
+  // reload reads and colours the whole diff again, hundreds of milliseconds for a long file. The
+  // editor compares against the version it last had.
+  useEffect(() => {
+    for (const { projectId, path } of Object.values(editorTabs)) {
+      setEditorVersion(projectId, diffVersion(states[projectId], path));
+    }
+  }, [editorTabs, states]);
   const runActiveBranchAction = useCallback(
     (label: string, action: () => Promise<GitActionResult>) => {
       if (activeProjectId) {
@@ -743,7 +780,10 @@ export function App() {
                 branch={activeBranch}
                 treeHeight={branchTreeHeight}
                 onTreeHeight={setBranchTreeHeight}
+                changesHeight={changesHeight}
+                onChangesHeight={setChangesHeight}
                 onOpenDiff={openActiveDiff}
+                openPath={activeProjectId ? (editorTabs[activeProjectId]?.path ?? null) : null}
               />
             </div>
             {gitOpen && (
@@ -764,14 +804,15 @@ export function App() {
             <TerminalsPane
               key={project.id}
               project={project}
-              tabs={tabs[project.id] ?? NO_TABS}
+              tabs={stripTabs[project.id] ?? NO_TABS}
               visible={project.id === activeProjectId}
               gitOpen={gitOpen}
               onToggleGit={toggleGit}
               // Only the bootstrap listing, which has no tab to point a pane at; once a tab is
               // what is starting, `startingTabIds` shows it.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
-              onOpenDiff={openDiff}
+              onOpenDiff={openDiffSync}
+              onCloseEditor={closeEditor}
               layout={layouts[project.id] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
               onSnapTab={snapTab}
@@ -794,20 +835,6 @@ export function App() {
           )}
         </main>
       </div>
-
-      {/* Over everything, only ever one. Reloads only when HEAD or this file's status changed:
-          a reload reads and colours the whole diff again, hundreds of milliseconds for a long
-          file. */}
-      {diffFile && diffProject && (
-        <DiffDialog
-          project={diffProject}
-          path={diffFile.path}
-          version={diffVersion(states[diffFile.projectId], diffFile.path ?? "")}
-          state={states[diffFile.projectId] ?? EMPTY_REPOSITORY_STATE}
-          onOpenDiff={openDiff}
-          onClose={closeDiff}
-        />
-      )}
 
       {addOpen && <AddRepositoryDialog onAdded={projectAdded} onClose={closeAdd} />}
 

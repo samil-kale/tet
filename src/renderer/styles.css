@@ -501,7 +501,7 @@ textarea:focus {
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-/* The diff dialog's EXPLORER tree. It nests to whatever depth a repository's folders do, so
+/* The git pane's EXPLORER tree. It nests to whatever depth a repository's folders do, so
    its rows set `padding-left` inline. */
 .explorer-tree {
   display: flex;
@@ -1000,65 +1000,49 @@ textarea:focus {
   color: var(--vscode-gitDecoration-conflictingResourceForeground);
 }
 
-/* The diff, over the whole window. `inset: 0` so the dim covers the title bar evenly. The
-   dialog's clearance is `padding-top`, at least the title bar's 35px: anything less lets its
-   bar reach under the window controls, which no z-index draws above. */
-.diff-dialog-overlay {
-  position: fixed;
+/* The editor tab's slot in `.terminal-stack`, over the stack's padding: monaco keeps a gutter of
+   its own. Hidden by visibility, like `.terminal-host`, so monaco keeps a laid-out box. */
+.editor-tab {
+  position: absolute;
   inset: 0;
-  z-index: 28;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 35px 24px 24px;
-  background: rgb(0 0 0 / 40%);
-}
-
-/* The changed files left, the diff right, the sash between. Focusable so the keys are the
-   dialog's while it is up (↑/↓ walk the list), without a focus ring. */
-.diff-dialog {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  max-width: 1800px;
-  min-width: 0;
-  min-height: 0;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--vscode-editorWidget-border);
-  border-radius: 5px;
-  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
-  overflow: hidden;
-  outline: none;
-}
-
-.diff-dialog-files {
   display: flex;
   flex-direction: column;
-  flex: none;
-  min-width: 0;
-  min-height: 0;
-  background: var(--vscode-sideBar-background);
+  background: var(--vscode-editor-background);
 }
 
-.diff-dialog-main {
+.editor-tab.hidden {
+  visibility: hidden;
+}
+
+/* The file below the bar: a placeholder or the image view in flow, the editor's frame over them. */
+.editor-body {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+
+/* What `attachEditor` moves monaco's element into; React renders nothing inside it. */
+.editor-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.editor-frame.hidden {
+  visibility: hidden;
 }
 
 /* Where monaco mounts itself. Not clipped with `overflow: hidden`: monaco contains its own
    content, so clipping would only catch an overlay widget rendering outside this box. */
 .editor-host {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
 
 /* Ctrl+S turns this on the moment a keystroke lands, off again once it reaches disk. */
-.diff-dialog-dirty {
+.editor-dirty {
   color: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
 
@@ -1091,9 +1075,8 @@ textarea:focus {
   opacity: 1;
 }
 
-.diff-dialog-bar {
-  /* What lets its own `.progress-bar` anchor to its bottom edge. */
-  position: relative;
+/* The editor tab's bar. Its progress shows in the pane's tab strip, like a starting agent's. */
+.editor-bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1104,7 +1087,7 @@ textarea:focus {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-.diff-dialog-path {
+.editor-path {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1407,7 +1390,7 @@ textarea:focus {
   margin: 0 6px 0 auto;
 }
 
-/* Same shape as .diff-dialog-bar, and shows progress the same way. It sits inside .dialog's
+/* Same shape as .editor-bar, and shows progress with a bar of its own. It sits inside .dialog's
    16px padding, cancelled on three sides so the bar is flush; the top corners then need
    .dialog's own radius back. */
 .dialog-bar {

@@ -45,7 +45,7 @@ interface DialogFrameProps<T extends string> {
 /**
  * The one shell every card dialog is drawn in: the overlay, the card, a header of one of the two
  * shapes above, the body, the button row. Used by the questions in `Dialog.tsx` and every dialog
- * under `dialogs/`, but not the diff dialog, which is a whole-window surface.
+ * under `dialogs/`.
  *
  * Escape is the caller's: a question listens on `window`, the others on `document`
  * (`useEscape`), and RequirementsDialog takes none at all.

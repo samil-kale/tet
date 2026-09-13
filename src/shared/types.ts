@@ -310,7 +310,7 @@ export interface HeadBlob {
   image?: string;
 }
 
-/** A file for the diff dialog — the working tree's text, and what HEAD has of it. Read once per
+/** A file for the editor tab — the working tree's text, and what HEAD has of it. Read once per
  *  open, not streamed. */
 export interface FileContent {
   path: string;
@@ -338,7 +338,7 @@ export interface FileWriteResult {
 }
 
 /**
- * Every file in the repository, for the diff dialog's Explorer tree — a real filesystem scan, not
+ * Every file in the repository, for the git pane's Explorer tree — a real filesystem scan, not
  * `git ls-files`: git cannot represent an empty directory at all. `emptyDirs` holds only the
  * directories nothing in `files` implies. `.git` is always left out; anything else only on the
  * project's say-so. The listing also carries the project's view settings from `tet.json`, so the
