@@ -76,12 +76,14 @@ jobs:
       - run: node --test dist-test/install.test.js
         if: runner.os != 'Linux'
 
+  # Trusted publishing: npm takes this workflow's OIDC token as the credential, no secret held
+  # anywhere — the package's settings on npmjs.com name this repository and this file.
   publish:
     needs: [test, install-test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # npm's provenance statement, which ties the published package to this workflow run.
+      # The OIDC token, which is also what signs the provenance statement.
       id-token: write
     steps:
       - uses: actions/checkout@v4
@@ -92,12 +94,13 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      # Node 22 ships npm 10; trusted publishing needs 11.5.1 or later.
+      - run: npm install -g npm@latest
+
       - run: npm ci
 
       # prepublishOnly builds dist/ for production first; `files` in package.json is what goes in.
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --access public
 
   # The GitHub Release for the tag, once the package is out, named after the bare version (no "v")
   # as the installer releases before it were. Never marked latest: the installers up to 0.5.x ask

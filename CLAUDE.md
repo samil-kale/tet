@@ -697,7 +697,8 @@ When asked for a release, run it:
 `npm version` bumps `package.json` and tags in one step, and refuses on a dirty tree — hence the
 changelog commit first. The tag push triggers `.github/workflows/build.yml`: the tests and the
 install test on all three platforms, and only when every one passed, the `tet-ide` package to npm
-(`NPM_TOKEN` secret) and then a GitHub Release with the version's section of `CHANGELOG.md`.
+(trusted publishing: npm trusts this workflow's OIDC token, configured in the package's settings on
+npmjs.com — no secret) and then a GitHub Release with the version's section of `CHANGELOG.md`.
 
 **tet ships through npm and nothing else** — no installer, no bundle (Sophos blocked the NSIS
 setup, macOS called the unsigned dmg damaged). The `tet` command (`src/cli/tet.ts`) starts
