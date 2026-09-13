@@ -229,7 +229,10 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
         ["-NoProfile", "-Command", `$l = (New-Object -ComObject WScript.Shell).CreateShortcut('${startMenu}'); $l.TargetPath + '|' + $l.Arguments`],
         { encoding: "utf8" }
       );
-      assert.equal(link.stdout.trim(), `${rootExecutable(installedRoot())}|`, "the Start menu entry, on TET.exe alone");
+      const [target, args] = link.stdout.trim().split("|");
+      // Real paths on both sides: a runner's temp directory can come as an 8.3 short name.
+      assert.equal(fs.realpathSync.native(target), fs.realpathSync.native(rootExecutable(installedRoot())), "the Start menu entry, on TET.exe");
+      assert.equal(args, "", "the Start menu entry, without arguments");
       assert.ok(fs.existsSync(path.join(installedRoot(), "bin", "tet.cmd")), "the tet command");
     } else {
       assert.ok(fs.existsSync(path.join(home, ".local", "bin", "tet")), "the tet command");
