@@ -1077,9 +1077,26 @@ textarea:focus {
   gap: 8px;
   flex: none;
   height: 35px;
-  padding: 0 6px 0 12px;
+  padding: 0 12px 0 0;
   background: var(--vscode-panel-background);
   border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+/* The text's distance from the bar's start, where no actions stand before it (a read-only file). */
+.editor-bar > :first-child {
+  margin-left: 12px;
+}
+
+/* The bar's buttons at its start, separated as `.tab-strip-actions` is in the tab strip. */
+.editor-bar > .editor-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  align-self: stretch;
+  margin-left: 0;
+  border-right: 1px solid var(--vscode-tab-border);
+  padding: 0 4px;
 }
 
 .editor-path {
