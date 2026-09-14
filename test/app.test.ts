@@ -8,6 +8,7 @@ import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { findControlPort } from "../src/main/control/control-server";
 import { resolveRoot } from "../src/main/git/git";
+import { contextDirFor } from "../src/main/terminals/agent-data";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
@@ -170,8 +171,8 @@ ${stderr.slice(uncaught)}`);
 
   it("writes the shell's output into the context file the agents read", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
-    const contextFile = path.join(userData, "projects", project.id, "context.md");
-    const logFile = path.join(userData, "projects", project.id, "shell-output.log");
+    const contextFile = path.join(contextDirFor(userData, project.id), "context.md");
+    const logFile = path.join(contextDirFor(userData, project.id), "shell-output.log");
     // A saved command that prints a whole line, not a plain shell tab: the transcript holds an
     // unfinished line back until something ends it (`carryFrom` in shell-context.ts), and a
     // prompt is one — a shell that only drew its prompt has written nothing yet. Whether a shell

@@ -16,6 +16,7 @@ import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/termin
 import { shellSingleQuote } from "../src/shared/script-text";
 import { ProjectStore } from "../src/main/projects";
 import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
+import { isMountAllowed, parseFilesystemRules } from "../src/main/sbx-policy";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
@@ -169,6 +170,77 @@ describe("sbx sandbox naming and mounts", () => {
       agentDir,
       pathMountSpecs({ path: contextDir, access: "ro" }).mount
     ]);
+  });
+});
+
+describe("sbx's filesystem policy", () => {
+  // `sbx policy ls --type filesystem --json` on an organization-governed account, 2026-09-14,
+  // sbx 0.42.1 — trimmed to the fields read. The local defaults are what an ungoverned account
+  // has active.
+  const governed = JSON.stringify({
+    rules: [
+      { resource_type: "filesystem:read", decision: "allow", resources: ["**"], status: "inactive" },
+      { resource_type: "filesystem:write", decision: "allow", resources: ["**"], status: "inactive" },
+      { resource_type: "filesystem:write", decision: "allow", resources: ["C:\\**"], status: "active" },
+      { resource_type: "filesystem:write", decision: "allow", resources: ["/**"], status: "active" }
+    ],
+    organization: "prehcmservice"
+  });
+  const local = JSON.stringify({
+    rules: [
+      { resource_type: "filesystem:read", decision: "allow", resources: ["**"], status: "active" },
+      { resource_type: "filesystem:write", decision: "allow", resources: ["**"], status: "active" }
+    ]
+  });
+  const win32 = { platform: "win32" as const, home: "C:\\Users\\saka" };
+  const posix = { platform: "linux" as const, home: "/home/saka" };
+  const rules = (entries: object[]) => parseFilesystemRules(JSON.stringify({ rules: entries }));
+  const allow = (type: string, resource: string) => ({ resource_type: type, decision: "allow", resources: [resource] });
+
+  it("reads only active rules, and nothing out of what is not JSON", () => {
+    assert.equal(parseFilesystemRules(governed).length, 2);
+    assert.deepEqual(parseFilesystemRules("Not authenticated"), []);
+  });
+
+  it("lets an organization granting write alone mount read-write and read-only, as measured", () => {
+    const measured = parseFilesystemRules(governed);
+    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\agent-data\\agents\\claude\\p", "rw", win32));
+    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\agent-data\\projects\\p", "ro", win32));
+    assert.ok(!isMountAllowed(measured, "D:\\work", "rw", win32), "another drive matches no rule: default deny");
+    assert.ok(isMountAllowed(measured, "/home/saka/work", "rw", posix));
+  });
+
+  it("allows everything under the local defaults' bare **", () => {
+    assert.ok(isMountAllowed(parseFilesystemRules(local), "D:\\anywhere\\at\\all", "rw", win32));
+    assert.ok(isMountAllowed(parseFilesystemRules(local), "/anywhere", "ro", posix));
+  });
+
+  it("matches * within one segment, ** at any depth and the folder itself", () => {
+    const one = rules([allow("filesystem:write", "C:\\data\\*")]);
+    assert.ok(isMountAllowed(one, "C:\\data\\project", "rw", win32));
+    assert.ok(!isMountAllowed(one, "C:\\data\\project\\src", "rw", win32));
+    const deep = rules([allow("filesystem:write", "C:\\data\\**")]);
+    assert.ok(isMountAllowed(deep, "C:\\data\\project\\src", "rw", win32));
+    assert.ok(isMountAllowed(deep, "C:\\data", "rw", win32));
+    assert.ok(!isMountAllowed(deep, "C:\\database", "rw", win32));
+  });
+
+  it("expands ~ and *: for any drive, and ignores case on win32 alone", () => {
+    assert.ok(isMountAllowed(rules([allow("filesystem:write", "~\\.tet\\agent-data\\**")]), "C:\\Users\\saka\\.tet\\agent-data\\agents", "rw", win32));
+    assert.ok(isMountAllowed(rules([allow("filesystem:write", "~/**")]), "/home/saka/tet", "rw", posix));
+    assert.ok(isMountAllowed(rules([allow("filesystem:write", "*:\\data\\**")]), "E:\\data\\x", "rw", win32));
+    assert.ok(isMountAllowed(rules([allow("filesystem:write", "c:\\USERS\\**")]), "C:\\Users\\saka", "rw", win32));
+    assert.ok(!isMountAllowed(rules([allow("filesystem:write", "/Home/**")]), "/home/saka", "rw", posix));
+  });
+
+  it("needs write for read-write, and lets a deny outrank every allow", () => {
+    const readOnly = rules([allow("filesystem:read", "/data/**")]);
+    assert.ok(isMountAllowed(readOnly, "/data/x", "ro", posix));
+    assert.ok(!isMountAllowed(readOnly, "/data/x", "rw", posix));
+    const denied = rules([allow("filesystem", "/**"), { resource_type: "filesystem:read", decision: "deny", resources: ["/data/secret/**"] }]);
+    assert.ok(isMountAllowed(denied, "/data/open", "rw", posix));
+    assert.ok(!isMountAllowed(denied, "/data/secret/x", "ro", posix));
+    assert.ok(!isMountAllowed(denied, "/data/secret/x", "rw", posix), "a read deny stops a writable mount too");
   });
 });
 

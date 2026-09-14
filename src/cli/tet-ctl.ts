@@ -5,7 +5,7 @@ import type { ControlRequest, ControlResponse } from "../shared/control";
 /**
  * `tet-ctl`: the command an agent runs inside one of tet's terminals to ask the app around it
  * something. A plain script with no electron in it, bundled on its own (esbuild.js) and started by
- * the launcher in userData/bin; the terminal's environment says where tet listens and who it is
+ * the launcher in ~/.tet/bin; the terminal's environment says where tet listens and who it is
  * (src/shared/control.ts). Output is for an agent, not a person: the result as JSON on stdout, one
  * line of plain text on stderr when something went wrong, and an exit code it can branch on.
  */

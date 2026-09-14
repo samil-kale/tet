@@ -124,9 +124,9 @@ function text(args: Record<string, unknown>, name: string, what: string): string
 const DYNAMIC_PORT_START = 49152;
 const DYNAMIC_PORT_RANGE = 65535 - DYNAMIC_PORT_START;
 
-/** Where userData alone would put the port, before checking it is actually free. */
-function hashPort(userDataPath: string): number {
-  const hash = crypto.createHash("sha1").update(userDataPath).digest("hex");
+/** Where the data folder alone would put the port, before checking it is actually free. */
+function hashPort(dataRoot: string): number {
+  const hash = crypto.createHash("sha1").update(dataRoot).digest("hex");
   return DYNAMIC_PORT_START + (parseInt(hash.slice(0, 8), 16) % DYNAMIC_PORT_RANGE);
 }
 
@@ -139,16 +139,17 @@ function canBind(port: number): Promise<boolean> {
 }
 
 /**
- * The port the control server will listen on, derived from userData so a dev checkout and the
- * installed app, or two Windows accounts, each land on a port of their own. Bound and released
+ * The port the control server will listen on, derived from tet's data folder (data-root.ts) so two
+ * accounts on one machine, or a test's own profile beside the tet it runs in, each land on a port
+ * of their own. Bound and released
  * here rather than trusted outright: Windows carves pieces out of the dynamic range for
  * Hyper-V/WSL/Docker NAT (`netsh int ipv4 show excludedportrange`), and a bind into one fails with
  * `EACCES`, not `EADDRINUSE` — static enough that reusing the probed port at the real bind is
  * reliable. Probed rather than assigned by the OS because the port has to be in every terminal's
  * environment (setControlEnv) before the server starts.
  */
-export async function findControlPort(userDataPath: string): Promise<number> {
-  const start = hashPort(userDataPath);
+export async function findControlPort(dataRoot: string): Promise<number> {
+  const start = hashPort(dataRoot);
   for (let offset = 0; offset < DYNAMIC_PORT_RANGE; offset += 1) {
     const port = DYNAMIC_PORT_START + ((start - DYNAMIC_PORT_START + offset) % DYNAMIC_PORT_RANGE);
     if (await canBind(port)) {

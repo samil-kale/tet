@@ -43,8 +43,8 @@ export class ProjectStore {
   private readonly file: string;
   private projects: Project[] = [];
 
-  constructor(userDataPath: string) {
-    this.file = path.join(userDataPath, "projects.json");
+  constructor(dataRoot: string) {
+    this.file = path.join(dataRoot, "projects.json");
     this.load();
   }
 

@@ -6,9 +6,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
-import type { SbxAgentId, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStatus } from "../shared/types";
+import type { SbxAgentId, SbxBlocker, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStatus } from "../shared/types";
 import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
+import { isMountAllowed, parseFilesystemRules } from "./sbx-policy";
+import { agentDataDir, agentDirFor, contextDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { SANDBOX_HOME, toContainerPath } from "./terminals/hook-target";
 import { resolveCommand } from "./terminals/pty";
@@ -22,11 +24,14 @@ import { checkAgentInstalled } from "./terminals/terminal-session";
 let currentChild: ChildProcess | undefined;
 
 /** Set once from main.ts: the `tet-ctl` bundle (ensureSandboxLauncher) and the control server's
- *  port (ensureControlNetworkAllowed). Unset in a run without a control channel, and then
- *  nothing control-related reaches a sandbox. */
+ *  port (isControlChannelAllowed). Unset in a run without a control channel, and then nothing
+ *  control-related reaches a sandbox. */
 let control: { cliPath: string; port: number } | undefined;
-export function configureSandboxes(cliPath: string, port: number): void {
+/** tet's data folder, where its own mounted folders live (readSbxBlockers, agent-data.ts). */
+let storageRoot: string | undefined;
+export function configureSandboxes(cliPath: string, port: number, dataRoot: string): void {
   control = { cliPath, port };
+  storageRoot = dataRoot;
 }
 
 interface RunOptions {
@@ -167,11 +172,12 @@ type SandboxList = Map<string, string[]>;
 /**
  * The first of the four preconditions not met, worded for a notice — or the sandbox listing,
  * which came out of the same `sbx ls` as the sign-in probe and is `prepareSbxRun`'s next
- * question. Asked before every sandboxed spawn (`resolveSbxRun`). The control channel is one of
- * them: a sandboxed agent whose hooks cannot reach tet runs with no turn marks and nothing
- * saying why.
+ * question. Asked before every sandboxed spawn (`resolveSbxRun`). The last is the policy allowing
+ * what tet needs (readSbxBlockers), asked again here although the dialog asked it: a policy
+ * changes from outside tet, and an agent whose hooks cannot reach tet, or whose own folders were
+ * not mounted, runs with no turn marks and nothing saying why.
  */
-export async function checkSbxReady(): Promise<{ notReady: string } | { sandboxes: SandboxList }> {
+export async function checkSbxReady(projectPath: string, projectId: string): Promise<{ notReady: string } | { sandboxes: SandboxList }> {
   // The spawn path, so no PATH re-read: on macOS/Linux that is a login shell per call.
   const { status, sandboxes } = await probeSbx(false);
   if (!status.installed) {
@@ -183,12 +189,10 @@ export async function checkSbxReady(): Promise<{ notReady: string } | { sandboxe
   if (!status.policyInitialized) {
     return { notReady: "SBX's network policy is not set up" };
   }
-  if (!(await isControlChannelAllowed())) {
-    return {
-      notReady: status.governed
-        ? "your organization's SBX network policy does not allow localhost, which tet's hooks use to reach it — ask for localhost to be allowed (no port)"
-        : "SBX's network policy does not allow localhost, which tet's hooks use to reach it"
-    };
+  const blockers = await readSbxBlockers(projectPath, projectId);
+  if (blockers.length > 0) {
+    const policy = status.governed ? "your organization's SBX policy" : "SBX's policy";
+    return { notReady: `${policy} does not allow ${blockers.map((blocker) => blocker.allow).join("; ")}` };
   }
   return { sandboxes };
 }
@@ -198,8 +202,53 @@ export async function checkSbxReady(): Promise<{ notReady: string } | { sandboxe
  * re-read first: "Check again" is pressed right after installing. Nothing here is cached —
  * sbx is installed, signed into and governed from outside tet at any time.
  */
-export async function readSbxStatus(): Promise<SbxStatus> {
-  return (await probeSbx(true)).status;
+export async function readSbxStatus(projectPath: string, projectId: string): Promise<SbxStatus> {
+  const { status } = await probeSbx(true);
+  if (status.policyInitialized) {
+    status.blockers = await readSbxBlockers(projectPath, projectId);
+  }
+  return status;
+}
+
+/** A folder as a filesystem rule covering it and everything below: under the home as `~`, in
+ *  this platform's own separators — a rule matches only the format it is written in. */
+function folderRule(folder: string): string {
+  const relative = path.relative(os.homedir(), folder);
+  const underHome = relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  return path.join(underHome ? path.join("~", relative) : folder, "**");
+}
+
+/**
+ * What sbx's policy still has to allow before a sandboxed tab of this project works: tet's
+ * control channel (isControlChannelAllowed, allowed locally where a local rule applies), the
+ * project as the sandbox's workspace, and tet's own mounted folders — every agent's agentDir
+ * read-write and the context directory read-only (fixedMountSpecs). The folders are checked as
+ * mounted but asked for as one rule each, all of tet's under agentDataDir, and read *and* write:
+ * what Docker's docs require for a writable mount, even though write alone was measured to do.
+ * Filesystem rules are read with one `sbx policy ls` and evaluated in sbx-policy.ts; the user's
+ * own Allowed paths and knowledge are not asked for — a tab starts without them.
+ */
+export async function readSbxBlockers(projectPath: string, projectId: string): Promise<SbxBlocker[]> {
+  const blockers: SbxBlocker[] = [];
+  if (!(await isControlChannelAllowed())) {
+    blockers.push({ what: "tet's hooks", allow: "localhost (network, no port)" });
+  }
+  const rules = parseFilesystemRules((await runSbx(["policy", "ls", "--type", "filesystem", "--json"])).stdout);
+  const flavor = { platform: process.platform, home: os.homedir() };
+  const mountable = (hostPath: string, access: "ro" | "rw") => isMountAllowed(rules, hostPath, access, flavor);
+  if (!mountable(projectPath, "rw")) {
+    blockers.push({ what: "The project", allow: `${folderRule(projectPath)} (read and write)` });
+  }
+  if (storageRoot) {
+    const root = storageRoot;
+    const own =
+      SBX_AGENT_IDS.every((agentId) => mountable(agentDirFor(root, agentId, projectId), "rw")) &&
+      mountable(contextDirFor(root, projectId), "ro");
+    if (!own) {
+      blockers.push({ what: "tet's agent data", allow: `${folderRule(agentDataDir(root))} (read and write)` });
+    }
+  }
+  return blockers;
 }
 
 /**
@@ -215,12 +264,11 @@ export async function readSbxStatus(): Promise<SbxStatus> {
  *
  * A governed account's `sbx policy ls` opens with a "Governance: Managed by <org>" line on stdout,
  * its SOURCE column reading "org" (measured, 0.42.1; an ungoverned one reads "local" or "kit" and
- * has no such line). Governance is only detected: the dialog shows a wall instead of its fields,
- * a managed filesystem policy allowing no local mount (not measured — the governed account
- * measured allowed every path).
+ * has no such line). Governance only changes how a blocker is worded: what is allowed is asked
+ * of the policy itself (readSbxBlockers).
  */
 async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList }> {
-  const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, governed: false };
+  const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, governed: false, blockers: [] };
   if (refreshPath) {
     await augmentAgentPath();
   }
@@ -716,14 +764,18 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
  * never hits sbx's "already mounted read-write; cannot also mount read-only" conflict (verified
  * live, 2026-09-08).
  */
-async function mountAll(name: string, specs: string[], onData?: OnData): Promise<void> {
+async function mountAll(name: string, specs: string[], onData?: OnData): Promise<string[]> {
   if (specs.length === 0) {
-    return;
+    return [];
   }
   await ensureRunning(name, onData);
+  const failed: string[] = [];
   for (const spec of specs) {
-    await runSbx(["mount", name, spec], { onData });
+    if (!(await runSbx(["mount", name, spec], { onData })).ok) {
+      failed.push(spec);
+    }
   }
+  return failed;
 }
 
 /**
@@ -859,8 +911,8 @@ export interface SbxRunRequest {
  * nothing to mount otherwise. The container side needs no such care — verified live,
  * 2026-09-09: sbx creates a missing target for either kind, and a mount even stacks over a
  * volume the template already put there (Claude's `~/.claude/projects`), the mount winning.
- * Best-effort per entry, like the knowledge mounts: no sessions on the host is no worse than
- * before, and must not keep the agent itself from starting.
+ * A host side that cannot be created is left out, since there is nothing to mount; one that is
+ * there but refused by sbx stops the tab like any of tet's own mounts (prepareSbxRun).
  */
 async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
   const specs: string[] = [];
@@ -889,31 +941,32 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
  * a control channel, which checkSbxReady has made sure the policy allows) the control-channel env
  * and `tet-ctl` launcher. Creates the sandbox first if it is missing (ensureSandboxExists) — `sbx run` would
  * too, but the launcher has to be written into it before `sbx run` starts the agent. Rejects
- * only when that creation failed (see there); everything after it is best-effort.
+ * when that creation failed (see there) or one of tet's own folders could not be mounted;
+ * everything else is best-effort.
  */
 export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: string[]; missing: string[] }> {
   const { agentId, config, onData } = request;
   const env = request.env ?? [];
   const name = sandboxName(request.projectId, agentId);
   const created = await ensureSandboxExists(agentId, request.projectPath, name, request.sandboxes, onData);
-  // Best-effort, same reasoning as the launcher below: no skills or allowed paths in the sandbox
-  // is no worse than today, so a failure here must not block the agent itself from starting. A
-  // row is mounted for merely *being there* — a folder and a plain file mount the same way
-  // (pathMountSpecs); only a path that is gone from this host is reported back as missing.
-  // fixedMountSpecs leads the list as the one part of it that is not optional: without it the
-  // agent still starts and still works on the project, but with no hook settings and no shell
-  // transcript. Best-effort all the same — by here everything it needs is
-  // in place (a directory tet created itself, a sandbox mountAll is about to start), so a
-  // failure means something is wrong that refusing to start the tab would not fix. The Allowed
-  // hosts follow the mounts for the same reason, but only into a sandbox this call created:
-  // from then on the sandbox's own rules are the truth, not tet.json (allowHosts).
+  // The user's grants are best-effort, same reasoning as the launcher below: no skills or allowed
+  // paths in the sandbox is no worse than today, so a failure there must not block the agent
+  // itself from starting. A row is mounted for merely *being there* — a folder and a plain file
+  // mount the same way (pathMountSpecs); only a path that is gone from this host is reported back
+  // as missing. tet's own folders are not: without them the agent runs with no hook settings,
+  // no shell transcript and no sessions tet can list, and nothing says so. Everything they need
+  // is in place by here (directories tet created itself, a sandbox mountAll starts), so a refusal
+  // is sbx's policy — checkSbxReady predicted otherwise, or the policy changed since — and the
+  // tab stops, sbx's own reason already in its output. The Allowed hosts follow the mounts, but
+  // only into a sandbox this call created: from then on the sandbox's own rules are the truth,
+  // not tet.json (allowHosts).
   const missing = config.paths.map((entry) => entry.path).filter((entry) => !statOf(normalizeHostPath(entry)));
-  const specs = [
-    ...fixedMountSpecs(request.paths),
-    ...(await sessionMountSpecs(request.sessionMounts ?? [])),
-    ...grantedMounts(agentId, config).map((spec) => spec.mount)
-  ];
-  await mountAll(name, specs, onData);
+  const own = [...fixedMountSpecs(request.paths), ...(await sessionMountSpecs(request.sessionMounts ?? []))];
+  const failed = await mountAll(name, [...own, ...grantedMounts(agentId, config).map((spec) => spec.mount)], onData);
+  const ownFailed = failed.filter((spec) => own.includes(spec));
+  if (ownFailed.length > 0) {
+    throw new Error(`sbx did not mount tet's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);
+  }
   if (created) {
     await allowHosts(name, config.hosts, onData);
   }

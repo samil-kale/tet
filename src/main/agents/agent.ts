@@ -110,7 +110,7 @@ export interface AgentPaths {
    * repository, so an agent that gates reads by path has to grant these explicitly.
    */
   contextReadPaths: string[];
-  /** TET's user-data root, for anything an agent has to install machine-wide. */
+  /** TET's data folder (`~/.tet`, data-root.ts), for anything an agent has to install machine-wide. */
   storageRoot: string;
   /**
    * Whether the idle reminder is wanted. The one notification setting an agent is handed:

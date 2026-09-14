@@ -65,7 +65,7 @@ export function installUncaughtHandler(logFile: string, notify: (severity: Notic
       // The console copy above is all there is then; a failure to log must not itself throw.
     }
     if (count === 1) {
-      notify("error", `TET hit an unexpected error and kept running: ${summary}. The details are in errors.log in TET's data folder.`);
+      notify("error", `TET hit an unexpected error and kept running: ${summary}. The details are in errors.log in TET's data folder (~/.tet).`);
     }
   });
 }

@@ -34,7 +34,7 @@ export function writePiExtension(storageDir: string, contextFile: string, target
  * pi loads it through `-e <path>` (jiti compiles the TypeScript; paths with spaces work) before
  * the project-trust dialog, and EXITS outright on one that fails to load. So every branch has to
  * stay valid, which pieces.test.ts checks by compiling it. Nothing is imported from pi's own
- * packages: they do not resolve under userData, and pi's event contract is plain objects.
+ * packages: they do not resolve under tet's data folder, and pi's event contract is plain objects.
  *
  * The events, in the order measured: session_start → (per prompt) before_agent_start →
  * agent_start → turn_start/turn_end… → agent_end → agent_settled; ui_prompt_start/end around an

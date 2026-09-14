@@ -104,8 +104,8 @@ still works (`AgentRuntime.sbxOnly`). Missing everything, `Startup` shows `Requi
 instead of mounting `App` — a wall (no Escape), and **it installs nothing**, not even a link.
 `--version` results are remembered (`isAgentInstalled`); `npm start -- --simulate=git,claude`
 makes the dialog reachable on a machine that has everything. `--allow-shell-only` lets a runner
-with no agent open, and `--user-data-dir=<dir>` gives that run a profile of its own (and, only
-then, a control token from its environment) — `test/app.test.ts` is the one user of both.
+with no agent open, and `--user-data-dir=<dir>` gives that run a profile and data folder of its
+own (and, only then, a control token from its environment) — `test/app.test.ts` uses both.
 `anyAgentInstalled` asks the same question mid-session, where a *project* decides whether it is
 sbx-only: nothing is stored for that, it is derived at each of tet's own refresh points.
 
@@ -213,7 +213,7 @@ Each of these was measured; the numbers are in the comment at each site.
 - A refresh finding events waiting goes back through `scheduleRefresh`, never re-runs at once.
 - `readStatus` runs `git --no-optional-locks status`; don't fix the index-write feedback loop with
   another entry in `isIgnoredEvent`.
-- `src/main/event-loop-monitor.ts` writes stalls to `event-loop.log` in `userData` every session;
+- `src/main/event-loop-monitor.ts` writes stalls to `event-loop.log` in `~/.tet` every session;
   `logSlow` names a block whose own duration is worth knowing.
 
 ## Saved commands
@@ -267,7 +267,7 @@ The watcher reports every write of `tet.json` as `commands:changed`.
 One dialog for everything TET keeps about *itself*, opened from pane "a"'s strip. **Nothing is
 written until Save**, as everywhere else — Cancel and Escape drop what was edited. Tabbed
 (Appearance, Notifications, Shortcuts, Files, Prompts, Info) with a tab strip in place of a title.
-Values live in `settings.json` in `userData` (`src/main/settings.ts`), written whole and read back
+Values live in `settings.json` in `~/.tet` (`src/main/settings.ts`), written whole and read back
 defensively. The Files tab alone writes elsewhere — one `setExplorerSetting` into the active
 project's `tet.json` per key Save finds changed. It reads that file once, on open: `patchSetting`
 reads it fresh at write time and leaves every other key standing.
@@ -477,13 +477,13 @@ private, unversioned serialization; if a future release changes it the screen re
 
 An agent can ask the app around it for things the filesystem and git can't give it — the theme,
 the project list, the terminal tabs. `src/main/control/control-server.ts` listens on a loopback
-TCP port derived from `userData` and probed for being free (`findControlPort`), one HTTP POST per
+TCP port derived from `~/.tet` and probed for being free (`findControlPort`), one HTTP POST per
 connection — HTTP because sbx's proxy to the host is HTTP-only — and answers with the same
 singletons `ipc.ts` holds. It comes up with the workspace, so `tet-ctl` waits a few seconds for a
 port. A second transport onto the same logic, never a second implementation (`addProject`/
 `removeProject` in `projects.ts` are shared for exactly that). The wire contract and the verb
 list are `src/shared/control.ts`; the CLI is `src/cli/tet-ctl.ts`, bundled on its own and run by
-a launcher in `userData/bin` under tet's own electron as node. What reaches a terminal is decided
+a launcher in `~/.tet/bin` under tet's own electron as node. What reaches a terminal is decided
 in `spawnAgentProcess` (`pty.ts`), in layers **above** `process.env`: the port, a per-run token,
 the launcher directory on PATH, and the tab's own project and tab id — above, because a tet
 started from one of its own shell tabs inherits the outer one's values. Only ptys get them; git
@@ -542,12 +542,15 @@ off. An agent that is not installed here at all is startable only through the sa
   reaching the control server at `host.docker.internal` (`TET_CONTROL_HOST`), which the policy
   sees as `localhost:<port>` — asked with `sbx policy check` (`isControlChannelAllowed`), allowed
   locally where it can be. An organization-governed account refuses every local rule (measured),
-  so only its organization can allow `localhost`; its account gets a wall in the sbx dialog
-  instead of the fields (`readSbxStatus`).
+  so only its organization can allow `localhost` (no port), the project and tet's mounted folders
+  — all under `~/.tet/agent-data` (`agent-data.ts`), one rule. sbx has no filesystem check, so
+  `sbx-policy.ts` evaluates its rules; what is missing is a wall in the sbx dialog and a stopped
+  tab at spawn (`readSbxBlockers`).
 
 ## Never touch the user's agent configuration
 
-Everything TET generates lives under its own `userData` and is pointed at from outside:
+Everything TET generates lives under its data folder `~/.tet` (`data-root.ts`; Electron's
+`userData` keeps only Chromium's profile) and is pointed at from outside:
 
 - Claude Code: a generated settings file passed as `--settings`. `~/.claude/settings.json` is
   never read, written or replaced.
@@ -559,7 +562,7 @@ Everything TET generates lives under its own `userData` and is pointed at from o
   but `"theme": "system"` (`tui-config.ts`).
 - Codex: `-c key=value` overrides for that one process only. `~/.codex/config.toml` and
   `~/.codex/hooks.json` are never read, written or replaced.
-- pi: a generated extension under `userData` passed as `-e`, `--use-theme` for that one process;
+- pi: a generated extension under `~/.tet` passed as `-e`, `--use-theme` for that one process;
   `PI_CODING_AGENT_DIR` is never set — it would move the user's sessions and auth.
 
 ## Files other processes read

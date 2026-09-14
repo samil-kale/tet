@@ -20,6 +20,7 @@ import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig } from "../git/commands";
 import { checkSbxReady, prepareSbxRun, sandboxName } from "../sbx";
 import type { SettingsStore } from "../settings";
+import { agentDirFor, contextDirFor } from "./agent-data";
 import { ShellContext } from "./shell-context";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
 import { sandboxSessionDir, toContainerPath } from "./hook-target";
@@ -248,12 +249,12 @@ export class ProjectSessionManager {
     private readonly settings: SettingsStore,
     private readonly callbacks: SessionManagerCallbacks
   ) {
-    this.shellContext = new ShellContext(path.join(storageRoot, "projects", project.id), project.name);
+    this.shellContext = new ShellContext(contextDirFor(storageRoot, project.id), project.name);
   }
 
   /** This agent's own scratch directory for this repository — see AgentPaths.agentDir. */
   private agentDirOf(agentId: AgentId): string {
-    return path.join(this.storageRoot, "agents", agentId, this.project.id);
+    return agentDirFor(this.storageRoot, agentId, this.project.id);
   }
 
   /** Where one agent may set itself up for this repository — see AgentDefinition.prepareSpawn. */
@@ -721,7 +722,7 @@ export class ProjectSessionManager {
       // Only a tab that cannot follow onto this machine gets a notice.
       return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : null;
     }
-    const ready = await checkSbxReady();
+    const ready = await checkSbxReady(this.project.path, this.project.id);
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, ready.notReady)) {
         this.callbacks.onNotice(

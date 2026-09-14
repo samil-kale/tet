@@ -25,7 +25,7 @@ const api: TETApi = {
     reportSlow: (label, ms) => ipcRenderer.send("app:slow", label, ms)
   },
   sbx: {
-    status: () => ipcRenderer.invoke("sbx:status"),
+    status: (projectId: string) => ipcRenderer.invoke("sbx:status", projectId),
     login: () => ipcRenderer.invoke("sbx:login"),
     initPolicy: () => ipcRenderer.invoke("sbx:init-policy"),
     cancelSetup: () => ipcRenderer.send("sbx:cancel-setup"),

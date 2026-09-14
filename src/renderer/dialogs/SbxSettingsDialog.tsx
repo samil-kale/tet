@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import type { Project } from "../../shared/types";
+import type { Project, SbxBlocker } from "../../shared/types";
 import { SbxSettingsFields, fromConfig, toConfig, type FieldsState } from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
@@ -17,7 +17,7 @@ type Phase =
   | { kind: "signing-in" }
   | { kind: "initializing-policy" }
   | { kind: "ready" }
-  | { kind: "governed" }
+  | { kind: "blocked"; governed: boolean; blockers: SbxBlocker[] }
   | { kind: "failed"; message: string };
 
 type SbxSettingsTab = "general" | keyof FieldsState;
@@ -36,8 +36,9 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
  * mounted: sbx installed, signed in (signing in in the background if needed), machine-wide
  * network policy initialized to "balanced" if needed (see sbx.ts's initSbxPolicy), then the
  * project's saved config. Each step shows in `DialogFrame`'s `busy` bar. Installs nothing: no
- * command works on all three platforms. An account whose policies an organization manages gets
- * a wall instead of the fields, what a managed policy grants never having been measured.
+ * command works on all three platforms. A policy that does not allow what a sandboxed tab needs
+ * (sbx.ts's readSbxBlockers) gets a wall listing it instead of the fields — under an
+ * organization's governance only the organization can change that.
  *
  * The fields' state lives here, not in SbxSettingsFields: Save builds the `sbx:save-config`
  * request from it. Each sandboxed agent authenticates inside the sandbox.
@@ -69,7 +70,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     // nothing (augmentAgentPath). The local answer is what the rest of this run reads — the state
     // set here is not visible until the next render.
     const [initialStatus, anyAgent] = await Promise.all([
-      window.tet.sbx.status(),
+      window.tet.sbx.status(project.id),
       window.tet.startup.anyAgentInstalled()
     ]);
     const isLocked = !anyAgent;
@@ -85,7 +86,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         setPhase({ kind: "failed", message: "SBX login failed." });
         return;
       }
-      status = await window.tet.sbx.status();
+      status = await window.tet.sbx.status(project.id);
     }
     if (!status.policyInitialized) {
       setPhase({ kind: "initializing-policy" });
@@ -93,10 +94,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         setPhase({ kind: "failed", message: "Could not set up SBX's network policy." });
         return;
       }
-      status = await window.tet.sbx.status();
+      status = await window.tet.sbx.status(project.id);
     }
-    if (status.governed) {
-      setPhase({ kind: "governed" });
+    if (status.blockers.length > 0) {
+      setPhase({ kind: "blocked", governed: status.governed, blockers: status.blockers });
       return;
     }
     // Read once setup is done, so Save writes on top of what is on disk rather than the blank
@@ -143,7 +144,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           <button type="button" className="button secondary" onClick={close}>
             Cancel
           </button>
-          {phase.kind === "not-installed" && (
+          {(phase.kind === "not-installed" || phase.kind === "blocked") && (
             <button type="button" className="button" onClick={() => void setup()}>
               Check again
             </button>
@@ -163,11 +164,24 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to SBX…</p>}
       {phase.kind === "initializing-policy" && <p className="dialog-detail">Setting up SBX's network policy…</p>}
       {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
-      {phase.kind === "governed" && (
-        <p className="dialog-detail">
-          Your organization manages SBX's policies. SBX sandboxing in tet does not work under a
-          managed policy yet, so it is not offered here.
-        </p>
+      {phase.kind === "blocked" && (
+        <>
+          <p className="dialog-message">
+            {phase.governed ? "Your organization's SBX policy" : "SBX's policy"} has to allow these
+            before tet can sandbox {project.name}:
+          </p>
+          <div className="requirement-list">
+            {phase.blockers.map((blocker) => (
+              <div key={blocker.what} className="requirement-item">
+                <span className="requirement-name">{blocker.what}</span>
+                <span className="requirement-command">{blocker.allow}</span>
+              </div>
+            ))}
+          </div>
+          {phase.governed && (
+            <p className="dialog-detail">Only your organization can add these rules. Check again once it has.</p>
+          )}
+        </>
       )}
       {phase.kind === "ready" && tab === "general" && (
         <label className="dialog-checkbox">

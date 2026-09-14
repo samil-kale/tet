@@ -12,7 +12,7 @@ import type { HookEvent } from "../../shared/control";
  * anything richer is where they start to differ (measured: `cmd.exe /c` has MSYS rewrite the
  * `/c` into `C:\`, and cmd then opens interactively, banner and all, into the very prompt the
  * hook was reporting). What makes the bare name resolve in all three is the pair of launchers
- * written into userData — see control-launcher.ts.
+ * written into tet's data folder — see control-launcher.ts.
  *
  * The event is tet's own vocabulary, not the CLI's: each agent's setup maps its own events onto
  * these, and the session manager gives all of them the same meaning.

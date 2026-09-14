@@ -5,6 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
+import { contextDirFor } from "../src/main/terminals/agent-data";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { SettingsStore } from "../src/main/settings";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
@@ -61,7 +62,7 @@ describe("a turn's toast", () => {
       // The manager writes its context file on its own time; removed under it, the write logs.
       // Never the reason this test fails: this runs after the assertions, as cleanup.
       await eventually("the context file written", () =>
-        fs.existsSync(path.join(root, "projects", "p", "context.md"))
+        fs.existsSync(path.join(contextDirFor(root, "p"), "context.md"))
       ).catch(() => undefined);
       await manager.dispose();
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });

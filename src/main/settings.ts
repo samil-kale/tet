@@ -18,7 +18,7 @@ const DEFAULTS: AppSettings = {
 };
 
 /**
- * The settings dialog's values, persisted in tet's own userData. Written whole from memory and
+ * The settings dialog's values, persisted in tet's data folder (data-root.ts). Written whole from memory and
  * read back defensively: a key of the wrong type falls back to its default rather than reaching
  * an agent as `undefined`.
  */
@@ -26,8 +26,8 @@ export class SettingsStore {
   private readonly file: string;
   private settings: AppSettings = DEFAULTS;
 
-  constructor(userDataPath: string) {
-    this.file = path.join(userDataPath, "settings.json");
+  constructor(dataRoot: string) {
+    this.file = path.join(dataRoot, "settings.json");
     this.load();
   }
 

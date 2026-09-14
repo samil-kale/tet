@@ -52,8 +52,9 @@ export interface TETApi {
   /** Docker Sandboxes, opt-in per project — see the project row's "Enable sbx" entry. */
   sbx: {
     /** Everything the dialog asks before showing its fields, in one call. Never cached, PATH
-     *  re-read first — "Check again" is pressed right after installing. */
-    status(): Promise<SbxStatus>;
+     *  re-read first — "Check again" is pressed right after installing. Per project: what the
+     *  policy has to allow includes the project's own folder. */
+    status(projectId: string): Promise<SbxStatus>;
     /** Opens the OAuth page in the user's browser and waits for it; no terminal of its own. */
     login(): Promise<boolean>;
     /** Sets the machine-wide network policy to "balanced", Docker's own recommended default. */

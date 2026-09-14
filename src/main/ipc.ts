@@ -25,6 +25,7 @@ import type {
   RepositoryState,
   Requirements,
   SbxProjectConfig,
+  SbxStatus,
   StashCommand,
   TerminalDescriptor
 } from "../shared/types";
@@ -152,7 +153,11 @@ export function registerIpc({
     })
   );
 
-  ipcMain.handle("sbx:status", () => readSbxStatus());
+  // Per project: what the policy has to allow includes the project's own folder.
+  ipcMain.handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
+    const project = store.get(projectId);
+    return readSbxStatus(project?.path ?? "", projectId);
+  });
   ipcMain.handle("sbx:login", () => runSbxLogin());
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());

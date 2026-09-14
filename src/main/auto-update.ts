@@ -24,8 +24,12 @@ type Notify = (severity: NoticeSeverity, message: string) => void;
 /** The update found and unpacked this session, for `installPendingUpdate` to run. */
 let pending: { version: string; root: string } | undefined;
 
+/** tet's data folder (data-root.ts), handed over by startAutoUpdate; `pending` is only ever set
+ *  after it. */
+let dataRoot = "";
+
 function updateDir(): string {
-  return path.join(app.getPath("userData"), "update");
+  return path.join(dataRoot, "update");
 }
 
 function resultPath(): string {
@@ -154,7 +158,8 @@ async function stage(releasesUrl: string, asset: string, version: string): Promi
  *
  * `releasesUrl` is `RELEASES_URL` but for test/install.test.ts, which serves its own.
  */
-export function startAutoUpdate(installed: boolean, releasesUrl: string, notify: Notify): void {
+export function startAutoUpdate(installed: boolean, releasesUrl: string, tetDataRoot: string, notify: Notify): void {
+  dataRoot = tetDataRoot;
   const asset = assetName(process.platform, process.arch);
   if (!installed || !asset) {
     return;

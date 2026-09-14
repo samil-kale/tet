@@ -1,4 +1,5 @@
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { app, BrowserWindow, ipcMain, Menu, Notification } from "electron";
@@ -17,6 +18,7 @@ import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
 import { configureSandboxes } from "./sbx";
+import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv } from "./terminals/pty";
 import { installUncaughtHandler, logError } from "./uncaught";
@@ -88,13 +90,21 @@ function queueOutput(projectId: string, tabId: string, data: string): void {
 /**
  * A profile of its own for the tests driving the real app through tet-ctl (test/app.test.ts): own
  * projects, settings and socket, and — the lock being per profile — a second tet beside the one
- * being worked in. Set before anything below asks for userData. Only with it does tet take the
- * control token from its environment instead of making one; a normal start never reads that.
+ * being worked in. It is both Chromium's profile and tet's data folder (data-root.ts), set before
+ * anything below asks for either. Only with it does tet take the control token from its
+ * environment instead of making one; a normal start never reads that.
  */
 const USER_DATA_ARG = "--user-data-dir=";
 const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
+}
+/** Where tet keeps everything of its own; `userData` is left to Chromium's profile. */
+const dataRoot = resolveDataRoot(userDataArg);
+try {
+  fs.mkdirSync(dataRoot, { recursive: true });
+} catch (error) {
+  console.error("[tet] could not create the data folder:", error);
 }
 
 /**
@@ -161,13 +171,13 @@ const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_UR
 // Before the stores, and before anything that could throw asynchronously: an uncaught exception
 // shows a notice and keeps every terminal alive instead of freezing them all behind Electron's
 // modal dialog. See uncaught.ts.
-installUncaughtHandler(path.join(app.getPath("userData"), "errors.log"), (severity, message) =>
+installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
   send("app:notice", { severity, message })
 );
 
-const store = new ProjectStore(app.getPath("userData"));
-const settings = new SettingsStore(app.getPath("userData"));
-const accounts = new AccountStore(app.getPath("userData"));
+const store = new ProjectStore(dataRoot);
+const settings = new SettingsStore(dataRoot);
+const accounts = new AccountStore(dataRoot);
 const repositories = new RepositoryManager(
   (projectId, state) => send("repo:state-changed", { projectId, state }),
   (severity, message) => send("app:notice", { severity, message }),
@@ -181,7 +191,7 @@ const repositories = new RepositoryManager(
       .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
   }
 );
-const sessions = new SessionManagerRegistry(app.getPath("userData"), settings, {
+const sessions = new SessionManagerRegistry(dataRoot, settings, {
   onTabs: (projectId, tabs) => {
     send("terminal:tabs", { projectId, tabs });
     awaitedToastTab(projectId);
@@ -568,7 +578,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
-    startEventLoopMonitor(path.join(app.getPath("userData"), "event-loop.log"));
+    startEventLoopMonitor(path.join(dataRoot, "event-loop.log"));
     // Before anything reads PATH — the requirements check and every terminal do — add where agents
     // actually install to it, since tet is launched with the OS's barer GUI PATH. Awaited only
     // below the window: on macOS/Linux it asks the login shell, which with an nvm in the profile
@@ -579,21 +589,21 @@ if (!app.requestSingleInstanceLock()) {
     // one can spawn. The token lives in this process only — never on disk, never on a command line.
     const controlToken =
       (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
-    const port = await findControlPort(app.getPath("userData"));
+    const port = await findControlPort(dataRoot);
     // Installed, dist/ sits in app.asar, which a process other than electron cannot read into;
     // electron-builder.yml unpacks the CLI beside it.
     const cliPath = path.join(installed ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
     let binDir: string | undefined;
     try {
-      binDir = writeLaunchers(app.getPath("userData"), cliPath);
+      binDir = writeLaunchers(dataRoot, cliPath);
     } catch (error) {
       // A read-only profile must not cost the window: the terminals then have no `tet-ctl` on PATH.
       console.error("[tet] could not write the tet-ctl launcher:", error);
     }
     setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: controlToken }, binDir);
-    // Same bundle and port: a sandbox has no access to userData's launcher, so sbx.ts writes this
-    // file into the sandbox itself (ensureSandboxLauncher).
-    configureSandboxes(cliPath, port);
+    // Same bundle and port: a sandbox has no access to the data folder's launcher, so sbx.ts writes
+    // this file into the sandbox itself (ensureSandboxLauncher).
+    configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
     registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
     timeStartup("window", createWindow);
@@ -602,7 +612,7 @@ if (!app.requestSingleInstanceLock()) {
     await pathReady;
     timeStartup("git-process", startGitProcess);
     timeStartup("auto-update", () =>
-      startAutoUpdate(installed, releasesUrl, (severity, message) => send("app:notice", { severity, message }))
+      startAutoUpdate(installed, releasesUrl, dataRoot, (severity, message) => send("app:notice", { severity, message }))
     );
 
     app.on("activate", () => {

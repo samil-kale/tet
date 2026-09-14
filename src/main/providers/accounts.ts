@@ -26,8 +26,8 @@ export class AccountStore {
   private readonly file: string;
   private accounts: StoredAccount[] = [];
 
-  constructor(userDataPath: string) {
-    this.file = path.join(userDataPath, "provider-accounts.json");
+  constructor(dataRoot: string) {
+    this.file = path.join(dataRoot, "provider-accounts.json");
     this.load();
   }
 

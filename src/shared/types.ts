@@ -121,14 +121,26 @@ export interface SbxProjectConfig {
   hosts: string[];
 }
 
+/** One thing sbx's policy has to allow before tet can sandbox a project — see sbx.ts's
+ *  readSbxBlockers. */
+export interface SbxBlocker {
+  /** What it is for, a word or two. */
+  what: string;
+  /** The rule to ask for, in sbx's own grammar. */
+  allow: string;
+}
+
 /** What the sbx-settings dialog asks before it shows its fields — see sbx.ts's readSbxStatus.
  *  Each answer is only meaningful when the one above it is true. */
 export interface SbxStatus {
   installed: boolean;
   loggedIn: boolean;
   policyInitialized: boolean;
-  /** An organization manages one of the account's policies; the dialog shows a wall instead. */
+  /** An organization manages the account's policies — only local rules no longer apply. */
   governed: boolean;
+  /** What the policy still has to allow for this project; the dialog shows these instead of its
+   *  fields. */
+  blockers: SbxBlocker[];
 }
 
 /** A project with no `sbx` section in its tet.json, and what the dialog mounts with. */
