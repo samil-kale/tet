@@ -165,9 +165,11 @@ export async function initSbxPolicy(): Promise<boolean> {
 type SandboxList = Map<string, string[]>;
 
 /**
- * The first of the three preconditions not met, worded for a notice — or the sandbox listing,
+ * The first of the four preconditions not met, worded for a notice — or the sandbox listing,
  * which came out of the same `sbx ls` as the sign-in probe and is `prepareSbxRun`'s next
- * question. Asked before every sandboxed spawn (`resolveSbxRun`).
+ * question. Asked before every sandboxed spawn (`resolveSbxRun`). The control channel is one of
+ * them: a sandboxed agent whose hooks cannot reach tet runs with no turn marks and nothing
+ * saying why.
  */
 export async function checkSbxReady(): Promise<{ notReady: string } | { sandboxes: SandboxList }> {
   // The spawn path, so no PATH re-read: on macOS/Linux that is a login shell per call.
@@ -180,6 +182,13 @@ export async function checkSbxReady(): Promise<{ notReady: string } | { sandboxe
   }
   if (!status.policyInitialized) {
     return { notReady: "SBX's network policy is not set up" };
+  }
+  if (!(await isControlChannelAllowed())) {
+    return {
+      notReady: status.governed
+        ? "your organization's SBX network policy does not allow localhost, which tet's hooks use to reach it — ask for localhost to be allowed (no port)"
+        : "SBX's network policy does not allow localhost, which tet's hooks use to reach it"
+    };
   }
   return { sandboxes };
 }
@@ -204,10 +213,11 @@ export async function readSbxStatus(): Promise<SbxStatus> {
  * that also exits 1 on a signed-in account without a policy. Every other failure reads as "not
  * signed in" too — a needless login costs one glance at an "already signed in" message.
  *
- * `sbx policy ls`'s SOURCE column reads "local" or "kit" for an ungoverned account (measured,
- * 0.42.1); Docker's docs say a governed one reads "Managed by <org>". Unverified against a real
- * governed account, so governance is only detected: the dialog shows a wall instead of its
- * fields, a managed filesystem policy allowing no local mount.
+ * A governed account's `sbx policy ls` opens with a "Governance: Managed by <org>" line on stdout,
+ * its SOURCE column reading "org" (measured, 0.42.1; an ungoverned one reads "local" or "kit" and
+ * has no such line). Governance is only detected: the dialog shows a wall instead of its fields,
+ * a managed filesystem policy allowing no local mount (not measured — the governed account
+ * measured allowed every path).
  */
 async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList }> {
   const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, governed: false };
@@ -229,37 +239,50 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   return { status, sandboxes };
 }
 
-/** Cached per app run: once the rule is there, it stays. */
-let networkAllowed: Promise<void> | undefined;
+/** Kept per app run once it answered yes: a rule, once there, stays. A no is asked again on the
+ *  next spawn — the policy may have been changed in the meantime. */
+let controlAllowed: Promise<boolean> | undefined;
 
 /**
- * Allows the sandbox's egress to tet's control channel as `localhost:<port>`, not
- * `host.docker.internal`: sbx's proxy rewrites `host.docker.internal` to `localhost` before
- * checking the policy (measured; a `host.docker.internal` rule matches nothing and requests
- * connect but never arrive). False in a run without a control channel; `prepareSbxRun` then
- * leaves the TET_CONTROL_* env out so tet-ctl inside fails closed.
+ * Whether sbx's policy lets a sandbox reach `target` — `sbx policy check`, which asks the same
+ * daemon-side authorizer the sandbox's proxy does, so no rule matching is reproduced here. Exit
+ * 1 and `"allowed": false` for a denial, with the JSON on stdout either way (measured, 0.42.1).
  */
-async function ensureControlNetworkAllowed(): Promise<boolean> {
-  if (!control) {
+async function isNetworkAllowed(target: string): Promise<boolean> {
+  const result = await runSbx(["policy", "check", "network", "--json", target]);
+  try {
+    return (JSON.parse(result.stdout) as { allowed?: boolean }).allowed === true;
+  } catch {
     return false;
   }
+}
+
+/**
+ * Whether the sandbox's egress reaches tet's control channel, allowing it first where it is
+ * not: `localhost:<port>`, not `host.docker.internal` — sbx's proxy rewrites
+ * `host.docker.internal` to `localhost` before checking the policy (measured; a
+ * `host.docker.internal` rule matches nothing and requests connect but never arrive, and a
+ * blocked hook shows in `sbx policy log` as `localhost:<port>`). Checked again after the allow,
+ * since an allow that succeeds is not yet access: a deny rule outranks it. Measured on an
+ * organization-governed account (0.42.1): every local `policy allow` exits 1 ("managed by your
+ * organization; local allow rules are not applied"), so only the organization can open it, and a
+ * rule without a port matches every port — the one worth asking for, since this port is probed
+ * per run (findControlPort). True in a run without a control channel: nothing to reach, and
+ * `prepareSbxRun` leaves the TET_CONTROL_* env out.
+ */
+async function isControlChannelAllowed(): Promise<boolean> {
+  if (!control) {
+    return true;
+  }
   const resource = `localhost:${control.port}`;
-  networkAllowed ??= (async () => {
-    const existing = (await runSbx(["policy", "ls", "--type", "network", "--json"])).stdout;
-    const alreadyAllowed = (() => {
-      try {
-        const parsed = JSON.parse(existing) as { rules?: { resources?: string[] }[] };
-        return (parsed.rules ?? []).some((rule) => rule.resources?.includes(resource));
-      } catch {
-        return false;
-      }
-    })();
-    if (!alreadyAllowed) {
-      await runSbx(["policy", "allow", "network", resource]);
-    }
-  })();
-  await networkAllowed;
-  return true;
+  controlAllowed ??= (async () =>
+    (await isNetworkAllowed(resource)) ||
+    ((await runSbx(["policy", "allow", "network", resource])).ok && (await isNetworkAllowed(resource))))();
+  const allowed = await controlAllowed;
+  if (!allowed) {
+    controlAllowed = undefined;
+  }
+  return allowed;
 }
 
 /**
@@ -862,9 +885,9 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
 /**
  * Readies one agent tab's sandbox and returns the full `sbx run` argument list for it — the
  * project as its one workspace, live-mounted tet paths (fixedMountSpecs), knowledge and Allowed
- * paths (whose `missing` is passed on for the caller to say), published ports, and (when network
- * policy allows it, see ensureControlNetworkAllowed) the control-channel env and `tet-ctl`
- * launcher. Creates the sandbox first if it is missing (ensureSandboxExists) — `sbx run` would
+ * paths (whose `missing` is passed on for the caller to say), published ports, and (in a run with
+ * a control channel, which checkSbxReady has made sure the policy allows) the control-channel env
+ * and `tet-ctl` launcher. Creates the sandbox first if it is missing (ensureSandboxExists) — `sbx run` would
  * too, but the launcher has to be written into it before `sbx run` starts the agent. Rejects
  * only when that creation failed (see there); everything after it is best-effort.
  */
@@ -912,7 +935,7 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
     ...config.ports.flatMap((port) => ["-p", portKey(port)]),
     ...env.flatMap((entry) => ["-e", entry])
   ];
-  if (await ensureControlNetworkAllowed()) {
+  if (control) {
     const passThrough = [CONTROL_ENV.port, CONTROL_ENV.token, CONTROL_ENV.projectId, CONTROL_ENV.tabId];
     args.push(...passThrough.flatMap((variable) => ["-e", variable]), "-e", `${CONTROL_ENV.host}=host.docker.internal`);
     // Best-effort: the launcher missing is no worse than today (no tet-ctl in the sandbox at
