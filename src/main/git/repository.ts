@@ -72,6 +72,8 @@ export class Repository {
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
   /** Same debounce as the refresh, for the one watched file that is not git state. */
   private commandsTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The same again, for a path starting or stopping to exist. */
+  private filesTimer: ReturnType<typeof setTimeout> | undefined;
   /** The refresh underway, if one is. */
   private inflight: Promise<RepositoryState> | undefined;
   private refreshPending = false;
@@ -95,7 +97,10 @@ export class Repository {
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
     /** tet.json in the root changed — an editor, an agent or a checkout rewrites it behind the
      *  list's back, and the watcher sees every such write anyway. */
-    private readonly onCommandsChanged: () => void
+    private readonly onCommandsChanged: () => void,
+    /** A path in the working tree was created, deleted or renamed — for the Explorer, which lists
+     *  git's ignored files too, and no refresh ever reports one of those. */
+    private readonly onFilesChanged: () => void
   ) {}
 
   /** Reports a repository that could not be read, named by project since several are open. Only on
@@ -741,7 +746,7 @@ export class Repository {
 
   private startWatching(): void {
     try {
-      this.watcher = fs.watch(this.project.path, { recursive: true }, (_event, filename) => {
+      this.watcher = fs.watch(this.project.path, { recursive: true }, (event, filename) => {
         const name = filename?.toString();
         if (name && isIgnoredEvent(name)) {
           return;
@@ -763,6 +768,12 @@ export class Repository {
           // Debounced: the file is written in place, and a read mid-write would find half of it.
           clearTimeout(this.commandsTimer);
           this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);
+        }
+        // A path appearing or going is "rename", a write to one that stays only "change" (measured
+        // on win32), so an edit never re-lists the tree. Nothing under .git is in it.
+        if (event === "rename" && name && !/^\.git(?:[\\/]|$)/.test(name)) {
+          clearTimeout(this.filesTimer);
+          this.filesTimer = setTimeout(this.onFilesChanged, REFRESH_DEBOUNCE_MS);
         }
         this.scheduleRefresh();
       });
@@ -801,6 +812,7 @@ export class Repository {
     this.disposed = true;
     clearTimeout(this.debounceTimer);
     clearTimeout(this.commandsTimer);
+    clearTimeout(this.filesTimer);
     clearTimeout(this.watchRetryTimer);
     clearInterval(this.autoFetchTimer);
     this.watcher?.close();
@@ -816,7 +828,8 @@ export class RepositoryManager {
   constructor(
     private readonly onState: (projectId: string, state: RepositoryState) => void,
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
-    private readonly onCommandsChanged: (projectId: string) => void
+    private readonly onCommandsChanged: (projectId: string) => void,
+    private readonly onFilesChanged: (projectId: string) => void
   ) {}
 
   open(project: Project): Repository {
@@ -828,7 +841,8 @@ export class RepositoryManager {
       project,
       (state) => this.onState(project.id, state),
       this.onNotice,
-      () => this.onCommandsChanged(project.id)
+      () => this.onCommandsChanged(project.id),
+      () => this.onFilesChanged(project.id)
     );
     this.repositories.set(project.id, repository);
     void repository.start();

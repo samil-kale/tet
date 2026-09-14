@@ -189,7 +189,8 @@ const repositories = new RepositoryManager(
       .get(projectId)
       ?.sbxConfigChanged()
       .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
-  }
+  },
+  (projectId) => send("repo:files-changed", { projectId })
 );
 const sessions = new SessionManagerRegistry(dataRoot, settings, {
   onTabs: (projectId, tabs) => {

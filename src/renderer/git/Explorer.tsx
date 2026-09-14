@@ -651,7 +651,10 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
  * The Explorer tree's listing, which carries the `folders`, `exclude` and sort settings with it.
  * Re-read whenever a file starts or stops existing, when tet.json changed, and through
  * `refreshExplorer` after the tree's own create/rename/delete — an empty new folder never touches
- * git status, and a plain edit leaves `changes` at "modified", so neither shows up there.
+ * git status, and a plain edit leaves `changes` at "modified", so neither shows up there. Starting
+ * or stopping to exist is what the watcher reports (`onFilesChanged`) on top of `changes`: a
+ * checkout, pull or reset adds and removes files none of which ever stands in `changes`, and git's
+ * ignored files never do.
  *
  * Held with the project it was read for: one files pane serves every project, and a switch must not
  * show the previous project's tree until the new listing lands.
@@ -665,15 +668,19 @@ export function useExplorerListing(
   const [listing, setListing] = useState(false);
   const [explorerVersion, setExplorerVersion] = useState(0);
   const refreshExplorer = useCallback(() => setExplorerVersion((count) => count + 1), []);
-  useEffect(
-    () =>
-      window.tet.commands.onChanged((payload) => {
-        if (payload.projectId === projectId) {
-          setExplorerVersion((count) => count + 1);
-        }
-      }),
-    [projectId]
-  );
+  useEffect(() => {
+    const bump = (payload: { projectId: string }): void => {
+      if (payload.projectId === projectId) {
+        setExplorerVersion((count) => count + 1);
+      }
+    };
+    const unsubscribeCommands = window.tet.commands.onChanged(bump);
+    const unsubscribeFiles = window.tet.repository.onFilesChanged(bump);
+    return () => {
+      unsubscribeCommands();
+      unsubscribeFiles();
+    };
+  }, [projectId]);
   const changesKey = useMemo(
     () =>
       changes

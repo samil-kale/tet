@@ -176,6 +176,9 @@ export interface TETApi {
     writeFile(projectId: string, path: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult>;
     /** Fires whenever a repository's state changed (git command, file watcher or refresh). */
     onState(listener: (payload: { projectId: string; state: RepositoryState }) => void): Unsubscribe;
+    /** Fires when a file or folder in the working tree started or stopped existing — git's
+     *  ignored ones included, which no state change ever reports. */
+    onFilesChanged(listener: (payload: { projectId: string }) => void): Unsubscribe;
   };
   /** A project's saved shell commands, kept in a tet.json in its own root, so they travel with it. */
   commands: {
