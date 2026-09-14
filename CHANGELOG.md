@@ -34,13 +34,6 @@ changed for the user, not the commit list.
 - **Installed by a script, no npm needed.** On macOS and Linux run
   `curl -fsSL https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.sh | sh`,
   on Windows `irm https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.ps1 | iex`.
-  TET is installed for your user alone, with a Start menu entry, a desktop icon and `tet` on the
-  PATH on Windows, `tet` and a desktop entry on Linux. The npm package is no longer updated.
-- **Notifications come from TET.** No more "Electron" entry in the Start menu after the first
-  notification. Clicking a notification brings TET to the front on the session it is about, and
-  one clicked after TET was closed starts it.
-- **Updates come from the GitHub release.** A new version is downloaded in the background and
-  installed after you quit, never while terminal sessions are running.
 - **Files open in an editor tab.** Double-click a changed file or ctrl-click a path in a terminal,
   and it opens in the project's editor tab; the next file reuses it.
 - **Split by dragging.** The layout picker is gone: drag a tab onto the right side or the lower left of
@@ -60,14 +53,6 @@ changed for the user, not the commit list.
 
 ## 0.6.0 (2026-09-13)
 
-- **Installed with npm.** TET now ships as the `tet-ide` package: `npm install -g tet-ide`, then
-  `tet`. No more installers or app bundles — nothing for a virus scanner or macOS to refuse. On
-  Windows the first start adds a Start menu entry and a desktop icon. On Linux, TET runs without
-  Chromium's sandbox, which a package manager cannot set up.
-- **Updates install when you quit.** A newer version on npm is announced once and installed after
-  TET closes, never while terminal sessions are running; the next start says so. Where TET
-  cannot install by itself (pnpm, yarn, bun, a prefix without write access), the notice carries
-  the command instead.
 - **A turn cut short counts as ended.** A Claude Code turn interrupted with Escape no longer
   leaves its tab spinning.
 - **Startup notices are no longer lost.** A message from the first seconds of a start now waits

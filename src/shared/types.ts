@@ -300,7 +300,7 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   changes: []
 };
 
-/** How loudly a notice asks to be read; all three disappear after 8 seconds or on click. */
+/** How loudly a notice asks to be read; it decides how long the notice stands (Notices.tsx). */
 export type NoticeSeverity = "error" | "warning" | "info";
 
 /** Anything the user is told, without exception — not a *status*, which a view draws for itself. */

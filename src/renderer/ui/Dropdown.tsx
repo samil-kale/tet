@@ -2,6 +2,12 @@ import { useState } from "react";
 import { ContextMenu, type ContextMenuEntry } from "./ContextMenu";
 import { ChevronIcon } from "./icons";
 
+/** The open list's tallest; a longer one scrolls. */
+const MAX_LIST_HEIGHT = 300;
+
+/** Kept free between the open list and the window's bottom edge. */
+const WINDOW_MARGIN = 8;
+
 interface DropdownOption {
   value: string;
   label: string;
@@ -20,7 +26,7 @@ interface DropdownProps {
  * `<select>`.
  */
 export function Dropdown({ value, options, onChange }: DropdownProps) {
-  const [menu, setMenu] = useState<{ x: number; y: number; width: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; width: number; maxHeight: number } | null>(null);
   const selected = options.find((option) => option.value === value);
 
   const entries: ContextMenuEntry[] = options.map((option) => ({
@@ -39,7 +45,10 @@ export function Dropdown({ value, options, onChange }: DropdownProps) {
             return;
           }
           const rect = event.currentTarget.getBoundingClientRect();
-          setMenu({ x: rect.left, y: rect.bottom, width: rect.width });
+          // Capped to the room below the trigger, so the list always opens under it: a taller
+          // one would be clamped upward over the trigger by `ContextMenu`.
+          const maxHeight = Math.min(MAX_LIST_HEIGHT, window.innerHeight - rect.bottom - WINDOW_MARGIN);
+          setMenu({ x: rect.left, y: rect.bottom, width: rect.width, maxHeight });
         }}
       >
         {selected?.label}
@@ -50,6 +59,7 @@ export function Dropdown({ value, options, onChange }: DropdownProps) {
           x={menu.x}
           y={menu.y}
           width={menu.width}
+          maxHeight={menu.maxHeight}
           entries={entries}
           onClose={() => setMenu(null)}
           className="dropdown-menu"

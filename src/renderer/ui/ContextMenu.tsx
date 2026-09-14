@@ -23,9 +23,11 @@ interface ContextMenuProps {
   className?: string;
   /** Matches the menu to a trigger's own width, e.g. `Dropdown` standing in for a `<select>`. */
   width?: number;
+  /** Caps the menu's height, which then scrolls; kept within the window, it is never clamped upward. */
+  maxHeight?: number;
 }
 
-export function ContextMenu({ x, y, entries, onClose, className, width }: ContextMenuProps) {
+export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
 
   // Anchored at the pointer, then clamped so a menu opened near an edge doesn't hang outside the
@@ -79,7 +81,12 @@ export function ContextMenu({ x, y, entries, onClose, className, width }: Contex
     <div
       ref={menu}
       className={`context-menu${className ? ` ${className}` : ""}`}
-      style={{ left: x, top: y, ...(width !== undefined ? { width } : {}) }}
+      style={{
+        left: x,
+        top: y,
+        ...(width !== undefined ? { width } : {}),
+        ...(maxHeight !== undefined ? { maxHeight } : {})
+      }}
     >
       {entries.map((entry, index) =>
         entry === SEPARATOR ? (

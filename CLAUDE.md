@@ -285,9 +285,9 @@ Deliberately not in there: the session marks, and a notification to turn off.
 
 `notify(severity, message)` from `src/renderer/ui/Notices.tsx` is the only way to say something
 to the user — no view keeps a message of its own. A plain function, modelled on VS Code's
-`window.showErrorMessage`; the main process uses the same channel (`app:notice`). All three
-severities disappear after 8 seconds or on click; an identical message already standing is
-dropped.
+`window.showErrorMessage`; the main process uses the same channel (`app:notice`). Sized, timed
+and moved like VS Code's toasts — 10/12/15 seconds by severity, held while hovered or while the
+window is out of focus — or gone on click; an identical message already standing is dropped.
 
 Not a notice: a status — a tab colored for an uninstalled agent, the progress bar, the head, the
 git mark and the sandbox shield next to a project's name.

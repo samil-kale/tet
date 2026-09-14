@@ -550,7 +550,7 @@ export class Repository {
       return { error: "Path is outside the repository" };
     }
     if (fs.existsSync(absolute)) {
-      return { error: "Something already exists at this path" };
+      return { error: `A file or folder "${filePath}" already exists at this location` };
     }
     return { absolute };
   }

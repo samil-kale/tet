@@ -2,8 +2,8 @@ import { useSyncExternalStore } from "react";
 import type { NoticeSeverity } from "../../shared/types";
 import { SeverityIcon } from "./icons";
 
-/** Long enough to read a line, short enough not to sit in the way. Same for every severity. */
-const DISMISS_MS = 8000;
+/** VS Code's own durations (notificationsToasts.ts): the more serious, the longer it stays. */
+const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_000, error: 15_000 };
 
 interface ShownNotice {
   id: number;
@@ -19,6 +19,8 @@ interface ShownNotice {
 let shown: ShownNotice[] = [];
 const listeners = new Set<() => void>();
 let nextId = 0;
+/** The notice under the pointer, which is not taken away while it is being read. */
+let hovered: number | undefined;
 
 function publish(next: ShownNotice[]): void {
   shown = next;
@@ -34,10 +36,34 @@ export function notify(severity: NoticeSeverity, message: string): void {
     return;
   }
   publish([...shown, { id, severity, message }]);
-  setTimeout(() => dismissNotice(id), DISMISS_MS);
+  scheduleDismiss(id, severity);
+}
+
+/**
+ * As VS Code does: a notice due while hovered gets its whole time again, and one due while the
+ * window is out of focus waits for the focus to return and then gets its whole time — it would
+ * otherwise be gone before anyone looked.
+ */
+function scheduleDismiss(id: number, severity: NoticeSeverity): void {
+  setTimeout(() => {
+    if (!shown.some((notice) => notice.id === id)) {
+      return;
+    }
+    if (hovered === id) {
+      scheduleDismiss(id, severity);
+    } else if (!document.hasFocus()) {
+      window.addEventListener("focus", () => scheduleDismiss(id, severity), { once: true });
+    } else {
+      dismissNotice(id);
+    }
+  }, DISMISS_MS[severity]);
 }
 
 function dismissNotice(id: number): void {
+  // A removed element never reports the pointer leaving it.
+  if (hovered === id) {
+    hovered = undefined;
+  }
   publish(shown.filter((notice) => notice.id !== id));
 }
 
@@ -59,6 +85,8 @@ export function Notices() {
           key={notice.id}
           className={`notice ${notice.severity}`}
           onClick={() => dismissNotice(notice.id)}
+          onMouseEnter={() => (hovered = notice.id)}
+          onMouseLeave={() => (hovered = undefined)}
           title="Dismiss"
         >
           <SeverityIcon className="notice-icon" severity={notice.severity} />
