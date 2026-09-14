@@ -20,7 +20,9 @@ export const SANDBOX_TARGET: HookTarget = { posix: true, embed: toContainerPath 
  *
  *  Spelled as it is on disk, not as it was asked for (measured, 2026-09-14): sbx mounts
  *  `%APPDATA%\TET` at `/c/…/Roaming/tet` when the folder was created as `tet`, and inside the
- *  case-sensitive sandbox the path as typed does not exist. */
+ *  case-sensitive sandbox the path as typed does not exist. That realpath also resolves junctions,
+ *  subst and mapped network drives costs nothing (measured, sbx 0.42.1): sbx takes none of the
+ *  three as a workspace or mount in the first place. */
 export function toContainerPath(hostPath: string): string {
   if (process.platform !== "win32") {
     return hostPath;

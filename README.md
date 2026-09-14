@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/renderer/icon.png" alt="TET" width="128" />
+  <img src="src/renderer/assets/icon.png" alt="TET" width="128" />
 </p>
 
 <p align="center"><em>"Welcome home, Jack."</em></p>

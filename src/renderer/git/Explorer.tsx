@@ -349,6 +349,8 @@ interface ExplorerProps {
   project: Project;
   /** Undefined while the listing is still being read — the EXPLORER header's own bar says so. */
   files: ExplorerListing | undefined;
+  /** False while hidden behind the git view: a row there cannot be scrolled to. */
+  shown: boolean;
   /** The open file, if any — reveals and highlights it. */
   selected: string | null;
   onOpen: (path: string) => void;
@@ -374,7 +376,7 @@ export interface ExplorerHandle {
  * explorer, overlapping allowed; `exclude`/`excludeGitIgnore` have already thinned it, and
  * `sortOrder`/`compactFolders` are applied on the way to the screen.
  */
-export function Explorer({ project, files, selected, onOpen, act, onExplorerChanged, ref }: ExplorerProps) {
+export function Explorer({ project, files, shown: visible, selected, onOpen, act, onExplorerChanged, ref }: ExplorerProps) {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
@@ -424,15 +426,17 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
   // The scroll itself, one effect later: a row inside a still-collapsed folder is not in the DOM
   // on the pass that expands it, so watching `expanded` runs this again once it exists. The
   // pending ref keeps an ordinary fold toggle from yanking the view back to an old selection.
+  // `shown` too: the view opens before its listing arrives, and the rows only exist after that. Kept
+  // pending while hidden behind the git view, where a row has no box to scroll to.
   useEffect(() => {
-    if (pendingReveal.current) {
+    if (visible && pendingReveal.current) {
       const row = rows.current.get(pendingReveal.current);
       if (row) {
         row.scrollIntoView({ block: "nearest" });
         pendingReveal.current = null;
       }
     }
-  }, [selected, expanded]);
+  }, [selected, expanded, shown, visible]);
 
   const toggle = (node: TreeNode): void =>
     setExpanded((current) => ({ ...current, [node.id]: !(current[node.id] ?? node.root === true) }));
@@ -652,7 +656,8 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
  */
 export function useExplorerListing(
   projectId: string,
-  changes: FileChange[]
+  changes: FileChange[],
+  shown: boolean
 ): { explorerListing: ExplorerListing | undefined; listing: boolean; refreshExplorer: () => void } {
   const [held, setHeld] = useState<{ projectId: string; listing: ExplorerListing } | undefined>(undefined);
   const [listing, setListing] = useState(false);
@@ -675,7 +680,11 @@ export function useExplorerListing(
         .join("\n"),
     [changes]
   );
+  // Only read while on screen, and read again on coming back: what changed meanwhile went unread.
   useEffect(() => {
+    if (!shown) {
+      return;
+    }
     let cancelled = false;
     setListing(true);
     void window.tet.repository.listExplorer(projectId).then((result) => {
@@ -687,6 +696,6 @@ export function useExplorerListing(
     return () => {
       cancelled = true;
     };
-  }, [projectId, changesKey, explorerVersion]);
+  }, [projectId, changesKey, explorerVersion, shown]);
   return { explorerListing: held?.projectId === projectId ? held.listing : undefined, listing, refreshExplorer };
 }

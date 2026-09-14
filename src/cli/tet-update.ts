@@ -82,9 +82,16 @@ function main(): void {
       fs.cpSync(staged, root, { recursive: true, verbatimSymlinks: true });
     }
   } catch (error) {
-    fs.rmSync(root, { recursive: true, force: true });
-    fs.renameSync(old, root);
-    writeResult(resultFile, { version, ok: false, output: `could not put ${version} in place: ${String(error)}` });
+    let output = `could not put ${version} in place: ${String(error)}`;
+    // Retried like the move aside, and never in the way of the result: a scanner holding a file
+    // just copied must not leave the failure unreported.
+    try {
+      retried(() => fs.rmSync(root, { recursive: true, force: true }));
+      retried(() => fs.renameSync(old, root));
+    } catch (restoreError) {
+      output += `\ncould not put ${old} back: ${String(restoreError)}`;
+    }
+    writeResult(resultFile, { version, ok: false, output });
     return;
   }
   writeResult(resultFile, { version, ok: true, output: "" });

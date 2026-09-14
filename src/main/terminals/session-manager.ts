@@ -450,8 +450,9 @@ export class ProjectSessionManager {
       return;
     }
     // `bringUp` runs a second time for an agent that only became startable later
-    // (sbxConfigChanged); a session already on screen must not be added twice.
-    const known = new Set(this.tabs.map((tab) => tab.sessionId));
+    // (sbxConfigChanged); a session already on screen must not be added twice — nor one a tab's
+    // own hooks named that reconcile has not claimed yet.
+    const known = new Set(this.tabs.flatMap((tab) => [tab.sessionId, tab.reportedSessionId]));
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
     for (const info of fresh) {
       this.tabs.push({
@@ -936,28 +937,34 @@ export class ProjectSessionManager {
   private async destroyTab(tab: TabState, index: number): Promise<void> {
     const session = this.sessions.get(tab.tabId);
     this.lastSizes.delete(tab.tabId);
-    if (session) {
-      this.sessions.delete(tab.tabId);
-      // Awaited: the persisted session is deleted after the process is gone.
-      await session.stop();
-    }
-
     const runtime = this.runtimeFor(tab.agentId);
     const { agent, executable } = runtime;
-    if (!agent.sessions) {
-      this.shellContext.close(tab.tabId);
-      return;
-    }
-    if (!tab.sessionId && session) {
-      // A fresh tab may have persisted a session already — claim its id so it gets deleted
-      // too. detachedTabs lets reconcile match a tab already spliced out.
+    // A fresh tab may have persisted a session already — claim its id so it gets deleted too.
+    // detachedTabs lets a hook name the session and reconcile match a tab already spliced out;
+    // joined before the stop, since the first hook of a tab closed right after its prompt
+    // arrives during the stop's grace period.
+    const detached = Boolean(agent.sessions && !tab.sessionId && session);
+    if (detached) {
       this.detachedTabs.push(tab);
-      try {
-        // A reconcile already underway listed before this tab was detached; wait it out, then
-        // run one that sees the tab.
+    }
+    try {
+      if (session) {
+        this.sessions.delete(tab.tabId);
+        // Awaited: the persisted session is deleted after the process is gone.
+        await session.stop();
+      }
+      if (!agent.sessions) {
+        this.shellContext.close(tab.tabId);
+        return;
+      }
+      if (detached && !tab.sessionId && tab.reportedSessionId !== undefined) {
+        // A reconcile already underway listed before the session was named; wait it out, then
+        // run one that sees it.
         await runtime.reconciling;
         await this.reconcile(runtime);
-      } finally {
+      }
+    } finally {
+      if (detached) {
         this.detachedTabs.splice(this.detachedTabs.indexOf(tab), 1);
       }
     }

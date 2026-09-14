@@ -796,31 +796,31 @@ export function App() {
         />
 
         {/* The active project's repository or its files, one view at a time. One pane for all
-            projects: it holds no state a project would lose by being switched away from. While
-            it slides in, it keeps the view it had. */}
+            projects. Both views stay mounted while it is out, the other one hidden, so a switch
+            between them keeps a selection, a filter, the open folders and a running action's bar.
+            While it slides in, it keeps the view it had. */}
         {sideMounted && activeProject && (
           <>
             <div
               className={`side-pane${sideSliding ? " sliding" : ""}`}
               style={{ width: sideExpanded ? sidePaneWidth : 0 }}
             >
-              {filesShown ? (
-                <FilesPane
-                  project={activeProject}
-                  state={activeState}
-                  openPath={activeProjectId ? (editorTabs[activeProjectId]?.path ?? null) : null}
-                  onOpenDiff={openActiveDiff}
-                />
-              ) : (
-                <GitPane
-                  project={activeProject}
-                  state={activeState}
-                  branch={activeBranch}
-                  treeHeight={branchTreeHeight}
-                  onTreeHeight={setBranchTreeHeight}
-                  onOpenDiff={openActiveDiff}
-                />
-              )}
+              <FilesPane
+                project={activeProject}
+                state={activeState}
+                shown={filesShown}
+                openPath={activeProjectId ? (editorTabs[activeProjectId]?.path ?? null) : null}
+                onOpenDiff={openActiveDiff}
+              />
+              <GitPane
+                project={activeProject}
+                state={activeState}
+                shown={!filesShown}
+                branch={activeBranch}
+                treeHeight={branchTreeHeight}
+                onTreeHeight={setBranchTreeHeight}
+                onOpenDiff={openActiveDiff}
+              />
             </div>
             {sidePaneOpen && (
               <Sash

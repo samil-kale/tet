@@ -76,18 +76,17 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
   return (
     <div className={`editor-tab${active ? "" : " hidden"}`} onKeyDown={onKeyDown}>
       <div className="editor-bar">
-        {!isReadOnly(file) && (
-          <div className="editor-bar-actions">
-            <button
-              className="icon-button"
-              title="Save (Ctrl+S)"
-              disabled={!dirty || saving}
-              onClick={() => void saveEditorFile(projectId)}
-            >
-              <SaveIcon />
-            </button>
-          </div>
-        )}
+        {/* Always there, so the path never shifts between a writable file and a read-only one. */}
+        <div className="editor-bar-actions">
+          <button
+            className="icon-button"
+            title="Save (Ctrl+S)"
+            disabled={isReadOnly(file) || !dirty || saving}
+            onClick={() => void saveEditorFile(projectId)}
+          >
+            <SaveIcon />
+          </button>
+        </div>
         {dirty && <span className="editor-dirty">●</span>}
         <span className="editor-path">{path}</span>
       </div>

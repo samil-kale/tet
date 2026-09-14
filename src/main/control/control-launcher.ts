@@ -4,7 +4,7 @@ import { shellSingleQuote, writePosixScript } from "../../shared/script-text";
 
 /**
  * The `tet-ctl` command a terminal finds on its PATH: one launcher per platform, written into
- * tet's own userData at every start (its paths move with every update) and prepended to every
+ * tet's own userData at every start (an install and `npm start` run tet from different places) and prepended to every
  * pty's PATH in `spawnAgentProcess`, never installed machine-wide. It runs the bundled CLI with
  * tet's own electron binary under `ELECTRON_RUN_AS_NODE`: a `node` on the machine is not a given
  * (opencode and Codex ship as native binaries), the electron running tet is.

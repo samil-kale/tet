@@ -9,6 +9,8 @@ interface FilesPaneProps {
   project: Project;
   /** Its changes are what the listing is read again on — a file starting or stopping to exist. */
   state: RepositoryState;
+  /** False while the git view stands in its place; hidden, not unmounted, to keep its state. */
+  shown: boolean;
   /** The file the project's editor tab shows, if any — the tree reveals it. */
   openPath: string | null;
   /** A file to look at — it opens in the project's editor tab. */
@@ -20,17 +22,18 @@ interface FilesPaneProps {
  * repository view rather than beside it (VS Code's Explorer and Source Control, one sidebar). The
  * listing is only read while this is on screen.
  */
-export const FilesPane = memo(function FilesPane({ project, state, openPath, onOpenDiff }: FilesPaneProps) {
+export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpenDiff }: FilesPaneProps) {
   const { acting, act } = useFileAct(project.id);
-  const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes);
+  const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
   const explorerRef = useRef<ExplorerHandle>(null);
 
   return (
-    <div className="side-pane-content">
+    <div className={`side-pane-content${shown ? "" : " hidden"}`}>
       <div className="section grows">
         <div className="section-header">
           <span>
-            EXPLORER <span className="count-badge">({explorerListing?.files.length ?? 0})</span>
+            EXPLORER{" "}
+            {explorerListing && <span className="count-badge">({explorerListing.files.length})</span>}
           </span>
           <span className="section-header-actions">
             <button
@@ -68,6 +71,7 @@ export const FilesPane = memo(function FilesPane({ project, state, openPath, onO
           ref={explorerRef}
           project={project}
           files={explorerListing}
+          shown={shown}
           selected={openPath}
           onOpen={onOpenDiff}
           act={act}

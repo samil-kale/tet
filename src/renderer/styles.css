@@ -922,6 +922,11 @@ textarea:focus {
   min-height: 0;
 }
 
+/* The side pane's other view, kept mounted for its state. Nothing in it measures itself. */
+.side-pane-content.hidden {
+  display: none;
+}
+
 .changes-list {
   display: flex;
   flex-direction: column;
@@ -1082,19 +1087,13 @@ textarea:focus {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-/* The text's distance from the bar's start, where no actions stand before it (a read-only file). */
-.editor-bar > :first-child {
-  margin-left: 12px;
-}
-
 /* The bar's buttons at its start, separated as `.tab-strip-actions` is in the tab strip. */
-.editor-bar > .editor-bar-actions {
+.editor-bar-actions {
   display: flex;
   align-items: center;
   gap: 2px;
   flex: none;
   align-self: stretch;
-  margin-left: 0;
   border-right: 1px solid var(--vscode-tab-border);
   padding: 0 4px;
 }
@@ -1404,7 +1403,7 @@ textarea:focus {
   margin: 0 6px 0 auto;
 }
 
-/* Same shape as .editor-bar, and shows progress with a bar of its own. It sits inside .dialog's
+/* Same height as .editor-bar, and shows progress with a bar of its own. It sits inside .dialog's
    16px padding, cancelled on three sides so the bar is flush; the top corners then need
    .dialog's own radius back. */
 .dialog-bar {

@@ -110,8 +110,9 @@ const testConfig = {
 
 function copyStaticAssets() {
   fs.mkdirSync(dist, { recursive: true });
-  for (const file of ["index.html", "icon.png", "icon.ico"]) {
-    fs.copyFileSync(path.join(__dirname, "src", "renderer", file), path.join(dist, file));
+  fs.copyFileSync(path.join(__dirname, "src", "renderer", "index.html"), path.join(dist, "index.html"));
+  for (const file of ["icon.png", "icon.ico"]) {
+    fs.copyFileSync(path.join(__dirname, "src", "renderer", "assets", file), path.join(dist, file));
   }
 }
 

@@ -53,19 +53,20 @@ function reportLastUpdate(notify: Notify): void {
 /**
  * Whatever an earlier session unpacked: installed by now, or given up on. Best effort — on win32 the
  * update that ran from one of these may still hold its executable a moment after writing its result.
+ * Awaited before the first check, whose `stage` may unpack into the very folder being swept.
  */
-function sweepUpdateDir(): void {
+async function sweepUpdateDir(): Promise<void> {
   let entries: string[];
   try {
-    entries = fs.readdirSync(updateDir());
+    entries = await fs.promises.readdir(updateDir());
   } catch {
     return;
   }
-  for (const entry of entries) {
-    if (entry !== path.basename(resultPath())) {
-      fs.rm(path.join(updateDir(), entry), { recursive: true, force: true }, () => undefined);
-    }
-  }
+  await Promise.all(
+    entries
+      .filter((entry) => entry !== path.basename(resultPath()))
+      .map((entry) => fs.promises.rm(path.join(updateDir(), entry), { recursive: true, force: true }).catch(() => undefined))
+  );
 }
 
 /** Whether the update can write where tet is installed, without asking for more rights. */
@@ -194,8 +195,7 @@ export function startAutoUpdate(installed: boolean, releasesUrl: string, notify:
   };
 
   reportLastUpdate(notify);
-  sweepUpdateDir();
-  void check();
+  void sweepUpdateDir().then(check);
   setInterval(() => void check(), CHECK_INTERVAL_MS);
 }
 

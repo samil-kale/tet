@@ -10,6 +10,8 @@ import { ProgressBar } from "../ui/ProgressBar";
 interface GitPaneProps {
   project: Project;
   state: RepositoryState;
+  /** False while the files view stands in its place; hidden, not unmounted, to keep its state. */
+  shown: boolean;
   branch: BranchActions;
   /** Dragged on the sash between the tree and the changes; held by the app, like the width. */
   treeHeight: number;
@@ -19,7 +21,15 @@ interface GitPaneProps {
 }
 
 /** The side pane's repository view: branches over the changed files, and nothing else. */
-export const GitPane = memo(function GitPane({ project, state, branch, treeHeight, onTreeHeight, onOpenDiff }: GitPaneProps) {
+export const GitPane = memo(function GitPane({
+  project,
+  state,
+  shown,
+  branch,
+  treeHeight,
+  onTreeHeight,
+  onOpenDiff
+}: GitPaneProps) {
   const { acting, act } = useFileAct(project.id);
 
   // Fetch, pull and push share the one action slot a discard or a stash uses.
@@ -28,7 +38,7 @@ export const GitPane = memo(function GitPane({ project, state, branch, treeHeigh
   const syncLocked = branch.busy || acting;
 
   return (
-    <div className="side-pane-content">
+    <div className={`side-pane-content${shown ? "" : " hidden"}`}>
       <div className="section" style={{ height: treeHeight }}>
         <div className="section-header">
           <span>BRANCHES</span>

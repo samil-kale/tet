@@ -34,7 +34,7 @@ asarUnpack:
 npmRebuild: false
 
 win:
-  icon: src/renderer/icon.ico
+  icon: src/renderer/assets/icon.ico
   target:
     - target: zip
       arch: [x64, arm64]
@@ -46,7 +46,7 @@ win:
 
 mac:
   # Generated from the 1200px png; macOS wants at least 512.
-  icon: src/renderer/icon.png
+  icon: src/renderer/assets/icon.png
   category: public.app-category.developer-tools
   target:
     - target: tar.gz
@@ -59,7 +59,7 @@ mac:
   hardenedRuntime: false
 
 linux:
-  icon: src/renderer/icon.png
+  icon: src/renderer/assets/icon.png
   category: Development
   executableName: tet
   target:
@@ -67,5 +67,5 @@ linux:
       arch: [x64, arm64]
   # For the .desktop entry install.sh writes; electron-builder puts no icon beside a tar.gz's binary.
   extraFiles:
-    - from: src/renderer/icon.png
+    - from: src/renderer/assets/icon.png
       to: icon.png
