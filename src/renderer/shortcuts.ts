@@ -13,7 +13,14 @@ import { isMac, isModifierHeld } from "./platform";
  * own mode toggle. `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` appear in no branch, modified or
  * not. None of these close a tab.
  */
-export type ShortcutId = "settings" | "toggleGit" | "needsAttention" | "nextTab" | "previousTab" | "newShellTab";
+export type ShortcutId =
+  | "settings"
+  | "toggleGit"
+  | "toggleFiles"
+  | "needsAttention"
+  | "nextTab"
+  | "previousTab"
+  | "newShellTab";
 
 interface ShortcutDef {
   id: ShortcutId;
@@ -33,6 +40,7 @@ interface ShortcutDef {
 const DEFS: ShortcutDef[] = [
   { id: "settings", description: "Open settings", shift: false, key: ",", label: "," },
   { id: "toggleGit", description: "Show or hide the repository", shift: true, key: "g", label: "G" },
+  { id: "toggleFiles", description: "Show or hide the files", shift: true, key: "e", label: "E" },
   {
     id: "needsAttention",
     description: "Jump to the session that needs you — a question first, then one that finished out of sight",

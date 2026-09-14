@@ -1,14 +1,12 @@
-// TRIAL: the Files tab's Explorer settings are commented out along with the git pane's EXPLORER
-// section (GitPane.tsx), to see whether tet does without them; restore everything marked TRIAL.
-import { useEffect, /* TRIAL: useRef, */ useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
 import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../../shared/types";
 import type {
   AppInfo,
   AppSettings,
-  // TRIAL: ExplorerSettings,
-  // TRIAL: ExplorerSortOrder,
+  ExplorerSettings,
+  ExplorerSortOrder,
   NotificationSettings,
   Project,
   PromptId
@@ -16,7 +14,7 @@ import type {
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
-// TRIAL: import { notify } from "../ui/Notices";
+import { notify } from "../ui/Notices";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 
@@ -52,20 +50,20 @@ const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only, from the next tab on)" }
 ];
 
-// TRIAL: /**
- // TRIAL: * The Files tab's sort-order picker. `foldersNestsFiles` is left out: the Explorer tree has no
- // TRIAL: * file nesting, so it sorts identically to `default`. A hand-written tet.json can still hold it.
- // TRIAL: */
-// TRIAL: const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
-  // TRIAL: { id: "default", label: "Default" },
-  // TRIAL: { id: "mixed", label: "Mixed" },
-  // TRIAL: { id: "filesFirst", label: "Files First" },
-  // TRIAL: { id: "type", label: "Type" },
-  // TRIAL: { id: "modified", label: "Modified" }
-// TRIAL: ];
+/**
+ * The Files tab's sort-order picker. `foldersNestsFiles` is left out: the Explorer tree has no
+ * file nesting, so it sorts identically to `default`. A hand-written tet.json can still hold it.
+ */
+const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
+  { id: "default", label: "Default" },
+  { id: "mixed", label: "Mixed" },
+  { id: "filesFirst", label: "Files First" },
+  { id: "type", label: "Type" },
+  { id: "modified", label: "Modified" }
+];
 
-// TRIAL: /** The Files tab's own keys, one write each — in the order Save goes through them. */
-// TRIAL: const EXPLORER_KEYS: (keyof ExplorerSettings)[] = ["excludeGitIgnore", "compactFolders", "sortOrder"];
+/** The Files tab's own keys, one write each — in the order Save goes through them. */
+const EXPLORER_KEYS: (keyof ExplorerSettings)[] = ["excludeGitIgnore", "compactFolders", "sortOrder"];
 
 /** The Info tab's rows: tet, then what it runs on. */
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
@@ -81,15 +79,15 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
  * this asks nothing — it edits its own copy of the settings and writes on Save, like every
  * other dialog. Cancel and Escape drop what was edited.
  */
-export function SettingsDialog({ /* TRIAL: activeProject, */ onClose }: SettingsDialogProps) {
+export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
-  // TRIAL: const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
+  const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
-  // TRIAL: /** What tet.json held when the dialog opened: Save writes only the keys that differ from it. */
-  // TRIAL: const loadedExplorer = useRef<ExplorerSettings | null>(null);
+  /** What tet.json held when the dialog opened: Save writes only the keys that differ from it. */
+  const loadedExplorer = useRef<ExplorerSettings | null>(null);
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
@@ -97,19 +95,19 @@ export function SettingsDialog({ /* TRIAL: activeProject, */ onClose }: Settings
     void window.tet.app.info().then(setInfo);
   }, []);
 
-  // TRIAL: // Read once, on open. Nothing follows tet.json while the dialog stands: Save reaches the file
-  // TRIAL: // through patchSetting (commands.ts), which reads it fresh and leaves every other key alone.
-  // TRIAL: useEffect(() => {
-    // TRIAL: if (!activeProject) {
-      // TRIAL: loadedExplorer.current = null;
-      // TRIAL: setExplorerSettings(null);
-      // TRIAL: return;
-    // TRIAL: }
-    // TRIAL: void window.tet.repository.explorerSettings(activeProject.id).then((view) => {
-      // TRIAL: loadedExplorer.current = view;
-      // TRIAL: setExplorerSettings(view);
-    // TRIAL: });
-  // TRIAL: }, [activeProject]);
+  // Read once, on open. Nothing follows tet.json while the dialog stands: Save reaches the file
+  // through patchSetting (commands.ts), which reads it fresh and leaves every other key alone.
+  useEffect(() => {
+    if (!activeProject) {
+      loadedExplorer.current = null;
+      setExplorerSettings(null);
+      return;
+    }
+    void window.tet.repository.explorerSettings(activeProject.id).then((view) => {
+      loadedExplorer.current = view;
+      setExplorerSettings(view);
+    });
+  }, [activeProject]);
 
   useEscape(onClose);
 
@@ -128,8 +126,8 @@ export function SettingsDialog({ /* TRIAL: activeProject, */ onClose }: Settings
   const applyPrompt = (id: PromptId, text: string): void =>
     patch((current) => ({ prompts: { ...current.prompts, [id]: text === DEFAULT_PROMPTS[id] ? "" : text } }));
 
-  // TRIAL: const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
-    // TRIAL: setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
+  const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
+    setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
 
   /** One write of settings.json, then one of tet.json per Explorer key the dialog changed. */
   const save = async (): Promise<void> => {
@@ -137,20 +135,20 @@ export function SettingsDialog({ /* TRIAL: activeProject, */ onClose }: Settings
     if (settings) {
       await window.tet.settings.save(settings);
     }
-    // TRIAL: const loaded = loadedExplorer.current;
-    // TRIAL: if (activeProject && explorerSettings && loaded) {
-      // TRIAL: for (const key of EXPLORER_KEYS) {
-        // TRIAL: if (explorerSettings[key] === loaded[key]) {
-          // TRIAL: continue;
-        // TRIAL: }
-        // TRIAL: const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
-        // TRIAL: if (!result.ok) {
-          // TRIAL: notify("error", result.error ?? "Could not update tet.json");
-          // TRIAL: setSaving(false);
-          // TRIAL: return;
-        // TRIAL: }
-      // TRIAL: }
-    // TRIAL: }
+    const loaded = loadedExplorer.current;
+    if (activeProject && explorerSettings && loaded) {
+      for (const key of EXPLORER_KEYS) {
+        if (explorerSettings[key] === loaded[key]) {
+          continue;
+        }
+        const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
+        if (!result.ok) {
+          notify("error", result.error ?? "Could not update tet.json");
+          setSaving(false);
+          return;
+        }
+      }
+    }
     setSaving(false);
     onClose();
   };
@@ -220,7 +218,6 @@ export function SettingsDialog({ /* TRIAL: activeProject, */ onClose }: Settings
       )}
       {tab === "files" && (
         <>
-          {/* TRIAL: the Explorer settings
           <p className="dialog-detail">
             {activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree - open a project to edit it"}
           </p>
@@ -252,7 +249,6 @@ export function SettingsDialog({ /* TRIAL: activeProject, */ onClose }: Settings
               </label>
             </>
           )}
-          */}
           <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
           <Dropdown
             value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}

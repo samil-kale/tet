@@ -76,13 +76,14 @@ interface TreeNode {
   root?: true;
 }
 
-/* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), shrunk 2px across the
- * board, the chevron glyph included (see .explorer-tree .tree-icon in styles.css). */
-const INDENT_STEP = 6;
-const INDENT_BASE = 6;
+/* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), 1px short of it across the
+ * board, at the window's own 13px type; the chevron glyph stays small (see .explorer-tree
+ * .tree-icon in styles.css). */
+const INDENT_STEP = 7;
+const INDENT_BASE = 7;
 /** Wide enough for a folder's chevron or a file's language badge, both centred in the same box. */
-const TWISTIE_WIDTH = 16;
-const TWISTIE_GAP = 4;
+const TWISTIE_WIDTH = 17;
+const TWISTIE_GAP = 5;
 
 /** Name order: case-insensitive, locale-aware. */
 function compareNames(a: TreeNode, b: TreeNode): number {
@@ -367,8 +368,8 @@ export interface ExplorerHandle {
 }
 
 /**
- * The git pane's file browser: every file in the repository, not just the changed ones under
- * LOCAL CHANGES above it. No ↑/↓ of its own — that stays with `ChangesList`. How it is shown
+ * The files pane's tree: every file in the repository, not just the changed ones under the git
+ * view's LOCAL CHANGES. No ↑/↓ of its own. How it is shown
  * comes from the project's tet.json, carried in by the listing: `folders` make it a multi-root
  * explorer, overlapping allowed; `exclude`/`excludeGitIgnore` have already thinned it, and
  * `sortOrder`/`compactFolders` are applied on the way to the screen.
@@ -646,7 +647,7 @@ export function Explorer({ project, files, selected, onOpen, act, onExplorerChan
  * `refreshExplorer` after the tree's own create/rename/delete — an empty new folder never touches
  * git status, and a plain edit leaves `changes` at "modified", so neither shows up there.
  *
- * Held with the project it was read for: one git pane serves every project, and a switch must not
+ * Held with the project it was read for: one files pane serves every project, and a switch must not
  * show the previous project's tree until the new listing lands.
  */
 export function useExplorerListing(

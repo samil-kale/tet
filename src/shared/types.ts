@@ -338,7 +338,7 @@ export interface FileWriteResult {
 }
 
 /**
- * Every file in the repository, for the git pane's Explorer tree — a real filesystem scan, not
+ * Every file in the repository, for the files pane's Explorer tree — a real filesystem scan, not
  * `git ls-files`: git cannot represent an empty directory at all. `emptyDirs` holds only the
  * directories nothing in `files` implies. `.git` is always left out; anything else only on the
  * project's say-so. The listing also carries the project's view settings from `tet.json`, so the

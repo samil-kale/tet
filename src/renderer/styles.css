@@ -501,7 +501,7 @@ textarea:focus {
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-/* The git pane's EXPLORER tree. It nests to whatever depth a repository's folders do, so
+/* The files pane's EXPLORER tree. It nests to whatever depth a repository's folders do, so
    its rows set `padding-left` inline. */
 .explorer-tree {
   display: flex;
@@ -510,12 +510,12 @@ textarea:focus {
   min-height: 0;
 }
 
-/* VS Code's explorer row (ExplorerDelegate.ITEM_HEIGHT is 22px), shrunk 2px along with every
-   other measurement in Explorer.tsx. No flex gap: the twistie slot carries its own. */
+/* VS Code's explorer row (ExplorerDelegate.ITEM_HEIGHT is 22px), 1px short of it like every other
+   measurement in Explorer.tsx, at the window's own 13px type. No flex gap: the twistie slot
+   carries its own. */
 .explorer-tree .tree-item {
-  height: 20px;
+  height: 21px;
   gap: 0;
-  font-size: 12px;
 }
 
 /* The chevron itself, 2px down from the shared --icon-size, for the smaller twistie slot. */
@@ -659,9 +659,9 @@ textarea:focus {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-/* Points back at the git pane beside this one, only on pane "a". The sash sits centred on that
+/* Points back at the side pane beside this one, only on pane "a". The sash sits centred on that
    boundary with `z-index: 1`, so without outranking it here its grey line paints over this. */
-.tab-strip.git-open {
+.tab-strip.side-pane-open {
   border-left: 2px solid var(--vscode-focusBorder);
   z-index: 2;
 }
@@ -902,10 +902,10 @@ textarea:focus {
  * here reaches. That one is made invisible by its color in `theme.ts`, with the overview ruler.
  */
 
-/* Git pane -------------------------------------------------------------------------------- */
+/* Side pane: git or files ----------------------------------------------------------------- */
 
 /* Its own column between the navigation and the terminals; width dragged like the sidebar's. */
-.git-pane {
+.side-pane {
   display: flex;
   flex: none;
   /* No floor on the host: it is the box the slide animates to zero, and the pane's own minimum
@@ -917,11 +917,11 @@ textarea:focus {
 }
 
 /* Only while it slides: a transition left on animates the width the sash sets too. */
-.git-pane.sliding {
+.side-pane.sliding {
   transition: width 0.15s ease;
 }
 
-.git-pane-content {
+.side-pane-content {
   display: flex;
   flex-direction: column;
   flex: 1;

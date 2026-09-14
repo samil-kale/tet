@@ -5,7 +5,7 @@ import { disposeTerminal, setRevealHandler } from "./terminal-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "../ui/Sash";
-import { Pane, type DragPosition, type PaneChrome } from "./Pane";
+import { Pane, type DragPosition, type PaneChrome, type SideView } from "./Pane";
 import { isEditorTab, type PaneTab } from "./editor-tab";
 import { useAgents } from "../ui/use-agents";
 
@@ -73,9 +73,10 @@ interface TerminalsPaneProps {
    *  project's. */
   tabs: PaneTab[];
   visible: boolean;
-  /** Whether the git pane beside this one is open; the button in the strip shows which. */
-  gitOpen: boolean;
+  /** What the side pane beside this one shows, if it is out; the buttons in the strip show which. */
+  sideView: SideView | null;
   onToggleGit: () => void;
+  onToggleFiles: () => void;
   /** Bootstrap's own session listing: the one project-wide reason with no tab of its own to show
       on, so it falls to pane "a". */
   externalBusy: boolean;
@@ -106,8 +107,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   project,
   tabs,
   visible,
-  gitOpen,
+  sideView,
   onToggleGit,
+  onToggleFiles,
   externalBusy,
   onOpenDiff,
   onCloseEditor,
@@ -213,11 +215,12 @@ export const TerminalsPane = memo(function TerminalsPane({
 
   const chrome = useMemo<PaneChrome>(
     () => ({
-      gitOpen,
+      sideView,
       onToggleGit,
+      onToggleFiles,
       onOpenSettings
     }),
-    [gitOpen, onToggleGit, onOpenSettings]
+    [sideView, onToggleGit, onToggleFiles, onOpenSettings]
   );
   const onActivate = useCallback(
     (paneId: PaneId, tabId: string) => onActivateTab(project.id, tabId, paneId),

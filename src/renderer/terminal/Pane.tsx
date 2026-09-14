@@ -37,10 +37,15 @@ function formatIso(ms: number): string {
   );
 }
 
+/** What the side pane beside the terminals shows: one of two views, never both. */
+export type SideView = "git" | "files";
+
 /** The one row of icon buttons, carried by pane "a" alone whatever the preset. */
 export interface PaneChrome {
-  gitOpen: boolean;
+  /** The side pane's view while it is out, null while it is in. */
+  sideView: SideView | null;
   onToggleGit: () => void;
+  onToggleFiles: () => void;
   onOpenSettings: () => void;
 }
 
@@ -394,16 +399,23 @@ export const Pane = memo(function Pane({
       // is over; this clears it.
       onDragEnd={onDragEnd}
     >
-      <div className={`tab-strip${chrome?.gitOpen ? " git-open" : ""}`}>
+      <div className={`tab-strip${chrome?.sideView ? " side-pane-open" : ""}`}>
         {/* Window chrome rather than tabs, on pane "a" alone. */}
         {chrome && (
           <div className="tab-strip-actions">
             <button
-              className={`icon-button${chrome.gitOpen ? " active" : ""}`}
+              className={`icon-button${chrome.sideView === "git" ? " active" : ""}`}
               onClick={chrome.onToggleGit}
-              title={chrome.gitOpen ? "Hide the repository" : "Show the repository"}
+              title={chrome.sideView === "git" ? "Hide the repository" : "Show the repository"}
             >
               <GitIcon />
+            </button>
+            <button
+              className={`icon-button${chrome.sideView === "files" ? " active" : ""}`}
+              onClick={chrome.onToggleFiles}
+              title={chrome.sideView === "files" ? "Hide the files" : "Show the files"}
+            >
+              <FilesIcon />
             </button>
             <button className="icon-button" title="Settings" onClick={chrome.onOpenSettings}>
               <GearIcon />

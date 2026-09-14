@@ -44,9 +44,10 @@ adopted: Octokit/GitBeaker for the providers.
 ## The layout
 
 - projects live in the left sidebar; the tab strip is one project's terminals, plus its editor tab
-- git is **not** a tab. The strip's git toggle slides out a pane between navigation and terminals —
-  branches over changed files over the Explorer — and stays out until pressed again
-  (`usePaneToggle`). One git pane for all projects.
+- git is **not** a tab, nor are the files. The strip's git and files toggles slide out one side
+  pane between navigation and terminals — branches over changed files, or the Explorer tree, one
+  view at a time — and it stays out until its view's toggle is pressed again (`usePaneToggle`).
+  One side pane for all projects.
 - a file opens in the project's one **editor tab** (double-click a changed file, click one in the
   Explorer, ctrl-click a path in a terminal) — VS Code's preview editor: the next file reuses it.
   No pty, never persisted, renderer-only (`editor-tab.ts`). `SettingsDialog` is not part of
@@ -62,7 +63,7 @@ One project's terminals can be split into up to four panes, each with its own ta
 Code's editor groups cut down to **four fixed presets** (single, two columns, two columns with the
 right one split, 2×2), not a nestable tree. `src/renderer/terminal/pane-layout.ts` holds the model
 and every rule about it; `TerminalsPane` lays the panes out; `Pane` is one strip-and-stack. Pane
-"a" (always top-left) carries the one row of icon buttons — git toggle and settings —
+"a" (always top-left) carries the one row of icon buttons — git and files toggles and settings —
 regardless of preset. There is no layout picker: a preset is only ever reached by dragging a tab
 onto a snap zone, and left by a pane collapsing.
 
@@ -244,7 +245,7 @@ serves every project; rows are added with `+` and can be edited, deleted or reor
 
 ## Explorer
 
-The git pane's Explorer tree (`git/Explorer.tsx`, fed by `Repository.listExplorer`) is configured
+The files view's tree (`git/Explorer.tsx`, fed by `Repository.listExplorer`) is configured
 from the same `tet.json`, shaped like a VS Code `.code-workspace` and read by `readExplorerView`
 in `commands.ts` as defensively as the commands:
 
@@ -305,8 +306,8 @@ Every pane that can be slow carries its own `.progress-bar` showing only what is
 `position: relative`. **Never add a second bar inside one pane** — a new slow reason there feeds
 the one it already has. Today: each terminal pane (`Pane`'s `showProgress`, from
 `TerminalDescriptor.starting`, and the editor tab reading, building or saving; the bootstrap
-listing falls to pane "a"), and the git pane's three sections (`branch.busy` under BRANCHES,
-`acting` under LOCAL CHANGES, the listing and the tree's own edits under EXPLORER).
+listing falls to pane "a"), the git view's two sections (`branch.busy` under BRANCHES, `acting`
+under LOCAL CHANGES), and the files view's EXPLORER (the listing and the tree's own edits).
 
 **A spinner in place of an icon is not a second one of these.** A spinner is about the one thing
 the icon stands for, and takes its place — a tab's agent icon while its session works a turn. An
@@ -593,9 +594,9 @@ from it; Ctrl+C with a selection always copies, and its per-agent rules are abov
 ## The renderer
 
 `src/renderer/` is split by surface: `terminal/` (xterm, the split, the link providers), `git/`
-(the pane, `ChangesList`, the Explorer), `diff/` (the editor tab, shiki and monaco), `sidebar/`,
-`dialogs/` (the ones that are not questions), `ui/` (what every surface uses). What stays flat is
-the shell: `App`, `Startup`, the stylesheets, the shortcut list.
+(the side pane's two views, `ChangesList`, the Explorer), `diff/` (the editor tab, shiki and
+monaco), `sidebar/`, `dialogs/` (the ones that are not questions), `ui/` (what every surface uses).
+What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 
 - Terminal output goes straight to xterm, never through React state. Instances live in
   `src/renderer/terminal/terminal-views.ts`, outside React, keyed by project *and* tab (tab ids
@@ -603,9 +604,9 @@ the shell: `App`, `Startup`, the stylesheets, the shortcut list.
 - An xterm is built the first time its tab is in front of the user, not on mount — building each
   at startup was most of the window's start.
 - **The views under `App` are memoized, and `App` hands them stable props.** `React.memo` on
-  `TerminalsPane`, `ProjectList`, `CommandList`, `GitPane`, `BranchTree` and `EditorHost` only
-  holds while props stay stable: a callback is a `useCallback`, an object a `useMemo`, an empty
-  list a shared constant (`NO_TABS`, `NO_IDS`).
+  `TerminalsPane`, `ProjectList`, `CommandList`, `GitPane`, `FilesPane`, `BranchTree` and
+  `EditorHost` only holds while props stay stable: a callback is a `useCallback`, an object a
+  `useMemo`, an empty list a shared constant (`NO_TABS`, `NO_IDS`).
 - A merely hidden terminal keeps its layout (`visibility`, not `display`) — xterm needs a laid-out
   element to measure itself. A pane using `display: none` needs refitting on return.
 - **The element xterm mounts into is `.terminal-host`, never `.terminal`** — xterm gives its own

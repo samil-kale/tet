@@ -6,6 +6,7 @@ import { CommandList } from "./sidebar/CommandList";
 import type { BranchActions } from "./git/BranchTree";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
+import { FilesPane } from "./git/FilesPane";
 import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
@@ -20,6 +21,7 @@ import {
   usePaneToggle
 } from "./ui/Sash";
 import { TerminalsPane } from "./terminal/TerminalsPane";
+import type { SideView } from "./terminal/Pane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
 import { useWindowCovered } from "./ui/window-covered";
@@ -31,8 +33,8 @@ import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 import { EDITOR_TAB_ID, type EditorTab, type PaneTab } from "./terminal/editor-tab";
 import { canDiscardEdit, disposeEditor, openEditorFile, setEditorVersion } from "./diff/editor-views";
 
-/** A little over `.git-pane.sliding`'s 0.15s, so the class outlives the transition. */
-const GIT_SLIDE_MS = 180;
+/** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
+const SIDE_PANE_SLIDE_MS = 180;
 
 /**
  * A per-project record without that project. Nothing pushes for a closed project, and a folder
@@ -112,41 +114,48 @@ export function App() {
   const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
   /** The same, read synchronously: a second double-click can land before a re-render does. */
   const branchActionsRef = useRef(new Set<string>());
-  // Defaults and limits of the draggable panes; the one git pane shares the three below.
+  // Defaults and limits of the draggable panes; the one side pane shares the two below, whichever
+  // view it shows (the width keeps its key from when it held git alone).
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
-  const [gitPanelsWidth, setGitPanelsWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
+  const [sidePaneWidth, setSidePaneWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
-  const [changesHeight, setChangesHeight] = usePaneSize("changes-list", 260, MIN_PANE_HEIGHT);
   // 40% of the window it first opens in.
   const [commandsHeight, setCommandsHeight] = usePaneSize(
     "commands",
     Math.round(window.innerHeight * 0.4),
     MIN_PANE_HEIGHT
   );
-  /** Whether the git pane is out; remembered like a pane size. */
-  const [gitOpen, setGitOpen] = usePaneToggle("git-pane", false);
   /**
-   * `gitMounted` keeps the pane in the DOM through the closing transition; `gitExpanded` drives
-   * the width transition. Two nested rAFs before expanding: one alone fires before the 0-width
-   * paint as often as after it (observed), which jumped straight to full width.
+   * Whether the side pane is out, and whether it shows the files rather than the repository —
+   * remembered like a pane size. Two views of one pane, never both (VS Code's Explorer and Source
+   * Control in one sidebar); `open` keeps its key from when the pane held git alone.
    */
-  const [gitMounted, setGitMounted] = useState(gitOpen);
-  const [gitExpanded, setGitExpanded] = useState(gitOpen);
+  const [sidePaneOpen, setSidePaneOpen] = usePaneToggle("git-pane", false);
+  const [filesShown, setFilesShown] = usePaneToggle("side-pane-files", false);
+  const sideView: SideView | null = sidePaneOpen ? (filesShown ? "files" : "git") : null;
   /**
-   * Whether the slide is running, which is what `.git-pane.sliding` transitions on. Not permanent:
+   * `sideMounted` keeps the pane in the DOM through the closing transition; `sideExpanded` drives
+   * the width transition. Two nested rAFs before expanding: one alone fires before the 0-width
+   * paint as often as after it (observed), which jumped straight to full width. A switch between
+   * the two views while the pane is out slides nothing.
+   */
+  const [sideMounted, setSideMounted] = useState(sidePaneOpen);
+  const [sideExpanded, setSideExpanded] = useState(sidePaneOpen);
+  /**
+   * Whether the slide is running, which is what `.side-pane.sliding` transitions on. Not permanent:
    * the sash sets the same width, and an animated one lags the pointer by the whole duration.
    */
-  const [gitSliding, setGitSliding] = useState(false);
+  const [sideSliding, setSideSliding] = useState(false);
   useEffect(() => {
-    setGitSliding(true);
+    setSideSliding(true);
     let stop: ReturnType<typeof setTimeout> | undefined;
-    if (gitOpen) {
-      setGitMounted(true);
+    if (sidePaneOpen) {
+      setSideMounted(true);
       let inner = 0;
       const outer = requestAnimationFrame(() => {
         inner = requestAnimationFrame(() => {
-          setGitExpanded(true);
-          stop = setTimeout(() => setGitSliding(false), GIT_SLIDE_MS);
+          setSideExpanded(true);
+          stop = setTimeout(() => setSideSliding(false), SIDE_PANE_SLIDE_MS);
         });
       });
       return () => {
@@ -155,13 +164,25 @@ export function App() {
         clearTimeout(stop);
       };
     }
-    setGitExpanded(false);
+    setSideExpanded(false);
     stop = setTimeout(() => {
-      setGitMounted(false);
-      setGitSliding(false);
-    }, GIT_SLIDE_MS);
+      setSideMounted(false);
+      setSideSliding(false);
+    }, SIDE_PANE_SLIDE_MS);
     return () => clearTimeout(stop);
-  }, [gitOpen]);
+  }, [sidePaneOpen]);
+  /** A view's button: shows that view, or slides the pane in when it is the one already out. */
+  const toggleSideView = useCallback(
+    (view: SideView) => {
+      if (sideView === view) {
+        setSidePaneOpen(false);
+        return;
+      }
+      setFilesShown(view === "files");
+      setSidePaneOpen(true);
+    },
+    [sideView, setFilesShown, setSidePaneOpen]
+  );
   /** Whether the add-repository dialog (clone, add, create) is up. */
   const [addOpen, setAddOpen] = useState(false);
   /** Whether the settings are up; they belong to the window, not to a project. */
@@ -607,8 +628,8 @@ export function App() {
    */
   // Actions in a ref: `showNeedsAttention` and `cycleTab` are remade on every tab push, and the
   // listener is registered once.
-  const shortcutActions = useRef({ gitOpen, setGitOpen, showNeedsAttention, cycleTab, newShellTab });
-  shortcutActions.current = { gitOpen, setGitOpen, showNeedsAttention, cycleTab, newShellTab };
+  const shortcutActions = useRef({ toggleSideView, showNeedsAttention, cycleTab, newShellTab });
+  shortcutActions.current = { toggleSideView, showNeedsAttention, cycleTab, newShellTab };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const actions = shortcutActions.current;
@@ -616,7 +637,9 @@ export function App() {
       if (matchesShortcut(event, "settings")) {
         run = () => setSettingsOpen(true);
       } else if (matchesShortcut(event, "toggleGit")) {
-        run = () => actions.setGitOpen(!actions.gitOpen);
+        run = () => actions.toggleSideView("git");
+      } else if (matchesShortcut(event, "toggleFiles")) {
+        run = () => actions.toggleSideView("files");
       } else if (matchesShortcut(event, "needsAttention")) {
         run = actions.showNeedsAttention;
       } else if (matchesShortcut(event, "nextTab")) {
@@ -650,17 +673,23 @@ export function App() {
     [projects]
   );
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
-  const toggleGit = useCallback(() => setGitOpen(!gitOpen), [gitOpen, setGitOpen]);
+  const toggleGit = useCallback(() => toggleSideView("git"), [toggleSideView]);
+  const toggleFiles = useCallback(() => toggleSideView("files"), [toggleSideView]);
   /**
-   * The project row's git mark: switches to that project and slides the git pane out. On the
+   * The project row's git mark: switches to that project and slides the repository out. On the
    * project already on screen it is the same toggle as the one in the terminal strip.
    */
   const showChanges = useCallback(
     (projectId: string) => {
       setActiveProjectId(projectId);
-      setGitOpen(projectId !== activeProjectId || !gitOpen);
+      if (projectId === activeProjectId) {
+        toggleSideView("git");
+      } else {
+        setFilesShown(false);
+        setSidePaneOpen(true);
+      }
     },
-    [activeProjectId, gitOpen, setGitOpen]
+    [activeProjectId, toggleSideView, setFilesShown, setSidePaneOpen]
   );
   /**
    * Shows a file in the project's editor tab, which the next file reuses. The editor is told
@@ -766,33 +795,40 @@ export function App() {
           onResize={setSidebarWidth}
         />
 
-        {/* The active project's repository. One pane for all projects: it holds no state a
-            project would lose by being switched away from. */}
-        {gitMounted && activeProject && (
+        {/* The active project's repository or its files, one view at a time. One pane for all
+            projects: it holds no state a project would lose by being switched away from. While
+            it slides in, it keeps the view it had. */}
+        {sideMounted && activeProject && (
           <>
             <div
-              className={`git-pane${gitSliding ? " sliding" : ""}`}
-              style={{ width: gitExpanded ? gitPanelsWidth : 0 }}
+              className={`side-pane${sideSliding ? " sliding" : ""}`}
+              style={{ width: sideExpanded ? sidePaneWidth : 0 }}
             >
-              <GitPane
-                project={activeProject}
-                state={activeState}
-                branch={activeBranch}
-                treeHeight={branchTreeHeight}
-                onTreeHeight={setBranchTreeHeight}
-                changesHeight={changesHeight}
-                onChangesHeight={setChangesHeight}
-                onOpenDiff={openActiveDiff}
-                openPath={activeProjectId ? (editorTabs[activeProjectId]?.path ?? null) : null}
-              />
+              {filesShown ? (
+                <FilesPane
+                  project={activeProject}
+                  state={activeState}
+                  openPath={activeProjectId ? (editorTabs[activeProjectId]?.path ?? null) : null}
+                  onOpenDiff={openActiveDiff}
+                />
+              ) : (
+                <GitPane
+                  project={activeProject}
+                  state={activeState}
+                  branch={activeBranch}
+                  treeHeight={branchTreeHeight}
+                  onTreeHeight={setBranchTreeHeight}
+                  onOpenDiff={openActiveDiff}
+                />
+              )}
             </div>
-            {gitOpen && (
+            {sidePaneOpen && (
               <Sash
                 orientation="vertical"
-                size={gitPanelsWidth}
+                size={sidePaneWidth}
                 min={MIN_PANE_WIDTH}
                 minOther={MIN_CONTENT_WIDTH}
-                onResize={setGitPanelsWidth}
+                onResize={setSidePaneWidth}
               />
             )}
           </>
@@ -806,8 +842,9 @@ export function App() {
               project={project}
               tabs={stripTabs[project.id] ?? NO_TABS}
               visible={project.id === activeProjectId}
-              gitOpen={gitOpen}
+              sideView={sideView}
               onToggleGit={toggleGit}
+              onToggleFiles={toggleFiles}
               // Only the bootstrap listing, which has no tab to point a pane at; once a tab is
               // what is starting, `startingTabIds` shows it.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
