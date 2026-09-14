@@ -3,6 +3,18 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.0 (2026-09-14)
+
+- **TET keeps its data in `~/.tet`.** Settings, the project list, provider accounts and logs now
+  live in one folder on every platform. Nothing is carried over from the old location: add your
+  projects and sign in to your providers again after updating.
+- **Sandboxed tabs never run on this machine.** When sbx is not ready, a sandboxing project's tab
+  stops with an error instead of starting the agent outside the sandbox.
+- **The SBX dialog says what the policy is missing.** Instead of a plain wall, it lists the rules a
+  sandboxed tab needs that the network policy does not allow yet.
+- **Faster terminal drawing.** Terminals render through WebGL, falling back to the previous
+  renderer where that is not available.
+
 ## 0.7.1 (2026-09-14)
 
 - **Files get their own side pane.** The Explorer has its own toggle beside the git one instead
