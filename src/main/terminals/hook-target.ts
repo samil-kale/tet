@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 /** Where a generated hook command will actually run — on this host, or inside an sbx sandbox. */
@@ -15,16 +16,31 @@ export const SANDBOX_TARGET: HookTarget = { posix: true, embed: toContainerPath 
 
 /** A host path the way sbx mounts it inside a sandbox — measured: a Windows path becomes a Linux
  *  path with the drive letter lower-cased as its own top segment (`C:\Users\x` → `/c/Users/x`);
- *  macOS and Linux hosts use the same path inside and out. */
+ *  macOS and Linux hosts use the same path inside and out.
+ *
+ *  Spelled as it is on disk, not as it was asked for (measured, 2026-09-14): sbx mounts
+ *  `%APPDATA%\TET` at `/c/…/Roaming/tet` when the folder was created as `tet`, and inside the
+ *  case-sensitive sandbox the path as typed does not exist. */
 export function toContainerPath(hostPath: string): string {
   if (process.platform !== "win32") {
     return hostPath;
   }
-  const match = /^([A-Za-z]):[\\/](.*)$/.exec(hostPath);
+  const match = /^([A-Za-z]):[\\/](.*)$/.exec(onDiskCase(hostPath));
   if (!match) {
     return hostPath;
   }
   return `/${match[1].toLowerCase()}/${match[2].replace(/\\/g, "/")}`;
+}
+
+/** The longest existing part of a path in its on-disk spelling, the rest as given — a path is
+ *  embedded before the file it names is always there. */
+function onDiskCase(hostPath: string): string {
+  try {
+    return fs.realpathSync.native(hostPath);
+  } catch {
+    const parent = path.dirname(hostPath);
+    return parent === hostPath ? hostPath : path.join(onDiskCase(parent), path.basename(hostPath));
+  }
 }
 
 /** Every sandbox template's non-root user's home — verified by `$HOME` and `whoami` inside a

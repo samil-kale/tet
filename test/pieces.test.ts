@@ -103,6 +103,20 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(toContainerPath("C:\\Users\\saka\\Documents\\Workspace\\Private\\tet"), "/c/Users/saka/Documents/Workspace/Private/tet");
   });
 
+  it("spells a Windows path the way it is on disk, since sbx mounts it that way, verified live 2026-09-14", {
+    skip: process.platform !== "win32" && "win32 only"
+  }, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-case-"));
+    try {
+      fs.mkdirSync(path.join(root, "tet"));
+      const onDisk = toContainerPath(path.join(root, "tet", "not-yet-written.json"));
+      assert.equal(toContainerPath(path.join(root, "TET", "not-yet-written.json")), onDisk);
+      assert.match(onDisk, /\/tet\/not-yet-written\.json$/);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("leaves a macOS/Linux path untouched — already the same path inside and out", {
     skip: process.platform === "win32" && "not win32"
   }, () => {
