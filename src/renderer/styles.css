@@ -920,6 +920,14 @@ textarea:focus {
   flex: 1;
   min-width: var(--pane-min-width);
   min-height: 0;
+  /* Restarts on every switch between the views: leaving `display: none` starts an animation anew. */
+  animation: side-pane-fade-in 0.1s ease-out;
+}
+
+@keyframes side-pane-fade-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* The side pane's other view, kept mounted for its state. Nothing in it measures itself. */
