@@ -3,6 +3,20 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.7.1 (2026-09-14)
+
+- **Files get their own side pane.** The Explorer has its own toggle beside the git one instead
+  of sharing the git pane; the toggle of the view that is open is marked blue.
+- **New tabs find their own session.** Agent tabs started at the same time no longer risk picking
+  up each other's session, and a tab closed right after its first prompt takes its session with it.
+- **A dead connection no longer hangs a fetch.** Git gives up on a connection that stays silent
+  for about a minute, and the background fetch is stopped when it takes too long.
+- **Sandboxes on Windows find TET's files** even when a folder's letter case on disk differs from
+  the path TET asked for.
+- **Updates are more robust.** A failed update puts the old version back even while a virus
+  scanner holds its files, and leftovers of an earlier update no longer get in the way of the next.
+- **The editor's save button** sits at the start of its bar, like the tab strip's actions.
+
 ## 0.7.0 (2026-09-14)
 
 - **Installed by a script, no npm needed.** On macOS and Linux run
