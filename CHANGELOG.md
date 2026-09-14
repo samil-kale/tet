@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.1 (2026-09-14)
+
+- **Notices stay long enough to read.** Info, warning and error notices stand for 10, 12 and 15
+  seconds, and wait while the pointer is on them or the window is out of focus.
+- **Settings and the add-repository dialog get a close button** in their tab strip.
+- **Calmer side pane.** Switching between the git and files views fades in, and the Explorer no
+  longer flashes its progress bar for a listing that finishes at once.
+- **Long dropdowns scroll** instead of opening over their own field.
+
 ## 0.8.0 (2026-09-14)
 
 - **TET keeps its data in `~/.tet`.** Settings, the project list, provider accounts and logs now
