@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { isWorking } from "../../shared/types";
 import type { AgentId, AgentInfo, TerminalDescriptor } from "../../shared/types";
 import { fitTerminal, focusTerminal, hideTerminal, showTerminal } from "./terminal-views";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
@@ -470,7 +471,7 @@ export const Pane = memo(function Pane({
                 <ExclamationIcon className="tab-icon session-mark session-mark-error" />
               ) : waitingTabIds.includes(tab.tabId) ? (
                 <QuestionIcon className="tab-icon session-mark" />
-              ) : tab.busy && tab.waitingAt === undefined ? (
+              ) : isWorking(tab) ? (
                 // A question is *hidden* on the tab in front of the user (`waitingTabIds` leaves
                 // it out), and the spinner must not step in for it: a session stopped on a
                 // question is not working, on screen or off.

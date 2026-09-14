@@ -53,7 +53,7 @@ export interface PromptOptions {
   extras?: { label: string; placeholder?: string; value?: string }[];
   /** Where the answer's own field sits among the extras, first by default. */
   valueIndex?: number;
-  /** The add-repository dialog's width, for fields holding lines rather than words. */
+  /** The wider dialog (`.dialog.wide`), for fields holding lines rather than words. */
   wide?: boolean;
   /** An optional yes/no under the fields — the push after a commit. See ConfirmOptions. */
   checkboxLabel?: string;

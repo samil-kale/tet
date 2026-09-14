@@ -37,7 +37,8 @@ interface EditorView {
   models: { original: MonacoEditor.ITextModel; modified: MonacoEditor.ITextModel } | null;
   /** The modified model's version at the last load or save; anything else is dirty. */
   savedVersionId: number;
-  /** Bumped by every open, so a read that lands after the next one began is dropped. */
+  /** Bumped by every open (and a re-read that builds the models), so a read that lands after the
+   *  next one began is dropped. */
   readSeq: number;
   /** What App last reported the file depends on — HEAD and its status. */
   version: string | undefined;
@@ -184,7 +185,9 @@ export function setEditorVersion(projectId: string, version: string): void {
       view.savedVersionId = model.getAlternativeVersionId();
       publish(projectId, view, { dirty: false });
     } else {
-      void showText(projectId, view, seq, result);
+      // A read of its own: the open that found no models yet may still be building them, and
+      // with the same generation both would go on to create the same two models.
+      void showText(projectId, view, ++view.readSeq, result);
     }
   });
 }

@@ -142,7 +142,7 @@ textarea:focus {
   --list-row-height: 28px;
   /**
    * Every icon in the window: the single knob that resizes them all. `extent` in icons.tsx
-   * settles how much of that box each drawing covers. The title bar's gear keeps its own 14.
+   * settles how much of that box each drawing covers.
    */
   --icon-size: 13px;
 }
@@ -173,7 +173,7 @@ textarea:focus {
   flex: none;
 }
 
-/* The one thing in the bar that may be cut; the icon and button beside it keep their box. */
+/* The one thing in the bar that may be cut; the icon beside it keeps its box. */
 .titlebar-name {
   overflow: hidden;
   font-size: 12px;
@@ -518,7 +518,8 @@ textarea:focus {
   gap: 0;
 }
 
-/* The chevron itself, 2px down from the shared --icon-size, for the smaller twistie slot. */
+/* The twistie slot's icons — the chevron and a file's language mark — 2px down from the shared
+   --icon-size, for the smaller slot. */
 .explorer-tree .tree-icon {
   width: 11px;
   height: 11px;
@@ -642,7 +643,6 @@ textarea:focus {
    keep their sizes until the drop, or every pty under them refits mid-drag. */
 .snap-preview {
   position: absolute;
-  box-sizing: border-box;
   border: 1px solid var(--vscode-focusBorder);
   z-index: 10;
   pointer-events: none;
@@ -1323,7 +1323,7 @@ textarea:focus {
   background: var(--vscode-button-background);
 }
 
-.button:hover {
+.button:hover:not(:disabled) {
   background: var(--vscode-button-hoverBackground);
 }
 
@@ -1332,7 +1332,7 @@ textarea:focus {
   background: var(--vscode-button-secondaryBackground);
 }
 
-.button.secondary:hover {
+.button.secondary:hover:not(:disabled) {
   background: var(--vscode-button-secondaryHoverBackground);
 }
 
@@ -1363,7 +1363,8 @@ textarea:focus {
   box-shadow: 0 4px 12px var(--vscode-widget-shadow);
 }
 
-/* The add-repository dialog's width: a question whose fields hold command lines needs it. */
+/* The wider dialog: the commit and command prompts, whose fields hold whole lines, and the
+   settings dialogs. */
 .dialog.wide {
   width: 560px;
 }
@@ -1428,10 +1429,6 @@ textarea:focus {
   white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
-}
-
-.dialog-field-label {
-  color: var(--vscode-descriptionForeground);
 }
 
 /* Every field label bold in this dialog only. The direct-child selector keeps this off
@@ -1510,7 +1507,7 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--vscode-editor-font-family, monospace);
+  font-family: var(--vscode-editor-font-family);
 }
 
 /* The dropdown is a button (.dropdown-trigger, padding: 3px 6px), shorter than an input's own
@@ -1560,11 +1557,8 @@ textarea:focus {
 .sbx-add-row {
   align-self: flex-start;
   margin-top: 4px;
-  background: none;
-  border: none;
   color: var(--vscode-textLink-foreground);
   font-size: 12px;
-  cursor: pointer;
   padding: 0;
 }
 
@@ -1740,10 +1734,6 @@ textarea:focus {
 .button:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-.button:disabled:hover {
-  background: var(--vscode-button-background);
 }
 
 /* The one being suggested sits last, where the platform's own dialogs put it. */
@@ -2032,31 +2022,4 @@ textarea:focus {
   overflow-wrap: anywhere;
   white-space: pre-line;
   line-height: 15px;
-}
-
-.notice-progress {
-  flex-direction: column;
-  /* Overrides .notice's flex-start: as a column it controls cross-axis width, without which
-     the track (no content, no width) shrinks to nothing. .notice-row keeps its own. */
-  align-items: stretch;
-}
-
-.notice-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.notice-progress-track {
-  margin-top: 2px;
-  height: 2px;
-  background: var(--vscode-notifications-border);
-  border-radius: 1px;
-  overflow: hidden;
-}
-
-.notice-progress-fill {
-  height: 100%;
-  background: var(--vscode-progressBar-background);
-  transition: width 0.2s linear;
 }

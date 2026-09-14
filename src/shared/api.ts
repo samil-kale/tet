@@ -49,7 +49,7 @@ export interface TETApi {
     /** A named block of the renderer's own work that ran long — into the same log. */
     reportSlow(label: string, ms: number): void;
   };
-  /** Docker Sandboxes, opt-in per project — see the project row's "Enable sbx" entry. */
+  /** Docker Sandboxes, opt-in per project — see the project row's "SBX Settings" entry. */
   sbx: {
     /** Everything the dialog asks before showing its fields, in one call. Never cached, PATH
      *  re-read first — "Check again" is pressed right after installing. Per project: what the
@@ -158,7 +158,7 @@ export interface TETApi {
     addFolder(projectId: string, path: string): Promise<GitActionResult>;
     /** Removes one again; the last one gone restores the whole repository as one tree. */
     removeFolder(projectId: string, path: string): Promise<GitActionResult>;
-    /** Adds the path to the project's `exclude` map in tet.json — "Exclude from Files". */
+    /** Adds the path to `settings["files.exclude"]` in the project's tet.json — "Exclude from Files". */
     excludePath(projectId: string, path: string): Promise<GitActionResult>;
     /** One of the file-only view settings, set from the settings dialog's Files tab. */
     setExplorerSetting<K extends keyof ExplorerSettings>(

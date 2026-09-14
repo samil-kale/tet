@@ -38,6 +38,11 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: n
       { cwd, maxBuffer: MAX_BUFFER, windowsHide: true, encoding: "utf8", env: env && { ...process.env, ...env } },
       (error, stdout, stderr) => {
         clearTimeout(timer);
+        // Git ran, and said more than MAX_BUFFER: a failed command, not one that never started.
+        if (error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+          resolve({ stdout: "", stderr: `git's output exceeded ${MAX_BUFFER / (1024 * 1024)} MB`, code: 1 });
+          return;
+        }
         if (error && typeof error.code !== "number") {
           reject(new Error(`git could not be started (${error.code ?? error.message})`));
           return;

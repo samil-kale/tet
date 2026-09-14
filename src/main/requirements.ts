@@ -104,7 +104,7 @@ export async function checkRequirements(): Promise<Requirements> {
  * again is that the user has just installed something (`augmentAgentPath` joins a running call
  * rather than starting a second login shell, so asking beside `sbx:status` costs one).
  */
-export async function anyAgentInstalled(cwd = os.tmpdir()): Promise<boolean> {
+export async function anyAgentInstalled(): Promise<boolean> {
   await augmentAgentPath();
-  return (await checkAgentRequirements(cwd)).some((agent) => agent.installed);
+  return (await checkAgentRequirements(os.tmpdir())).some((agent) => agent.installed);
 }

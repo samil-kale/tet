@@ -12,6 +12,16 @@ export function sameList<T>(previous: T[] | undefined, next: T[], empty: T[]): T
   return previous && previous.length === next.length && previous.every((item, i) => item === next[i]) ? previous : next;
 }
 
+/**
+ * A per-project record without that project. Nothing pushes for a closed project, and a folder
+ * opened again gets the same id, so stale entries would show for a frame.
+ */
+export function forget<T>(record: Record<string, T>, projectId: string): Record<string, T> {
+  const rest = { ...record };
+  delete rest[projectId];
+  return rest;
+}
+
 /** `next` unless `previous` already holds the same keys and values — then that one. */
 export function sameRecord<V>(previous: Record<string, V>, next: Record<string, V>): Record<string, V> {
   const keys = Object.keys(next);

@@ -28,7 +28,7 @@ runs an opencode server, never reads its SQLite file, and runs its CLI only for 
 `extractTitle`'s precedence rules for Claude Code titles; the modifier-gated link providers
 (`src/renderer/terminal/links/`); the AppUserModelID and toast activator CLSID a Windows toast needs, the
 Start menu entry Electron writes for them, and where a click on a toast arrives (`src/main/main.ts`); the
-`background_tasks` stop guard (`src/main/main.ts`, `src/main/agents/claude/hooks.ts`); the
+`background_tasks` stop guard (`src/main/agents/claude/hooks.ts`); the
 `--vscode-*` theming layer.
 
 An agent gets no editor context and no quick fix. What it gets is the shell transcript
@@ -144,7 +144,7 @@ goes through one `GitProvider` interface for GitHub and GitLab (`src/main/provid
 stay out of the local git layer.
 
 Every action goes through `Repository.runAction`, one at a time per repository, refreshing after.
-The renderer mirrors this in `App`'s `branchAction`; `BranchActions.run` is the one way in — a
+The renderer mirrors this in `App`'s `runBranchAction`; `BranchActions.run` is the one way in — a
 view asks its own question first, then hands over a label and the call. Each repository also
 auto-fetches every ten minutes, silently on failure, without taking the action slot.
 
@@ -336,7 +336,7 @@ inside their own process, no `tet-ctl` involved. The **tab** is the address, off
 the hook's own environment (sbx passes it into the sandbox), so a turn is never reported for a
 session no tab has claimed yet.
 
-`SessionManager.hookEvent` is where an event becomes a mark, a toast and the answer the agent
+`ProjectSessionManager.hookEvent` is where an event becomes a mark, a toast and the answer the agent
 sees on stdout: the context file's text for `prompt-submit` — which is why Claude and Codex need
 only one `UserPromptSubmit` hook — and `{}` for the rest, since Codex reads its Stop hook's
 stdout as JSON. The toast is composed there too, off the settings **as they stand at that

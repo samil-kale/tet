@@ -5,7 +5,7 @@ import { DEFAULT_PROMPTS } from "../shared/prompts";
 import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../shared/types";
 import type { AppSettings, PromptSettings } from "../shared/types";
 
-/** What tet does before anyone has said otherwise; sbc's own defaults. */
+/** What tet does before anyone has said otherwise; tet's own defaults. */
 const DEFAULTS: AppSettings = {
   notifications: {
     finished: true,
@@ -36,12 +36,7 @@ export class SettingsStore {
   }
 
   save(settings: AppSettings): void {
-    this.settings = {
-      notifications: booleans(settings.notifications),
-      editorKeybindingPreset: presetId(settings.editorKeybindingPreset),
-      theme: themeId(settings.theme),
-      prompts: promptTexts(settings.prompts)
-    };
+    this.settings = normalize(settings);
     try {
       fs.writeFileSync(this.file, JSON.stringify(this.settings, null, 2), "utf8");
     } catch (error) {
@@ -53,19 +48,23 @@ export class SettingsStore {
     try {
       const parsed: unknown = JSON.parse(fs.readFileSync(this.file, "utf8"));
       if (typeof parsed === "object" && parsed !== null) {
-        const value = parsed as Partial<AppSettings>;
-        this.settings = {
-          notifications: booleans(value.notifications),
-          editorKeybindingPreset: presetId(value.editorKeybindingPreset),
-          theme: themeId(value.theme),
-          prompts: promptTexts(value.prompts)
-        };
+        this.settings = normalize(parsed as Partial<AppSettings>);
       }
     } catch {
       // No file yet (first start) or unreadable — the defaults stand.
       this.settings = DEFAULTS;
     }
   }
+}
+
+/** Every key as the store holds it, whether it came from the dialog or from the file. */
+function normalize(value: Partial<AppSettings>): AppSettings {
+  return {
+    notifications: booleans(value.notifications),
+    editorKeybindingPreset: presetId(value.editorKeybindingPreset),
+    theme: themeId(value.theme),
+    prompts: promptTexts(value.prompts)
+  };
 }
 
 /** Every switch that is not a boolean in the file is the one the defaults name. */

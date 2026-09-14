@@ -11,6 +11,7 @@ import {
   type EditorSnapshot
 } from "./editor-views";
 import { SaveIcon } from "../ui/icons";
+import { isMac, isModifierHeld } from "../platform";
 
 function useEditorStore<T>(projectId: string, select: (snapshot: EditorSnapshot) => T): T {
   const subscribe = useCallback((listener: () => void) => subscribeEditor(projectId, listener), [projectId]);
@@ -67,7 +68,7 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     // Reaches here only when nothing inside claimed the key, so the editor's own Ctrl+S never
     // gets this far and there is no double save.
-    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s") {
+    if (isModifierHeld(event) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void saveEditorFile(projectId);
     }
@@ -80,7 +81,7 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
         <div className="editor-bar-actions">
           <button
             className="icon-button"
-            title="Save (Ctrl+S)"
+            title={`Save (${isMac() ? "⌘" : "Ctrl"}+S)`}
             disabled={isReadOnly(file) || !dirty || saving}
             onClick={() => void saveEditorFile(projectId)}
           >

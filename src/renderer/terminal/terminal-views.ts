@@ -610,11 +610,16 @@ export function disposeTerminal(projectId: string, tabId: string): void {
   if (!view) {
     return;
   }
+  dropView(key, view);
+  webglPool.forget(key);
+  forgetUrls(`${key} `);
+}
+
+/** One xterm gone for good: out of the map, its WebGL context handed back, its buffer dropped. */
+function dropView(key: string, view: TerminalView): void {
   views.delete(key);
   releaseWebgl(view);
   view.term.dispose();
-  webglPool.forget(key);
-  forgetUrls(`${key} `);
 }
 
 /**
@@ -638,9 +643,7 @@ export function disposeProjectTerminals(projectId: string): void {
   }
   for (const [key, view] of [...views]) {
     if (key.startsWith(prefix)) {
-      views.delete(key);
-      releaseWebgl(view);
-      view.term.dispose();
+      dropView(key, view);
     }
   }
   webglPool.forgetPrefix(prefix);

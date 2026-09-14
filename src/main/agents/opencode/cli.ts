@@ -5,8 +5,8 @@ import { resolveCommand } from "../../terminals/pty";
 /**
  * One `opencode <args>` run to completion, where the session lives: on this machine, or inside
  * the sbx sandbox named. Each run boots an opencode of its own (~1.5 s measured, writing to the
- * database while at it), so this is for the one-off actions — delete, export, the one-time
- * seeding — never for anything a tab's output or a timer triggers. Resolves with stdout on exit
+ * database while at it), so this is for the one-off actions — delete, export, the background
+ * question's cleanup — never for anything a tab's output or a timer triggers. Resolves with stdout on exit
  * code 0 and rejects otherwise, with what the process said.
  */
 export function runOpencode(executable: string, cwd: string, sandbox: string | null | undefined, args: string[]): Promise<string> {

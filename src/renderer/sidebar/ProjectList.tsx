@@ -233,8 +233,8 @@ export const ProjectList = memo(function ProjectList({
             {heads[project.id]?.dirty &&
               rowButton("Uncommitted changes", () => onShowChanges(project.id), <ChangesIcon />)}
             {/* A standing property of the repository, so outside the mark ranking above. It says the
-                switch is on, not that this tab got a sandbox: sbx can be away, and resolveSbxRun then
-                runs that one spawn on the host. */}
+                switch is on, not that a tab got a sandbox: sbx can be away, and a tab it cannot serve
+                then stays in error rather than running on the host (resolveSbxRun). */}
             {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
             {rowButton("Close repository", () => onClose(project.id), <CloseIcon />)}
           </div>

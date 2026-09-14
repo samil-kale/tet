@@ -55,7 +55,7 @@ function readRecord(file: string): SessionRecord | undefined {
       sandbox: typeof parsed.sandbox === "string" ? parsed.sandbox : null
     };
   } catch {
-    // Half-written (the plugin renames into place, but a stray .tmp is listed too) or not ours.
+    // Not ours, or damaged: the plugin renames into place, so it is never half-written.
     return undefined;
   }
 }

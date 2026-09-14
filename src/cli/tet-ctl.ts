@@ -1,6 +1,6 @@
 import * as http from "node:http";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
-import type { ControlRequest, ControlResponse } from "../shared/control";
+import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
 
 /**
  * `tet-ctl`: the command an agent runs inside one of tet's terminals to ask the app around it
@@ -27,7 +27,7 @@ function fail(message: string, code: number): never {
 }
 
 /** `verb [positionals...] [--project <id>] [--agent <id>] [--confirm]` into a request's verb and args. */
-function parse(argv: string[]): { verb: string; args: Record<string, unknown> } {
+function parse(argv: string[]): { verb: string; args: Record<string, unknown>; entry?: ControlVerb } {
   const [verb, ...rest] = argv;
   if (!verb || verb === HELP_VERB || verb === "--help" || verb === "-h") {
     return { verb: HELP_VERB, args: {} };
@@ -63,7 +63,7 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown> } 
       args[name] = positionals[index];
     }
   });
-  return { verb, args };
+  return { verb, args, entry };
 }
 
 /** HTTP rather than a raw socket, one request per connection (`Connection: close`), matching the
@@ -82,6 +82,9 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
       },
       (res) => {
         res.setEncoding("utf8");
+        // A connection dropped mid-answer errors on the response, and unheard that throws — a hook
+        // must end quietly whatever happened.
+        res.on("error", reject);
         let buffer = "";
         res.on("data", (chunk: string) => {
           buffer += chunk;
@@ -100,7 +103,7 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
         });
       }
     );
-    req.once("error", reject);
+    req.on("error", reject);
     if (idleMs !== undefined) {
       req.setTimeout(idleMs, () => req.destroy(new Error(`TET did not answer within ${idleMs / 1000} s`)));
     }
@@ -140,8 +143,7 @@ async function sendWhenUp(host: string, port: number, request: ControlRequest, i
 
 /**
  * Everything the caller piped in, for a verb that takes a payload. A hook writes its JSON and
- * closes stdin — the same assumption the generated hook scripts made when they read it with
- * `cat`. Run by hand there is no pipe at all, and a TTY would block forever instead of ending.
+ * closes stdin. Run by hand there is no pipe at all, and a TTY would block forever instead of ending.
  */
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) {
@@ -155,12 +157,11 @@ async function readStdin(): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const { verb, args } = parse(process.argv.slice(2));
+  const { verb, args, entry } = parse(process.argv.slice(2));
   if (verb === HELP_VERB) {
     process.stdout.write(usage() + "\n");
     return;
   }
-  const entry = CONTROL_VERBS.find((candidate) => candidate.verb === verb);
   // A hook's channel: it speaks for the agent, so it says nothing of its own and never fails.
   // A non-zero exit or a stray line on stdout is not this process's to spend — Claude Code
   // appends a UserPromptSubmit hook's stdout to the prompt and can hold the prompt back on a

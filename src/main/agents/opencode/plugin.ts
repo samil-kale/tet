@@ -1,8 +1,8 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { CONTROL_ENV } from "../../../shared/control";
-import type { HookTarget } from "../../terminals/hook-target";
+import { sandboxHookDir, type HookTarget } from "../../terminals/hook-target";
+import { renderHookReport } from "../hook-report";
 
 /**
  * opencode is driven through one generated plugin per repository: a `.ts` file under a config
@@ -47,7 +47,7 @@ export interface SessionRecord {
 /** A sandboxed tab's plugin lives in its own config dir under agentDir, mounted into the sandbox
  *  whole, so its bun install is a Linux one and never collides with the host's. */
 export function sandboxConfigDir(agentDir: string): string {
-  return path.join(agentDir, "sandbox", "opencode");
+  return path.join(sandboxHookDir(agentDir), "opencode");
 }
 
 export function sessionsDir(agentDir: string): string {
@@ -125,9 +125,6 @@ const CONTEXT_FILE = ${JSON.stringify(options.contextFile)};
 const SESSIONS_DIR = ${JSON.stringify(options.sessionsDir)};
 const RENAME_DIR = ${JSON.stringify(options.renameDir)};
 const SANDBOX: string | null = ${JSON.stringify(options.sandbox)};
-// The names only: the port and token behind them are new on every start of tet, and a plugin
-// file whose contents changed costs opencode a recompile.
-const CONTROL = ${JSON.stringify(CONTROL_ENV)};
 // A permission opencode approves by itself still raises permission.asked, with the reply
 // milliseconds behind it (measured: 7 ms). Held this long before it counts as a question, and
 // let go when the reply arrives first.
@@ -144,44 +141,7 @@ function isSessionId(id: unknown): id is string {
   return typeof id === "string" && /^[0-9A-Za-z_-]+$/.test(id);
 }
 
-// This tab's own turn, reported to tet: the same wire contract tet-ctl speaks, from inside this
-// process rather than through it — nothing here needs a process of its own. node:http rather
-// than fetch, which is what this file already relies on being there (measured through both
-// runtimes opencode ships as). Never awaited: opencode waits for a hook to return, and a turn
-// mark must not hold up the TUI. The session goes along in the payload, as Claude Code's and
-// Codex's hooks carry it: it is what binds the tab to its session.
-function report(event: string, sessionId: unknown): void {
-  const port = process.env[CONTROL.port];
-  const token = process.env[CONTROL.token];
-  if (!port || !token) {
-    return;
-  }
-  const payload = JSON.stringify(isSessionId(sessionId) ? { session_id: sessionId } : {});
-  const body = JSON.stringify({
-    token,
-    verb: "hook",
-    args: { event, payload },
-    caller: { projectId: process.env[CONTROL.projectId], tabId: process.env[CONTROL.tabId] },
-    // Now, not when it arrives: nothing here is awaited, so two reports of one turn race.
-    at: Date.now()
-  });
-  try {
-    const request = http.request(
-      {
-        host: process.env[CONTROL.host] || "127.0.0.1",
-        port: Number(port),
-        method: "POST",
-        path: "/",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), Connection: "close" }
-      },
-      (response: any) => response.resume()
-    );
-    request.on("error", () => undefined);
-    request.end(body);
-  } catch {
-    // Nothing to tell opencode about; a missed report is a tab that has to be looked at.
-  }
-}
+${renderHookReport("opencode")}
 
 // A reply names its request's id under one of three names, varying across releases.
 function permissionKey(props: any): string {
@@ -302,8 +262,9 @@ export const TETPlugin = async (input: any) => {
       // — twenty tool calls used to be twenty reports, each ~100 ms on the way out of a sandbox,
       // and the last of them raced its own turn's session.idle. The mark is a state, not a
       // pulse: once set it stands until the end of the turn reports.
-      if (!children.has(String(output?.message?.sessionID))) {
-        report("prompt-submit", output?.message?.sessionID);
+      const sessionId = output?.message?.sessionID;
+      if (!children.has(String(sessionId))) {
+        report("prompt-submit", isSessionId(sessionId) ? sessionId : undefined);
       }
       try {
         let text = fs.readFileSync(CONTEXT_FILE, "utf8");
@@ -376,7 +337,7 @@ export const TETPlugin = async (input: any) => {
           // its own approval took longer than the settle above. The session is working again, and
           // saying so is what takes the mark away; nothing else would until the turn ended.
           if (markedPermissions.delete(key)) {
-            report("prompt-submit", props.sessionID);
+            report("prompt-submit", isSessionId(props.sessionID) ? props.sessionID : undefined);
           }
           return;
         }

@@ -16,19 +16,18 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { addExclude, addFolder, readExplorerView, removeFolder, setExplorerSetting } from "./commands";
+import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "./commands";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { git } from "./git-client";
 import { watchedDirectoryGone } from "../watch-dir";
+import { relativeInside } from "../path-inside";
 import type { DiscardTargets } from "./git";
 import { isImage, toDataUrl } from "./git";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;
-/** The saved commands' file in the root, reported for the list rather than the repository. */
-const COMMANDS_FILE = "tet.json";
 /** Least time between two finished refreshes: continuous change would otherwise keep one running
- *  back to back. Measured with instrumented process creation: the git start is the cost, two per
+ *  back to back. Measured with instrumented process creation: the git start is the cost, three per
  *  refresh, and that is main-process time a keystroke on its way to a terminal waits for. */
 const REFRESH_MIN_INTERVAL_MS = 2000;
 /** How often a repository fetches on its own — GitHub Desktop's interval. */
@@ -655,8 +654,7 @@ export class Repository {
   /** A repository-relative path resolved to an absolute one, or undefined if it escapes the root. */
   private resolveInside(filePath: string): string | undefined {
     const absolute = path.resolve(this.project.path, filePath);
-    const relative = path.relative(this.project.path, absolute);
-    return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? absolute : undefined;
+    return relativeInside(this.project.path, absolute) === undefined ? undefined : absolute;
   }
 
   /** A file for the editor tab: the working tree's text, and what HEAD has of it wherever git
@@ -757,7 +755,8 @@ export class Repository {
         if (name && /^\.git[\\/]config$/.test(name)) {
           this.remoteUrlsStale = true;
         }
-        if (name === COMMANDS_FILE) {
+        // The saved commands' file in the root, reported for the list rather than the repository.
+        if (name === PROJECT_FILE) {
           // Debounced: the file is written in place, and a read mid-write would find half of it.
           clearTimeout(this.commandsTimer);
           this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);

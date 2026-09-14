@@ -10,16 +10,31 @@ import * as path from "node:path";
  * opencode already loaded; the user's `tui.json` is never read, written or replaced. Passed as a
  * default, so a user who sets that variable keeps their own file. One file for every repository:
  * `dir` is storageRoot for host tabs, a sandbox's own mounted config dir for a sandboxed one.
+ *
+ * Another project's opencode can be reading it while this runs, so it is written beside the target
+ * and renamed into place, and only when it is not there already.
  */
 export function installTuiConfig(dir: string): Record<string, string> {
   const file = path.join(dir, "opencode-tui.json");
   const contents = JSON.stringify({ $schema: "https://opencode.ai/tui.json", theme: "system" }, null, 2);
   try {
-    fs.writeFileSync(file, contents);
+    if (readIfExists(file) !== contents) {
+      const temp = `${file}.tmp`;
+      fs.writeFileSync(temp, contents);
+      fs.renameSync(temp, file);
+    }
   } catch (error) {
     // A TUI in opencode's own colours is still a working TUI.
     console.error("[tet] could not write the opencode tui config:", error);
     return {};
   }
   return { OPENCODE_TUI_CONFIG: file };
+}
+
+function readIfExists(file: string): string | undefined {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch {
+    return undefined;
+  }
 }

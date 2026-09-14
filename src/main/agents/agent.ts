@@ -214,8 +214,8 @@ export interface AgentDefinition {
   /**
    * Async setup before any session of this agent is spawned: generated hooks, settings files,
    * plugins, and however the repository's context file reaches the model (see AgentPaths).
-   * A rejection marks the agent unstartable, so a failed optional write (a notification script)
-   * is swallowed, never rethrown.
+   * A rejection marks the agent unstartable, so a failed optional write (an extension, a theme
+   * file) is swallowed, never rethrown.
    */
   prepareSpawn?: (executable: string, cwd: string, paths: AgentPaths) => Promise<SpawnPreparation>;
   /**
@@ -226,7 +226,7 @@ export interface AgentDefinition {
    *
    * Returns the extra CLI arguments after `sbx run`'s "--" and, where the setup is pointed at
    * by a variable, the environment for it. No executable override: the sandbox's own bundled
-   * binary runs. `cwd` is the project's host path (for a notify message's repository name);
+   * binary runs. `cwd` is the project's host path (opencode's plugin is scoped by it);
    * `sandbox` its name (AgentSessionInfo.sandbox). Synchronous. Omitted by the shell.
    */
   prepareSandboxSpawn?: (cwd: string, paths: AgentPaths, sandbox: string) => SandboxPreparation;
@@ -251,8 +251,7 @@ export interface AgentDefinition {
   resolveUrlPrefix?: (executable: string, cwd: string, sessionId: string, prefix: string) => Promise<string | undefined>;
   /**
    * A factory (not the predicate itself) for the "is this session's CLI ready yet" check, so
-   * each session gets a fresh one. It sees each output chunk and the ms since the session
-   * started; once true, the progress bar under the tab strip hides. Output flows to the
+   * each session gets a fresh one. It sees each output chunk; once true, the progress bar under the tab strip hides. Output flows to the
    * terminal throughout — some CLIs query it for capabilities at start and need a timely answer.
    *
    * There is no real readiness signal, so this is a per-agent guess at undocumented output

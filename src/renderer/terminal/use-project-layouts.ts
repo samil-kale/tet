@@ -12,6 +12,7 @@ import {
 } from "./pane-layout";
 import type { LayoutTab, PaneId, ProjectLayout, SnapTransition } from "./pane-layout";
 import type { PaneTab } from "./editor-tab";
+import { forget } from "../identity";
 
 /** Shared instance, so a pane's props stay identical for a project that has none. */
 export const NO_TABS: PaneTab[] = [];
@@ -184,11 +185,7 @@ export function useProjectLayouts(
 
   /** Everything held for a closed project, let go of; the project list itself is `App`'s. */
   const forgetLayout = useCallback((projectId: string) => {
-    setLayouts((current) => {
-      const rest = { ...current };
-      delete rest[projectId];
-      return rest;
-    });
+    setLayouts((current) => forget(current, projectId));
     delete previousTabsRef.current[projectId];
     delete savedLayoutsRef.current[projectId];
     settledProjects.current.delete(projectId);

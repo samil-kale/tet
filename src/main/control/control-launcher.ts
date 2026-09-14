@@ -32,7 +32,7 @@ export function writeLaunchers(dataRoot: string, cliPath: string): string {
     posix,
     `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shellSingleQuote(process.execPath)} ${shellSingleQuote(cliPath)} "$@"\n`
   );
-  // Found on PATH means run directly, unlike the hook scripts that are handed to `sh`.
+  // Found on PATH means run directly, which takes the executable bit.
   fs.chmodSync(posix, 0o755);
   return binDir;
 }

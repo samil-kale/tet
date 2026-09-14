@@ -4,7 +4,7 @@ import type { languages } from "monaco-editor";
 import type { HighlighterCore } from "shiki/core";
 
 /**
- * `monaco-core.ts`, not monaco's `editor.main`: colouring goes through the diff view's shiki
+ * `monaco-core.ts`, not monaco's `editor.main`: colouring goes through tet's own shiki
  * instance (`@shikijs/monaco`), so no language service is loaded and no Monarch tokenizer is
  * registered. Nothing here is evaluated until an editor is opened.
  */
@@ -78,8 +78,8 @@ const registered = new Set<string>();
 let chromeApplied = false;
 
 /**
- * Wires a language into monaco through shiki, so a token reads the same color here as in the
- * diff view. `shikiToMonaco` only sees languages loaded and registered at call time, so it
+ * Wires a language into monaco through shiki, so a token is colored by shiki's grammar.
+ * `shikiToMonaco` only sees languages loaded and registered at call time, so it
  * re-runs per new grammar, and each run redefines the theme from shiki's colors — `applyChrome`
  * must follow every run. It must run at least once even for plaintext (`language: null`): an
  * unknown theme name makes monaco fall back to its built-in light theme.

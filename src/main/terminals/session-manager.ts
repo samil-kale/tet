@@ -59,7 +59,7 @@ interface TabState extends TerminalDescriptor {
   /** When the running turn was reported as started — what a turn end is dated against. */
   busySince?: number;
   /**
-   * When the latest turn signal applied here arrived. Two of an agent's hooks can be in flight
+   * When the latest turn signal applied here was made (ControlRequest.at). Two of an agent's hooks can be in flight
    * at once (a question raised moments before the turn ends), and each is a process of its own
    * racing the other to the channel; anything older than the last applied signal is dropped.
    */
@@ -109,7 +109,7 @@ export interface SessionManagerCallbacks {
   onStatus: (projectId: string, tabId: string, status: TerminalStatus) => void;
   /** Whether anything in this project is still starting up — drives the tab strip's bar. */
   onStartupProgress: (projectId: string, show: boolean) => void;
-  /** Surfaces a failure the user should see (a session that could not be renamed or deleted). */
+  /** Surfaces something the user should see, as a notice. */
   onNotice: (severity: NoticeSeverity, message: string) => void;
 }
 
@@ -204,6 +204,11 @@ function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
 /** Either field is set only for a tab created by `createCommandTab`. */
 function isSavedCommandTab(tab: TabState): boolean {
   return tab.executable !== undefined || tab.runArgs !== undefined;
+}
+
+/** What resumes this tab's session, on the host or inside its sandbox alike. */
+function resumeArgsOf(tab: TabState, agent: AgentDefinition): string[] {
+  return tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
 }
 
 /**
@@ -679,7 +684,7 @@ export class ProjectSessionManager {
         this.startSession(tab, sbxArgs).ensureStarted(dims.cols, dims.rows);
       })
       .catch((error: unknown) => {
-        this.callbacks.onNotice("error", `${tab.agentId} could not be started: ${String(error)}`);
+        this.callbacks.onNotice("error", `${getAgent(tab.agentId).displayName} could not be started: ${String(error)}`);
         // Spawned nothing; `error` offers Restart, as above.
         if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
           tab.status = "error";
@@ -757,7 +762,6 @@ export class ProjectSessionManager {
     const paths = this.pathsFor(runtime);
     const sandbox = sandboxName(this.project.id, tab.agentId);
     const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
-    const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
     const { args, missing } = await prepareSbxRun({
       agentId: tab.agentId,
@@ -766,7 +770,7 @@ export class ProjectSessionManager {
       config,
       sandboxes: ready.sandboxes,
       paths,
-      agentArgs: [...hooks.args, ...resumeArgs, ...(tab.runArgs ?? [])],
+      agentArgs: [...hooks.args, ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])],
       env: [...(agent.sandboxEnv ?? []), ...Object.entries(hooks.env ?? {}).map(([key, value]) => `${key}=${value}`)],
       sessionMounts: (agent.sessions?.sandbox?.mounts ?? []).map((mount) => ({
         host: path.join(sessionRoot, mount.sub),
@@ -809,7 +813,6 @@ export class ProjectSessionManager {
   private startSession(tab: TabState, sbxArgs: string[] | null): TerminalSession {
     const runtime = this.runtimeFor(tab.agentId);
     const { agent, executable, preparation } = runtime;
-    const resumeArgs = tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
     const tabId = tab.tabId;
 
     // Fresh per session, so the predicate starts counting from zero.
@@ -831,7 +834,7 @@ export class ProjectSessionManager {
     // the preparation's host-only executable/args/env don't apply inside the sandbox.
     const args = tab.executable
       ? (tab.runArgs ?? [])
-      : (sbxArgs ?? [...(preparation?.args ?? []), ...resumeArgs, ...(tab.runArgs ?? [])]);
+      : (sbxArgs ?? [...(preparation?.args ?? []), ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])]);
 
     const session = new TerminalSession(
       sbxArgs ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),

@@ -43,6 +43,7 @@ import { DEFAULT_EXPLORER_VIEW, readCommands, writeCommands } from "./git/comman
 import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererSlow, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
+import { relativeInside } from "./path-inside";
 import { addProject, removeProject, type ProjectStore } from "./projects";
 import type { Repository, RepositoryManager } from "./git/repository";
 import { anyAgentInstalled, checkRequirements } from "./requirements";
@@ -173,7 +174,7 @@ export function registerIpc({
   ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxProjectConfig): Promise<GitActionResult> => {
     const project = store.get(projectId);
     if (!project) {
-      return { ok: false, error: "Project not found" };
+      return { ok: false, error: MISSING_REPOSITORY.error };
     }
     try {
       const removed = await saveSbxConfig(project.path, project.id, request);
@@ -585,9 +586,9 @@ export function registerIpc({
       return null;
     }
     // git reports every path relative to the root with forward slashes, so match in that shape.
-    const relativeRaw = path.relative(root, resolved);
-    if (relativeRaw !== "" && !relativeRaw.startsWith("..") && !path.isAbsolute(relativeRaw)) {
-      return relativeRaw.replace(/\\/g, "/");
+    const relative = relativeInside(root, resolved);
+    if (relative !== undefined) {
+      return relative.replace(/\\/g, "/");
     }
     const error = await shell.openPath(resolved);
     if (error) {

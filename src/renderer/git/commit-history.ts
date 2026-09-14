@@ -1,12 +1,9 @@
+import type { PromptHistoryLists } from "../ui/Dialog";
+
 /** The commit dialog's message history, per project: the last ten messages as submitted, newest
  *  first, and up to five pinned. Kept in `localStorage` under the `tet.dialog.` namespace — a
  *  fact about this window's dialogs, not about the repository. */
-export interface CommitHistory {
-  /** Pin order is display order. */
-  pinned: string[];
-  /** Newest first. */
-  recent: string[];
-}
+export type CommitHistory = PromptHistoryLists;
 
 export const MAX_PINNED = 5;
 const MAX_RECENT = 10;

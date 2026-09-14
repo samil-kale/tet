@@ -204,12 +204,12 @@ describe("tet-ctl against the control server", () => {
     assert.match(run.stderr, /unknown verb: frobnicate/);
   });
 
-  it("refuses a request the server does not know, even with a valid token", async () => {
-    // Not through the CLI, which will not send it: the wire itself (HTTP, see control-server.ts
-    // and tet-ctl.ts's own send — the one transport that also reaches the server from inside an
-    // sbx sandbox).
+  /** Not through the CLI, which will not send such a request: the wire itself (HTTP, see
+   *  control-server.ts and tet-ctl.ts's own send — the one transport that also reaches the server
+   *  from inside an sbx sandbox). */
+  async function post(body: string): Promise<string> {
     const http = await import("node:http");
-    const body = await new Promise<string>((resolve) => {
+    return new Promise<string>((resolve) => {
       const req = http.request(
         { host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } },
         (res) => {
@@ -219,9 +219,17 @@ describe("tet-ctl against the control server", () => {
           res.on("end", () => resolve(data));
         }
       );
-      req.end(JSON.stringify({ token: TOKEN, verb: "help", args: {}, caller: {} }));
+      req.end(body);
     });
+  }
+
+  it("refuses a request the server does not know, even with a valid token", async () => {
+    const body = await post(JSON.stringify({ token: TOKEN, verb: "help", args: {}, caller: {} }));
     assert.equal(JSON.parse(body).error.code, "unknown_verb");
+  });
+
+  it("answers a JSON body that is not an object", async () => {
+    assert.equal(JSON.parse(await post("null")).error.code, "bad_args");
   });
 
   it("reports the version", async () => {
@@ -339,6 +347,11 @@ describe("tet-ctl against the control server", () => {
   it("renames a tab", async () => {
     assert.deepEqual((await tetCtl(["tabs-rename", "tab-2", "Build log"])).result, { renamed: "tab-2" });
     assert.deepEqual(calls.renamed, [["tab-2", "Build log"]]);
+  });
+
+  it("refuses to rename a tab it does not know", async () => {
+    assert.equal((await tetCtl(["tabs-rename", "tab-9", "Build log"])).status, EXIT_CODES.usage);
+    assert.deepEqual(calls.renamed, []);
   });
 
   it("refuses too many arguments", async () => {

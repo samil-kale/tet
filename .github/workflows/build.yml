@@ -37,8 +37,7 @@ jobs:
       - run: node -e "require('electron')"
 
       # The same three gates the working copy is held to, before anything is packaged. The
-      # tests are what exercises the control channel's socket on each platform — a named pipe
-      # here, a socket file on the other two.
+      # tests are what exercises the control channel's loopback TCP port on each platform.
       - run: npm run typecheck
       - run: npm run lint
       # test/app.test.ts starts the real app, which wants a display; the other two runners

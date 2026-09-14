@@ -6,6 +6,7 @@ const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
 const tsconfig = path.join(__dirname, "tsconfig.json");
 const dist = path.join(__dirname, "dist");
+const distTest = path.join(__dirname, "dist-test");
 
 const common = {
   bundle: true,
@@ -98,7 +99,7 @@ const editorWorkerConfig = {
 const testConfig = {
   ...common,
   entryPoints: [path.join(__dirname, "test", "*.test.ts")],
-  outdir: path.join(__dirname, "dist-test"),
+  outdir: distTest,
   platform: "node",
   target: "node22",
   format: "cjs",
@@ -122,6 +123,9 @@ async function build() {
   if (production) {
     fs.rmSync(dist, { recursive: true, force: true });
   }
+  // `npm test` runs every file in dist-test/, so a test deleted or renamed in test/ must not keep
+  // running from its old build.
+  fs.rmSync(distTest, { recursive: true, force: true });
   copyStaticAssets();
 
   const configs = [

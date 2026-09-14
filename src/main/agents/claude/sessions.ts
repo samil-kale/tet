@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { findEncodedDir, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
+import { findEncodedDir, forgetMissing, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
@@ -59,7 +59,7 @@ async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
       return [];
     }
     const files = (await fs.promises.readdir(projectDir)).filter((file) => file.endsWith(".jsonl"));
-    forgetMissing(projectDir, files);
+    forgetMissing(projectDir, files, [headCache, scanCache, createdAtCache]);
     const entries = await Promise.all(
       files.map(async (file) => {
         const id = file.slice(0, -".jsonl".length);
@@ -127,22 +127,6 @@ function projectsRoot(): string {
 
 function findProjectDir(root: string, cwd: string): Promise<string | undefined> {
   return findEncodedDir(root, cwd.replace(/[^a-zA-Z0-9]/g, "-"));
-}
-
-/** Drops what the three caches hold for transcripts that are gone — Claude Code's own picker
- *  deletes them behind tet's back, and without this the caches only ever grow. Scoped to the
- *  directory just listed: a sandbox's transcripts are read from a second root
- *  (SessionProvider.sandbox) into these same caches, and unscoped each pass would evict the
- *  other root's entries. */
-function forgetMissing(dir: string, files: string[]): void {
-  const present = new Set(files.map((file) => path.join(dir, file)));
-  for (const cache of [headCache, scanCache, createdAtCache]) {
-    for (const filePath of cache.keys()) {
-      if (path.dirname(filePath) === dir && !present.has(filePath)) {
-        cache.delete(filePath);
-      }
-    }
-  }
 }
 
 const TITLE_SCAN_BYTE_LIMIT = 256 * 1024;

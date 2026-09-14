@@ -69,11 +69,11 @@ straight into an agent session.
 - A project's terminals can be split into up to four panes. Files and images can be dropped into
   an agent session.
 - The git pane handles branches, fetch, pull, push, commit, discard and `.gitignore`. A changed
-  file opens in a full-window diff with visual image changes, expandable context and a small
-  Monaco editor. Repositories can be cloned from GitHub or GitLab.
+  file opens in the editor tab as an inline diff you can edit, with visual image changes.
+  Repositories can be cloned from GitHub or GitLab.
 - Desktop notifications and project marks point to sessions that need attention.
 - `tet-ctl` lets an agent inspect the workspace and git state, manage projects and tabs, run saved
-  commands, change TET's settings and read recent shell context.
+  commands and change TET's settings. Recent shell output reaches it as a file it is pointed at.
 - A project can run **Claude Code**, **OpenCode**, **Codex CLI** or **Pi** in a Docker sandbox.
 
 ---

@@ -16,7 +16,7 @@ export interface SpawnOptions {
   own?: Record<string, string>;
 }
 
-/** What every pty gets from tet itself, set once from main.ts (the control channel's socket and
+/** What every pty gets from tet itself, set once from main.ts (the control channel's port and
  *  token). Layered *above* `process.env`: tet started from one of its own shell tabs inherits the
  *  outer app's values there, and its terminals must reach the inner one. Kept out of `process.env`
  *  so only the terminals carry it, not git. */
@@ -31,7 +31,7 @@ export function setControlEnv(vars: Record<string, string>, binDir: string | und
 
 /** The name PATH goes under in `env`: win32 stores it as `Path`, and a second key of another case
  *  would be one more variable rather than a replacement. */
-function pathKey(env: Record<string, string>): string {
+export function pathKey(env: Record<string, string | undefined>): string {
   return Object.keys(env).find((key) => key.toUpperCase() === "PATH") ?? "PATH";
 }
 

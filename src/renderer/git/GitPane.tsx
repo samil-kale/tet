@@ -35,7 +35,7 @@ export const GitPane = memo(function GitPane({
   // Fetch, pull and push share the one action slot a discard or a stash uses.
   const remote = state.remotes[0]?.name;
   const canSync = remote !== undefined && !state.detached;
-  const syncLocked = branch.busy || acting;
+  const locked = branch.busy || acting;
 
   return (
     <div className={`side-pane-content${shown ? "" : " hidden"}`}>
@@ -46,7 +46,7 @@ export const GitPane = memo(function GitPane({
             <button
               className="icon-button"
               title={remote ? `Fetch from ${remote}` : "This repository has no remote"}
-              disabled={syncLocked || !canSync}
+              disabled={locked || !canSync}
               onClick={() => branch.run("Fetching...", () => window.tet.repository.fetch(project.id))}
             >
               <SyncIcon />
@@ -54,7 +54,7 @@ export const GitPane = memo(function GitPane({
             <button
               className="icon-button"
               title={state.upstream ? `Pull from ${state.upstream}` : "No upstream to pull from"}
-              disabled={syncLocked || !canSync || state.upstream === undefined}
+              disabled={locked || !canSync || state.upstream === undefined}
               onClick={() => branch.run("Pulling...", () => window.tet.repository.pull(project.id))}
             >
               <ArrowDownIcon />
@@ -66,7 +66,7 @@ export const GitPane = memo(function GitPane({
                   ? `Push ${state.head} to ${remote} and track it`
                   : `Push to ${state.upstream}`
               }
-              disabled={syncLocked || !canSync}
+              disabled={locked || !canSync}
               onClick={() =>
                 branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", () =>
                   window.tet.repository.push(project.id)
@@ -99,7 +99,7 @@ export const GitPane = memo(function GitPane({
             <button
               className="icon-button"
               title="Commit all changes"
-              disabled={branch.busy || acting || state.changes.length === 0}
+              disabled={locked || state.changes.length === 0}
               onClick={() => void askCommit(project, state, undefined, act)}
             >
               <CommitIcon />
@@ -107,7 +107,7 @@ export const GitPane = memo(function GitPane({
             <button
               className="icon-button"
               title="Stash all changes"
-              disabled={branch.busy || acting || state.changes.length === 0}
+              disabled={locked || state.changes.length === 0}
               // Through `act`, not `branch.run`: it starts from the changed-file list this
               // section owns, so its own bar shows it running.
               onClick={() => act(() => window.tet.repository.stashPush(project.id, ""))}
@@ -117,7 +117,7 @@ export const GitPane = memo(function GitPane({
             <button
               className="icon-button"
               title="Discard all changes"
-              disabled={branch.busy || acting || state.changes.length === 0}
+              disabled={locked || state.changes.length === 0}
               onClick={() => void confirmDiscard(project.id, state.changes.map((change) => change.path), act)}
             >
               <DiscardIcon />

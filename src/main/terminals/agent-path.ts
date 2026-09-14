@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { pathKey } from "./pty";
 
 /**
  * Puts the directories the agents actually land in on this process's PATH, at startup and on every
@@ -28,7 +29,7 @@ export function augmentAgentPath(): Promise<void> {
 let pending: Promise<void> | undefined;
 
 async function augment(): Promise<void> {
-  const key = Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
+  const key = pathKey(process.env);
   const current = process.env[key] ?? "";
   let merged: string;
   if (process.platform === "win32") {

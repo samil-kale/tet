@@ -97,17 +97,20 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   // Read once, on open. Nothing follows tet.json while the dialog stands: Save reaches the file
   // through patchSetting (commands.ts), which reads it fresh and leaves every other key alone.
+  // By id: the project list is rebuilt whole when a project is added elsewhere, and a new object
+  // for the same project must not throw away what was edited here.
+  const activeProjectId = activeProject?.id;
   useEffect(() => {
-    if (!activeProject) {
+    if (!activeProjectId) {
       loadedExplorer.current = null;
       setExplorerSettings(null);
       return;
     }
-    void window.tet.repository.explorerSettings(activeProject.id).then((view) => {
+    void window.tet.repository.explorerSettings(activeProjectId).then((view) => {
       loadedExplorer.current = view;
       setExplorerSettings(view);
     });
-  }, [activeProject]);
+  }, [activeProjectId]);
 
   useEscape(onClose);
 

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
-import { CONTROL_ENV } from "../../../shared/control";
+import { renderHookReport } from "../hook-report";
 
 /** Everything the generated extension has baked in — written into the source as JSON literals,
  *  so nothing is ever shell-quoted. The turns it reports go over the control channel, whose
@@ -47,52 +47,17 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 
 const CONTEXT_FILE = ${JSON.stringify(options.contextFile)};
-// The names only: the port and token behind them are new on every start of tet, and this file
-// is written on every spawn — baking them in would rewrite it for no reason.
-const CONTROL = ${JSON.stringify(CONTROL_ENV)};
 
-// This tab's own turn, reported to tet: the same wire contract tet-ctl speaks, from inside this
-// process rather than through it. node:http rather than fetch, which is one assumption fewer
-// about the runtime pi brings. Never awaited: pi waits for a handler to return, and a turn mark
-// must not hold up the TUI. The session goes along in the payload, as Claude Code's and Codex's
-// hooks carry it: it is what binds the tab to its session — the transcript header's id, which
-// ctx.sessionManager hands every handler (0.85.1).
-function report(event: string, ctx: any): void {
-  const port = process.env[CONTROL.port];
-  const token = process.env[CONTROL.token];
-  if (!port || !token) {
-    return;
-  }
-  let sessionId: unknown;
+${renderHookReport("pi")}
+
+// The session a handler runs for: the transcript header's id, which ctx.sessionManager hands
+// every handler (0.85.1).
+function sessionOf(ctx: any): string | undefined {
   try {
-    sessionId = ctx?.sessionManager?.getSessionId();
+    const sessionId = ctx?.sessionManager?.getSessionId();
+    return typeof sessionId === "string" && sessionId ? sessionId : undefined;
   } catch {
-    sessionId = undefined;
-  }
-  const payload = JSON.stringify(typeof sessionId === "string" && sessionId ? { session_id: sessionId } : {});
-  const body = JSON.stringify({
-    token,
-    verb: "hook",
-    args: { event, payload },
-    caller: { projectId: process.env[CONTROL.projectId], tabId: process.env[CONTROL.tabId] },
-    // Now, not when it arrives: nothing here is awaited, so two reports of one turn race.
-    at: Date.now()
-  });
-  try {
-    const request = http.request(
-      {
-        host: process.env[CONTROL.host] || "127.0.0.1",
-        port: Number(port),
-        method: "POST",
-        path: "/",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), Connection: "close" }
-      },
-      (response: any) => response.resume()
-    );
-    request.on("error", () => undefined);
-    request.end(body);
-  } catch {
-    // Nothing to tell pi about; a missed report is a tab that has to be looked at.
+    return undefined;
   }
 }
 
@@ -119,15 +84,15 @@ export default function (pi: { on(event: string, handler: (event: any, ctx: any)
   // \`prompt-submit\` is what a turn starting is called on the channel; pi takes the context file
   // itself, above, so it has no use for what the answer carries.
   pi.on("agent_start", (_event, ctx) => {
-    report("prompt-submit", ctx);
+    report("prompt-submit", sessionOf(ctx));
   });
   pi.on("agent_settled", (_event, ctx) => {
-    report("stop", ctx);
+    report("stop", sessionOf(ctx));
   });
   // pi has no permission prompts; ui_prompt_start is an extension's own dialog. The project-trust
   // dialog at startup is not reported — it comes before session_start.
   pi.on("ui_prompt_start", (_event, ctx) => {
-    report("permission", ctx);
+    report("permission", sessionOf(ctx));
   });
 }
 `;

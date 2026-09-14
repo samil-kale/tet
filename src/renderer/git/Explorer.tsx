@@ -35,7 +35,7 @@ import {
 } from "../ui/icons";
 
 /** A file's language, marked in its twistie slot — one entry per grammar `diff-highlight.ts`
- *  bundles, so a mark only names a language the diff view can colour. */
+ *  bundles, so a mark only names a language the editor can colour. */
 const LANGUAGE_ICONS: Record<string, (props: IconProps) => React.ReactElement> = {
   c: CIcon,
   cpp: CppIcon,

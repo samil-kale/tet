@@ -35,8 +35,8 @@ export const piAgent: AgentDefinition = {
       args.push("-e", extension);
     } catch (error) {
       // A `-e` file pi cannot load is fatal to it (measured: it prints "Failed to load
-      // extension" and exits), so a file that failed to write is not passed at all and the
-      // watcher is not armed. See prepareSpawn: swallow, never reject.
+      // extension" and exits), so a file that failed to write is not passed at all. See
+      // prepareSpawn: swallow, never reject.
       console.error("[tet] could not write pi's extension:", error);
     }
     // pi's built-in themes are named after the background's kind, `dark` and `light`, and

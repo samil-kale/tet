@@ -9,6 +9,7 @@ import { SBX_AGENT_IDS } from "../shared/types";
 import type { SbxAgentId, SbxBlocker, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStatus } from "../shared/types";
 import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
+import { relativeInside } from "./path-inside";
 import { isMountAllowed, parseFilesystemRules } from "./sbx-policy";
 import { agentDataDir, agentDirFor, contextDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
@@ -213,9 +214,8 @@ export async function readSbxStatus(projectPath: string, projectId: string): Pro
 /** A folder as a filesystem rule covering it and everything below: under the home as `~`, in
  *  this platform's own separators — a rule matches only the format it is written in. */
 function folderRule(folder: string): string {
-  const relative = path.relative(os.homedir(), folder);
-  const underHome = relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
-  return path.join(underHome ? path.join("~", relative) : folder, "**");
+  const relative = relativeInside(os.homedir(), folder);
+  return path.join(relative !== undefined ? path.join("~", relative) : folder, "**");
 }
 
 /**
@@ -344,12 +344,13 @@ export function sandboxName(projectId: string, agentId: SbxAgentId): string {
 }
 
 /** Expands tet.json's `~` and `~/…` (contractHome) before the path reaches `sbx`, which is not
- *  a shell and would pass the tilde through literally. */
+ *  a shell and would pass the tilde through literally. On win32 a typed `~\…` counts too. */
 function expandHome(hostPath: string): string {
   if (hostPath === "~") {
     return os.homedir();
   }
-  return hostPath.startsWith("~/") ? path.join(os.homedir(), hostPath.slice(2)) : hostPath;
+  const homeRelative = hostPath.startsWith("~/") || (path.sep === "\\" && hostPath.startsWith("~\\"));
+  return homeRelative ? path.join(os.homedir(), hostPath.slice(2)) : hostPath;
 }
 
 /**
@@ -363,11 +364,11 @@ export function contractHome(hostPath: string): string {
   if (!path.isAbsolute(resolved)) {
     return typed;
   }
-  const relative = path.relative(os.homedir(), resolved);
-  if (relative === "") {
+  if (path.relative(os.homedir(), resolved) === "") {
     return "~";
   }
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  const relative = relativeInside(os.homedir(), resolved);
+  if (relative === undefined) {
     return typed;
   }
   return `~/${relative.split(path.sep).join("/")}`;
@@ -841,6 +842,16 @@ function portKey(port: SbxPort): string {
   return `${port.host}:${port.container}`;
 }
 
+/** The ports to unpublish and to publish between two saves — see applyPortChanges. */
+function portDelta(previous: SbxPort[], current: SbxPort[]): { removed: SbxPort[]; added: SbxPort[] } {
+  const previousKeys = new Set(previous.map(portKey));
+  const currentKeys = new Set(current.map(portKey));
+  return {
+    removed: previous.filter((port) => !currentKeys.has(portKey(port))),
+    added: current.filter((port) => !previousKeys.has(portKey(port)))
+  };
+}
+
 /**
  * Publishes/unpublishes exactly the ports that changed since the last save, on a sandbox that
  * already exists. Unlike a folder's bind mount, a published port survives a sandbox stop/restart
@@ -851,15 +862,6 @@ function portKey(port: SbxPort): string {
  * — so only the actual delta may be sent, never the whole current list. The caller has
  * started the sandbox (`sbx ports` refuses a stopped one, see ensureRunning).
  */
-function portDelta(previous: SbxPort[], current: SbxPort[]): { removed: SbxPort[]; added: SbxPort[] } {
-  const previousKeys = new Set(previous.map(portKey));
-  const currentKeys = new Set(current.map(portKey));
-  return {
-    removed: previous.filter((port) => !currentKeys.has(portKey(port))),
-    added: current.filter((port) => !previousKeys.has(portKey(port)))
-  };
-}
-
 async function applyPortChanges(name: string, delta: { removed: SbxPort[]; added: SbxPort[] }): Promise<void> {
   for (const port of delta.removed) {
     await runSbx(["ports", name, "--unpublish", portKey(port)]);

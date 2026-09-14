@@ -33,6 +33,24 @@ export async function findEncodedDir(root: string, encoded: string): Promise<str
   return undefined;
 }
 
+/**
+ * Drops what `caches` hold for the transcripts in `dir` that are no longer among `files` — the
+ * agent's own picker deletes them behind tet's back, and without this the caches only ever grow.
+ * Scoped to the directory just listed: a sandbox's transcripts are read from a second root
+ * (SessionProvider.sandbox) into these same caches, and unscoped each pass would evict the other
+ * root's entries.
+ */
+export function forgetMissing(dir: string, files: string[], caches: Map<string, unknown>[]): void {
+  const present = new Set(files.map((file) => path.join(dir, file)));
+  for (const cache of caches) {
+    for (const filePath of cache.keys()) {
+      if (path.dirname(filePath) === dir && !present.has(filePath)) {
+        cache.delete(filePath);
+      }
+    }
+  }
+}
+
 /** Transcript fields are untrusted JSON — a title only counts if it's a non-blank string. */
 export function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;

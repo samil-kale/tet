@@ -72,6 +72,10 @@ export function setupClaudeHooks(
   // after the first render, and it draws a dark frame meanwhile (measured).
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.mkdirSync(storageDir, { recursive: true });
-  fs.writeFileSync(settingsFile, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));
+  // Written beside the target and renamed into place: a sandbox's copy is rewritten on every spawn,
+  // while another tab's Claude Code may be reading it.
+  const temp = `${settingsFile}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));
+  fs.renameSync(temp, settingsFile);
   return ["--settings", target.embed(settingsFile)];
 }

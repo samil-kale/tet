@@ -40,7 +40,7 @@ export interface ControlDeps {
   };
   /** Every agent, and whether it is installed — the requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
-  /** The ids `tabs-create` accepts — `AGENTS`', so a fourth agent needs nothing here. */
+  /** The ids `tabs-create` accepts — `AGENTS`', so a new agent needs nothing here. */
   agentIds: readonly string[];
   addProject(directory: string): Promise<AddRepositoryResult>;
   removeProject(projectId: string): void;
@@ -308,7 +308,11 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "tabs-rename": async (args, caller) => {
       const found = project(args, caller);
       const tabId = text(args, "tabId", "tab id");
-      await terminals(found).renameTab(tabId, text(args, "title", "title"));
+      const tabs = terminals(found);
+      if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
+        throw new ControlError("not_found", `unknown tab: ${tabId} (see tabs-list)`);
+      }
+      await tabs.renameTab(tabId, text(args, "title", "title"));
       return { result: { renamed: tabId } };
     },
 
@@ -429,6 +433,12 @@ export async function startControlServer(
       try {
         request = JSON.parse(body) as ControlRequest;
       } catch {
+        respond(res, reject("bad_args", "not a JSON request"));
+        return;
+      }
+      // Valid JSON that is not an object (`null`, a number) would throw inside `handle`, and the
+      // connection would never be answered.
+      if (typeof request !== "object" || request === null || Array.isArray(request)) {
         respond(res, reject("bad_args", "not a JSON request"));
         return;
       }

@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { findEncodedDir, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
+import { findEncodedDir, forgetMissing, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
@@ -71,7 +71,7 @@ async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
       return [];
     }
     const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
-    forgetMissing(dir, files);
+    forgetMissing(dir, files, [headCache, scanCache]);
     const entries = await Promise.all(
       files.map(async (file): Promise<AgentSessionInfo | undefined> => {
         const filePath = path.join(dir, file);
@@ -190,8 +190,8 @@ function findSessionDir(root: string, cwd: string): Promise<string | undefined> 
 }
 
 /** The transcript holding a session, by the uuid in its filename — or, for a file pi renamed or
- *  forked into place, by the header's id. */
-/** Undefined when no transcript carries this id — a removal takes that for "already gone". */
+ *  forked into place, by the header's id. Undefined when no transcript carries this id — a
+ *  removal takes that for "already gone". */
 async function findSessionFile(dir: string, sessionId: string): Promise<string | undefined> {
   const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
   const named = files.find((file) => file.endsWith(`_${sessionId}.jsonl`));
@@ -206,18 +206,6 @@ async function findSessionFile(dir: string, sessionId: string): Promise<string |
     }
   }
   return undefined;
-}
-
-/** Drops the caches of transcripts that are gone — a session deleted by pi itself. */
-function forgetMissing(dir: string, files: string[]): void {
-  const present = new Set(files.map((file) => path.join(dir, file)));
-  for (const cache of [headCache, scanCache]) {
-    for (const filePath of cache.keys()) {
-      if (path.dirname(filePath) === dir && !present.has(filePath)) {
-        cache.delete(filePath);
-      }
-    }
-  }
 }
 
 interface TranscriptHead {

@@ -729,7 +729,7 @@ export function SaveIcon(props: IconProps) {
 
 /**
  * A file's language, in Explorer.tsx's twistie slot — one per grammar `diff-highlight.ts`
- * bundles, so a file only ever gets a mark for a language the diff view can colour.
+ * bundles, so a file only ever gets a mark for a language the editor can colour.
  *
  * Vendored from Catppuccin Icons' `css-variables` set (github.com/catppuccin/vscode-icons,
  * MIT — Copyright (c) 2023 Catppuccin, Copyright (c) 2023 thang-nm): monoline strokes on a 16x16

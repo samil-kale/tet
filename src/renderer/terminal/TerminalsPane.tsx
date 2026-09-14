@@ -35,15 +35,16 @@ function useDividerFraction(projectId: string, name: string, initial: number): [
   return [fraction, set];
 }
 
-/**
- * The pixel size a divider is rendered at: `fraction` of `containerSize`, through the same bounds
- * `Sash` applies to a drag, since a share stored against a wider room can ask for more than a
- * narrower one has. `null` (the grid not measured yet) gives `min`.
- */
+/** `pixels` within the same bounds `Sash` applies to a drag. */
 function clampPixels(pixels: number, min: number, minOther: number, containerSize: number): number {
   return Math.min(Math.max(pixels, min), Math.max(min, containerSize - minOther));
 }
 
+/**
+ * The pixel size a divider is rendered at: `fraction` of `containerSize`, clamped, since a share
+ * stored against a wider room can ask for more than a narrower one has. `null` (the grid not
+ * measured yet) gives `min`.
+ */
 function pixelsFor(fraction: number, min: number, minOther: number, containerSize: number | null): number {
   return containerSize === null ? min : clampPixels(Math.round(containerSize * fraction), min, minOther, containerSize);
 }

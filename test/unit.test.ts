@@ -7,6 +7,7 @@ import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
 import { contextDirFor } from "../src/main/terminals/agent-data";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
+import { relativeInside } from "../src/main/path-inside";
 import { SettingsStore } from "../src/main/settings";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager } from "../src/main/terminals/session-manager";
@@ -246,5 +247,23 @@ describe("the agent PATH", () => {
     const took = Date.now() - started;
     assert.ok(took < 20_000, `it waited ${took}ms on a shell it had given up on`);
     assert.equal(process.env.PATH, pathBefore, "a shell that answered nothing changes nothing");
+  });
+});
+
+describe("a path inside a root", () => {
+  const root = path.join(os.tmpdir(), "tet-root");
+
+  it("is answered relative to the root", () => {
+    assert.equal(relativeInside(root, path.join(root, "src", "a.ts")), path.join("src", "a.ts"));
+  });
+
+  it("counts a name that only starts with two dots as inside", () => {
+    assert.equal(relativeInside(root, path.join(root, "..env")), "..env");
+  });
+
+  it("leaves out the root itself, its parent and its siblings", () => {
+    assert.equal(relativeInside(root, root), undefined);
+    assert.equal(relativeInside(root, path.dirname(root)), undefined);
+    assert.equal(relativeInside(root, path.join(path.dirname(root), "other", "a.ts")), undefined);
   });
 });

@@ -307,8 +307,6 @@ export type NoticeSeverity = "error" | "warning" | "info";
 export interface Notice {
   severity: NoticeSeverity;
   message: string;
-  /** 0-100 while a download the notice is tracking is under way; omitted for a plain notice. */
-  progress?: number;
 }
 
 /** The file as HEAD has it — the diff editor's original side, beside the working tree's own text. */
@@ -442,4 +440,10 @@ export interface TerminalDescriptor {
   /** The saved command's line as written in `tet.json` — what the split layout keys `commandPane`
    *  by, so the next run lands where the last one lay. The line, not the `name`, which may be missing. */
   command?: string;
+}
+
+/** Whether a session is working a turn, as every spinner shows it: never while it waits on a
+ *  question, whatever `busy` still says. */
+export function isWorking(tab: TerminalDescriptor): boolean {
+  return tab.busy === true && tab.waitingAt === undefined;
 }

@@ -1,10 +1,12 @@
+import { PROMPT_IDS } from "./types";
+
 /**
  * The control channel's wire contract, shared by the server (`src/main/control/control-server.ts`)
  * and the `tet-ctl` CLI (`src/cli/tet-ctl.ts`). Nothing here imports electron or node: the CLI is
  * bundled on its own and must stay a plain script.
  *
- * One request per connection: a single JSON line in, a single JSON line out, then the server ends
- * the connection. No ids, no pipelining — the CLI is one process per invocation.
+ * One HTTP POST per connection: a JSON body in, a JSON body out, then the server ends the
+ * connection. No ids, no pipelining — the CLI is one process per invocation.
  */
 
 /** The environment every pty tet spawns carries; the CLI reads its whole configuration off it. */
@@ -89,7 +91,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   },
   {
     verb: "settings-set-prompt",
-    usage: "settings-set-prompt <commitMessage|commands> [text]",
+    usage: `settings-set-prompt <${PROMPT_IDS.join("|")}> [text]`,
     summary: "Set the text of a background question; no text puts TET's own back. Applies to the next press.",
     positionals: ["id", "text"]
   },

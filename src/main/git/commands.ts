@@ -16,7 +16,7 @@ import type {
  *  shown. Shaped like a VS Code `.code-workspace`: `folders` at the top level, the view settings
  *  nested under `settings` by their full VS Code name (see `readExplorerView`). It lives in the
  *  repository rather than in tet's own storage, so it travels with it. */
-const FILE = "tet.json";
+export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs cwd, env or shell. */
 type StoredCommand =
@@ -57,7 +57,7 @@ const SORT_ORDERS: readonly ExplorerSortOrder[] = ["default", "mixed", "filesFir
 const UNREADABLE: ProjectFile = {};
 
 function file(root: string): string {
-  return path.join(root, FILE);
+  return path.join(root, PROJECT_FILE);
 }
 
 /** The file's contents, or **null** when there is no tet.json at all. A write may create a missing
@@ -86,7 +86,7 @@ async function patch(root: string, changes: Partial<ProjectFile>): Promise<void>
 async function readForPatch(root: string): Promise<ProjectFile> {
   const content = (await read(root)) ?? {};
   if (content === UNREADABLE) {
-    throw new Error(`${FILE} is not valid JSON`);
+    throw new Error(`${PROJECT_FILE} is not valid JSON`);
   }
   return content;
 }
@@ -188,7 +188,8 @@ function toFolders(value: unknown, root: string): ExplorerRoot[] {
   return folders;
 }
 
-/** `settings`, defensively: anything not an object is no settings at all. */
+/** `settings` (or any nested object tet.json holds), defensively: anything not a plain object is an
+ *  empty one. */
 function toSettings(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -197,10 +198,7 @@ function toSettings(value: unknown): Record<string, unknown> {
 
 /** `files.exclude`'s patterns: VS Code's map of glob → true; only the ones set to true count. */
 function toExclude(value: unknown): string[] {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return [];
-  }
-  return Object.entries(value)
+  return Object.entries(toSettings(value))
     .filter(([pattern, enabled]) => enabled === true && pattern.trim())
     .map(([pattern]) => pattern);
 }
@@ -211,10 +209,14 @@ export async function readExplorerView(root: string): Promise<ExplorerView> {
   return {
     folders: toFolders(content.folders, root),
     exclude: toExclude(settings[KEY_EXCLUDE]),
-    excludeGitIgnore: settings[KEY_EXCLUDE_GIT_IGNORE] === true,
-    compactFolders: settings[KEY_COMPACT_FOLDERS] !== false,
-    sortOrder: SORT_ORDERS.find((order) => order === settings[KEY_SORT_ORDER]) ?? "default"
+    excludeGitIgnore: booleanOr(settings[KEY_EXCLUDE_GIT_IGNORE], DEFAULT_EXPLORER_VIEW.excludeGitIgnore),
+    compactFolders: booleanOr(settings[KEY_COMPACT_FOLDERS], DEFAULT_EXPLORER_VIEW.compactFolders),
+    sortOrder: SORT_ORDERS.find((order) => order === settings[KEY_SORT_ORDER]) ?? DEFAULT_EXPLORER_VIEW.sortOrder
   };
+}
+
+function booleanOr(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
 }
 
 /** `readExplorerView`'s defaults, also ipc.ts's fallbacks for a missing repository — one source. */
@@ -262,10 +264,7 @@ async function patchSetting(root: string, key: string, value: unknown): Promise<
 export async function addExclude(root: string, relPath: string): Promise<void> {
   const content = await readForPatch(root);
   const settings = toSettings(content.settings);
-  const existing =
-    typeof settings[KEY_EXCLUDE] === "object" && settings[KEY_EXCLUDE] !== null && !Array.isArray(settings[KEY_EXCLUDE])
-      ? (settings[KEY_EXCLUDE] as Record<string, unknown>)
-      : {};
+  const existing = toSettings(settings[KEY_EXCLUDE]);
   await write(root, {
     ...content,
     settings: { ...settings, [KEY_EXCLUDE]: { ...existing, [relPath]: true } }
@@ -350,12 +349,12 @@ function toSbxPaths(value: unknown): StoredSbxPath[] {
 }
 
 function sbxSection(content: ProjectFile): Record<string, unknown> {
-  return typeof content.sbx === "object" && content.sbx !== null ? (content.sbx as Record<string, unknown>) : {};
+  return toSettings(content.sbx);
 }
 
 /** A malformed or missing `knowledge` object reads as every kind off, never partially on. */
 function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
-  const record = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  const record = toSettings(value);
   const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((candidate) => candidate === field) ?? false;
   return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
 }

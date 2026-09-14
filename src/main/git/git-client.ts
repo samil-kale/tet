@@ -4,7 +4,7 @@ import type { GitRequest, GitResponse } from "./git-host";
 
 /** `git.ts` as seen from the main process: the same functions, each asynchronous. */
 type GitModule = typeof import("./git");
-export type GitApi = {
+type GitApi = {
   [K in keyof GitModule]: GitModule[K] extends (...args: infer A) => infer R
     ? (...args: A) => Promise<Awaited<R>>
     : never;
@@ -46,6 +46,11 @@ function host(): UtilityProcess {
     }
   });
   started.on("exit", (code) => {
+    // A process stopGitProcess already let go of ends later: by then a newer one may be running,
+    // and its reference and its calls are not this one's to drop.
+    if (child !== started) {
+      return;
+    }
     child = undefined;
     fail(`The git process stopped (exit code ${code})`);
   });

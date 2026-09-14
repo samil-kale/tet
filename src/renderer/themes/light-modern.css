@@ -12,7 +12,6 @@
   /* Dark Modern's red, kept: the one error color the marks and notices share. */
   --vscode-errorForeground: #f85149;
   --vscode-textLink-foreground: #ca5010;
-  --vscode-textLink-activeForeground: #ca5010;
   --vscode-focusBorder: #ca5010;
   --vscode-sash-hoverBorder: #ca5010;
 

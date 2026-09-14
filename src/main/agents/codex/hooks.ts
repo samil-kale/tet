@@ -80,7 +80,7 @@ interface HookEntry {
   event: string;
   /** The same event, Codex's snake_case label, as it appears in a trust key. */
   label: string;
-  /** In registration order — `UserPromptSubmit` has two (read the context, then mark busy). */
+  /** In registration order; each event has one today (see setupCodexHooks). */
   commands: string[];
   /** Only `PreToolUse` is given one here; every other event either ignores or doesn't need it. */
   matcher?: string;

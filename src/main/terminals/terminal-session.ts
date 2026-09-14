@@ -9,20 +9,20 @@ export interface SessionCallbacks {
   onStatusChange: (status: TerminalStatus) => void;
 }
 
-/**
- * Ending an agent asks it to quit before killing it, by writing the Ctrl+C bytes its own quit
- * convention expects (`AgentDefinition.quitPresses`), so the CLI runs its exit handlers, which a
- * hard kill never does. Claude Code arms a record in `~/.claude.json` while its fullscreen renderer
- * boots and clears it ten seconds later, counting every process that died in between as a strike
- * against the renderer — twice, and it turns fullscreen off machine-wide. A tab spawned at tet's
- * startup sits inside that window. `\x03` is safe here only because an agent TUI is in raw mode by
- * then and reads it as an ordinary byte (measured); in cooked mode ConPTY turns it into a
- * process-level CTRL_C_EVENT that kills without running anything.
- */
+// Ending an agent asks it to quit before killing it, by writing the Ctrl+C bytes its own quit
+// convention expects (`AgentDefinition.quitPresses`), so the CLI runs its exit handlers, which a
+// hard kill never does. Claude Code arms a record in `~/.claude.json` while its fullscreen renderer
+// boots and clears it ten seconds later, counting every process that died in between as a strike
+// against the renderer — twice, and it turns fullscreen off machine-wide. A tab spawned at tet's
+// startup sits inside that window. `\x03` is safe here only because an agent TUI is in raw mode by
+// then and reads it as an ordinary byte (measured); in cooked mode ConPTY turns it into a
+// process-level CTRL_C_EVENT that kills without running anything.
+
 /** Between two Ctrl+C bytes. Long enough that the first is read as its own keypress (a much
  *  shorter gap still was, measured), short enough for the offer the second answers. */
 const CTRL_C_GAP_MS = 250;
-/** After the last one. Measured through this same pty: all three agents are gone well inside it.
+/** After the last one. Measured through this same pty: Claude Code, opencode and Codex are gone well
+ *  inside it.
  *  A session that read Ctrl+C as "interrupt the turn" never leaves at all. */
 const GRACEFUL_EXIT_MS = 2000;
 /** After the kill, so stopping cannot hang on a pty that never reports its exit. */

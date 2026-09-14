@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { EMPTY_REPOSITORY_STATE } from "../shared/types";
+import { EMPTY_REPOSITORY_STATE, isWorking } from "../shared/types";
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
@@ -25,7 +25,7 @@ import type { SideView } from "./terminal/Pane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
 import { useWindowCovered } from "./ui/window-covered";
-import { sameList } from "./identity";
+import { forget, sameList } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
 import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
@@ -35,16 +35,6 @@ import { canDiscardEdit, disposeEditor, openEditorFile, setEditorVersion } from 
 
 /** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const SIDE_PANE_SLIDE_MS = 180;
-
-/**
- * A per-project record without that project. Nothing pushes for a closed project, and a folder
- * opened again gets the same id, so stale entries would show for a frame.
- */
-function forget<T>(record: Record<string, T>, projectId: string): Record<string, T> {
-  const rest = { ...record };
-  delete rest[projectId];
-  return rest;
-}
 
 /** What an open file has to be re-read for: HEAD, and the status of the file it shows. */
 function diffVersion(state: RepositoryState | undefined, filePath: string): string {
@@ -67,6 +57,9 @@ export function App() {
     reportSlow("render", performance.now() - renderStartedAt);
   });
   const [projects, setProjects] = useState<Project[]>([]);
+  /** The list as it stands after an await: the control channel can add a project meanwhile. */
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
   /** Every project's terminal tabs, held here because the project list needs all of them at once. */
@@ -85,13 +78,16 @@ export function App() {
    * What each project's tab strip holds: its terminals, and its editor tab last. What the layout
    * is reconciled against, what the panes draw and what next/previous tab step through; the marks
    * and `seen` stay on `tabs`, the editor tab having no turns. The same list as `tabs` for a project
-   * with no file open, so the panes' props keep their identity.
+   * with no file open, so the panes' props keep their identity; for one with a file open, the
+   * previous list while neither its terminals nor its editor tab changed.
    */
+  const stripTabsRef = useRef<Record<string, PaneTab[]>>({});
   const stripTabs = useMemo(() => {
     const next: Record<string, PaneTab[]> = { ...tabs };
     for (const [projectId, editor] of Object.entries(editorTabs)) {
-      next[projectId] = [...(tabs[projectId] ?? []), editor];
+      next[projectId] = sameList(stripTabsRef.current[projectId], [...(tabs[projectId] ?? []), editor], NO_TABS);
     }
+    stripTabsRef.current = next;
     return next;
   }, [tabs, editorTabs]);
   /**
@@ -187,7 +183,7 @@ export function App() {
   const [addOpen, setAddOpen] = useState(false);
   /** Whether the settings are up; they belong to the window, not to a project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
-  /** The project the "Enable sbx" dialog is up for, if any. */
+  /** The project the "SBX Settings" dialog is up for, if any. */
   const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
   /**
    * Which projects run their agents in an sbx sandbox — the `sbx.enabled` of each repository's
@@ -254,7 +250,7 @@ export function App() {
   }, []);
 
   useEffect(
-    () => window.tet.onNotice(({ severity, message, progress }) => notify(severity, message, progress)),
+    () => window.tet.onNotice(({ severity, message }) => notify(severity, message)),
     []
   );
 
@@ -288,12 +284,12 @@ export function App() {
   const closeProject = useCallback(
     async (projectId: string) => {
       await window.tet.projects.remove(projectId);
-      const remaining = projects.filter((project) => project.id !== projectId);
+      const remaining = projectsRef.current.filter((project) => project.id !== projectId);
       setProjects(remaining);
       setActiveProjectId((current) => (current === projectId ? (remaining[0]?.id ?? null) : current));
       forgetProject(projectId);
     },
-    [projects, forgetProject]
+    [forgetProject]
   );
 
   // The control channel opened or closed a project: the same paths as the dialog's add and the
@@ -444,7 +440,7 @@ export function App() {
         finished: sameList(previous?.finished, markedTabs(projectId, "finishedAt").map((tab) => tab.tabId), NO_IDS),
         waiting: sameList(previous?.waiting, markedTabs(projectId, "waitingAt").map((tab) => tab.tabId), NO_IDS),
         starting: sameList(previous?.starting, startingTabs(projectId).map((tab) => tab.tabId), NO_IDS),
-        busy: (tabs[projectId] ?? []).some((tab) => tab.busy && tab.waitingAt === undefined)
+        busy: (tabs[projectId] ?? []).some(isWorking)
       };
       next[projectId] =
         previous &&
@@ -504,7 +500,7 @@ export function App() {
   const busyCursor = useRef<Record<string, string>>({});
   const showBusy = useCallback(
     (projectId: string) => {
-      const working = (tabsRef.current[projectId] ?? []).filter((tab) => tab.busy && tab.waitingAt === undefined);
+      const working = (tabsRef.current[projectId] ?? []).filter(isWorking);
       if (working.length === 0) {
         return;
       }

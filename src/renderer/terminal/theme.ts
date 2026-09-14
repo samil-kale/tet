@@ -158,9 +158,9 @@ const MONACO_CSS_VARS: Record<string, string> = {
 };
 
 /**
- * Monaco's own chrome (menus, inputs, lists) as color overrides; everything else is left to
- * monaco's vs-dark defaults. The editor surface is not part of this — monaco gets that from
- * shiki's theme (`editor.ts`'s `applyChrome`).
+ * What `MONACO_CSS_VARS` names, as color overrides laid over shiki's theme, plus the few fixed
+ * values below. The editor surface is not part of this — monaco gets that from shiki's theme
+ * (`editor.ts`'s `applyChrome`).
  */
 export function buildMonacoColors(): Record<string, string> {
   const colors = readCssVars(MONACO_CSS_VARS);

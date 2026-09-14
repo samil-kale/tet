@@ -102,7 +102,7 @@ function pickActive(
   }
   // Not in the list, but never was: a tab just activated whose own push has not arrived yet.
   // Left alone, or the neighbour rule would steal the selection from a tab about to exist. Only
-  // ever an id set during this run — `activeTab` is not persisted (see `saveLayout`).
+  // ever an id set during this run — `activeTab` is not persisted (see `PersistedLayout`).
   if (wanted && !previousList.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
