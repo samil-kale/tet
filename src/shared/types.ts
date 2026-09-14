@@ -263,6 +263,9 @@ export interface RepositoryState {
   /** Branch name, or the short commit id while HEAD is detached. */
   head: string;
   detached: boolean;
+  /** The commit the checked-out branch points at; absent while detached (`head` is the id then)
+   *  or unborn. What tells a pull or a reset apart from the same branch standing still. */
+  headCommit?: string;
   /** The branch HEAD tracks, e.g. "origin/main"; absent when it tracks none or none exists. */
   upstream?: string;
   /** Commits HEAD has that its upstream does not, and the other way round. Both 0 without one. */

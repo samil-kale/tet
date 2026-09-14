@@ -465,7 +465,9 @@ describe("sessions written inside a sandbox", () => {
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {
     const dir = root("tet-sbx-pi-");
-    const sessionDir = path.join(dir, "sessions", encodeCwd(cwd));
+    // Spelled out rather than encodeCwd's: what pi on the sandbox's Linux makes of the container
+    // path, which a win32 host's own resolution would read as `C:\c\work\...`.
+    const sessionDir = path.join(dir, "sessions", "--c-work-Repo One--");
     fs.mkdirSync(sessionDir, { recursive: true });
     fs.writeFileSync(
       path.join(sessionDir, `${AT.replace(/[:.]/g, "-")}_s1.jsonl`),

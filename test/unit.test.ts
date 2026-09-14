@@ -97,6 +97,14 @@ describe("a terminal's environment", () => {
     assert.equal(env[key], `/tet/bin${path.delimiter}${before}`);
     assert.equal(Object.keys(env).filter((name) => name.toUpperCase() === "PATH").length, 1, "one PATH, not two");
   });
+
+  it("lets a saved command's PATH replace one spelled Path, where names ignore case", { skip: process.platform !== "win32" }, () => {
+    setControlEnv({}, "");
+    // A tet started from the desktop inherits `Path`; the spelling a tet.json uses is its own.
+    const env = buildEnv({ own: { Path: "inherited" }, envOverride: { PATH: "command" } });
+    const names = Object.keys(env).filter((name) => name.toUpperCase() === "PATH");
+    assert.deepEqual(names.map((name) => env[name]), ["command"]);
+  });
 });
 
 describe("the tet-ctl launcher", () => {

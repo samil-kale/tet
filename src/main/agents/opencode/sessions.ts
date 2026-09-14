@@ -100,13 +100,14 @@ export const opencodeSessionProvider: SessionProvider = {
    *
    *  A session opencode no longer knows is already deleted — resolved, not rejected, per
    *  SessionProvider.remove. Measured (1.18.4): `session delete <unknown id>` exits 1 with
-   *  `Session not found: <id>` on stderr. */
+   *  `Session not found: <id>` on stderr, inside a sandbox too; so is one whose sandbox is gone,
+   *  where sbx itself answers `sandbox '<name>' not found`. */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     const dir = recordsDir(cwd);
     try {
       await runOpencode(executable, cwd, sessionSandbox(cwd, sessionId), ["session", "delete", sessionId]);
     } catch (error) {
-      if (!String(error).includes("Session not found")) {
+      if (!/Session not found|sandbox '[^']*' not found/.test(String(error))) {
         throw error;
       }
     } finally {

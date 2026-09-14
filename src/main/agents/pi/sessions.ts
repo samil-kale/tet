@@ -58,15 +58,16 @@ export const piSessionProvider: SessionProvider = {
    */
   sandbox: {
     mounts: [{ sub: "sessions", target: `${SANDBOX_HOME}/.pi/agent/sessions` }],
-    list: (_executable, root, cwd) => listIn(path.join(root, "sessions"), cwd),
-    remove: (_executable, root, cwd, sessionId) => removeIn(path.join(root, "sessions"), cwd, sessionId),
-    rename: (_executable, root, cwd, sessionId, title) => renameIn(path.join(root, "sessions"), cwd, sessionId, title)
+    list: (_executable, root, cwd) => listIn(path.join(root, "sessions"), cwd, path.posix),
+    remove: (_executable, root, cwd, sessionId) => removeIn(path.join(root, "sessions"), cwd, sessionId, path.posix),
+    rename: (_executable, root, cwd, sessionId, title) =>
+      renameIn(path.join(root, "sessions"), cwd, sessionId, title, path.posix)
   }
 };
 
-async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
+async function listIn(root: string, cwd: string, paths = path): Promise<AgentSessionInfo[]> {
   try {
-    const dir = await findSessionDir(root, cwd);
+    const dir = await findSessionDir(root, cwd, paths);
     if (!dir) {
       return [];
     }
@@ -105,8 +106,8 @@ async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
 /** No session directory and no transcript both mean the session is already gone — resolved, not
  *  rejected, per SessionProvider.remove. A transcript can disappear behind tet's back, and the
  *  tab still holding its id was then unclosable. */
-async function removeIn(root: string, cwd: string, sessionId: string): Promise<void> {
-  const dir = await findSessionDir(root, cwd);
+async function removeIn(root: string, cwd: string, sessionId: string, paths = path): Promise<void> {
+  const dir = await findSessionDir(root, cwd, paths);
   if (!dir) {
     return;
   }
@@ -126,12 +127,12 @@ async function removeIn(root: string, cwd: string, sessionId: string): Promise<v
  * appending with its own in-memory leaf as parent, the file stays valid, and the running pi shows
  * the new name only after a restart, reading the file once at startup.
  */
-async function renameIn(root: string, cwd: string, sessionId: string, title: string): Promise<void> {
+async function renameIn(root: string, cwd: string, sessionId: string, title: string, paths = path): Promise<void> {
   const trimmed = title.trim();
   if (!trimmed) {
     throw new Error("title must be non-empty");
   }
-  const dir = await findSessionDir(root, cwd);
+  const dir = await findSessionDir(root, cwd, paths);
   if (!dir) {
     throw new Error("pi session directory not found");
   }
@@ -174,10 +175,11 @@ function sessionsRoot(): string {
 /**
  * pi's own encoding of a working directory (getDefaultSessionDirPath): the resolved path with a
  * leading `/` or `\` dropped and every `/`, `\` and `:` turned into `-`, wrapped in `--`. So
- * `C:\Users\x\repo` becomes `--C--Users-x-repo--`.
+ * `C:\Users\x\repo` becomes `--C--Users-x-repo--`. `paths` is the platform pi runs on: a sandboxed pi
+ * resolves its container path (`/c/Users/x/repo`) the POSIX way, where win32's would read `C:\c\Users…`.
  */
-export function encodeCwd(cwd: string): string {
-  return `--${path.resolve(cwd).replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+export function encodeCwd(cwd: string, paths: path.PlatformPath = path): string {
+  return `--${paths.resolve(cwd).replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
 }
 
 /**
@@ -185,8 +187,8 @@ export function encodeCwd(cwd: string): string {
  * win32: the drive letter's case follows whatever pi was spawned with (`c:\…` gives `--c--Users…`)
  * while the folder names come back canonical — findEncodedDir's case-insensitive match covers it.
  */
-function findSessionDir(root: string, cwd: string): Promise<string | undefined> {
-  return findEncodedDir(root, encodeCwd(cwd));
+function findSessionDir(root: string, cwd: string, paths = path): Promise<string | undefined> {
+  return findEncodedDir(root, encodeCwd(cwd, paths));
 }
 
 /** The transcript holding a session, by the uuid in its filename — or, for a file pi renamed or

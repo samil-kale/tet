@@ -113,10 +113,15 @@ export interface SessionManagerCallbacks {
   onNotice: (severity: NoticeSeverity, message: string) => void;
 }
 
+/** This tab's hooks named a session it has not claimed: its first, or one it moved on to. */
+function awaitsClaim(tab: TabState): boolean {
+  return tab.reportedSessionId !== undefined && tab.reportedSessionId !== tab.sessionId;
+}
+
 /** Nothing about this tab's label is settled yet: no session claimed, no title, or only a
  * stand-in the agent may still replace with a name of its own. */
 function titleUnsettled(tab: TabState): boolean {
-  return !tab.sessionId || !tab.title || tab.provisionalTitle === true;
+  return !tab.sessionId || awaitsClaim(tab) || !tab.title || tab.provisionalTitle === true;
 }
 
 /**
@@ -670,7 +675,7 @@ export class ProjectSessionManager {
     // right after its first prompt: claimed first, so the start resumes it. Started without it,
     // the new process's own report would take its place and leave the first one behind for good.
     // Before resolveSbxRun, which reads the `sandbox` the claim sets.
-    const claimed = !tab.sessionId && tab.reportedSessionId !== undefined ? runtime.ready.then(() => this.reconcile(runtime)) : Promise.resolve();
+    const claimed = awaitsClaim(tab) ? runtime.ready.then(() => this.reconcile(runtime)) : Promise.resolve();
     void claimed
       .then(() => Promise.all([runtime.ready, this.resolveSbxRun(tab)]))
       .then(([, sbxArgs]) => {
@@ -959,8 +964,9 @@ export class ProjectSessionManager {
     // A fresh tab may have persisted a session already — claim its id so it gets deleted too.
     // detachedTabs lets a hook name the session and reconcile match a tab already spliced out;
     // joined before the stop, since the first hook of a tab closed right after its prompt
-    // arrives during the stop's grace period.
-    const detached = Boolean(agent.sessions && !tab.sessionId && session);
+    // arrives during the stop's grace period. The same for a tab whose session was just replaced
+    // (bindReportedSession): the one it moved on to is the one to delete.
+    const detached = Boolean(agent.sessions && (!tab.sessionId || awaitsClaim(tab)) && session);
     if (detached) {
       this.detachedTabs.push(tab);
     }
@@ -974,7 +980,7 @@ export class ProjectSessionManager {
         this.shellContext.close(tab.tabId);
         return;
       }
-      if (detached && !tab.sessionId && tab.reportedSessionId !== undefined) {
+      if (detached && awaitsClaim(tab)) {
         // A reconcile already underway listed before the session was named; wait it out, then
         // run one that sees it.
         await runtime.reconciling;
@@ -1140,12 +1146,14 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Takes the session a report names for a tab that has none yet. Whatever the report's age: the
-   * id is the same for every report of one session. Claimed by reconcile once the listing has it,
-   * so the title and the rest arrive the way they do for every other tab.
+   * Takes the session a report names for a tab that has none yet, or has moved on from the one it
+   * had — `/clear`, `/new` or `/resume` inside the CLI start or open another (measured for Claude
+   * Code's `/clear`). Whatever the report's age: the id is the same for every report of one
+   * session. Claimed by reconcile once the listing has it, so the title and the rest arrive the
+   * way they do for every other tab. The session left behind stays, a tab of its own next start.
    */
   private bindReportedSession(tab: TabState | undefined, payload: string): void {
-    if (!tab || tab.sessionId) {
+    if (!tab) {
       return;
     }
     const reported = getAgent(tab.agentId).sessionIdOf?.(payload);
@@ -1153,7 +1161,9 @@ export class ProjectSessionManager {
       return;
     }
     tab.reportedSessionId = reported;
-    this.scheduleReconcile(this.runtimeFor(tab.agentId));
+    if (awaitsClaim(tab)) {
+      this.scheduleReconcile(this.runtimeFor(tab.agentId));
+    }
   }
 
   /** What the user is told about this event, or nothing where the settings say so. Read now, so
@@ -1286,9 +1296,7 @@ export class ProjectSessionManager {
     let changed = false;
 
     // Each tab takes the session its own hooks named (bindReportedSession), once it is listed.
-    const pendingTabs = [...ownTabs, ...this.detachedTabs.filter((tab) => tab.agentId === agent.id)].filter(
-      (tab) => !tab.sessionId && tab.reportedSessionId !== undefined
-    );
+    const pendingTabs = [...ownTabs, ...this.detachedTabs.filter((tab) => tab.agentId === agent.id)].filter(awaitsClaim);
     for (const tab of pendingTabs) {
       const match = infos.find((info) => info.id === tab.reportedSessionId && !claimed.has(info.id));
       if (!match) {

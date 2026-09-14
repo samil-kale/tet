@@ -201,6 +201,11 @@ describe("a repository, from init on", () => {
     state = await readState(cwd);
     assert.deepEqual([state.ahead, state.behind], [1, 0]);
     assert.deepEqual(state.branchTrack, {}, "only the checked-out branch, from the header");
+    // The same branch at another commit, as after a pull or a reset: what an open file reloads on.
+    assert.equal(state.headCommit, run("rev-parse", "HEAD"));
+    run("reset", "-q", "--hard", "HEAD~1");
+    assert.equal((await readState(cwd)).headCommit, run("rev-parse", "HEAD"));
+    run("reset", "-q", "--hard", "HEAD@{1}");
   });
 
   it("hides what .gitignore hides, added the way the menu adds it", async () => {
@@ -288,5 +293,38 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
     write("[id]/page.txt", "id changed\n");
     assert.deepEqual(await commitPaths(cwd, "route", ["[id]/page.txt"], []), { ok: true });
     assert.deepEqual(await changed(), ["modified b.txt", "modified i/page.txt", "untracked other.txt"]);
+  });
+});
+
+describe("remotes the tree has to read carefully", () => {
+  it("names the branch of a clone of an empty repository, not its whole header", async () => {
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-empty-"));
+    assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-clone-"));
+    run("clone", "-q", bare, ".");
+    run("symbolic-ref", "HEAD", "refs/heads/main");
+    run("config", "branch.main.remote", "origin");
+    run("config", "branch.main.merge", "refs/heads/main");
+    // The header reads "No commits yet on main...origin/main [gone]".
+    const state = await readState(cwd, ["origin"]);
+    assert.equal(state.head, "main");
+    assert.equal(state.upstream, undefined);
+  });
+
+  it("keeps a remote whose name holds a slash as one remote", async () => {
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-fork-"));
+    assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-fork-"));
+    run("init", "-q");
+    run("symbolic-ref", "HEAD", "refs/heads/main");
+    write("a.txt", "a\n");
+    assert.deepEqual(await commitAll(cwd, "base"), { ok: true });
+    run("remote", "add", "team/fork", bare);
+    assert.deepEqual(await push(cwd, "team/fork", "main", true), { ok: true });
+    run("remote", "set-head", "team/fork", "main");
+    const state = await readState(cwd, ["team/fork"]);
+    assert.deepEqual(state.remotes, [{ name: "team/fork", branches: ["main"] }]);
+    assert.equal(state.defaultBranch, "main");
+    assert.equal(state.upstream, "team/fork/main");
   });
 });

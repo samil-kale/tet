@@ -102,14 +102,13 @@ async function readHead(cwd: string, header: string): Promise<HeadState> {
     const short = await git(cwd, ["rev-parse", "--short", "HEAD"]);
     return { ...base, head: short.stdout.trim() || "HEAD", detached: true };
   }
-  // Unborn branch: git says so in words. The wording changed in 2.16; both are accepted.
-  const unborn = /^(?:No commits yet on|Initial commit on) (.+)$/.exec(header);
-  if (unborn) {
-    return { ...base, head: unborn[1], detached: false };
-  }
+  // Unborn branch: git says so in words, then goes on like any other header — a clone of an empty
+  // repository reads "No commits yet on master...origin/master [gone]". The wording changed in
+  // 2.16; both are accepted.
+  const branch = header.replace(/^(?:No commits yet on|Initial commit on) /, "");
   // "<branch>...<upstream> [ahead 1, behind 2]", or plain "<branch>". A branch name holds
   // neither "..." nor a space, so the first field is the name.
-  const [name, rest] = header.split("...");
+  const [name, rest] = branch.split("...");
   const tracking = /^(\S+)(?: \[(.*)\])?$/.exec(rest ?? "");
   const divergence = tracking?.[2] ?? "";
   return {
@@ -155,13 +154,15 @@ async function readTrackCount(
  * whose upstream is no longer among these refs.
  */
 async function readRefs(
-  cwd: string
+  cwd: string,
+  remoteNames: string[]
 ): Promise<{
   localBranches: string[];
   remotes: RemoteInfo[];
   tags: string[];
   defaultBranch?: string;
   branchTrack: Record<string, { ahead: number; behind: number }>;
+  headCommit?: string;
 }> {
   // Full ref names, not %(refname:short): git shortens "refs/remotes/origin/HEAD" to "origin",
   // indistinguishable from a branch of that name. %(symref) is set only on "<remote>/HEAD",
@@ -182,6 +183,7 @@ async function readRefs(
   // Per remote, since the refs come sorted and "backup/HEAD" would otherwise beat "origin/HEAD".
   const defaultBranches = new Map<string, string>();
   const diverged: { name: string; head: string; upstream: string }[] = [];
+  let headCommit: string | undefined;
 
   for (const line of result.stdout.split("\n")) {
     const [refname, symref = "", objectname = "", isHead = "", upstream = "", trackshort = ""] = line
@@ -193,6 +195,9 @@ async function readRefs(
     if (refname.startsWith("refs/heads/")) {
       const name = refname.slice("refs/heads/".length);
       localBranches.push(name);
+      if (isHead === "*") {
+        headCommit = objectname;
+      }
       if (isHead !== "*" && upstream && trackshort && trackshort !== "=") {
         diverged.push({ name, head: objectname, upstream });
       }
@@ -204,9 +209,12 @@ async function readRefs(
     }
     remoteHeads.set(refname, objectname);
     const remoteRef = refname.slice("refs/remotes/".length);
+    // A remote's name may hold a "/" itself ("team/fork"), so the longest known name that prefixes
+    // the ref wins; a ref of a remote not known yet is cut at its first "/".
+    const known = remoteNames.filter((name) => remoteRef.startsWith(`${name}/`));
+    const separator = known.length > 0 ? Math.max(...known.map((name) => name.length)) : remoteRef.indexOf("/");
     // "origin/HEAD" points at the remote's default branch rather than being one; listing it
     // would duplicate an existing entry. What it points at is what "Update from ..." merges in.
-    const separator = remoteRef.indexOf("/");
     if (separator < 0 || remoteRef.endsWith("/HEAD")) {
       const remote = remoteRef.slice(0, separator);
       const prefix = `refs/remotes/${remote}/`;
@@ -242,6 +250,7 @@ async function readRefs(
     tags,
     defaultBranch: defaultBranches.get("origin") ?? defaultBranches.values().next().value,
     branchTrack,
+    headCommit,
     remotes: [...remotes].map(([name, branches]) => ({ name, branches }))
   };
 }
@@ -353,14 +362,16 @@ async function readOperation(cwd: string): Promise<GitOperation | undefined> {
   return (await exists("MERGE_HEAD")) ? "merge" : undefined;
 }
 
-export async function readState(cwd: string): Promise<RepositoryState> {
+/** `remoteNames` are the repository's remotes as last read, which `for-each-ref` cannot tell apart
+ *  from the branch part of a remote-tracking ref (`readRefs`). */
+export async function readState(cwd: string, remoteNames: string[] = []): Promise<RepositoryState> {
   try {
     // No `isRepository` check: Repository asks once when it opens, and dropping it took a quarter
     // off every refresh where starting git is slow. The stash list is the third process a refresh
     // spends, earned by being a list the user acts on. All three run at once, so no extra wall time.
     const [status, refs, stashes, operation] = await Promise.all([
       readStatus(cwd),
-      readRefs(cwd),
+      readRefs(cwd, remoteNames),
       readStashes(cwd),
       readOperation(cwd)
     ]);

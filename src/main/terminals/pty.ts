@@ -94,6 +94,14 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     const key = pathKey(env);
     env[key] = env[key] ? `${launcherDir}${path.delimiter}${env[key]}` : launcherDir;
   }
+  // win32's variable names ignore case, and of `Path` and `PATH` side by side the child sees the
+  // inherited one (measured through node-pty) — so an override replaces its name in any spelling.
+  if (process.platform === "win32") {
+    const names = new Set(Object.keys(options.envOverride ?? {}).map((name) => name.toUpperCase()));
+    for (const name of Object.keys(env).filter((name) => names.has(name.toUpperCase()))) {
+      delete env[name];
+    }
+  }
   return Object.assign(env, options.envOverride);
 }
 

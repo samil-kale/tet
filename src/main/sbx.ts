@@ -56,29 +56,35 @@ interface RunResult {
   /** Exited 0. */
   ok: boolean;
   stdout: string;
+  /** Both sbx's own errors and those of a command it ran go here (measured). */
+  stderr: string;
 }
 
 /** Every `sbx` invocation: a plain spawn through `resolveCommand`, no shell, from the temp
- *  directory so the working directory never reads as a workspace. stderr is dropped unless
- *  `onData` forwards it; callers decide by exit code or stdout's JSON. */
+ *  directory so the working directory never reads as a workspace. stderr is forwarded only with
+ *  `onData`; callers decide by exit code, stdout's JSON, or what stderr says. */
 function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
   return new Promise((resolve) => {
     const resolved = resolveCommand("sbx", args);
     const child = spawn(resolved.command, resolved.args, {
       cwd: os.tmpdir(),
       windowsHide: true,
-      stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", options.onData ? "pipe" : "ignore"]
+      stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"]
     });
     if (options.cancellable) {
       currentChild = child;
     }
     let stdout = "";
+    let stderr = "";
     const forward = (chunk: Buffer): void => options.onData?.(chunk.toString().replace(/\n/g, "\r\n"));
     child.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
       forward(chunk);
     });
-    child.stderr?.on("data", forward);
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+      forward(chunk);
+    });
     let settled = false;
     const finish = (result: RunResult) => {
       if (!settled) {
@@ -89,8 +95,8 @@ function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
         resolve(result);
       }
     };
-    child.on("error", () => finish({ ok: false, stdout }));
-    child.on("exit", (code) => finish({ ok: code === 0, stdout }));
+    child.on("error", () => finish({ ok: false, stdout, stderr }));
+    child.on("exit", (code) => finish({ ok: code === 0, stdout, stderr }));
     if (options.stdin !== undefined) {
       child.stdin?.end(options.stdin);
     }
@@ -100,12 +106,14 @@ function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
 /**
  * One command run to completion inside a sandbox via `sbx exec`, no shell, from `cwd` as the
  * sandbox sees it (`-w`). Starts a stopped sandbox first, as every exec does. Resolves with
- * stdout on exit 0, rejects otherwise — for one-off agent actions whose session lives there.
+ * stdout on exit 0, rejects otherwise with what stderr said — for one-off agent actions whose
+ * session lives there. A sandbox that no longer exists says `ERROR: sandbox '<name>' not found`.
  */
 export async function execInSandbox(name: string, cwd: string, command: string[]): Promise<string> {
   const result = await runSbx(["exec", "-i", "-w", toContainerPath(cwd), name, ...command]);
   if (!result.ok) {
-    throw new Error(`${command[0]} failed in sandbox ${name}`);
+    const said = result.stderr.trim();
+    throw new Error(`${command[0]} failed in sandbox ${name}${said ? `: ${said.slice(-300)}` : ""}`);
   }
   return result.stdout;
 }

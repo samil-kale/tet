@@ -36,9 +36,10 @@ import { canDiscardEdit, disposeEditor, openEditorFile, setEditorVersion } from 
 /** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const SIDE_PANE_SLIDE_MS = 180;
 
-/** What an open file has to be re-read for: HEAD, and the status of the file it shows. */
+/** What an open file has to be re-read for: HEAD — the branch and the commit it is at, so a pull or
+ *  a reset moving it is one too — and the status of the file it shows. */
 function diffVersion(state: RepositoryState | undefined, filePath: string): string {
-  return `${state?.head}:${state?.changes.find((change) => change.path === filePath)?.status}`;
+  return `${state?.head}:${state?.headCommit}:${state?.changes.find((change) => change.path === filePath)?.status}`;
 }
 
 /** Shared instance, so a pane's props stay identical for a project with none. */

@@ -124,7 +124,9 @@ export class Repository {
       return;
     }
     this.remoteUrls = urls;
-    this.emit(read);
+    // The first read ran before the remotes were known; only a name holding a "/" reads differently
+    // with them, so only then is it read again.
+    this.emit(Object.keys(urls).some((name) => name.includes("/")) ? await this.read() : read);
     // Closed while the first refresh ran: a watcher started now would have nothing to close it.
     if (this.disposed) {
       return;
@@ -161,7 +163,7 @@ export class Repository {
   /** What git says the repository is right now; a dead git process is an error like any other. */
   private read(): Promise<RepositoryState> {
     // readState answers with an error rather than throwing; a rejection is the git process gone.
-    return git.readState(this.project.path).catch((error: Error) => ({
+    return git.readState(this.project.path, Object.keys(this.remoteUrls)).catch((error: Error) => ({
       ...EMPTY_REPOSITORY_STATE,
       error: error.message
     }));
