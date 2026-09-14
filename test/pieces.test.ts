@@ -457,13 +457,21 @@ describe("opencode's plugin", () => {
     sandbox
   });
 
-  /** Compiles the plugin and returns its hooks, with a fake client that records renames. */
-  async function load(dir: string, sandbox: string | null = null): Promise<{ hooks: Hooks; renames: unknown[] }> {
+  /** Compiles the plugin and returns its hooks, with a fake client that records renames and answers
+   *  each with `answer` — the SDK's `{ error }` for a session its process does not hold. */
+  async function load(dir: string, sandbox: string | null = null, answer?: unknown): Promise<{ hooks: Hooks; renames: unknown[] }> {
     const source = renderOpencodePlugin(options(dir, sandbox));
     const compiled = path.join(dir, "tet.js");
     fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
     const renames: unknown[] = [];
-    const client = { session: { update: async (request: unknown) => void renames.push(request) } };
+    const client = {
+      session: {
+        update: async (request: unknown) => {
+          renames.push(request);
+          return answer;
+        }
+      }
+    };
     const module = createRequire(__filename)(compiled) as { TETPlugin: (input: unknown) => Promise<Hooks> };
     return { hooks: await module.TETPlugin({ client, directory: dir }), renames };
   }
@@ -577,6 +585,18 @@ describe("opencode's plugin", () => {
     await eventually("the request is picked up", () => renames.length === 1, 3000);
     assert.deepEqual(renames, [{ path: { id: "ses_a" }, body: { title: "New title" } }]);
     assert.equal(fs.existsSync(path.join(dir, "rename", "ses_a")), false, "consumed");
+  });
+
+  it("leaves a rename request its own database has no session for", async () => {
+    // A host tab and a sandboxed tab of one repository poll the same folder; each holds its own
+    // sessions only, and the one that picks up the other's request must not throw it away.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
+    process.env.TET_PROJECT_ROOT = dir;
+    const { renames } = await load(dir, "tet-opencode-abc", { error: { name: "NotFoundError" } });
+    fs.mkdirSync(path.join(dir, "rename"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "rename", "ses_b"), "Other title\n");
+    await eventually("the request is tried", () => renames.length >= 1, 3000);
+    assert.equal(fs.existsSync(path.join(dir, "rename", "ses_b")), true, "left for the process whose session it is");
   });
 });
 

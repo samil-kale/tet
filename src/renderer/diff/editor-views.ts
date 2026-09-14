@@ -40,6 +40,9 @@ interface EditorView {
   /** Bumped by every open (and a re-read that builds the models), so a read that lands after the
    *  next one began is dropped. */
   readSeq: number;
+  /** Bumped by every save that reached disk: a re-read begun before one holds the text and mtime
+   *  the save replaced, and must not put them back as clean. */
+  saves: number;
   /** What App last reported the file depends on — HEAD and its status. */
   version: string | undefined;
   snapshot: EditorSnapshot;
@@ -110,7 +113,7 @@ export function openEditorFile(projectId: string, path: string): void {
   if (!view) {
     const host = document.createElement("div");
     host.className = "editor-host";
-    view = { host, editor: null, building: null, models: null, savedVersionId: 0, readSeq: 0, version: undefined, snapshot: CLOSED };
+    view = { host, editor: null, building: null, models: null, savedVersionId: 0, readSeq: 0, saves: 0, version: undefined, snapshot: CLOSED };
     views.set(projectId, view);
   }
   const seq = ++view.readSeq;
@@ -153,6 +156,7 @@ export function setEditorVersion(projectId: string, version: string): void {
     return;
   }
   const seq = view.readSeq;
+  const saves = view.saves;
   void window.tet.repository.readFile(projectId, path).then((result) => {
     if (views.get(projectId) !== view || view.readSeq !== seq || result.error) {
       return;
@@ -169,7 +173,7 @@ export function setEditorVersion(projectId: string, version: string): void {
       // the computed diff away and have the worker rebuild the identical one.
       view.models.original.setValue(original);
     }
-    if (view.snapshot.dirty || result.mtimeMs === held.mtimeMs) {
+    if (view.snapshot.dirty || view.saves !== saves || result.mtimeMs === held.mtimeMs) {
       // The edited side stays as it is; what HEAD has of it is carried in regardless, or the tab
       // keeps deciding binary, image and original off the side already replaced.
       publish(projectId, view, { file: { ...held, head: result.head } });
@@ -184,7 +188,7 @@ export function setEditorVersion(projectId: string, version: string): void {
       // monaco takes a BOM off the text only when it builds a buffer: pushed as an edit it becomes
       // text, and the save, which puts the model's own BOM in front, writes it twice. A BOM that
       // came or went on disk is a buffer of its own.
-      const bom = result.content.startsWith("﻿");
+      const bom = result.content.startsWith("\uFEFF");
       const modelBom = model.getValueLength(undefined, true) !== model.getValueLength();
       if (bom === modelBom) {
         const text = bom ? result.content.slice(1) : result.content;
@@ -193,6 +197,9 @@ export function setEditorVersion(projectId: string, version: string): void {
         model.setValue(result.content);
       }
       view.savedVersionId = model.getAlternativeVersionId();
+      // As `showText` does for an open: a file deleted under the tab is no longer one to edit, and
+      // one restored under it is again.
+      view.editor?.updateOptions({ readOnly: isReadOnly(result) });
       publish(projectId, view, { dirty: false });
     } else {
       // A read of its own: the open that found no models yet may still be building them, and
@@ -226,6 +233,7 @@ export async function saveEditorFile(projectId: string): Promise<void> {
     return;
   }
   view.savedVersionId = versionId;
+  view.saves++;
   const held = view.snapshot.file;
   publish(projectId, view, {
     file: held ? { ...held, content, mtimeMs: result.mtimeMs ?? held.mtimeMs } : held,

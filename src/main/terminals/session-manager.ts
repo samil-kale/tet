@@ -457,8 +457,9 @@ export class ProjectSessionManager {
     }
     // `bringUp` runs a second time for an agent that only became startable later
     // (sbxConfigChanged); a session already on screen must not be added twice — nor one a tab's
-    // own hooks named that reconcile has not claimed yet.
-    const known = new Set(this.tabs.flatMap((tab) => [tab.sessionId, tab.reportedSessionId]));
+    // own hooks named that reconcile has not claimed yet, nor one whose closed tab is still deleting
+    // it (listed before the deletion landed), as in doReconcile.
+    const known = new Set([...this.tabs.flatMap((tab) => [tab.sessionId, tab.reportedSessionId]), ...this.deletingSessionIds]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
     for (const info of fresh) {
       this.tabs.push({
@@ -664,7 +665,14 @@ export class ProjectSessionManager {
     // Released *after* the session is started: `startSession` acquires the same tab's next
     // indicator, and releasing first would flicker the bar off and on.
     this.acquireIndicator(tabId);
-    void Promise.all([this.runtimeFor(tab.agentId).ready, this.resolveSbxRun(tab)])
+    const runtime = this.runtimeFor(tab.agentId);
+    // A session this tab's hooks named that reconcile has not claimed yet — a fresh tab restarted
+    // right after its first prompt: claimed first, so the start resumes it. Started without it,
+    // the new process's own report would take its place and leave the first one behind for good.
+    // Before resolveSbxRun, which reads the `sandbox` the claim sets.
+    const claimed = !tab.sessionId && tab.reportedSessionId !== undefined ? runtime.ready.then(() => this.reconcile(runtime)) : Promise.resolve();
+    void claimed
+      .then(() => Promise.all([runtime.ready, this.resolveSbxRun(tab)]))
       .then(([, sbxArgs]) => {
         const dims = this.lastSizes.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {

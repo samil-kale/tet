@@ -6,6 +6,9 @@ import { WIN_BOM } from "../../shared/script-text";
 const WRITE_DEBOUNCE_MS = 250;
 /** Under continuous output the debounce never fires; this is the longest a write is held back. */
 const WRITE_MAX_WAIT_MS = 2000;
+/** A write that failed — on win32 a reader holding the file without delete sharing — is tried
+ *  again this much later, rather than only once more output happens to arrive. */
+const WRITE_RETRY_MS = 1000;
 /** A verbose producer fills the log without bound, so only the most recent slice is kept. */
 const MAX_LOG_CHARS = 500_000;
 const LOG_TRUNCATION_NOTE = "... [earlier output dropped, showing most recent]\n";
@@ -30,7 +33,10 @@ class CappedLogFile {
   /** Writes are chained rather than started concurrently — they share one temp path. */
   private writing: Promise<void> = Promise.resolve();
 
-  constructor(private readonly file: string) {}
+  constructor(
+    private readonly file: string,
+    private readonly onFailure: () => void
+  ) {}
 
   get chars(): number {
     return this.content.length;
@@ -66,6 +72,7 @@ class CappedLogFile {
         console.error(`[tet] failed to write ${path.basename(this.file)}:`, error);
         // Nothing landed on disk, so the next flush has to retry.
         this.dirty = true;
+        this.onFailure();
       });
   }
 }
@@ -115,11 +122,15 @@ function carryFrom(data: string): number {
  */
 export class ShellContext {
   private readonly log: CappedLogFile;
+  /** The pending flush, a debounced one or a retry; undefined once it has run. */
   private writeTimer: ReturnType<typeof setTimeout> | undefined;
   /** Set on the first append after a flush; the latest the next flush may come. */
   private flushDeadline: number | undefined;
+  /** What the context says, whether or not the file holds it yet. */
+  private contents = "";
   /** What was last written, so an unchanged context isn't rewritten on every burst. */
   private written: string | undefined;
+  private disposed = false;
   /** Writes are chained rather than started concurrently — they share one temp path. */
   private writing: Promise<void> = Promise.resolve();
   /** Per tab, the end of its last chunk that could not be cleaned until the next one arrives. */
@@ -132,7 +143,7 @@ export class ShellContext {
     private readonly repositoryName: string
   ) {
     fs.mkdirSync(directory, { recursive: true });
-    this.log = new CappedLogFile(this.logFile);
+    this.log = new CappedLogFile(this.logFile, () => this.retryLater());
     // Written up front: an absent file makes the agent's hook fail rather than say nothing.
     this.writeContext();
   }
@@ -146,9 +157,10 @@ export class ShellContext {
   }
 
   /** The same text the file holds, for an agent that asks over the control channel rather than
-   *  reading it (`prompt-submit`). Never the BOM: that is the file's, for PowerShell's sake. */
+   *  reading it (`prompt-submit`) — even while a write of it is failing. Never the BOM: that is
+   *  the file's, for PowerShell's sake. */
   get text(): string {
-    return this.written ?? "";
+    return this.contents;
   }
 
   /** `label` is what a section header calls the tab — its title, or its id where it has none. */
@@ -182,14 +194,21 @@ export class ShellContext {
     const now = Date.now();
     this.flushDeadline ??= now + WRITE_MAX_WAIT_MS;
     clearTimeout(this.writeTimer);
-    this.writeTimer = setTimeout(
-      () => {
-        this.flushDeadline = undefined;
-        this.log.flush();
-        this.writeContext();
-      },
-      Math.min(WRITE_DEBOUNCE_MS, Math.max(0, this.flushDeadline - now))
-    );
+    this.writeTimer = setTimeout(() => this.flush(), Math.min(WRITE_DEBOUNCE_MS, Math.max(0, this.flushDeadline - now)));
+  }
+
+  private flush(): void {
+    this.writeTimer = undefined;
+    this.flushDeadline = undefined;
+    this.log.flush();
+    this.writeContext();
+  }
+
+  /** A pending flush writes everything anyway, so only one is armed. */
+  private retryLater(): void {
+    if (!this.disposed && this.writeTimer === undefined) {
+      this.writeTimer = setTimeout(() => this.flush(), WRITE_RETRY_MS);
+    }
   }
 
   private writeContext(): void {
@@ -211,6 +230,7 @@ export class ShellContext {
       "This is the state of the user's workspace at the time the message was sent." +
         " It may or may not be relevant to the request."
     ].join("\n");
+    this.contents = contents;
     if (contents === this.written) {
       return;
     }
@@ -221,10 +241,12 @@ export class ShellContext {
         console.error("[tet] failed to write the context file:", error);
         // Nothing landed on disk, so the next write must not be skipped as unchanged.
         this.written = undefined;
+        this.retryLater();
       });
   }
 
   dispose(): void {
+    this.disposed = true;
     for (const tabId of [...this.carries.keys()]) {
       this.close(tabId);
     }

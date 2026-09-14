@@ -236,12 +236,21 @@ export const TETPlugin = async (input: any) => {
       } catch {
         continue;
       }
+      // Every opencode of the repository polls this one folder, a sandboxed one included, and only
+      // the process whose database holds the session can apply it: a request another process could
+      // not apply is left for that one, and withdrawn by tet's own timeout when there is none.
+      let applied = !title;
       try {
         if (title) {
-          await input.client.session.update({ path: { id }, body: { title } });
+          // The client answers an unknown session with an error rather than throwing, unless told to.
+          const result = await input.client.session.update({ path: { id }, body: { title } });
+          applied = !result?.error;
         }
       } catch {
-        // The session is not this process's to rename; tet's own timeout says so.
+        // As above: not this process's session.
+      }
+      if (!applied) {
+        continue;
       }
       try {
         fs.rmSync(file, { force: true });

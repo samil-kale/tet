@@ -161,6 +161,26 @@ describe("the context file", () => {
     );
     fs.rmSync(dir, { recursive: true, force: true });
   });
+
+  it("tries a failed write again by itself, and answers with the text meanwhile", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
+    // A directory in each file's place: the rename onto it fails on every platform, the way it does
+    // on win32 while a reader holds the file without delete sharing.
+    fs.mkdirSync(path.join(dir, "context.md"));
+    fs.mkdirSync(path.join(dir, "shell-output.log"));
+    const context = new ShellContext(dir, "repo");
+    context.append("tab-1", "build", "done\r\n");
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    assert.match(context.text, /Shell output/, "what the prompt-submit hook is answered with");
+    fs.rmdirSync(context.contextFile);
+    fs.rmdirSync(context.logFile);
+    // No further output: nothing but a retry of its own writes them.
+    const written = (file: string, pattern: RegExp): boolean =>
+      fs.statSync(file, { throwIfNoEntry: false })?.isFile() === true && pattern.test(fs.readFileSync(file, "utf8"));
+    await eventually("the retried writes", () => written(context.logFile, /done/) && written(context.contextFile, /Shell output/), 5000);
+    context.dispose();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe("the agent PATH", () => {
