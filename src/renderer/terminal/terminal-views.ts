@@ -1,19 +1,23 @@
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { AgentInfo } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
 import type { WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
-import { isMac, isModifierHeld } from "../platform";
+import { isLinux, isMac, isModifierHeld } from "../platform";
 import { reportSlow } from "../slow-report";
 import { buildXtermTheme } from "./theme";
+import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
 interface TerminalView {
   term: Terminal;
   fit: FitAddon;
   /** The size last reported to the pty, so a fit that changed nothing does not report again. */
   sent?: { cols: number; rows: number };
+  /** Its WebGL renderer, while it holds a context; without one xterm draws through the DOM. */
+  webgl?: WebglAddon;
 }
 
 /**
@@ -36,7 +40,7 @@ function viewKey(projectId: string, tabId: string): string {
 /**
  * What the output path has done since the last `takeOutputStats`: how many writes, into how many
  * distinct terminals, and how many of those were hidden tabs — a hidden tab's xterm parses and
- * (with the DOM renderer) draws every batch the same as a visible one. Read by the long-task
+ * draws every batch the same as a visible one, whichever renderer it has. Read by the long-task
  * report in main.tsx. Counting only: this runs for every batch, and nothing in it may cost more
  * than the write it counts.
  */
@@ -235,6 +239,125 @@ async function pasteClipboard(term: Terminal): Promise<void> {
   }
 }
 
+/**
+ * Terminals draw through WebGL where it is there and fast; the DOM renderer is the fallback, never
+ * a failure. Which terminals may hold a context is webgl-pool.ts's; the size of the budget is
+ * main.ts's `max-active-webgl-contexts`.
+ */
+const webglPool = new WebglPool();
+
+/** The terminals in front of the user, as `showTerminal` and `hideTerminal` report them. */
+const inFront = new Set<string>();
+
+/** Decided once, on the first terminal; a failed attach anywhere turns it off for the session. */
+let webglAllowed: boolean | undefined;
+
+/**
+ * Orca's policy, not measured here. On Linux WebGL stays off under Wayland, where creating a
+ * context was reported to wedge terminal input (stablyai/orca#5319), and wherever the renderer is
+ * missing, unnamed or software rasterizing — slower than the DOM, and with glyph corruption that
+ * never reports a lost context.
+ */
+function decideWebgl(): boolean {
+  if (!isLinux()) {
+    return true;
+  }
+  if (window.tet.waylandSession) {
+    return false;
+  }
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    const info = gl?.getExtension("WEBGL_debug_renderer_info");
+    if (!gl || !info) {
+      return false;
+    }
+    const identity = `${gl.getParameter(info.UNMASKED_VENDOR_WEBGL)} ${gl.getParameter(info.UNMASKED_RENDERER_WEBGL)}`;
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return identity.trim() !== "" && !isSoftwareRenderer(identity);
+  } catch {
+    return false;
+  }
+}
+
+/** The addon's private renderer, reached into only to hand its context back early. */
+interface WebglAddonInternals {
+  _renderer?: { _gl?: WebGL2RenderingContext; _canvas?: HTMLCanvasElement };
+}
+
+function releaseWebgl(view: TerminalView): void {
+  const addon = view.webgl;
+  if (!addon) {
+    return;
+  }
+  view.webgl = undefined;
+  try {
+    // xterm drops the canvas on dispose, but ANGLE on Windows can keep the driver's context alive
+    // long enough for quick tab switches to run into the context budget (Orca, #6874). Losing it
+    // explicitly and emptying the canvas returns it at once.
+    const renderer = (addon as unknown as WebglAddonInternals)._renderer;
+    renderer?._gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    if (renderer?._canvas) {
+      renderer._canvas.width = 0;
+      renderer._canvas.height = 0;
+    }
+  } catch {
+    // Nothing here may keep the terminal from falling back to the DOM renderer.
+  }
+  try {
+    addon.dispose();
+  } catch {
+    // A context already lost can throw on the way out; the DOM renderer is back either way.
+  }
+}
+
+/**
+ * Puts the terminal on WebGL if it may be. Called before a fit measures it: WebGL floors the cell
+ * width to whole device pixels, so the renderer decides the column count, and a renderer changed
+ * after the fit would resize the pty a second time.
+ */
+function acquireWebgl(projectId: string, tabId: string, view: TerminalView): void {
+  const key = viewKey(projectId, tabId);
+  if (view.webgl || !view.term.element || !webglPool.mayRetry(key, Date.now())) {
+    return;
+  }
+  webglAllowed ??= decideWebgl();
+  if (!webglAllowed) {
+    return;
+  }
+  let addon: WebglAddon | undefined;
+  try {
+    addon = new WebglAddon();
+    const attached = addon;
+    // Fired once the addon has waited a few seconds for the context to come back.
+    attached.onContextLoss(() => {
+      if (view.webgl !== attached) {
+        return;
+      }
+      webglPool.recordLoss(key, Date.now());
+      webglPool.lost(key);
+      releaseWebgl(view);
+      // Back on the DOM renderer the cells measure differently; a terminal on screen is refitted
+      // for them, the next frame so the addon has finished tearing down. A hidden one is fitted
+      // when it is shown again, after `showTerminal` has tried WebGL once more.
+      if (inFront.has(key)) {
+        requestAnimationFrame(() => fitTerminal(projectId, tabId));
+      }
+    });
+    view.term.loadAddon(attached);
+    view.webgl = attached;
+    // A new canvas starts empty; without this it stays blank until the next output.
+    view.term.refresh(0, view.term.rows - 1);
+  } catch (error) {
+    console.warn("[tet] WebGL unavailable, terminals draw through the DOM:", error);
+    webglAllowed = false;
+    try {
+      addon?.dispose();
+    } catch {
+      // A half-constructed addon may throw on dispose.
+    }
+  }
+}
+
 function createView(projectId: string, tabId: string, agent: AgentInfo): TerminalView {
   const fontFamily =
     getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim() || "monospace";
@@ -348,6 +471,9 @@ export function attachTerminal(projectId: string, tabId: string, agent: AgentInf
     container.appendChild(view.term.element);
   } else {
     view.term.open(container);
+    // Only a first open is a tab coming in front of the user; before Pane's fit, see acquireWebgl.
+    // A moved tab keeps whatever renderer it had: its canvas moves with the element.
+    acquireWebgl(projectId, tabId, view);
   }
 
   // On the container rather than the document: several terminals are mounted at once, and a drop
@@ -426,6 +552,48 @@ export function fitTerminal(projectId: string, tabId: string): void {
   window.tet.terminals.resize(projectId, tabId, cols, rows);
 }
 
+/** The terminal came in front of the user; called before its fit, which then measures WebGL cells. */
+export function showTerminal(projectId: string, tabId: string): void {
+  const key = viewKey(projectId, tabId);
+  inFront.add(key);
+  webglPool.show(key);
+  const view = views.get(key);
+  if (view) {
+    acquireWebgl(projectId, tabId, view);
+  }
+}
+
+let trimQueued = false;
+
+/**
+ * The terminal went out of sight. It keeps its context unless that pushes one hidden longer out of
+ * the pool — decided in a microtask, once the same commit's `showTerminal` calls have taken the
+ * terminals coming back on screen out of it (see `WebglPool.trim`). Released contexts are not
+ * refitted: the terminal is hidden, and `showTerminal` puts WebGL back before its next fit, so its
+ * column count — and the pty — stay as they are.
+ */
+export function hideTerminal(projectId: string, tabId: string): void {
+  const key = viewKey(projectId, tabId);
+  inFront.delete(key);
+  if (!views.get(key)?.webgl) {
+    return;
+  }
+  webglPool.hide(key);
+  if (trimQueued) {
+    return;
+  }
+  trimQueued = true;
+  queueMicrotask(() => {
+    trimQueued = false;
+    for (const evicted of webglPool.trim()) {
+      const view = views.get(evicted);
+      if (view) {
+        releaseWebgl(view);
+      }
+    }
+  });
+}
+
 export function focusTerminal(projectId: string, tabId: string): void {
   views.get(viewKey(projectId, tabId))?.term.focus();
 }
@@ -443,7 +611,9 @@ export function disposeTerminal(projectId: string, tabId: string): void {
     return;
   }
   views.delete(key);
+  releaseWebgl(view);
   view.term.dispose();
+  webglPool.forget(key);
   forgetUrls(`${key} `);
 }
 
@@ -469,8 +639,10 @@ export function disposeProjectTerminals(projectId: string): void {
   for (const [key, view] of [...views]) {
     if (key.startsWith(prefix)) {
       views.delete(key);
+      releaseWebgl(view);
       view.term.dispose();
     }
   }
+  webglPool.forgetPrefix(prefix);
   forgetUrls(prefix);
 }

@@ -124,6 +124,33 @@ if (process.platform === "win32") {
   }
 }
 
+// Every terminal the user has in front of them, plus the few hidden ones kept warm
+// (webgl-pool.ts), holds a WebGL context. Past 16 per renderer Blink silently evicts the oldest,
+// dropping that terminal to the DOM renderer; 128 leaves room while a leak still surfaces.
+app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
+
+/**
+ * Whether Chromium draws this window through Wayland — told to the renderer, which then keeps its
+ * terminals off WebGL (terminal-views.ts). An explicit x11 choice wins; otherwise any sign of a
+ * Wayland session counts, since Electron picks Wayland there by itself.
+ */
+function isWaylandSession(): boolean {
+  if (process.platform !== "linux") {
+    return false;
+  }
+  const ozonePlatform = app.commandLine.getSwitchValue("ozone-platform").toLowerCase();
+  const ozoneHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? "").toLowerCase();
+  if (ozonePlatform === "x11" || (ozonePlatform === "" && ozoneHint === "x11")) {
+    return false;
+  }
+  return (
+    Boolean(process.env.WAYLAND_DISPLAY) ||
+    process.env.XDG_SESSION_TYPE === "wayland" ||
+    ozoneHint === "wayland" ||
+    ozonePlatform === "wayland"
+  );
+}
+
 /**
  * The releases the update asks: GitHub's, but for the install test (test/install.test.ts), which
  * serves its own — taken from the environment only with a profile of its own, as the control token
@@ -471,7 +498,7 @@ function createWindow(): void {
       spellcheck: false,
       // How the renderer learns the theme before its first paint: the preload reads this off
       // process.argv synchronously; an IPC round trip would leave the first frame in the defaults.
-      additionalArguments: [`--tet-theme=${theme.id}`]
+      additionalArguments: [`--tet-theme=${theme.id}`, ...(isWaylandSession() ? ["--tet-wayland"] : [])]
     }
   });
 

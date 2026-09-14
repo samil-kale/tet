@@ -11,6 +11,7 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscr
 /** Handed in by main.ts's createWindow through webPreferences.additionalArguments — see there. */
 const THEME_ARG = "--tet-theme=";
 const initialTheme = process.argv.find((arg) => arg.startsWith(THEME_ARG))?.slice(THEME_ARG.length) || DEFAULT_THEME_ID;
+const waylandSession = process.argv.includes("--tet-wayland");
 
 const api: TETApi = {
   startup: {
@@ -147,7 +148,8 @@ const api: TETApi = {
     ipcRenderer.send("app:notice-listening");
     return unsubscribe;
   },
-  initialTheme
+  initialTheme,
+  waylandSession
 };
 
 contextBridge.exposeInMainWorld("tet", api);

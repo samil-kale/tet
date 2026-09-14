@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { AgentId, AgentInfo, TerminalDescriptor } from "../../shared/types";
-import { fitTerminal, focusTerminal } from "./terminal-views";
+import { fitTerminal, focusTerminal, hideTerminal, showTerminal } from "./terminal-views";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
@@ -163,10 +163,15 @@ export const Pane = memo(function Pane({
 
   // Refit whenever the terminal becomes the visible one: while its pane was hidden it had no
   // layout, so its last measured size is stale. The resize is also what starts its process.
+  // Shown before the fit, since its renderer decides the cell width the fit measures (see
+  // `showTerminal`); hidden again when anything here changes or the pane goes.
   useEffect(() => {
-    if (visible && activeTerminalId) {
-      fitTerminal(projectId, activeTerminalId);
+    if (!visible || !activeTerminalId) {
+      return;
     }
+    showTerminal(projectId, activeTerminalId);
+    fitTerminal(projectId, activeTerminalId);
+    return () => hideTerminal(projectId, activeTerminalId);
   }, [visible, activeTerminalId, projectId]);
 
   // Keyboard focus follows the focused pane's active tab. Only the focused pane's: with several

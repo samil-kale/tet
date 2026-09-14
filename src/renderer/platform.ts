@@ -6,6 +6,10 @@ function isWindows(): boolean {
   return navigator.platform.toLowerCase().includes("win");
 }
 
+export function isLinux(): boolean {
+  return navigator.platform.toLowerCase().includes("linux");
+}
+
 /** The key that gates link activation and paste: Cmd on macOS, Ctrl everywhere else. */
 export function isModifierHeld(event: { ctrlKey: boolean; metaKey: boolean }): boolean {
   return isMac() ? event.metaKey : event.ctrlKey;

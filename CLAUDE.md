@@ -604,6 +604,12 @@ What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut li
   are only unique within their project). Output arrives batched, one flush for every terminal.
 - An xterm is built the first time its tab is in front of the user, not on mount — building each
   at startup was most of the window's start.
+- **A terminal draws through WebGL, the DOM renderer is only its fallback** (`acquireWebgl` in
+  `terminal-views.ts`). `Pane` calls `showTerminal` *before* each fit and `hideTerminal` after:
+  WebGL floors the cell width, so a renderer changed after a fit resizes the pty again. Hidden
+  terminals keep their context in a small LRU (`webgl-pool.ts`); `main.ts` raises Blink's
+  `max-active-webgl-contexts`. A lost context falls back and retries on the next show; Linux under
+  Wayland or a software rasterizer stays on the DOM (Orca's policy, not measured here).
 - **The views under `App` are memoized, and `App` hands them stable props.** `React.memo` on
   `TerminalsPane`, `ProjectList`, `CommandList`, `GitPane`, `FilesPane`, `BranchTree` and
   `EditorHost` only holds while props stay stable: a callback is a `useCallback`, an object a
@@ -679,6 +685,7 @@ What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut li
   (`git.test.ts`); the session providers against transcripts written the way the CLIs write them
   (`sessions.test.ts`); `tet.json` reading and writing (`commands.test.ts`); the command-line
   reading (`command.test.ts`); the split view's rules and `tabsInFront` (`pane-layout.test.ts`);
+  which terminals keep a WebGL context (`webgl-pool.test.ts`);
   the background question and the commit message (`ask.test.ts`); the measured pieces — Codex's
   hook hash, `resolveCommand`, the quoting helper, the stores, the generated plugin and extension
   (`pieces.test.ts`), env layering, launcher, context file and the toast rule (`unit.test.ts`).
