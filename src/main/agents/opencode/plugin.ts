@@ -148,17 +148,19 @@ function isSessionId(id: unknown): id is string {
 // process rather than through it — nothing here needs a process of its own. node:http rather
 // than fetch, which is what this file already relies on being there (measured through both
 // runtimes opencode ships as). Never awaited: opencode waits for a hook to return, and a turn
-// mark must not hold up the TUI.
-function report(event: string): void {
+// mark must not hold up the TUI. The session goes along in the payload, as Claude Code's and
+// Codex's hooks carry it: it is what binds the tab to its session.
+function report(event: string, sessionId: unknown): void {
   const port = process.env[CONTROL.port];
   const token = process.env[CONTROL.token];
   if (!port || !token) {
     return;
   }
+  const payload = JSON.stringify(isSessionId(sessionId) ? { session_id: sessionId } : {});
   const body = JSON.stringify({
     token,
     verb: "hook",
-    args: { event },
+    args: { event, payload },
     caller: { projectId: process.env[CONTROL.projectId], tabId: process.env[CONTROL.tabId] },
     // Now, not when it arrives: nothing here is awaited, so two reports of one turn race.
     at: Date.now()
@@ -224,7 +226,7 @@ export const TETPlugin = async (input: any) => {
     const now = Date.now();
     if (now - (lastWaiting.get(sessionId) ?? 0) > WAITING_GAP_MS) {
       lastWaiting.set(sessionId, now);
-      report("permission");
+      report("permission", sessionId);
     }
     return true;
   };
@@ -301,7 +303,7 @@ export const TETPlugin = async (input: any) => {
       // and the last of them raced its own turn's session.idle. The mark is a state, not a
       // pulse: once set it stands until the end of the turn reports.
       if (!children.has(String(output?.message?.sessionID))) {
-        report("prompt-submit");
+        report("prompt-submit", output?.message?.sessionID);
       }
       try {
         let text = fs.readFileSync(CONTEXT_FILE, "utf8");
@@ -345,7 +347,7 @@ export const TETPlugin = async (input: any) => {
         // (measured), and sometimes twice for one turn, which the mark absorbs.
         case "session.idle":
           if (isSessionId(props.sessionID) && !children.has(props.sessionID)) {
-            report("stop");
+            report("stop", props.sessionID);
           }
           return;
         case "permission.asked": {
@@ -374,7 +376,7 @@ export const TETPlugin = async (input: any) => {
           // its own approval took longer than the settle above. The session is working again, and
           // saying so is what takes the mark away; nothing else would until the turn ended.
           if (markedPermissions.delete(key)) {
-            report("prompt-submit");
+            report("prompt-submit", props.sessionID);
           }
           return;
         }

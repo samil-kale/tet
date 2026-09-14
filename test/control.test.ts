@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -454,5 +455,23 @@ describe("tet-ctl against the control server", () => {
       assert.equal(run.stderr, "", what);
     }
     assert.deepEqual(calls.hooks, [], "none of them reached a tab");
+  });
+
+  // The agent's turn waits on its hook: a tet that took the request and then stalled must not
+  // hold that turn up for good.
+  it("gives up on a TET that accepts a hook and never answers", async () => {
+    const stalled = http.createServer(() => undefined);
+    await new Promise<void>((resolve) => stalled.listen(0, "127.0.0.1", () => resolve()));
+    try {
+      const started = Date.now();
+      const run = await tetCtl(["hook", "stop"], { [CONTROL_ENV.port]: String((stalled.address() as { port: number }).port) });
+      assert.equal(run.status, EXIT_CODES.ok);
+      assert.equal(run.stdout, "");
+      assert.equal(run.stderr, "");
+      assert.ok(Date.now() - started < 20_000, "ended by its own deadline");
+    } finally {
+      stalled.closeAllConnections();
+      await new Promise((resolve) => stalled.close(resolve));
+    }
   });
 });

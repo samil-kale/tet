@@ -23,14 +23,21 @@ export interface GitResult {
   code: number;
 }
 
-/** Runs the local git CLI. Resolves for any exit code; rejects only when git could not be started. */
-function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<GitResult> {
+/**
+ * Runs the local git CLI. Resolves for any exit code; rejects only when git could not be started.
+ * Past `timeoutMs` git is killed and this resolves at once as a failure — not on the callback,
+ * which waits for every pipe to close, and a credential helper or ssh that git started holds its
+ * copy of them past git's own end.
+ */
+function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: number): Promise<GitResult> {
   return new Promise((resolve, reject) => {
-    execFile(
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const child = execFile(
       "git",
       args,
       { cwd, maxBuffer: MAX_BUFFER, windowsHide: true, encoding: "utf8", env: env && { ...process.env, ...env } },
       (error, stdout, stderr) => {
+        clearTimeout(timer);
         if (error && typeof error.code !== "number") {
           reject(new Error(`git could not be started (${error.code ?? error.message})`));
           return;
@@ -38,6 +45,12 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<GitR
         resolve({ stdout, stderr, code: error ? Number(error.code) : 0 });
       }
     );
+    if (timeoutMs !== undefined) {
+      timer = setTimeout(() => {
+        child.kill();
+        resolve({ stdout: "", stderr: `git took longer than ${timeoutMs / 1000} s and was stopped`, code: 1 });
+      }, timeoutMs);
+    }
   });
 }
 
@@ -353,9 +366,9 @@ export async function readState(cwd: string): Promise<RepositoryState> {
 }
 
 /** One git command as the UI wants it: a non-zero exit is git's message, a failed start the thrown error's. */
-async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<GitActionResult> {
+async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: number): Promise<GitActionResult> {
   try {
-    const result = await git(cwd, args, env);
+    const result = await git(cwd, args, env, timeoutMs);
     if (result.code === 0) {
       return { ok: true };
     }
@@ -378,6 +391,10 @@ const NETWORK_ENV: NodeJS.ProcessEnv = {
   // Set but empty: unset makes git fall back to the terminal, the very thing above prevents.
   GIT_ASKPASS: "",
   SSH_ASKPASS: "",
+  // A connection that went silent is given up on rather than waited on for good: below 1 KB/s for
+  // a minute, git's own http transport aborts. The ssh one's equivalent is in networkEnv.
+  GIT_HTTP_LOW_SPEED_LIMIT: "1000",
+  GIT_HTTP_LOW_SPEED_TIME: "60",
   // AUTH_FAILURES matches git's messages as text, and git translates them: LANG=de_DE would
   // answer "Authentifizierung fehlgeschlagen" and match neither pattern.
   LC_ALL: "C"
@@ -406,7 +423,9 @@ export function forget(cwd: string): void {
 
 /**
  * `NETWORK_ENV` plus an ssh that never asks — `-oBatchMode=yes` keeps an unknown host key from
- * becoming a question nobody can answer. Only where the user chose no ssh of their own:
+ * becoming a question nobody can answer — and never hangs on a dead connection: four unanswered
+ * keepalives 15 s apart end it, the minute the http transport gets too. Only where the user chose
+ * no ssh of their own:
  * `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so setting it blindly breaks a
  * plink or `ssh -i work_key` setup, and a non-OpenSSH program would not know the flag.
  */
@@ -422,20 +441,28 @@ async function networkEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
     );
     sshCommands.set(cwd, configured);
   }
-  return (await configured) ? NETWORK_ENV : { ...NETWORK_ENV, GIT_SSH_COMMAND: "ssh -oBatchMode=yes" };
+  return (await configured)
+    ? NETWORK_ENV
+    : { ...NETWORK_ENV, GIT_SSH_COMMAND: "ssh -oBatchMode=yes -oServerAliveInterval=15 -oServerAliveCountMax=4" };
 }
 
-async function runNetwork(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<GitActionResult> {
-  const result = await run(cwd, args, { ...(await networkEnv(cwd)), ...env });
+async function runNetwork(
+  cwd: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  timeoutMs?: number
+): Promise<GitActionResult> {
+  const result = await run(cwd, args, { ...(await networkEnv(cwd)), ...env }, timeoutMs);
   if (result.ok || !AUTH_FAILURES.some((pattern) => pattern.test(result.error ?? ""))) {
     return result;
   }
   return { ...result, authRequired: true };
 }
 
-/** `--prune`, like GitHub Desktop: a branch deleted on the remote goes from the tree too. */
-export function fetch(cwd: string): Promise<GitActionResult> {
-  return runNetwork(cwd, ["fetch", "--prune"]);
+/** `--prune`, like GitHub Desktop: a branch deleted on the remote goes from the tree too. A
+ *  `timeoutMs` stops it, for a fetch nobody is waiting on (see `git`). */
+export function fetch(cwd: string, timeoutMs?: number): Promise<GitActionResult> {
+  return runNetwork(cwd, ["fetch", "--prune"], undefined, timeoutMs);
 }
 
 /** Plain `git pull`, so whatever the user configured — merge or rebase — is what happens. */

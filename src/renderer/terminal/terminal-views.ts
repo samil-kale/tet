@@ -189,6 +189,15 @@ function toBase64(buffer: ArrayBuffer): string {
 }
 
 /**
+ * A path as one word: one holding a space would otherwise reach the shell or the agent as two.
+ * Double quotes, which bash, zsh, PowerShell and cmd.exe all read the same way; a path without
+ * whitespace is left bare, as it always was.
+ */
+function quotePath(filePath: string): string {
+  return /\s/.test(filePath) ? `"${filePath}"` : filePath;
+}
+
+/**
  * Types the dropped files' paths. A file dragged in from the filesystem has a real path; one
  * dragged out of a browser carries only its content and is saved to a temp file first.
  */
@@ -205,7 +214,7 @@ async function pasteDroppedFiles(term: Terminal, files: File[]): Promise<void> {
   if (paths.length > 0) {
     // Through term.paste, like clipboard text: whatever input mode the CLI is in cannot misread
     // it as individual keystrokes (vim-mode commands, say).
-    term.paste(`${paths.join(" ")} `);
+    term.paste(`${paths.map(quotePath).join(" ")} `);
   }
 }
 
@@ -215,7 +224,8 @@ async function pasteClipboardImage(term: Terminal): Promise<boolean> {
   if (file === null) {
     return false;
   }
-  term.paste(`${file} `);
+  // The temp directory sits under the user's profile, whose name can hold a space.
+  term.paste(`${quotePath(file)} `);
   return true;
 }
 

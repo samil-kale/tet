@@ -407,6 +407,7 @@ folder. A new agent is a new folder, one entry in that index, one case in `Agent
   a session behind (`cleanupAsk` for an agent that persists one either way)
 - `runArgs` — one command run *in* a terminal; only the shell has it
 - `sessions` — listing, resume args, rename, delete, optional `watch`
+- `sessionIdOf` — the session a hook report names, the one thing binding a new tab to its session
 - `holdsTurnEnd` — reads this agent's own end-of-turn payload for a reason the turn is not over
 - `questionOutlivesTurn` — its questions are asked asynchronously and still stand once the turn ends
 - `prepareSpawn` — async setup before the first spawn, **the only place an agent may write

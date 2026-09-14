@@ -67,8 +67,9 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown> } 
 }
 
 /** HTTP rather than a raw socket, one request per connection (`Connection: close`), matching the
- *  server's model — the reason is at `startControlServer` in src/main/control/control-server.ts. */
-function send(host: string, port: number, request: ControlRequest): Promise<ControlResponse> {
+ *  server's model — the reason is at `startControlServer` in src/main/control/control-server.ts.
+ *  `idleMs` gives up on a connection nothing arrives on for that long. */
+function send(host: string, port: number, request: ControlRequest, idleMs?: number): Promise<ControlResponse> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(request);
     const req = http.request(
@@ -100,9 +101,20 @@ function send(host: string, port: number, request: ControlRequest): Promise<Cont
       }
     );
     req.once("error", reject);
+    if (idleMs !== undefined) {
+      req.setTimeout(idleMs, () => req.destroy(new Error(`TET did not answer within ${idleMs / 1000} s`)));
+    }
     req.end(body);
   });
 }
+
+/**
+ * How long a hook waits on an app that accepted it and then went quiet — a stalled main process.
+ * The agent's turn waits on its hook, and a hook must never hold its own turn up for good; given
+ * up on, it answers nothing, the same as when tet cannot be reached at all. That one prompt then
+ * goes without the context text.
+ */
+const HOOK_IDLE_MS = 10_000;
 
 /** How long a port nobody answers on is retried before it counts as absent: the server comes up
  *  with the workspace, a moment after the terminal this runs in did, and likewise after a
@@ -111,11 +123,11 @@ const CONNECT_RETRY_MS = 5000;
 const CONNECT_RETRY_GAP_MS = 250;
 
 /** `send`, retried while nothing listens yet; any other failure is answered at once. */
-async function sendWhenUp(host: string, port: number, request: ControlRequest): Promise<ControlResponse> {
+async function sendWhenUp(host: string, port: number, request: ControlRequest, idleMs?: number): Promise<ControlResponse> {
   const deadline = Date.now() + CONNECT_RETRY_MS;
   for (;;) {
     try {
-      return await send(host, port, request);
+      return await send(host, port, request, idleMs);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "ECONNREFUSED" || Date.now() >= deadline) {
@@ -175,7 +187,12 @@ async function main(): Promise<void> {
   };
   let response: ControlResponse;
   try {
-    response = await sendWhenUp(process.env[CONTROL_ENV.host] || "127.0.0.1", Number(portVar), request);
+    response = await sendWhenUp(
+      process.env[CONTROL_ENV.host] || "127.0.0.1",
+      Number(portVar),
+      request,
+      quiet ? HOOK_IDLE_MS : undefined
+    );
   } catch (error) {
     if (quiet) {
       return;

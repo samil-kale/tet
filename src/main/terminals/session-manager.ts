@@ -48,8 +48,9 @@ const INDICATOR_LINGER_MS = 700;
 const SHELL_OPERATOR = /^(?:&&|\|\||[|;&]|\d*>>?|\d*>&\d*|<)$/;
 
 interface TabState extends TerminalDescriptor {
-  /** When this tab's pty was spawned — used to claim newly persisted sessions. */
-  spawnedAt?: number;
+  /** The session this tab's own hooks named (AgentDefinition.sessionIdOf), claimed as `sessionId`
+   *  once the listing shows it persisted. */
+  reportedSessionId?: string;
   /** Mirrors AgentSessionInfo.provisionalTitle for this tab's session. */
   provisionalTitle?: boolean;
   /** Mirrors AgentSessionInfo.sandbox: the sbx sandbox this tab's session lives in, if any. */
@@ -867,9 +868,6 @@ export class ProjectSessionManager {
       { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId }
     );
 
-    if (!tab.sessionId) {
-      tab.spawnedAt = Date.now();
-    }
     this.sessions.set(tabId, session);
     session.markInstalled(this.canStart(runtime));
     return session;
@@ -1059,6 +1057,9 @@ export class ProjectSessionManager {
    */
   hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined): HookOutcome {
     const tab = this.disposed ? undefined : this.tabs.find((candidate) => candidate.tabId === tabId);
+    // A tab closed moments after its first prompt still needs its session named, to delete it.
+    const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
+    this.bindReportedSession(bound, payload);
     if (!tab) {
       return {};
     }
@@ -1112,6 +1113,23 @@ export class ProjectSessionManager {
         // A reminder about a turn that already ended — nothing to mark, the bubble stands.
         return fresh ? { toast: this.toast(tab, "idle") } : {};
     }
+  }
+
+  /**
+   * Takes the session a report names for a tab that has none yet. Whatever the report's age: the
+   * id is the same for every report of one session. Claimed by reconcile once the listing has it,
+   * so the title and the rest arrive the way they do for every other tab.
+   */
+  private bindReportedSession(tab: TabState | undefined, payload: string): void {
+    if (!tab || tab.sessionId) {
+      return;
+    }
+    const reported = getAgent(tab.agentId).sessionIdOf?.(payload);
+    if (!reported || reported === tab.reportedSessionId) {
+      return;
+    }
+    tab.reportedSessionId = reported;
+    this.scheduleReconcile(this.runtimeFor(tab.agentId));
   }
 
   /** What the user is told about this event, or nothing where the settings say so. Read now, so
@@ -1241,21 +1259,18 @@ export class ProjectSessionManager {
       ...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined),
       ...this.deletingSessionIds
     ]);
-    // Oldest first, so the `find` below is the *nearest* session created after a tab's spawn.
-    const unclaimed = infos.filter((info) => !claimed.has(info.id)).sort((a, b) => a.createdAt - b.createdAt);
     let changed = false;
 
-    // Newest tab first, each taking the nearest session created after its spawn: right as long
-    // as CLIs persist in spawn order, and a listing carries no cwd or pid to do better.
-    const pendingTabs = [...ownTabs, ...this.detachedTabs.filter((tab) => tab.agentId === agent.id)]
-      .filter((tab) => !tab.sessionId && tab.spawnedAt !== undefined)
-      .sort((a, b) => (b.spawnedAt ?? 0) - (a.spawnedAt ?? 0));
+    // Each tab takes the session its own hooks named (bindReportedSession), once it is listed.
+    const pendingTabs = [...ownTabs, ...this.detachedTabs.filter((tab) => tab.agentId === agent.id)].filter(
+      (tab) => !tab.sessionId && tab.reportedSessionId !== undefined
+    );
     for (const tab of pendingTabs) {
-      const match = unclaimed.find((info) => info.createdAt > (tab.spawnedAt ?? 0));
+      const match = infos.find((info) => info.id === tab.reportedSessionId && !claimed.has(info.id));
       if (!match) {
         continue;
       }
-      unclaimed.splice(unclaimed.indexOf(match), 1);
+      claimed.add(match.id);
       tab.sessionId = match.id;
       tab.title = match.title;
       tab.updatedAt = match.updatedAt;

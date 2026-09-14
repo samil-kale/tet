@@ -1,5 +1,6 @@
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
+import { hookSessionId } from "../hook-payload";
 import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { claudeHoldsTurnEnd, setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
@@ -13,6 +14,7 @@ export const claudeAgent: AgentDefinition = {
   askArgs: ["-p", "--no-session-persistence"],
   sessions: claudeSessionProvider,
   holdsTurnEnd: claudeHoldsTurnEnd,
+  sessionIdOf: hookSessionId,
   prepareSpawn: (_executable, _cwd, paths) => {
     let args: string[] = [];
     try {

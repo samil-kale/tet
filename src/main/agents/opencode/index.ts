@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { HOST_TARGET, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createNonAsciiThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
+import { hookSessionId } from "../hook-payload";
 import { runOpencode } from "./cli";
 import { sandboxConfigDir, writeOpencodePlugin } from "./plugin";
 import { resolveOpencodeUrlPrefix } from "./session-urls";
@@ -45,6 +46,8 @@ export const opencodeAgent: AgentDefinition = {
     }
   },
   sessions: opencodeSessionProvider,
+  // The plugin sends the root session's id with every report.
+  sessionIdOf: hookSessionId,
   resolveUrlPrefix: resolveOpencodeUrlPrefix,
   prepareSpawn: (_executable, cwd, paths) => {
     registerAgentDir(cwd, paths.agentDir);

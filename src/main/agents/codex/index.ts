@@ -4,6 +4,7 @@ import { SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";
+import { hookSessionId } from "../hook-payload";
 import { setupCodexHooks } from "./hooks";
 import { codexSessionProvider } from "./sessions";
 
@@ -35,6 +36,7 @@ export const codexAgent: AgentDefinition = {
   // `--ephemeral` skips the rollout file entirely, so there is nothing for cleanupAsk to remove.
   askArgs: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
   sessions: codexSessionProvider,
+  sessionIdOf: hookSessionId,
   prepareSpawn: (executable, _cwd, paths) => {
     let args: string[] = [];
     let launcher: string | undefined;

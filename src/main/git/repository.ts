@@ -33,6 +33,10 @@ const COMMANDS_FILE = "tet.json";
 const REFRESH_MIN_INTERVAL_MS = 2000;
 /** How often a repository fetches on its own — GitHub Desktop's interval. */
 const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
+/** How long the periodic fetch may hold back a click (runAction waits for it) before it is
+ *  stopped. Well past the minute a silent connection gets from git and ssh themselves (git.ts's
+ *  NETWORK_ENV); this is for what they cannot see, a credential helper waiting on its own. */
+const AUTO_FETCH_TIMEOUT_MS = 2 * 60_000;
 
 /** How long before a failed watcher is put back, and the ceiling the delay doubles up to. A dead
  *  watcher takes every change with it silently; a filesystem that cannot watch recursively at all
@@ -142,7 +146,7 @@ export class Repository {
       return;
     }
     this.autoFetching = git
-      .fetch(this.project.path)
+      .fetch(this.project.path, AUTO_FETCH_TIMEOUT_MS)
       .catch(() => undefined)
       .then(() => this.refresh())
       .then(

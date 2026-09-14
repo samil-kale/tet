@@ -7,6 +7,7 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
+import { hookSessionId } from "../src/main/agents/hook-payload";
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
@@ -281,6 +282,19 @@ function reported(reports: ControlRequest[]): string[] {
   return reports.map((report) => String(report.args.event));
 }
 
+describe("the session a hook report names", () => {
+  // Trimmed from what the real hooks wrote to stdin (Claude Code 2.1.270, Codex 0.154.0).
+  it("is read off Claude Code's and Codex's payloads alike", () => {
+    const claude = `{"session_id":"e1ddb9cf-df0f-40b3-82b2-1343910fc3e4","transcript_path":"C:\\\\x.jsonl","hook_event_name":"UserPromptSubmit","prompt":"ok"}`;
+    const codex = `{"session_id":"01a09f45-f0d2-74e1-be90-a8f79f43cb7e","turn_id":"01a09f45-f15d-77e1-b1d3-5375a8ce98d5","hook_event_name":"Stop"}`;
+    assert.equal(hookSessionId(claude), "e1ddb9cf-df0f-40b3-82b2-1343910fc3e4");
+    assert.equal(hookSessionId(codex), "01a09f45-f0d2-74e1-be90-a8f79f43cb7e");
+    for (const nothing of ["", "{}", "null", "not json", `{"session_id":"  "}`, `{"session_id":7}`]) {
+      assert.equal(hookSessionId(nothing), undefined, nothing);
+    }
+  });
+});
+
 describe("which of two turn reports counts", () => {
   // The direction of this comparison is what a finished turn going back to working hangs on.
   it("drops the one that lost the race, and takes one whose clock jumped backwards", () => {
@@ -324,13 +338,16 @@ describe("pi's extension", () => {
       fs.writeFileSync(contextFile, "  \n");
       assert.equal(handlers.before_agent_start({ systemPrompt: "base" }, {}), undefined, "blank means nothing to say");
 
-      handlers.agent_start({}, {});
-      handlers.agent_settled({}, {});
+      const ctx = { sessionManager: { getSessionId: () => "019eba31-566c-7911-bf09-14afe53d7c36" } };
+      handlers.agent_start({}, ctx);
+      handlers.agent_settled({}, ctx);
       handlers.ui_prompt_start({}, {});
       await eventually("all three reported", () => channel.reports.length === 3, 3000);
       assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
-      // The tab is the address; no session id is involved at all any more.
+      // The tab is the address; the session goes along, for tet to bind the tab to it.
       assert.deepEqual(channel.reports[0].caller, { projectId: "p1", tabId: "tab-1" });
+      assert.equal(hookSessionId(String(channel.reports[0].args.payload)), "019eba31-566c-7911-bf09-14afe53d7c36");
+      assert.equal(hookSessionId(String(channel.reports[2].args.payload)), undefined, "a context without a session");
       assert.equal(channel.reports[0].verb, "hook");
       // Nothing here is awaited, so two reports of one turn race — each carries its own time,
       // which is what tet orders them by.
@@ -440,6 +457,11 @@ describe("opencode's plugin", () => {
       // not a session id at all.
       await eventually("the root session's three", () => channel.reports.length === 3, 3000);
       assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
+      assert.deepEqual(
+        channel.reports.map((report) => hookSessionId(String(report.args.payload))),
+        ["ses_a", "ses_a", "ses_a"],
+        "each report names the root session, which binds the tab to it"
+      );
 
       await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_a" } } } });
       assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);

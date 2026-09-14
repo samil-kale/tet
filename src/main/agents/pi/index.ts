@@ -1,6 +1,7 @@
 import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
+import { hookSessionId } from "../hook-payload";
 import { writePiExtension } from "./extension";
 import { piSessionProvider } from "./sessions";
 
@@ -25,6 +26,8 @@ export const piAgent: AgentDefinition = {
   // `--no-session` leaves no transcript behind, so there is no cleanupAsk.
   askArgs: ["-p", "--no-session"],
   sessions: piSessionProvider,
+  // The extension sends the session manager's id with every report.
+  sessionIdOf: hookSessionId,
   prepareSpawn: (_executable, _cwd, paths) => {
     const args: string[] = [];
     try {

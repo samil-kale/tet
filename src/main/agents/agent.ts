@@ -195,6 +195,14 @@ export interface AgentDefinition {
    */
   holdsTurnEnd?: (payload: string) => boolean;
   /**
+   * The session a hook report of this agent is about, read off the report's payload — the one
+   * thing that binds a new tab to the session its CLI persists. Nothing else can: a listing
+   * carries no pid or tab, and a CLI persists its session with the first prompt rather than at
+   * spawn, so of two new tabs the one typed into first would hand its session to the other.
+   * Omitted for an agent without sessions.
+   */
+  sessionIdOf?: (payload: string) => string | undefined;
+  /**
    * Whether a question this agent asked is still standing after the turn that asked it ended.
    * Claude Code's `AskUserQuestion` blocks its turn, so its question cannot outlive it and the
    * end of the turn is the end of the question. Codex's is the other kind (measured, 0.154.0:
