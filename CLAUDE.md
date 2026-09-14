@@ -515,12 +515,13 @@ call a plain spawn, never a shell — and every fact in it about sbx was measure
 binary; its comments are the record. The config is the `sbx` key of the repository's own
 `tet.json` (`readSbxConfig` in `commands.ts`: ports, allowed paths — a folder or a single file —
 and which of the agent's skills/plugins/instructions to mount); the tab-time decision is
-`resolveSbxRun` in `session-manager.ts`, which skips the sandbox for the one spawn when sbx is
-not ready — never writing the project's switch off — and sends each session back where it was
-made. Skipping needs somewhere to skip *to*: an agent that is not installed here at all is
-startable only through the sandbox (`AgentRuntime.sbxOnly`, decided with the project's config at
-bootstrap and again whenever `tet.json` is written, `sbxConfigChanged`), and its tab is left in
-`error` rather than spawning an executable that does not exist.
+`resolveSbxRun` in `session-manager.ts`, which sends each session back where it was made. When sbx
+is not ready (`checkSbxReady`: installed, signed in, policy set up, control channel allowed) a
+sandboxing project's tab is left in `error` — **it never falls back to this machine**, which
+would run the agent past an organization's policy — and the project's switch is never written
+off. An agent that is not installed here at all is startable only through the sandbox
+(`AgentRuntime.sbxOnly`, decided with the project's config at bootstrap and again whenever
+`tet.json` is written, `sbxConfigChanged`).
 
 - **A setup is generated for where it runs**, not for `process.platform`: `HookTarget`
   (`src/main/terminals/hook-target.ts`) says whether the target is POSIX and how a host path reads
@@ -538,10 +539,11 @@ bootstrap and again whenever `tet.json` is written, `sbxConfigChanged`), and its
   opencode differs in mechanism only: its plugin already writes records through the `agentDir`
   mount.
 - **`tet-ctl` inside a sandbox** is the same bundle written into the sandbox's `~/.local/bin`,
-  reaching the control server at `host.docker.internal` (`TET_CONTROL_HOST`) through an
-  `sbx policy allow` for `localhost:<port>`. An account whose policies an organization manages
-  gets a wall in the sbx dialog instead of the fields (`readSbxStatus`, unverified against a
-  real managed account).
+  reaching the control server at `host.docker.internal` (`TET_CONTROL_HOST`), which the policy
+  sees as `localhost:<port>` — asked with `sbx policy check` (`isControlChannelAllowed`), allowed
+  locally where it can be. An organization-governed account refuses every local rule (measured),
+  so only its organization can allow `localhost`; its account gets a wall in the sbx dialog
+  instead of the fields (`readSbxStatus`).
 
 ## Never touch the user's agent configuration
 

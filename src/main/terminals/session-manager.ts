@@ -665,12 +665,12 @@ export class ProjectSessionManager {
           // Closed while the setup ran: nothing left to start.
           return;
         }
-        // A sandboxed session cannot resume on the host, and an agent that is not installed here
-        // has no host process to be (see resolveSbxRun) — without this both would spawn the
-        // missing executable. Left in `error` so the tab menu's Restart retries: a `ready` tab
-        // gets no second fit for an unchanged size (`sent` in terminal-views.ts). `sbxStranded`
+        // A sandboxed session cannot resume on the host, an agent that is not installed here has
+        // no host process to be, and a sandboxing project's tab does not leave for the host
+        // (see resolveSbxRun). Left in `error` so the tab menu's Restart retries: a `ready` tab
+        // gets no second fit for an unchanged size (`sent` in terminal-views.ts). resolveSbxRun
         // has already said why.
-        if (sbxArgs === null && (tab.sandbox || this.runtimeFor(tab.agentId).sbxOnly)) {
+        if (sbxArgs === "stranded") {
           tab.status = "error";
           this.callbacks.onStatus(this.project.id, tabId, "error");
           return;
@@ -702,31 +702,34 @@ export class ProjectSessionManager {
    * ("No conversation found with session ID: …", measured), so a host session stays on the host
    * and a sandboxed one goes back in. A tab with no `sessionId` yet is sandboxed.
    *
-   * Sbx not ready (not installed, not signed in, policy never initialized) skips the sandbox for
-   * this one spawn and says so, without writing `enabled: false` back: the checks cannot tell an
-   * outage from a permanent state (`sbx ls` fails the same way while the daemon restarts, e.g.
-   * during an sbx update). Skipping is needed: `sbx run` would otherwise print its own
-   * interactive sign-in and policy setup into the tab (measured).
+   * Sbx not ready (not installed, not signed in, policy never initialized, control channel
+   * blocked) starts nothing and says so, leaving the tab in `error` for Restart: a project that
+   * sandboxes its agents never runs one on this machine behind the user's back — past an
+   * organization's policy, for a governed account. Nor is `enabled: false` written back: the
+   * checks cannot tell an outage from a permanent state (`sbx ls` fails the same way while the
+   * daemon restarts, e.g. during an sbx update). And never `sbx run` regardless: it would print
+   * its own interactive sign-in and policy setup into the tab (measured).
+   *
+   * Null runs the tab on this machine; "stranded" runs it nowhere, its notice already said.
    */
-  private async resolveSbxRun(tab: TabState): Promise<string[] | null> {
+  private async resolveSbxRun(tab: TabState): Promise<string[] | null | "stranded"> {
     if (tab.executable || !isSbxAgent(tab.agentId)) {
       return null;
     }
     const config = await readSbxConfig(this.project.path);
     if (!config.enabled) {
       // Only a tab that cannot follow onto this machine gets a notice.
-      this.sbxStranded(tab, "sandboxing is switched off for the project");
-      return null;
+      return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : null;
     }
     const ready = await checkSbxReady();
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, ready.notReady)) {
         this.callbacks.onNotice(
           "warning",
-          `SBX is not available for ${this.project.name}: ${ready.notReady}. This tab starts on this machine directly; sandboxing stays on for the project.`
+          `SBX is not available for ${this.project.name}: ${ready.notReady}. The tab does not start on this machine instead; the tab menu's Restart tries again once that has changed.`
         );
       }
-      return null;
+      return "stranded";
     }
     const runtime = this.runtimeFor(tab.agentId);
     const { agent } = runtime;
@@ -739,7 +742,9 @@ export class ProjectSessionManager {
           "warning",
           `${agent.displayName} is not installed on this machine any more, and a session made here cannot be resumed in ${this.project.name}'s SBX sandbox. A new tab runs in the sandbox; this one cannot.`
         );
-      } else if (!this.sbxPreexistingSaid) {
+        return "stranded";
+      }
+      if (!this.sbxPreexistingSaid) {
         this.sbxPreexistingSaid = true;
         this.callbacks.onNotice(
           "info",

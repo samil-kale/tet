@@ -15,7 +15,7 @@ export const CONTROL_ENV = {
   tabId: "TET_TAB_ID",
   /** Unset for every ordinary pty, so tet-ctl.ts falls back to "127.0.0.1". Only an sbx-wrapped
    *  session carries this, set to "host.docker.internal" — the sandbox has its own loopback. See
-   *  sbx.ts's ensureControlNetworkAllowed for the policy-allow this also requires. */
+   *  sbx.ts's isControlChannelAllowed for the policy-allow this also requires. */
   host: "TET_CONTROL_HOST"
 } as const;
 
