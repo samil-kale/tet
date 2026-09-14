@@ -399,7 +399,7 @@ export const Pane = memo(function Pane({
       // is over; this clears it.
       onDragEnd={onDragEnd}
     >
-      <div className={`tab-strip${chrome?.sideView ? " side-pane-open" : ""}`}>
+      <div className="tab-strip">
         {/* Window chrome rather than tabs, on pane "a" alone. */}
         {chrome && (
           <div className="tab-strip-actions">

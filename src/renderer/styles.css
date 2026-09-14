@@ -659,13 +659,6 @@ textarea:focus {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-/* Points back at the side pane beside this one, only on pane "a". The sash sits centred on that
-   boundary with `z-index: 1`, so without outranking it here its grey line paints over this. */
-.tab-strip.side-pane-open {
-  border-left: 2px solid var(--vscode-focusBorder);
-  z-index: 2;
-}
-
 /* Indeterminate: nothing this sits under reports real progress. Drawn only by `ProgressBar`,
    whose bit width, offset, travel (`--travel`) and duration are absolute, so the bit is the
    same length and speed in a 300px sidebar section and a 900px pane. */
@@ -1098,9 +1091,11 @@ textarea:focus {
   font-size: 13px;
 }
 
+/* A toggle whose pane is out — the side pane's view buttons. The marking blue, as everything that
+   points at something: `--vscode-button-background` is near white in Dark Slate. */
 .icon-button.active {
   opacity: 1;
-  color: var(--vscode-button-background);
+  color: var(--vscode-focusBorder);
 }
 
 .image-diff {
