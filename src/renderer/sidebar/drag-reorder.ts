@@ -81,6 +81,11 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       setDropAt(insertionIndex(event, index));
     },
     onDrop: (event) => {
+      // A file still lands here: main.tsx prevents every file's dragover, which makes each element
+      // a drop target. Its getData is "", and Number("") is row 0.
+      if (!event.dataTransfer.types.includes(dragType)) {
+        return;
+      }
       event.preventDefault();
       // Straight from the event: the dragover state only draws the line, and a drop must not wait
       // on its render.
@@ -103,7 +108,7 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       setDropAt(count);
     },
     onDrop: (event) => {
-      if (!isBelowList(event)) {
+      if (!isBelowList(event) || !event.dataTransfer.types.includes(dragType)) {
         return;
       }
       event.preventDefault();

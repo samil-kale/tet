@@ -632,13 +632,17 @@ export async function commitPaths(
   untracked: string[]
 ): Promise<GitActionResult> {
   if (untracked.length > 0) {
-    const added = await run(cwd, ["add", "--", ...untracked]);
+    const added = await run(cwd, [LITERAL_PATHSPECS, "add", "--", ...untracked]);
     if (!added.ok) {
       return added;
     }
   }
-  return run(cwd, ["commit", "--message", message, "--", ...paths]);
+  return run(cwd, [LITERAL_PATHSPECS, "commit", "--message", message, "--", ...paths]);
 }
+
+/** Ahead of every command handed paths off the changes list: without it git reads `*`, `?` and
+ *  `[…]` in a path as a pattern, and discarding `app/[id]/page.tsx` also resets `app/i/page.tsx`. */
+const LITERAL_PATHSPECS = "--literal-pathspecs";
 
 /** How many subjects are enough to read a repository's commit style off. */
 const RECENT_SUBJECTS = 20;
@@ -664,8 +668,8 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
   const pathspec = selection ? ["--", ...selection] : [];
   const [subjects, diff, untracked] = await Promise.all([
     git(cwd, ["log", `-${RECENT_SUBJECTS}`, "--format=%s"]),
-    git(cwd, ["diff", "HEAD", ...pathspec]),
-    git(cwd, ["ls-files", "--others", "--exclude-standard", "-z", ...pathspec])
+    git(cwd, [LITERAL_PATHSPECS, "diff", "HEAD", ...pathspec]),
+    git(cwd, [LITERAL_PATHSPECS, "ls-files", "--others", "--exclude-standard", "-z", ...pathspec])
   ]);
   const sections: string[] = [];
   if (subjects.code === 0 && subjects.stdout.trim() !== "") {
@@ -755,7 +759,7 @@ export interface DiscardTargets {
 export async function discard(cwd: string, targets: DiscardTargets): Promise<GitActionResult> {
   if (targets.drop.length > 0) {
     // --ignore-unmatch: a path that was never staged has no index entry, which is a success here.
-    const dropped = await run(cwd, ["rm", "--cached", "--force", "--ignore-unmatch", "--", ...targets.drop]);
+    const dropped = await run(cwd, [LITERAL_PATHSPECS, "rm", "--cached", "--force", "--ignore-unmatch", "--", ...targets.drop]);
     if (!dropped.ok) {
       return dropped;
     }
@@ -763,7 +767,7 @@ export async function discard(cwd: string, targets: DiscardTargets): Promise<Git
   if (targets.restore.length === 0) {
     return { ok: true };
   }
-  return run(cwd, ["restore", "--source=HEAD", "--staged", "--worktree", "--", ...targets.restore]);
+  return run(cwd, [LITERAL_PATHSPECS, "restore", "--source=HEAD", "--staged", "--worktree", "--", ...targets.restore]);
 }
 
 /** The characters a gitignore line reads as syntax rather than as part of a name. */

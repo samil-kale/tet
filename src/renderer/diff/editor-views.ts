@@ -181,7 +181,17 @@ export function setEditorVersion(projectId: string, version: string): void {
       clearModels(view);
     } else if (view.models) {
       const model = view.models.modified;
-      model.pushEditOperations([], [{ range: model.getFullModelRange(), text: result.content }], () => null);
+      // monaco takes a BOM off the text only when it builds a buffer: pushed as an edit it becomes
+      // text, and the save, which puts the model's own BOM in front, writes it twice. A BOM that
+      // came or went on disk is a buffer of its own.
+      const bom = result.content.startsWith("﻿");
+      const modelBom = model.getValueLength(undefined, true) !== model.getValueLength();
+      if (bom === modelBom) {
+        const text = bom ? result.content.slice(1) : result.content;
+        model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+      } else {
+        model.setValue(result.content);
+      }
       view.savedVersionId = model.getAlternativeVersionId();
       publish(projectId, view, { dirty: false });
     } else {

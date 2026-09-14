@@ -426,7 +426,12 @@ export class Repository {
         if (!change) {
           continue;
         }
-        if (change.status === "untracked" || change.status === "added") {
+        // A rename is one entry over two paths, and only the old one is in HEAD: the new one is a
+        // file HEAD does not know, restored from nothing it would simply be deleted.
+        if (change.status === "renamed" && change.origPath) {
+          targets.restore.push(change.origPath);
+        }
+        if (change.status === "untracked" || change.status === "added" || change.status === "renamed") {
           targets.drop.push(filePath);
           // Staged and then deleted on disk still reads as "added"; nothing left to move.
           const absolute = path.join(this.project.path, filePath);
@@ -440,10 +445,6 @@ export class Repository {
           continue;
         }
         targets.restore.push(filePath);
-        // A rename is one entry over two paths, and only the old one is in HEAD.
-        if (change.origPath) {
-          targets.restore.push(change.origPath);
-        }
       }
 
       return git.discard(this.project.path, targets);

@@ -72,6 +72,8 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
   const [menu, setMenu] = useState<{ x: number; y: number; command: ProjectCommand } | null>(null);
   /** The list as it stands now, for callbacks that were made before the last change to it. */
   const latest = useRef<ProjectCommand[]>([]);
+  /** The project the list on screen belongs to now, for the same callbacks. */
+  const shownProject = useRef(projectId);
 
   const { rowProps, listProps, rowClasses } = useDragReorder({
     dragType: DRAG_TYPE,
@@ -84,6 +86,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
   });
 
   useEffect(() => {
+    shownProject.current = projectId;
     if (!projectId) {
       applyCommands([]);
       return;
@@ -121,7 +124,9 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
 
   /** The list is written whole; the file is the record, this is only what is on screen. */
   const save = (next: ProjectCommand[]): void => {
-    if (!projectId) {
+    // A dialog answered after the shown project changed: `next` was built from the other
+    // project's list, and would replace this one's tet.json with it.
+    if (!projectId || projectId !== shownProject.current) {
       return;
     }
     applyCommands(next);

@@ -508,7 +508,9 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
   const askRename = async (node: TreeNode): Promise<void> => {
     const answer = await prompt({ title: "Rename", label: "Name", value: node.name, confirmLabel: "Rename" });
     if (answer && answer.value !== node.name) {
-      const dir = parentOf(node.path);
+      // A compacted row's name is the whole chain `a/b/c`, its path the innermost folder's: the
+      // answer replaces the chain, so it goes where the chain's outermost folder is.
+      const dir = node.path.split("/").slice(0, -node.name.split("/").length).join("/");
       run(() => window.tet.repository.renamePath(project.id, node.path, dir ? `${dir}/${answer.value}` : answer.value));
     }
   };

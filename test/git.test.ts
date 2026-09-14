@@ -269,4 +269,24 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
     assert.deepEqual(await commitPaths(cwd, "rename", ["renamed.txt", "a.txt"], []), { ok: true });
     assert.deepEqual(await changed(), ["modified b.txt", "untracked other.txt"]);
   });
+
+  it("takes a path with glob characters as that one file, never as a pattern", async () => {
+    // A Next.js route folder: read as a pattern, "[id]" also matches a folder named "i".
+    for (const dir of ["[id]", "i"]) {
+      fs.mkdirSync(path.join(cwd, dir));
+      write(`${dir}/page.txt`, "page\n");
+    }
+    // Literal here too, and only these two: b.txt is still staged from the test before.
+    run("--literal-pathspecs", "add", "--", "[id]", "i");
+    run("--literal-pathspecs", "commit", "-q", "--message", "routes", "--", "[id]", "i");
+    write("[id]/page.txt", "id changed\n");
+    write("i/page.txt", "i changed\n");
+    const context = await readCommitContext(cwd, ["[id]/page.txt"]);
+    assert.doesNotMatch(context, /i changed/);
+    assert.deepEqual(await discard(cwd, { restore: ["[id]/page.txt"], drop: [] }), { ok: true });
+    assert.deepEqual(await changed(), ["modified b.txt", "modified i/page.txt", "untracked other.txt"]);
+    write("[id]/page.txt", "id changed\n");
+    assert.deepEqual(await commitPaths(cwd, "route", ["[id]/page.txt"], []), { ok: true });
+    assert.deepEqual(await changed(), ["modified b.txt", "modified i/page.txt", "untracked other.txt"]);
+  });
 });

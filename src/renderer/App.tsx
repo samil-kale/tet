@@ -283,6 +283,9 @@ export function App() {
 
   const closeProject = useCallback(
     async (projectId: string) => {
+      if (!(await canDiscardEdit(projectId))) {
+        return;
+      }
       await window.tet.projects.remove(projectId);
       const remaining = projectsRef.current.filter((project) => project.id !== projectId);
       setProjects(remaining);
