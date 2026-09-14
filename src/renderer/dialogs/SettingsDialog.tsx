@@ -159,7 +159,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   return (
     // The tabs head the dialog instead of a title, as in the add-repository dialog.
     <DialogFrame
-      header={{ tabs: TABS, active: tab, onSelect: setTab }}
+      header={{ tabs: TABS, active: tab, onSelect: setTab, onClose }}
       className="wide settings-dialog"
       buttons={
         <>

@@ -622,7 +622,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
 
   return (
     <DialogFrame
-      header={{ tabs: MODES, active: mode, onSelect: switchMode }}
+      header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose }}
       className="add-repository-dialog"
       onSubmit={() => {
         if (ready && !busy) {
