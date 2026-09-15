@@ -3,6 +3,16 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.6 (2026-09-16)
+
+- **`tet.json` edits keep your formatting.** Adding folders, excludes, commands or sandbox
+  settings changes only the affected keys; comments, trailing commas and layout stay as written.
+- **Arguments reach Windows shims literally.** Agents and commands started through a `.cmd` shim
+  receive arguments containing `&`, `>`, `%` or quotes unchanged, and stopping one ends the
+  program behind the shim as well.
+- **Safer file writes.** Settings, generated agent configuration and shell transcripts are written
+  atomically, so a crash or a concurrent reader never sees a half-written file.
+
 ## 0.8.5 (2026-09-15)
 
 - **Trees laid out as in VS Code.** The Explorer and the git pane's branch tree share VS Code's
