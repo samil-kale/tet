@@ -60,6 +60,17 @@ function isIgnoredEvent(relativePath: string): boolean {
   );
 }
 
+/** Whether two paths name the one file or folder — the same path in another case, where the
+ *  filesystem does not tell case apart. By file id, as bigints: a win32 file id overflows a number. */
+function sameEntry(a: string, b: string): boolean {
+  try {
+    const [first, second] = [fs.statSync(a, { bigint: true }), fs.statSync(b, { bigint: true })];
+    return first.ino === second.ino && first.dev === second.dev;
+  } catch {
+    return false;
+  }
+}
+
 /** One repository's shared state: the single source of truth for the git views and the terminals.
  *  Refreshed from the git CLI after filesystem changes, so a branch switched in a terminal shows up. */
 export class Repository {
@@ -551,13 +562,15 @@ export class Repository {
     };
   }
 
-  /** A repository-relative path, checked to exist (or not) and resolved, or an error either way. */
-  private async resolveNew(filePath: string): Promise<{ absolute: string } | { error: string }> {
+  /** A repository-relative path, checked to exist (or not) and resolved, or an error either way.
+   *  `renaming` is the path being renamed there: on a case-insensitive filesystem `Readme.md` →
+   *  `README.md` finds the source itself standing at the target, which is no conflict. */
+  private async resolveNew(filePath: string, renaming?: string): Promise<{ absolute: string } | { error: string }> {
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
       return { error: "Path is outside the repository" };
     }
-    if (fs.existsSync(absolute)) {
+    if (fs.existsSync(absolute) && !(renaming && sameEntry(absolute, renaming))) {
       return { error: `A file or folder "${filePath}" already exists at this location` };
     }
     return { absolute };
@@ -612,7 +625,7 @@ export class Repository {
     if (!from) {
       return { ok: false, error: "Path is outside the repository" };
     }
-    const to = await this.resolveNew(toPath);
+    const to = await this.resolveNew(toPath, from);
     if ("error" in to) {
       return { ok: false, error: to.error };
     }

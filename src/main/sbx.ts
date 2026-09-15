@@ -573,6 +573,9 @@ function staleMounts(previous: MountSpec[], current: MountSpec[]): string[] {
  *  sandbox in removeSandbox. */
 const launcherWritten = new Set<string>();
 
+/** The `sbx create` (or rebuild) underway per sandbox name — see ensureSandboxExists. */
+const sandboxSetups = new Map<string, Promise<boolean>>();
+
 /**
  * `sbx ls --json` as name → workspaces, or undefined when sbx could not answer — signed out,
  * `sbx ls` exits 1 (see probeSbx). One process for every sandbox at once.
@@ -711,26 +714,47 @@ const SBX_CREATE_TARGET: Partial<Record<SbxAgentId, string>> = { pi: "docker.io/
  * that could not be pulled (pi's, on a first start without network) is exactly this. Rejects,
  * for the caller to leave the tab in error; sbx's own message has already reached the tab
  * through `onData`.
+ *
+ * One setup per sandbox at a time (`sandboxSetups`), and that one lists again first: two tabs of
+ * a project starting together both find the sandbox missing in their own `checkSbxReady`, and a
+ * second `sbx create` of one name fails with `409 Conflict: sandbox "…" already exists`
+ * (measured) — or, rebuilding, removes the sandbox the first has just made.
  */
-async function ensureSandboxExists(
+function ensureSandboxExists(
   agentId: SbxAgentId,
   projectPath: string,
   name: string,
   sandboxes: SandboxList,
   onData?: OnData
 ): Promise<boolean> {
-  const existing = sandboxes.get(name);
-  if (existing !== undefined && sameWorkspaceSet(existing, [projectPath])) {
-    return false;
+  const listed = sandboxes.get(name);
+  if (listed !== undefined && sameWorkspaceSet(listed, [projectPath])) {
+    return Promise.resolve(false);
   }
-  if (existing !== undefined) {
-    await removeSandbox(name, onData);
-  }
-  const created = await runSbx(["create", SBX_CREATE_TARGET[agentId] ?? agentId, projectPath, "--name", name], { onData });
-  if (!created.ok) {
-    throw new Error(`sbx could not create the ${agentId} sandbox`);
-  }
-  return true;
+  const setup = (sandboxSetups.get(name) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(async () => {
+      const existing = ((await listSandboxes()) ?? sandboxes).get(name);
+      if (existing !== undefined && sameWorkspaceSet(existing, [projectPath])) {
+        return false;
+      }
+      if (existing !== undefined) {
+        await removeSandbox(name, onData);
+      }
+      const created = await runSbx(["create", SBX_CREATE_TARGET[agentId] ?? agentId, projectPath, "--name", name], { onData });
+      if (!created.ok) {
+        throw new Error(`sbx could not create the ${agentId} sandbox`);
+      }
+      return true;
+    });
+  sandboxSetups.set(name, setup);
+  const forget = (): void => {
+    if (sandboxSetups.get(name) === setup) {
+      sandboxSetups.delete(name);
+    }
+  };
+  setup.then(forget, forget);
+  return setup;
 }
 
 /**

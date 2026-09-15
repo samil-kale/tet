@@ -129,6 +129,23 @@ describe("the tet-ctl launcher", () => {
     assert.equal(run.status, 0);
     assert.match(run.stdout, /tet-ctl — control the TET app/);
   });
+
+  it("leaves nothing set in the cmd.exe that ran it", { skip: process.platform !== "win32" }, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-launcher-"));
+    const bin = writeLaunchers(dir, CLI);
+    const after = await new Promise<string>((resolve) => {
+      // One cmd.exe session, as a user typing both lines at its prompt: the launcher, then a look.
+      const child = spawn(`call tet-ctl help >nul & set ELECTRON_RUN_AS_NODE`, [], {
+        env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined, ELECTRON_RUN_AS_NODE: undefined },
+        shell: true
+      });
+      let stdout = "";
+      child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+      child.on("close", () => resolve(stdout));
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+    assert.doesNotMatch(after, /ELECTRON_RUN_AS_NODE=1/);
+  });
 });
 
 describe("the context file", () => {

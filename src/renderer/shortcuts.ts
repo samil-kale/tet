@@ -53,14 +53,20 @@ const DEFS: ShortcutDef[] = [
   { id: "newShellTab", description: "New shell tab", shift: true, key: "t", label: "T" }
 ];
 
+/**
+ * A key whose `code` one of the shortcuts names is decided by that `code` alone: on French AZERTY
+ * the `Comma`-code key reports `.` under Shift, which by `key` would be "next tab" too, and
+ * "previous tab" was on no key at all.
+ */
 export function matchesShortcut(event: KeyboardEvent, id: ShortcutId): boolean {
   const def = DEFS.find((entry) => entry.id === id);
-  return (
-    def !== undefined &&
-    isModifierHeld(event) &&
-    event.shiftKey === def.shift &&
-    (event.key.toLowerCase() === def.key || (def.code !== undefined && event.code === def.code))
-  );
+  if (def === undefined || !isModifierHeld(event) || event.shiftKey !== def.shift) {
+    return false;
+  }
+  if (DEFS.some((entry) => entry.shift === event.shiftKey && entry.code === event.code)) {
+    return def.code === event.code;
+  }
+  return event.key.toLowerCase() === def.key;
 }
 
 export function shortcutLabel(id: ShortcutId): string {

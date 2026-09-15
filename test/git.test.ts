@@ -86,6 +86,13 @@ describe("a repository, from init on", () => {
     assert.deepEqual(await head("a.txt"), { content: "", binary: false, missing: true });
   });
 
+  it("hands a staged file to the commit message before there is a HEAD", async () => {
+    // An agent's `git add` before the first commit: no longer untracked, and no HEAD to diff against.
+    run("add", "a.txt");
+    assert.match(await readCommitContext(cwd), /\+two/);
+    run("rm", "-q", "--cached", "a.txt");
+  });
+
   it("commits everything and is clean again", async () => {
     assert.deepEqual(await commitAll(cwd, "first"), { ok: true });
     const state = await readState(cwd);

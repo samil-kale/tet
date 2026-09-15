@@ -15,10 +15,12 @@ export function writeLaunchers(dataRoot: string, cliPath: string): string {
   const posix = path.join(binDir, "tet-ctl");
   if (process.platform === "win32") {
     // A .cmd rather than a .ps1: cmd.exe finds only the former on PATH. Known limit: a `%` in
-    // either path would be expanded by cmd — batch has no literal quoting.
+    // either path would be expanded by cmd — batch has no literal quoting. `setlocal`: a batch
+    // file sets its variables in the cmd.exe that ran it, and an interactive one would keep
+    // ELECTRON_RUN_AS_NODE for every electron app started there afterwards (measured).
     fs.writeFileSync(
       path.join(binDir, "tet-ctl.cmd"),
-      `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cliPath}" %*\r\n`
+      `@echo off\r\nsetlocal\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cliPath}" %*\r\n`
     );
     // And the POSIX one beside it, because a hook command is run by whichever shell the agent
     // picked: measured, Claude Code runs its hooks on win32 under `/usr/bin/bash`, where a bare

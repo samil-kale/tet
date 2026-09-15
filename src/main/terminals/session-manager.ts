@@ -648,7 +648,10 @@ export class ProjectSessionManager {
       return;
     }
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
-    if (!tab) {
+    // A tab whose start already gave up (`error`, no session) waits for Restart, which reads the
+    // size kept above: retried from here, every settled resize would run the whole setup again —
+    // sbx's checks and the notice included.
+    if (!tab || tab.status === "error") {
       return;
     }
     this.startTab(tab);

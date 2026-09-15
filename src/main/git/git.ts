@@ -672,16 +672,18 @@ function capped(text: string, budget: number): string {
  * for the repository's style, and what the commit would take — every change, or only `selection`.
  * Three invocations plus a read per untracked file — more than the refresh path may spend, but
  * this runs on a wand press. Measured with `claude -p`: asked to run git itself the agent took
- * several times as long, every status, diff and log being a round trip. Empty strings where there
- * is no HEAD yet.
+ * several times as long, every status, diff and log being a round trip. No subjects where there is
+ * no HEAD yet, and the diff is then the staged one: a file added before the first commit is neither
+ * untracked nor in a diff against HEAD, and would otherwise not be named at all.
  */
 export async function readCommitContext(cwd: string, selection?: string[]): Promise<string> {
   const pathspec = selection ? ["--", ...selection] : [];
-  const [subjects, diff, untracked] = await Promise.all([
+  const [subjects, againstHead, untracked] = await Promise.all([
     git(cwd, ["log", `-${RECENT_SUBJECTS}`, "--format=%s"]),
     git(cwd, [LITERAL_PATHSPECS, "diff", "HEAD", ...pathspec]),
     git(cwd, [LITERAL_PATHSPECS, "ls-files", "--others", "--exclude-standard", "-z", ...pathspec])
   ]);
+  const diff = againstHead.code === 0 ? againstHead : await git(cwd, [LITERAL_PATHSPECS, "diff", "--cached", ...pathspec]);
   const sections: string[] = [];
   if (subjects.code === 0 && subjects.stdout.trim() !== "") {
     sections.push(`=== recent commit subjects ===\n${subjects.stdout.trim()}`);
@@ -690,7 +692,7 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
   const tracked = diff.code === 0 ? capped(diff.stdout, budget) : "";
   if (tracked.trim() !== "") {
     budget -= tracked.length;
-    sections.push(`=== diff against HEAD ===\n${tracked.trimEnd()}`);
+    sections.push(`=== ${diff === againstHead ? "diff against HEAD" : "staged diff, no commit yet"} ===\n${tracked.trimEnd()}`);
   }
   const paths = untracked.code === 0 ? untracked.stdout.split("\0").filter((entry) => entry !== "") : [];
   for (const relative of paths) {
