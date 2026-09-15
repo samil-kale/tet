@@ -290,8 +290,10 @@ describe("tet-ctl against the control server", () => {
       "dark-modern:dark",
       "dark-slate:dark",
       "dark-github:dark",
+      "dark-intellij:dark",
       "light-modern:light",
-      "light-github:light"
+      "light-github:light",
+      "light-intellij:light"
     ]);
   });
 

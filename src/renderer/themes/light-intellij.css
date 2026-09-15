@@ -1,0 +1,155 @@
+/*
+ * "Light IntelliJ": the Light variant of compassak.intellij-idea-new-ui (MIT, Ananda Bibek Ray),
+ * with its dark title bar. Values, token colors included, come from light-intellij.json beside this
+ * file: the extension's theme file as it ships, renamed and stripped of its comments. See
+ * dark-modern.css for the layer. The theme sets few colors; one it leaves unset takes VS Code's
+ * registry fallback — what VS Code draws with this theme — or, for a border, the theme's own
+ * border color; each is marked below. Exception: the secondary button's hover, marked where it
+ * stands.
+ */
+:root[data-theme="light-intellij"] {
+  color-scheme: light;
+
+  /* Unset; the registry's. */
+  --vscode-foreground: #616161;
+  --vscode-descriptionForeground: #717171;
+  --vscode-errorForeground: #a1260d;
+  --vscode-textLink-foreground: #006ab1;
+  --vscode-focusBorder: #aeb3c2;
+  /* Unset; the registry's is focusBorder. */
+  --vscode-sash-hoverBorder: #aeb3c2;
+
+  --vscode-editor-background: #ffffff;
+  --vscode-editor-foreground: #000000;
+  --vscode-terminal-background: #ffffff;
+  --vscode-terminal-foreground: #000000;
+
+  --vscode-sideBar-background: #f7f8fa;
+  /* Unset; the registry's is sideBar.foreground. */
+  --vscode-sideBarSectionHeader-foreground: #000000;
+  --vscode-titleBar-activeBackground: #27282e;
+  --vscode-titleBar-activeForeground: #e7ebed;
+
+  --vscode-panel-background: #f7f8fa;
+  --vscode-panel-border: #ebecf0;
+
+  --vscode-tab-activeBackground: #f9fef9;
+  --vscode-tab-activeForeground: #000000;
+  --vscode-tab-inactiveBackground: #f7f8fa;
+  --vscode-tab-inactiveForeground: #777777;
+  --vscode-tab-border: #ebecf0;
+
+  /* tet's own, the same as Dark Modern's — see the note there. */
+  --vscode-toolbar-hoverBackground: #5a5d5e50;
+
+  --vscode-list-activeSelectionBackground: #cfdefc;
+  --vscode-list-activeSelectionForeground: #000000;
+  --vscode-list-hoverBackground: #dfdfdf;
+
+  /* Unset; the registry's, the placeholder the foreground at half its alpha; the border the
+     theme's. */
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #616161;
+  --vscode-input-border: #ebecf0;
+  --vscode-input-placeholderForeground: #61616180;
+
+  /* Unset; the registry's. */
+  --vscode-dropdown-background: #ffffff;
+  --vscode-dropdown-foreground: #616161;
+  --vscode-dropdown-border: #cecece;
+
+  /* Unset; the registry's: hover the background darkened by 0.2, the secondary button the list
+     hover and the foreground. */
+  --vscode-button-background: #007acc;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: #0062a3;
+  --vscode-button-secondaryBackground: #dfdfdf;
+  --vscode-button-secondaryForeground: #616161;
+  /* Not the registry's lighten(0.2), which is white and lightens the button into the dialog
+     behind it: the list hover darkened by the step Light Modern's secondary button takes. */
+  --vscode-button-secondaryHoverBackground: #c6c6c6;
+
+  --vscode-editorWidget-background: #f7f8fa;
+  --vscode-editorWidget-border: #ebecf0;
+  /* Unset; the registry's. */
+  --vscode-widget-shadow: #00000029;
+
+  /* Unset; the registry falls back to the dropdown, the list selection and the foreground at 0.2
+     alpha; the border is the theme's. */
+  --vscode-menu-background: #ffffff;
+  --vscode-menu-foreground: #616161;
+  --vscode-menu-border: #ebecf0;
+  --vscode-menu-selectionBackground: #cfdefc;
+  --vscode-menu-selectionForeground: #000000;
+  --vscode-menu-separatorBackground: #61616133;
+
+  /* Unset; the registry's. */
+  --vscode-progressBar-background: #0e70c0;
+
+  /* Unset; the registry falls back to the editor widget and the editor's squiggle colors; the
+     border is the theme's. */
+  --vscode-notifications-background: #f7f8fa;
+  --vscode-notifications-foreground: #616161;
+  --vscode-notifications-border: #ebecf0;
+  --vscode-notificationsErrorIcon-foreground: #e51400;
+  --vscode-notificationsWarningIcon-foreground: #bf8803;
+  --vscode-notificationsInfoIcon-foreground: #0063d3;
+
+  --vscode-scrollbarSlider-background: #3a3a3a33;
+  /* Unset; the registry's. */
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-scrollbarSlider-activeBackground: #00000099;
+
+  --vscode-gitDecoration-modifiedResourceForeground: #0050c1;
+  /* Unset; the git extension's. */
+  --vscode-gitDecoration-deletedResourceForeground: #ad0707;
+  --vscode-gitDecoration-untrackedResourceForeground: #007100;
+  --vscode-gitDecoration-addedResourceForeground: #3e7718;
+  --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
+
+  /* Unset; the registry's, and the overview ruler the text colors at twice their alpha. */
+  --vscode-diffEditor-insertedLineBackground: #9bb95533;
+  --vscode-diffEditor-removedLineBackground: #ff000033;
+  --vscode-diffEditor-insertedTextBackground: #9ccc2c40;
+  --vscode-diffEditor-removedTextBackground: #ff000033;
+  --vscode-diffEditorOverview-insertedForeground: #9ccc2c80;
+  --vscode-diffEditorOverview-removedForeground: #ff000066;
+  --vscode-editorLineNumber-foreground: #b9beca;
+  --vscode-editorLineNumber-activeForeground: #767a8a;
+  /* Unset; the registry's. */
+  --vscode-editorCursor-foreground: #000000;
+  --vscode-editor-selectionBackground: #a6d2ff;
+  /* Unset; the registry's: the selection at half its alpha. */
+  --vscode-editor-inactiveSelectionBackground: #a6d2ff80;
+  /* The theme's lineHighlightBackground, as the border tet draws it with. */
+  --vscode-editor-lineHighlightBorder: #f5f8fe;
+  --vscode-editor-findMatchBackground: #a6d2ff;
+  --vscode-editor-findMatchHighlightBackground: #fcbd3866;
+  /* The theme's editorIndentGuide.background and activeBackground, which the numbered ones
+     default to. */
+  --vscode-editorIndentGuide-background1: #ebecf0;
+  --vscode-editorIndentGuide-activeBackground1: #aeb3c2;
+
+  /* Unset; the registry's: the terminal foreground, the editor selection, and that at half its
+     alpha. */
+  --vscode-terminalCursor-foreground: #000000;
+  --vscode-terminal-selectionBackground: #a6d2ff;
+  --vscode-terminal-inactiveSelectionBackground: #a6d2ff80;
+
+  --vscode-terminal-ansiBlack: #6e6e6e;
+  --vscode-terminal-ansiRed: #d70000;
+  --vscode-terminal-ansiGreen: #5f8700;
+  --vscode-terminal-ansiYellow: #af8700;
+  --vscode-terminal-ansiBlue: #0087ff;
+  --vscode-terminal-ansiMagenta: #af005f;
+  --vscode-terminal-ansiCyan: #00afaf;
+  --vscode-terminal-ansiWhite: #e4e4e4;
+  --vscode-terminal-ansiBrightBlack: #1c1c1c;
+  --vscode-terminal-ansiBrightRed: #d75f00;
+  --vscode-terminal-ansiBrightGreen: #585858;
+  --vscode-terminal-ansiBrightYellow: #626262;
+  --vscode-terminal-ansiBrightBlue: #808080;
+  --vscode-terminal-ansiBrightMagenta: #5f5faf;
+  --vscode-terminal-ansiBrightCyan: #8a8a8a;
+  --vscode-terminal-ansiBrightWhite: #ffffd7;
+}

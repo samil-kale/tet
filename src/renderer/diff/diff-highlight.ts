@@ -25,7 +25,9 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
   "github-light-default": () => import("@shikijs/themes/github-light-default"),
   // A JSON import is typed literally, and one color here is an array ThemeRegistration rejects.
-  "dark-slate": () => import("../themes/dark-slate.json") as unknown as Promise<{ default: ThemeRegistration }>
+  "dark-slate": () => import("../themes/dark-slate.json") as unknown as Promise<{ default: ThemeRegistration }>,
+  "dark-intellij": () => import("../themes/dark-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>,
+  "light-intellij": () => import("../themes/light-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>
 };
 
 /** `highlightTheme()` with its editor surface patched from tet's --vscode-* values, for shiki and

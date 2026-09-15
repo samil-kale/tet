@@ -7,8 +7,15 @@ export interface ThemeDefinition {
   /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */
   label: string;
   /** Token colors: Dark/Light Modern `include` Dark+/Light+; Dark Slate's is tet's own
-   *  (src/renderer/themes/dark-slate.json). */
-  shikiTheme: "dark-plus" | "light-plus" | "github-dark-default" | "github-light-default" | "dark-slate";
+   *  (src/renderer/themes/dark-slate.json), the IntelliJ themes' the extension's, beside it. */
+  shikiTheme:
+    | "dark-plus"
+    | "light-plus"
+    | "github-dark-default"
+    | "github-light-default"
+    | "dark-slate"
+    | "dark-intellij"
+    | "light-intellij";
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
   /** BrowserWindow paint and Windows title-bar overlay, set before the CSS exists — kept in step
@@ -53,6 +60,16 @@ export const THEMES: ThemeDefinition[] = [
     terminalForeground: "#e6edf3"
   },
   {
+    id: "dark-intellij",
+    label: "IntelliJ",
+    shikiTheme: "dark-intellij",
+    kind: "dark",
+    windowBackground: "#2b2d30",
+    titleBarSymbolColor: "#cccccc",
+    terminalBackground: "#1e1f22",
+    terminalForeground: "#bcbec3"
+  },
+  {
     id: "light-modern",
     label: "Modern",
     shikiTheme: "light-plus",
@@ -71,6 +88,16 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#656d76",
     terminalBackground: "#ffffff",
     terminalForeground: "#1f2328"
+  },
+  {
+    id: "light-intellij",
+    label: "IntelliJ",
+    shikiTheme: "light-intellij",
+    kind: "light",
+    windowBackground: "#27282e",
+    titleBarSymbolColor: "#e7ebed",
+    terminalBackground: "#ffffff",
+    terminalForeground: "#000000"
   }
 ];
 
