@@ -62,6 +62,8 @@
      hover and the foreground. */
   --vscode-button-background: #007acc;
   --vscode-button-foreground: #ffffff;
+  /* Unset; the registry's is contrastBorder, set only in high contrast. */
+  --vscode-button-border: #00000000;
   --vscode-button-hoverBackground: #0062a3;
   --vscode-button-secondaryBackground: #dfdfdf;
   --vscode-button-secondaryForeground: #616161;
