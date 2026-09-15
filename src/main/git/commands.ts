@@ -1,5 +1,8 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+// The ESM build: esbuild can't follow the UMD build's `require("./impl/format")`.
+import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
+import writeFileAtomic from "write-file-atomic";
 import type {
   ExplorerRoot,
   ExplorerSettings,
@@ -63,38 +66,54 @@ function file(root: string): string {
   return path.join(root, PROJECT_FILE);
 }
 
-/** The file's contents, or **null** when there is none. A write may create a missing file but never
- *  replaces a broken one — it is a file in the user's repository. */
-async function read(root: string): Promise<ProjectFile | null> {
-  let content: string;
+/** The file's text, or **null** when there is none. */
+async function readText(root: string): Promise<string | null> {
   try {
-    content = await fs.readFile(file(root), "utf8");
+    return await fs.readFile(file(root), "utf8");
   } catch {
     return null;
   }
-  try {
-    return JSON.parse(content) as ProjectFile;
-  } catch {
-    return UNREADABLE;
-  }
 }
 
-/** Writes one key, keeping every other the file already holds. */
-async function patch(root: string, changes: Partial<ProjectFile>): Promise<void> {
-  await write(root, { ...(await readForPatch(root)), ...changes });
+/** Parsed like a `.code-workspace`: comments and trailing commas allowed. */
+function parse(text: string): ProjectFile {
+  const errors: ParseError[] = [];
+  const content: unknown = parseJsonc(text, errors, { allowTrailingComma: true });
+  return errors.length > 0 || typeof content !== "object" || content === null || Array.isArray(content)
+    ? UNREADABLE
+    : (content as ProjectFile);
 }
 
-/** The file for an edit; throws on a broken one rather than have it written over. */
-async function readForPatch(root: string): Promise<ProjectFile> {
-  const content = (await read(root)) ?? {};
+/** The file's contents, or **null** when there is none. A write may create a missing file but never
+ *  replaces a broken one — it is a file in the user's repository. */
+async function read(root: string): Promise<ProjectFile | null> {
+  const text = await readText(root);
+  return text === null ? null : parse(text);
+}
+
+/** A value to set at a path inside the file; undefined removes the key. */
+type Change = [JSONPath, unknown];
+
+/**
+ * Applies the changes `edit` derives from the file's contents, leaving comments, formatting and
+ * every other key as the user wrote them; throws on a broken file rather than have it written over.
+ */
+async function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
+  const text = await readText(root);
+  const content = text === null ? {} : parse(text);
   if (content === UNREADABLE) {
     throw new Error(`${PROJECT_FILE} is not valid JSON`);
   }
-  return content;
-}
-
-function write(root: string, content: ProjectFile): Promise<void> {
-  return fs.writeFile(file(root), `${JSON.stringify(content, undefined, 2)}\n`, "utf8");
+  const changes = edit(content);
+  if (changes.length === 0) {
+    return;
+  }
+  const formattingOptions = { insertSpaces: true, tabSize: 2, eol: text?.includes("\r\n") ? "\r\n" : "\n" };
+  let next = text ?? "";
+  for (const [jsonPath, value] of changes) {
+    next = applyEdits(next, modify(next, jsonPath, value, { formattingOptions }));
+  }
+  await writeFileAtomic(file(root), text === null ? `${next}\n` : next, "utf8");
 }
 
 /** Only the string values of an `env`, which outranks the inherited environment. */
@@ -144,11 +163,12 @@ export async function readCommands(root: string): Promise<ProjectCommand[]> {
 
 export function writeCommands(root: string, commands: ProjectCommand[]): Promise<void> {
   // The short form wherever the command line alone says it all.
-  return patch(root, {
-    commands: commands.map((command) =>
-      command.name || command.cwd || command.env || command.shell ? command : command.command
-    )
-  });
+  return patch(root, () => [
+    [
+      ["commands"],
+      commands.map((command) => (command.name || command.cwd || command.env || command.shell ? command : command.command))
+    ]
+  ]);
 }
 
 /** A `folders` path as the tree keys it: repository-relative, forward slashes, "" for the root;
@@ -229,46 +249,49 @@ export const DEFAULT_EXPLORER_VIEW: ExplorerSettings = {
 
 /** "Add Folder to Workspace". No `folders` means the whole repository, so the first add also writes
  *  that root. Existing entries are kept as written. */
-export async function addFolder(root: string, folderPath: string): Promise<void> {
-  const content = await readForPatch(root);
-  const folders = Array.isArray(content.folders) ? (content.folders as unknown[]) : [];
-  if (folders.some((entry) => storedPath(entry) === folderPath)) {
-    return;
-  }
-  const kept = folders.length === 0 ? [{ path: "." }] : folders;
-  await write(root, { ...content, folders: [...kept, { path: folderPath }] });
+export function addFolder(root: string, folderPath: string): Promise<void> {
+  return patch(root, (content) => {
+    const folders = Array.isArray(content.folders) ? (content.folders as unknown[]) : [];
+    if (folders.some((entry) => storedPath(entry) === folderPath)) {
+      return [];
+    }
+    const kept = folders.length === 0 ? [{ path: "." }] : folders;
+    return [[["folders"], [...kept, { path: folderPath }]]];
+  });
 }
 
 /** "Remove Folder from Workspace": the last one gone means no `folders` — the whole repository. */
-export async function removeFolder(root: string, folderPath: string): Promise<void> {
-  const content = await readForPatch(root);
-  const folders = (Array.isArray(content.folders) ? (content.folders as unknown[]) : []).filter(
-    (entry) => storedPath(entry) !== folderPath
-  );
-  if (folders.length > 0) {
-    await write(root, { ...content, folders });
-    return;
-  }
-  const rest: ProjectFile = { ...content };
-  delete rest.folders;
-  await write(root, rest);
+export function removeFolder(root: string, folderPath: string): Promise<void> {
+  return patch(root, (content) => {
+    const folders = (Array.isArray(content.folders) ? (content.folders as unknown[]) : []).filter(
+      (entry) => storedPath(entry) !== folderPath
+    );
+    return [[["folders"], folders.length > 0 ? folders : undefined]];
+  });
 }
 
 /** Writes one key inside `settings`, keeping every other key. */
-async function patchSetting(root: string, key: string, value: unknown): Promise<void> {
-  const content = await readForPatch(root);
-  const settings = toSettings(content.settings);
-  await write(root, { ...content, settings: { ...settings, [key]: value } });
+function patchSetting(root: string, key: string, value: unknown): Promise<void> {
+  return patch(root, (content) => [settingChange(content, key, value)]);
+}
+
+/** A key inside `settings`; a `settings` that isn't an object is replaced, as an edit can't reach into it. */
+function settingChange(content: ProjectFile, key: string, value: unknown): Change {
+  const settings = content.settings;
+  return typeof settings === "object" && settings !== null && !Array.isArray(settings)
+    ? [["settings", key], value]
+    : [["settings"], { [key]: value }];
 }
 
 /** "Exclude from Files": the path itself as a pattern, set to true. */
-export async function addExclude(root: string, relPath: string): Promise<void> {
-  const content = await readForPatch(root);
-  const settings = toSettings(content.settings);
-  const existing = toSettings(settings[KEY_EXCLUDE]);
-  await write(root, {
-    ...content,
-    settings: { ...settings, [KEY_EXCLUDE]: { ...existing, [relPath]: true } }
+export function addExclude(root: string, relPath: string): Promise<void> {
+  return patch(root, (content) => {
+    const exclude = toSettings(content.settings)[KEY_EXCLUDE];
+    return [
+      typeof exclude === "object" && exclude !== null && !Array.isArray(exclude)
+        ? [["settings", KEY_EXCLUDE, relPath], true]
+        : settingChange(content, KEY_EXCLUDE, { [relPath]: true })
+    ];
   });
 }
 
@@ -375,18 +398,21 @@ export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
 }
 
 /** Replaces only the rows that apply here — see StoredSbxPath. */
-export async function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<void> {
-  const content = await readForPatch(root);
-  const others = toSbxPaths(sbxSection(content).paths).filter((entry) => !appliesHere(entry));
-  const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: process.platform }));
-  await write(root, {
-    ...content,
-    sbx: {
-      enabled: config.enabled,
-      knowledge: config.knowledge,
-      ports: config.ports,
-      paths: [...others, ...mine],
-      hosts: config.hosts
-    }
+export function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<void> {
+  return patch(root, (content) => {
+    const others = toSbxPaths(sbxSection(content).paths).filter((entry) => !appliesHere(entry));
+    const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: process.platform }));
+    return [
+      [
+        ["sbx"],
+        {
+          enabled: config.enabled,
+          knowledge: config.knowledge,
+          ports: config.ports,
+          paths: [...others, ...mine],
+          hosts: config.hosts
+        }
+      ]
+    ];
   });
 }

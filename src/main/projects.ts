@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
 import type { AddRepositoryResult, Project } from "../shared/types";
 import { git } from "./git/git-client";
 import type { RepositoryManager } from "./git/repository";
@@ -110,7 +111,8 @@ export class ProjectStore {
 
   private save(): void {
     try {
-      fs.writeFileSync(this.file, JSON.stringify(this.projects, null, 2), "utf8");
+      // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
+      writeFileAtomic.sync(this.file, JSON.stringify(this.projects, null, 2), "utf8");
     } catch (error) {
       console.error("[tet] could not persist projects:", error);
     }

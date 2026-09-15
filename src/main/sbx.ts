@@ -65,6 +65,7 @@ function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
     const child = spawn(resolved.command, resolved.args, {
       cwd: os.tmpdir(),
       windowsHide: true,
+      windowsVerbatimArguments: resolved.windowsVerbatimArguments,
       stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"]
     });
     if (options.cancellable) {

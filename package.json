@@ -33,6 +33,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/semver": "^7.8.0",
+    "@types/write-file-atomic": "^4.0.3",
     "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-webgl": "^0.19.0",
@@ -41,6 +42,7 @@
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1",
     "eslint": "^10.8.0",
+    "jsonc-parser": "^3.3.1",
     "monaco-editor": "^0.56.0",
     "monaco-editor-core": "^0.56.0",
     "react": "^19.2.0",
@@ -48,6 +50,7 @@
     "semver": "^7.8.5",
     "shiki": "^4.4.3",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.65.0",
+    "write-file-atomic": "^7.0.1"
   }
 }

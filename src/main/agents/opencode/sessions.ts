@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
 import { watchTranscriptDir } from "../../watch-dir";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import { runOpencode } from "./cli";
@@ -130,8 +131,7 @@ export const opencodeSessionProvider: SessionProvider = {
     const requests = renameDir(agentDir);
     fs.mkdirSync(requests, { recursive: true });
     const request = path.join(requests, sessionId);
-    fs.writeFileSync(`${request}.tmp`, trimmed);
-    fs.renameSync(`${request}.tmp`, request);
+    writeFileAtomic.sync(request, trimmed);
     const recordFile = path.join(sessionsDir(agentDir), `${sessionId}.json`);
     const deadline = Date.now() + RENAME_TIMEOUT_MS;
     while (Date.now() < deadline) {

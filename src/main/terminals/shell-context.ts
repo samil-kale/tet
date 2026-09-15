@@ -1,5 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
+import { ANSI_SEQUENCE_AT_START, stripAnsi } from "../../shared/ansi";
 import { WIN_BOM } from "../../shared/script-text";
 
 const WRITE_DEBOUNCE_MS = 250;
@@ -13,18 +15,18 @@ const LOG_TRUNCATION_NOTE = "... [earlier output dropped, showing most recent]\n
 // PowerShell 5.1's Get-Content reads BOM-less files as ANSI, garbling non-ASCII output.
 const CONTEXT_FILE_BOM = process.platform === "win32" ? WIN_BOM : "";
 
-/** Write beside and rename: another process reads these, and on Windows a read mid-write fails. */
-async function replaceFile(file: string, contents: string): Promise<void> {
-  const temp = `${file}.tmp`;
-  await fs.promises.writeFile(temp, contents);
-  await fs.promises.rename(temp, file);
+/** Write beside and rename: another process reads these, and on Windows a read mid-write fails. No
+ *  fsync: rewritten every few hundred milliseconds under output, and a transcript lost to a crash
+ *  costs nothing. */
+function replaceFile(file: string, contents: string): Promise<void> {
+  return writeFileAtomic(file, contents, { fsync: false });
 }
 
 class CappedLogFile {
   private content = "";
   private truncated = false;
   private dirty = false;
-  /** Chained, not concurrent — writes share one temp path. */
+  /** Chained, not concurrent — a failed write is handled after the writes before it. */
   private writing: Promise<void> = Promise.resolve();
 
   constructor(
@@ -69,22 +71,16 @@ class CappedLogFile {
   }
 }
 
-// eslint-disable-next-line no-control-regex
-const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
-
 /** Strips escape sequences and keeps what follows a line's last bare `\r` — a progress bar's
  *  redraws leave the line as finally shown. */
 function cleanTerminalOutput(data: string): string {
-  return data
-    .replace(ANSI_PATTERN, "")
+  return stripAnsi(data)
     .replace(/\r\n/g, "\n")
     .split("\n")
     .map((line) => line.slice(line.lastIndexOf("\r") + 1))
     .join("\n");
 }
 
-// eslint-disable-next-line no-control-regex
-const ANSI_AT_START = /^(?:\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_])/;
 /** The most of a chunk held back for the next one. */
 const MAX_CARRY = 4096;
 
@@ -97,7 +93,7 @@ function carryFrom(data: string): number {
     return newline + 1;
   }
   const escape = data.lastIndexOf("\x1b");
-  if (escape !== -1 && data.length - escape < MAX_CARRY && !ANSI_AT_START.test(data.slice(escape))) {
+  if (escape !== -1 && data.length - escape < MAX_CARRY && !ANSI_SEQUENCE_AT_START.test(data.slice(escape))) {
     return escape;
   }
   return data.length;
@@ -120,7 +116,7 @@ export class ShellContext {
   /** What was last written, so an unchanged context isn't rewritten. */
   private written: string | undefined;
   private disposed = false;
-  /** Chained, not concurrent — writes share one temp path. */
+  /** Chained, not concurrent — a failed write is handled after the writes before it. */
   private writing: Promise<void> = Promise.resolve();
   /** Per tab, the tail of its last chunk held back for the next one. */
   private readonly carries = new Map<string, string>();

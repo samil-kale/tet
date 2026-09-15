@@ -41,8 +41,12 @@ const installedChecks = new Map<string, Promise<boolean>>();
 /** Always spawns (the requirements re-check needs that) and remembers the answer. */
 export function checkAgentInstalled(executable: string, versionArgs: string[], cwd: string): Promise<boolean> {
   const check = new Promise<boolean>((resolve) => {
-    const { command, args } = resolveCommand(executable, versionArgs);
-    const process = spawn(command, args, { cwd, windowsHide: true });
+    const command = resolveCommand(executable, versionArgs);
+    const process = spawn(command.command, command.args, {
+      cwd,
+      windowsHide: true,
+      windowsVerbatimArguments: command.windowsVerbatimArguments
+    });
     let resolved = false;
     const finish = (installed: boolean) => {
       if (!resolved) {

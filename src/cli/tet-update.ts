@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import writeFileAtomic from "write-file-atomic";
 import type { UpdateResult } from "../shared/release";
 
 /**
@@ -44,9 +45,7 @@ function retried(action: () => void): void {
 
 /** Written beside and renamed into place: the app may be starting and reading it. */
 function writeResult(file: string, result: UpdateResult): void {
-  const temp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(temp, JSON.stringify(result));
-  fs.renameSync(temp, file);
+  writeFileAtomic.sync(file, JSON.stringify(result));
 }
 
 function main(): void {

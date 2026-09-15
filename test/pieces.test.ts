@@ -1,4 +1,5 @@
 import * as assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import { createRequire } from "node:module";
@@ -13,11 +14,12 @@ import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/exten
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
+import { ANSI_SEQUENCE_AT_START, stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/shared/script-text";
 import { ProjectStore } from "../src/main/projects";
 import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
 import { isMountAllowed, parseFilesystemRules } from "../src/main/sbx-policy";
-import { resolveCommand } from "../src/main/terminals/pty";
+import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
@@ -74,16 +76,50 @@ describe("resolveCommand", () => {
     assert.deepEqual(resolveCommand("C:\\tools\\run.exe", ["-v"]), { command: "C:\\tools\\run.exe", args: ["-v"] });
     assert.deepEqual(resolveCommand("C:\\tools\\run.cmd", ["-v"]), {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", "C:\\tools\\run.cmd", "-v"]
+      args: ["/d", "/s", "/c", '"C:\\tools\\run.cmd ^"-v^""'],
+      windowsVerbatimArguments: true
     });
-    assert.deepEqual(resolveCommand("C:\\Program Files\\run.cmd", ["-v"]).args, [
-      "/d",
-      "/s",
-      "/c",
-      "call",
-      "C:\\Program Files\\run.cmd",
-      "-v"
-    ]);
+  });
+
+  it("hands every character to a shim literally, through cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, () => {
+    // An npm shim's shape, in a folder whose name cmd.exe would otherwise split and group.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet shim (x)-"));
+    const script = path.join(dir, "argv.js");
+    fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
+    const shim = path.join(dir, "echo-args.cmd");
+    fs.writeFileSync(shim, `@ECHO off\r\nSETLOCAL\r\n"${process.execPath}" "${script}" %*\r\n`);
+    const args = ["plain", "", "a b", "a&b", "a>b", "a|b", "%PATH%", "a^b", 'say "hi"', "(x)", "!x!", "C:\\dir\\", "a\\\"b", "x;y,z", "ä€"];
+    const resolved = resolveCommand(shim, args);
+    const run = spawnSync(resolved.command, resolved.args, {
+      encoding: "utf8",
+      windowsHide: true,
+      windowsVerbatimArguments: resolved.windowsVerbatimArguments
+    });
+    assert.deepEqual(JSON.parse(run.stdout), args, run.stderr);
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["argv.js", "echo-args.cmd"], "nothing redirected into a file");
+  });
+
+  it("kills the program behind a shim along with its cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-kill-"));
+    const pidFile = path.join(dir, "pid");
+    const script = path.join(dir, "wait.js");
+    fs.writeFileSync(script, `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
+    const shim = path.join(dir, "wait.cmd");
+    fs.writeFileSync(shim, `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
+    const resolved = resolveCommand(shim, []);
+    const child = spawn(resolved.command, resolved.args, { windowsHide: true, windowsVerbatimArguments: resolved.windowsVerbatimArguments, stdio: "ignore" });
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    await eventually("the program started", () => fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8") !== "", 10_000);
+    const pid = Number(fs.readFileSync(pidFile, "utf8"));
+    killProcessTree(child);
+    await eventually("the program behind the shim exited", () => !alive(pid), 10_000);
   });
 
   it("changes nothing elsewhere", { skip: process.platform === "win32" && "not win32" }, () => {
@@ -243,6 +279,19 @@ describe("sbx's filesystem policy", () => {
   });
 });
 
+describe("stripping escape sequences", () => {
+  it("removes CSI with any parameter bytes, OSC ended either way and two-byte escapes", () => {
+    const text = "\x1b[1;31mred\x1b[0m \x1b[>4;1mkeys\x1b[<u \x1b]0;title\x07a\x1b]8;;url\x1b\\b \x1bMc\x1b[?25h";
+    assert.equal(stripAnsi(text), "red keys ab c");
+  });
+
+  it("recognizes a sequence only when it starts the text", () => {
+    assert.ok(ANSI_SEQUENCE_AT_START.test("\x1b[>4;1mrest"));
+    assert.ok(!ANSI_SEQUENCE_AT_START.test("x\x1b[0m"));
+    assert.ok(!ANSI_SEQUENCE_AT_START.test("\x1b[1;3"), "cut off mid-sequence");
+  });
+});
+
 describe("the quoting helpers", () => {
   it("make any value one literal word in their shell", () => {
     assert.equal(shellSingleQuote("it's $HOME"), `'it'\\''s $HOME'`);
@@ -314,6 +363,7 @@ describe("the stores", () => {
     store.reorder(["nope", added.id]);
     assert.deepEqual(store.list().map((project) => project.id), [added.id, "a", "c"], "unknown dropped, omitted kept behind");
     assert.equal(new ProjectStore(dir).list().length, 3, "persisted");
+    assert.deepEqual(fs.readdirSync(dir), ["projects.json"], "renamed into place, no temporary file left");
   });
 });
 

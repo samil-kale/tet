@@ -159,6 +159,66 @@ describe("the tree's own edits", () => {
   });
 });
 
+describe("a hand-written tet.json", () => {
+  const handWritten = [
+    "{",
+    "\t// Run from the tab strip.",
+    '\t"commands": ["npm test",],',
+    '\t"settings": {',
+    '\t\t"files.exclude": { "dist": true }, // build output',
+    '\t\t"explorer.sortOrder": "type",',
+    "\t},",
+    "}",
+    ""
+  ].join("\r\n");
+
+  it("reads comments and trailing commas the way a .code-workspace allows them", async () => {
+    put(handWritten);
+    assert.deepEqual(await readCommands(root), [{ command: "npm test" }]);
+    const view = await readExplorerView(root);
+    assert.deepEqual([view.exclude, view.sortOrder], [["dist"], "type"]);
+  });
+
+  it("keeps comments, indentation and line endings through every edit", async () => {
+    put(handWritten);
+    await writeCommands(root, [{ command: "npm run lint" }]);
+    await addExclude(root, "out");
+    await addFolder(root, "src");
+    const text = fs.readFileSync(file(), "utf8");
+    for (const kept of ["\t// Run from the tab strip.", '"explorer.sortOrder": "type"', "// build output"]) {
+      assert.ok(text.includes(kept), kept);
+    }
+    assert.equal(text.replace(/\r\n/g, "").includes("\n"), false, "CRLF stays CRLF");
+    assert.deepEqual(await readCommands(root), [{ command: "npm run lint" }]);
+    const view = await readExplorerView(root);
+    assert.deepEqual(view.exclude, ["dist", "out"]);
+    assert.deepEqual(view.folders.map((folder) => folder.path), ["", "src"]);
+    await removeFolder(root, "src");
+    await removeFolder(root, "");
+    assert.equal(fs.readFileSync(file(), "utf8").includes('"folders"'), false, "the key goes with the last folder");
+  });
+
+  it("creates a missing file as plain JSON, and replaces a settings key that isn't an object", async () => {
+    await addExclude(root, "dist");
+    assert.deepEqual(stored(), { settings: { "files.exclude": { dist: true } } });
+    assert.ok(fs.readFileSync(file(), "utf8").endsWith("}\n"));
+    put(JSON.stringify({ settings: "junk" }));
+    await addExclude(root, "dist");
+    assert.deepEqual(stored(), { settings: { "files.exclude": { dist: true } } });
+  });
+
+  it("refuses to edit a file whose top level isn't an object", async () => {
+    put("[]");
+    await assert.rejects(addFolder(root, "src"), /not valid JSON/);
+    assert.equal(fs.readFileSync(file(), "utf8"), "[]", "untouched");
+  });
+
+  it("leaves no temporary file beside it", async () => {
+    await writeCommands(root, [{ command: "a" }]);
+    assert.deepEqual(fs.readdirSync(root), ["tet.json"]);
+  });
+});
+
 describe("readSbxConfig", () => {
   it("is disabled and empty for a project with no tet.json at all", async () => {
     assert.deepEqual(await readSbxConfig(root), {

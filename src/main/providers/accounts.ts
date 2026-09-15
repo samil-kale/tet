@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { safeStorage } from "electron";
+import writeFileAtomic from "write-file-atomic";
 import type { ProviderAccount, ProviderId } from "../../shared/types";
 
 /** What the file holds: the account plus its token, encrypted by the OS and base64-wrapped. */
@@ -113,7 +114,8 @@ export class AccountStore {
 
   private save(): void {
     try {
-      fs.writeFileSync(this.file, JSON.stringify(this.accounts, null, 2), "utf8");
+      // Renamed into place: `load` reads a half-written file as no accounts, and the next save would keep that.
+      writeFileAtomic.sync(this.file, JSON.stringify(this.accounts, null, 2), "utf8");
     } catch (error) {
       console.error("[tet] could not persist accounts:", error);
     }

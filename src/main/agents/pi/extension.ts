@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
 import { renderHookReport } from "../hook-report";
 
@@ -19,9 +20,7 @@ export interface PiExtensionOptions {
 export function writePiExtension(storageDir: string, contextFile: string, target: HookTarget = HOST_TARGET): string {
   fs.mkdirSync(storageDir, { recursive: true });
   const file = path.join(storageDir, "tet.ts");
-  const temp = `${file}.tmp`;
-  fs.writeFileSync(temp, renderPiExtension({ contextFile: target.embed(contextFile) }));
-  fs.renameSync(temp, file);
+  writeFileAtomic.sync(file, renderPiExtension({ contextFile: target.embed(contextFile) }));
   return file;
 }
 

@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import * as net from "node:net";
+import { stripAnsi } from "../../shared/ansi";
 import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
@@ -162,14 +163,9 @@ function count(args: Record<string, unknown>, name: string, fallback: number): n
   return value;
 }
 
-/** Strips CSI, OSC and two-byte escapes; CRLF to LF. */
+/** Strips escape sequences; CRLF to LF. */
 function plainText(data: string): string {
-  return (
-    data
-      // eslint-disable-next-line no-control-regex
-      .replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g, "")
-      .replace(/\r\n/g, "\n")
-  );
+  return stripAnsi(data).replace(/\r\n/g, "\n");
 }
 
 /** `tabs-wait` default timeout and poll interval. */

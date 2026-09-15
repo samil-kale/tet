@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type {
   CheckoutTarget,
@@ -518,9 +519,7 @@ function ensureAskpass(): Promise<string> {
   askpassPath ??= (async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tet-askpass-"));
     const file = path.join(dir, "askpass.sh");
-    const temp = `${file}.${process.pid}`;
-    await fs.writeFile(temp, ASKPASS_SCRIPT, { encoding: "utf8", mode: 0o755 });
-    await fs.rename(temp, file);
+    await writeFileAtomic(file, ASKPASS_SCRIPT, { encoding: "utf8", mode: 0o755 });
     return file;
   })().catch((error: unknown) => {
     askpassPath = undefined;

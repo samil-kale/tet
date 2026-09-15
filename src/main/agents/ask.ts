@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { resolveCommand } from "../terminals/pty";
+import { killProcessTree, resolveCommand } from "../terminals/pty";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 /** How much of a failed agent's output goes into a notice. */
@@ -11,13 +11,19 @@ const ASK_TIMEOUT_MS = 5 * 60_000;
  * on win32 an npm CLI is a `.cmd` shim behind cmd.exe, which mangles a multiline argument.
  */
 export function askAgent(root: string, executable: string, args: string[], question: string): Promise<string> {
-  const { command, args: resolved } = resolveCommand(executable, args);
+  const resolved = resolveCommand(executable, args);
   return new Promise((resolve, reject) => {
     let timedOut = false;
     const child = execFile(
-      command,
-      resolved,
-      { cwd: root, maxBuffer: MAX_BUFFER, windowsHide: true, encoding: "utf8" },
+      resolved.command,
+      resolved.args,
+      {
+        cwd: root,
+        maxBuffer: MAX_BUFFER,
+        windowsHide: true,
+        windowsVerbatimArguments: resolved.windowsVerbatimArguments,
+        encoding: "utf8"
+      },
       (error, stdout, stderr) => {
         clearTimeout(timer);
         const reply = stdout.trim();
@@ -34,11 +40,7 @@ export function askAgent(root: string, executable: string, args: string[], quest
     // child keeps stdout open and the callback waiting.
     const timer = setTimeout(() => {
       timedOut = true;
-      if (process.platform === "win32" && child.pid !== undefined) {
-        execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
-      } else {
-        child.kill();
-      }
+      killProcessTree(child);
     }, ASK_TIMEOUT_MS);
     child.stdin?.on("error", () => undefined);
     child.stdin?.end(question);

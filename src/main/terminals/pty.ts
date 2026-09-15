@@ -1,3 +1,4 @@
+import { execFile, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as pty from "node-pty";
@@ -57,22 +58,49 @@ function resolveWin32NativeExecutable(executable: string): string | undefined {
   return undefined;
 }
 
+export interface ResolvedCommand {
+  command: string;
+  args: string[];
+  /** The args are one escaped cmd.exe line: pass as `windowsVerbatimArguments` to child_process,
+   *  joined with spaces to node-pty (which takes a string as the command line as is). */
+  windowsVerbatimArguments?: true;
+}
+
+/** Every character cmd.exe gives a meaning, `^`-escaped — cross-spawn's `lib/util/escape.js`. */
+const CMD_META_CHARS = /([()\][%!^"`<>&|;, *?])/g;
+
+/** One argument for a program behind cmd.exe: quoted by the C runtime's rules (qntm.org/cmd), then
+ *  `^`-escaped, so `&`, `>` or `%VAR%` reach it literally (measured through an npm shim, via
+ *  child_process and node-pty). */
+function escapeCmdArgument(arg: string): string {
+  const quoted = `"${arg.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"').replace(/(?=(\\+?)?)\1$/, "$1$1")}"`;
+  return quoted.replace(CMD_META_CHARS, "^$1");
+}
+
 /** Where a command line goes, for every spawn: on win32 a native executable directly, a shim or an
  *  unresolved name through cmd.exe; elsewhere unchanged. */
-export function resolveCommand(executable: string, args: string[]): { command: string; args: string[] } {
+export function resolveCommand(executable: string, args: string[]): ResolvedCommand {
   if (process.platform === "win32") {
     const native = resolveWin32NativeExecutable(executable);
     if (native) {
       return { command: native, args };
     }
-    // Shim or unresolved: cmd.exe, not `shell: true`, which joins args unescaped. A path with a space
-    // gets `call` in front: node-pty quotes it, and `/s` strips a leading and trailing quote after
-    // `/c`, leaving `C:\Users\John` as the command (measured). Only then, so the measured npm-shim
-    // invocation is unchanged.
-    const invoke = /\s/.test(executable) ? ["call", executable] : [executable];
-    return { command: "cmd.exe", args: ["/d", "/s", "/c", ...invoke, ...args] };
+    // Shim or unresolved: cmd.exe, not `shell: true`, which joins args unescaped. The whole line is
+    // escaped as cross-spawn does it; `/s` strips only the outer quotes.
+    const line = [executable.replace(CMD_META_CHARS, "^$1"), ...args.map(escapeCmdArgument)].join(" ");
+    return { command: "cmd.exe", args: ["/d", "/s", "/c", `"${line}"`], windowsVerbatimArguments: true };
   }
   return { command: executable, args };
+}
+
+/** Kills a process `resolveCommand` started, with its children: on win32 `kill()` would end only the
+ *  cmd.exe in front of a shim, while the program keeps running (and its pipes open). */
+export function killProcessTree(child: ChildProcess): void {
+  if (process.platform === "win32" && child.pid !== undefined) {
+    execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
+  } else {
+    child.kill();
+  }
 }
 
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), then
@@ -101,9 +129,9 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
 
 export function spawnAgentProcess(executable: string, args: string[], options: SpawnOptions): IPty {
   const env = buildEnv(options);
-  const { command, args: resolvedArgs } = resolveCommand(executable, args);
+  const resolved = resolveCommand(executable, args);
 
-  return pty.spawn(command, resolvedArgs, {
+  return pty.spawn(resolved.command, resolved.windowsVerbatimArguments ? resolved.args.join(" ") : resolved.args, {
     name: "xterm-256color",
     cols: options.cols,
     rows: options.rows,

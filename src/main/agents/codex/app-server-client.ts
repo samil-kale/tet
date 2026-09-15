@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import * as readline from "node:readline";
-import { resolveCommand } from "../../terminals/pty";
+import { killProcessTree, resolveCommand } from "../../terminals/pty";
 
 /**
  * `codex app-server` speaks JSONL JSON-RPC 2.0 (without `jsonrpc`) over stdio. tet starts one per
@@ -30,10 +30,11 @@ function callAppServer(executable: string, cwd: string, request: RpcRequest, hom
  * JSON-RPC error, spawn failure or timeout. Always kills the process.
  */
 async function callAppServerNow(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
-  const { command, args } = resolveCommand(executable, ["app-server", "--stdio"]);
-  const child = spawn(command, args, {
+  const resolved = resolveCommand(executable, ["app-server", "--stdio"]);
+  const child = spawn(resolved.command, resolved.args, {
     cwd,
     windowsHide: true,
+    windowsVerbatimArguments: resolved.windowsVerbatimArguments,
     stdio: ["pipe", "pipe", "pipe"],
     env: home === undefined ? process.env : { ...process.env, CODEX_HOME: home }
   });
@@ -51,7 +52,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
       }
       settled = true;
       clearTimeout(timer);
-      child.kill();
+      killProcessTree(child);
       fn();
     };
 

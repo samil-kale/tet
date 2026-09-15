@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
 import { sandboxHookDir, type HookTarget } from "../../terminals/hook-target";
 import { renderHookReport } from "../hook-report";
 
@@ -95,9 +96,7 @@ export function writeOpencodePlugin(
     existing = undefined;
   }
   if (existing !== contents) {
-    const temp = `${file}.tmp`;
-    fs.writeFileSync(temp, contents);
-    fs.renameSync(temp, file);
+    writeFileAtomic.sync(file, contents);
   }
   return { OPENCODE_CONFIG_DIR: target.embed(configDir), [PROJECT_ROOT_ENV]: target.embed(cwd) };
 }

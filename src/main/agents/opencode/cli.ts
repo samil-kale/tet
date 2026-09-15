@@ -14,7 +14,12 @@ export function runOpencode(executable: string, cwd: string, sandbox: string | n
   }
   return new Promise((resolve, reject) => {
     const resolved = resolveCommand(executable, args);
-    const child = spawn(resolved.command, resolved.args, { cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const child = spawn(resolved.command, resolved.args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      windowsVerbatimArguments: resolved.windowsVerbatimArguments
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => {
