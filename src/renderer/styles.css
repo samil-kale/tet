@@ -525,7 +525,25 @@ textarea:focus {
   height: 11px;
 }
 
-/* A language mark's color, by Seti's palette (LANGUAGE_COLORS in Explorer.tsx). Every theme names
+/* A file mark is a glyph of Seti's font (git/file-icons.ts). VS Code draws it at 150% of the
+   13px label in a 16px box; the same share of this 11px box. */
+@font-face {
+  font-family: "seti";
+  src: url("./git/seti.woff") format("woff");
+  font-weight: normal;
+  font-style: normal;
+}
+
+.explorer-tree .file-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "seti";
+  font-size: 13.4px;
+  line-height: 1;
+}
+
+/* A file mark's color, by Seti's palette (FileMarkColor in git/file-icons.ts). Every theme names
    the terminal's colors; Seti's orange has no ANSI slot and takes the bright red, its pink the
    bright magenta. */
 .explorer-tree .tree-icon.blue {

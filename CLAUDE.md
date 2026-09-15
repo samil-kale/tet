@@ -652,7 +652,8 @@ What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut li
   State an icon's size in CSS, never rely on the `width`/`height` attributes.
 - **A new icon comes from Lucide first** (lucide.dev, ISC), vendored on its native 24-unit grid
   (`fitIcon`/`fitStroke` take the grid); the hand drawings in `icons.tsx` are what Lucide had no
-  match for.
+  match for. The exception is the Explorer's file marks: Seti's font glyphs, generated into
+  `git/file-icons.ts` (and `git/seti.woff`) by `scripts/file-icons.js` — re-run, never edited.
 - **When two things that should look identical don't, measure them** — rebuild a page with the
   *built* stylesheet, serve over http, read `getComputedStyle`. Use layout size, not
   `getBoundingClientRect`, on anything `.spinning`.
@@ -662,7 +663,7 @@ What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut li
 - **Icons and marks are monochrome**; the only colour any takes is that blue. Three exceptions —
   the changes list's status letters (`gitDecoration-*`) and the error mark
   (`--vscode-errorForeground`), both colours Dark Modern already names for that meaning, and the
-  Explorer's language marks, colored after Seti in the terminal's ANSI colors — there only.
+  Explorer's file marks, colored after Seti in the terminal's ANSI colors — there only.
 - Colors come from `--vscode-*` variables only (`src/renderer/themes/`); add a new variable under
   VS Code's own name rather than hardcoding. Exception: the syntax colors, which Shiki hands back
   per token (`diff-highlight.ts`). Shiki's editor-surface colors are patched with those variables
@@ -713,6 +714,8 @@ What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut li
 
 When asked for a release, run it:
 
+0. Ask the user for the version number first (AskUserQuestion) — never pick patch/minor/major
+   yourself; a published version cannot be taken back once an install has updated to it.
 1. Write the release's section at the top of `CHANGELOG.md` — `## <version> (<date>)`, then one
    bullet per change a user would notice, read off `git log <last tag>..HEAD`. Keep each bullet
    short: a bold title of a few words, then a sentence or two of explanation. Say what changed

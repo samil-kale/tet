@@ -205,7 +205,7 @@ export function loadGrammar(shiki: HighlighterCore, language: string): Promise<v
   return pending;
 }
 
-/** The grammar a path's extension colors as — shared by the editor tab and the Explorer's marks. */
+/** The grammar a path's extension colors as, for the editor tab. */
 export function languageForPath(filePath: string): string | undefined {
   const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
   return EXTENSIONS[name.slice(name.lastIndexOf(".") + 1)];

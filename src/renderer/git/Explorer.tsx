@@ -1,90 +1,38 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder, FileChange, Project } from "../../shared/types";
-import { languageForPath } from "../diff/diff-highlight";
 import { absolutePath, revealLabel } from "../platform";
 import { type FileAct } from "./ChangesList";
+import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
-import {
-  ChevronIcon,
-  CIcon,
-  CppIcon,
-  CSharpIcon,
-  CssIcon,
-  GoIcon,
-  HtmlIcon,
-  IniIcon,
-  JavaIcon,
-  JavaScriptIcon,
-  JsonIcon,
-  JsxIcon,
-  MarkdownIcon,
-  PowerShellIcon,
-  PythonIcon,
-  RustIcon,
-  SearchIcon,
-  ShellScriptIcon,
-  SMALLER,
-  SqlIcon,
-  TomlIcon,
-  TsxIcon,
-  TypeScriptIcon,
-  XmlIcon,
-  YamlIcon,
-  type IconProps
-} from "../ui/icons";
+import { ChevronIcon, SearchIcon, SMALLER } from "../ui/icons";
 
-/** A file's language, marked in its twistie slot — one entry per grammar `diff-highlight.ts`
- *  bundles, so a mark only names a language the editor can colour. */
-const LANGUAGE_ICONS: Record<string, (props: IconProps) => React.ReactElement> = {
-  c: CIcon,
-  cpp: CppIcon,
-  csharp: CSharpIcon,
-  css: CssIcon,
-  go: GoIcon,
-  html: HtmlIcon,
-  ini: IniIcon,
-  java: JavaIcon,
-  javascript: JavaScriptIcon,
-  json: JsonIcon,
-  jsx: JsxIcon,
-  markdown: MarkdownIcon,
-  powershell: PowerShellIcon,
-  python: PythonIcon,
-  rust: RustIcon,
-  shellscript: ShellScriptIcon,
-  sql: SqlIcon,
-  toml: TomlIcon,
-  tsx: TsxIcon,
-  typescript: TypeScriptIcon,
-  xml: XmlIcon,
-  yaml: YamlIcon
-};
+/** A file's mark, as VS Code resolves an icon theme: the name, then each extension from the
+ *  longest (`a.spec.ts` is `spec.ts`, then `ts`). The tables come from scripts/file-icons.js. */
+function fileMark(name: string): FileMark | null {
+  const lower = name.toLowerCase();
+  if (Object.hasOwn(FILE_NAMES, lower)) {
+    return FILE_NAMES[lower];
+  }
+  for (let dot = lower.indexOf("."); dot >= 0; dot = lower.indexOf(".", dot + 1)) {
+    const extension = lower.slice(dot + 1);
+    if (Object.hasOwn(FILE_EXTENSIONS, extension)) {
+      return FILE_EXTENSIONS[extension];
+    }
+  }
+  return null;
+}
 
-/** Each mark's color, Seti's (VS Code's default file icon theme, MIT) per language, named by
- *  its palette and drawn by styles.css in the theme's terminal colors. A language Seti leaves
- *  grey stays the mark's own color. */
-const LANGUAGE_COLORS: Record<string, "blue" | "yellow" | "green" | "red" | "orange" | "purple" | "pink"> = {
-  c: "blue",
-  cpp: "blue",
-  csharp: "blue",
-  css: "blue",
-  go: "blue",
-  html: "orange",
-  java: "red",
-  javascript: "yellow",
-  json: "yellow",
-  jsx: "blue",
-  markdown: "blue",
-  powershell: "blue",
-  python: "blue",
-  shellscript: "green",
-  sql: "pink",
-  tsx: "blue",
-  typescript: "blue",
-  xml: "orange",
-  yaml: "purple"
-};
+/** A glyph of Seti's font, sized by styles.css's `.file-mark` rather than run through `Svg`'s
+ *  extent-cropping, which only reaches a path. The color is the class styles.css draws in the
+ *  theme's terminal colors. */
+function FileMarkIcon({ mark: [glyph, color] }: { mark: FileMark }) {
+  return (
+    <span className={`tree-icon file-mark${color ? ` ${color}` : ""}`} aria-hidden="true">
+      {glyph}
+    </span>
+  );
+}
 
 interface TreeNode {
   /** What `expanded`, the row map and React keys go by. The path alone, until the project lists
@@ -314,9 +262,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
         const isFolder = node.children !== undefined;
         // A root starts open, everything else closed.
         const open = forceExpanded || (expanded[node.id] ?? node.root === true);
-        const language = isFolder ? "" : (languageForPath(node.path) ?? "");
-        const LangIcon = LANGUAGE_ICONS[language];
-        const langColor = LANGUAGE_COLORS[language];
+        const mark = isFolder ? null : fileMark(node.name);
         return (
           <div key={node.id}>
             <button
@@ -347,7 +293,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
                 {isFolder ? (
                   <ChevronIcon expanded={open} className="tree-icon" scale={SMALLER} />
                 ) : (
-                  LangIcon && <LangIcon className={`tree-icon${langColor ? ` ${langColor}` : ""}`} />
+                  mark && <FileMarkIcon mark={mark} />
                 )}
               </span>
               <span className="tree-label">{node.name}</span>

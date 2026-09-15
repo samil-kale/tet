@@ -74,8 +74,9 @@ const rendererConfig = {
   platform: "browser",
   format: "iife",
   target: "chrome130",
-  // monaco's CSS pulls in codicon.ttf; without a loader for it the build fails outright.
-  loader: { ".ttf": "file" },
+  // monaco's CSS pulls in codicon.ttf, and styles.css the Explorer's seti.woff; without a loader
+  // for them the build fails outright.
+  loader: { ".ttf": "file", ".woff": "file" },
   // monaco reads `import.meta.url` as a worker-location fallback (unreached, see editor.ts's
   // `getWorker`); esbuild replaces `import.meta` with `{}` under `format: "iife"` and warns at
   // every such site, burying real warnings.
