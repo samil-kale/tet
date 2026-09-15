@@ -14,10 +14,13 @@ import type {
 
 /** A project's saved commands and Explorer view, in its own root so it travels with the repository.
  *  Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
- *  their VS Code name (`readExplorerView`). */
+ *  their VS Code name (`readExplorerView`). A file missing, unparseable or oddly shaped is no
+ *  commands and the default view. The watcher reports every write of it as `commands:changed`. */
 export const PROJECT_FILE = "tet.json";
 
-/** A plain string while the command line says everything, an object once it needs cwd, env or shell. */
+/** A plain string while the command line says everything, an object once it needs name, cwd, env or
+ *  shell. `"shell": true` hands the line to `AgentDefinition.runArgs`, so it only works where it was
+ *  written. */
 type StoredCommand =
   | string
   | { command?: unknown; name?: unknown; cwd?: unknown; env?: unknown; shell?: unknown };
@@ -38,7 +41,8 @@ const KEY_SORT_ORDER = "explorer.sortOrder";
 
 /** How the Explorer shows this project; anything of the wrong shape is its default. */
 export interface ExplorerView {
-  /** Top-level nodes; empty means the whole repository as one tree. */
+  /** Top-level nodes; empty means the whole repository as one tree. They may overlap, each file is
+   *  still listed once. A `name` is file-only: the tree's menu writes paths alone. */
   folders: ExplorerRoot[];
   /** `files.exclude`'s globs, matched against repository-relative paths. */
   exclude: string[];
@@ -93,7 +97,7 @@ function write(root: string, content: ProjectFile): Promise<void> {
   return fs.writeFile(file(root), `${JSON.stringify(content, undefined, 2)}\n`, "utf8");
 }
 
-/** Only the string values of an `env`. */
+/** Only the string values of an `env`, which outranks the inherited environment. */
 function toEnv(value: unknown): Record<string, string> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
@@ -129,7 +133,7 @@ function toCommand(entry: StoredCommand): ProjectCommand | undefined {
   return command;
 }
 
-
+/** In the array's order, which is the screen order. */
 export async function readCommands(root: string): Promise<ProjectCommand[]> {
   const content = await read(root);
   if (!content || !Array.isArray(content.commands)) {
@@ -353,7 +357,9 @@ function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
   return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
 }
 
-/** Never holds a token: each sandboxed agent signs in with its own `/login` inside the sandbox. */
+/** The sbx settings: ports, allowed paths (a folder or a single file), hosts, and which of the
+ *  agent's skills, plugins and instructions to mount. Never holds a token: each sandboxed agent
+ *  signs in with its own `/login` inside the sandbox. */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)

@@ -14,7 +14,9 @@ import { renderHookReport } from "../hook-report";
  *
  * `OPENCODE_CONFIG_DIR` is additive to the user's `plugins/`. On first sight of a plugin in a
  * config dir, opencode bun-installs `@opencode-ai/plugin` *into it* (measured, seconds to
- * minutes) — so the host dir is shared across repositories and a sandbox gets a Linux one.
+ * minutes) — so the host dir is shared across repositories and a sandbox gets a Linux one. Shared,
+ * each repository's plugin needs a unique filename *and* the `TET_PROJECT_ROOT` runtime guard. Never
+ * an `opencode.json` in a config dir: it would override the user's.
  */
 
 /** Baked into one repository's plugin; the control channel's address is read from its env. */

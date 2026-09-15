@@ -71,4 +71,9 @@ export const codexAgent: AgentDefinition = {
   quitPresses: 1
   // Measured at 0.153.4: Codex reads \x03 as a byte — it clears a non-empty composer, and quits
   // (exit 0) on an empty one.
+  //
+  // Codex reprints its whole scrollback on any real pty resize: it never enters its alternate
+  // screen, and `alternate_screen = "always"` has no effect in the shipped binary (raw pty bytes
+  // captured; openai/codex#24552). A Codex bug — per-agent resize suppression only trades one
+  // symptom for another, so wait for an upstream fix.
 };

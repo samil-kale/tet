@@ -3,6 +3,9 @@
 # scripts/install.sh and scripts/install.ps1 fetch and unpack, and which the app's own update
 # (src/main/auto-update.ts) fetches the same way. The names are src/shared/release.ts's
 # `assetName`, and the scripts' own copy of it.
+# Neither an installer nor an npm package: an antivirus blocks the NSIS setup, and macOS rejects an
+# unsigned dmg as damaged. The executable is the app's own (TET.exe, TET.app, tet), never a bare
+# electron — Windows names the toast's Start menu entry after it (main.ts's APP_USER_MODEL_ID).
 appId: com.samilkale.tet
 productName: TET
 artifactName: "TET-${os}-${arch}.${ext}"

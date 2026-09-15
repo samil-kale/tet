@@ -1,4 +1,7 @@
 /**
+ * Turn reports are ordered by when they were made (ControlRequest.at), never by arrival: by arrival
+ * a turn's `busy` can overtake its own `stop`, leaving a tab finished and working.
+ *
  * How far behind the last applied signal a report counts as having lost a race (two hooks of one
  * turn in flight: ~100 ms out of a sandbox, a second on a loaded host) and is dropped. Further
  * behind, the reporter's clock jumped back (a container's, corrected after the host slept) — all of

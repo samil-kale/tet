@@ -66,7 +66,7 @@ interface CommandListProps {
 }
 
 /** A project's saved commands, from tet.json in the repository root, so they travel with the
- *  project. Running one opens a terminal tab. */
+ *  project. Running one opens a terminal tab. One list serves every project: the active one's. */
 export const CommandList = memo(function CommandList({ projectId, height, onOpenTab }: CommandListProps) {
   const [commands, setCommands] = useState<ProjectCommand[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; command: ProjectCommand } | null>(null);

@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-/** Where a generated hook command will actually run — on this host, or inside an sbx sandbox. */
+/** Where a generated hook command will actually run — on this host, or inside an sbx sandbox. The
+ *  command is the same on both; a sandboxed `tet-ctl` reaches the host through TET_CONTROL_HOST. */
 export interface HookTarget {
   /** False only for a Windows host: a sandbox is always Linux, whatever `process.platform` says. */
   posix: boolean;

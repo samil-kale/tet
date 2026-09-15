@@ -106,7 +106,8 @@ function carryFrom(data: string): number {
 /**
  * The context file an agent is pointed at, and the capped transcript of the project's shell tabs
  * (not agent tabs — that output is a TUI redrawing). Tabs write in arrival order, never mid-line
- * (each holds its unfinished line back), with a header at every change of tab.
+ * (each holds its unfinished line back), with a header at every change of tab. An agent gets no
+ * editor context; this transcript is what it gets instead.
  */
 export class ShellContext {
   private readonly log: CappedLogFile;

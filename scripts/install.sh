@@ -49,6 +49,7 @@ fi
 # The newest release, off the redirect GitHub answers /latest with.
 tag=$(curl -fsSI "$RELEASES/latest" | tr -d '\r' | sed -n 's#^[Ll]ocation: .*/tag/\([^/]*\)$#\1#p' | tail -n 1)
 [ -n "$tag" ] || fail "could not find the newest release at $RELEASES"
+# A copy of src/shared/release.ts's `assetName`: a change there updates this line too.
 asset="TET-$os-$arch.tar.gz"
 
 tmp=$(mktemp -d)

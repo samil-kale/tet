@@ -92,6 +92,7 @@ export function schemeKind(scheme: ColorScheme, systemDark: boolean): ThemeKind 
   return scheme === "system" ? (systemDark ? "dark" : "light") : scheme;
 }
 
+/** Light or dark is chosen apart from the theme: `colorScheme` picks the kind, this key its theme. */
 export function themeKey(kind: ThemeKind): "darkTheme" | "lightTheme" {
   return kind === "dark" ? "darkTheme" : "lightTheme";
 }

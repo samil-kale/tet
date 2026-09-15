@@ -134,6 +134,10 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* Shared measurements, checked against the neighbouring view before inventing one: a bar along
+     an edge is 35px (tab strip, title bar, `.section-header`, the editor tab's bar); the border
+     between panes is 1px --vscode-panel-border; anything that marks or points at something is 1px
+     --vscode-focusBorder. */
   /* Pane floors, as MIN_PANE_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
   --pane-min-width: 180px;
@@ -213,6 +217,8 @@ textarea:focus {
   cursor: default;
 }
 
+/* Measure a spinning element by its layout size, not `getBoundingClientRect`: the rotation grows
+   its bounding box. */
 .spinning {
   transform-origin: 50% 50%;
   animation: spin 1.2s linear infinite;
@@ -352,6 +358,7 @@ textarea:focus {
   background: var(--vscode-list-hoverBackground);
 }
 
+/* After the hover rule: a selected row keeps its selection colour while hovered. */
 .project-item.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
@@ -878,7 +885,8 @@ textarea:focus {
 }
 
 /* Where one xterm mounts. `-host`, never `terminal`: xterm's own element has class "terminal",
-   so a rule on the plain word lands on both. Paints the terminal background from the variable
+   so a rule on the plain word lands on both (xterm's classes: `xterm`, `xterm-viewport`,
+   `xterm-screen`, `terminal`). Paints the terminal background from the variable
    `theme.ts` reads, so the two cannot drift. */
 .terminal-host {
   position: absolute;
@@ -1329,7 +1337,8 @@ textarea:focus {
 
 /* Shared bits ---------------------------------------------------------------------------- */
 
-/* Late in the file: it must beat the `display` the hidden panes set with single classes too. */
+/* Late in the file: it must beat the `display` the hidden panes set with single classes too. A pane
+   hidden this way loses its layout, so its terminal is refitted on return. */
 .pane-hidden {
   display: none;
 }

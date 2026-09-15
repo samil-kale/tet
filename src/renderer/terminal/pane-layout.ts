@@ -3,11 +3,15 @@ import { sameRecord } from "../identity";
 
 /**
  * A terminal split view: fixed presets, not a nestable tree (CLAUDE.md, "Split view"). At most
- * four panes, so a letter identifies one.
+ * four panes, so a letter identifies one; "a" is top left in every preset.
  */
 export type PaneId = "a" | "b" | "c" | "d";
 export const PANE_IDS: readonly PaneId[] = ["a", "b", "c", "d"];
 
+/**
+ * Single, two columns, two columns with the right one split, 2×2. No layout picker: a preset is
+ * reached only by a snap (`SNAP_TRANSITIONS`) and left only by a collapse (`COLLAPSE_TRANSITIONS`).
+ */
 export type SplitPreset = "single" | "cols2" | "split-right" | "grid2x2";
 /** Every preset — what a persisted layout is checked against. */
 export const PRESETS: readonly SplitPreset[] = ["single", "cols2", "split-right", "grid2x2"];
@@ -50,7 +54,10 @@ export interface ProjectLayout {
   preset: SplitPreset;
   /** Where a new tab lands and what the tab shortcuts act on; keyboard focus follows it. */
   focusedPane: PaneId;
-  /** Which pane an open tab belongs to, by tab id. Assigned lazily — see `normalizeLayout`. */
+  /**
+   * Which pane an open tab belongs to, by tab id — exactly one, since a tab has one xterm. Assigned
+   * lazily — see `normalizeLayout`.
+   */
   tabPane: Record<string, PaneId>;
   /** Each pane's own active tab. */
   activeTab: Partial<Record<PaneId, string | null>>;
@@ -114,7 +121,8 @@ function pickActive(
 }
 
 /**
- * Reconciles a layout with the tab list: each pane's active tab still exists, moves to a neighbour
+ * The one place a layout is reconciled with the tab list: a tab seen for the first time goes to
+ * the focused pane, each pane's active tab still exists, moves to a neighbour
  * in its pane, or becomes null. `tabPane` entries of closed tabs are dropped; `previousTabs` tells
  * "closed" from "not created yet" (`pickActive`).
  *
@@ -534,6 +542,7 @@ export function layoutStorageKey(projectId: string, suffix: string): string {
  * What survives a restart: preset, focused pane, each tab's pane — keyed by *session id*. A new
  * tab's `new-N` id restarts from zero each run and returns, if at all, under its session id. So
  * both are one entry, and what cannot return (a shell tab, no session persisted) is dropped.
+ * The divider shares are persisted beside it (`useDividerFraction`).
  *
  * Not each pane's active tab: a stale one (session deleted between runs) would leave its pane
  * waiting for a tab that never comes.

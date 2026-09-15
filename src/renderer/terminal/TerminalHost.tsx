@@ -21,7 +21,7 @@ interface TerminalHostProps {
  * moves it into the DOM.
  *
  * Attached the first time the tab is in front of the user, not on mount: building every tab's
- * xterm at startup was most of the window's start. Nothing is lost: a tab's process starts on its
+ * xterm at startup costs most of the window's start. Nothing is lost: a tab's process starts on its
  * first fit, which needs the view.
  *
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm

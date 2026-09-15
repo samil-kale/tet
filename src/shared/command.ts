@@ -1,10 +1,12 @@
 import type { ProjectCommand } from "./types";
 
 /**
- * A saved command as program plus arguments. Deliberately not a shell: quotes group a word and are
- * dropped, everything else is literal — backslashes too, since `tet.json` holds Windows paths and is
- * read on every platform. No pipes, redirections or variables; those need `"shell": true`. Shared,
- * so the dialog's environment field splits words the same way.
+ * A saved command as program plus arguments, started directly — the same on every machine.
+ * Deliberately not a shell: quotes group a word and are dropped, everything else is literal —
+ * backslashes too, since `tet.json` holds Windows paths and is read on every platform. No pipes,
+ * redirections, `&&`, `$(...)` or `$VAR`; those need `"shell": true`, and an operator surviving as
+ * its own word is refused with a notice (session-manager.ts). Shared, so the dialog's environment
+ * field splits words the same way.
  */
 export function splitCommand(command: string): string[] {
   const tokens: string[] = [];

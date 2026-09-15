@@ -510,6 +510,7 @@ interface AddRepositoryDialogProps {
   onClose: () => void;
 }
 
+/** The one place tet talks to a host rather than a repository, so provider accounts live here. */
 export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");

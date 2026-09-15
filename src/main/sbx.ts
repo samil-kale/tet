@@ -885,6 +885,7 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
     ...env.flatMap((entry) => ["-e", entry])
   ];
   if (control) {
+    // The tab id too: a hook reports for the tab it runs in (ProjectSessionManager.hookEvent).
     const passThrough = [CONTROL_ENV.port, CONTROL_ENV.token, CONTROL_ENV.projectId, CONTROL_ENV.tabId];
     args.push(...passThrough.flatMap((variable) => ["-e", variable]), "-e", `${CONTROL_ENV.host}=host.docker.internal`);
     // Best-effort: a missing launcher must not keep the agent from starting.

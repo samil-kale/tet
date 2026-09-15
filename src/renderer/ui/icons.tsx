@@ -22,6 +22,10 @@ const GRID = 16;
  *
  * Re-measure when a path changes: render every icon and read `getBBox()` on each child, grown by
  * half a stroke.
+ *
+ * The box is `--icon-size` (13px), stated in CSS. A new icon comes from Lucide first (lucide.dev,
+ * ISC), vendored on its 24-unit grid (`fitIcon`/`fitStroke`); a hand drawing is for what Lucide
+ * has no match for.
  */
 function geometry(extent: number, cx: number, cy: number, grid: number, stroke: number) {
   const side = (extent * grid) / ((TARGET_EXTENT / GRID) * grid);

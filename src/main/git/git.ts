@@ -363,7 +363,8 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
   try {
     // No `isRepository` check: Repository asks once on open, and the check costs a quarter of every
     // refresh where starting git is slow. The stash list is the third process, earned by being a
-    // list the user acts on. All three run at once, so no extra wall time.
+    // list the user acts on; anything added here has to earn its process too. All three run at
+    // once, so no extra wall time.
     const [status, refs, stashes, operation] = await Promise.all([
       readStatus(cwd),
       readRefs(cwd, remoteNames),
@@ -396,7 +397,8 @@ async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout
 }
 
 /** The env of every command reaching a remote. git must never ask for a password: there is no
- *  terminal, and a waiting command holds the repository's one action slot forever. */
+ *  terminal, and a waiting command holds the repository's one action slot forever. Credentials come
+ *  from the user's credential helper or a provider token; tet writes nothing into that helper. */
 const NETWORK_ENV: NodeJS.ProcessEnv = {
   GIT_TERMINAL_PROMPT: "0",
   // Set but empty: unset, git falls back to the terminal.
@@ -406,8 +408,8 @@ const NETWORK_ENV: NodeJS.ProcessEnv = {
   // ssh equivalent is in networkEnv.
   GIT_HTTP_LOW_SPEED_LIMIT: "1000",
   GIT_HTTP_LOW_SPEED_TIME: "60",
-  // AUTH_FAILURES matches git's messages as text, and git translates them (LANG=de_DE:
-  // "Authentifizierung fehlgeschlagen").
+  // AUTH_FAILURES matches git's messages as text into `authRequired`, the one thing the add-repository
+  // dialog's CloneAuth acts on, and git translates them (LANG=de_DE: "Authentifizierung fehlgeschlagen").
   LC_ALL: "C"
 };
 
@@ -706,7 +708,8 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
   return sections.join("\n\n");
 }
 
-/** `--include-untracked`, so "stash all changes" covers the files the list shows. */
+/** `--include-untracked`, so "stash all changes" covers the files the list shows. All only, as in
+ *  GitHub Desktop: `stash push -- <paths>` mishandles a staged rename. */
 export function stashPush(cwd: string, message: string): Promise<GitActionResult> {
   return run(cwd, ["stash", "push", "--include-untracked", ...(message ? ["--message", message] : [])]);
 }
@@ -845,8 +848,8 @@ export interface HeadBlobOptions {
  *
  * `cat-file --filters`, not `show`: it applies the smudge filters and eol conversion of
  * `.gitattributes` and `core.autocrlf`, so the text reads like the working tree. `show` returns the
- * stored blob, which under an LFS or `ident` filter is not the file. Buffer encoding, as in
- * `readFile`: utf8 replaces invalid bytes and would break an image.
+ * stored blob, which under an LFS or `ident` filter is not the file (pinned in `git.test.ts`).
+ * Buffer encoding, as in `readFile`: utf8 replaces invalid bytes and would break an image.
  */
 export async function readHeadBlob(cwd: string, filePath: string, options: HeadBlobOptions): Promise<HeadBlob> {
   // A rename is one entry over two paths, and only the old one is in HEAD.

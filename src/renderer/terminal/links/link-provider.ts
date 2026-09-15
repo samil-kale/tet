@@ -47,7 +47,8 @@ export function createModifierGatedLinkProvider(
   onActivate: (text: string) => void,
   resolveWrapped?: WrappedUrlResolver
 ): ILinkProvider {
-  // Built once: provideLinks runs on every render while the pointer is over the terminal.
+  // Built once: provideLinks runs on every render while the pointer is over the terminal — nothing
+  // expensive, and no logging, in that path.
   const rex = new RegExp(regex.source, (regex.flags || "") + "g");
   return {
     provideLinks(bufferLineNumber, callback) {

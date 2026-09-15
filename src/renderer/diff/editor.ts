@@ -155,7 +155,8 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
 /**
  * The diff half. Inline — a side-by-side text diff is deliberately not offered — and the whole file,
  * not hunks, so the overview ruler beside the scrollbar is how changes are found (a click scrolls).
- * Whitespace-only changes never count; hunk boundaries are monaco's (`advanced`), not git's.
+ * Whitespace-only changes never count; hunk boundaries are monaco's (`advanced`), not git's. tet
+ * never diffs: it hands monaco two texts. The modified (right-hand) side is the editable one.
  *
  * Left at default on purpose: `renderGutterMenu` (its "Revert Block" edits the buffer, a save away
  * from disk, never a git discard); `maxFileSize` (50 MB, beyond our 4 MB ceiling);

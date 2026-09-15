@@ -157,7 +157,8 @@ function endLeavesQuestion(tab: TabState, agent: AgentDefinition): boolean {
 }
 
 /**
- * Whether terminal input can answer a standing question — see `write`. Enter, a printable
+ * Whether terminal input can answer a standing question — see `write`. No agent reports an answer,
+ * so this and either end of the turn (setTurn) are what clear the mark. Enter, a printable
  * character (Claude Code's permission prompt takes a digit without Enter) and an SGR mouse press
  * (`ESC [ < button ; x ; y M`). Not arrows, Tab, Shift+Tab, a bare Escape, motion (bit 32) or the
  * wheel (64+). Generous: a mark dropped early is on a tab being typed into, which hides it anyway.
@@ -1103,8 +1104,8 @@ export class ProjectSessionManager {
 
   /**
    * A tab's hook report — the only way turns reach tet ("Both ends of a turn" in CLAUDE.md).
-   * Addressed by tab (the id is in the hook's environment), so no turn is reported for a session
-   * no tab has claimed.
+   * Addressed by tab (`TET_TAB_ID` in the hook's environment, passed into a sandbox by
+   * prepareSbxRun), so no turn is reported for a session no tab has claimed.
    *
    * Answers the agent's stdout and the toast, composed here so settings are read at the event, not
    * baked in at setup. Showing a mark is the renderer's call; no toast for a tab in front
@@ -1134,7 +1135,8 @@ export class ProjectSessionManager {
           setTurn(tab, true, at);
           this.postTabs();
         }
-        // The context for the model, whatever the report's age: it goes into this prompt.
+        // The context for the model, whatever the report's age: it goes into this prompt. Hence
+        // Claude Code and Codex need only one UserPromptSubmit hook, both mark and context.
         return { stdout: this.shellContext.text };
       case "stop": {
         const agent = getAgent(tab.agentId);
@@ -1163,7 +1165,8 @@ export class ProjectSessionManager {
         this.postTabs();
         return { toast: this.toast(tab, event) };
       case "idle":
-        // About a turn already ended — nothing to mark.
+        // About a turn already ended — nothing to mark. Its hook exists only while the switch is on
+        // (AgentPaths.idleReminder), rather than a process per idle prompt answered with nothing.
         return fresh ? { toast: this.toast(tab, "idle") } : {};
     }
   }

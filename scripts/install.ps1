@@ -24,6 +24,7 @@
 
   $releases = if ($env:TET_RELEASES_URL) { $env:TET_RELEASES_URL } else { 'https://github.com/samil-kale/tet/releases' }
   $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
+  # A copy of src/shared/release.ts's `assetName`: a change there updates this line too.
   $asset = "TET-win-$arch.zip"
   $dest = Join-Path $env:LOCALAPPDATA 'Programs\TET'
   $exe = Join-Path $dest 'TET.exe'

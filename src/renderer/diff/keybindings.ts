@@ -1,7 +1,10 @@
 import type { Monaco } from "./editor";
 import { KEYBINDING_PRESETS } from "./keybinding-presets";
 
-/** tet's own commands, layered under the chosen preset. */
+/**
+ * tet's own commands, layered under the chosen preset (`keybinding-presets.ts`). No chords, no
+ * command that depends on a language provider, no format.
+ */
 const DEFAULT_KEYBINDINGS: Record<string, string> = {
   "ctrl+s": "tet.save"
 };

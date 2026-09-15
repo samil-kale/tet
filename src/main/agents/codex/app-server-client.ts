@@ -4,8 +4,9 @@ import { resolveCommand } from "../../terminals/pty";
 
 /**
  * `codex app-server` speaks JSONL JSON-RPC 2.0 (without `jsonrpc`) over stdio. tet starts one per
- * request and tears it down: the shared `$CODEX_HOME` SQLite state does not tolerate concurrent
- * cold starts (measured: parallel starts against a fresh `CODEX_HOME` failed). The startup cost is
+ * request and tears it down, never a persistent one: the shared `$CODEX_HOME` SQLite state has a
+ * write-lock race between instances and does not tolerate concurrent cold starts (measured:
+ * parallel starts against a fresh `CODEX_HOME` failed). The startup cost is
  * fine for rare renames and deletes.
  */
 const REQUEST_TIMEOUT_MS = 15_000;

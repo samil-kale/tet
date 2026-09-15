@@ -1,8 +1,9 @@
 import { net } from "electron";
 import type { RemoteRepository } from "../../shared/types";
 
-/** A repository host: authenticate and list repositories with their clone url. Everything past the
- *  clone goes through the local git CLI. */
+/** A repository host: authenticate and list repositories with their clone url. One interface for
+ *  GitHub and GitLab, over plain REST rather than Octokit or GitBeaker, and kept out of the local
+ *  git layer: everything past the clone goes through the local git CLI. */
 export interface GitProvider {
   /** Checks the token against the host and returns its login. */
   validate(host: string, token: string): Promise<string>;

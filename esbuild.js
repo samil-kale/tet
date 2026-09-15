@@ -8,6 +8,8 @@ const tsconfig = path.join(__dirname, "tsconfig.json");
 const dist = path.join(__dirname, "dist");
 const distTest = path.join(__dirname, "dist-test");
 
+// esbuild only bundles, it never typechecks: an unimported identifier becomes a global and the app
+// dies on load with a ReferenceError. Hence `npm start` runs the typecheck first.
 const common = {
   bundle: true,
   sourcemap: !production,

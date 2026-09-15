@@ -37,8 +37,8 @@ interface EditorHostProps {
 }
 
 /**
- * The editor tab: a bar naming the file, then the diff editor, the image view or a placeholder. The
- * editor lives in `editor-views.ts` and is attached to a childless frame; on a pane move React
+ * The editor tab: a bar naming the file, then the diff editor, the image view or a placeholder —
+ * all drawn off the editor's snapshot. The editor lives outside React in `editor-views.ts` and is attached to a childless frame; on a pane move React
  * removes the frame with it inside, and the next host's attach takes it out again.
  */
 export const EditorHost = memo(function EditorHost({ projectId, active, visible, focused }: EditorHostProps) {

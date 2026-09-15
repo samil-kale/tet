@@ -26,7 +26,8 @@ function fail(message: string): void {
   pending.clear();
 }
 
-/** Starts the git process, or returns the running one. Restarted on the next call after a crash, not
+/** Starts the git process, or returns the running one. A process that dies rejects every in-flight
+ *  call (Repository catches that at each entry point) and is restarted on the next call, not
  *  supervised: git commands are short-lived and independent, so no state is lost. */
 function host(): UtilityProcess {
   if (child) {

@@ -96,7 +96,8 @@ export function App() {
   const [starting, setStarting] = useState<Record<string, boolean>>({});
   /**
    * Split state lives here, not in `TerminalsPane`: shortcuts and marks/seen need what is on screen
-   * across every pane — see "Split view" in CLAUDE.md.
+   * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
+   * through `onActivateTab`. See "Split view" in CLAUDE.md.
    */
   const { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout } = useProjectLayouts(
     stripTabs,
@@ -321,7 +322,11 @@ export function App() {
     void window.tet.projects.reorder(ordered.map((project) => project.id));
   }, []);
 
-  /** One branch command per project at a time: a second click mid-switch would stack two `git switch`. */
+  /**
+   * One branch command per project at a time: a second click mid-switch would stack two `git switch`.
+   * Mirrors `Repository.runAction`; `BranchActions.run` is the one way in, a view asking its own
+   * question first.
+   */
   const runBranchAction = useCallback(
     async (projectId: string, label: string, action: () => Promise<GitActionResult>) => {
       if (branchActionsRef.current.has(projectId)) {
@@ -342,7 +347,10 @@ export function App() {
     []
   );
 
-  /** Shows a tab opened from outside its pane, bringing its project to front. */
+  /**
+   * Shows a tab opened from outside the terminals pane, bringing its project to front — a one-off
+   * write into the layout (`placeTab`: a saved command's goes where its line last lay).
+   */
   const showTab = useCallback(
     (projectId: string, tabId: string, command?: string) => {
       setActiveProjectId(projectId);

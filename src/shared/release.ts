@@ -4,7 +4,7 @@ import * as path from "node:path";
  * Shared by src/main/auto-update.ts, src/cli/tet-update.ts and the install scripts
  * (scripts/install.sh, scripts/install.ps1). One archive per platform and architecture on the tag's
  * GitHub Release (electron-builder.yml). The scripts keep their own copy of these names: they run
- * before tet is on the machine.
+ * before tet is on the machine. A change to a name updates the scripts too.
  */
 
 /** `<url>/latest` redirects to the newest tag; `<url>/download/v<version>/<asset>` is a file. */

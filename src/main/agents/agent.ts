@@ -17,7 +17,7 @@ export interface AgentSessionInfo {
   provisionalTitle?: boolean;
   /**
    * When the last turn ended, per the agent's own record; undefined where it keeps none. A net
-   * under the `stop` hook (Claude Code runs no Stop for a turn the user cut short). Read only in
+   * under the `stop` hook (no agent's hook fires for a turn the user cut short). Read only in
    * reconcile, only to end a turn.
    */
   turnEndedAt?: number;
@@ -28,7 +28,8 @@ export interface AgentSessionInfo {
   sandbox?: string;
 }
 
-/** One host path mounted into a sandbox so an agent's sessions land on the host. */
+/** One host path mounted into a sandbox so an agent's sessions land on the host. Curated subpaths
+ *  only, never the one holding the agent's credentials. */
 export interface SandboxSessionMount {
   /** The mounted file or directory, under the host root (`sandboxSessionDir`). */
   sub: string;
@@ -136,7 +137,7 @@ export interface AgentDefinition {
    * background question must not come back as a tab.
    */
   cleanupAsk?: (executable: string, cwd: string) => Promise<void>;
-  /** Missing means "this agent has no sessions". */
+  /** Listing, resume args, rename, delete, optional watch. Missing means "this agent has no sessions". */
   sessions?: SessionProvider;
   /**
    * Whether the raw end-of-turn payload says the turn is not over, so `stop` leaves no mark: Claude
@@ -160,8 +161,9 @@ export interface AgentDefinition {
   questionOutlivesTurn?: boolean;
   /**
    * Setup before any session spawns: hooks, settings, plugins, and how the context file reaches
-   * the model. A rejection marks the agent unstartable, so a failed optional write (an extension,
-   * a theme file) is swallowed.
+   * the model — the only place an agent may write anything. A rejection marks the agent
+   * unstartable, so reject only for what truly makes it unusable; a failed optional write (an
+   * extension, a theme file) is swallowed.
    */
   prepareSpawn?: (executable: string, cwd: string, paths: AgentPaths) => Promise<SpawnPreparation>;
   /**
@@ -196,20 +198,23 @@ export interface AgentDefinition {
    * strip's progress bar hides. Output reaches the terminal throughout — some CLIs query it for
    * capabilities at start.
    *
-   * No real readiness signal exists: a per-agent guess at undocumented output. Omitted by the shell.
+   * No real readiness signal exists: a per-agent guess at "the CLI drew its first real frame", from
+   * undocumented output, its threshold tuned by hand per agent. Omitted by the shell.
    */
   createIsSessionReady?: () => (chunk: string) => boolean;
   /**
    * Ctrl+C presses that make the CLI quit by itself, sent before a kill (TerminalSession.stop).
-   * Measured: Claude Code and pi 2 (well inside the ~1 s "press again" window), Codex and opencode
-   * 1 — a second byte to a leaving Codex lands after raw mode ended, where ConPTY turns it into a
-   * CTRL_C_EVENT that kills the shutdown. Omitted for the shell (plain SIGINT).
+   * Measured: Claude Code and pi 2 (pi within 500 ms), and both soon withdraw the offer; Codex and
+   * opencode 1 — a second byte to a leaving Codex lands after raw mode ended, where ConPTY turns it
+   * into a CTRL_C_EVENT that kills the shutdown. All four read `\x03` as an ordinary byte and decide
+   * what it means. Omitted for the shell (plain SIGINT).
    */
   quitPresses?: number;
   /**
    * The TUI takes the right mouse button through mouse reporting (Claude Code pastes, opencode
    * copies). Otherwise — the shell, Codex (github.com/openai/codex#8344) — tet copies a selection or
-   * pastes (terminal-views.ts).
+   * pastes (terminal-views.ts). pi turns on no mouse reporting at all. A measured fact the renderer
+   * acts on, travelling as a flag on AgentInfo, as does `swapsBlueMagenta`.
    */
   takesRightMouse?: boolean;
   /**

@@ -29,7 +29,8 @@ export interface PromptHistoryLists {
 }
 
 /**
- * Past answers for a prompt's field, shown under it once clicked in. The callbacks persist at once
+ * Past answers for a prompt's field, per project (`commit-history.ts`), shown under it once clicked
+ * in. The callbacks persist at once
  * and return the updated lists, so housekeeping survives a Cancel.
  */
 export interface PromptHistory extends PromptHistoryLists {
@@ -80,7 +81,9 @@ type Pending =
 
 /**
  * Asking the user, as `notify` tells them: a function anything can call, and one mounted component
- * drawing what is pending, in the window rather than Electron's `dialog.showMessageBox`.
+ * drawing what is pending, in the window rather than Electron's `dialog.showMessageBox`. The main
+ * process asks nothing: a question lives in the view offering the action. Questions only — a form
+ * with two buttons; `SettingsDialog` and the rest of `dialogs/` are not part of this.
  *
  * `confirm` is for the irreversible only. `prompt` is for a name, and is where every rename
  * happens: a tab is too narrow to name inline, and a commit-on-blur field loses typing to a stray

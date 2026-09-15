@@ -61,7 +61,8 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
 
 /**
  * Needed before the app opens: git, and an agent or sbx — a sandboxed tab runs the agent's CLI in
- * its container (session-manager's AgentRuntime.sbxOnly). Never answered from memory: each re-check
+ * its container (session-manager's AgentRuntime.sbxOnly). Met, ipc.ts's `startup:check` opens the
+ * workspace. Never answered from memory: each re-check
  * re-scans the managers' bin dirs (`augmentAgentPath`); an install elsewhere needs a restart.
  * Projects opened afterwards reuse this answer (`isAgentInstalled`).
  */

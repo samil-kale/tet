@@ -122,8 +122,9 @@ export function logSlow(activity: Activity, ms: number): void {
 }
 
 /**
- * Logs main-loop stalls and what ran before them. To a file only: `tet` starts detached, stdout
- * goes nowhere. Always on — by the time a stall matters, its run is over.
+ * Logs main-loop stalls and what ran before them to `event-loop.log` in tet's data folder. To a file
+ * only: `tet` starts detached, stdout goes nowhere. Always on — by the time a stall matters, its run
+ * is over.
  */
 export function startEventLoopMonitor(logFile: string): void {
   try {

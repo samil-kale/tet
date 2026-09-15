@@ -46,7 +46,8 @@ export async function confirmDiscard(projectId: string, paths: string[], act: Fi
   }
 }
 
-/** One message, then `add` and `commit` of all changes or only `paths`, optionally pushing. */
+/** One message, then `add` and `commit` of all changes or only `paths`, optionally pushing. No
+ *  staging area: the selection is what one commit takes. */
 export async function askCommit(
   project: Project,
   state: RepositoryState,

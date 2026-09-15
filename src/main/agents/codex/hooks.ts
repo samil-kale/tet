@@ -11,7 +11,8 @@ import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
  * sort recursively alphabetical (`matcher` after `hooks`). `async` stays `false`: the build
  * refuses async hooks ("async hooks are not supported yet") and drops them from the trust listing.
  *
- * A changed normalization only shows the hook as "Modified" and the review screen once. Cross-check
+ * The serialization is Codex's private, unversioned one. A changed normalization only shows the
+ * hook as "Modified" and the review screen once. Cross-check
  * `hooks/src/engine/discovery.rs::hook_hash` and `config/src/fingerprint.rs`.
  */
 export function hookTrustedHash(eventLabel: string, command: string, matcher?: string): string {

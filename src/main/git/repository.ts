@@ -45,7 +45,7 @@ const WATCH_RETRY_MAX_MS = 60_000;
 const MAX_EDIT_BYTES = 4 * 1024 * 1024;
 
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
- *  `git status`. */
+ *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus). */
 function isIgnoredEvent(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/");
   return (
@@ -514,6 +514,7 @@ export class Repository {
       }
       const pending: Promise<void>[] = [];
       for (const entry of entries) {
+        // Hidden regardless of `files.exclude`.
         if (entry.name === ".git") {
           continue;
         }
@@ -674,7 +675,8 @@ export class Repository {
   }
 
   /** A file for the editor tab: the working tree's text, plus HEAD's (the diff's original side)
-   *  only where git reports a change. */
+   *  only where git reports a change — an unchanged file is its own original, a plain editor. A
+   *  deleted, binary or too-large file is read-only (`isReadOnly` in editor-views.ts). */
   async readFile(filePath: string): Promise<FileContent> {
     const base = { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false };
     const absolute = this.resolveInside(filePath);

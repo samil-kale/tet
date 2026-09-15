@@ -57,6 +57,8 @@ function resolveWin32NativeExecutable(executable: string): string | undefined {
   return undefined;
 }
 
+/** Where a command line goes, for every spawn: on win32 a native executable directly, a shim or an
+ *  unresolved name through cmd.exe; elsewhere unchanged. */
 export function resolveCommand(executable: string, args: string[]): { command: string; args: string[] } {
   if (process.platform === "win32") {
     const native = resolveWin32NativeExecutable(executable);

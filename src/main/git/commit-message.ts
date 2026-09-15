@@ -16,8 +16,9 @@ export function commitMessageFrom(reply: string): string {
     : withoutLabel;
 }
 
-/** `prompt` (`effectivePrompt`) and `context` (`readCommitContext`) are handed in: only the main
- *  process reaches the git process and the settings. */
+/** The commit prompt's suggest button, asked of the first installed agent with `askArgs`
+ *  (`findAskableAgent`). `prompt` (`effectivePrompt`) and `context` (`readCommitContext`) are handed
+ *  in: only the main process reaches the git process and the settings. */
 export async function suggestCommitMessage(
   root: string,
   executable: string,

@@ -64,6 +64,7 @@ export function takeOutputStats(): { writes: number; tabs: number; hidden: numbe
 const earlyOutput = new Map<string, string>();
 const MAX_EARLY_OUTPUT = 64 * 1024;
 
+// Output arrives batched: one message, and one flush, for every terminal.
 window.tet.terminals.onOutput((batch) => {
   for (const { projectId, tabId, data } of batch) {
     const key = viewKey(projectId, tabId);
@@ -185,7 +186,10 @@ function quotePath(filePath: string): string {
   return /\s/.test(filePath) ? `"${filePath}"` : filePath;
 }
 
-/** Types the dropped files' paths; content without a path (from a browser) goes to a temp file. */
+/**
+ * Types the dropped files' paths; content without a path (from a browser) goes to a temp file,
+ * swept a day old at startup.
+ */
 async function pasteDroppedFiles(term: Terminal, files: File[]): Promise<void> {
   const paths: string[] = [];
   for (const file of files) {
@@ -370,6 +374,8 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
 
   term.onData((data) => window.tet.terminals.input(projectId, tabId, data));
 
+  // Runs before xterm encodes the key. Takes nothing an agent could receive (see `shortcuts.ts`):
+  // the three below are handled *for* the terminal, not taken from it.
   term.attachCustomKeyEventHandler((event) => {
     // xterm sends Shift+Enter as plain "\r"; agent TUIs read ESC+CR as "insert newline". Repeats
     // are skipped: back-to-back ESC+CR hangs a CLI's escape-sequence parser.

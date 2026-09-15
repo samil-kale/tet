@@ -20,7 +20,8 @@ import type {
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
- * the server under plain node with these faked.
+ * the server under plain node with these faked. The same singletons ipc.ts holds: a second
+ * transport onto that logic, never a second implementation (projects.ts's addProject/removeProject).
  */
 export interface ControlDeps {
   version: string;

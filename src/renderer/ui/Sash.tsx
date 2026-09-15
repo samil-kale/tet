@@ -15,7 +15,10 @@ export const MIN_PANE_HEIGHT = 120;
 /** The floor for the terminals, the one pane no sash sizes directly. */
 export const MIN_CONTENT_WIDTH = 320;
 
-/** Whether a pane is showing, in the same layout storage. */
+/**
+ * Whether a pane is showing, in the same layout storage. It stays as set until toggled again —
+ * the side pane stays out until its view's toggle is pressed again, one for all projects.
+ */
 export function usePaneToggle(key: string, initial: boolean): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(() => {
     const stored = localStorage.getItem(STORAGE_PREFIX + key);
