@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
-import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
-import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../../shared/types";
+import { resolveTheme, THEMES, type ThemeKind } from "../../shared/themes";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../../shared/types";
 import type {
   AppInfo,
   AppSettings,
+  ColorScheme,
   ExplorerSettings,
   ExplorerSortOrder,
   NotificationSettings,
@@ -35,6 +36,13 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "prompts", label: "Prompts" },
   { id: "info", label: "Info" }
 ];
+
+/** The Appearance tab's radio buttons. */
+const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
+  system: "System",
+  light: "Light",
+  dark: "Dark"
+};
 
 /** The Prompts tab's picker, one label per question. */
 const PROMPT_LABELS: Record<PromptId, string> = {
@@ -123,7 +131,17 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   const applyPreset = (id: string): void => patch(() => ({ editorKeybindingPreset: id }));
 
-  const applyTheme = (id: string): void => patch(() => ({ theme: id }));
+  const applyColorScheme = (scheme: ColorScheme): void => patch(() => ({ colorScheme: scheme }));
+
+  const applyTheme = (kind: ThemeKind, id: string): void =>
+    patch(() => (kind === "dark" ? { darkTheme: id } : { lightTheme: id }));
+
+  // The kind the window is drawn in, and the one Save would ask for — "system" answered by the OS as
+  // it is now (Electron's prefers-color-scheme follows nativeTheme, which main.ts's currentTheme reads).
+  const shownKind = resolveTheme(document.documentElement.dataset.theme).kind;
+  const scheme = settings?.colorScheme ?? "system";
+  const chosenKind: ThemeKind =
+    scheme === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : scheme;
 
   /** Tet's own text is stored as "" (settings.ts does the same); the reset button reads off it. */
   const applyPrompt = (id: PromptId, text: string): void =>
@@ -174,20 +192,36 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     >
       {tab === "appearance" && (
         <>
+          <p className="dialog-detail">Color scheme</p>
+          <div className="settings-color-schemes">
+            {COLOR_SCHEMES.map((option) => (
+              <label key={option} className="dialog-checkbox">
+                <input
+                  type="radio"
+                  name="color-scheme"
+                  checked={scheme === option}
+                  onChange={() => applyColorScheme(option)}
+                />
+                <span>{COLOR_SCHEME_LABELS[option]}</span>
+              </label>
+            ))}
+          </div>
           <label className="dialog-field">
-            <span>Color theme</span>
+            <span>{chosenKind === "dark" ? "Dark theme" : "Light theme"}</span>
             <Dropdown
-              value={settings?.theme ?? SYSTEM_THEME_ID}
-              onChange={applyTheme}
-              options={[
-                { value: SYSTEM_THEME_ID, label: "System" },
-                ...THEMES.map((theme) => ({ value: theme.id, label: theme.label }))
-              ]}
+              value={resolveTheme(chosenKind === "dark" ? settings?.darkTheme : settings?.lightTheme, chosenKind).id}
+              onChange={(id) => applyTheme(chosenKind, id)}
+              options={THEMES.filter((theme) => theme.kind === chosenKind).map((theme) => ({
+                value: theme.id,
+                label: theme.label
+              }))}
             />
           </label>
-          {/* Not live: xterm, shiki, monaco and the window's chrome each read the theme once
-              and keep it, and an agent is handed it when its first terminal starts. */}
-          <p className="dialog-detail">Applies after tet is restarted.</p>
+          {/* Live within one kind only: an agent is handed light or dark when its tab starts, and
+              one already running would go on drawing for the other (main.ts's applyTheme). */}
+          {settings && chosenKind !== shownKind && (
+            <p className="dialog-detail">Switching between light and dark applies after tet is restarted.</p>
+          )}
         </>
       )}
       {tab === "notifications" && (

@@ -56,6 +56,8 @@ let tempDir: string;
 let port: number;
 let server: { close: () => Promise<void> };
 let settings: AppSettings;
+/** What the faked applyTheme answers. */
+let themeWaits = false;
 let calls: Calls;
 
 function terminalsOf(projectId: string): ControlTerminals {
@@ -155,7 +157,9 @@ function deps(ownProfile = true): ControlDeps {
     },
     notify: (title, body, target) => {
       calls.notified.push([title, body, target]);
-    }
+    },
+    // What main.ts's applyTheme decides, set by the test.
+    applyTheme: () => themeWaits
   };
 }
 
@@ -208,13 +212,16 @@ describe("tet-ctl against the control server", () => {
     settings = {
       notifications: { finished: true, needsYou: true, idleReminder: false },
       editorKeybindingPreset: "tet",
-      theme: "system",
+      colorScheme: "system",
+      darkTheme: "dark-modern",
+      lightTheme: "light-modern",
       prompts: { commitMessage: "" }
     };
     for (const list of Object.values(calls)) {
       list.length = 0;
     }
     tab2Session = undefined;
+    themeWaits = false;
   });
 
   it("answers help by itself, with every verb", async () => {
@@ -277,14 +284,20 @@ describe("tet-ctl against the control server", () => {
   it("lists the themes with system first", async () => {
     const run = await tetCtl(["list-themes"]);
     assert.equal(run.status, EXIT_CODES.ok);
-    const ids = (run.result as { id: string }[]).map((theme) => theme.id);
-    assert.deepEqual(ids, ["system", "dark-modern", "dark-slate", "light-modern"]);
+    const themes = (run.result as { id: string; kind: string }[]).map(({ id, kind }) => `${id}:${kind}`);
+    assert.deepEqual(themes, ["dark-modern:dark", "dark-slate:dark", "light-modern:light"]);
   });
 
-  it("sets a known theme and says a restart is needed, without restarting", async () => {
-    const run = await tetCtl(["settings-set-theme", "light-modern"]);
-    assert.deepEqual(run.result, { saved: true, restartRequired: true });
-    assert.equal(settings.theme, "light-modern");
+  it("sets a known theme for its own kind and relays whether a restart is needed, without restarting", async () => {
+    const dark = await tetCtl(["settings-set-theme", "dark-slate"]);
+    assert.deepEqual(dark.result, { saved: true, restartRequired: false });
+    assert.equal(settings.darkTheme, "dark-slate");
+    assert.equal(settings.lightTheme, "light-modern");
+    themeWaits = true;
+    const light = await tetCtl(["settings-set-theme", "light-modern"]);
+    assert.deepEqual(light.result, { saved: true, restartRequired: true });
+    assert.equal(settings.lightTheme, "light-modern");
+    assert.equal(settings.colorScheme, "system", "the kind is not the theme's to change");
     assert.deepEqual(calls.shutdown, []);
   });
 
@@ -292,7 +305,19 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["settings-set-theme", "solarized"]);
     assert.equal(run.status, EXIT_CODES.usage);
     assert.match(run.stderr, /unknown theme: solarized/);
-    assert.equal(settings.theme, "system");
+    assert.equal(settings.darkTheme, "dark-modern");
+  });
+
+  it("sets the color scheme, relays whether a restart is needed, and refuses an unknown one", async () => {
+    themeWaits = true;
+    const set = await tetCtl(["settings-set-color-scheme", "light"]);
+    assert.deepEqual(set.result, { saved: true, restartRequired: true });
+    assert.equal(settings.colorScheme, "light");
+    const unknown = await tetCtl(["settings-set-color-scheme", "sepia"]);
+    assert.equal(unknown.status, EXIT_CODES.usage);
+    assert.match(unknown.stderr, /unknown color scheme: sepia/);
+    assert.equal(settings.colorScheme, "light");
+    assert.deepEqual(calls.shutdown, []);
   });
 
   it("sets a prompt's text, puts tet's own back without one, and refuses an unknown id", async () => {

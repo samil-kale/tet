@@ -14,6 +14,8 @@ import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 interface TerminalView {
   term: Terminal;
   fit: FitAddon;
+  /** What its theme is built for — see `buildXtermTheme`. */
+  agent: AgentInfo;
   /** The size last reported to the pty, so a fit that changed nothing does not report again. */
   sent?: { cols: number; rows: number };
   /** Its WebGL renderer, while it holds a context; without one xterm draws through the DOM. */
@@ -441,7 +443,7 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
     return true;
   });
 
-  const view: TerminalView = { term, fit };
+  const view: TerminalView = { term, fit, agent };
   const key = viewKey(projectId, tabId);
   views.set(key, view);
   const buffered = earlyOutput.get(key);
@@ -596,6 +598,14 @@ export function hideTerminal(projectId: string, tabId: string): void {
 
 export function focusTerminal(projectId: string, tabId: string): void {
   views.get(viewKey(projectId, tabId))?.term.focus();
+}
+
+/** Repaints every terminal in the theme now on the root element; a terminal not built yet reads it
+ *  when it is. Colors alone, so no pty is resized. */
+export function rethemeTerminals(): void {
+  for (const view of views.values()) {
+    view.term.options.theme = buildXtermTheme(view.agent);
+  }
 }
 
 /** Wipes the scrollback and screen — what a restart clears once the command is running again. */

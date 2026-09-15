@@ -72,6 +72,8 @@ export interface IpcDeps {
   openProject: (project: Project) => void;
   /** Opens the stored projects, once and only once the requirements are met. */
   openWorkspace: () => void;
+  /** Brings a saved theme onto the window, answering whether a restart is still needed for it. */
+  applyTheme: () => boolean;
 }
 
 const MISSING_REPOSITORY: RepositoryState = { ...EMPTY_REPOSITORY_STATE, error: "Project not found" };
@@ -125,7 +127,8 @@ export function registerIpc({
   records,
   send,
   openProject,
-  openWorkspace
+  openWorkspace,
+  applyTheme
 }: IpcDeps): void {
   /**
    * The gate the window opens with: nothing is restored until git and either an agent or sbx are
@@ -211,7 +214,11 @@ export function registerIpc({
   ipcMain.handle("settings:get", (): AppSettings => settings.get());
 
   // Written whole, like a project's saved commands: the dialog holds all of it.
-  ipcMain.handle("settings:save", (_event, next: AppSettings): void => settings.save(next));
+  // The dialog says in so many words when a theme waits for a restart; nothing to answer it.
+  ipcMain.handle("settings:save", (_event, next: AppSettings): void => {
+    settings.save(next);
+    applyTheme();
+  });
 
   ipcMain.handle("projects:list", (): Project[] => store.list());
 

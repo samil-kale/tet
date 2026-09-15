@@ -50,14 +50,21 @@ export interface NotificationSettings {
   idleReminder: boolean;
 }
 
+export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
+export type ColorScheme = (typeof COLOR_SCHEMES)[number];
+
 /** Everything tet keeps about itself rather than about one repository; written whole. */
 export interface AppSettings {
   notifications: NotificationSettings;
   /** The Files tab's keybinding preset; an id out of `KEYBINDING_PRESETS`. */
   editorKeybindingPreset: string;
-  /** The Appearance tab's color theme: an id out of `THEMES` or `SYSTEM_THEME_ID`, the default.
-   *  Applies to windows opened after it — see `currentTheme` in src/main/theme.ts. */
-  theme: string;
+  /** The Appearance tab's light or dark, "system" being whichever the OS is in. Which kind a window
+   *  is drawn in is decided when it is built — see `applyTheme` in src/main/main.ts. */
+  colorScheme: ColorScheme;
+  /** The theme for each kind: an id out of `THEMES` of that kind. Applied to the running window
+   *  while it is drawn in that kind. */
+  darkTheme: string;
+  lightTheme: string;
   /** The Prompts tab's background question; an empty string means tet's own (`DEFAULT_PROMPTS`). */
   prompts: PromptSettings;
 }

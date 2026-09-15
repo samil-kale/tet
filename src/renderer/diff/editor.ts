@@ -1,5 +1,5 @@
 import { buildMonacoColors } from "../terminal/theme";
-import { highlighter, loadGrammar, THEME } from "./diff-highlight";
+import { highlighter, highlightTheme, loadGrammar, switchHighlightTheme } from "./diff-highlight";
 import type { languages } from "monaco-editor";
 import type { HighlighterCore } from "shiki/core";
 
@@ -116,9 +116,30 @@ export async function ensureLanguage(monaco: Monaco, language: string | null): P
  */
 async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void> {
   const { textmateThemeToMonacoTheme } = await import("@shikijs/monaco");
-  const base = textmateThemeToMonacoTheme(shiki.getTheme(THEME));
-  monaco.editor.defineTheme(THEME, { ...base, colors: { ...base.colors, ...buildMonacoColors() } });
-  monaco.editor.setTheme(THEME);
+  const theme = highlightTheme();
+  const base = textmateThemeToMonacoTheme(shiki.getTheme(theme));
+  monaco.editor.defineTheme(theme, { ...base, colors: { ...base.colors, ...buildMonacoColors() } });
+  monaco.editor.setTheme(theme);
+}
+
+/**
+ * Switches shiki and monaco to the theme with this id, once its stylesheet is on the root element.
+ * `setTheme` is monaco's global, so every editor already open takes it. `shikiToMonaco` runs again
+ * when it has run before: its token provider only knows the themes loaded at the time it ran. A
+ * monaco not loaded yet reads the theme when it is.
+ */
+export async function switchEditorTheme(id: string): Promise<void> {
+  await switchHighlightTheme(id);
+  if (!monacoPromise) {
+    return;
+  }
+  const [monaco, shiki] = await Promise.all([monacoPromise, highlighter()]);
+  if (registered.size > 0) {
+    const { shikiToMonaco } = await import("@shikijs/monaco");
+    shikiToMonaco(shiki, monaco as never);
+  }
+  await applyChrome(monaco, shiki);
+  chromeApplied = true;
 }
 
 /**
@@ -128,7 +149,7 @@ async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void
  */
 export function editorOptions(fontFamily: string): Record<string, unknown> {
   return {
-    theme: THEME,
+    theme: highlightTheme(),
     fontFamily,
     fontSize: 13,
     lineHeight: 18,

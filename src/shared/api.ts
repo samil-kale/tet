@@ -264,6 +264,8 @@ export interface TETApi {
   /** The persisted theme id, read synchronously off `webPreferences.additionalArguments` before
    *  main.tsx's first line runs: an async read would leave a first frame in the wrong colors. */
   initialTheme: string;
+  /** A theme to draw in from now on — main.ts's `applyTheme`, and after every load of the page. */
+  onTheme(listener: (themeId: string) => void): Unsubscribe;
   /** Whether the window is drawn through Wayland (main.ts's `isWaylandSession`), handed in the same
    *  way; the terminals stay off WebGL there. */
   waylandSession: boolean;

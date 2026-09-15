@@ -13,8 +13,13 @@ import { buildShikiColors } from "../terminal/theme";
  *  Per-token colors are the one thing not from a --vscode-* variable: a theme assigns them per
  *  grammar scope and Shiki hands them back per token. The theme is the token half of the one picked
  *  in Settings (Dark Modern's tokens come from Dark+, Light Modern's from Light+); its
- *  editor-surface colors are patched in `loadTheme`. */
-export const THEME = resolveTheme(window.tet.initialTheme).shikiTheme;
+ *  editor-surface colors are patched in `loadTheme`. Changed by `switchHighlightTheme`. */
+let theme = resolveTheme(window.tet.initialTheme).shikiTheme;
+
+/** The shiki theme — and monaco's, named after it — the editor draws in now. */
+export function highlightTheme(): ThemeDefinition["shikiTheme"] {
+  return theme;
+}
 
 /** One import per theme, spelled out: esbuild can only bundle an import whose path it can read
  *  off the call — the same reason GRAMMARS below is a map rather than a template. */
@@ -23,11 +28,24 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "light-plus": () => import("@shikijs/themes/light-plus")
 };
 
-/** Loads `THEME` and patches its editor-surface colors with tet's own --vscode-* values, so
- *  shiki's theme — and monaco's, layered on it in editor.ts — draw tet's chrome. */
+/** Loads `highlightTheme()` and patches its editor-surface colors with tet's own --vscode-* values,
+ *  so shiki's theme — and monaco's, layered on it in editor.ts — draw tet's chrome. */
 async function loadTheme(): Promise<ThemeRegistration> {
-  const { default: theme } = await THEME_MODULES[THEME]();
-  return { ...theme, colors: { ...theme.colors, ...buildShikiColors() } };
+  const { default: registration } = await THEME_MODULES[theme]();
+  return { ...registration, colors: { ...registration.colors, ...buildShikiColors() } };
+}
+
+/**
+ * Switches to the theme with this id, once its stylesheet is on the root element. Loaded again even
+ * under a name shiki already has: two tet themes can share one token half (`dark-plus`), and the
+ * editor-surface colors patched into it are the stylesheet's. A highlighter not created yet loads it
+ * when it is.
+ */
+export async function switchHighlightTheme(id: string): Promise<void> {
+  theme = resolveTheme(id).shikiTheme;
+  if (core) {
+    await (await core).loadTheme(loadTheme());
+  }
 }
 
 /** The grammars tet bundles: what an agent's repository plausibly holds, not all two hundred
@@ -160,8 +178,8 @@ let core: Promise<HighlighterCore> | undefined;
 /** One load per grammar, kept as the promise so two files of a kind don't race it. */
 const grammars = new Map<string, Promise<void>>();
 
-/** The one shiki instance, shared with the editor (see editor.ts): one theme, `THEME`, and
- *  grammars loaded lazily. */
+/** The one shiki instance, shared with the editor (see editor.ts): the theme `highlightTheme()`
+ *  names, and grammars loaded lazily. */
 export function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
     themes: [loadTheme()],

@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { SYSTEM_THEME_ID } from "../shared/themes";
+import { DEFAULT_THEME_IDS, THEMES, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
-import { DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../shared/types";
-import type { AppSettings, PromptSettings } from "../shared/types";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../shared/types";
+import type { AppSettings, ColorScheme, PromptSettings } from "../shared/types";
 
 /** What tet does before anyone has said otherwise; tet's own defaults. */
 const DEFAULTS: AppSettings = {
@@ -13,7 +13,9 @@ const DEFAULTS: AppSettings = {
     idleReminder: false
   },
   editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
-  theme: SYSTEM_THEME_ID,
+  colorScheme: "system",
+  darkTheme: DEFAULT_THEME_IDS.dark,
+  lightTheme: DEFAULT_THEME_IDS.light,
   prompts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptSettings
 };
 
@@ -57,14 +59,28 @@ export class SettingsStore {
   }
 }
 
+/** What a file written before light and dark were chosen apart held: one theme id, or "system". */
+interface LegacyThemeSetting {
+  theme?: unknown;
+}
+
 /** Every key as the store holds it, whether it came from the dialog or from the file. */
-function normalize(value: Partial<AppSettings>): AppSettings {
+function normalize(value: Partial<AppSettings> & LegacyThemeSetting): AppSettings {
+  // The one theme an older file names becomes its kind and that kind's theme; "system" or an
+  // unknown id leaves the defaults.
+  const legacy = THEMES.find((theme) => theme.id === value.theme);
   return {
     notifications: booleans(value.notifications),
     editorKeybindingPreset: presetId(value.editorKeybindingPreset),
-    theme: themeId(value.theme),
+    colorScheme: colorScheme(value.colorScheme ?? legacy?.kind),
+    darkTheme: themeId(value.darkTheme ?? (legacy?.kind === "dark" ? legacy.id : undefined), "dark"),
+    lightTheme: themeId(value.lightTheme ?? (legacy?.kind === "light" ? legacy.id : undefined), "light"),
     prompts: promptTexts(value.prompts)
   };
+}
+
+function colorScheme(value: unknown): ColorScheme {
+  return COLOR_SCHEMES.find((scheme) => scheme === value) ?? DEFAULTS.colorScheme;
 }
 
 /** Every switch that is not a boolean in the file is the one the defaults name. */
@@ -84,9 +100,9 @@ function presetId(value: unknown): string {
   return typeof value === "string" && value ? value : DEFAULTS.editorKeybindingPreset;
 }
 
-/** The same for the theme: an unknown id is left standing, and `currentTheme` falls back. */
-function themeId(value: unknown): string {
-  return typeof value === "string" && value ? value : DEFAULTS.theme;
+/** The same for a kind's theme: an unknown id is left standing, and `currentTheme` falls back. */
+function themeId(value: unknown, kind: ThemeKind): string {
+  return typeof value === "string" && value ? value : DEFAULT_THEME_IDS[kind];
 }
 
 /**

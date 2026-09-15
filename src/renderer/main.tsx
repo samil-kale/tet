@@ -5,7 +5,8 @@ import "./themes/light-modern.css";
 import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import { Startup } from "./Startup";
-import { takeOutputStats } from "./terminal/terminal-views";
+import { rethemeTerminals, takeOutputStats } from "./terminal/terminal-views";
+import { switchEditorTheme } from "./diff/editor";
 
 /**
  * A file dropped anywhere but on a terminal navigates the Electron window to it, replacing the
@@ -55,8 +56,20 @@ if (!container) {
   throw new Error("Root container not found");
 }
 
-// Set before anything is rendered: xterm, shiki and monaco read those variables once and keep
-// the result.
+// Set before anything is rendered: xterm, shiki and monaco read those variables when they are
+// built and keep the result.
 document.documentElement.dataset.theme = window.tet.initialTheme;
+
+// A theme applied while tet runs (main.ts's applyTheme): the stylesheet first, since every one of
+// them reads its colors off it again. Subscribed here, before anything renders: main repeats the
+// theme after each load of the page, which the arguments of a reloaded window may no longer match.
+window.tet.onTheme((themeId) => {
+  if (themeId === document.documentElement.dataset.theme) {
+    return;
+  }
+  document.documentElement.dataset.theme = themeId;
+  rethemeTerminals();
+  void switchEditorTheme(themeId);
+});
 
 createRoot(container).render(<Startup />);

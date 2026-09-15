@@ -255,26 +255,44 @@ describe("the stores", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-settings-"));
     const file = path.join(dir, "settings.json");
     fs.writeFileSync(file, "{ nope");
-    assert.equal(new SettingsStore(dir).get().theme, "system");
+    assert.equal(new SettingsStore(dir).get().colorScheme, "system");
     fs.writeFileSync(
       file,
       JSON.stringify({
         notifications: { finished: false, needsYou: "yes" },
-        theme: "solarized",
+        colorScheme: "sepia",
+        darkTheme: "solarized",
         editorKeybindingPreset: "",
         prompts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }
       })
     );
     const settings = new SettingsStore(dir).get();
     assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: false });
-    assert.equal(settings.theme, "solarized", "an unknown id is left standing for the readers to fall back from");
+    assert.equal(settings.colorScheme, "system");
+    assert.equal(settings.darkTheme, "solarized", "an unknown id is left standing for the readers to fall back from");
+    assert.equal(settings.lightTheme, "light-modern");
     assert.equal(settings.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
     assert.deepEqual(settings.prompts, { commitMessage: "" }, "tet's own text spelled out is stored as none");
     assert.equal(effectivePrompt(settings.prompts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
     assert.equal(effectivePrompt({ commitMessage: "write a subject" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
-    store.save({ ...settings, theme: "light-modern" });
-    assert.equal(new SettingsStore(dir).get().theme, "light-modern", "written whole and read back");
+    store.save({ ...settings, colorScheme: "light" });
+    assert.equal(new SettingsStore(dir).get().colorScheme, "light", "written whole and read back");
+  });
+
+  it("read the one theme of an older settings file as its kind and that kind's theme", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-settings-"));
+    const file = path.join(dir, "settings.json");
+    fs.writeFileSync(file, JSON.stringify({ theme: "dark-slate" }));
+    const picked = new SettingsStore(dir).get();
+    assert.deepEqual(
+      [picked.colorScheme, picked.darkTheme, picked.lightTheme],
+      ["dark", "dark-slate", "light-modern"]
+    );
+    fs.writeFileSync(file, JSON.stringify({ theme: "system" }));
+    const system = new SettingsStore(dir).get();
+    assert.deepEqual([system.colorScheme, system.darkTheme, system.lightTheme], ["system", "dark-modern", "light-modern"]);
+    assert.equal("theme" in system, false, "not written back");
   });
 
   it("keep only well-formed projects, deduplicate by path and reorder what they know", () => {

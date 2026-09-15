@@ -1,4 +1,4 @@
-import { PROMPT_IDS } from "./types";
+import { COLOR_SCHEMES, PROMPT_IDS } from "./types";
 
 /**
  * The control channel's wire contract, shared by the server (`src/main/control/control-server.ts`)
@@ -111,7 +111,7 @@ export interface ControlEvent {
 export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   { verb: "help", usage: "help", summary: "Print this list.", positionals: [] },
   { verb: "version", usage: "version", summary: "TET's version.", positionals: [] },
-  { verb: "list-themes", usage: "list-themes", summary: "The color themes (id and label).", positionals: [] },
+  { verb: "list-themes", usage: "list-themes", summary: "The color themes (id, label and kind).", positionals: [] },
   {
     verb: "list-agents",
     usage: "list-agents",
@@ -122,8 +122,16 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "settings-set-theme",
     usage: "settings-set-theme <theme-id>",
-    summary: "Set the color theme. Applies after TET is restarted — tell the user, do not restart for them.",
+    summary:
+      "Set the theme for its kind (light or dark, see list-themes). Shown at once while TET is drawn in that kind; restartRequired says it waits for a restart — tell the user, do not restart for them.",
     positionals: ["theme"]
+  },
+  {
+    verb: "settings-set-color-scheme",
+    usage: `settings-set-color-scheme <${COLOR_SCHEMES.join("|")}>`,
+    summary:
+      "Set light or dark, system following the OS. restartRequired says it waits for a restart — tell the user, do not restart for them.",
+    positionals: ["scheme"]
   },
   {
     verb: "settings-set-prompt",

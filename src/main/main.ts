@@ -7,6 +7,7 @@ import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
+import type { ThemeDefinition } from "../shared/themes";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
@@ -472,7 +473,8 @@ async function startControl(): Promise<void> {
         openEditor: (projectId, filePath) => send("editor:open", { projectId, path: filePath }),
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
         projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
-        notify: showDesktopNotification
+        notify: showDesktopNotification,
+        applyTheme
       },
       controlChannel.token,
       controlChannel.port
@@ -483,10 +485,36 @@ async function startControl(): Promise<void> {
   }
 }
 
-function createWindow(): void {
-  // Read per window: a theme picked in the settings dialog reaches the windows opened after it;
-  // the ones already up keep what they were built with (xterm, shiki and monaco bake colors in).
+/** The theme the window is drawn in: the one it was built with, or the last one `applyTheme` took. */
+let shownTheme: ThemeDefinition | undefined;
+
+/**
+ * Brings the saved theme onto the window while it runs, and answers whether a restart is still
+ * needed for it. Only between two themes of one `kind`: an agent is handed light or dark once, when
+ * its tab starts (`AgentPaths.theme`), and a running one would go on drawing for the other.
+ */
+function applyTheme(): boolean {
   const theme = currentTheme(settings);
+  if (!window || window.isDestroyed() || !shownTheme || theme.id === shownTheme.id) {
+    return false;
+  }
+  if (theme.kind !== shownTheme.kind) {
+    return true;
+  }
+  shownTheme = theme;
+  window.setBackgroundColor(theme.windowBackground);
+  if (process.platform !== "darwin") {
+    window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
+  }
+  send("app:theme", theme.id);
+  return false;
+}
+
+function createWindow(): void {
+  // Read per window: a theme the running window could not take (see applyTheme) reaches the
+  // windows opened after it.
+  const theme = currentTheme(settings);
+  shownTheme = theme;
   window = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -526,6 +554,13 @@ function createWindow(): void {
   // A load — the first, or a reload after the renderer died — has no listener until App subscribes.
   window.webContents.on("did-start-loading", () => {
     noticesHeard = false;
+  });
+  // A reload — after the renderer died — reads the theme off the arguments the window was built
+  // with, which a theme applied since then no longer matches. The renderer ignores its own.
+  window.webContents.on("did-finish-load", () => {
+    if (shownTheme) {
+      send("app:theme", shownTheme.id);
+    }
   });
   window.once("ready-to-show", () => window?.show());
   // Looked at: what attractAttention asked for is answered.
@@ -616,7 +651,7 @@ if (!app.requestSingleInstanceLock()) {
     // this file into the sandbox itself (ensureSandboxLauncher).
     configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
-    registerIpc({ store, settings, accounts, repositories, sessions, records, send, openProject, openWorkspace });
+    registerIpc({ store, settings, accounts, repositories, sessions, records, send, openProject, openWorkspace, applyTheme });
     timeStartup("window", createWindow);
     // The git process inherits its environment at the fork, so it waits for the PATH — still up
     // front rather than on the first repository, the renderer being busy loading meanwhile.

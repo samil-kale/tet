@@ -52,13 +52,18 @@ export const THEMES: ThemeDefinition[] = [
   }
 ];
 
-export const DEFAULT_THEME_ID = "dark-modern";
+export type ThemeKind = ThemeDefinition["kind"];
 
-/** The setting's value for "whichever the OS is in". Not a theme: `currentTheme` in
- *  src/main/theme.ts turns it into one of the ids above before any reader sees it. */
-export const SYSTEM_THEME_ID = "system";
+/** Each kind's theme before anyone picked one. */
+export const DEFAULT_THEME_IDS: Readonly<Record<ThemeKind, string>> = { dark: "dark-modern", light: "light-modern" };
 
-/** An id the list no longer knows is the default — the same contract as the keybinding preset. */
-export function resolveTheme(id: string | undefined): ThemeDefinition {
-  return THEMES.find((theme) => theme.id === id) ?? THEMES.find((theme) => theme.id === DEFAULT_THEME_ID)!;
+export const DEFAULT_THEME_ID = DEFAULT_THEME_IDS.dark;
+
+/** An id the list no longer knows — or, given a kind, one of the other kind — is the default: the
+ *  same contract as the keybinding preset. */
+export function resolveTheme(id: string | undefined, kind?: ThemeKind): ThemeDefinition {
+  return (
+    THEMES.find((theme) => theme.id === id && (!kind || theme.kind === kind)) ??
+    THEMES.find((theme) => theme.id === (kind ? DEFAULT_THEME_IDS[kind] : DEFAULT_THEME_ID))!
+  );
 }

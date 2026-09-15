@@ -1626,6 +1626,12 @@ textarea:focus {
   overflow-y: auto;
 }
 
+/* The Appearance tab's light / dark radio buttons, side by side. */
+.settings-color-schemes {
+  display: flex;
+  gap: 16px;
+}
+
 .settings-prompt-header {
   display: flex;
   gap: 8px;

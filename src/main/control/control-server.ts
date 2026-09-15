@@ -3,8 +3,8 @@ import * as http from "node:http";
 import * as net from "node:net";
 import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
-import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
-import { PROMPT_IDS } from "../../shared/types";
+import { THEMES } from "../../shared/themes";
+import { COLOR_SCHEMES, PROMPT_IDS } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -69,6 +69,9 @@ export interface ControlDeps {
    *  never throw: `hook` shows its toast on the way to answering, and that answer is a turn.
    *  `target` is the tab it is about, which a click on it brings to the front. */
   notify(title: string, body: string, target?: ToastTarget): void;
+  /** Brings the saved theme onto the window, answering whether a restart is still needed for it —
+   *  main.ts's `applyTheme`. */
+  applyTheme(): boolean;
 }
 
 /** Which tab a toast is about. */
@@ -254,28 +257,35 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
   return {
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 
-    "list-themes": () => ({
-      result: [
-        { id: SYSTEM_THEME_ID, label: "System (whichever the OS is in)" },
-        ...THEMES.map(({ id, label }) => ({ id, label }))
-      ]
-    }),
+    "list-themes": () => ({ result: THEMES.map(({ id, label, kind }) => ({ id, label, kind })) }),
 
     "list-agents": async () => ({ result: await deps.listAgents() }),
 
     "settings-get": () => ({ result: settings.get() }),
 
     "settings-set-theme": (args) => {
-      const theme = text(args, "theme", "theme id");
+      const id = text(args, "theme", "theme id");
       // The store keeps any string (settings.ts); what it would silently fall back from is
       // refused here, where the caller can be told.
-      if (theme !== SYSTEM_THEME_ID && !THEMES.some((candidate) => candidate.id === theme)) {
-        throw new ControlError("bad_args", `unknown theme: ${theme} (see list-themes)`);
+      const theme = THEMES.find((candidate) => candidate.id === id);
+      if (!theme) {
+        throw new ControlError("bad_args", `unknown theme: ${id} (see list-themes)`);
       }
-      settings.save({ ...settings.get(), theme });
-      // Never applied to the running window — xterm, shiki, monaco and the window chrome bake the
-      // theme in at construction. The flag is for the agent to relay; restarting is the user's call.
-      return { result: { saved: true, restartRequired: true } };
+      settings.save({ ...settings.get(), [theme.kind === "dark" ? "darkTheme" : "lightTheme"]: id });
+      // The theme of its own kind: shown at once while the window is drawn in that kind. The flag
+      // is for the agent to relay; restarting is the user's call.
+      return { result: { saved: true, restartRequired: deps.applyTheme() } };
+    },
+
+    "settings-set-color-scheme": (args) => {
+      const value = text(args, "scheme", "color scheme");
+      const colorScheme = COLOR_SCHEMES.find((candidate) => candidate === value);
+      if (!colorScheme) {
+        throw new ControlError("bad_args", `unknown color scheme: ${value} (one of ${COLOR_SCHEMES.join(", ")})`);
+      }
+      settings.save({ ...settings.get(), colorScheme });
+      // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
+      return { result: { saved: true, restartRequired: deps.applyTheme() } };
     },
 
     "settings-set-prompt": (args) => {

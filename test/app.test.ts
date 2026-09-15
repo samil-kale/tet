@@ -11,7 +11,7 @@ import { resolveRoot } from "../src/main/git/git";
 import { contextDirFor } from "../src/main/terminals/agent-data";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { CONTROL_ENV } from "../src/shared/control";
-import type { Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
+import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl } from "./helpers";
 
 /**
@@ -251,11 +251,13 @@ ${stderr.slice(uncaught)}`);
     assert.equal((await state()).localBranches.length, 1);
   });
 
-  it("changes the theme for the next start only", async () => {
-    const set = await ctl("settings-set-theme", "light-modern");
-    assert.deepEqual(set.result, { saved: true, restartRequired: true });
-    assert.equal(((await ctl("settings-get")).result as { theme: string }).theme, "light-modern");
-    assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).theme, "light-modern");
+  it("changes a kind's theme without a restart", async () => {
+    // The window starts in "system", light or dark by the machine: a dark theme is either shown at
+    // once or not shown at all, and neither waits for a restart.
+    const set = await ctl("settings-set-theme", "dark-slate");
+    assert.deepEqual(set.result, { saved: true, restartRequired: false });
+    assert.equal(((await ctl("settings-get")).result as AppSettings).darkTheme, "dark-slate");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).darkTheme, "dark-slate");
   });
 
   it("restarts on --confirm and comes back with the same profile", async () => {
@@ -272,7 +274,7 @@ ${stderr.slice(uncaught)}`);
       STARTUP_MS
     );
     assert.deepEqual(((await ctl("projects-list")).result as Project[]).map((entry) => entry.id), [project.id]);
-    assert.equal(((await ctl("settings-get")).result as { theme: string }).theme, "light-modern");
+    assert.equal(((await ctl("settings-get")).result as AppSettings).darkTheme, "dark-slate");
   });
 
   it("closes a project with a running tab, and forgets it", async () => {

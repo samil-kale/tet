@@ -155,6 +155,7 @@ const api: TETApi = {
     return unsubscribe;
   },
   initialTheme,
+  onTheme: (listener) => subscribe("app:theme", listener),
   waylandSession
 };
 

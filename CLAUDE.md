@@ -506,7 +506,7 @@ real agents. What only the window knows (the editor tab, the notices it showed) 
 `ControlRecords` as it happens, the way it reports `inFront`; the server never asks the window.
 
 **Direction of travel**: every setting in `settings-get` is to be settable through `tet-ctl`
-(`settings-set-theme`, `settings-set-prompt` so far), toward letting an agent drive the whole
+(`settings-set-color-scheme`, `settings-set-theme`, `settings-set-prompt` so far), toward letting an agent drive the whole
 app. A new or extended setting comes with an offer to add its verb: the same `ControlVerb` entry,
 handler and `control.test.ts` case the existing ones have — offered, since the user decides what
 an agent may change.
@@ -672,9 +672,11 @@ What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut li
   Modern doubles as the bare `:root`) — plus an entry in `src/shared/themes.ts` for what lives
   outside the stylesheet. Values come from VS Code's theme files, not from eyeballing. The fonts
   are `styles.css`'s. The id travels `settings.json` → `currentTheme` → `additionalArguments` →
-  preload → `data-theme` in `main.tsx`, synchronously, so the first frame is right. **A change
-  applies after a restart**: xterm, shiki, monaco and the window chrome bake it in at
-  construction.
+  preload → `data-theme` in `main.tsx`, synchronously, so the first frame is right. **Light or
+  dark is chosen apart from the theme** (`colorScheme`, then `darkTheme`/`lightTheme`): a kind
+  applies after a restart — a running agent was handed light or dark when its tab started — and a
+  theme of the kind on screen applies at once (`applyTheme` in `main.ts`, `app:theme`): the
+  stylesheet, then xterm, shiki and monaco re-read it.
 - Two hover colors, not interchangeable: a *row* takes `--vscode-list-hoverBackground`, an
   *action button* the translucent `--vscode-toolbar-hoverBackground`. A selected row keeps its
   selection color while hovered.
