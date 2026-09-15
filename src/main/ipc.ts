@@ -455,6 +455,10 @@ export function registerIpc({
     return (await repositories.get(projectId)?.readExplorerSettings()) ?? DEFAULT_EXPLORER_VIEW;
   });
 
+  ipcMain.handle("repo:watch-file", (_event, projectId: string, filePath: string | null): void => {
+    repositories.get(projectId)?.watchFile(filePath ?? undefined);
+  });
+
   ipcMain.handle("repo:file-read", async (_event, projectId: string, filePath: string): Promise<FileContent> => {
     const repository = repositories.get(projectId);
     if (!repository) {

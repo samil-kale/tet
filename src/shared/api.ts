@@ -179,6 +179,10 @@ export interface TETApi {
     /** Fires when a file or folder in the working tree started or stopped existing — git's
      *  ignored ones included, which no state change ever reports. */
     onFilesChanged(listener: (payload: { projectId: string }) => void): Unsubscribe;
+    /** Names the file the project's editor tab shows, for `onFileChanged`; null once none is. */
+    watchFile(projectId: string, path: string | null): Promise<void>;
+    /** Fires when the file `watchFile` named was written, by anyone. */
+    onFileChanged(listener: (payload: { projectId: string; path: string }) => void): Unsubscribe;
   };
   /** A project's saved shell commands, kept in a tet.json in its own root, so they travel with it. */
   commands: {

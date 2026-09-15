@@ -85,6 +85,10 @@ export class Repository {
   private commandsTimer: ReturnType<typeof setTimeout> | undefined;
   /** The same again, for a path starting or stopping to exist. */
   private filesTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The file the project's editor tab shows, repository-relative with "/" — see watchFile. */
+  private watchedFile: string | undefined;
+  /** The same debounce, for a write to that file. */
+  private watchedFileTimer: ReturnType<typeof setTimeout> | undefined;
   /** The refresh underway, if one is. */
   private inflight: Promise<RepositoryState> | undefined;
   private refreshPending = false;
@@ -111,8 +115,18 @@ export class Repository {
     private readonly onCommandsChanged: () => void,
     /** A path in the working tree was created, deleted or renamed — for the Explorer, which lists
      *  git's ignored files too, and no refresh ever reports one of those. */
-    private readonly onFilesChanged: () => void
+    private readonly onFilesChanged: () => void,
+    /** The file `watchFile` names was written — an edit to a file already "modified" changes
+     *  nothing a refresh reports, and the editor tab showing it would go stale. */
+    private readonly onFileChanged: (filePath: string) => void
   ) {}
+
+  /** Which file the project's editor tab shows, or undefined once none is; one at a time, as the
+   *  tab shows one. */
+  watchFile(filePath: string | undefined): void {
+    clearTimeout(this.watchedFileTimer);
+    this.watchedFile = filePath?.replace(/\\/g, "/");
+  }
 
   /** Reports a repository that could not be read, named by project since several are open. Only on
    *  a change, so a folder that stays unreadable is not announced again on every refresh. */
@@ -788,6 +802,12 @@ export class Repository {
           clearTimeout(this.filesTimer);
           this.filesTimer = setTimeout(this.onFilesChanged, REFRESH_DEBOUNCE_MS);
         }
+        // Any event: an agent writing beside and renaming into place reports "rename", not "change".
+        const watchedFile = this.watchedFile;
+        if (watchedFile !== undefined && name?.replace(/\\/g, "/") === watchedFile) {
+          clearTimeout(this.watchedFileTimer);
+          this.watchedFileTimer = setTimeout(() => this.onFileChanged(watchedFile), REFRESH_DEBOUNCE_MS);
+        }
         this.scheduleRefresh();
       });
       this.watcher.on("error", (error) => {
@@ -826,6 +846,7 @@ export class Repository {
     clearTimeout(this.debounceTimer);
     clearTimeout(this.commandsTimer);
     clearTimeout(this.filesTimer);
+    clearTimeout(this.watchedFileTimer);
     clearTimeout(this.watchRetryTimer);
     clearInterval(this.autoFetchTimer);
     this.watcher?.close();
@@ -842,7 +863,8 @@ export class RepositoryManager {
     private readonly onState: (projectId: string, state: RepositoryState) => void,
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
     private readonly onCommandsChanged: (projectId: string) => void,
-    private readonly onFilesChanged: (projectId: string) => void
+    private readonly onFilesChanged: (projectId: string) => void,
+    private readonly onFileChanged: (projectId: string, filePath: string) => void
   ) {}
 
   open(project: Project): Repository {
@@ -855,7 +877,8 @@ export class RepositoryManager {
       (state) => this.onState(project.id, state),
       this.onNotice,
       () => this.onCommandsChanged(project.id),
-      () => this.onFilesChanged(project.id)
+      () => this.onFilesChanged(project.id),
+      (filePath) => this.onFileChanged(project.id, filePath)
     );
     this.repositories.set(project.id, repository);
     void repository.start();

@@ -37,9 +37,10 @@ import { canDiscardEdit, disposeEditor, openEditorFile, setEditorVersion } from 
 const SIDE_PANE_SLIDE_MS = 180;
 
 /** What an open file has to be re-read for: HEAD — the branch and the commit it is at, so a pull or
- *  a reset moving it is one too — and the status of the file it shows. */
-function diffVersion(state: RepositoryState | undefined, filePath: string): string {
-  return `${state?.head}:${state?.headCommit}:${state?.changes.find((change) => change.path === filePath)?.status}`;
+ *  a reset moving it is one too — the status of the file it shows, and a write to it on disk
+ *  (`writes`), which leaves a file already modified at the same status. */
+function diffVersion(state: RepositoryState | undefined, filePath: string, writes: number | undefined): string {
+  return `${state?.head}:${state?.headCommit}:${state?.changes.find((change) => change.path === filePath)?.status}:${writes ?? 0}`;
 }
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
@@ -75,6 +76,8 @@ export function App() {
   const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab>>({});
   const editorTabsRef = useRef(editorTabs);
   editorTabsRef.current = editorTabs;
+  /** Per project, how often the file its editor tab shows was written on disk — see diffVersion. */
+  const [fileWrites, setFileWrites] = useState<Record<string, number>>({});
   /**
    * What each project's tab strip holds: its terminals, and its editor tab last. What the layout
    * is reconciled against, what the panes draw and what next/previous tab step through; the marks
@@ -727,14 +730,40 @@ export function App() {
       }
     });
   }, []);
-  // Folds a change of HEAD or of the file's status into the open file — not on every push: a
-  // reload reads and colours the whole diff again, hundreds of milliseconds for a long file. The
-  // editor compares against the version it last had.
+  // Which file each project's editor tab shows, for the watcher to report writes to (onFileChanged).
+  const watchedFiles = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const previous = watchedFiles.current;
+    const next = Object.fromEntries(Object.values(editorTabs).map(({ projectId, path }) => [projectId, path]));
+    for (const [projectId, path] of Object.entries(next)) {
+      if (previous[projectId] !== path) {
+        void window.tet.repository.watchFile(projectId, path);
+      }
+    }
+    for (const projectId of Object.keys(previous)) {
+      if (!(projectId in next)) {
+        void window.tet.repository.watchFile(projectId, null);
+      }
+    }
+    watchedFiles.current = next;
+  }, [editorTabs]);
+  useEffect(
+    () =>
+      window.tet.repository.onFileChanged(({ projectId, path }) => {
+        if (editorTabsRef.current[projectId]?.path === path) {
+          setFileWrites((current) => ({ ...current, [projectId]: (current[projectId] ?? 0) + 1 }));
+        }
+      }),
+    []
+  );
+  // Folds a change of HEAD, of the file's status or of the file on disk into the open file — not on
+  // every push: a reload reads and colours the whole diff again, hundreds of milliseconds for a long
+  // file. The editor compares against the version it last had.
   useEffect(() => {
     for (const { projectId, path } of Object.values(editorTabs)) {
-      setEditorVersion(projectId, diffVersion(states[projectId], path));
+      setEditorVersion(projectId, diffVersion(states[projectId], path, fileWrites[projectId]));
     }
-  }, [editorTabs, states]);
+  }, [editorTabs, states, fileWrites]);
   const runActiveBranchAction = useCallback(
     (label: string, action: () => Promise<GitActionResult>) => {
       if (activeProjectId) {

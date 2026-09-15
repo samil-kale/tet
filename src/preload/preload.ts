@@ -98,7 +98,9 @@ const api: TETApi = {
     writeFile: (projectId, filePath, content, expectedMtimeMs) =>
       ipcRenderer.invoke("repo:file-write", projectId, filePath, content, expectedMtimeMs),
     onState: (listener) => subscribe("repo:state-changed", listener),
-    onFilesChanged: (listener) => subscribe("repo:files-changed", listener)
+    onFilesChanged: (listener) => subscribe("repo:files-changed", listener),
+    watchFile: (projectId, filePath) => ipcRenderer.invoke("repo:watch-file", projectId, filePath),
+    onFileChanged: (listener) => subscribe("repo:file-changed", listener)
   },
   commands: {
     list: (projectId) => ipcRenderer.invoke("commands:list", projectId),
