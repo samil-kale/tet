@@ -513,8 +513,9 @@ textarea:focus {
 }
 
 /* A file mark is a glyph of Seti's font (git/file-icons.ts), laid out like VS Code's
-   `.monaco-icon-label::before` (iconlabel.css): a 16px slot with 6px after it, the glyph at 150% of
-   the 13px label, left-aligned on the 22px line. */
+   `.monaco-icon-label::before` (iconlabel.css): a 16px slot, the glyph at 150% of the 13px label,
+   left-aligned on the 22px line. No gap after it: slot and gap together match a folder's chevron
+   and gap (TWISTIE_WIDTH + TWISTIE_GAP in Explorer.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
   src: url("./git/seti.woff") format("woff");
@@ -525,7 +526,6 @@ textarea:focus {
 .explorer-tree .file-mark {
   width: 16px;
   height: 22px;
-  margin-right: 6px;
   font-family: "seti";
   font-size: 19.5px;
   line-height: 22px;

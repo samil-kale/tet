@@ -47,16 +47,16 @@ interface TreeNode {
   root?: true;
 }
 
-/* VS Code's explorer geometry: TreeRenderer's DefaultIndent and `workbench.tree.indent` (both 8),
- * `.monaco-tl-twistie` in tree.css (16px wide, 6px right padding, nudged 3px right). A file has no
- * twistie — views.css zeroes it under `align-icons-and-twisties`, which Seti (file icons, no folder
- * icons) turns on — so its mark sits where a sibling folder's chevron does (.file-mark in styles.css). */
+/* VS Code's indent: TreeRenderer's DefaultIndent and `workbench.tree.indent` (both 8). The chevron
+ * sits as in the branch tree's headers (`.tree-header` in styles.css: 9px in, 4px before the label),
+ * not as VS Code's `.monaco-tl-twistie`. A file has no twistie — views.css zeroes it under
+ * `align-icons-and-twisties`, which Seti (file icons, no folder icons) turns on — so its mark sits
+ * where a sibling folder's chevron does, its label level with the folder's (.file-mark in styles.css). */
 const INDENT_STEP = 8;
-const INDENT_BASE = 8;
-/** Holds a folder's chevron; empty on a file. */
-const TWISTIE_WIDTH = 16;
-const TWISTIE_GAP = 6;
-const TWISTIE_NUDGE = 3;
+const INDENT_BASE = 9;
+/** Holds a folder's chevron: the chevron's own 12px box. */
+const TWISTIE_WIDTH = 12;
+const TWISTIE_GAP = 4;
 
 /** Case-insensitive, locale-aware. */
 function compareNames(a: TreeNode, b: TreeNode): number {
@@ -284,7 +284,6 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
                     alignItems: "center",
                     justifyContent: "center",
                     marginRight: TWISTIE_GAP,
-                    transform: `translateX(${TWISTIE_NUDGE}px)`,
                   }}
                 >
                   <ChevronIcon expanded={open} className="tree-icon" scale={TREE_CHEVRON} />
