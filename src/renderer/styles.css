@@ -525,6 +525,37 @@ textarea:focus {
   height: 11px;
 }
 
+/* A language mark's color, by Seti's palette (LANGUAGE_COLORS in Explorer.tsx). Every theme names
+   the terminal's colors; Seti's orange has no ANSI slot and takes the bright red, its pink the
+   bright magenta. */
+.explorer-tree .tree-icon.blue {
+  color: var(--vscode-terminal-ansiBlue);
+}
+
+.explorer-tree .tree-icon.yellow {
+  color: var(--vscode-terminal-ansiYellow);
+}
+
+.explorer-tree .tree-icon.green {
+  color: var(--vscode-terminal-ansiGreen);
+}
+
+.explorer-tree .tree-icon.red {
+  color: var(--vscode-terminal-ansiRed);
+}
+
+.explorer-tree .tree-icon.orange {
+  color: var(--vscode-terminal-ansiBrightRed);
+}
+
+.explorer-tree .tree-icon.purple {
+  color: var(--vscode-terminal-ansiMagenta);
+}
+
+.explorer-tree .tree-icon.pink {
+  color: var(--vscode-terminal-ansiBrightMagenta);
+}
+
 .tree-icon,
 .tree-header svg,
 .tree-item.remote > svg {

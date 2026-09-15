@@ -61,6 +61,31 @@ const LANGUAGE_ICONS: Record<string, (props: IconProps) => React.ReactElement> =
   yaml: YamlIcon
 };
 
+/** Each mark's color, Seti's (VS Code's default file icon theme, MIT) per language, named by
+ *  its palette and drawn by styles.css in the theme's terminal colors. A language Seti leaves
+ *  grey stays the mark's own color. */
+const LANGUAGE_COLORS: Record<string, "blue" | "yellow" | "green" | "red" | "orange" | "purple" | "pink"> = {
+  c: "blue",
+  cpp: "blue",
+  csharp: "blue",
+  css: "blue",
+  go: "blue",
+  html: "orange",
+  java: "red",
+  javascript: "yellow",
+  json: "yellow",
+  jsx: "blue",
+  markdown: "blue",
+  powershell: "blue",
+  python: "blue",
+  shellscript: "green",
+  sql: "pink",
+  tsx: "blue",
+  typescript: "blue",
+  xml: "orange",
+  yaml: "purple"
+};
+
 interface TreeNode {
   /** What `expanded`, the row map and React keys go by. The path alone, until the project lists
    *  `folders`: the same file can then sit under two roots, so each root prefixes its own index
@@ -289,7 +314,9 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
         const isFolder = node.children !== undefined;
         // A root starts open, everything else closed.
         const open = forceExpanded || (expanded[node.id] ?? node.root === true);
-        const LangIcon = isFolder ? undefined : LANGUAGE_ICONS[languageForPath(node.path) ?? ""];
+        const language = isFolder ? "" : (languageForPath(node.path) ?? "");
+        const LangIcon = LANGUAGE_ICONS[language];
+        const langColor = LANGUAGE_COLORS[language];
         return (
           <div key={node.id}>
             <button
@@ -320,7 +347,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
                 {isFolder ? (
                   <ChevronIcon expanded={open} className="tree-icon" scale={SMALLER} />
                 ) : (
-                  LangIcon && <LangIcon className="tree-icon" />
+                  LangIcon && <LangIcon className={`tree-icon${langColor ? ` ${langColor}` : ""}`} />
                 )}
               </span>
               <span className="tree-label">{node.name}</span>

@@ -659,9 +659,10 @@ What stays flat is the shell: `App`, `Startup`, the stylesheets, the shortcut li
 - **Anything that marks or points at something is 1px in `--vscode-focusBorder`**: the drop
   indicator, the active tab's underline, the drag-over frame, the dragged sash. A new one copies
   an existing rule. Every session mark sits under one `.session-mark` rule.
-- **Icons and marks are monochrome**; the only colour any takes is that blue. Two exceptions —
+- **Icons and marks are monochrome**; the only colour any takes is that blue. Three exceptions —
   the changes list's status letters (`gitDecoration-*`) and the error mark
-  (`--vscode-errorForeground`) — both colours Dark Modern already names for that meaning.
+  (`--vscode-errorForeground`), both colours Dark Modern already names for that meaning, and the
+  Explorer's language marks, colored after Seti in the terminal's ANSI colors — there only.
 - Colors come from `--vscode-*` variables only (`src/renderer/themes/`); add a new variable under
   VS Code's own name rather than hardcoding. Exception: the syntax colors, which Shiki hands back
   per token (`diff-highlight.ts`). Shiki's editor-surface colors are patched with those variables
