@@ -1,16 +1,15 @@
 import type { ProjectCommand } from "./types";
 
 /**
- * A saved command as the program and the arguments it is started with. Deliberately not a shell:
- * quotes group a word and are dropped, everything else is literal — a backslash included, since a
- * Windows path is full of them and `tet.json` is read on every platform. A pipe, a redirection or a
- * variable cannot be smuggled in; a command that really needs one says `"shell": true`. Shared, so
- * the dialog's environment field reads "one word" exactly the same way.
+ * A saved command as program plus arguments. Deliberately not a shell: quotes group a word and are
+ * dropped, everything else is literal — backslashes too, since `tet.json` holds Windows paths and is
+ * read on every platform. No pipes, redirections or variables; those need `"shell": true`. Shared,
+ * so the dialog's environment field splits words the same way.
  */
 export function splitCommand(command: string): string[] {
   const tokens: string[] = [];
   let current = "";
-  // Told apart from `current === ""` so that an empty quoted argument survives as one.
+  // Not `current === ""`: an empty quoted argument must survive.
   let started = false;
   let quote: string | undefined;
 
@@ -39,24 +38,22 @@ export function splitCommand(command: string): string[] {
     current += char;
     started = true;
   }
-  // A quote nobody closed takes the rest of the line with it, which is what the user typed.
+  // An unclosed quote takes the rest of the line.
   if (started) {
     tokens.push(current);
   }
   return tokens;
 }
 
-/** Whether two saved commands are the same one: same line, same folder, same variables. Environments
- *  are compared sorted, so the same variables in a different order match. */
+/** Same line, folder and variables; variable order does not matter. */
 export function isSameCommand(one: ProjectCommand, other: ProjectCommand): boolean {
   const envKey = (entry: ProjectCommand): string => JSON.stringify(Object.entries(entry.env ?? {}).sort());
   return one.command === other.command && one.cwd === other.cwd && envKey(one) === envKey(other);
 }
 
 /**
- * An environment written the way the dialog's field takes it — the inverse of `parseEnv`. A value
- * holding a space is quoted, and one holding a quote in the other kind, since a bare quote is what
- * the parser drops. A value holding both kinds cannot be written for it at all.
+ * The inverse of `parseEnv`. A value with whitespace or a quote is quoted with the other quote
+ * kind; a value holding both kinds cannot round-trip.
  */
 export function formatEnv(env: Record<string, string> | undefined): string {
   return Object.entries(env ?? {})
@@ -70,8 +67,7 @@ export function formatEnv(env: Record<string, string> | undefined): string {
     .join(" ");
 }
 
-/** `NAME=value NAME2="a b"` as an environment. A word without an `=` is dropped; the first `=`
- *  separates, so a value may hold more of them. */
+/** Parses `NAME=value NAME2="a b"`. A word without `=` is dropped; the first `=` separates. */
 export function parseEnv(text: string): Record<string, string> | undefined {
   const env: Record<string, string> = {};
   for (const token of splitCommand(text)) {

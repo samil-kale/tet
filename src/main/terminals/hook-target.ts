@@ -3,8 +3,7 @@ import * as path from "node:path";
 
 /** Where a generated hook command will actually run — on this host, or inside an sbx sandbox. */
 export interface HookTarget {
-  /** False only for a Windows host: a sandbox is always Linux, so anything generated for one is
-   *  shaped the POSIX way even when `process.platform` is win32. */
+  /** False only for a Windows host: a sandbox is always Linux, whatever `process.platform` says. */
   posix: boolean;
   /** A host path exactly as this target's own shell will see it — identity outside a sandbox. */
   embed(hostPath: string): string;
@@ -14,15 +13,12 @@ export const HOST_TARGET: HookTarget = { posix: process.platform !== "win32", em
 
 export const SANDBOX_TARGET: HookTarget = { posix: true, embed: toContainerPath };
 
-/** A host path the way sbx mounts it inside a sandbox — measured: a Windows path becomes a Linux
- *  path with the drive letter lower-cased as its own top segment (`C:\Users\x` → `/c/Users/x`);
- *  macOS and Linux hosts use the same path inside and out.
+/** A host path as sbx mounts it in a sandbox (measured): `C:\Users\x` → `/c/Users/x`; macOS and
+ *  Linux paths are unchanged.
  *
- *  Spelled as it is on disk, not as it was asked for (measured, 2026-09-14): sbx mounts
- *  `%APPDATA%\TET` at `/c/…/Roaming/tet` when the folder was created as `tet`, and inside the
- *  case-sensitive sandbox the path as typed does not exist. That realpath also resolves junctions,
- *  subst and mapped network drives costs nothing (measured, sbx 0.42.1): sbx takes none of the
- *  three as a workspace or mount in the first place. */
+ *  Spelled as on disk, not as asked (measured, 2026-09-14): a folder created as `tet` mounts at
+ *  `…/tet` even when asked as `TET`, and the sandbox is case-sensitive. realpath also resolving
+ *  junctions, subst and mapped drives costs nothing: sbx 0.42.1 accepts none of them anyway. */
 export function toContainerPath(hostPath: string): string {
   if (process.platform !== "win32") {
     return hostPath;
@@ -34,8 +30,7 @@ export function toContainerPath(hostPath: string): string {
   return `/${match[1].toLowerCase()}/${match[2].replace(/\\/g, "/")}`;
 }
 
-/** The longest existing part of a path in its on-disk spelling, the rest as given — a path is
- *  embedded before the file it names is always there. */
+/** The longest existing prefix in on-disk spelling, the rest as given — the file may not exist yet. */
 function onDiskCase(hostPath: string): string {
   try {
     return fs.realpathSync.native(hostPath);
@@ -45,21 +40,18 @@ function onDiskCase(hostPath: string): string {
   }
 }
 
-/** Every sandbox template's non-root user's home — verified by `$HOME` and `whoami` inside a
- *  Claude, a Codex, an opencode and pi's community-kit sandbox. A mount target must be absolute
- *  (`sbx mount --help`): it is not passed through a shell, so `~` never expands there. */
+/** The sandbox user's home in every template — verified in Claude, Codex, opencode and pi's
+ *  community kit. A mount target must be absolute (`sbx mount --help`): `~` never expands. */
 export const SANDBOX_HOME = "/home/agent";
 
-/** Where the sessions a sandboxed agent writes land on the host — the directory tet mounts into
- *  the sandbox at the path that agent's CLI keeps its transcripts under. Beside `sandboxHookDir`,
- *  never inside it: that one is the sandbox's own generated setup. */
+/** The host directory mounted where a sandboxed CLI writes its transcripts. Beside
+ *  `sandboxHookDir`, never inside it. */
 export function sandboxSessionDir(agentDir: string): string {
   return path.join(agentDir, "sandbox-sessions");
 }
 
-/** Where a sandboxed session's own generated setup lives — a subdirectory of the
- *  agentDir a host session uses, so the two never overwrite each other's files while still sitting
- *  inside the one folder sbx.ts mounts whole. */
+/** A sandboxed session's generated setup: inside agentDir, which sbx.ts mounts whole, but apart
+ *  from the host session's files. */
 export function sandboxHookDir(agentDir: string): string {
   return path.join(agentDir, "sandbox");
 }

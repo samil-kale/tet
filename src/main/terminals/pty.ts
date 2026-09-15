@@ -8,18 +8,15 @@ export interface SpawnOptions {
   cols: number;
   rows: number;
   env?: Record<string, string>;
-  /** Variables that win over the machine's own, unlike `env` above. A saved command's are the
-   *  only ones: the user wrote them next to the command. */
+  /** Variables that win over the machine's own, unlike `env` — only a saved command's. */
   envOverride?: Record<string, string>;
-  /** tet's own variables for this one process — the project and tab it belongs to, for the
-   *  control channel (`TET_PROJECT_ID`, `TET_TAB_ID`). Above the machine's, like `controlEnv`. */
+  /** This process's project and tab for the control channel (`TET_PROJECT_ID`, `TET_TAB_ID`).
+   *  Above the machine's, like `controlEnv`. */
   own?: Record<string, string>;
 }
 
-/** What every pty gets from tet itself, set once from main.ts (the control channel's port and
- *  token). Layered *above* `process.env`: tet started from one of its own shell tabs inherits the
- *  outer app's values there, and its terminals must reach the inner one. Kept out of `process.env`
- *  so only the terminals carry it, not git. */
+/** The control channel's port and token, set from main.ts. Above `process.env`, since a tet started
+ *  from its own shell tab inherits the outer one's; kept out of it so git does not carry them. */
 let controlEnv: Record<string, string> = {};
 /** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */
 let launcherDir: string | undefined;
@@ -29,17 +26,15 @@ export function setControlEnv(vars: Record<string, string>, binDir: string | und
   launcherDir = binDir;
 }
 
-/** The name PATH goes under in `env`: win32 stores it as `Path`, and a second key of another case
- *  would be one more variable rather than a replacement. */
+/** PATH's key in `env` — win32's `Path`; a key in another case would be a second variable. */
 export function pathKey(env: Record<string, string | undefined>): string {
   return Object.keys(env).find((key) => key.toUpperCase() === "PATH") ?? "PATH";
 }
 
 const WIN32_NATIVE_EXTENSIONS = [".exe", ".com"];
 
-/** node-pty spawns via CreateProcessW on win32, which does not apply PATHEXT resolution and cannot
- *  launch ".cmd"/".bat"/".ps1" shims directly. Returns the resolved path of a native executable
- *  where there is one, undefined where only a shim (or nothing) resolves and cmd.exe is needed. */
+/** node-pty's CreateProcessW applies no PATHEXT and cannot launch .cmd/.bat/.ps1 shims. The native
+ *  executable's path, or undefined where only a shim (or nothing) resolves and cmd.exe is needed. */
 function resolveWin32NativeExecutable(executable: string): string | undefined {
   const ext = path.extname(executable).toLowerCase();
   if (WIN32_NATIVE_EXTENSIONS.includes(ext)) {
@@ -68,21 +63,18 @@ export function resolveCommand(executable: string, args: string[]): { command: s
     if (native) {
       return { command: native, args };
     }
-    // Shim (.cmd/.bat/.ps1) or unresolved: route through cmd.exe rather than `shell: true`, which
-    // concatenates args into an unescaped command string. A path with a space in it (a launcher
-    // under `C:\Users\John Doe\...`) gets `call` in front: node-pty quotes it, and `/s` has cmd
-    // strip the first and last quote of everything after `/c` when it starts with one, leaving
-    // `C:\Users\John` as the command (measured). `call` makes the first character a `c`, so
-    // nothing is stripped. Only then, so the measured npm-shim path stays as it was.
+    // Shim or unresolved: cmd.exe, not `shell: true`, which joins args unescaped. A path with a space
+    // gets `call` in front: node-pty quotes it, and `/s` strips a leading and trailing quote after
+    // `/c`, leaving `C:\Users\John` as the command (measured). Only then, so the measured npm-shim
+    // invocation is unchanged.
     const invoke = /\s/.test(executable) ? ["call", executable] : [executable];
     return { command: "cmd.exe", args: ["/d", "/s", "/c", ...invoke, ...args] };
   }
   return { command: executable, args };
 }
 
-/** What a terminal's process is started with. options.env are defaults, not overrides: a variable
- *  the user already set must win. tet's own (controlEnv, options.own) come after the machine's, a
- *  saved command's (envOverride) after everything. Its own function to have a test without a pty. */
+/** A terminal's env: options.env as defaults under the machine's (the user's value wins), then
+ *  tet's own (controlEnv, options.own), then a saved command's envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own">): Record<string, string> {
   const env: Record<string, string> = {
     ...options.env,
@@ -94,8 +86,8 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     const key = pathKey(env);
     env[key] = env[key] ? `${launcherDir}${path.delimiter}${env[key]}` : launcherDir;
   }
-  // win32's variable names ignore case, and of `Path` and `PATH` side by side the child sees the
-  // inherited one (measured through node-pty) — so an override replaces its name in any spelling.
+  // win32 names ignore case, and of `Path` and `PATH` together the child sees the inherited one
+  // (measured through node-pty) — so an override replaces its name in any spelling.
   if (process.platform === "win32") {
     const names = new Set(Object.keys(options.envOverride ?? {}).map((name) => name.toUpperCase()));
     for (const name of Object.keys(env).filter((name) => names.has(name.toUpperCase()))) {
@@ -115,8 +107,7 @@ export function spawnAgentProcess(executable: string, args: string[], options: S
     rows: options.rows,
     cwd: options.cwd,
     env,
-    // Windows-only field (node-pty ignores it on Linux/macOS): the OpenConsole/conpty.dll shipped
-    // with node-pty is maintained more actively than Windows' inbox conhost.exe.
+    // Windows only: node-pty's bundled conpty.dll is maintained better than the inbox conhost.exe.
     useConptyDll: true
   });
 }

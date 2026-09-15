@@ -2,8 +2,8 @@ import type { TerminalDescriptor } from "../../shared/types";
 import { sameRecord } from "../identity";
 
 /**
- * A terminal split view: a fixed set of presets, not a nestable tree (see CLAUDE.md, "Split
- * view"). At most four panes, so a letter is all the identity a pane needs.
+ * A terminal split view: fixed presets, not a nestable tree (CLAUDE.md, "Split view"). At most
+ * four panes, so a letter identifies one.
  */
 export type PaneId = "a" | "b" | "c" | "d";
 export const PANE_IDS: readonly PaneId[] = ["a", "b", "c", "d"];
@@ -40,9 +40,8 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
 };
 
 /**
- * What the layout reads of a tab: its id, its session (persistence), its saved command
- * (`placeCommandTab`) and when it was last used (`pickActive`). A terminal's descriptor, or the
- * editor tab (`editor-tab.ts`), which carries the id alone and so is never written to disk.
+ * What the layout reads of a tab: id, session (persistence), saved command (`placeCommandTab`),
+ * last use (`pickActive`). The editor tab (`editor-tab.ts`) has only the id, so is never written.
  */
 export type LayoutTab = Pick<TerminalDescriptor, "tabId" | "sessionId" | "command" | "updatedAt">;
 
@@ -56,9 +55,9 @@ export interface ProjectLayout {
   /** Each pane's own active tab. */
   activeTab: Partial<Record<PaneId, string | null>>;
   /**
-   * Where each saved command's tab last lay, by command line — written when such a tab closes
-   * (`normalizeLayout`), read when it runs again (`placeCommandTab`), persisted with the open ones
-   * merged in (`serializeLayout`). Preset and pane: a pane is a position only within its preset.
+   * Where each saved command's tab last lay, by command line — written on close (`normalizeLayout`),
+   * read on rerun (`placeCommandTab`), persisted with the open ones merged (`serializeLayout`).
+   * With the preset: a pane is a position only within its preset.
    */
   commandPane: Record<string, CommandPlace>;
 }
@@ -83,10 +82,7 @@ export function visibleTabIds(layout: ProjectLayout): string[] {
   return Object.values(layout.activeTab).filter((id): id is string => id != null);
 }
 
-/**
- * The tabs in front of the user: those shown, but none while the window lacks the focus (another
- * window in front, or minimized) or a dialog covers it — a turn ending then was out of sight.
- */
+/** The tabs in front of the user: those shown, none while the window is unfocused or covered. */
 export function tabsInFront(layout: ProjectLayout, focused: boolean, covered: boolean): string[] {
   return focused && !covered ? visibleTabIds(layout) : [];
 }
@@ -100,9 +96,8 @@ function pickActive(
   if (wanted && list.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
-  // Not in the list, but never was: a tab just activated whose own push has not arrived yet.
-  // Left alone, or the neighbour rule would steal the selection from a tab about to exist. Only
-  // ever an id set during this run — `activeTab` is not persisted (see `PersistedLayout`).
+  // Never in the list: a tab just activated whose push has not arrived. Kept, or the neighbour rule
+  // steals its selection. Always an id of this run — `activeTab` is not persisted.
   if (wanted && !previousList.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
@@ -110,27 +105,23 @@ function pickActive(
     return null;
   }
   if (!wanted) {
-    // First tab this pane has ever shown: the session the user last worked in.
+    // The pane's first: the session last worked in.
     return [...list].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0].tabId;
   }
-  // Closed for good: VS Code's rule, the nearest neighbour on the right, else on the left.
+  // Closed: VS Code's rule, the neighbour on the right, else the left.
   const index = previousList.findIndex((tab) => tab.tabId === wanted);
   return list[Math.min(Math.max(index, 0), list.length - 1)].tabId;
 }
 
 /**
- * Reconciles a layout with the current tab list: every pane's active tab still exists, is
- * reassigned to a neighbour within its pane, or goes to null once the pane has nothing left.
- * `tabPane` entries for tabs gone for good are dropped; `previousTabs` tells "gone for good" from
- * "not created yet" (see `pickActive`).
+ * Reconciles a layout with the tab list: each pane's active tab still exists, moves to a neighbour
+ * in its pane, or becomes null. `tabPane` entries of closed tabs are dropped; `previousTabs` tells
+ * "closed" from "not created yet" (`pickActive`).
  *
- * A `tabPane` entry for a tab in neither list is kept: sessions arrive agent by agent at startup,
- * so a restored entry may name a tab whose push has not come yet. One that never comes costs an
- * entry until the next `saveLayout`, which writes only what exists; `paneOf` is only asked about
- * tabs that do.
+ * An entry for a tab in neither list is kept: sessions arrive agent by agent at startup. One that
+ * never comes lasts until the next `saveLayout`, which writes only what exists.
  *
- * Returns `layout` itself when nothing changed: a new object re-renders every memoized view the
- * layout reaches.
+ * Returns `layout` itself when nothing changed: a new object re-renders every memoized view.
  */
 export function normalizeLayout(
   layout: ProjectLayout,
@@ -147,8 +138,7 @@ export function normalizeLayout(
       tabPane[tabId] = paneId;
     }
   }
-  // A tab with no pane yet settles in the focused pane when first seen — written now, so it
-  // does not follow the focus afterwards.
+  // A new tab settles in the focused pane — written now, so it does not follow the focus later.
   for (const tab of tabs) {
     tabPane[tab.tabId] ??= layout.focusedPane;
   }
@@ -159,7 +149,7 @@ export function normalizeLayout(
     activeTab[paneId] = pickActive(listOf(tabs, paneId), listOf(previousTabs, paneId), layout.activeTab[paneId]);
   }
   const focusedPane = panes.includes(layout.focusedPane) ? layout.focusedPane : panes[0];
-  // A saved command's tab that just closed leaves its pane behind under its command line.
+  // A closing saved command's tab records its pane under its command line.
   let commandPane = layout.commandPane;
   for (const tab of previousTabs) {
     if (tab.command === undefined || currentIds.has(tab.tabId)) {
@@ -188,9 +178,8 @@ export function normalizeLayout(
 type PaneRemap = Partial<Record<PaneId, PaneId>>;
 
 /**
- * The one way a preset changes underneath existing tabs: tabs, active tab and focus follow
- * `remap`; a pane the new preset lacks and `remap` does not name hands everything to "a".
- * Re-normalized at once.
+ * The one way a preset changes under existing tabs: tabs, active tab and focus follow `remap`; a
+ * pane the new preset lacks and `remap` omits hands everything to "a". Re-normalized at once.
  */
 function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, tabs: LayoutTab[]): ProjectLayout {
   const panes = PRESET_PANES[preset];
@@ -198,8 +187,8 @@ function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, 
   const tabPane = Object.fromEntries(Object.entries(layout.tabPane).map(([tabId, paneId]) => [tabId, paneFor(paneId)]));
   const activeTab: Partial<Record<PaneId, string | null>> = {};
   for (const [paneId, tabId] of Object.entries(layout.activeTab) as [PaneId, string | null][]) {
-    // A remapped pane's selection outranks that of the pane whose letter it takes over (that pane
-    // is being emptied). A pane falling to "a" brings no selection: a has its own, or picks afresh.
+    // A remapped pane's selection outranks that of the (emptied) pane whose letter it takes. A pane
+    // falling to "a" brings none: a keeps its own, or picks afresh.
     const target = remap[paneId];
     if (target !== undefined) {
       activeTab[target] = tabId;
@@ -215,10 +204,9 @@ function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, 
 }
 
 /**
- * A tab becomes the active one of `target` — a click, a move, a new tab. Written blindly, whether
- * or not the tab has arrived in `tabs` (`normalizeLayout` leaves a pending one alone). Keyboard
- * focus follows it. The pane that loses its active tab falls back to the tab before it in its own
- * order, else the first, else null.
+ * A tab becomes `target`'s active one — a click, a move, a new tab — written whether or not it has
+ * arrived in `tabs` (`normalizeLayout` leaves a pending one alone). Focus follows. The source pane
+ * falls back to the tab before it, else the first, else null.
  */
 export function moveTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: LayoutTab[]): ProjectLayout {
   const source = paneOf(layout, tabId);
@@ -244,11 +232,10 @@ function occupiedPanes(layout: ProjectLayout, tabs: LayoutTab[]): PaneId[] {
 }
 
 /**
- * What a preset falls to once one of its panes is *emptied* (its last tab moved out or closed):
- * that pane goes, every other keeps its place, empty or not. Two panes left is cols2, whichever
- * way they were arranged; grid2x2 with b or d empty has no "split-left" to fall to and stays. A
- * pane never filled is not emptied: the empty panes a snap lays out stay. Not by count of
- * occupied panes: moving c into an empty d would collapse the untouched b.
+ * What a preset falls to once a pane is *emptied* (last tab moved out or closed): that pane goes,
+ * every other keeps its place, empty or not. Two panes left is cols2, however arranged; grid2x2
+ * with b or d emptied has no "split-left" and stays. A never-filled pane is not emptied, so a
+ * snap's empty panes stay. Not by occupied count: moving c into an empty d would collapse b.
  */
 export const COLLAPSE_TRANSITIONS: Record<SplitPreset, Partial<Record<PaneId, { preset: SplitPreset; remap: PaneRemap }>>> = {
   single: {},
@@ -265,10 +252,10 @@ export const COLLAPSE_TRANSITIONS: Record<SplitPreset, Partial<Record<PaneId, { 
 };
 
 /**
- * What goes along with a collapse: every empty pane at the *end* of the reading order (LO, RO,
- * LU, RU), the occupied ones taking the room. An empty pane *before* an occupied one stays, so a
- * tab moved into RU stays bottom right. Run after the emptied pane has gone, and again after
- * each removal: taking LU out of the grid is what brings RO and RU into a split-right.
+ * What goes along with a collapse: every empty pane at the *end* of the reading order, the
+ * occupied ones taking the room. An empty pane *before* an occupied one stays, so a tab moved
+ * bottom right stays there. Repeated after each removal: taking bottom left out of the grid is
+ * what brings the right column into a split-right.
  */
 function collapseTrailing(layout: ProjectLayout, tabs: LayoutTab[]): ProjectLayout {
   let next = layout;
@@ -289,10 +276,9 @@ export function collapseEmptied(layout: ProjectLayout, emptied: PaneId, tabs: La
 }
 
 /**
- * `moveTab`, plus the collapse when the move took the last tab out of its pane. "Emptied" is
- * judged against `tabs`, not the pane the tab resolves to: a tab activated ahead of its push
- * resolves through `paneOf` to the focused pane, which may be empty without this move. A snap
- * (`snapTab`) is the same move without the collapse.
+ * `moveTab`, plus the collapse when it emptied the source pane. Judged against `tabs`: a tab
+ * activated ahead of its push resolves (`paneOf`) to the focused pane, which may already be empty.
+ * `snapTab` is the same move without the collapse.
  */
 export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: LayoutTab[]): ProjectLayout {
   const source = paneOf(layout, tabId);
@@ -302,9 +288,8 @@ export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId
 }
 
 /**
- * `normalizeLayout` for a tab list push, plus the collapse for the tabs that *closed*: every pane
- * that held a tab of `previousTabs` and holds none of `tabs`. The normalized layout itself when
- * nothing closed.
+ * `normalizeLayout` for a tab list push, plus the collapse of every pane that held a tab of
+ * `previousTabs` and holds none of `tabs`.
  */
 export function collapseClosed(
   layout: ProjectLayout,
@@ -319,9 +304,8 @@ export function collapseClosed(
 }
 
 /**
- * The collapse at startup, once a project's bootstrap has listed every session: every pane the
- * restored layout has nothing for counts as emptied, a snap's empty pane included. Stricter than
- * a run; what the transitions cannot take (the grid's b or d) still stays.
+ * The collapse once a project's bootstrap has listed every session: every empty pane counts as
+ * emptied, a snap's included. What the transitions cannot take (the grid's b or d) stays.
  */
 export function collapseEmpty(layout: ProjectLayout, tabs: LayoutTab[]): ProjectLayout {
   const occupied = occupiedPanes(layout, tabs);
@@ -333,8 +317,8 @@ export function collapseEmpty(layout: ProjectLayout, tabs: LayoutTab[]): Project
 }
 
 /**
- * Several panes emptied at once, in reading order, each later letter translated through the
- * collapse before it; what trails is taken once at the end. `layout` itself when nothing collapsed.
+ * Several emptied panes in reading order, each later letter translated through the collapse
+ * before it; what trails is taken once at the end. `layout` itself when nothing collapsed.
  */
 function collapsePanes(layout: ProjectLayout, emptied: PaneId[], tabs: LayoutTab[]): ProjectLayout {
   let next = layout;
@@ -361,12 +345,10 @@ export interface FractionBox {
 }
 
 /**
- * Where a dragged tab can ask for a pane that is not there yet, named for the position it would
- * take. The same map for every preset: the right quarter in thirds, the lower half of the left
- * quarter; top left is pane "a", never a zone. What a zone does is `SNAP_TRANSITIONS`; without an
- * entry it is a plain drop into the pane under the pointer. A quarter, not the half the layout
- * splits at: in cols2 the zones would otherwise cover all of b. Set by hand against the real
- * drag.
+ * Where a dragged tab asks for a pane at that position. The same for every preset: the right
+ * quarter in thirds, the lower half of the left quarter; top left is "a", never a zone. Without a
+ * `SNAP_TRANSITIONS` entry it is a plain drop. A quarter, not a half: in cols2 a half would cover
+ * all of b. Tuned by hand against the real drag.
  */
 export type SnapZone = "right" | "top-right" | "bottom-right" | "bottom-left";
 export const SNAP_ZONES: Record<SnapZone, FractionBox> = {
@@ -377,12 +359,10 @@ export const SNAP_ZONES: Record<SnapZone, FractionBox> = {
 };
 
 /**
- * What a zone does: the tab lands in `target`, existing panes are renamed by `remap`, the rest
- * keep their letter. The preset is the smallest with a pane at that position; panes it adds
- * beyond the target stay empty. Where the preset already has that pane, the zone is the pane
- * itself; the difference to a plain drop is the source pane: a zone drop *places* (`snapTab`
- * never collapses), a plain drop *moves* (`collapseEmptied`). cols2's top-right is the one zone
- * that moves tabs already there: b makes room by going below.
+ * What a zone does: the tab lands in `target`, `remap` renames panes, the rest keep their letter.
+ * The preset is the smallest with a pane there; panes it adds beyond the target stay empty. Unlike
+ * a plain drop, which *moves* (`collapseEmptied`), a zone drop *places* (`snapTab` never
+ * collapses). cols2's top-right is the one zone moving existing tabs: b goes below.
  */
 export interface SnapTransition {
   preset: SplitPreset;
@@ -416,8 +396,8 @@ export const SNAP_TRANSITIONS: Record<SplitPreset, Partial<Record<SnapZone, Snap
 };
 
 /**
- * Where the three divider lines sit, as shares of `.panes-grid`. One share per *line*, not per
- * preset: `TerminalsPane` sizes every preset from the same three, so a preset switch moves no line.
+ * The three divider lines as shares of `.panes-grid`. Per *line*, not per preset, so a preset
+ * switch moves no line.
  */
 export interface DividerShares {
   col: number;
@@ -425,10 +405,7 @@ export interface DividerShares {
   rowRight: number;
 }
 
-/**
- * Each pane's box given the lines — what the preview draws for the pane a drop would add. Fed the
- * live shares, it is that pane's real box after the drop.
- */
+/** Each pane's box given the lines — the preview of the pane a drop would add. */
 const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, (shares: DividerShares) => FractionBox>>> = {
   single: { a: () => ({ left: 0, top: 0, width: 1, height: 1 }) },
   cols2: {
@@ -453,9 +430,8 @@ export function paneBox(preset: SplitPreset, paneId: PaneId, shares: DividerShar
 }
 
 /**
- * A tab dropped on a snap zone: preset switch and move as one layout for one state write, so the
- * tab never sits in the focused pane for a render in between. No collapse, unlike `activateTab`:
- * the source pane and the panes the preset adds stay — the user asked for this layout.
+ * A tab dropped on a snap zone: preset switch and move in one state write, so the tab never renders
+ * in the focused pane between. No collapse, unlike `activateTab`: the user asked for this layout.
  */
 export function snapTab(
   layout: ProjectLayout,
@@ -467,8 +443,8 @@ export function snapTab(
 }
 
 /**
- * Where a pane sits on screen — "the same pane" across presets: the letters agree except bottom
- * right (c in split-right, d in the grid), and a full-height a or b counts as the top of its column.
+ * "The same pane" across presets: letters agree except bottom right (c in split-right, d in the
+ * grid); a full-height a or b is the top of its column.
  */
 type PanePosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const PANE_POSITIONS: Record<SplitPreset, Partial<Record<PaneId, PanePosition>>> = {
@@ -483,10 +459,9 @@ function paneAt(preset: SplitPreset, position: PanePosition | undefined): PaneId
 }
 
 /**
- * A saved command's tab, just opened, goes where that command last lay: beside an open tab of the
- * same command, else in the recorded pane — the one at the same position in the current preset,
- * or the recorded preset restored like a snap. Placed, not moved: nothing collapses. A command
- * never run before goes to the focused pane.
+ * A saved command's new tab goes beside an open tab of the same command, else to the recorded
+ * place — the same position in the current preset, or the recorded preset restored like a snap.
+ * Placed, so nothing collapses. A command never run goes to the focused pane.
  */
 export function placeCommandTab(
   layout: ProjectLayout,
@@ -515,14 +490,14 @@ export function placeCommandTab(
 }
 
 /**
- * How far past a zone's boundary the pointer may stray before the zone goes out; without it the
- * preview flickers on the line between two zones. Set by hand against the real drag.
+ * How far past its zone the pointer may stray; stops the preview flickering between two zones.
+ * Tuned by hand against the real drag.
  */
 const SNAP_STICKY = 0.03;
 
 /**
- * The snap zone under `point` (fractions of the grid), given the zone shown now (`active`, for
- * the margin) — only zones the preset has an entry for. Over a tab strip the caller does not ask.
+ * The snap zone under `point` (grid fractions), `active` keeping its margin — only zones the
+ * preset has an entry for. Not asked over a tab strip.
  */
 export function snapZoneAt(
   preset: SplitPreset,
@@ -547,23 +522,21 @@ export function snapZoneAt(
 }
 
 /**
- * `localStorage`, under the `tet.layout.` namespace `Sash.tsx` uses: layout describes the window,
- * not the repository. Per project, so not `usePaneSize`/`usePaneToggle` (their key is fixed at
- * the call site). `suffix` tells the layout from the divider positions `TerminalsPane` keeps.
+ * `localStorage` under `Sash.tsx`'s `tet.layout.` namespace: layout describes the window, not the
+ * repository. Per project, unlike `usePaneSize`/`usePaneToggle`'s fixed keys. `suffix` tells the
+ * layout from `TerminalsPane`'s divider positions.
  */
 export function layoutStorageKey(projectId: string, suffix: string): string {
   return `tet.layout.terminals.${projectId}.${suffix}`;
 }
 
 /**
- * What survives a restart: preset, focused pane, and which pane each tab lives in — keyed by
- * *session id*, not tab id. A tab created during a run has a `new-N` id handed out from zero at
- * every start, and comes back, if at all, under its session id (a restored tab's tab id). Keying
- * by session id makes both the same entry and drops what cannot return (a shell tab, an agent tab
- * whose CLI persisted no session).
+ * What survives a restart: preset, focused pane, each tab's pane — keyed by *session id*. A new
+ * tab's `new-N` id restarts from zero each run and returns, if at all, under its session id. So
+ * both are one entry, and what cannot return (a shell tab, no session persisted) is dropped.
  *
- * Not here: each pane's active tab. A stale one (a session deleted between runs) would leave its
- * pane waiting for a tab that never comes.
+ * Not each pane's active tab: a stale one (session deleted between runs) would leave its pane
+ * waiting for a tab that never comes.
  */
 interface PersistedLayout {
   preset: SplitPreset;
@@ -574,9 +547,8 @@ interface PersistedLayout {
 }
 
 /**
- * Read back defensively, like `settings.json`: a shape that does not parse falls back to a fresh
- * layout. Entries naming sessions that no longer exist are left in (see `normalizeLayout`).
- * Session ids come back as tab ids here, which is why the editor tab's id looks like none.
+ * Read defensively: a bad shape falls back to a fresh layout. Entries of vanished sessions stay
+ * (`normalizeLayout`). Session ids come back as tab ids, hence the editor tab's unlike id.
  */
 export function loadLayout(projectId: string): ProjectLayout {
   const fallback = defaultLayout();
@@ -617,8 +589,8 @@ export function loadLayout(projectId: string): ProjectLayout {
 }
 
 /**
- * The persisted form, given the tabs it describes — only those with a session are written, under
- * it (see `PersistedLayout`), so disk never names an id the next run could hand to another tab.
+ * Only tabs with a session are written, under it (`PersistedLayout`), so disk never names an id
+ * the next run could hand to another tab.
  */
 export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): string {
   const tabPane: Record<string, PaneId> = {};

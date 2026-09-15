@@ -22,7 +22,7 @@ type Phase =
 
 type SbxSettingsTab = "general" | keyof FieldsState;
 
-/** The project's SBX settings, split along the same sections that are stored in tet.json. */
+/** Split along the sections stored in tet.json. */
 const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "knowledge", label: "Knowledge" },
@@ -32,43 +32,38 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
 ];
 
 /**
- * The one dialog for the whole sbx open path and its configuration. Runs its own setup once
- * mounted: sbx installed, signed in (signing in in the background if needed), machine-wide
- * network policy initialized to "balanced" if needed (see sbx.ts's initSbxPolicy), then the
- * project's saved config. Each step shows in `DialogFrame`'s `busy` bar. Installs nothing: no
- * command works on all three platforms. A policy that does not allow what a sandboxed tab needs
- * (sbx.ts's readSbxBlockers) gets a wall listing it instead of the fields — under an
- * organization's governance only the organization can change that.
+ * The one dialog for sbx setup and configuration. On mount it checks: installed, signed in
+ * (signing in if needed), machine-wide network policy set to "balanced" if needed (sbx.ts's
+ * initSbxPolicy), then loads the saved config; each step shows in the `busy` bar. Installs
+ * nothing: no command works on all three platforms. A policy not allowing what a sandboxed tab
+ * needs (sbx.ts's readSbxBlockers) gets a wall instead of the fields — under an organization's
+ * governance only the organization can change that.
  *
- * The fields' state lives here, not in SbxSettingsFields: Save builds the `sbx:save-config`
- * request from it. Each sandboxed agent authenticates inside the sandbox.
+ * The fields' state lives here, since Save builds `sbx:save-config` from it. Each sandboxed agent
+ * authenticates inside the sandbox.
  */
 export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) {
-  // One way out, whichever of × / Escape / Cancel triggers it: `cancelSbxSetup` is a no-op when
-  // nothing is running.
+  // × / Escape / Cancel all go here; `cancelSbxSetup` is a no-op when nothing runs.
   const close = (): void => {
     window.tet.sbx.cancelSetup();
     onClose();
   };
   useEscape(close);
   const [enabled, setEnabled] = useState(false);
-  /** No agent on this machine: the sandbox is the only way this project runs one, so sandboxing
-   *  cannot be switched off here. Derived on every open rather than stored — install an agent and
-   *  the next open is an ordinary one. */
+  /** No agent on this machine, so sandboxing cannot be switched off. Derived on every open, not
+   *  stored. */
   const [locked, setLocked] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
 
-  /** Installed → signed in → policy → saved config. Run on mount and by "Check again". One
-   *  status call answers the first three; signing in or setting the policy re-asks, both being
-   *  the kind of thing that changes the answer. */
+  /** Installed → signed in → policy → saved config, on mount and "Check again". One status call
+   *  answers the first three; signing in or setting the policy asks again. */
   const setup = async (): Promise<void> => {
     setPhase({ kind: "checking" });
-    // Asked beside the status: both re-read PATH, and a call joining one already running costs
-    // nothing (augmentAgentPath). The local answer is what the rest of this run reads — the state
-    // set here is not visible until the next render.
+    // In parallel with the status: both re-read PATH, and joining a running call is free
+    // (augmentAgentPath). This run reads the local value; the state lands next render.
     const [initialStatus, anyAgent] = await Promise.all([
       window.tet.sbx.status(project.id),
       window.tet.startup.anyAgentInstalled()
@@ -100,8 +95,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       setPhase({ kind: "blocked", governed: status.governed, blockers: status.blockers });
       return;
     }
-    // Read once setup is done, so Save writes on top of what is on disk rather than the blank
-    // defaults this component mounted with.
+    // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
     const config = await window.tet.sbx.getConfig(project.id);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
@@ -110,10 +104,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
 
   useEffect(() => {
     void setup();
-    // Once, on mount — "Check again" runs it by hand.
+    // Once; "Check again" reruns it.
   }, []);
 
-  /** Writes tet.json — see sbx.ts's saveSbxConfig for the sandbox removal Save can trigger. */
+  /** Writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
   const save = async (): Promise<void> => {
     setSaving(true);
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) });
@@ -127,7 +121,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   };
 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
-  // What an agent may bring in from this machine is meaningless where none is installed.
+  // Knowledge from this machine is meaningless where no agent is installed.
   const tabs = useMemo(() => (locked ? TABS.filter((entry) => entry.id !== "knowledge") : TABS), [locked]);
 
   return (

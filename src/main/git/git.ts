@@ -26,8 +26,7 @@ export interface GitResult {
 /**
  * Runs the local git CLI. Resolves for any exit code; rejects only when git could not be started.
  * Past `timeoutMs` git is killed and this resolves at once as a failure — not on the callback,
- * which waits for every pipe to close, and a credential helper or ssh that git started holds its
- * copy of them past git's own end.
+ * which waits for every pipe, and a credential helper or ssh started by git holds them past git's end.
  */
 function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: number): Promise<GitResult> {
   return new Promise((resolve, reject) => {
@@ -38,7 +37,7 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: n
       { cwd, maxBuffer: MAX_BUFFER, windowsHide: true, encoding: "utf8", env: env && { ...process.env, ...env } },
       (error, stdout, stderr) => {
         clearTimeout(timer);
-        // Git ran, and said more than MAX_BUFFER: a failed command, not one that never started.
+        // Git ran but exceeded MAX_BUFFER: a failed command, not one that never started.
         if (error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
           resolve({ stdout: "", stderr: `git's output exceeded ${MAX_BUFFER / (1024 * 1024)} MB`, code: 1 });
           return;
@@ -59,7 +58,7 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: n
   });
 }
 
-/** Whether the git CLI can be started at all. Run from the temp directory, which exists everywhere. */
+/** Whether the git CLI can be started. Runs in the temp directory, which exists everywhere. */
 export async function isAvailable(): Promise<boolean> {
   try {
     const result = await git(os.tmpdir(), ["--version"]);
@@ -78,7 +77,7 @@ export async function isRepository(cwd: string): Promise<boolean> {
   }
 }
 
-/** The repository root of `cwd`, or undefined when it is not inside one; git reports paths relative to it. */
+/** The repository root of `cwd`, or undefined outside one; git reports paths relative to it. */
 export async function resolveRoot(cwd: string): Promise<string | undefined> {
   try {
     const result = await git(cwd, ["rev-parse", "--show-toplevel"]);
@@ -89,12 +88,12 @@ export async function resolveRoot(cwd: string): Promise<string | undefined> {
   }
 }
 
-/** What the status header says about HEAD, on top of the changed files it precedes. */
+/** What the status header says about HEAD. */
 type HeadState = Pick<RepositoryState, "head" | "detached" | "upstream" | "ahead" | "behind">;
 
 /**
- * What `--branch` puts in front of the status output: branch, upstream and drift — one process
- * instead of a `rev-parse` plus a `rev-list`. Only a detached HEAD needs a second call.
+ * The `--branch` status header: branch, upstream and drift — one process instead of a `rev-parse`
+ * plus a `rev-list`. Only a detached HEAD needs a second call.
  */
 async function readHead(cwd: string, header: string): Promise<HeadState> {
   const base = { upstream: undefined, ahead: 0, behind: 0 };
@@ -102,19 +101,18 @@ async function readHead(cwd: string, header: string): Promise<HeadState> {
     const short = await git(cwd, ["rev-parse", "--short", "HEAD"]);
     return { ...base, head: short.stdout.trim() || "HEAD", detached: true };
   }
-  // Unborn branch: git says so in words, then goes on like any other header — a clone of an empty
-  // repository reads "No commits yet on master...origin/master [gone]". The wording changed in
-  // 2.16; both are accepted.
+  // Unborn branch: a prefix, then a normal header ("No commits yet on master...origin/master [gone]"
+  // for a clone of an empty repository). Git before 2.16 says "Initial commit on".
   const branch = header.replace(/^(?:No commits yet on|Initial commit on) /, "");
-  // "<branch>...<upstream> [ahead 1, behind 2]", or plain "<branch>". A branch name holds
-  // neither "..." nor a space, so the first field is the name.
+  // "<branch>...<upstream> [ahead 1, behind 2]", or plain "<branch>". A branch name holds neither
+  // "..." nor a space.
   const [name, rest] = branch.split("...");
   const tracking = /^(\S+)(?: \[(.*)\])?$/.exec(rest ?? "");
   const divergence = tracking?.[2] ?? "";
   return {
     head: name.split(" ")[0] || "HEAD",
     detached: false,
-    // "[gone]" is an upstream the remote no longer has; it counts as none at all.
+    // "[gone]": the remote no longer has the upstream; counts as none.
     upstream: tracking && divergence !== "gone" ? tracking[1] : undefined,
     ahead: Number(/ahead (\d+)/.exec(divergence)?.[1] ?? 0),
     behind: Number(/behind (\d+)/.exec(divergence)?.[1] ?? 0)
@@ -122,8 +120,8 @@ async function readHead(cwd: string, header: string): Promise<HeadState> {
 }
 
 /**
- * Ahead/behind per commit pair, remembered: two hashes name two fixed histories, so the count can
- * never change, and readRefs would otherwise spend a process per diverged branch every refresh.
+ * Ahead/behind per commit pair, cached: two hashes fix the count, and readRefs would otherwise spend
+ * a process per diverged branch every refresh.
  */
 const trackCounts = new Map<string, { ahead: number; behind: number }>();
 
@@ -148,10 +146,9 @@ async function readTrackCount(
 }
 
 /**
- * Every ref the tree shows, from one `for-each-ref` — tags at no extra process. A local branch
- * `%(upstream:trackshort)` reports as differing gets a `rev-list --left-right --count` of its own.
- * Skipped: the checked-out branch, whose numbers `readHead` has from the status header, and one
- * whose upstream is no longer among these refs.
+ * Every ref the tree shows, from one `for-each-ref`. A local branch `%(upstream:trackshort)` reports
+ * as diverged gets its own `rev-list --left-right --count` — except the checked-out one (`readHead`
+ * has its numbers) and one whose upstream is not among these refs.
  */
 async function readRefs(
   cwd: string,
@@ -164,9 +161,8 @@ async function readRefs(
   branchTrack: Record<string, { ahead: number; behind: number }>;
   headCommit?: string;
 }> {
-  // Full ref names, not %(refname:short): git shortens "refs/remotes/origin/HEAD" to "origin",
-  // indistinguishable from a branch of that name. %(symref) is set only on "<remote>/HEAD",
-  // where it names the remote's default branch.
+  // Full ref names, not %(refname:short): that shortens "refs/remotes/origin/HEAD" to "origin", like
+  // a branch of that name. %(symref) is set only on "<remote>/HEAD", naming the default branch.
   const result = await git(cwd, [
     "for-each-ref",
     "--format=%(refname)%00%(symref)%00%(objectname)%00%(HEAD)%00%(upstream)%00%(upstream:trackshort)",
@@ -178,9 +174,9 @@ async function readRefs(
   const localBranches: string[] = [];
   const tags: string[] = [];
   const remotes = new Map<string, string[]>();
-  // Every remote-tracking ref's own commit, so a diverged local branch is diffed by hash, not name.
+  // Each remote-tracking ref's commit, so a diverged branch is counted by hash, not name.
   const remoteHeads = new Map<string, string>();
-  // Per remote, since the refs come sorted and "backup/HEAD" would otherwise beat "origin/HEAD".
+  // Per remote: refs come sorted, and "backup/HEAD" would otherwise beat "origin/HEAD".
   const defaultBranches = new Map<string, string>();
   const diverged: { name: string; head: string; upstream: string }[] = [];
   let headCommit: string | undefined;
@@ -209,12 +205,12 @@ async function readRefs(
     }
     remoteHeads.set(refname, objectname);
     const remoteRef = refname.slice("refs/remotes/".length);
-    // A remote's name may hold a "/" itself ("team/fork"), so the longest known name that prefixes
-    // the ref wins; a ref of a remote not known yet is cut at its first "/".
+    // A remote name may hold a "/" ("team/fork"): the longest known prefix wins; an unknown remote's
+    // ref is cut at its first "/".
     const known = remoteNames.filter((name) => remoteRef.startsWith(`${name}/`));
     const separator = known.length > 0 ? Math.max(...known.map((name) => name.length)) : remoteRef.indexOf("/");
-    // "origin/HEAD" points at the remote's default branch rather than being one; listing it
-    // would duplicate an existing entry. What it points at is what "Update from ..." merges in.
+    // "origin/HEAD" only points at the default branch — not listed, but what it points at is what
+    // "Update from ..." merges in.
     if (separator < 0 || remoteRef.endsWith("/HEAD")) {
       const remote = remoteRef.slice(0, separator);
       const prefix = `refs/remotes/${remote}/`;
@@ -264,7 +260,7 @@ function toChangeStatus(code: string): ChangeStatus {
   if (CONFLICT_CODES.has(code)) {
     return "conflicted";
   }
-  // Index status first, worktree status second; the first non-space one describes the change.
+  // Index status, then worktree status; the first non-space one describes the change.
   const letter = code[0] !== " " ? code[0] : code[1];
   switch (letter) {
     case "A":
@@ -280,12 +276,11 @@ function toChangeStatus(code: string): ChangeStatus {
   }
 }
 
-/** The changed files and, from the `--branch` header, what HEAD is — in one git process. */
+/** The changed files and, from the `--branch` header, HEAD — in one git process. */
 async function readStatus(cwd: string): Promise<HeadState & { changes: FileChange[] }> {
-  // --no-optional-locks: without it `git status` writes its stat cache under the index lock, the
-  // watcher reports that write, and the refresh it schedules runs this again — forever. Measured:
-  // a burst of events per run without the flag, none with it, same runtime. core.quotePath=false
-  // keeps non-ASCII paths readable instead of octal-escaped.
+  // --no-optional-locks: otherwise `git status` writes its stat cache, the watcher reports it, and
+  // the refresh runs this again — forever. Measured: a burst of events per run without the flag,
+  // none with it, same runtime. core.quotePath=false: non-ASCII paths unescaped.
   const result = await git(cwd, [
     "--no-optional-locks",
     "-c",
@@ -297,13 +292,13 @@ async function readStatus(cwd: string): Promise<HeadState & { changes: FileChang
     "--branch"
   ]);
 
-  // Thrown, not read as an empty status: a blank result would look like a clean repository.
+  // Thrown: an empty status would look like a clean repository.
   if (result.code !== 0) {
     throw new Error((result.stderr || result.stdout).trim() || `git status exited with ${result.code}`);
   }
 
   const records = result.stdout.split("\0");
-  // The header is one record like any other, and always the first one.
+  // The header is always the first record.
   const header = records[0]?.startsWith("## ") ? records[0].slice(3) : "";
   return {
     ...(await readHead(cwd, header)),
@@ -346,8 +341,8 @@ async function resolveGitDir(cwd: string): Promise<string> {
 }
 
 /**
- * A merge or rebase git stopped in the middle of, for the "Abort" entry — three stats instead of
- * a git process, the way GitHub Desktop reads it. */
+ * A merge or rebase stopped midway, for the "Abort" entry — three stats instead of a git process,
+ * as GitHub Desktop reads it. */
 async function readOperation(cwd: string): Promise<GitOperation | undefined> {
   const gitDir = await resolveGitDir(cwd);
   const exists = (name: string): Promise<boolean> =>
@@ -355,20 +350,20 @@ async function readOperation(cwd: string): Promise<GitOperation | undefined> {
       () => true,
       () => false
     );
-  // A rebase that stopped at a conflict has both, and it is the rebase that has to be aborted.
+  // A rebase stopped at a conflict has both; the rebase is what must be aborted.
   if ((await exists("rebase-merge")) || (await exists("rebase-apply"))) {
     return "rebase";
   }
   return (await exists("MERGE_HEAD")) ? "merge" : undefined;
 }
 
-/** `remoteNames` are the repository's remotes as last read, which `for-each-ref` cannot tell apart
- *  from the branch part of a remote-tracking ref (`readRefs`). */
+/** `remoteNames`: the remotes as last read, which `for-each-ref` can't tell apart from the branch
+ *  part of a remote-tracking ref (`readRefs`). */
 export async function readState(cwd: string, remoteNames: string[] = []): Promise<RepositoryState> {
   try {
-    // No `isRepository` check: Repository asks once when it opens, and dropping it took a quarter
-    // off every refresh where starting git is slow. The stash list is the third process a refresh
-    // spends, earned by being a list the user acts on. All three run at once, so no extra wall time.
+    // No `isRepository` check: Repository asks once on open, and the check costs a quarter of every
+    // refresh where starting git is slow. The stash list is the third process, earned by being a
+    // list the user acts on. All three run at once, so no extra wall time.
     const [status, refs, stashes, operation] = await Promise.all([
       readStatus(cwd),
       readRefs(cwd, remoteNames),
@@ -381,14 +376,14 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
   }
 }
 
-/** One git command as the UI wants it: a non-zero exit is git's message, a failed start the thrown error's. */
+/** One git command for the UI: a non-zero exit carries git's message, a failed start the error's. */
 async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: number): Promise<GitActionResult> {
   try {
     const result = await git(cwd, args, env, timeoutMs);
     if (result.code === 0) {
       return { ok: true };
     }
-    // Without the "hint:" block: eight lines of terminal advice a notice has no room for.
+    // Without the "hint:" lines: terminal advice a notice has no room for.
     const message = (result.stderr || result.stdout)
       .split("\n")
       .filter((line) => !line.startsWith("hint:"))
@@ -400,34 +395,34 @@ async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout
   }
 }
 
-/** What every command reaching a remote runs with. git must never stop to ask for a password: there
- *  is no terminal to ask in, and a waiting command holds the repository's one action slot forever. */
+/** The env of every command reaching a remote. git must never ask for a password: there is no
+ *  terminal, and a waiting command holds the repository's one action slot forever. */
 const NETWORK_ENV: NodeJS.ProcessEnv = {
   GIT_TERMINAL_PROMPT: "0",
-  // Set but empty: unset makes git fall back to the terminal, the very thing above prevents.
+  // Set but empty: unset, git falls back to the terminal.
   GIT_ASKPASS: "",
   SSH_ASKPASS: "",
-  // A connection that went silent is given up on rather than waited on for good: below 1 KB/s for
-  // a minute, git's own http transport aborts. The ssh one's equivalent is in networkEnv.
+  // A stalled connection is given up: below 1 KB/s for a minute, git's http transport aborts. The
+  // ssh equivalent is in networkEnv.
   GIT_HTTP_LOW_SPEED_LIMIT: "1000",
   GIT_HTTP_LOW_SPEED_TIME: "60",
-  // AUTH_FAILURES matches git's messages as text, and git translates them: LANG=de_DE would
-  // answer "Authentifizierung fehlgeschlagen" and match neither pattern.
+  // AUTH_FAILURES matches git's messages as text, and git translates them (LANG=de_DE:
+  // "Authentifizierung fehlgeschlagen").
   LC_ALL: "C"
 };
 
 /**
- * The two messages that mean git stopped for want of credentials. There is no exit code for it —
- * every fatal error of a clone is 128 — so this reads the message, as GitHub Desktop does:
- * `GIT_TERMINAL_PROMPT=0` produces the first, a 401 or 403 the second. A repository git could not
- * find is deliberately not here: both hosts answer 404 for a private one *and* for a typo.
+ * The messages meaning git stopped for want of credentials. No exit code says so (every fatal clone
+ * error is 128), so the message is read, as GitHub Desktop does: `GIT_TERMINAL_PROMPT=0` produces
+ * the first, a 401 or 403 the second. Not "repository not found": both hosts answer 404 for a
+ * private one *and* for a typo.
  */
 const AUTH_FAILURES = [/could not read (?:Username|Password)/i, /Authentication failed/i];
 
-/** `core.sshCommand` per working directory, read once: no network command spends a process on it. */
+/** `core.sshCommand` per working directory, read once rather than a process per network command. */
 const sshCommands = new Map<string, Promise<string>>();
 
-/** Drops both caches for one working directory when its project closes; this process outlives them. */
+/** Drops both caches for a working directory whose project closed; this process outlives them. */
 export function forget(cwd: string): void {
   sshCommands.delete(cwd);
   for (const key of trackCounts.keys()) {
@@ -438,12 +433,10 @@ export function forget(cwd: string): void {
 }
 
 /**
- * `NETWORK_ENV` plus an ssh that never asks — `-oBatchMode=yes` keeps an unknown host key from
- * becoming a question nobody can answer — and never hangs on a dead connection: four unanswered
- * keepalives 15 s apart end it, the minute the http transport gets too. Only where the user chose
- * no ssh of their own:
- * `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so setting it blindly breaks a
- * plink or `ssh -i work_key` setup, and a non-OpenSSH program would not know the flag.
+ * `NETWORK_ENV` plus an ssh that never asks (`-oBatchMode=yes`, e.g. about an unknown host key) and
+ * never hangs: four unanswered keepalives 15 s apart end it, the minute http gets too. Only where
+ * the user chose no ssh of their own: `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so
+ * setting it blindly breaks a plink or `ssh -i work_key` setup; a non-OpenSSH program lacks the flag.
  */
 async function networkEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
   if (process.env.GIT_SSH || process.env.GIT_SSH_COMMAND) {
@@ -475,13 +468,13 @@ async function runNetwork(
   return { ...result, authRequired: true };
 }
 
-/** `--prune`, like GitHub Desktop: a branch deleted on the remote goes from the tree too. A
- *  `timeoutMs` stops it, for a fetch nobody is waiting on (see `git`). */
+/** `--prune`, like GitHub Desktop: a branch deleted on the remote leaves the tree. `timeoutMs` is for
+ *  a fetch nobody waits on (see `git`). */
 export function fetch(cwd: string, timeoutMs?: number): Promise<GitActionResult> {
   return runNetwork(cwd, ["fetch", "--prune"], undefined, timeoutMs);
 }
 
-/** Plain `git pull`, so whatever the user configured — merge or rebase — is what happens. */
+/** Plain `git pull`, so the user's configured merge or rebase applies. */
 export function pull(cwd: string): Promise<GitActionResult> {
   return runNetwork(cwd, ["pull"]);
 }
@@ -491,21 +484,20 @@ export function push(cwd: string, remote: string, branch: string, setUpstream: b
   return runNetwork(cwd, setUpstream ? ["push", "--set-upstream", remote, branch] : ["push"]);
 }
 
-/** Clones into `directory`, which git creates — leading folders included — and refuses when it
- *  exists and is not empty. The cwd only anchors a relative path. */
+/** Clones into `directory`, which git creates with its parents, refusing a non-empty one. The cwd
+ *  only anchors a relative path. */
 export function clone(url: string, directory: string): Promise<GitActionResult> {
   return runNetwork(os.homedir(), ["clone", "--", url, directory]);
 }
 
-/** `git init`, which creates the folder — leading folders included — like clone does. */
+/** `git init`, which creates the folder with its parents, like clone. */
 export function init(directory: string): Promise<GitActionResult> {
   return run(os.homedir(), ["init", "--", directory]);
 }
 
 /**
- * A GIT_ASKPASS script answering from two environment variables — VS Code's askpass.sh pattern, the
- * same sh script on every platform: Git for Windows runs a non-exe askpass through its own sh. It
- * holds no secret; only the environment of the command using it does.
+ * A GIT_ASKPASS script answering from two environment variables (VS Code's askpass.sh pattern). One
+ * sh script everywhere: Git for Windows runs a non-exe askpass through its own sh. No secret in it.
  */
 const ASKPASS_SCRIPT = [
   "#!/bin/sh",
@@ -518,8 +510,8 @@ const ASKPASS_SCRIPT = [
 
 let askpassPath: Promise<string> | undefined;
 
-/** Written once per process into a directory of its own: a fixed name under a shared /tmp can
- *  already belong to another user, and the rename then fails. */
+/** Written once per process into its own directory: a fixed name under a shared /tmp may belong to
+ *  another user, failing the rename. */
 function ensureAskpass(): Promise<string> {
   askpassPath ??= (async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tet-askpass-"));
@@ -535,8 +527,8 @@ function ensureAskpass(): Promise<string> {
   return askpassPath;
 }
 
-/** A clone authenticated by a provider account's token. `credential.helper=` empties the helper
- *  list for this one command: a stale login on the machine would otherwise answer first and 403. */
+/** A clone with a provider account's token. `credential.helper=` empties the helper list for this
+ *  command: a stale login on the machine would otherwise answer first and 403. */
 export async function cloneWithToken(
   url: string,
   directory: string,
@@ -559,7 +551,7 @@ export async function readRemoteUrls(cwd: string): Promise<Record<string, string
     return urls;
   }
   for (const line of result.stdout.split("\n")) {
-    // "origin\tgit@github.com:owner/repo.git (fetch)", and the same again for (push).
+    // "origin\tgit@github.com:owner/repo.git (fetch)", and again for (push).
     const match = /^(\S+)\t(.+) \(fetch\)$/.exec(line.trim());
     if (match) {
       urls[match[1]] = match[2];
@@ -572,7 +564,7 @@ export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<
   return run(cwd, ["remote", "set-url", remote, url]);
 }
 
-/** Creates the branch and switches to it, which is what GitHub Desktop's dialog does too. */
+/** Creates the branch and switches to it, as GitHub Desktop does. */
 export function createBranch(cwd: string, name: string, startPoint: string): Promise<GitActionResult> {
   return run(cwd, ["switch", "--create", name, startPoint]);
 }
@@ -581,7 +573,7 @@ export function renameBranch(cwd: string, from: string, to: string): Promise<Git
   return run(cwd, ["branch", "--move", from, to]);
 }
 
-/** `--force`, like GitHub Desktop; the confirmation says out loud what that risks. */
+/** `--force`, like GitHub Desktop; the confirmation states the risk. */
 export function deleteBranch(cwd: string, name: string): Promise<GitActionResult> {
   return run(cwd, ["branch", "--delete", "--force", name]);
 }
@@ -598,12 +590,11 @@ export function rebase(cwd: string, ref: string): Promise<GitActionResult> {
   return run(cwd, ["rebase", ref]);
 }
 
-/** Puts the working tree back the way it was before the merge or rebase started. */
 export function abortOperation(cwd: string, operation: GitOperation): Promise<GitActionResult> {
   return run(cwd, [operation, "--abort"]);
 }
 
-/** An annotated tag when there is a message for it, a lightweight one when there is not. */
+/** Annotated with a message, lightweight without. */
 export function createTag(cwd: string, name: string, target: string, message: string): Promise<GitActionResult> {
   const args = message ? ["tag", "--annotate", "--message", message] : ["tag"];
   return run(cwd, [...args, name, target]);
@@ -621,21 +612,19 @@ export function deleteRemoteTag(cwd: string, remote: string, name: string): Prom
   return runNetwork(cwd, ["push", remote, "--delete", `refs/tags/${name}`]);
 }
 
-/** A tag names a commit, not a branch, so checking one out is a detached HEAD by definition. */
 export function checkoutTag(cwd: string, name: string): Promise<GitActionResult> {
   return run(cwd, ["switch", "--detach", `refs/tags/${name}`]);
 }
 
-/** `add --all` first: `commit --all` alone would leave the untracked files the list shows behind. */
+/** `add --all` first: `commit --all` alone leaves out the untracked files the list shows. */
 export async function commitAll(cwd: string, message: string): Promise<GitActionResult> {
   const added = await run(cwd, ["add", "--all"]);
   return added.ok ? run(cwd, ["commit", "--message", message]) : added;
 }
 
-/** The same for these files alone: `commit -- <paths>` takes their working-tree state, whatever
- *  else is staged, but only for paths git knows — so the untracked ones are added first. Not
- *  `add --all -- <paths>`: a rename's old path is in neither the index nor the tree, and `add`
- *  refuses a path that matches nothing. */
+/** The same for these files: `commit -- <paths>` takes their working-tree state regardless of what
+ *  is staged, but only for paths git knows, so untracked ones are added first. Not `add --all --
+ *  <paths>`: a rename's old path is in neither index nor tree, and `add` refuses it. */
 export async function commitPaths(
   cwd: string,
   message: string,
@@ -651,16 +640,16 @@ export async function commitPaths(
   return run(cwd, [LITERAL_PATHSPECS, "commit", "--message", message, "--", ...paths]);
 }
 
-/** Ahead of every command handed paths off the changes list: without it git reads `*`, `?` and
- *  `[…]` in a path as a pattern, and discarding `app/[id]/page.tsx` also resets `app/i/page.tsx`. */
+/** For every command given paths from the changes list: otherwise git reads `*`, `?` and `[…]` as
+ *  a pattern, and discarding `app/[id]/page.tsx` also resets `app/i/page.tsx`. */
 const LITERAL_PATHSPECS = "--literal-pathspecs";
 
-/** How many subjects are enough to read a repository's commit style off. */
+/** Enough subjects to read the repository's commit style off. */
 const RECENT_SUBJECTS = 20;
-/** What the diff and the untracked files together may contribute to a commit-message question;
- *  beyond it the tail is cut and said to be cut, rather than silently half-shown. */
+/** The budget for diff plus untracked files in a commit-message question; the tail past it is cut
+ *  and marked as cut. */
 const MAX_COMMIT_CONTEXT = 128 * 1024;
-/** Enough of an untracked file to see what it is; a new lockfile must not eat the budget. */
+/** Enough of an untracked file to see what it is; a new lockfile mustn't eat the budget. */
 const MAX_UNTRACKED_CONTEXT = 16 * 1024;
 
 function capped(text: string, budget: number): string {
@@ -668,13 +657,12 @@ function capped(text: string, budget: number): string {
 }
 
 /**
- * Everything an agent needs to write a commit message without going looking: the recent subjects
- * for the repository's style, and what the commit would take — every change, or only `selection`.
- * Three invocations plus a read per untracked file — more than the refresh path may spend, but
- * this runs on a wand press. Measured with `claude -p`: asked to run git itself the agent took
- * several times as long, every status, diff and log being a round trip. No subjects where there is
- * no HEAD yet, and the diff is then the staged one: a file added before the first commit is neither
- * untracked nor in a diff against HEAD, and would otherwise not be named at all.
+ * Everything an agent needs for a commit message up front: recent subjects for the style, and what
+ * the commit would take — every change, or only `selection`. Three invocations plus a read per
+ * untracked file, fine on a wand press. Measured with `claude -p`: running git itself, the agent
+ * took several times as long, each status, diff and log a round trip. Without HEAD there are no
+ * subjects and the diff is the staged one: a file added before the first commit is neither
+ * untracked nor in a diff against HEAD.
  */
 export async function readCommitContext(cwd: string, selection?: string[]): Promise<string> {
   const pathspec = selection ? ["--", ...selection] : [];
@@ -700,8 +688,8 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
       sections.push(`=== untracked: ${relative} ===\n[not read: the files above filled the budget]`);
       continue;
     }
-    // A buffer, not a string: a binary read as text is noise the agent pays for, so a NUL byte
-    // is reason enough to name the file and stop.
+    // A buffer, so a NUL byte marks a binary, which is only named: as text it is noise the agent
+    // pays for.
     const content = await fs.readFile(path.join(cwd, relative)).catch(() => undefined);
     if (!content) {
       sections.push(`=== untracked: ${relative} ===\n[could not be read]`);
@@ -718,7 +706,7 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
   return sections.join("\n\n");
 }
 
-/** `--include-untracked`, so "stash all changes" covers the same files the list shows. */
+/** `--include-untracked`, so "stash all changes" covers the files the list shows. */
 export function stashPush(cwd: string, message: string): Promise<GitActionResult> {
   return run(cwd, ["stash", "push", "--include-untracked", ...(message ? ["--message", message] : [])]);
 }
@@ -736,17 +724,17 @@ export function stashDrop(cwd: string, ref: string): Promise<GitActionResult> {
 }
 
 export async function checkout(cwd: string, target: CheckoutTarget, localBranches: string[]): Promise<GitActionResult> {
-  // By name once a local branch of that name exists; otherwise git creates a tracking branch.
+  // By name if a local branch of that name exists; otherwise create a tracking branch.
   if (target.remote === undefined || localBranches.includes(target.name)) {
     return run(cwd, ["switch", target.name]);
   }
   const tracked = await run(cwd, ["switch", "--track", `${target.remote}/${target.name}`]);
-  // The local branch may have appeared since the last refresh; then a plain switch is right.
+  // The local branch may have appeared since the last refresh.
   return tracked.ok ? tracked : run(cwd, ["switch", target.name]);
 }
 
 async function readStashes(cwd: string): Promise<StashEntry[]> {
-  // %gd is the ref the other commands take ("stash@{0}"), %gs the message git itself wrote.
+  // %gd is the ref the other commands take ("stash@{0}"), %gs the message.
   const result = await git(cwd, ["stash", "list", "--format=%gd%x00%gs"]);
   if (result.code !== 0) {
     return [];
@@ -761,17 +749,17 @@ async function readStashes(cwd: string): Promise<StashEntry[]> {
 }
 
 export interface DiscardTargets {
-  /** Paths that exist in HEAD — index and worktree both go back to what it holds. */
+  /** Paths in HEAD — index and worktree are restored from it. */
   restore: string[];
-  /** Paths not in HEAD; the file is already in the trash, this drops a staged addition's index entry. */
+  /** Paths not in HEAD, already trashed; this drops a staged addition's index entry. */
   drop: string[];
 }
 
-/** Throws away local changes. Files HEAD does not know are the caller's to move to the trash first
- *  (GitHub Desktop's rule), so it hands over targets already sorted. */
+/** Throws away local changes. The caller trashes files HEAD lacks first (GitHub Desktop's rule) and
+ *  hands over sorted targets. */
 export async function discard(cwd: string, targets: DiscardTargets): Promise<GitActionResult> {
   if (targets.drop.length > 0) {
-    // --ignore-unmatch: a path that was never staged has no index entry, which is a success here.
+    // --ignore-unmatch: a never-staged path has no index entry, which is fine.
     const dropped = await run(cwd, [LITERAL_PATHSPECS, "rm", "--cached", "--force", "--ignore-unmatch", "--", ...targets.drop]);
     if (!dropped.ok) {
       return dropped;
@@ -783,14 +771,13 @@ export async function discard(cwd: string, targets: DiscardTargets): Promise<Git
   return run(cwd, [LITERAL_PATHSPECS, "restore", "--source=HEAD", "--staged", "--worktree", "--", ...targets.restore]);
 }
 
-/** The characters a gitignore line reads as syntax rather than as part of a name. */
+/** Escapes what a gitignore line reads as syntax. */
 function escapeIgnorePattern(pattern: string): string {
   return pattern.replace(/[\\!#*?[\]]/g, "\\$&");
 }
 
-/** Adds the file, or everything with its extension, to the repository's .gitignore — skipping a
- *  rule it already holds verbatim. Written in place: a working tree file the user owns, and a
- *  temp file beside it would show up in the very list this was started from. */
+/** Adds the file, or its extension, to .gitignore unless the rule is already there. Written in
+ *  place: a temp file beside it would show up in the changes list this was started from. */
 export async function ignorePath(cwd: string, filePath: string, scope: "file" | "extension"): Promise<GitActionResult> {
   const extension = path.extname(filePath);
   if (scope === "extension" && !extension) {
@@ -818,7 +805,7 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
   }
 }
 
-/** What the diff view shows side by side instead of "binary file". SVG stays text on purpose. */
+/** Shown as images instead of "binary file". SVG stays text on purpose. */
 const IMAGE_TYPES: Record<string, string> = {
   avif: "image/avif",
   bmp: "image/bmp",
@@ -839,30 +826,27 @@ export function isImage(filePath: string): boolean {
   return imageType(filePath) !== undefined;
 }
 
-/** One version of an image for the renderer, or nothing for an empty file. No ceiling of its own:
- *  both callers refuse a file past the one the editor reads under, and a second number for the
- *  same thing is a number that goes stale. */
+/** One version of an image, or undefined for an empty file. No size cap of its own: both callers
+ *  already apply the editor's, and a second number would go stale. */
 export function toDataUrl(filePath: string, content: Buffer): string | undefined {
   return content.length > 0 ? `data:${imageType(filePath)};base64,${content.toString("base64")}` : undefined;
 }
 
 export interface HeadBlobOptions {
-  /** The rename's source path — without it HEAD is asked for a path it does not have. */
+  /** A rename's source path — the one HEAD has. */
   origPath?: string;
-  /** Past this the blob counts as binary: the same ceiling the editor reads a file under, since
-   *  both sides end up in the one editor. */
+  /** Past this the blob counts as binary: the editor's own cap, since both sides share the editor. */
   maxBytes: number;
 }
 
 /**
- * What HEAD has of a file, the diff editor's original side. A path HEAD does not know — untracked,
- * newly added, or an unborn branch — is `missing` rather than an error: it diffs as an all-new file.
+ * HEAD's version of a file, the diff editor's original side. A path HEAD lacks (untracked, newly
+ * added, unborn branch) is `missing`, not an error: it diffs as all new.
  *
- * `cat-file --filters`, not `show`: it puts the blob through the smudge filters and the eol
- * conversion `.gitattributes` and `core.autocrlf` ask for, so the text is what the working tree
- * would hold. `show` hands back the stored blob, which under an LFS or `ident` filter is not the
- * file at all. Buffer encoding for the reason `readFile` uses it too: utf8 replaces every invalid
- * byte and would leave an image nothing can decode.
+ * `cat-file --filters`, not `show`: it applies the smudge filters and eol conversion of
+ * `.gitattributes` and `core.autocrlf`, so the text reads like the working tree. `show` returns the
+ * stored blob, which under an LFS or `ident` filter is not the file. Buffer encoding, as in
+ * `readFile`: utf8 replaces invalid bytes and would break an image.
  */
 export async function readHeadBlob(cwd: string, filePath: string, options: HeadBlobOptions): Promise<HeadBlob> {
   // A rename is one entry over two paths, and only the old one is in HEAD.
@@ -873,13 +857,13 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
       ["cat-file", "--filters", `HEAD:${at}`],
       {
         cwd,
-        // One byte over the cap is all that has to arrive: node kills the child there and reports
-        // it under a code of its own, which is how a blob too large is told from one HEAD lacks.
+        // One byte over the cap: node kills the child with its own error code, which tells a blob
+        // too large from one HEAD lacks.
         maxBuffer: options.maxBytes + 1,
         windowsHide: true,
         encoding: "buffer",
-        // `--filters` runs the repository's own smudge filter, and an LFS one fetches. Without this
-        // git would stop for credentials, in a process with no terminal to type them into.
+        // `--filters` runs the repository's smudge filter, and an LFS one fetches: never ask for
+        // credentials without a terminal.
         env: { ...process.env, ...NETWORK_ENV }
       },
       (error, stdout) =>
@@ -889,7 +873,7 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
         })
     );
   });
-  // Too large, an image, or a NUL byte anywhere: no text side to show, and the editor tab says so.
+  // Too large, an image, or a NUL byte: no text side, and the editor tab says so.
   if (read.tooLarge) {
     return { content: "", binary: true, missing: false };
   }
@@ -905,9 +889,8 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
   return { content: read.blob.toString("utf8"), binary: false, missing: false };
 }
 
-/** Every path the exclude chain hides — files and, with `--directory`, whole ignored directories
- *  collapsed to one entry with a trailing `/`, so the walk can skip them. Repository-relative and
- *  forward-slashed, as git prints them. */
+/** Every path the exclude chain hides, repository-relative with forward slashes; `--directory`
+ *  collapses an ignored directory to one entry with a trailing `/`, so the walk can skip it. */
 export async function listIgnored(cwd: string): Promise<string[]> {
   const result = await git(cwd, ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]);
   if (result.code !== 0) {

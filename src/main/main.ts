@@ -30,20 +30,19 @@ import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
 import { currentTheme } from "./theme";
 
-/** Terminal output arrives in many small chunks; one IPC message per chunk is wasteful. */
+/** Output arrives in small chunks; batch them rather than one IPC message each. */
 const OUTPUT_FLUSH_MS = 8;
 
 let window: BrowserWindow | undefined;
 
-/** How long a rebuilt window must hold before another crash is answered with another rebuild. */
+/** Minimum gap between two renderer-crash rebuilds. */
 const RENDERER_REBUILD_GAP_MS = 60_000;
 let rendererRebuiltAt = 0;
 
 /**
- * Notices said before the window listens are held, not lost: `App` subscribes only once the
- * requirements check passed, and a check that answers fast — the update's, against a quick
- * registry — beat it (measured: "Updated to" never showed). The renderer says when it listens
- * (`app:notice-listening`, preload's `onNotice`); every load of the page starts over deaf.
+ * Notices sent before the window listens are held: `App` subscribes only after the requirements
+ * check, and a fast sender (the update's "Updated to") would otherwise be lost. The renderer
+ * reports listening via `app:notice-listening` (preload's `onNotice`); every page load resets it.
  */
 let noticesHeard = false;
 const heldNotices: unknown[] = [];
@@ -65,13 +64,11 @@ ipcMain.on("app:notice-listening", () => {
   }
 });
 
-/** How long `editor-state` waits for the window's answer: a window still in its requirements
- *  check, or reloading, has no App listening and never answers. */
+/** `editor-state`'s wait for the window: one in its requirements check or reloading never answers. */
 const EDITOR_CONTENT_TIMEOUT_MS = 2000;
 let editorContentRequests = 0;
 
-/** Asks the window for the text of a project's editor tab (ControlDeps.editorContent), on a reply
- *  channel of its own so two questions never take each other's answer. */
+/** A project's editor tab text (ControlDeps.editorContent), on a per-request reply channel. */
 function editorContent(projectId: string): Promise<string | undefined> {
   if (!window || window.isDestroyed()) {
     return Promise.resolve(undefined);
@@ -95,7 +92,7 @@ function editorContent(projectId: string): Promise<string | undefined> {
 const pendingOutput = new Map<string, TerminalOutput>();
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** All of it in one message: see TerminalOutput for why it is not one per tab. */
+/** One message for all tabs: see TerminalOutput. */
 function flushOutput(): void {
   flushTimer = undefined;
   if (pendingOutput.size > 0) {
@@ -117,20 +114,19 @@ function queueOutput(projectId: string, tabId: string, data: string): void {
 }
 
 /**
- * A profile of its own for the tests driving the real app through tet-ctl (test/app.test.ts): own
- * projects, settings and socket, and — the lock being per profile — a second tet beside the one
- * being worked in. It is both Chromium's profile and tet's data folder (data-root.ts), set before
- * anything below asks for either. Only with it does tet take the control token from its
- * environment instead of making one; a normal start never reads that.
+ * A separate profile for tests driving the real app via tet-ctl (test/app.test.ts): own projects,
+ * settings and socket, and — the lock being per profile — a second tet beside the working one.
+ * Both Chromium's profile and tet's data folder (data-root.ts), set before either is asked for.
+ * Only then is the control token taken from the environment.
  */
 const USER_DATA_ARG = "--user-data-dir=";
 const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
-/** A run with a profile of its own: the one that answers ControlVerb.ownProfileOnly verbs. */
+/** Only such a run answers ControlVerb.ownProfileOnly verbs. */
 const ownProfile = Boolean(userDataArg);
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
 }
-/** Where tet keeps everything of its own; `userData` is left to Chromium's profile. */
+/** tet's own data; `userData` is left to Chromium's profile. */
 const dataRoot = resolveDataRoot(userDataArg);
 try {
   fs.mkdirSync(dataRoot, { recursive: true });
@@ -139,21 +135,17 @@ try {
 }
 
 /**
- * Who Windows says a toast is from. The name and icon above every notification are those Windows
- * finds for this id — never anything the notification holds, which is why a toast needs no icon
- * of its own. They come from the Start menu entry carrying the id, and Electron writes that entry
- * itself on the first toast (windows_toast_activator.cc): named after the executable's own
- * ProductName, pointing at the executable, with the id and the toast activator's CLSID on it. An
- * install's executable is `TET.exe` (electron-builder.yml), so that entry is the very `TET.lnk`
- * install.ps1 put there, rewritten in place. A development run's is electron.exe, whose entry reads
- * "Electron".
+ * Who Windows says a toast is from: name and icon come from the Start menu entry carrying this id,
+ * never from the notification (so no toast icon). Electron writes that entry on the first toast
+ * (windows_toast_activator.cc), named after the executable's ProductName, with the id and the
+ * activator CLSID. Installed, the executable is `TET.exe` (electron-builder.yml), so the entry is
+ * install.ps1's `TET.lnk` rewritten in place; a development run's electron.exe reads "Electron".
  *
- * Windows keeps what it once decided about an id, so one development toast under the shipped id
- * would leave the *installed* tet reading "Electron" too. Hence the second id: what `npm start`
- * spends is its own. The CLSID is fixed rather than Electron's per-run random one, so a toast
- * clicked after tet has quit starts the COM server the entry still names. Both are set before the
- * workspace, since a hook can report a turn as soon as the first terminal is up. The id was the
- * installers' `appId`, kept so a machine that had one keeps what Windows decided about it.
+ * Windows remembers what it decided about an id, so `npm start` gets its own id — else one dev
+ * toast leaves the installed tet reading "Electron". The CLSID is fixed, not Electron's per-run
+ * random one, so a toast clicked after tet quit starts the COM server the entry names. Both are set
+ * before the workspace: a hook can report a turn once the first terminal is up. The id is the old
+ * installers' `appId`, kept so Windows' existing decisions about it stay.
  */
 const APP_USER_MODEL_ID = "com.samilkale.tet";
 const TOAST_ACTIVATOR_CLSID = "{8DA9BB54-C0A5-4BEC-AF76-BE3568344852}";
@@ -165,15 +157,13 @@ if (process.platform === "win32") {
   }
 }
 
-// Every terminal the user has in front of them, plus the few hidden ones kept warm
-// (webgl-pool.ts), holds a WebGL context. Past 16 per renderer Blink silently evicts the oldest,
-// dropping that terminal to the DOM renderer; 128 leaves room while a leak still surfaces.
+// Every visible terminal plus the warm hidden ones (webgl-pool.ts) holds a WebGL context. Past 16
+// per renderer Blink silently evicts the oldest to the DOM renderer; 128 leaves room, a leak shows.
 app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
 
 /**
- * Whether Chromium draws this window through Wayland — told to the renderer, which then keeps its
- * terminals off WebGL (terminal-views.ts). An explicit x11 choice wins; otherwise any sign of a
- * Wayland session counts, since Electron picks Wayland there by itself.
+ * Whether Chromium draws through Wayland; the renderer then keeps terminals off WebGL
+ * (terminal-views.ts). An explicit x11 wins; else any Wayland sign counts, as Electron picks it.
  */
 function isWaylandSession(): boolean {
   if (process.platform !== "linux") {
@@ -193,15 +183,13 @@ function isWaylandSession(): boolean {
 }
 
 /**
- * The releases the update asks: GitHub's, but for the install test (test/install.test.ts), which
- * serves its own — taken from the environment only with a profile of its own, as the control token
- * is, so a normal start never reads it.
+ * GitHub's releases, except for the install test (test/install.test.ts) serving its own — read from
+ * the environment only with a profile of its own, like the control token.
  */
 const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_URL;
 
-// Before the stores, and before anything that could throw asynchronously: an uncaught exception
-// shows a notice and keeps every terminal alive instead of freezing them all behind Electron's
-// modal dialog. See uncaught.ts.
+// Before anything that could throw asynchronously, so an uncaught exception becomes a notice rather
+// than Electron's modal dialog freezing every terminal (uncaught.ts).
 installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
   send("app:notice", { severity, message })
 );
@@ -209,15 +197,14 @@ installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
-/** What the control verbs answer from beyond the stores; terminal output only with a profile of its own. */
+/** What control verbs answer beyond the stores; terminal output only with a profile of its own. */
 const records = new ControlRecords(ownProfile);
 const repositories = new RepositoryManager(
   (projectId, state) => send("repo:state-changed", { projectId, state }),
   (severity, message) => send("app:notice", { severity, message }),
   (projectId) => {
     send("commands:changed", { projectId });
-    // The same file carries the project's sbx switch, and an agent that is only startable inside
-    // the sandbox has to hear that it was turned on — see ProjectSessionManager.sbxConfigChanged.
+    // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged).
     void sessions
       .get(projectId)
       ?.sbxConfigChanged()
@@ -247,8 +234,7 @@ function openProject(project: Project): void {
 
 let workspaceOpen = false;
 
-/** The stored projects, brought up once by the requirements check and only when it passed.
- *  Idempotent: the check runs again on every window and after every re-check. */
+/** Opens the stored projects once the requirements check passes. Idempotent: the check reruns. */
 function openWorkspace(): void {
   if (workspaceOpen) {
     return;
@@ -260,15 +246,13 @@ function openWorkspace(): void {
   void markStartup("control", startControl);
 }
 
-/** What the control channel needs from the process; set before any terminal can spawn. */
+/** Set before any terminal can spawn. */
 let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
-/** A toast follows the rule the window's notices follow — an identical message already standing
- *  is dropped (Notices.tsx) — with the span a notice stands for as its window. A dropped repeat
- *  does not extend that window. The tab it is about is part of what makes it identical: two tabs
- *  of one agent in one repository read the same until their sessions have titles, and dropping
- *  the second would leave its click pointing at the first one's tab. */
+/** Like notices (Notices.tsx), an identical toast within this span is dropped, without extending
+ *  it. The target tab is part of the identity: two untitled tabs of one agent read the same, and
+ *  dropping the second would point its click at the first's tab. */
 const TOAST_REPEAT_MS = 8000;
 const recentToasts = new Map<string, number>();
 
@@ -288,10 +272,9 @@ function repeatedToast(title: string, body: string, target?: ToastTarget): boole
 }
 
 /**
- * Every toast still clickable, held so its click handler is not collected with it — outside win32,
- * whose clicks all arrive through `Notification.handleActivation`. Not let go on `close`: that can
- * be the toast leaving the screen for the notification center, where a click still arrives
- * (measured on win32). The oldest go once there are more than anyone scrolls back to.
+ * Clickable toasts, held so their click handlers are not garbage-collected — outside win32, where
+ * clicks arrive through `Notification.handleActivation`. Not released on `close`: that can be the
+ * move to the notification center, where a click still arrives (measured on win32). Capped.
  */
 const LIVE_TOASTS_MAX = 50;
 const liveToasts = new Set<Notification>();
@@ -308,16 +291,14 @@ function holdToast(toast: Notification): void {
 }
 
 /**
- * A clicked toast's tab, once it is there: a toast clicked after tet had quit starts tet, whose
- * tabs are restored only after the window is up. Looked for at every tab report of its project
- * (`onTabs`), and given up on when a later click asks for another.
+ * A clicked toast's tab not yet restored (the click started tet). Looked for on each `onTabs` of
+ * its project; replaced by a later click.
  */
 let toastTargetAwaited: { projectId: string; tabId: string; sessionId?: string } | undefined;
 
 /**
- * The tab a toast is about, brought to the front with the window. Found by its tab id while the
- * tab lives, or by its session id, which is the tab id of a tab restored since (TerminalDescriptor).
- * Returns whether it was there; a tab closed since is not, and the window alone comes forward.
+ * Brings a toast's tab to the front, found by tab id or by session id — the tab id of a restored
+ * tab (TerminalDescriptor). Returns whether it was found.
  */
 function showToastTarget(target: { projectId: string; tabId: string; sessionId?: string }): boolean {
   const tab = sessions
@@ -330,7 +311,7 @@ function showToastTarget(target: { projectId: string; tabId: string; sessionId?:
   return tab !== undefined;
 }
 
-/** A tab report, for a toast clicked before its tab was restored. */
+/** For a toast clicked before its tab was restored. */
 function awaitedToastTab(projectId: string): void {
   if (toastTargetAwaited?.projectId === projectId && showToastTarget(toastTargetAwaited)) {
     toastTargetAwaited = undefined;
@@ -338,17 +319,14 @@ function awaitedToastTab(projectId: string): void {
 }
 
 /**
- * On win32 every click on a toast arrives here, clicked while tet runs or the reason it was just
- * started (`Notification.handleActivation`), carrying the `launch` string `windowsToastXml` put
- * on the toast — Electron's own toast has none, and a click starting tet would not know its tab.
+ * On win32 every toast click arrives here, whether tet runs or the click started it, carrying the
+ * `launch` string from `windowsToastXml` — Electron's own toast has none, so no tab would be known.
  */
 if (process.platform === "win32") {
   void app.whenReady().then(() => {
-    // Electron registers the COM activator a click is delivered through only once its notification
-    // presenter exists, which the first Notification — or this question — creates. Asked at once:
-    // a click that started tet has nothing to show yet, and would otherwise reach no one. An install
-    // alone: creating the presenter also writes the Start menu entry, which for a development run
-    // is electron.exe's "Electron".
+    // Electron registers the COM activator only once its notification presenter exists, which the
+    // first Notification or this call creates — asked at once, or a click that started tet reaches
+    // no one. Installed only: the presenter also writes the Start menu entry ("Electron" in dev).
     if (installed) {
       Notification.isSupported();
     }
@@ -371,9 +349,9 @@ function escapeXml(text: string): string {
 }
 
 /**
- * The toast Electron would have built, plus the `launch` string Windows hands back on a click.
- * `type` and `tag` are Electron's own keys: with them it still finds the Notification behind a
- * click while tet runs. The session id is what outlives tet quitting (showToastTarget).
+ * Electron's toast plus a `launch` string Windows hands back on a click. `type` and `tag` are
+ * Electron's keys, so it still finds the Notification while tet runs; the session id outlives a
+ * quit (showToastTarget).
  */
 function windowsToastXml(id: string, title: string, body: string, target?: ToastTarget): string {
   const launch = new URLSearchParams({ type: "click", tag: id });
@@ -396,14 +374,11 @@ function windowsToastXml(id: string, title: string, body: string, target?: Toast
 }
 
 /**
- * The real desktop toast behind the control channel's `hook` and `notify` verbs — this process is
- * the one holding the desktop session (a sandboxed hook has none), and a platform without a
- * notifier of its own simply shows nothing. No `icon`: Windows heads the toast with tet's already
- * (APP_USER_MODEL_ID).
+ * The desktop toast behind the `hook` and `notify` verbs — this process holds the desktop session
+ * (a sandboxed hook has none). No `icon`: Windows takes tet's (APP_USER_MODEL_ID).
  *
- * A click brings the window, and the tab the toast is about, to the front — on win32 through
- * `Notification.handleActivation` above, which also takes a click from the notification center
- * after tet has quit, elsewhere through the toast's own `click`.
+ * A click brings the window and the toast's tab to the front — on win32 via
+ * `Notification.handleActivation` (also after tet quit), elsewhere via the toast's `click`.
  */
 function showDesktopNotification(title: string, body: string, target?: ToastTarget): void {
   if (repeatedToast(title, body, target)) {
@@ -427,8 +402,8 @@ function showDesktopNotification(title: string, body: string, target?: ToastTarg
       }
     });
   }
-  // Shown nothing and said nothing else: a switch off in Windows' own notification settings reads
-  // "Settings prevent the notification from being delivered" here and nowhere else (measured).
+  // The only trace of notifications being off in Windows' settings: "Settings prevent the
+  // notification from being delivered" (measured).
   toast.on("failed", (_event, error) => {
     liveToasts.delete(toast);
     logError(`toast not delivered: ${error}`);
@@ -437,13 +412,11 @@ function showDesktopNotification(title: string, body: string, target?: ToastTarg
 }
 
 /**
- * A toast disappears; the window's own entry asks for a look until the window has the focus again
- * (the `focus` handler in createWindow). One call for all three: Windows flashes the taskbar
- * button, macOS bounces the dock icon, Linux sets the urgency hint — whose look is the desktop's
- * call. No count on the icon: only macOS has a badge that holds one everywhere.
+ * A toast disappears; this lasts until the window is focused (createWindow's `focus` handler):
+ * taskbar flash on Windows, dock bounce on macOS, urgency hint on Linux. No badge count: only
+ * macOS has one everywhere.
  *
- * `isMinimized` as well: minimized from its own button, a win32 window still answers `isFocused`
- * with true (measured), while its page has long had its `blur`.
+ * `isMinimized` too: a win32 window minimized by its button still reports `isFocused` (measured).
  */
 function attractAttention(): void {
   if (window && !window.isDestroyed() && (!window.isFocused() || window.isMinimized())) {
@@ -451,7 +424,6 @@ function attractAttention(): void {
   }
 }
 
-/** The window brought to the front, restored first if it was minimized. */
 function revealWindow(): void {
   if (!window || window.isDestroyed()) {
     return;
@@ -463,9 +435,8 @@ function revealWindow(): void {
 }
 
 /**
- * The control channel, up from the moment the workspace is: a socket that answers means every
- * project's terminals and repository are there to be asked about. Before that there is no socket
- * at all — no half-open state for a verb to find; tet-ctl waits a moment for one.
+ * Started with the workspace, so an answering socket means every project is open — no half-open
+ * state for a verb to find; tet-ctl waits a moment for the socket.
  */
 async function startControl(): Promise<void> {
   if (!controlChannel) {
@@ -486,7 +457,7 @@ async function startControl(): Promise<void> {
             AGENTS.map(async (agent) => ({
               id: agent.id,
               name: agent.displayName,
-              // The shell has no version check and is always there.
+              // The shell has no version check.
               installed: agent.versionArgs
                 ? await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir())
                 : true
@@ -510,25 +481,23 @@ async function startControl(): Promise<void> {
       controlChannel.port
     );
   } catch (error) {
-    // The terminals then simply have nothing to reach, and tet-ctl says so.
+    // tet-ctl then reports nothing to reach.
     console.error("[tet] control channel not started:", error);
   }
 }
 
-/** The theme the window is drawn in: the one it was built with, or the last one `applyTheme` took. */
+/** The theme on screen: the window's initial one or the last `applyTheme` took. */
 let shownTheme: ThemeDefinition | undefined;
 
 /**
- * Brings the saved theme onto the window while it runs, and answers whether a restart is still
- * needed for it. Only between two themes of one `kind`: an agent is handed light or dark once, when
- * its tab starts (`AgentPaths.theme`), and a running one would go on drawing for the other.
+ * Applies the saved theme live and returns whether a restart is still needed. Live only within one
+ * `kind`: an agent gets light or dark once at tab start (`AgentPaths.theme`).
  */
 function applyTheme(): boolean {
   if (!window || window.isDestroyed() || !shownTheme) {
     return false;
   }
-  // The theme saved for the kind on screen, whichever kind is saved: a switch to the other kind
-  // waiting for its restart must not hold back a change within this one.
+  // The kind on screen, not the saved one: a pending kind switch must not block a change within it.
   const { kind } = shownTheme;
   const theme = resolveTheme(settings.get()[themeKey(kind)], kind);
   if (theme.id !== shownTheme.id) {
@@ -539,8 +508,8 @@ function applyTheme(): boolean {
     }
     send("app:theme", theme.id);  }
   const saved = currentTheme(settings);
-  // Agents are set up for the saved theme (AgentPaths.theme), so only once that is the one on
-  // screen: a kind waiting for its restart is not handed to the tabs of projects already open.
+  // Agents get the saved theme (AgentPaths.theme), so only once it is on screen: a kind awaiting its
+  // restart is not handed to open projects.
   if (saved.id === shownTheme.id) {
     sessions.themeChanged();
   }
@@ -548,32 +517,27 @@ function applyTheme(): boolean {
 }
 
 function createWindow(): void {
-  // Read per window: a theme the running window could not take (see applyTheme) reaches the
-  // windows opened after it.
+  // Per window: a theme the running window could not take (applyTheme) reaches later windows.
   const theme = currentTheme(settings);
   shownTheme = theme;
   window = new BrowserWindow({
     width: 1400,
     height: 900,
-    // Where the panes' own floors add up to (--pane-min-width twice and --content-min-width,
-    // plus the stacked sections and the title and branch bars); below this something clips.
+    // The panes' floors summed (--pane-min-width twice, --content-min-width, the stacked sections,
+    // title and branch bars); below this something clips.
     minWidth: 700,
     minHeight: 340,
-    // What the window is painted with before the first frame, so it is the title bar's own color
-    // rather than the editor's: the platform draws the window controls as an overlay right away.
-    // --vscode-titleBar-activeBackground and --vscode-sideBar-background are both this.
+    // Painted before the first frame in the title bar's color, since the window controls overlay
+    // shows at once. Equals --vscode-titleBar-activeBackground and --vscode-sideBar-background.
     backgroundColor: theme.windowBackground,
     show: false,
-    // Windows takes the .ico, whose frames are each rendered at the size they are drawn at
-    // rather than resampled from one large image, which made the mark look soft in the taskbar.
-    // Linux wants a plain image; macOS ignores this and reads the app bundle. icon.ico is
-    // generated from icon.png.
+    // Windows takes the .ico (generated from icon.png): per-size frames stay sharp in the taskbar,
+    // where a resampled image looks soft. Linux wants a plain image; macOS reads the app bundle.
     icon: path.join(__dirname, process.platform === "win32" ? "icon.ico" : "icon.png"),
-    // The project tabs live in the title bar; the platform's window controls stay via the overlay.
+    // Our own title bar; the platform's window controls stay via the overlay.
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     titleBarOverlay:
-      // Height must match the .titlebar rule in the renderer, or the window controls and the
-      // drag region disagree about where the title bar ends.
+      // Height must match the renderer's .titlebar rule, or controls and drag region disagree.
       process.platform === "darwin"
         ? undefined
         : { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 },
@@ -582,25 +546,25 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      // How the renderer learns the theme before its first paint: the preload reads this off
-      // process.argv synchronously; an IPC round trip would leave the first frame in the defaults.
+      // The preload reads the theme off process.argv synchronously, so the first frame is right;
+      // an IPC round trip would paint it in the defaults.
       additionalArguments: [`--tet-theme=${theme.id}`, ...(isWaylandSession() ? ["--tet-wayland"] : [])]
     }
   });
 
-  // A load — the first, or a reload after the renderer died — has no listener until App subscribes.
+  // Every load, reloads included, has no listener until App subscribes.
   window.webContents.on("did-start-loading", () => {
     noticesHeard = false;
   });
-  // A reload — after the renderer died — reads the theme off the arguments the window was built
-  // with, which a theme applied since then no longer matches. The renderer ignores its own.
+  // A reload reads the theme off the window's original arguments, possibly stale since applyTheme.
+  // The renderer ignores its own theme id.
   window.webContents.on("did-finish-load", () => {
     if (shownTheme) {
       send("app:theme", shownTheme.id);
     }
   });
   window.once("ready-to-show", () => window?.show());
-  // Looked at: what attractAttention asked for is answered.
+  // Ends attractAttention's flash.
   window.on("focus", () => window?.flashFrame(false));
   window.on("closed", () => {
     window = undefined;
@@ -613,18 +577,15 @@ function createWindow(): void {
       return;
     }
     console.error(`[tet] renderer gone (${details.reason}); rebuilding the window`);
-    // A renderer that dies takes the view and nothing else: every pty lives in this process and
-    // keeps running behind the blank window, so the way back to the sessions is to load the
-    // window again. It re-asks for the projects and their tabs, and the terminals it draws are
-    // the ones that never stopped — what is lost is the scrollback, which the renderer held.
-    // Never twice in a row without a pause: a renderer failing on load would reload forever.
+    // Every pty lives in this process and keeps running, so reloading brings the sessions back;
+    // only the renderer-held scrollback is lost. Rate-limited, or a renderer failing on load
+    // would reload forever.
     const now = Date.now();
     if (now - rendererRebuiltAt < RENDERER_REBUILD_GAP_MS) {
       return;
     }
     rendererRebuiltAt = now;
-    // Only once the new renderer is listening; anything sent before that is spoken into a
-    // process that no longer exists.
+    // Only once the new renderer has loaded; earlier sends reach the dead process.
     crashed.webContents.once("did-finish-load", () =>
       send("app:notice", {
         severity: "warning",
@@ -647,51 +608,48 @@ function createWindow(): void {
 }
 
 /**
- * One instance, because there is one of everything it keeps: projects and accounts are rewritten
- * whole from memory, so a second window saving after the first would drop what the first added;
- * the agents' sessions live in the same directories for both; and the two would run git in one
- * repository unserialized, which `Repository.runAction` only prevents within a process. Asked
- * before anything is opened — the lock is the app's, not the window's.
+ * One instance: projects and accounts are rewritten whole from memory (a second instance would drop
+ * the first's additions), agent sessions share directories, and `Repository.runAction` serializes
+ * git only within a process. Asked before anything opens.
  */
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  // Started again is a request to look at it: bring what is already there to the front.
+  // A second start brings the running window to the front.
   app.on("second-instance", revealWindow);
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
     startEventLoopMonitor(path.join(dataRoot, "event-loop.log"));
-    // Before anything reads PATH — the requirements check and every terminal do — add where agents
-    // actually install to it, since tet is launched with the OS's barer GUI PATH. Awaited only
-    // below the window: on macOS/Linux it asks the login shell, which with an nvm in the profile
-    // takes a good part of a second. The requirements re-check (ipc.ts) joins the same run.
+    // Before anything reads PATH, add the agents' install dirs to the OS's bare GUI PATH. Awaited
+    // only after the window: on macOS/Linux it asks the login shell, which with nvm takes most of a
+    // second. The requirements re-check (ipc.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepTempFiles();
-    // The control channel's token and address, into every terminal's environment before the first
-    // one can spawn. The token lives in this process only — never on disk, never on a command line.
+    // Into every terminal's environment before the first spawn. The token lives in this process
+    // only — never on disk or a command line.
     const controlToken =
       (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
     const port = await findControlPort(dataRoot);
-    // Installed, dist/ sits in app.asar, which a process other than electron cannot read into;
-    // electron-builder.yml unpacks the CLI beside it.
+    // Installed, dist/ is in app.asar, unreadable outside electron; electron-builder.yml unpacks
+    // the CLI.
     const cliPath = path.join(installed ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
     let binDir: string | undefined;
     try {
       binDir = writeLaunchers(dataRoot, cliPath);
     } catch (error) {
-      // A read-only profile must not cost the window: the terminals then have no `tet-ctl` on PATH.
+      // Not fatal: terminals then just lack `tet-ctl` on PATH.
       console.error("[tet] could not write the tet-ctl launcher:", error);
     }
     setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: controlToken }, binDir);
-    // Same bundle and port: a sandbox has no access to the data folder's launcher, so sbx.ts writes
-    // this file into the sandbox itself (ensureSandboxLauncher).
+    // A sandbox cannot reach the data folder's launcher, so sbx.ts writes the bundle into it
+    // (ensureSandboxLauncher).
     configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
     registerIpc({ store, settings, accounts, repositories, sessions, records, send, openProject, openWorkspace, applyTheme });
     timeStartup("window", createWindow);
-    // The git process inherits its environment at the fork, so it waits for the PATH — still up
-    // front rather than on the first repository, the renderer being busy loading meanwhile.
+    // The git process inherits its environment at the fork, so it waits for PATH; started up front
+    // while the renderer loads.
     await pathReady;
     timeStartup("git-process", startGitProcess);
     timeStartup("auto-update", () =>
@@ -713,19 +671,17 @@ app.on("window-all-closed", () => {
 });
 
 /**
- * Ending the sessions is asynchronous (TerminalSession.stop) and electron tears the process down
- * the moment a synchronous before-quit handler returns, so the quit is held back and asked for
- * again afterwards. `quitting` keeps that second ask from being held back in turn, which would
- * leave the app unable to quit at all. Bounded so a pty that never reports its exit cannot either.
+ * Ending sessions is async (TerminalSession.stop) but electron exits once before-quit returns, so
+ * the quit is held back and re-asked; `quitting` lets the re-ask through. Bounded so a pty that
+ * never reports its exit cannot block the quit.
  */
 const QUIT_TEARDOWN_TIMEOUT_MS = 5000;
 
 let quitting = false;
 
 /**
- * The one way out, for the quit and the control channel's restart alike: the sessions first, then
- * everything with nothing left to serve. `relaunch` starts the new instance once this one has
- * exited, so the single-instance lock is free by then.
+ * The one way out, for quit and the control channel's restart: sessions first, then the rest.
+ * `relaunch` starts the new instance after this one exits, so the single-instance lock is free.
  */
 function shutdown(relaunch: boolean): void {
   if (quitting) {

@@ -1,15 +1,13 @@
 import type { EditorReport, NoticeReport } from "../../shared/types";
 
-/** How many notices `notices-list` goes back. */
 const MAX_NOTICES = 50;
-/** How much of a terminal's latest output `tabs-output` keeps — a few screens of a TUI's redraws. */
+/** A few screens of a TUI's redraws. */
 const MAX_OUTPUT_CHARS = 64 * 1024;
 
 /**
- * What the control verbs answer from but no store of the main process holds: what the window alone
- * knows and reports here (the editor tab, the notices it put up), and each terminal's latest
- * output. The output only in a run with a profile of its own — see ControlVerb.ownProfileOnly —
- * so an ordinary run keeps nothing it would never be asked for.
+ * Control-verb data no main-process store holds: what the window reports (editor tab, shown
+ * notices) and each terminal's latest output — the latter only with a profile of its own
+ * (ControlVerb.ownProfileOnly).
  */
 export class ControlRecords {
   private readonly editors = new Map<string, EditorReport>();
@@ -18,7 +16,7 @@ export class ControlRecords {
 
   constructor(private readonly keepOutput: boolean) {}
 
-  /** A project's editor tab as the window last reported it; null once it is closed. */
+  /** null once the editor tab is closed. */
   setEditor(projectId: string, report: EditorReport | null): void {
     if (report) {
       this.editors.set(projectId, report);
@@ -48,7 +46,7 @@ export class ControlRecords {
     this.outputs.set(key, ((this.outputs.get(key) ?? "") + data).slice(-MAX_OUTPUT_CHARS));
   }
 
-  /** Undefined for a tab that printed nothing yet, and for every tab in an ordinary run. */
+  /** Undefined before any output, and always in an ordinary run. */
   output(projectId: string, tabId: string): string | undefined {
     return this.outputs.get(`${projectId}\u0000${tabId}`);
   }

@@ -3,11 +3,10 @@ import * as readline from "node:readline";
 import { resolveCommand } from "../../terminals/pty";
 
 /**
- * `codex app-server` is a JSON-RPC-over-stdio process (JSONL, JSON-RPC 2.0 without the `jsonrpc`
- * field). tet starts one, sends exactly one request and tears it down: the `$CODEX_HOME` SQLite
- * state every repository's Codex shares does not tolerate concurrent first-time startup
- * (measured: parallel cold starts against a fresh `CODEX_HOME` failed outright). Nearly all of
- * the round trip is that startup, affordable for the rare rename and delete this is for.
+ * `codex app-server` speaks JSONL JSON-RPC 2.0 (without `jsonrpc`) over stdio. tet starts one per
+ * request and tears it down: the shared `$CODEX_HOME` SQLite state does not tolerate concurrent
+ * cold starts (measured: parallel starts against a fresh `CODEX_HOME` failed). The startup cost is
+ * fine for rare renames and deletes.
  */
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -26,9 +25,8 @@ function callAppServer(executable: string, cwd: string, request: RpcRequest, hom
 }
 
 /**
- * Starts one `codex app-server`, performs the `initialize` handshake, sends one further request
- * and returns its result — rejecting on a JSON-RPC error, spawn failure or timeout. The process
- * is always killed on the way out.
+ * Starts an app-server, runs `initialize`, sends one request and returns its result; rejects on a
+ * JSON-RPC error, spawn failure or timeout. Always kills the process.
  */
 async function callAppServerNow(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
   const { command, args } = resolveCommand(executable, ["app-server", "--stdio"]);
@@ -41,7 +39,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
 
   return new Promise((resolve, reject) => {
     let nextId = 1;
-    /** Request id -> method, to tell the initialize reply from the actual request's. */
+    /** Request id -> method, telling the initialize reply from the request's. */
     const pending = new Map<number, string>();
     let stderr = "";
     let settled = false;
@@ -67,8 +65,8 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
     };
 
     child.on("error", (error) => finish(() => reject(error)));
-    // An app-server that died before reading its request fails the write asynchronously, and an
-    // unhandled stream error takes the main process into Electron's modal crash dialog.
+    // A server that died early fails the write asynchronously; unhandled, that stream error
+    // raises Electron's modal crash dialog.
     child.stdin.on("error", () => undefined);
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
@@ -88,7 +86,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
         return;
       }
       if (typeof message.id !== "number") {
-        return; // A server-pushed notification, not a response to anything tet asked.
+        return; // A server notification.
       }
       const method = pending.get(message.id);
       if (!method) {
@@ -114,20 +112,18 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
 }
 
 /**
- * `home` is what a sandboxed session needs: its rollouts and name index live in the directory tet
- * mounts into the sandbox, so the one-shot app-server is pointed at that as its `CODEX_HOME`.
- * Measured: a foreign CODEX_HOME needs no sign-in and no config of its own — `initialize` and a
- * `thread/*` request both answer — but the directory has to exist, or it exits 1.
+ * `home`: the sandbox's mounted directory holding its rollouts and name index, used as `CODEX_HOME`.
+ * Measured: a foreign CODEX_HOME needs no sign-in or config for `initialize` and `thread/*`, but
+ * must exist, or it exits 1.
  */
 export async function renameThread(executable: string, cwd: string, threadId: string, name: string, home?: string): Promise<void> {
   await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } }, home);
 }
 
 /**
- * A thread whose rollout is gone is already deleted — resolved, not rejected, per
- * SessionProvider.remove. Measured (codex-cli 0.154.0): `thread/delete` for an unknown id answers
- * `-32600 no rollout found for thread id <id>`. Matched on the message because -32600 is the
- * generic "invalid request"; should the wording change, the worst is today's behaviour back.
+ * A thread without a rollout is already deleted and resolves (SessionProvider.remove). Measured
+ * (codex-cli 0.154.0): an unknown id answers `-32600 no rollout found for thread id <id>`; matched
+ * on the message, since -32600 is the generic "invalid request".
  */
 export async function deleteThread(executable: string, cwd: string, threadId: string, home?: string): Promise<void> {
   try {

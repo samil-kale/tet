@@ -1,8 +1,7 @@
 import type { PromptHistoryLists } from "../ui/Dialog";
 
-/** The commit dialog's message history, per project: the last ten messages as submitted, newest
- *  first, and up to five pinned. Kept in `localStorage` under the `tet.dialog.` namespace — a
- *  fact about this window's dialogs, not about the repository. */
+/** The commit dialog's per-project history: the last ten messages, newest first, and up to five
+ *  pinned. In `localStorage` under `tet.dialog.` — about this window's dialogs, not the repository. */
 export type CommitHistory = PromptHistoryLists;
 
 export const MAX_PINNED = 5;
@@ -12,7 +11,7 @@ function storageKey(projectId: string): string {
   return `tet.dialog.commitHistory.${projectId}`;
 }
 
-/** Only the strings, only up to the cap — whatever shape the stored value turned out to be. */
+/** Only strings, up to the cap, whatever was stored. */
 function readList(value: unknown, cap: number): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -20,8 +19,7 @@ function readList(value: unknown, cap: number): string[] {
   return value.filter((entry): entry is string => typeof entry === "string").slice(0, cap);
 }
 
-/** Read back defensively: a shape that does not parse is an empty history, never an error. The
- *  caps hold on the way in too. */
+/** Defensive: an unparseable shape is an empty history, never an error. Caps apply on read too. */
 export function loadCommitHistory(projectId: string): CommitHistory {
   try {
     const raw = localStorage.getItem(storageKey(projectId));
@@ -43,8 +41,8 @@ function save(projectId: string, history: CommitHistory): void {
   localStorage.setItem(storageKey(projectId), JSON.stringify(history));
 }
 
-/** Called on submit, whether or not the commit then goes through. A pinned message stays put;
- *  one already recent moves to the front; the eleventh pushes the oldest out. */
+/** On submit, whether or not the commit succeeds. A pinned message stays put; a recent one moves
+ *  to the front; the eleventh pushes the oldest out. */
 export function recordCommitMessage(projectId: string, message: string): void {
   const history = loadCommitHistory(projectId);
   if (history.pinned.includes(message)) {
@@ -56,7 +54,6 @@ export function recordCommitMessage(projectId: string, message: string): void {
   });
 }
 
-/** Removes the message from whichever list holds it. */
 export function deleteCommitMessage(projectId: string, text: string): CommitHistory {
   const history = loadCommitHistory(projectId);
   const next = {
@@ -67,9 +64,8 @@ export function deleteCommitMessage(projectId: string, text: string): CommitHist
   return next;
 }
 
-/** Pins to the end (pin order is display order) or unpins to the front of the recents, pushing
- *  the oldest out. Pinning past the cap returns the lists unchanged, for a stale view whose pin
- *  buttons the dialog has not yet disabled. */
+/** Pins to the end (pin order is display order) or unpins to the front of the recents. Past the
+ *  cap it changes nothing — a stale view may not have disabled its pin buttons yet. */
 export function toggleCommitPin(projectId: string, text: string): CommitHistory {
   const history = loadCommitHistory(projectId);
   let next: CommitHistory;

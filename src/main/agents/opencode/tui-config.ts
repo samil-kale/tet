@@ -2,17 +2,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
- * opencode draws its TUI in a palette of its own, background included. `"theme": "system"` is the
- * only way to make it take the terminal's colours instead — the `--vscode-*` ones xterm was
- * handed (`src/renderer/terminal/theme.ts`); every other theme paints its own background.
+ * `"theme": "system"` is the only way opencode takes the terminal's colours (xterm's `--vscode-*`,
+ * `src/renderer/terminal/theme.ts`); every other theme paints its own background.
  *
- * It goes in a file of tet's own that `OPENCODE_TUI_CONFIG` points at, layered over whatever
- * opencode already loaded; the user's `tui.json` is never read, written or replaced. Passed as a
- * default, so a user who sets that variable keeps their own file. One file for every repository:
- * `dir` is storageRoot for host tabs, a sandbox's own mounted config dir for a sandboxed one.
+ * A tet file `OPENCODE_TUI_CONFIG` points at, layered over opencode's config; the user's `tui.json`
+ * is never touched, and a user-set variable wins. One file for all repositories: `dir` is
+ * storageRoot on the host, the mounted config dir in a sandbox.
  *
- * Another project's opencode can be reading it while this runs, so it is written beside the target
- * and renamed into place, and only when it is not there already.
+ * Another project's opencode may be reading it: renamed into place, and only when changed.
  */
 export function installTuiConfig(dir: string): Record<string, string> {
   const file = path.join(dir, "opencode-tui.json");
@@ -24,7 +21,7 @@ export function installTuiConfig(dir: string): Record<string, string> {
       fs.renameSync(temp, file);
     }
   } catch (error) {
-    // A TUI in opencode's own colours is still a working TUI.
+    // opencode's own colours still work.
     console.error("[tet] could not write the opencode tui config:", error);
     return {};
   }

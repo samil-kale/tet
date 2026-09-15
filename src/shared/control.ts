@@ -1,23 +1,21 @@
 import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
 
 /**
- * The control channel's wire contract, shared by the server (`src/main/control/control-server.ts`)
- * and the `tet-ctl` CLI (`src/cli/tet-ctl.ts`). Nothing here imports electron or node: the CLI is
- * bundled on its own and must stay a plain script.
+ * The control channel's wire contract, shared by `src/main/control/control-server.ts` and
+ * `src/cli/tet-ctl.ts`. No electron or node imports: the CLI is bundled on its own.
  *
- * One HTTP POST per connection: a JSON body in, a JSON body out, then the server ends the
- * connection. No ids, no pipelining — the CLI is one process per invocation.
+ * One HTTP POST per connection: JSON in, JSON out, connection closed. No ids, no pipelining — one
+ * CLI process per invocation.
  */
 
-/** The environment every pty tet spawns carries; the CLI reads its whole configuration off it. */
+/** Set on every pty tet spawns; the CLI's whole configuration. */
 export const CONTROL_ENV = {
   port: "TET_CONTROL_PORT",
   token: "TET_CONTROL_TOKEN",
   projectId: "TET_PROJECT_ID",
   tabId: "TET_TAB_ID",
-  /** Unset for every ordinary pty, so tet-ctl.ts falls back to "127.0.0.1". Only an sbx-wrapped
-   *  session carries this, set to "host.docker.internal" — the sandbox has its own loopback. See
-   *  sbx.ts's isControlChannelAllowed for the policy-allow this also requires. */
+  /** Only sbx sessions set it ("host.docker.internal" — the sandbox has its own loopback); unset
+   *  means "127.0.0.1". Also needs the policy allow in sbx.ts's isControlChannelAllowed. */
   host: "TET_CONTROL_HOST"
 } as const;
 
@@ -27,14 +25,12 @@ export interface ControlRequest {
   token: string;
   verb: string;
   args: Record<string, unknown>;
-  /** The tab the CLI was run from, off its environment — what "the project" means when no
-   *  `--project` was given, and what a verb must answer *before* acting on, if it is the target. */
+  /** The tab the CLI ran in: the default project without `--project`, and a target a verb must
+   *  answer *before* acting on. */
   caller: { projectId?: string; tabId?: string };
   /**
-   * When the caller spoke, by its own clock — what a turn signal is *ordered* by, since two
-   * hooks of the same turn are two requests racing each other and the one that arrives second
-   * is not always the one that happened second. Every report about one tab comes from the same
-   * place (that tab's agent, host or sandbox), so one clock decides throughout.
+   * When the caller spoke, by its own clock. Turn signals are ordered by this, not by arrival: two
+   * hooks of one turn race each other. A tab's reports all come from its own agent, so one clock.
    */
   at?: number;
 }
@@ -47,37 +43,32 @@ export interface ControlVerb {
   verb: string;
   usage: string;
   summary: string;
-  /** The names the CLI gives its positional arguments, in order; flags go in under their own name
-   *  (CONTROL_FLAGS). */
+  /** Argument names for the positionals, in order; flags keep their own name (CONTROL_FLAGS). */
   positionals: string[];
   /**
-   * Only for a run with a profile of its own (`--user-data-dir`, as the tests start tet): the verb
-   * types into another agent's terminal or reads what it printed, which in an ordinary run would
-   * let one agent drive or overhear another.
+   * Only in a run with its own `--user-data-dir` (tests): the verb types into or reads another
+   * tab's terminal, which would otherwise let one agent drive or overhear another.
    */
   ownProfileOnly?: true;
-  /** Sends whatever the caller wrote to stdin as `args.payload` — an agent's hook payload. */
+  /** Stdin goes in as `args.payload` — an agent's hook payload. */
   stdin?: true;
   /**
-   * The answer is text for the calling agent rather than a result for a person: the CLI writes
-   * `result.stdout` verbatim and nothing else, and never fails the caller — a hook exiting
-   * non-zero can hold back the very prompt it was reporting.
+   * The CLI writes only `result.stdout`, verbatim, and never fails — a hook exiting non-zero can
+   * hold back the prompt it reports.
    */
   stdout?: true;
 }
 
 /**
- * What an agent's hook reports, in tet's own vocabulary rather than any CLI's: each agent's
- * setup maps its own events onto these (each agent's own hooks.ts), and the session manager
- * gives all of them the same meaning. `permission` and `question` are one mark with two toasts —
- * the wording is the only difference, and it belongs where the event is named.
+ * Hook events in tet's own vocabulary; each agent's hooks.ts maps its events onto these.
+ * `permission` and `question` are one mark with two toast wordings.
  */
 export const HOOK_EVENTS = ["prompt-submit", "stop", "permission", "question", "idle"] as const;
 
 export type HookEvent = (typeof HOOK_EVENTS)[number];
 
-/** The flags the CLI knows, by name: a switch is `true` when given, a value flag takes the next
- *  argument as a string. Every verb gets all of them; each reads the ones it has a use for. */
+/** A switch is `true` when given; a value flag takes the next argument. Every verb gets all flags
+ *  and reads the ones it uses. */
 export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   project: "value",
   agent: "value",
@@ -91,23 +82,23 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   timeout: "value"
 };
 
-/** What `events-tail` lists: what the session manager heard and made of it, in arrival order. */
+/** An `events-tail` entry: what the session manager heard, in arrival order. */
 export interface ControlEvent {
   /** When it arrived here, ms since epoch. */
   at: number;
   tabId: string;
-  /** A hook report arrived; a tab took a reported session as its own (reconcile); a tab was closed. */
+  /** A hook report; a tab claiming a reported session (reconcile); a closed tab. */
   kind: "hook" | "claimed" | "closed";
   /** The hook's event, for `hook`. */
   event?: HookEvent;
-  /** When the hook fired by the agent's own clock (ControlRequest.at), for `hook`. */
+  /** ControlRequest.at, for `hook`. */
   reportedAt?: number;
   /** The session the report named, or the one claimed. */
   sessionId?: string;
 }
 
-/** Every verb, with the one line `tet-ctl help` prints for it. The CLI answers `help` by itself; the
- *  server refuses anything not in this list as `unknown_verb`. */
+/** Every verb with its `tet-ctl help` line. The CLI answers `help` itself; the server refuses
+ *  anything else not listed as `unknown_verb`. */
 export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   { verb: "help", usage: "help", summary: "Print this list.", positionals: [] },
   { verb: "version", usage: "version", summary: "TET's version.", positionals: [] },
@@ -268,10 +259,9 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   }
 ];
 
-/** The verb the CLI answers itself. */
 export const HELP_VERB = "help";
 
-/** What `tet-ctl` exits with; an agent can branch on these without parsing anything. */
+/** `tet-ctl`'s exit codes, for an agent to branch on. */
 export const EXIT_CODES = {
   ok: 0,
   internal: 1,

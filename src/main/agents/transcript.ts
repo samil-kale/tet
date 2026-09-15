@@ -2,16 +2,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
- * What the session providers share about reading append-only JSONL transcripts from the end:
- * the chunked read, the title rules, the per-repository directory lookup. Entry types and the
- * "found what I came for" test are each agent's own `sessions.ts`.
+ * Shared reading of append-only JSONL transcripts from the end: the chunked read, title rules,
+ * directory lookup. Entry types and the stop test live in each agent's `sessions.ts`.
  */
 
 /**
- * The directory `root/<encoded>` for an agent that keeps one per repository (Claude Code, pi),
- * or undefined. The CLIs preserve whatever path casing they saw (pi's drive letter follows the
- * spawn, Claude Code's whole path does), so the match ignores case on win32. A missing root is
- * the same answer as a missing directory: no sessions, not a failure.
+ * The directory `root/<encoded>` of an agent keeping one per repository (Claude Code, pi), or
+ * undefined. The CLIs keep the path casing they saw (pi's drive letter, Claude Code's whole
+ * path), so win32 matches case-insensitively. A missing root means no sessions, not a failure.
  */
 export async function findEncodedDir(root: string, encoded: string): Promise<string | undefined> {
   const ignoreCase = process.platform === "win32";
@@ -34,11 +32,9 @@ export async function findEncodedDir(root: string, encoded: string): Promise<str
 }
 
 /**
- * Drops what `caches` hold for the transcripts in `dir` that are no longer among `files` — the
- * agent's own picker deletes them behind tet's back, and without this the caches only ever grow.
- * Scoped to the directory just listed: a sandbox's transcripts are read from a second root
- * (SessionProvider.sandbox) into these same caches, and unscoped each pass would evict the other
- * root's entries.
+ * Evicts cached transcripts in `dir` no longer among `files` (the agent's picker deletes them
+ * behind tet's back). Scoped to `dir`: a sandbox root (SessionProvider.sandbox) shares these
+ * caches, and each pass would evict the other root's entries.
  */
 export function forgetMissing(dir: string, files: string[], caches: Map<string, unknown>[]): void {
   const present = new Set(files.map((file) => path.join(dir, file)));
@@ -56,7 +52,7 @@ export function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
-/** A tab title's length, what the strip has room for. */
+/** What the tab strip has room for. */
 const TITLE_MAX_LENGTH = 60;
 
 export function truncateTitle(text: string): string {
@@ -65,11 +61,10 @@ export function truncateTitle(text: string): string {
 }
 
 /**
- * Hands `onLines` the file's lines from `size` down to `floor`, later chunks of `chunkBytes`
- * first, until `onLines` returns true or `floor` is reached. Every line arrives whole: the
- * bytes before a chunk's first newline are carried (as bytes, so a cut character survives) into
- * the next chunk up — except at `floor`, where the partial line is handed over as it is, which
- * is why a scan resuming above an earlier one overlaps it by a chunk.
+ * Hands `onLines` the file's lines from `size` down to `floor`, last chunk first, until it returns
+ * true. Lines arrive whole: bytes before a chunk's first newline carry (as bytes, so a cut
+ * character survives) into the next chunk — except at `floor`, where the partial line is handed
+ * over as is; hence a resumed scan overlaps the earlier one by a chunk.
  */
 export async function readLinesBackwards(
   handle: fs.promises.FileHandle,
@@ -97,31 +92,25 @@ export async function readLinesBackwards(
   }
 }
 
-/**
- * The per-agent half of a cached tail scan. Everything about the transcript's own format lives
- * here at the call site; `scanTranscriptTail` owns only the file handling.
- */
+/** The per-agent, format-specific half of a cached tail scan; `scanTranscriptTail` handles the file. */
 export interface TailScan<T> {
-  /** Bytes read per chunk, and how far below an earlier scan the next one restarts. */
+  /** Bytes per chunk, and how far below an earlier scan the next one restarts. */
   byteLimit: number;
-  /** Names the agent in the message a failed scan logs. */
+  /** Names the agent in a failed scan's log. */
   label: string;
-  /** An empty result to fill. */
   create: () => T;
   /** Takes one chunk's lines into `tail`; true once nothing further is wanted. */
   read: (lines: string[], tail: T) => boolean;
-  /** Runs after the backward read, before the merge below. */
+  /** Runs after the backward read, before `merge`. */
   finish?: (tail: T) => void;
-  /** Fills what this scan did not find from the scan before it. */
+  /** Fills what this scan did not find from the previous one. */
   merge: (tail: T, previous: T) => void;
 }
 
 /**
- * Reads a transcript backwards for whatever the agent's `read` is after, answering an unchanged
- * file from `cache`. A file scanned before is only read from a chunk below where that scan
- * ended, and what the new stretch does not hold comes from the old answer through `merge` — the
- * overlap covers a line the earlier read may have caught half-written. The cache stays the
- * caller's, which also evicts from it.
+ * Reads a transcript backwards for the agent's `read`, answering an unchanged file from `cache`.
+ * A grown file is read only down to a chunk below the previous scan's end, the rest merged from
+ * the old answer — the overlap covers a line caught half-written. The caller owns and evicts the cache.
  */
 export async function scanTranscriptTail<T>(
   filePath: string,

@@ -3,11 +3,10 @@ import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
 
 /**
- * `tet-ctl`: the command an agent runs inside one of tet's terminals to ask the app around it
- * something. A plain script with no electron in it, bundled on its own (esbuild.js) and started by
- * the launcher in ~/.tet/bin; the terminal's environment says where tet listens and who it is
- * (src/shared/control.ts). Output is for an agent, not a person: the result as JSON on stdout, one
- * line of plain text on stderr when something went wrong, and an exit code it can branch on.
+ * `tet-ctl`: how an agent in a tet terminal asks the app. No electron; bundled on its own
+ * (esbuild.js), started by the launcher in ~/.tet/bin; the environment says where tet listens and
+ * who the caller is (src/shared/control.ts). Output is for an agent: JSON on stdout, one line on
+ * stderr on failure, and an exit code to branch on.
  */
 
 function usage(): string {
@@ -26,7 +25,7 @@ function fail(message: string, code: number): never {
   process.exit(code);
 }
 
-/** `verb [positionals...] [--<flag> [value]...]` into a request's verb and args — see CONTROL_FLAGS. */
+/** `verb [positionals...] [--<flag> [value]...]` — see CONTROL_FLAGS. */
 function parse(argv: string[]): { verb: string; args: Record<string, unknown>; entry?: ControlVerb } {
   const [verb, ...rest] = argv;
   if (!verb || verb === HELP_VERB || verb === "--help" || verb === "-h") {
@@ -67,9 +66,8 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown>; e
   return { verb, args, entry };
 }
 
-/** HTTP rather than a raw socket, one request per connection (`Connection: close`), matching the
- *  server's model — the reason is at `startControlServer` in src/main/control/control-server.ts.
- *  `idleMs` gives up on a connection nothing arrives on for that long. */
+/** HTTP, one request per connection — why is at `startControlServer` (control-server.ts).
+ *  `idleMs` gives up on a silent connection. */
 function send(host: string, port: number, request: ControlRequest, idleMs?: number): Promise<ControlResponse> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify(request);
@@ -83,8 +81,7 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
       },
       (res) => {
         res.setEncoding("utf8");
-        // A connection dropped mid-answer errors on the response, and unheard that throws — a hook
-        // must end quietly whatever happened.
+        // A drop mid-answer errors here and would throw unheard; a hook must end quietly.
         res.on("error", reject);
         let buffer = "";
         res.on("data", (chunk: string) => {
@@ -113,20 +110,16 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
 }
 
 /**
- * How long a hook waits on an app that accepted it and then went quiet — a stalled main process.
- * The agent's turn waits on its hook, and a hook must never hold its own turn up for good; given
- * up on, it answers nothing, the same as when tet cannot be reached at all. That one prompt then
- * goes without the context text.
+ * A hook's wait on a stalled app: the agent's turn waits on its hook, which must not hold it for
+ * good. Given up on, it answers nothing, and that prompt goes without the context text.
  */
 const HOOK_IDLE_MS = 10_000;
 
-/** How long a port nobody answers on is retried before it counts as absent: the server comes up
- *  with the workspace, a moment after the terminal this runs in did, and likewise after a
- *  `restart-app`. */
+/** The server comes up with the workspace, after the terminal may (and after `restart-app`). */
 const CONNECT_RETRY_MS = 5000;
 const CONNECT_RETRY_GAP_MS = 250;
 
-/** `send`, retried while nothing listens yet; any other failure is answered at once. */
+/** Retries only while nothing listens yet. */
 async function sendWhenUp(host: string, port: number, request: ControlRequest, idleMs?: number): Promise<ControlResponse> {
   const deadline = Date.now() + CONNECT_RETRY_MS;
   for (;;) {
@@ -142,10 +135,7 @@ async function sendWhenUp(host: string, port: number, request: ControlRequest, i
   }
 }
 
-/**
- * Everything the caller piped in, for a verb that takes a payload. A hook writes its JSON and
- * closes stdin. Run by hand there is no pipe at all, and a TTY would block forever instead of ending.
- */
+/** A hook pipes its JSON and closes stdin; a TTY (run by hand) would block forever. */
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) {
     return "";
@@ -163,10 +153,8 @@ async function main(): Promise<void> {
     process.stdout.write(usage() + "\n");
     return;
   }
-  // A hook's channel: it speaks for the agent, so it says nothing of its own and never fails.
-  // A non-zero exit or a stray line on stdout is not this process's to spend — Claude Code
-  // appends a UserPromptSubmit hook's stdout to the prompt and can hold the prompt back on a
-  // failure, and Codex reads its Stop hook's stdout as JSON.
+  // A hook never fails and prints nothing of its own: Claude Code appends UserPromptSubmit's stdout
+  // to the prompt and can hold it back on failure; Codex parses its Stop hook's stdout as JSON.
   const quiet = entry?.stdout === true;
   if (entry?.stdin) {
     args.payload = await readStdin();
@@ -184,7 +172,7 @@ async function main(): Promise<void> {
     verb,
     args,
     caller: { projectId: process.env[CONTROL_ENV.projectId], tabId: process.env[CONTROL_ENV.tabId] },
-    // This process started when the hook fired, which is what a turn signal is ordered by.
+    // Started when the hook fired, which orders turn signals.
     at: Date.now()
   };
   let response: ControlResponse;

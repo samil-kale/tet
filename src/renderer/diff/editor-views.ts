@@ -7,52 +7,50 @@ import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco } from "./
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 
 /**
- * Each project's editor tab, outside React as the xterms are (`terminal-views.ts`): the element
- * monaco lives in, the diff editor, and the file it shows. A tab moved into another pane gets a
- * new container and this element follows it, so an edit survives the move — React would have
- * rebuilt the editor. One per project, since a project has one editor tab.
+ * Each project's one editor tab, outside React like the xterms (`terminal-views.ts`): monaco's
+ * element, the diff editor and the file. The element follows a tab moved between panes, so an edit
+ * survives the move, where React would rebuild the editor.
  */
 
-/** What the tab draws, replaced whole on every change — `useSyncExternalStore` compares identity. */
+/** Replaced whole on every change — `useSyncExternalStore` compares identity. */
 export interface EditorSnapshot {
   path: string;
-  /** The read of `path`; null while it is in flight. */
+  /** Null while the read is in flight. */
   file: FileContent | null;
   loading: boolean;
-  /** Monaco loading, a grammar being fetched, the editor being built. */
+  /** Monaco, a grammar or the editor loading. */
   building: boolean;
   saving: boolean;
   dirty: boolean;
 }
 
-/** How a read file is shown: a placeholder, the image view, or the editor. */
+/** A placeholder, the image view, or the editor. */
 export type EditorKind = "loading" | "error" | "image" | "binary" | "tooLarge" | "text";
 
 interface EditorView {
-  /** Created here and moved between containers, never rendered by React. */
+  /** Moved between containers, never rendered by React. */
   host: HTMLDivElement;
   editor: MonacoEditor.IStandaloneDiffEditor | null;
-  /** The editor being built, shared by every file opened while it is. */
+  /** Shared by every file opened while the editor builds. */
   building: Promise<MonacoEditor.IStandaloneDiffEditor | null> | null;
   models: { original: MonacoEditor.ITextModel; modified: MonacoEditor.ITextModel } | null;
   /** The modified model's version at the last load or save; anything else is dirty. */
   savedVersionId: number;
-  /** Bumped by every open (and a re-read that builds the models), so a read that lands after the
-   *  next one began is dropped. */
+  /** Bumped by every open (and a re-read that builds the models): a read overtaken is dropped. */
   readSeq: number;
-  /** Bumped by every save that reached disk: a re-read begun before one holds the text and mtime
-   *  the save replaced, and must not put them back as clean. */
+  /** Bumped by every save that reached disk: an older re-read must not restore the replaced text
+   *  and mtime as clean. */
   saves: number;
-  /** What App last reported the file depends on — HEAD and its status. */
+  /** HEAD and status as App last reported them. */
   version: string | undefined;
   snapshot: EditorSnapshot;
 }
 
 const views = new Map<string, EditorView>();
-/** By project rather than on the view: a pane subscribes before any file was opened. */
+/** By project: a pane subscribes before any file was opened. */
 const listeners = new Map<string, Set<() => void>>();
 
-/** The snapshot of a project with no editor tab — one instance, so it compares equal. */
+/** A project with no editor tab — one instance, so it compares equal. */
 const CLOSED: EditorSnapshot = { path: "", file: null, loading: false, building: false, saving: false, dirty: false };
 
 export function editorKind(file: FileContent | null): EditorKind {
@@ -94,7 +92,7 @@ function emit(projectId: string): void {
   listeners.get(projectId)?.forEach((listener) => listener());
 }
 
-/** A change to what the tab draws; dropped for a view that has been disposed meanwhile. */
+/** Dropped for a view disposed meanwhile. */
 function publish(projectId: string, view: EditorView, patch: Partial<EditorSnapshot>): void {
   if (views.get(projectId) !== view) {
     return;
@@ -110,8 +108,7 @@ function report(projectId: string, view: EditorView): void {
   window.tet.repository.reportEditor(projectId, { path, loading, dirty, readOnly: isReadOnly(file), error: file?.error });
 }
 
-/** The edited side's text as it stands now, the model's once there is one — asked for by
- *  `tet-ctl editor-state`. Undefined for no editor tab, an image, a binary or a file too large. */
+/** The edited side's current text, for `tet-ctl editor-state`. Undefined unless a text file is open. */
 export function editorContent(projectId: string): string | undefined {
   const view = views.get(projectId);
   if (!view || editorKind(view.snapshot.file) !== "text") {
@@ -121,9 +118,8 @@ export function editorContent(projectId: string): string | undefined {
 }
 
 /**
- * Shows `path` in the project's editor tab, reading it afresh. The caller has asked about an
- * unsaved edit already (`canDiscardEdit`), and calls this before the tab is drawn: the tab's
- * host attaches the element made here.
+ * Reads `path` afresh into the editor tab. The caller has already asked `canDiscardEdit`, and calls
+ * this before the tab is drawn, whose host attaches the element made here.
  */
 export function openEditorFile(projectId: string, path: string): void {
   let view = views.get(projectId);
@@ -134,8 +130,7 @@ export function openEditorFile(projectId: string, path: string): void {
     views.set(projectId, view);
   }
   const seq = ++view.readSeq;
-  // The previous file's models go at once: kept until the read lands, the editor would show them
-  // under the new path.
+  // Now, or the editor shows the previous file under the new path until the read lands.
   clearModels(view);
   view.version = undefined;
   publish(projectId, view, { path, file: null, loading: true, building: false, saving: false, dirty: false });
@@ -156,10 +151,9 @@ export function openEditorFile(projectId: string, path: string): void {
 }
 
 /**
- * Folds what changed outside into the open file, on a HEAD or status change (`version`). The
- * edited side only while it is clean, in place so undo history and the cursor survive; HEAD's side
- * always, because a commit or a checkout under an open edit moves what the marks are against.
- * The first report after an open is the baseline, not a change.
+ * Folds outside changes into the open file on a HEAD or status change. The edited side only while
+ * clean, in place so undo and cursor survive; HEAD's side always, since a commit or checkout moves
+ * what the marks are against. The first report after an open is the baseline.
  */
 export function setEditorVersion(projectId: string, version: string): void {
   const view = views.get(projectId);
@@ -182,17 +176,15 @@ export function setEditorVersion(projectId: string, version: string): void {
     if (!held) {
       return;
     }
-    // Without a HEAD side the file is its own original — and that is the case a commit under the
-    // open file lands in, where git stops reporting a change and the marks have to go.
+    // No HEAD side means its own original — after a commit, so the marks go.
     const original = result.head?.content ?? result.content;
     if (view.models && view.models.original.getValue() !== original) {
-      // Asked on every refresh, so the no-op is here: setting the same text again would throw
-      // the computed diff away and have the worker rebuild the identical one.
+      // Same text again would make the worker recompute an identical diff, on every refresh.
       view.models.original.setValue(original);
     }
     if (view.snapshot.dirty || view.saves !== saves || result.mtimeMs === held.mtimeMs) {
-      // The edited side stays as it is; what HEAD has of it is carried in regardless, or the tab
-      // keeps deciding binary, image and original off the side already replaced.
+      // The edited side stays; HEAD's is carried in anyway, or binary, image and original are
+      // decided off a stale HEAD.
       publish(projectId, view, { file: { ...held, head: result.head } });
       return;
     }
@@ -202,9 +194,8 @@ export function setEditorVersion(projectId: string, version: string): void {
       clearModels(view);
     } else if (view.models) {
       const model = view.models.modified;
-      // monaco takes a BOM off the text only when it builds a buffer: pushed as an edit it becomes
-      // text, and the save, which puts the model's own BOM in front, writes it twice. A BOM that
-      // came or went on disk is a buffer of its own.
+      // monaco strips a BOM only when building a buffer: pushed as an edit it becomes text, and the
+      // save writes it twice. A BOM that came or went on disk needs a new buffer.
       const bom = result.content.startsWith("\uFEFF");
       const modelBom = model.getValueLength(undefined, true) !== model.getValueLength();
       if (bom === modelBom) {
@@ -214,13 +205,11 @@ export function setEditorVersion(projectId: string, version: string): void {
         model.setValue(result.content);
       }
       view.savedVersionId = model.getAlternativeVersionId();
-      // As `showText` does for an open: a file deleted under the tab is no longer one to edit, and
-      // one restored under it is again.
+      // As in `showText`: deleted under the tab means read-only, restored means editable.
       view.editor?.updateOptions({ readOnly: isReadOnly(result) });
       publish(projectId, view, { dirty: false });
     } else {
-      // A read of its own: the open that found no models yet may still be building them, and
-      // with the same generation both would go on to create the same two models.
+      // A new generation: the open may still be building models, and both would create the same two.
       void showText(projectId, view, ++view.readSeq, result);
     }
   });
@@ -236,8 +225,8 @@ export async function saveEditorFile(projectId: string): Promise<void> {
   const { path, file } = view.snapshot;
   const seq = view.readSeq;
   publish(projectId, view, { saving: true });
-  // BOM preserved — see `Repository.writeFile`. The version is taken with the text, so a keystroke
-  // landing while the write runs still counts as unsaved.
+  // BOM kept (`Repository.writeFile`). The version is taken with the text, so a keystroke during
+  // the write stays unsaved.
   const content = model.getValue(undefined, true);
   const versionId = model.getAlternativeVersionId();
   const result = await window.tet.repository.writeFile(projectId, path, content, file.mtimeMs);
@@ -273,10 +262,7 @@ export async function canDiscardEdit(projectId: string): Promise<boolean> {
   return answer.confirmed;
 }
 
-/**
- * Moves the element into `container` — the tab's host, which is a new one after a move between
- * panes. Nothing is rebuilt: monaco measures itself again (`automaticLayout`).
- */
+/** Moves the element into the tab's host, new after a pane move; monaco remeasures (`automaticLayout`). */
 export function attachEditor(projectId: string, container: HTMLElement): void {
   const view = views.get(projectId);
   if (view && view.host.parentElement !== container) {
@@ -303,8 +289,8 @@ export function disposeEditor(projectId: string): void {
 }
 
 /**
- * The editor first, then both models: disposing a model the editor still holds throws, and a
- * model left behind holds its URI against the next open of the same file.
+ * Editor first: disposing a model it still holds throws. A model left behind blocks its URI for the
+ * next open of the same file.
  */
 function clearModels(view: EditorView): void {
   if (!view.models) {
@@ -316,18 +302,17 @@ function clearModels(view: EditorView): void {
   view.models = null;
 }
 
-/** Hands a text file to the editor, building the editor first if this project has none yet. */
+/** Hands a text file to the editor, building it first if needed. */
 async function showText(projectId: string, view: EditorView, seq: number, file: FileContent): Promise<void> {
   const editor = await ensureEditor(projectId, view);
   const monaco = await loadMonaco();
-  // Only a grammar diff-highlight.ts bundles gets colors; anything else is "plaintext".
+  // A grammar diff-highlight.ts doesn't bundle is "plaintext".
   const language = languageForPath(file.path) ?? null;
   await ensureLanguage(monaco, language);
   if (!editor || views.get(projectId) !== view || view.readSeq !== seq) {
     return;
   }
-  // Two models mean two URIs: the model service holds one instance per URI and throws on a
-  // second. The project is the authority, since two projects can show the same path at once.
+  // One model per URI or monaco throws; the project is the authority, as two can show one path.
   const uri = (scheme: string): ReturnType<typeof monaco.Uri.from> =>
     monaco.Uri.from({ scheme, authority: projectId, path: `/${file.path}` });
   const models = {
@@ -347,12 +332,11 @@ async function showText(projectId: string, view: EditorView, seq: number, file: 
   publish(projectId, view, { building: false });
 }
 
-/** The project's diff editor, built once and kept for every file after. */
+/** Built once per project, kept for every file after. */
 function ensureEditor(projectId: string, view: EditorView): Promise<MonacoEditor.IStandaloneDiffEditor | null> {
   view.building ??= (async () => {
     const monaco = await loadMonaco();
-    // The first call defines the theme, which must exist before the editor does, or it paints
-    // once in monaco's own colors (see ensureLanguage).
+    // Defines the theme before the editor exists, or it paints once in monaco's colors.
     await ensureLanguage(monaco, null);
     const { editorKeybindingPreset } = await window.tet.settings.get();
     if (views.get(projectId) !== view) {
@@ -361,9 +345,9 @@ function ensureEditor(projectId: string, view: EditorView): Promise<MonacoEditor
     const fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim();
     const editor = monaco.editor.createDiffEditor(view.host, { ...editorOptions(fontFamily), ...diffEditorOptions() });
     view.editor = editor;
-    // No keybinding here; it comes from the resolved keybindings below.
+    // Bound through the resolved keybindings below.
     editor.addAction({ id: "tet.save", label: "Save", run: () => void saveEditorFile(projectId) });
-    // Monaco's find/find-replace actions declare no context menu group; added as one here.
+    // Monaco's find actions declare no context menu group.
     editor.addAction({
       id: "tet.find",
       label: "Find",
@@ -378,9 +362,8 @@ function ensureEditor(projectId: string, view: EditorView): Promise<MonacoEditor
       contextMenuOrder: 2,
       run: (instance) => void instance.getAction("editor.action.startFindReplaceAction")?.run()
     });
-    // An unknown combo is skipped at parse time, an unknown command id silently at run time.
-    // `addCommand` and `addAction` on a diff editor both reach its modified side, which is where
-    // every one of these commands belongs.
+    // Unknown combos are skipped at parse, unknown command ids silently at run. On a diff editor,
+    // `addCommand` and `addAction` reach the modified side, where these belong.
     for (const [combo, commandId] of Object.entries(resolveKeybindings(editorKeybindingPreset))) {
       const parsed = parseKeyCombo(monaco, combo);
       if (parsed !== undefined) {

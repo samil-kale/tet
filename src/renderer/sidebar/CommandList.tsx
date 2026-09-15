@@ -6,10 +6,10 @@ import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { PlayIcon, PlusIcon } from "../ui/icons";
 
-/** A type of our own: a row dragged across a terminal must not end up pasted into it. */
+/** Our own type, so a row dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-command";
 
-/** The optional fields of the dialog, the same in the one that adds and the one that edits. */
+/** The optional fields, shared by the add and edit dialogs. */
 const EXTRA_FIELDS = [
   { label: "Name (optional)", placeholder: "what the row calls it, e.g. Start the backend" },
   { label: "Folder (optional)", placeholder: "relative to the project, e.g. web" },
@@ -18,9 +18,9 @@ const EXTRA_FIELDS = [
 
 const COMMAND_DETAIL = "Saved to tet.json in the project. The command is started without a shell.";
 
-/** What the dialog was answered with as an entry, carrying only what was filled in, so a command
- *  with nothing to say beyond itself stays a plain string in tet.json. `shell` is carried over
- *  from the command being edited: editing must not quietly change how it is started. */
+/** The dialog's answer as an entry with only what was filled in, so a bare command stays a plain
+ *  string in tet.json. `shell` carries over from the edited command: editing must not change how
+ *  it starts. */
 function toCommand(answer: PromptAnswer, edited?: ProjectCommand): ProjectCommand {
   const [name, cwd, env] = answer.extras;
   const command: ProjectCommand = { command: answer.value };
@@ -40,7 +40,7 @@ function toCommand(answer: PromptAnswer, edited?: ProjectCommand): ProjectComman
   return command;
 }
 
-/** The whole command as a tooltip: the line, where it runs, and what it runs with. */
+/** The tooltip: the line, its folder, its env. */
 function describe(command: ProjectCommand): string {
   const lines = [command.command];
   if (command.cwd) {
@@ -56,30 +56,30 @@ function describe(command: ProjectCommand): string {
 }
 
 interface CommandListProps {
-  /** Whose commands these are; null when no project is open. */
+  /** null when no project is open. */
   projectId: string | null;
-  /** Dragged on the sash above the list. */
+  /** Set by the sash above the list. */
   height: number;
-  /** The tab a started command opened, brought to the front in the pane the command last ran in
-      — hence the command line travelling along. */
+  /** Brings a started command's tab to front in the pane the command last ran in — hence the
+      command line. */
   onOpenTab: (projectId: string, tabId: string, command?: string) => void;
 }
 
-/** A project's saved shell commands, from a tet.json in the repository's own root, so they
- *  belong to the project rather than to this machine. Running one opens a terminal tab. */
+/** A project's saved commands, from tet.json in the repository root, so they travel with the
+ *  project. Running one opens a terminal tab. */
 export const CommandList = memo(function CommandList({ projectId, height, onOpenTab }: CommandListProps) {
   const [commands, setCommands] = useState<ProjectCommand[]>([]);
   const [menu, setMenu] = useState<{ x: number; y: number; command: ProjectCommand } | null>(null);
-  /** The list as it stands now, for callbacks that were made before the last change to it. */
+  /** The current list, for callbacks created before its last change. */
   const latest = useRef<ProjectCommand[]>([]);
-  /** The project the list on screen belongs to now, for the same callbacks. */
+  /** The project currently shown, for the same callbacks. */
   const shownProject = useRef(projectId);
 
   const { rowProps, listProps, rowClasses } = useDragReorder({
     dragType: DRAG_TYPE,
     count: commands.length,
-    // The row's position, not its command: the same command can be in the list twice, once per
-    // folder it runs in, and the rows hold no state of their own.
+    // The position, not the command: a command can appear twice (once per folder), and rows hold
+    // no state.
     payloadOf: String,
     indexOf: Number,
     onMove: (from, to) => save(reorder(commands, from, to))
@@ -98,7 +98,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       }
       applyCommands(saved);
     });
-    // The file is the record and changes without this list, so every change is read again.
+    // The file is the record and changes outside this list, so every change is re-read.
     const unsubscribe = window.tet.commands.onChanged((payload) => {
       if (payload.projectId !== projectId) {
         return;
@@ -115,17 +115,16 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     };
   }, [projectId]);
 
-  /** Every change goes through here, computed from `latest` rather than the `commands` a callback
-   *  closed over: a dialog is awaited, and the file can change while one stands open. */
+  /** Every change goes through here; callers compute from `latest`, not a closed-over `commands`,
+   *  since the file can change while a dialog is open. */
   const applyCommands = (next: ProjectCommand[]): void => {
     latest.current = next;
     setCommands(next);
   };
 
-  /** The list is written whole; the file is the record, this is only what is on screen. */
+  /** Writes the list whole. */
   const save = (next: ProjectCommand[]): void => {
-    // A dialog answered after the shown project changed: `next` was built from the other
-    // project's list, and would replace this one's tet.json with it.
+    // A dialog answered after the project changed built `next` from the other project's list.
     if (!projectId || projectId !== shownProject.current) {
       return;
     }
@@ -154,14 +153,14 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     }
   };
 
-  /** Where the command sits in the latest list. By identity when it can be: a re-read of the file
-   *  replaces every object while a dialog stands, so the row is then found by what it says. */
+  /** The command's index in the latest list: by identity, else by content, since a re-read while a
+   *  dialog is open replaces every object. */
   const indexOf = (command: ProjectCommand): number => {
     const exact = latest.current.indexOf(command);
     return exact !== -1 ? exact : latest.current.findIndex((entry) => isSameCommand(entry, command));
   };
 
-  /** The same dialog as `askAdd`, opened with what the command already says. */
+  /** `askAdd`'s dialog, prefilled. */
   const askEdit = async (command: ProjectCommand): Promise<void> => {
     const answer = await prompt({
       title: "Edit command",
@@ -182,7 +181,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     }
     const current = latest.current;
     const index = indexOf(command);
-    // Gone from the list while the dialog stood: writing it back would put it there again.
+    // Removed while the dialog was open: writing it back would resurrect it.
     if (index === -1) {
       return;
     }
@@ -204,7 +203,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     }
   };
 
-  /** Opens the tab the command runs in and switches to it; the tab is where it is watched. */
+  /** Opens the command's tab and switches to it. */
   const run = (command: ProjectCommand): void => {
     if (!projectId) {
       return;
@@ -238,7 +237,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       <div className="command-list" {...listProps}>
         {commands.map((command, index) => (
           <div
-            // The position, not the command — see the hook's payload above.
+            // The position, as in the hook's payload above.
             key={index}
             className={["command-item", ...rowClasses(index)].join(" ")}
             title={describe(command)}
@@ -248,11 +247,10 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
               setMenu({ x: event.clientX, y: event.clientY, command });
             }}
           >
-            {/* Its name where it has one; the line itself is a tooltip away. */}
+            {/* Its name if any; the line is in the tooltip. */}
             <span className="command-main">
               <span className="command-label">{command.name ?? command.command}</span>
-              {/* `env` is shown on unnamed rows only — it changes what the command does; the
-                  folder does not. */}
+              {/* `env` on unnamed rows only: it changes what the command does, the folder does not. */}
               {!command.name && formatEnv(command.env) && (
                 <span className="command-extra">({formatEnv(command.env)})</span>
               )}

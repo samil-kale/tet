@@ -36,9 +36,8 @@ import { canDiscardEdit, disposeEditor, editorContent, openEditorFile, setEditor
 /** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const SIDE_PANE_SLIDE_MS = 180;
 
-/** What an open file has to be re-read for: HEAD — the branch and the commit it is at, so a pull or
- *  a reset moving it is one too — the status of the file it shows, and a write to it on disk
- *  (`writes`), which leaves a file already modified at the same status. */
+/** What an open file is re-read for: HEAD's branch and commit (so a pull or reset counts), the
+ *  file's status, and a write on disk (`writes`), which leaves a modified file's status unchanged. */
 function diffVersion(state: RepositoryState | undefined, filePath: string, writes: number | undefined): string {
   return `${state?.head}:${state?.headCommit}:${state?.changes.find((change) => change.path === filePath)?.status}:${writes ?? 0}`;
 }
@@ -47,43 +46,39 @@ function diffVersion(state: RepositoryState | undefined, filePath: string, write
 const NO_IDS: string[] = [];
 const DEFAULT_LAYOUT = defaultLayout();
 
-/** When App's current render began — read by the layout effect at the top of App. */
 let renderStartedAt = 0;
 
 export function App() {
   renderStartedAt = performance.now();
-  // From App's render to its commit: the whole tree that re-rendered with it, which is what a
-  // state change here costs (React's Profiler reports nothing in a production build). A subtree
-  // re-rendering on its own is not seen.
+  // App's render to commit: what a state change here costs across the tree (React's Profiler is
+  // silent in production). A subtree re-rendering alone is not seen.
   useLayoutEffect(() => {
     reportSlow("render", performance.now() - renderStartedAt);
   });
   const [projects, setProjects] = useState<Project[]>([]);
-  /** The list as it stands after an await: the control channel can add a project meanwhile. */
+  /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
-  /** Every project's terminal tabs, held here because the project list needs all of them at once. */
+  /** Every project's tabs: the project list needs all of them at once. */
   const [tabs, setTabs] = useState<Record<string, TerminalDescriptor[]>>({});
   /**
-   * For the layout callbacks that only read it on a click: depending on `tabs` would remake them,
-   * and every pane's props, on every push from any project.
+   * For callbacks that read it only on a click: depending on `tabs` would remake them, and every
+   * pane's props, on every push.
    */
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
-  /** Each project's editor tab, once a file is open — renderer-only, see `editor-tab.ts`. */
+  /** Renderer-only, see `editor-tab.ts`. */
   const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab>>({});
   const editorTabsRef = useRef(editorTabs);
   editorTabsRef.current = editorTabs;
-  /** Per project, how often the file its editor tab shows was written on disk — see diffVersion. */
+  /** Per project, disk writes to the editor tab's file — see diffVersion. */
   const [fileWrites, setFileWrites] = useState<Record<string, number>>({});
   /**
-   * What each project's tab strip holds: its terminals, and its editor tab last. What the layout
-   * is reconciled against, what the panes draw and what next/previous tab step through; the marks
-   * and `seen` stay on `tabs`, the editor tab having no turns. The same list as `tabs` for a project
-   * with no file open, so the panes' props keep their identity; for one with a file open, the
-   * previous list while neither its terminals nor its editor tab changed.
+   * Each project's tab strip: its terminals, then its editor tab. The layout reconciles against it,
+   * panes draw it, next/previous step through it; marks and `seen` stay on `tabs` (the editor has no
+   * turns). Identity: `tabs`' own list without a file open, else the previous list while unchanged.
    */
   const stripTabsRef = useRef<Record<string, PaneTab[]>>({});
   const stripTabs = useMemo(() => {
@@ -95,27 +90,24 @@ export function App() {
     return next;
   }, [tabs, editorTabs]);
   /**
-   * Which projects still have something starting up (bootstrap listing, a CLI booting). Read by
-   * the active project's progress bar and by the layout persistence.
+   * Projects with something starting (bootstrap listing, a CLI booting). Read by the progress bar
+   * and the layout persistence.
    */
   const [starting, setStarting] = useState<Record<string, boolean>>({});
   /**
-   * Each project's split state, held here rather than in `TerminalsPane` because the shortcuts and
-   * the marks/seen logic need what is on screen across every pane — see "Split view" in CLAUDE.md.
+   * Split state lives here, not in `TerminalsPane`: shortcuts and marks/seen need what is on screen
+   * across every pane — see "Split view" in CLAUDE.md.
    */
   const { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout } = useProjectLayouts(
     stripTabs,
     starting
   );
-  /**
-   * Projects with a branch command in flight. Per project, not one slot for the window: a fetch
-   * finishing in A must not free B's tree.
-   */
+  /** Projects with a branch command in flight — per project: a fetch ending in A must not free B. */
   const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
-  /** The same, read synchronously: a second double-click can land before a re-render does. */
+  /** Read synchronously: a second double-click can land before a re-render. */
   const branchActionsRef = useRef(new Set<string>());
-  // Defaults and limits of the draggable panes; the one side pane shares the two below, whichever
-  // view it shows (the width keeps its key from when it held git alone).
+  // Pane defaults and limits; both side-pane views share the two below ("git-panels" predates the
+  // files view).
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
   const [sidePaneWidth, setSidePaneWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
@@ -126,24 +118,23 @@ export function App() {
     MIN_PANE_HEIGHT
   );
   /**
-   * Whether the side pane is out, and whether it shows the files rather than the repository —
-   * remembered like a pane size. Two views of one pane, never both (VS Code's Explorer and Source
-   * Control in one sidebar); `open` keeps its key from when the pane held git alone.
+   * Whether the side pane is out, and whether it shows files instead of git — remembered like a
+   * pane size. One view at a time, as VS Code's Explorer and Source Control ("git-pane" predates
+   * the files view).
    */
   const [sidePaneOpen, setSidePaneOpen] = usePaneToggle("git-pane", false);
   const [filesShown, setFilesShown] = usePaneToggle("side-pane-files", false);
   const sideView: SideView | null = sidePaneOpen ? (filesShown ? "files" : "git") : null;
   /**
    * `sideMounted` keeps the pane in the DOM through the closing transition; `sideExpanded` drives
-   * the width transition. Two nested rAFs before expanding: one alone fires before the 0-width
-   * paint as often as after it (observed), which jumped straight to full width. A switch between
-   * the two views while the pane is out slides nothing.
+   * the width. Two nested rAFs before expanding: one alone often fires before the 0-width paint
+   * (observed), skipping the slide. Switching views while out slides nothing.
    */
   const [sideMounted, setSideMounted] = useState(sidePaneOpen);
   const [sideExpanded, setSideExpanded] = useState(sidePaneOpen);
   /**
-   * Whether the slide is running, which is what `.side-pane.sliding` transitions on. Not permanent:
-   * the sash sets the same width, and an animated one lags the pointer by the whole duration.
+   * Gates `.side-pane.sliding`'s transition to the slide alone: the sash sets the same width, and an
+   * animated one would lag the pointer.
    */
   const [sideSliding, setSideSliding] = useState(false);
   useEffect(() => {
@@ -171,7 +162,7 @@ export function App() {
     }, SIDE_PANE_SLIDE_MS);
     return () => clearTimeout(stop);
   }, [sidePaneOpen]);
-  /** A view's button: shows that view, or slides the pane in when it is the one already out. */
+  /** Shows that view, or slides the pane in when that view is already out. */
   const toggleSideView = useCallback(
     (view: SideView) => {
       if (sideView === view) {
@@ -183,16 +174,13 @@ export function App() {
     },
     [sideView, setFilesShown, setSidePaneOpen]
   );
-  /** Whether the add-repository dialog (clone, add, create) is up. */
   const [addOpen, setAddOpen] = useState(false);
-  /** Whether the settings are up; they belong to the window, not to a project. */
+  /** Window-wide, not per project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
-  /** The project the "SBX Settings" dialog is up for, if any. */
   const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
   /**
-   * Which projects run their agents in an sbx sandbox — the `sbx.enabled` of each repository's
-   * tet.json, by identity only where the answer changed (the memoized list re-renders otherwise).
-   * Any writer of that file (dialog, agent, editor, checkout) arrives as `commands:changed`.
+   * Each tet.json's `sbx.enabled`, replaced only where it changed (the memoized list re-renders
+   * otherwise). Any writer of that file (dialog, agent, editor, checkout) arrives as `commands:changed`.
    */
   const [sandboxed, setSandboxed] = useState<Record<string, boolean>>({});
 
@@ -204,11 +192,9 @@ export function App() {
       window.tet.terminals.onTabs(({ projectId, tabs: list }) =>
         setTabs((current) => ({ ...current, [projectId]: list }))
       ),
-      // A status arrives alone, not as a list: patch the one tab it names.
       window.tet.terminals.onStatus(({ projectId, tabId, status }) => {
-      // A saved command's restart kills the process first, and the kill writes a trailing "^C";
-      // clearing once the respawned process runs keeps that off screen (the old output has
-      // arrived by then, the new one's has not).
+      // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
+      // it off screen (the old output has arrived by then, the new one's has not).
         if (status === "running" && tabsRef.current[projectId]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
           clearTerminal(projectId, tabId);
         }
@@ -238,7 +224,7 @@ export function App() {
           return [project.id, state, list, isStarting] as const;
         })
       );
-      // Pushes that landed while this was in flight are newer than what was fetched.
+      // Pushes that landed meanwhile are newer than what was fetched.
       setStates((current) => ({
         ...Object.fromEntries(loaded.map(([id, state]) => [id, state])),
         ...current
@@ -258,9 +244,8 @@ export function App() {
     []
   );
 
-  /** What the add-repository dialog ends in, whichever tab produced the project. A machine with no
-   *  agent on it can only run this project in a sandbox, so its sbx settings open right away —
-   *  locked, the dialog deriving that from the same question (see SbxSettingsDialog). */
+  /** The add-repository dialog's result. With no agent installed the project can only run
+   *  sandboxed, so its sbx settings open at once — locked (see SbxSettingsDialog). */
   const projectAdded = useCallback((project: Project) => {
     setProjects((current) => (current.some((entry) => entry.id === project.id) ? current : [...current, project]));
     setActiveProjectId(project.id);
@@ -271,7 +256,7 @@ export function App() {
     });
   }, []);
 
-  /** Everything held for a project, let go of; the project list itself is the caller's. */
+  /** Drops everything held for a project; the project list is the caller's. */
   const forgetProject = useCallback((projectId: string) => {
     setStates((current) => forget(current, projectId));
     setTabs((current) => forget(current, projectId));
@@ -281,7 +266,7 @@ export function App() {
     disposeEditor(projectId);
     forgetLayout(projectId);
     busyCursor.current = forget(busyCursor.current, projectId);
-    // The xterm instances live outside React; this is the one moment a project ends for good.
+    // The xterms live outside React; this is where a project ends for good.
     disposeProjectTerminals(projectId);
   }, [forgetLayout]);
 
@@ -300,7 +285,7 @@ export function App() {
   );
 
   // The control channel opened or closed a project: the same paths as the dialog's add and the
-  // row's close, with the list handed over.
+  // row's close.
   useEffect(
     () =>
       window.tet.projects.onChanged(({ projects: list, added, removed }) => {
@@ -323,8 +308,7 @@ export function App() {
     );
   }, []);
 
-  // One tet.json write is one `commands:changed`, whichever half changed; the saved commands
-  // read the same event.
+  // Every tet.json write is one `commands:changed`, shared with the saved commands.
   useEffect(() => {
     for (const project of projects) {
       void readSandboxed(project.id);
@@ -337,16 +321,12 @@ export function App() {
     void window.tet.projects.reorder(ordered.map((project) => project.id));
   }, []);
 
-  /**
-   * One branch command per project at a time: a second click mid-switch would stack two
-   * `git switch` on one repository. Per project: two repositories working at once is no conflict.
-   */
+  /** One branch command per project at a time: a second click mid-switch would stack two `git switch`. */
   const runBranchAction = useCallback(
     async (projectId: string, label: string, action: () => Promise<GitActionResult>) => {
       if (branchActionsRef.current.has(projectId)) {
         return;
       }
-      // Which project is working, not just that one is: the active project may not be the busy one.
       branchActionsRef.current.add(projectId);
       setBranchActions(new Set(branchActionsRef.current));
       try {
@@ -362,7 +342,7 @@ export function App() {
     []
   );
 
-  /** Shows a tab opened from outside its own pane, bringing its project to the front first. */
+  /** Shows a tab opened from outside its pane, bringing its project to front. */
   const showTab = useCallback(
     (projectId: string, tabId: string, command?: string) => {
       setActiveProjectId(projectId);
@@ -371,7 +351,7 @@ export function App() {
     [placeTab]
   );
 
-  // A tab the control channel opened, shown like a saved command's: drawing it starts its process.
+  // A control-channel tab, shown like a saved command's: drawing it starts its process.
   useEffect(() => window.tet.terminals.onShow(({ projectId, tabId }) => showTab(projectId, tabId)), [showTab]);
 
   const [focused, setFocused] = useState(() => document.hasFocus());
@@ -388,9 +368,8 @@ export function App() {
   const covered = useWindowCovered();
 
   /**
-   * The active project's tabs in front of the user (`tabsInFront`). The one definition the marks,
-   * `seen` and the toasts (`terminals.inFront`) all go by; identity-stable, since it is reported
-   * on change.
+   * The active project's tabs in front of the user (`tabsInFront`) — the one definition marks,
+   * `seen` and toasts (`terminals.inFront`) go by. Identity-stable: it is reported on change.
    */
   const inFrontRef = useRef<string[]>(NO_IDS);
   const inFront = useMemo(() => {
@@ -399,16 +378,16 @@ export function App() {
     return inFrontRef.current;
   }, [focused, covered, activeProjectId, layouts]);
 
-  // May name the editor tab, which the main process never matches against a tab of its own.
+  // May include the editor tab, which matches no tab in the main process.
   useEffect(() => {
     window.tet.terminals.inFront(activeProjectId, inFront);
   }, [activeProjectId, inFront]);
 
   /**
-   * Finished and waiting sessions not in front of the user, oldest first — the tab strip's marks,
-   * and what the project row's marks step through. Leaves out the tabs in front: a turn that
-   * finished or a question asked there was never out of sight. Decided here, once: the main process
-   * holds the mark but cannot know what is on screen, and two views must not each decide.
+   * Finished or waiting sessions not in front of the user, oldest first — the tab strip's marks and
+   * what the project row steps through. Tabs in front are left out: nothing there was out of sight.
+   * Decided here, once: main holds the mark but cannot see the screen, and two views must not each
+   * decide.
    */
   const markedTabs = useCallback(
     (projectId: string, field: "finishedAt" | "waitingAt"): TerminalDescriptor[] => {
@@ -421,9 +400,8 @@ export function App() {
   );
 
   /**
-   * Sessions whose own tab is what the progress bar is about — a runtime being prepared, a CLI
-   * not yet past its first frame. The tab on screen is not excluded: the bar is about the pane's
-   * own tabs, wherever the pane is.
+   * Tabs the progress bar is about — runtime being prepared, CLI before its first frame. Tabs on
+   * screen included: the bar is about the pane's own tabs.
    */
   const startingTabs = useCallback(
     (projectId: string): TerminalDescriptor[] => (tabs[projectId] ?? []).filter((tab) => tab.starting === true),
@@ -431,11 +409,10 @@ export function App() {
   );
 
   /**
-   * The three above as tab ids plus `busy` (see `ProjectMarks`), per project, identity-stable
-   * where the answer is unchanged: panes and the project list take these as props, and most pushes
-   * (a spinner tick) change nothing here. `busy` keeps the tab on screen (a spinner says what is
-   * happening now, wherever the tab is) but excludes a tab waiting on a question: that session is
-   * not working, and the two marks would otherwise stand side by side.
+   * The above as tab ids plus `busy` (`ProjectMarks`), per project, identity-stable where unchanged:
+   * panes and the project list take them as props, and most pushes change nothing here. `busy`
+   * includes the tab on screen (a spinner is about now) but not one waiting on a question: that
+   * session is not working, and both marks would stand side by side.
    */
   const marksRef = useRef<Record<string, ProjectMarks>>({});
   const marks = useMemo(() => {
@@ -467,9 +444,8 @@ export function App() {
   }, [tabs, markedTabs, startingTabs]);
 
   /**
-   * The project row's HEAD, first remote and dirty flag, identity-stable where unchanged: `states`
-   * is a fresh record on every push. Costs no git call of its own (`changes` is part of every
-   * refresh).
+   * The project row's HEAD, first remote and dirty flag, identity-stable where unchanged (`states`
+   * is fresh on every push). No git call of its own: `changes` comes with every refresh.
    */
   const headsRef = useRef<Record<string, ProjectHead>>({});
   const heads = useMemo(() => {
@@ -497,12 +473,11 @@ export function App() {
   }, [states]);
 
   /**
-   * The project row's spinner: the working sessions, one per press. Watching a session does not
-   * stop it working, so this remembers where it left off. A ref: it changes what the next press
-   * does, nothing on screen.
+   * The project row's spinner steps through working sessions, one per press. Viewing one does not
+   * stop it, so the position is remembered — in a ref, since nothing on screen depends on it.
    *
-   * These three read `tabsRef`/`marksRef` rather than depending on `tabs`: a dependency would
-   * remake them, and the project list, on every push.
+   * These three read `tabsRef`/`marksRef`, not `tabs`: a dependency would remake them, and the
+   * project list, on every push.
    */
   const busyCursor = useRef<Record<string, string>>({});
   const showBusy = useCallback(
@@ -511,7 +486,7 @@ export function App() {
       if (working.length === 0) {
         return;
       }
-      // -1 when the last shown tab has since stopped or gone; the next index wraps.
+      // -1 when the last shown tab stopped or is gone; the index wraps.
       const at = working.findIndex((tab) => tab.tabId === busyCursor.current[projectId]);
       const next = working[(at + 1) % working.length];
       busyCursor.current[projectId] = next.tabId;
@@ -520,7 +495,7 @@ export function App() {
     [showTab]
   );
 
-  /** The project row's mark: the session that finished first, then the next one. */
+  /** The project row's mark: the oldest finished session first. */
   const showFinished = useCallback(
     (projectId: string) => {
       const next = marksRef.current[projectId]?.finished[0];
@@ -531,7 +506,7 @@ export function App() {
     [showTab]
   );
 
-  /** The same, for the session that has been waiting on an answer the longest. */
+  /** The same, for the longest-waiting question. */
   const showWaiting = useCallback(
     (projectId: string) => {
       const next = marksRef.current[projectId]?.waiting[0];
@@ -543,11 +518,10 @@ export function App() {
   );
 
   /**
-   * Every tab in front of the user (`inFront`) has been seen, so its mark goes — a turn that
-   * finished behind a dialog or while another window was in front keeps its bubble until the user
-   * is back. The main process holds the mark but never learns what is on screen. Only the bubble: a
-   * standing question is hidden while in front (`markedTabs`), not cleared, so reporting it would
-   * be an IPC per push.
+   * Tabs in front (`inFront`) count as seen, so their finished mark clears — behind a dialog or
+   * another window it stays until the user is back. Main holds the mark but cannot see the screen.
+   * Only the bubble: a question is hidden while in front (`markedTabs`), not cleared, and reporting
+   * it would cost an IPC per push.
    */
   useEffect(() => {
     if (!activeProjectId) {
@@ -560,7 +534,7 @@ export function App() {
     }
   }, [activeProjectId, inFront, tabs]);
 
-  /** Opens a shell tab in that project, which is what a project row offers as "terminal". */
+  /** A shell tab — the project row's "terminal". */
   const openTerminal = useCallback(
     (projectId: string) => {
       void window.tet.terminals.create(projectId, "shell").then((tab) => showTab(projectId, tab.tabId));
@@ -569,11 +543,11 @@ export function App() {
   );
 
   /**
-   * Ctrl/Cmd+Shift+U: across every project, the session waiting on a question the longest, else
-   * the one that finished out of sight first — so a project nobody clicked into is not missed.
+   * Ctrl/Cmd+Shift+U, across all projects: the longest-waiting question, else the oldest finished
+   * turn out of sight — so an unvisited project is not missed.
    */
   const showNeedsAttention = useCallback(() => {
-    // Through `markedTabs`, so the "not the tab on screen" rule stays in one place.
+    // Through `markedTabs`, so the "not on screen" rule stays in one place.
     const collect = (field: "waitingAt" | "finishedAt"): { projectId: string; tab: TerminalDescriptor }[] =>
       Object.keys(tabs)
         .flatMap((projectId) => markedTabs(projectId, field).map((tab) => ({ projectId, tab })))
@@ -584,7 +558,7 @@ export function App() {
     }
   }, [tabs, markedTabs, showTab]);
 
-  /** Ctrl/Cmd+Shift+./, — the focused pane's own tabs, one over. */
+  /** Ctrl/Cmd+Shift+./, — within the focused pane. */
   const cycleTab = useCallback(
     (direction: 1 | -1) => {
       if (!activeProjectId) {
@@ -602,7 +576,7 @@ export function App() {
     [activeProjectId, stripTabs, layouts, activateTab]
   );
 
-  /** Ctrl/Cmd+Shift+T — a shell tab in the project on screen. */
+  /** Ctrl/Cmd+Shift+T. */
   const newShellTab = useCallback(() => {
     if (activeProjectId) {
       openTerminal(activeProjectId);
@@ -610,8 +584,8 @@ export function App() {
   }, [activeProjectId, openTerminal]);
 
   /**
-   * Refresh on window focus: when a change the watcher missed would show. Only the project on
-   * screen — every open one would cost three git processes each for a state nobody reads.
+   * Refresh on window focus, for changes the watcher missed. Only the project on screen — each
+   * other would cost three git processes for a state nobody reads.
    */
   useEffect(() => {
     if (!activeProjectId) {
@@ -625,12 +599,10 @@ export function App() {
   }, [activeProjectId]);
 
   /**
-   * The window's shortcuts, on `document` in the capture phase, so they win against xterm's own
-   * listener on its textarea further down the tree. Every `matchesShortcut` combination is one
-   * xterm never encodes — see `shortcuts.ts`.
+   * The window's shortcuts, on `document` in the capture phase to beat xterm's textarea listener.
+   * xterm never encodes any of them — see `shortcuts.ts`.
    */
-  // Actions in a ref: `showNeedsAttention` and `cycleTab` are remade on every tab push, and the
-  // listener is registered once.
+  // A ref: the actions are remade on every tab push, the listener is registered once.
   const shortcutActions = useRef({ toggleSideView, showNeedsAttention, cycleTab, newShellTab });
   shortcutActions.current = { toggleSideView, showNeedsAttention, cycleTab, newShellTab };
   useEffect(() => {
@@ -665,7 +637,7 @@ export function App() {
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
   const activeState = (activeProjectId ? states[activeProjectId] : undefined) ?? EMPTY_REPOSITORY_STATE;
 
-  // Stable handles, so a memoized view re-renders for a change in what it shows only.
+  // Stable handles, so memoized views re-render only for what they show.
   const closeProjectSync = useCallback((projectId: string) => void closeProject(projectId), [closeProject]);
   const openAdd = useCallback(() => setAddOpen(true), []);
   const closeAdd = useCallback(() => setAddOpen(false), []);
@@ -679,8 +651,8 @@ export function App() {
   const toggleGit = useCallback(() => toggleSideView("git"), [toggleSideView]);
   const toggleFiles = useCallback(() => toggleSideView("files"), [toggleSideView]);
   /**
-   * The project row's git mark: switches to that project and slides the repository out. On the
-   * project already on screen it is the same toggle as the one in the terminal strip.
+   * The project row's git mark: switches to the project and slides git out; on the shown project,
+   * the strip's toggle.
    */
   const showChanges = useCallback(
     (projectId: string) => {
@@ -695,9 +667,9 @@ export function App() {
     [activeProjectId, toggleSideView, setFilesShown, setSidePaneOpen]
   );
   /**
-   * Shows a file in the project's editor tab, which the next file reuses. The editor is told
-   * before the tab is drawn, since the tab attaches what it made; the tab is activated ahead of
-   * its own appearance in `stripTabs`, the way a new terminal tab is.
+   * Shows a file in the project's reused editor tab. The editor is told before the tab draws, since
+   * the tab attaches what it made; the tab is activated before it appears in `stripTabs`, as a new
+   * terminal tab is.
    */
   const openDiff = useCallback(
     async (projectId: string, path: string) => {
@@ -713,7 +685,7 @@ export function App() {
     [activateTab]
   );
   const openDiffSync = useCallback((projectId: string, path: string) => void openDiff(projectId, path), [openDiff]);
-  // A file the control channel asked for, in front like a tab it opened.
+  // A file the control channel asked for, brought to front.
   useEffect(
     () =>
       window.tet.repository.onOpenEditor(({ projectId, path }) => {
@@ -731,7 +703,7 @@ export function App() {
     },
     [activeProjectId, openDiff]
   );
-  /** Closing the tab lets go of its editor; the layout collapses a pane it leaves empty. */
+  /** Disposes the editor; the layout collapses a pane left empty. */
   const closeEditor = useCallback((projectId: string) => {
     void canDiscardEdit(projectId).then((discard) => {
       if (discard) {
@@ -740,7 +712,7 @@ export function App() {
       }
     });
   }, []);
-  // Which file each project's editor tab shows, for the watcher to report writes to (onFileChanged).
+  // Each editor tab's file, whose writes the watcher reports (onFileChanged).
   const watchedFiles = useRef<Record<string, string>>({});
   useEffect(() => {
     const previous = watchedFiles.current;
@@ -766,9 +738,8 @@ export function App() {
       }),
     []
   );
-  // Folds a change of HEAD, of the file's status or of the file on disk into the open file — not on
-  // every push: a reload reads and colours the whole diff again, hundreds of milliseconds for a long
-  // file. The editor compares against the version it last had.
+  // Reloads the open file only when its diffVersion changes, not on every push: a reload re-reads
+  // and recolours the whole diff, hundreds of ms for a long file.
   useEffect(() => {
     for (const { projectId, path } of Object.values(editorTabs)) {
       setEditorVersion(projectId, diffVersion(states[projectId], path, fileWrites[projectId]));
@@ -782,7 +753,7 @@ export function App() {
     },
     [activeProjectId, runBranchAction]
   );
-  /** What the git pane may start, in the shape its views take it — for the project on screen. */
+  /** The git pane's actions, for the project on screen. */
   const activeBranch = useMemo<BranchActions>(
     () => ({ busy: activeProjectId !== null && branchActions.has(activeProjectId), run: runActiveBranchAction }),
     [branchActions, activeProjectId, runActiveBranchAction]
@@ -790,14 +761,13 @@ export function App() {
 
   return (
     <div className="app">
-      {/* The app name; the bar is the drag region and the window controls' space. */}
+      {/* The drag region and the window controls' space. */}
       <div className="titlebar">
         <img className="titlebar-icon" src="icon.png" alt="" />
         <span className="titlebar-name">TET</span>
       </div>
 
       <div className="body">
-        {/* Projects on top, the selected one's saved commands below them. */}
         <div className="sidebar" style={{ width: sidebarWidth }}>
           <ProjectList
             projects={projects}
@@ -834,10 +804,8 @@ export function App() {
           onResize={setSidebarWidth}
         />
 
-        {/* The active project's repository or its files, one view at a time. One pane for all
-            projects. Both views stay mounted while it is out, the other one hidden, so a switch
-            between them keeps a selection, a filter, the open folders and a running action's bar.
-            While it slides in, it keeps the view it had. */}
+        {/* One side pane for all projects. Both views stay mounted while it is out, one hidden, so
+            a switch keeps selection, filter, open folders and a running action's bar. */}
         {sideMounted && activeProject && (
           <>
             <div
@@ -884,8 +852,7 @@ export function App() {
               sideView={sideView}
               onToggleGit={toggleGit}
               onToggleFiles={toggleFiles}
-              // Only the bootstrap listing, which has no tab to point a pane at; once a tab is
-              // what is starting, `startingTabIds` shows it.
+              // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
               onOpenDiff={openDiffSync}
               onCloseEditor={closeEditor}

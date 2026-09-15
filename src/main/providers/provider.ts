@@ -1,24 +1,23 @@
 import { net } from "electron";
 import type { RemoteRepository } from "../../shared/types";
 
-/** What a repository host offers tet: authenticate and list repositories, with the clone url in the
- *  listing. Everything past the clone goes through the local git CLI; no provider touches a tree. */
+/** A repository host: authenticate and list repositories with their clone url. Everything past the
+ *  clone goes through the local git CLI. */
 export interface GitProvider {
-  /** Checks the token against the host and answers the login it belongs to. */
+  /** Checks the token against the host and returns its login. */
   validate(host: string, token: string): Promise<string>;
   /** Every repository the token's user can reach, most recently active first. */
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
 }
 
-/** Pages are followed through the RFC 5988 `Link` header, which GitHub and GitLab both send; the
- *  cap bounds an account that can reach thousands of repositories. */
+/** Pages follow the RFC 5988 `Link` header both hosts send; the cap bounds an account reaching
+ *  thousands of repositories. */
 const PAGE_CAP = 10;
 
 /**
- * One GET; a non-2xx status becomes an Error carrying what the API said. `net.fetch`, never the
- * global one: it goes through Chromium, so the machine's proxy settings and its certificate store
- * apply. Node's own stack knows neither, and behind a company proxy or a private root certificate
- * every listing would fail with nothing the user could configure.
+ * One GET; a non-2xx status throws with what the API said. `net.fetch`, never the global fetch: only
+ * Chromium's stack applies the machine's proxy settings and certificate store, so a company proxy or
+ * private root certificate works.
  */
 async function fetchOk(url: string, headers: Record<string, string>): Promise<Response> {
   const response = await net.fetch(url, { headers });
@@ -34,9 +33,8 @@ export async function getJson(url: string, headers: Record<string, string>): Pro
 }
 
 /**
- * Every page of a listing, up to the cap. Both hosts send `rel="last"` alongside `rel="next"`, so
- * the rest are fetched at once — a page costs about a second, and waiting for each to name the next
- * spends that many seconds in a row. Without a `rel="last"` it follows `rel="next"` instead.
+ * Every page of a listing, up to the cap. With `rel="last"` the rest are fetched in parallel — a
+ * page costs about a second, and following `rel="next"` one by one adds that up. Else `rel="next"`.
  */
 export async function getPaged(first: string, headers: Record<string, string>): Promise<unknown[]> {
   const response = await fetchOk(first, headers);
@@ -66,7 +64,7 @@ export async function getPaged(first: string, headers: Record<string, string>): 
   return items;
 }
 
-/** An array body as itself; anything else — an object where a list was expected — as nothing. */
+/** A body that is not an array counts as empty. */
 function arrayBody(body: unknown): unknown[] {
   return Array.isArray(body) ? body : [];
 }
@@ -76,13 +74,12 @@ function relLink(header: string | null, rel: string): string | undefined {
   return match?.[1];
 }
 
-/** The `page` a paging url carries; both hosts number their pages with that one parameter. */
+/** The url's `page` parameter, which both hosts page by. */
 function pageOf(url: string): number | undefined {
   const value = Number(new URL(url).searchParams.get("page"));
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-/** The same url with its page replaced; the rest of the query is carried along. */
 function withPage(url: string, page: number): string {
   const next = new URL(url);
   next.searchParams.set("page", String(page));
@@ -98,7 +95,7 @@ async function apiError(response: Response): Promise<string> {
       return `${body.message} (${status})`;
     }
   } catch {
-    // Not JSON — a proxy's error page, say. The status line is all there is.
+    // Not JSON, e.g. a proxy's error page.
   }
   return status;
 }

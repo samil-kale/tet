@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import type { AgentInfo } from "../../shared/types";
 
 /**
- * Asked once for the window, not once per view: the list is a fact about the process (the agents
- * and their measured flags, see `AgentInfo`) and cannot change while it runs, and a
- * `TerminalHost` cannot attach until its pane's copy has landed.
+ * Asked once per window, not per view: the list (agents and their measured flags, `AgentInfo`)
+ * cannot change while the process runs, and a `TerminalHost` cannot attach until it has landed.
  */
 let agentsPromise: Promise<AgentInfo[]> | undefined;
 let agentsList: AgentInfo[] = [];

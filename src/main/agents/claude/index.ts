@@ -35,11 +35,11 @@ export const claudeAgent: AgentDefinition = {
   },
   // See AgentDefinition.sandboxEnv.
   sandboxEnv: ["CLAUDE_CODE_NO_FLICKER=1"],
-  // Measured: the startup handshake is under 150 bytes, the main UI redraw one ~850-byte
-  // chunk; 500 reveals as that chunk lands. A higher threshold is not reliably reached.
+  // Measured: the startup handshake is under 150 bytes, the main UI one ~850-byte chunk; a higher
+  // threshold than 500 is not reliably reached.
   createIsSessionReady: () => createByteThresholdCheck(500),
   // The first only offers to exit, the second takes it up.
   quitPresses: 2,
-  // Its Ink TUI handles the right click itself (it pastes).
+  // Its Ink TUI takes the right click (it pastes).
   takesRightMouse: true
 };

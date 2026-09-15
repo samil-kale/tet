@@ -1,11 +1,10 @@
 import * as path from "node:path";
 
 /**
- * Everything an agent tab of tet's own reads or writes about a project — each agent's generated
- * setup and records (agentDir) and the shell context — lives under one folder of tet's data folder
- * (data-root.ts), apart from what a sandbox must never see (settings, provider tokens). An
- * organization governing sbx then allows tet's data with one filesystem rule for this folder
- * (sbx.ts's readSbxBlockers), not for all of `~/.tet`.
+ * Everything an agent tab reads or writes about a project (agentDir, the shell context) lives in
+ * one folder of tet's data folder (data-root.ts), apart from what a sandbox must never see
+ * (settings, provider tokens) — so an organization governing sbx allows it with one filesystem
+ * rule (sbx.ts's readSbxBlockers), not all of `~/.tet`.
  */
 export function agentDataDir(storageRoot: string): string {
   return path.join(storageRoot, "agent-data");

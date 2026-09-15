@@ -6,19 +6,17 @@ import { runOpencode } from "./cli";
 import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
 
 /**
- * opencode keeps its sessions in one SQLite database per machine, which nothing here reads: the
- * listing is the records the generated plugin writes into tet's own agentDir (plugin.ts's
- * SessionRecord), one file per root session, host and sandboxed alike. There is no on-disk
- * session format to read or watch instead, and `opencode session list` boots a full instance per
- * call (~1.5 s measured, writing to the database each time) — anomalyco/opencode#37435. That is
- * what the one-off actions below pay and a listing never does.
+ * opencode keeps sessions in one SQLite database per machine, which tet never reads: the listing
+ * is the plugin's records in agentDir (plugin.ts's SessionRecord), one per root session, host and
+ * sandbox alike. There is no on-disk format to watch, and `opencode session list` boots a full
+ * instance per call (~1.5 s measured, writing to the database) — anomalyco/opencode#37435. Only
+ * the one-off actions below pay that.
  *
- * The cost: tet knows the sessions that ran through it. One started elsewhere leaves no record.
- * One removed elsewhere keeps its record until a resume of it fails.
+ * The cost: only sessions run through tet are known, and one removed elsewhere keeps its record
+ * until a resume fails.
  */
 
-/** Where each repository's records are, registered by prepareSpawn: a provider gets a cwd, not an
- *  agentDir, and the two are only ever paired there. Never cleared. */
+/** Each repository's agentDir, registered by prepareSpawn (a provider only gets a cwd). Never cleared. */
 const agentDirs = new Map<string, string>();
 
 export function registerAgentDir(cwd: string, agentDir: string): void {
@@ -30,14 +28,14 @@ function recordsDir(cwd: string): string | undefined {
   return agentDir ? sessionsDir(agentDir) : undefined;
 }
 
-/** The sandbox a session's record names, or null for one on the host — and for one without a
- *  record, since the host is the only place an unrecorded session could be. */
+/** The sandbox a session's record names; null on the host or without a record (only the host
+ *  can hold an unrecorded session). */
 export function sessionSandbox(cwd: string, sessionId: string): string | null {
   const dir = recordsDir(cwd);
   return (dir && readRecord(path.join(dir, `${sessionId}.json`))?.sandbox) ?? null;
 }
 
-/** How long a rename waits for the tab's opencode to apply it before it is called off. */
+/** How long a rename waits for the tab's opencode to apply it. */
 const RENAME_TIMEOUT_MS = 5000;
 const RENAME_POLL_MS = 250;
 
@@ -55,7 +53,7 @@ function readRecord(file: string): SessionRecord | undefined {
       sandbox: typeof parsed.sandbox === "string" ? parsed.sandbox : null
     };
   } catch {
-    // Not ours, or damaged: the plugin renames into place, so it is never half-written.
+    // Not ours, or damaged (never half-written: the plugin renames into place).
     return undefined;
   }
 }
@@ -71,8 +69,7 @@ function readRecords(dir: string): SessionRecord[] {
 }
 
 export const opencodeSessionProvider: SessionProvider = {
-  // Reads only the records (see the file header): a session deleted from outside tet is listed
-  // as if it existed until a tab tries to resume it and fails.
+  // Records only (see the file header).
   list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
     const dir = recordsDir(cwd);
     if (!dir) {
@@ -94,14 +91,12 @@ export const opencodeSessionProvider: SessionProvider = {
     return ["--session", sessionId];
   },
 
-  /** `opencode session delete`, run where the session is — the record says whether that is a
-   *  sandbox. The record goes whatever opencode said: a session whose sandbox was removed is
-   *  gone with it, and the record is all that is left.
+  /** `opencode session delete` where the record says the session is. The record goes regardless:
+   *  a removed sandbox took its session with it.
    *
-   *  A session opencode no longer knows is already deleted — resolved, not rejected, per
-   *  SessionProvider.remove. Measured (1.18.4): `session delete <unknown id>` exits 1 with
-   *  `Session not found: <id>` on stderr, inside a sandbox too; so is one whose sandbox is gone,
-   *  where sbx itself answers `sandbox '<name>' not found`. */
+   *  An unknown session resolves (SessionProvider.remove). Measured (1.18.4): an unknown id exits 1
+   *  with `Session not found: <id>`, in a sandbox too; a gone sandbox gets sbx's
+   *  `sandbox '<name>' not found`. */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     const dir = recordsDir(cwd);
     try {
@@ -118,12 +113,10 @@ export const opencodeSessionProvider: SessionProvider = {
   },
 
   /**
-   * opencode has no `session rename` command, only the HTTP API — and the one server there is
-   * runs inside the tab's own process. So the title is left for that process's plugin to apply
-   * (plugin.ts's applyRenames), and the record it rewrites is what says it landed. A tab whose
-   * opencode is not running has no one to apply it: the request is withdrawn after the timeout.
-   * anomalyco/opencode#34751 was closed by exposing rename through the plugin/tool API, not a
-   * CLI subcommand — revisit only if `session rename <id> <title>` actually ships.
+   * No `session rename` command, only the HTTP API of the server inside the tab's process. So a
+   * request file is left for its plugin (plugin.ts's applyRenames); the rewritten record confirms
+   * it. Without a running opencode it is withdrawn after the timeout. anomalyco/opencode#34751
+   * exposed rename via the plugin API, not the CLI — revisit if `session rename <id> <title>` ships.
    */
   async rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
     const trimmed = title.trim();
@@ -156,9 +149,8 @@ export const opencodeSessionProvider: SessionProvider = {
     if (!dir) {
       return () => undefined;
     }
-    // The records directory exists from prepareSpawn on; the root above it is agentDir. A record
-    // written inside a sandbox may raise no event on this side of the bind mount — the reconcile
-    // that follows a tab's output is the net.
+    // The root is agentDir. A record written in a sandbox may raise no event across the bind
+    // mount; the reconcile after a tab's output is the net.
     return watchTranscriptDir(
       () => path.dirname(dir),
       () => Promise.resolve(fs.existsSync(dir) ? dir : undefined),

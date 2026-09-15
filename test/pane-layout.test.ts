@@ -21,7 +21,7 @@ import type { ProjectLayout } from "../src/renderer/terminal/pane-layout";
 import type { TerminalDescriptor } from "../src/shared/types";
 import { EDITOR_TAB_ID, type EditorTab } from "../src/renderer/terminal/editor-tab";
 
-/** The split view's rules — pure functions, the one part of the renderer that needs no window. */
+/** The split view's rules — pure functions, needing no window. */
 
 function tab(tabId: string, updatedAt?: number, sessionId?: string): TerminalDescriptor {
   return { tabId, projectId: "p", agentId: "shell", title: "", status: "running", updatedAt, sessionId };
@@ -151,8 +151,8 @@ describe("placeCommandTab", () => {
     const fromGrid = placeCommandTab(split({ "npm test": { preset: "grid2x2", pane: "d" } }, tabs), "c1", "npm test", tabs);
     assert.equal(fromGrid.preset, "split-right");
     assert.equal(fromGrid.tabPane.c1, "c");
-    // Recorded bottom left in the grid; split-right has no such pane, so the grid comes back,
-    // with split-right's bottom right pane keeping its place as d.
+    // Recorded bottom left in the grid, which split-right lacks: the grid comes back, and
+    // split-right's bottom right pane keeps its place as d.
     const layout = normalizeLayout(
       { preset: "split-right", focusedPane: "a", tabPane: { t1: "a", t2: "c" }, activeTab: {}, commandPane: { "npm test": { preset: "grid2x2", pane: "c" } } },
       tabs,

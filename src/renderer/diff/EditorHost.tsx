@@ -21,29 +21,25 @@ function useEditorStore<T>(projectId: string, select: (snapshot: EditorSnapshot)
 const whole = (snapshot: EditorSnapshot): EditorSnapshot => snapshot;
 const busy = (snapshot: EditorSnapshot): boolean => snapshot.loading || snapshot.building || snapshot.saving;
 
-/**
- * Whether the project's editor tab has something underway — reading the file, building the editor,
- * saving. It is what the progress bar of the pane holding that tab shows, as a starting agent is.
- */
+/** Reading, building or saving — shown by the progress bar of the pane holding the editor tab. */
 export function useEditorBusy(projectId: string): boolean {
   return useEditorStore(projectId, busy);
 }
 
 interface EditorHostProps {
   projectId: string;
-  /** The one on screen in its pane; otherwise it keeps its layout but stays hidden. */
+  /** On screen in its pane; otherwise hidden but laid out. */
   active: boolean;
-  /** Whether the pane itself is on screen — the project is the one selected. */
+  /** The project is the one selected. */
   visible: boolean;
-  /** The project's focused pane, which is where keyboard focus goes. */
+  /** In the project's focused pane, which gets keyboard focus. */
   focused: boolean;
 }
 
 /**
- * The editor tab's content: a bar naming the file, and the file — monaco's diff editor, the image
- * view, or a placeholder for what neither can show. The editor itself lives in `editor-views.ts`
- * and is only attached here, to a frame React renders no children into: React removes the frame
- * with it inside on a move between panes, and the next host's attach takes it out again.
+ * The editor tab: a bar naming the file, then the diff editor, the image view or a placeholder. The
+ * editor lives in `editor-views.ts` and is attached to a childless frame; on a pane move React
+ * removes the frame with it inside, and the next host's attach takes it out again.
  */
 export const EditorHost = memo(function EditorHost({ projectId, active, visible, focused }: EditorHostProps) {
   const { path, file, building, saving, dirty } = useEditorStore(projectId, whole);
@@ -56,8 +52,7 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
     }
   }, [projectId, path]);
 
-  // The editor's twin of the terminal's focus rule in `Pane`: only the focused pane's active tab,
-  // and once there is an editor with the file in it.
+  // As `Pane`'s terminal focus rule: the focused pane's active tab, once the file is in the editor.
   const ready = kind === "text" && !building;
   useEffect(() => {
     if (visible && active && focused && ready) {
@@ -66,8 +61,7 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
   }, [visible, active, focused, ready, projectId, path]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    // Reaches here only when nothing inside claimed the key, so the editor's own Ctrl+S never
-    // gets this far and there is no double save.
+    // Only keys nothing inside claimed arrive, so the editor's own Ctrl+S never saves twice.
     if (isModifierHeld(event) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void saveEditorFile(projectId);
@@ -77,7 +71,7 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
   return (
     <div className={`editor-tab${active ? "" : " hidden"}`} onKeyDown={onKeyDown}>
       <div className="editor-bar">
-        {/* Always there, so the path never shifts between a writable file and a read-only one. */}
+        {/* Always there, so the path doesn't shift for a read-only file. */}
         <div className="editor-bar-actions">
           <button
             className="icon-button"
@@ -96,7 +90,7 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
         {kind === "image" && <ImageView image={{ before: file?.head?.image, after: file?.image }} />}
         {kind === "binary" && <div className="placeholder">Binary file.</div>}
         {kind === "tooLarge" && <div className="placeholder">File too large to edit.</div>}
-        {/* Hidden rather than unmounted while it has nothing to show: the editor stays attached. */}
+        {/* Hidden, not unmounted, so the editor stays attached. */}
         <div ref={frame} className={`editor-frame${ready ? "" : " hidden"}`} />
       </div>
     </div>

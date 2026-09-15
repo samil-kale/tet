@@ -8,7 +8,7 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscr
   return () => ipcRenderer.off(channel, handler);
 }
 
-/** Handed in by main.ts's createWindow through webPreferences.additionalArguments — see there. */
+/** From main.ts's createWindow, through webPreferences.additionalArguments. */
 const THEME_ARG = "--tet-theme=";
 const initialTheme = process.argv.find((arg) => arg.startsWith(THEME_ARG))?.slice(THEME_ARG.length) || DEFAULT_THEME_IDS.dark;
 const waylandSession = process.argv.includes("--tet-wayland");
@@ -138,8 +138,7 @@ const api: TETApi = {
     list: () => ipcRenderer.invoke("agents:list")
   },
   files: {
-    // Electron 32 removed the non-standard File.path in favour of this; it has to run here
-    // in the preload, since contextIsolation keeps the renderer out of electron's modules.
+    // Replaces File.path (gone since Electron 32); preload-only under contextIsolation.
     pathOf: (file) => webUtils.getPathForFile(file),
     writeTemp: (name, dataBase64) => ipcRenderer.invoke("files:write-temp", name, dataBase64),
     clipboardImage: () => ipcRenderer.invoke("clipboard:image-file")
@@ -152,7 +151,7 @@ const api: TETApi = {
       ipcRenderer.invoke("shell:open-file-externally", projectId, filePath),
     openProject: (projectId) => ipcRenderer.invoke("shell:open-project", projectId)
   },
-  // Tells main it may hand over the notices it held until now (see `send` in main.ts).
+  // Lets main release the notices it held back (`send` in main.ts).
   onNotice: (listener) => {
     const unsubscribe = subscribe("app:notice", listener);
     ipcRenderer.send("app:notice-listening");

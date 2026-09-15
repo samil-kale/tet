@@ -1,10 +1,9 @@
 /*
- * "Dark GitHub":the Dark Default variant of GitHub.github-vscode-theme. The values come from the
- * theme file as shiki ships it (@shikijs/themes/github-dark-default), which is also where the token
- * half comes from.
- * See dark-modern.css for the layer itself. The theme leaves some colors unset; where it does, the
- * value is the one VS Code's color registry falls back to — so what VS Code draws with this theme —
- * or, for a border, the theme's own border color, and says so below.
+ * "Dark GitHub": the Dark Default variant of GitHub.github-vscode-theme. Values, token colors
+ * included, come from the theme file as shiki ships it (@shikijs/themes/github-dark-default).
+ * See dark-modern.css for the layer. A color the theme leaves unset takes VS Code's registry
+ * fallback — what VS Code draws with this theme — or, for a border, the theme's own border
+ * color; each is marked below.
  */
 :root[data-theme="dark-github"] {
   color-scheme: dark;

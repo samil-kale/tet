@@ -8,20 +8,19 @@ const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
   { value: "rw", label: "Read+Write" }
 ];
 
-/** One row per `SbxKnowledgeConfig` kind, in the order shown. Labels only; the host paths are
- *  sbx.ts's `knowledgePaths`, which differ per agent. */
+/** One row per `SbxKnowledgeConfig` kind, in display order. Labels only; the per-agent host paths
+ *  are sbx.ts's `knowledgePaths`. */
 const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
   { kind: "skills", label: "Skills" },
   { kind: "plugins", label: "Plugins" },
   { kind: "instructions", label: "Instructions file (CLAUDE.md / AGENTS.md)" }
 ];
 
-/** A port, allowed-path or host row as the fields hold it: the saved shape plus a local id for
- *  its React key, never sent anywhere. */
+/** A row as the fields hold it: the saved shape plus a local React key, never sent anywhere. */
 type Row<T> = T & { id: string };
 
 export interface FieldsState {
-  /** tet.json's `knowledge` — see sbx.ts's knowledgePaths for exactly what each kind mounts. */
+  /** tet.json's `knowledge`; what each kind mounts is sbx.ts's knowledgePaths. */
   knowledge: SbxKnowledgeConfig;
   ports: Row<SbxPort>[];
   paths: Row<SbxPath>[];
@@ -34,9 +33,8 @@ function withId<T>(row: T): Row<T> {
   return { ...row, id: `row-${nextRowId}` };
 }
 
-/** `sbx:get-config`'s answer as the fields' own rows. Only the user's own paths: tet's own
- *  directories and each agent's session directory are mounted whatever this list says (sbx.ts's
- *  fixedMountSpecs and sessionMountSpecs) and are not shown as rows. */
+/** `sbx:get-config`'s answer as rows. Only the user's paths: tet's directories and each agent's
+ *  session directory are always mounted (sbx.ts's fixedMountSpecs, sessionMountSpecs), not shown. */
 export function fromConfig(config: SbxProjectConfig): FieldsState {
   return {
     knowledge: config.knowledge,
@@ -46,8 +44,7 @@ export function fromConfig(config: SbxProjectConfig): FieldsState {
   };
 }
 
-/** The inverse, for Save: ids dropped, and a port row left half-empty or an empty host row
- *  dropped with them. */
+/** The inverse, for Save: ids dropped, as are half-empty port rows and empty host rows. */
 export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> {
   return {
     knowledge: state.knowledge,
@@ -58,14 +55,14 @@ export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> 
 }
 
 interface SbxSettingsFieldsProps {
-  /** Owned by SbxSettingsDialog, where the save request is built; this only edits it. */
+  /** Owned by SbxSettingsDialog, which builds the save request. */
   state: FieldsState;
   setState: Dispatch<SetStateAction<FieldsState>>;
   section: keyof FieldsState;
 }
 
-/** One tab of the dialog's fields, once sbx is installed, signed in and its network policy is
- *  set (see SbxSettingsDialog). The state remains shared while the user switches tabs. */
+/** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
+ *  shared across tabs. */
 export function SbxSettingsFields({ state, setState, section }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
@@ -73,9 +70,8 @@ export function SbxSettingsFields({ state, setState, section }: SbxSettingsField
   /** `false` turns a kind off; an `SbxAccess` turns it on with that access. */
   const setKnowledge = (kind: keyof SbxKnowledgeConfig, value: SbxAccess | false): void =>
     update("knowledge", (knowledge) => ({ ...knowledge, [kind]: value }));
-  /** The native picker; a cancelled pick adds nothing. A folder and a file are two buttons
-   *  rather than one picker because Electron only shows both kinds in one dialog on macOS (see
-   *  the `projects:pick-file` handler); sbx mounts either the same way. */
+  /** A cancelled pick adds nothing. Folder and file are two buttons: Electron shows both kinds in
+   *  one picker only on macOS (see `projects:pick-file`); sbx mounts either the same way. */
   const addPath = async (picked: Promise<string | null>): Promise<void> => {
     const chosen = await picked;
     if (chosen) {
@@ -169,7 +165,7 @@ export function SbxSettingsFields({ state, setState, section }: SbxSettingsField
           {state.paths.length === 0 && <p className="dialog-detail">No paths shared yet</p>}
           {state.paths.map((row) => (
             <div key={row.id} className="sbx-path-row">
-              {/* Plain text, not an input: the path is what the picker returned. */}
+              {/* Plain text: the path is what the picker returned. */}
               <span className="sbx-path-value" title={row.path}>
                 {row.path}
               </span>
@@ -212,8 +208,7 @@ export function SbxSettingsFields({ state, setState, section }: SbxSettingsField
       <div className="sbx-rows">
         {state.hosts.length === 0 && <p className="dialog-detail">No hosts allowed yet</p>}
         {state.hosts.map((row) => (
-          // The path row's box: the input's flex: 1 pushes the button flush right the way
-          // .sbx-path-value does, so .sbx-port-row's margin-left: auto is not needed.
+          // The path row's box: the input's flex: 1 pushes the button right, as .sbx-path-value does.
           <div key={row.id} className="sbx-path-row">
             <input
               className="sbx-host-input"

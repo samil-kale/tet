@@ -1,10 +1,9 @@
 import type { TerminalDescriptor } from "../../shared/types";
 
 /**
- * The one tab in a strip that is not a terminal: a project's file, shown and edited in monaco —
- * VS Code's preview editor, one per project, reused by every file opened after it. It lives in
- * the renderer alone: no pty, no session, nothing the main process knows of, never persisted
- * (the layout writes only tabs with a session id, see `serializeLayout`).
+ * The one non-terminal tab: a project's file in monaco — VS Code's preview editor, one per project,
+ * reused by the next file. Renderer-only: no pty, no session, never persisted (`serializeLayout`
+ * writes only tabs with a session id).
  *
  * The id is shaped unlike any session id, which `loadLayout` hands back as tab ids.
  */

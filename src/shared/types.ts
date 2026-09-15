@@ -3,40 +3,39 @@ export type AgentId = "claude" | "opencode" | "codex" | "pi" | "shell";
 export interface AgentInfo {
   id: AgentId;
   displayName: string;
-  /** Whether this agent persists sessions; the shell does not, so its tabs are just terminals. */
+  /** False for the shell, whose tabs are plain terminals. */
   hasSessions: boolean;
-  /* The two below mirror their measured AgentDefinition fields; the renderer acts on them but
-     cannot import src/main/agents, so the facts travel here as data. */
+  /* Mirrors of the measured AgentDefinition fields, for the renderer, which cannot import
+     src/main/agents. */
   takesRightMouse: boolean;
   swapsBlueMagenta: boolean;
 }
 
-/** One program tet needs on the machine, and whether the startup check found it. */
+/** A program tet needs, and whether the startup check found it. */
 export interface Requirement {
-  /** What it is called where it is downloaded — "Git", "Claude". */
+  /** Its download name — "Git", "Claude". */
   name: string;
-  /** The executable that was looked for, so the user can try it in their own terminal. */
+  /** The executable looked for, for the user to try in their own terminal. */
   command: string;
   installed: boolean;
 }
 
-/** What the startup check found; `met` is git *and* either an agent or sbx, or the app does not
- *  open. sbx suffices because a sandboxed tab runs the agent's CLI inside its container, never on
- *  this machine — see requirements.ts. */
+/** `met` is git *and* either an agent or sbx, else the app does not open. sbx suffices: a sandboxed
+ *  tab runs the agent's CLI in its container (requirements.ts). */
 export interface Requirements {
   met: boolean;
   git: Requirement;
-  /** The agents that have to be installed; one of them is enough. */
+  /** One is enough. */
   agents: Requirement[];
-  /** The other way in: the sandbox runs the agents, so none of them has to be here. */
+  /** Enough without any agent installed here. */
   sbx: Requirement;
 }
 
 export interface Project {
   id: string;
-  /** Absolute path of the repository working directory. */
+  /** Absolute path of the working directory. */
   path: string;
-  /** Display name; the directory's base name. */
+  /** The directory's base name. */
   name: string;
 }
 
@@ -44,67 +43,62 @@ export interface Project {
 export interface NotificationSettings {
   /** The agent finished responding, with nothing it started still running. */
   finished: boolean;
-  /** The agent is blocked mid-turn on a permission prompt, an elicitation, or a question. */
+  /** Blocked mid-turn on a permission prompt, an elicitation, or a question. */
   needsYou: boolean;
-  /** Idle waiting for the next prompt; only Claude Code raises an event, the others ignore it. */
+  /** Idle waiting for the next prompt; only Claude Code raises this event. */
   idleReminder: boolean;
 }
 
 export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
-/** Everything tet keeps about itself rather than about one repository; written whole. */
+/** What tet keeps about itself, not about a repository; written whole. */
 export interface AppSettings {
   notifications: NotificationSettings;
-  /** The Files tab's keybinding preset; an id out of `KEYBINDING_PRESETS`. */
+  /** An id out of `KEYBINDING_PRESETS`. */
   editorKeybindingPreset: string;
-  /** The Appearance tab's light or dark, "system" being whichever the OS is in. Which kind a window
-   *  is drawn in is decided when it is built — see `applyTheme` in src/main/main.ts. */
+  /** "system" follows the OS. A window's kind is fixed when it is built (`applyTheme` in
+   *  src/main/main.ts). */
   colorScheme: ColorScheme;
-  /** The theme for each kind: an id out of `THEMES` of that kind. Applied to the running window
-   *  while it is drawn in that kind. */
+  /** Per kind, an id out of `THEMES` of that kind; applies at once while the window is that kind. */
   darkTheme: string;
   lightTheme: string;
-  /** The Prompts tab's background question; an empty string means tet's own (`DEFAULT_PROMPTS`). */
+  /** An empty string means tet's own (`DEFAULT_PROMPTS`). */
   prompts: PromptSettings;
 }
 
-/** The question tet asks an agent in the background. */
+/** A question tet asks an agent in the background. */
 export type PromptId = "commitMessage";
 
 export type PromptSettings = Record<PromptId, string>;
 
-/** The agents that run in an sbx sandbox: the three Docker ships a built-in kit for, plus pi through
- *  the community kit (see sbx.ts's `SBX_CREATE_TARGET`). The shell is what stays out. */
+/** Agents that run in an sbx sandbox: three with Docker's built-in kit, pi through a community kit
+ *  (sbx.ts's `SBX_CREATE_TARGET`). Not the shell. */
 export type SbxAgentId = "claude" | "codex" | "opencode" | "pi";
 
-/** The same four as a list, for everything that walks them — sbx.ts's save path, the dialog's text. */
 export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex", "opencode", "pi"];
 
 export function isSbxAgent(agentId: string): agentId is SbxAgentId {
   return (SBX_AGENT_IDS as readonly string[]).includes(agentId);
 }
 
-/** One port row: forwards `host` on the machine to `container`. Both stay strings — typed input,
- *  validated only at `sbx run` time. */
+/** Forwards `host` to `container`. Strings as typed; validated only at `sbx run`. */
 export interface SbxPort {
   host: string;
   container: string;
 }
 
-/** One allowed-path row's access — `sbx mount`'s own two modes (`HOST:TARGET:ro|rw`); the dialog
- *  labels them Read / Read+Write. */
+/** `sbx mount`'s modes (`HOST:TARGET:ro|rw`), labelled Read / Read+Write. */
 export type SbxAccess = "ro" | "rw";
 
-/** One row of "Allowed paths": a host folder *or* a single file — sbx mounts either. */
+/** An "Allowed paths" row: a host folder or a single file. */
 export interface SbxPath {
   path: string;
   access: SbxAccess;
 }
 
-/** Which of an agent's shareable, non-identity host knowledge to bring into its sandbox, and with
- *  which access — see sbx.ts's knowledgePaths for the paths per agent. `false` is off. One switch
- *  per kind, agent-agnostic: each agent's actual paths are sbx.ts's concern, not the dialog's. */
+/** Which non-identity host knowledge to mount into the sandbox, with which access; `false` is off.
+ *  Agent-agnostic — the paths per agent are sbx.ts's knowledgePaths. */
 export interface SbxKnowledgeConfig {
   skills: SbxAccess | false;
   plugins: SbxAccess | false;
@@ -112,24 +106,20 @@ export interface SbxKnowledgeConfig {
   instructions: SbxAccess | false;
 }
 
-/** The sbx-settings dialog's saved state, per project: one set of ports, paths and knowledge for
- *  every sandboxed tab, whichever agent it runs. Authentication is never part of it — each agent
- *  signs in inside the sandbox, pi excepted (a credential from sbx's own store, see sbx.ts). */
+/** Per project, for every sandboxed tab whatever its agent. No authentication: each agent signs in
+ *  inside the sandbox, pi excepted (a credential from sbx's own store, see sbx.ts). */
 export interface SbxProjectConfig {
   enabled: boolean;
   knowledge: SbxKnowledgeConfig;
   ports: SbxPort[];
   paths: SbxPath[];
-  /** "Allowed hosts": the project's additions to sbx's network policy, in sbx's own grammar — an
-   *  exact host, a wildcard (`*.example.com`), an optional port. Never checked: sbx validates
-   *  nothing here (measured, 0.42.1 — `https://example.com` is accepted and matches no request),
-   *  so a typo is a rule that never matches. The sandbox, not tet.json, is the truth for this one
-   *  field: the dialog opens with the rules actually attached (sbx.ts's readLiveSbxConfig). */
+  /** "Allowed hosts" in sbx's grammar — exact host, wildcard (`*.example.com`), optional port.
+   *  Unvalidated: sbx accepts anything (measured, 0.42.1 — `https://example.com` matches nothing).
+   *  The sandbox, not tet.json, is the truth here (sbx.ts's readLiveSbxConfig). */
   hosts: string[];
 }
 
-/** One thing sbx's policy has to allow before tet can sandbox a project — see sbx.ts's
- *  readSbxBlockers. */
+/** A rule sbx's policy must allow before tet can sandbox a project (sbx.ts's readSbxBlockers). */
 export interface SbxBlocker {
   /** What it is for, a word or two. */
   what: string;
@@ -137,20 +127,19 @@ export interface SbxBlocker {
   allow: string;
 }
 
-/** What the sbx-settings dialog asks before it shows its fields — see sbx.ts's readSbxStatus.
- *  Each answer is only meaningful when the one above it is true. */
+/** Checked before the sbx dialog shows its fields (sbx.ts's readSbxStatus). Each field means
+ *  something only when the one above is true. */
 export interface SbxStatus {
   installed: boolean;
   loggedIn: boolean;
   policyInitialized: boolean;
-  /** An organization manages the account's policies — only local rules no longer apply. */
+  /** An organization manages the account's policies; local rules do not apply. */
   governed: boolean;
-  /** What the policy still has to allow for this project; the dialog shows these instead of its
-   *  fields. */
+  /** Shown instead of the dialog's fields while non-empty. */
   blockers: SbxBlocker[];
 }
 
-/** A project with no `sbx` section in its tet.json, and what the dialog mounts with. */
+/** No `sbx` section in tet.json; also the dialog's initial state. */
 export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
   enabled: false,
   knowledge: { skills: false, plugins: false, instructions: false },
@@ -162,54 +151,54 @@ export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
 /** The Prompts tab's picker. */
 export const PROMPT_IDS: PromptId[] = ["commitMessage"];
 
-/** The Files tab's keybinding-preset fallback, shared so main and renderer can't drift apart. */
+/** Shared so main and renderer cannot drift apart. */
 export const DEFAULT_KEYBINDING_PRESET_ID = "vscode";
 
-/** What tet *is* rather than what it is set to — the settings dialog's Info tab, read once. */
+/** The settings dialog's Info tab, read once. */
 export interface AppInfo {
-  /** package.json's version, which is what the installers are named after. */
+  /** package.json's version. */
   version: string;
   electron: string;
   chromium: string;
   node: string;
-  /** `process.platform` and `process.arch`, spelled the way node spells them. */
+  /** `process.platform` and `process.arch`. */
   os: string;
 }
 
-/** How clone and create answer: the project once its folder is open, or git's own message. */
+/** Clone/create: the opened project, or git's message. */
 export interface AddRepositoryResult {
   project?: Project;
   error?: string;
-  /** See GitActionResult: the clone wants credentials, and the dialog asks for them. */
+  /** The clone wants credentials; the dialog asks for them. */
   authRequired?: boolean;
 }
 
 export type ProviderId = "github" | "gitlab";
 
-/** A configured account of a repository host. The token lives with it, encrypted, main-side. */
+/** A repository host account. Its token is kept encrypted, main-side. */
 export interface ProviderAccount {
   id: string;
   provider: ProviderId;
-  /** "github.com", or wherever a self-hosted instance answers. */
+  /** "github.com", or a self-hosted instance. */
   host: string;
-  /** The login the token belongs to, read from the API when the account was added. */
+  /** The token's login, read from the API when added. */
   user: string;
-  /** The group the list was last narrowed to; "" is all of them, undefined means never picked. */
+  /** The group the list was last narrowed to; "" is all, undefined never picked. */
   namespace?: string;
 }
 
-/** One repository the remote tab lists, in the shape its rows and the clone tab need. */
+/** A repository the remote tab lists. */
 export interface RemoteRepository {
-  /** "owner/name", the way both hosts spell it. */
+  /** "owner/name". */
   fullName: string;
-  /** The default folder name of a clone, which the clone tab is prefilled with. */
+  /** The clone tab's default folder name. */
   name: string;
   private: boolean;
-  /** The https url git clones; the account's token can authenticate it. */
+  /** The https url; the account's token can authenticate it. */
   cloneUrl: string;
 }
 
-/** How adding an account answers: the account once its token checked out, or the API's message. */
+/** The account once its token checked out, or the API's message. */
 export interface AddAccountResult {
   account?: ProviderAccount;
   error?: string;
@@ -220,18 +209,18 @@ export interface ListRepositoriesResult {
   error?: string;
 }
 
-/** One saved shell command of a project; `cwd` is where it runs, relative to the project root. */
+/** A project's saved shell command. */
 export interface ProjectCommand {
   command: string;
-  /** What the row calls it where the command line reads badly. Only a label; the line is what runs. */
+  /** The row's label; the line is what runs. */
   name?: string;
-  /** Relative to the project root; absent means the root itself. */
+  /** Relative to the project root; absent means the root. */
   cwd?: string;
-  /** Environment variables the command runs with — its own field because `PROFILE=x java ...` is
-   *  POSIX syntax PowerShell reads as a command name. These win over the inherited ones. */
+  /** Its own field because PowerShell reads `PROFILE=x java ...` as a command name. Wins over the
+   *  inherited environment. */
   env?: Record<string, string>;
-  /** Hands the command to a shell instead of starting the program — for one that really needs a
-   *  pipe or a redirection, and then only works on the platform it was written for. */
+  /** Runs the line in a shell (pipes, redirections); then only works on the platform it was
+   *  written for. */
   shell?: boolean;
 }
 
@@ -243,17 +232,16 @@ export interface RemoteInfo {
   url?: string;
 }
 
-/** What can be done with a stash from its row: put it back, put it back and drop it, or drop it. */
 export type StashCommand = "apply" | "pop" | "drop";
 
 export interface StashEntry {
-  /** What the stash commands take, e.g. "stash@{0}". Not stable: dropping one renumbers the rest. */
+  /** e.g. "stash@{0}". Not stable: dropping one renumbers the rest. */
   ref: string;
-  /** git's own line for it, e.g. "WIP on main: 1a2b3c the last commit's subject". */
+  /** git's line, e.g. "WIP on main: 1a2b3c the last commit's subject". */
   message: string;
 }
 
-/** A merge or a rebase git stopped half-way through, so the UI can offer to abort it. */
+/** A merge or rebase stopped half-way, which the UI offers to abort. */
 export type GitOperation = "merge" | "rebase";
 
 export type ChangeStatus = "modified" | "added" | "deleted" | "renamed" | "untracked" | "conflicted";
@@ -270,33 +258,31 @@ export interface RepositoryState {
   /** Branch name, or the short commit id while HEAD is detached. */
   head: string;
   detached: boolean;
-  /** The commit the checked-out branch points at; absent while detached (`head` is the id then)
-   *  or unborn. What tells a pull or a reset apart from the same branch standing still. */
+  /** The branch's commit; absent while detached (`head` is the id then) or unborn. Tells a pull or
+   *  reset apart from the branch standing still. */
   headCommit?: string;
-  /** The branch HEAD tracks, e.g. "origin/main"; absent when it tracks none or none exists. */
+  /** e.g. "origin/main"; absent without one. */
   upstream?: string;
-  /** Commits HEAD has that its upstream does not, and the other way round. Both 0 without one. */
+  /** Relative to the upstream; both 0 without one. */
   ahead: number;
   behind: number;
   localBranches: string[];
-  /** Ahead/behind for a local branch that is *not* the current one, held only once
-   *  `%(upstream:trackshort)` has confirmed it differs — the count costs a `rev-list`. Absent for a
-   *  branch in sync, with no upstream, or the checked-out one, whose numbers are `ahead`/`behind`. */
+  /** Ahead/behind of non-current branches, only where `%(upstream:trackshort)` says they differ —
+   *  each count costs a `rev-list`. The current branch's are `ahead`/`behind`. */
   branchTrack: Record<string, { ahead: number; behind: number }>;
   remotes: RemoteInfo[];
-  /** The branch the first remote's HEAD points at, e.g. "main"; absent where none was published. */
+  /** The first remote's HEAD branch, e.g. "main". */
   defaultBranch?: string;
-  /** Tag names, as `for-each-ref` orders them. */
+  /** In `for-each-ref` order. */
   tags: string[];
   stashes: StashEntry[];
   changes: FileChange[];
-  /** A merge or rebase git is half-way through; the branch menu offers to abort it. */
   operation?: GitOperation;
-  /** Set when git could not be run or the folder is not a repository; the rest is then empty. */
+  /** git could not run or the folder is no repository; the rest is then empty. */
   error?: string;
 }
 
-/** A repository nothing has been read from. Never mutated, only spread from. */
+/** Nothing read yet. Never mutated, only spread from. */
 export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   head: "",
   detached: false,
@@ -310,20 +296,20 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   changes: []
 };
 
-/** How loudly a notice asks to be read; it decides how long the notice stands (Notices.tsx). */
+/** Decides how long a notice stands (Notices.tsx). */
 export type NoticeSeverity = "error" | "warning" | "info";
 
-/** A notice the window put up, as it reports each for `tet-ctl notices-list`. */
+/** A notice the window showed, reported for `tet-ctl notices-list`. */
 export interface NoticeReport {
   severity: NoticeSeverity;
   message: string;
-  /** When it went up, ms since epoch. */
+  /** ms since epoch. */
   at: number;
 }
 
-/** What a project's editor tab shows, as the renderer reports it on every change of its snapshot
- *  for `tet-ctl editor-state` — the editor lives in the renderer alone. Not its text: that is up
- *  to 4 MB, and a snapshot changes several times per write of the file on disk (measured). */
+/** The editor tab's state, reported by the renderer (where the editor alone lives) on every
+ *  snapshot change, for `tet-ctl editor-state`. Without the text: up to 4 MB, and a snapshot
+ *  changes several times per write on disk (measured). */
 export interface EditorReport {
   path: string;
   /** The read of `path` still in flight. */
@@ -334,44 +320,41 @@ export interface EditorReport {
   error?: string;
 }
 
-/** Anything the user is told, without exception — not a *status*, which a view draws for itself. */
+/** Anything the user is told — not a *status*, which a view draws itself. */
 export interface Notice {
   severity: NoticeSeverity;
   message: string;
 }
 
-/** The file as HEAD has it — the diff editor's original side, beside the working tree's own text. */
+/** The file at HEAD — the diff editor's original side. */
 export interface HeadBlob {
   content: string;
-  /** A binary blob, an image, or one too large to hand over; `content` is empty either way. */
+  /** Binary, image or too large; `content` is empty. */
   binary: boolean;
-  /** HEAD has no such path: untracked, newly added, or an unborn branch. Diffs as an all-new file. */
+  /** Not in HEAD (untracked, added, unborn branch); diffs as all new. */
   missing: boolean;
-  /** Set instead of `content` for an image, the committed version as a data URL. */
+  /** An image's committed version as a data URL, instead of `content`. */
   image?: string;
 }
 
-/** A file for the editor tab — the working tree's text, and what HEAD has of it. Read once per
- *  open, not streamed. */
+/** The working tree's text plus HEAD's, read once per open. */
 export interface FileContent {
   path: string;
   content: string;
-  /** Compared against on save, so a write started here never clobbers an outside edit. 0 for a file
-   *  that is not in the working tree at all, which is a deleted one and never saved. */
+  /** Checked on save so an outside edit is never clobbered. 0 for a deleted file, never saved. */
   mtimeMs: number;
   binary: boolean;
   tooLarge: boolean;
-  /** Set instead of `content` when the file is an image. */
+  /** An image as a data URL, instead of `content`. */
   image?: string;
-  /** Absent for a file git reports no change to: the diff editor mirrors its own content then, and
-   *  nothing is marked. */
+  /** Absent for an unchanged file: the diff editor mirrors its own content, nothing marked. */
   head?: HeadBlob;
-  /** True where the working tree has no such file — a deleted one. The editor is read-only. */
+  /** Missing from the working tree; the editor is read-only. */
   deleted?: boolean;
   error?: string;
 }
 
-/** What a save reports: written, or why not — a stale `mtimeMs` never overwrites silently. */
+/** Written, or why not — a stale `mtimeMs` never overwrites silently. */
 export interface FileWriteResult {
   ok: boolean;
   mtimeMs?: number;
@@ -379,12 +362,10 @@ export interface FileWriteResult {
 }
 
 /**
- * Every file in the repository, for the files pane's Explorer tree — a real filesystem scan, not
- * `git ls-files`: git cannot represent an empty directory at all. `emptyDirs` holds only the
- * directories nothing in `files` implies. `.git` is always left out; anything else only on the
- * project's say-so. The listing also carries the project's view settings from `tet.json`, so the
- * tree gets configuration and data in one read; `roots` is absent when there is no `folders` list.
- * Paths stay repository-relative and each file is listed once, whichever roots contain it.
+ * The Explorer tree's files — a filesystem scan, not `git ls-files`, which cannot represent an empty
+ * directory. `emptyDirs` holds only directories no file implies. `.git` is always left out. Carries
+ * `tet.json`'s view settings too, for one read; `roots` is absent without a `folders` list. Paths
+ * are repository-relative, each file listed once whatever roots contain it.
  */
 export interface ExplorerListing {
   files: string[];
@@ -392,43 +373,42 @@ export interface ExplorerListing {
   roots?: ExplorerRoot[];
   compactFolders: boolean;
   sortOrder: ExplorerSortOrder;
-  /** Modification time per listed path, files and directories alike — only read for `modified`. */
+  /** Per listed file and directory — only read for `modified`. */
   mtimes?: Record<string, number>;
 }
 
-/** One entry of a `folders` list: a top-level node of the tree, labelled `name`. */
+/** A `folders` entry: a top-level tree node labelled `name`. */
 export interface ExplorerRoot {
   name: string;
-  /** Repository-relative, forward-slashed; "" for the repository root itself. */
+  /** Repository-relative, forward slashes; "" for the root. */
   path: string;
 }
 
-/** VS Code's `explorer.sortOrder` values. `foldersNestsFiles` is `default` without file nesting. */
+/** VS Code's `explorer.sortOrder`. `foldersNestsFiles` is `default` without file nesting. */
 export type ExplorerSortOrder = "default" | "mixed" | "filesFirst" | "type" | "modified" | "foldersNestsFiles";
 
-/** The Explorer settings the settings dialog's Files tab edits directly, read on its own. */
+/** What the settings dialog's Files tab edits, read on its own. */
 export interface ExplorerSettings {
   excludeGitIgnore: boolean;
   compactFolders: boolean;
   sortOrder: ExplorerSortOrder;
 }
 
-/** What any git action the UI starts reports back: it worked, or what git said when it didn't. */
 export interface GitActionResult {
   ok: boolean;
   error?: string;
-  /** git stopped for want of credentials; only a network command sets it, only the clone acts on it. */
+  /** git wanted credentials; set only by network commands, acted on only by the clone. */
   authRequired?: boolean;
 }
 
-/** A branch to check out: a local branch, or a remote-tracking one like "origin/development". */
+/** A local branch, or a remote-tracking one like "origin/development". */
 export interface CheckoutTarget {
   name: string;
   remote?: string;
 }
 
-/** One terminal's output since the last flush. They cross to the renderer in batches: one message
- *  per tab per flush would grow the message count with the number of open terminals. */
+/** One terminal's output since the last flush. Batched, so the message count does not grow with
+ *  the number of open terminals. */
 export interface TerminalOutput {
   projectId: string;
   tabId: string;
@@ -446,36 +426,33 @@ export interface TerminalDescriptor {
   /** Session title; "" makes the UI show a placeholder. */
   title: string;
   status: TerminalStatus;
-  /** The agent's own id for this session; absent until the CLI has persisted one. Equal to `tabId`
-   *  for a restored tab, which is why the split layout keys its pane assignments by it. */
+  /** The agent's session id; absent until the CLI persisted one. Equals `tabId` for a restored tab,
+   *  hence the split layout's key. */
   sessionId?: string;
-  /** Last activity, ms since epoch; absent for tabs without a session. */
+  /** Last activity, ms since epoch; absent without a session. */
   updatedAt?: number;
-  /** Creation time, ms since epoch; absent for tabs without a session. */
+  /** ms since epoch; absent without a session. */
   createdAt?: number;
-  /** When this session last finished a turn unseen, ms since epoch; cleared once the tab is on
-   *  screen (`terminals.seen`). A time, not a flag: the project row's mark opens the oldest first. */
+  /** Last turn finished unseen, ms since epoch; cleared once on screen (`terminals.seen`). A time,
+   *  not a flag: the project row's mark opens the oldest first. */
   finishedAt?: number;
-  /** Whether the agent is working on a turn — reported by the agent at both ends, never read off
-   *  the TUI. Always false for a tab whose process has ended, whatever the agent last said. */
+  /** Working a turn — reported by the agent at both ends, never read off the TUI. False once the
+   *  process has ended. */
   busy?: boolean;
-  /** Whether *this* tab is what a progress bar is about — its runtime still being prepared, or its
-   *  CLI not past its first frame — so its own pane shows the bar. Read off the session manager's
-   *  per-tab indicator count at every snapshot, not kept on the tab. */
+  /** This tab's pane shows the progress bar: runtime being prepared, or CLI before its first frame.
+   *  Read off the session manager's per-tab indicator count at each snapshot. */
   starting?: boolean;
-  /** When this session last stopped mid-turn on an unanswered question, ms since epoch. Cleared like
-   *  `finishedAt`, and by either end of a turn. Its own field rather than a shade of `busy`: such a
-   *  session is *not* working. */
+  /** Stopped mid-turn on an unanswered question, ms since epoch. Cleared like `finishedAt` and by
+   *  either end of a turn. Not a shade of `busy`: such a session is *not* working. */
   waitingAt?: number;
-  /** Whether this tab's process is a saved command; only then does the context menu offer Restart. */
+  /** A saved command's tab; only these offer Restart. */
   savedCommand?: boolean;
-  /** The saved command's line as written in `tet.json` — what the split layout keys `commandPane`
-   *  by, so the next run lands where the last one lay. The line, not the `name`, which may be missing. */
+  /** The saved command's line from `tet.json` — the split layout's `commandPane` key, so the next
+   *  run lands where the last lay. The line, since `name` may be missing. */
   command?: string;
 }
 
-/** Whether a session is working a turn, as every spinner shows it: never while it waits on a
- *  question, whatever `busy` still says. */
+/** As every spinner shows it: never while waiting on a question, whatever `busy` says. */
 export function isWorking(tab: TerminalDescriptor): boolean {
   return tab.busy === true && tab.waitingAt === undefined;
 }

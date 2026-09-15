@@ -3,9 +3,8 @@ import type { FileAct } from "./ChangesList";
 import { notify } from "../ui/Notices";
 
 /**
- * Runs a file action against the repository and reports what it says when it failed, marking it
- * running for the section that started it — one side pane serves every project, so the mark is
- * per project. Called once per section, each with its own bar.
+ * Runs a file action, notifying on failure. The running mark is per project, since one side pane
+ * serves all; called once per section, each with its own bar.
  */
 export function useFileAct(projectId: string): { acting: boolean; act: FileAct } {
   const [actingIn, setActingIn] = useState<ReadonlySet<string>>(() => new Set());

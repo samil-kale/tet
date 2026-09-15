@@ -7,7 +7,7 @@ import { isSbxInstalled } from "./sbx";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { checkAgentInstalled } from "./terminals/terminal-session";
 
-/** An agent that has to be installed; the shell has no `versionArgs` and is always there. */
+/** The shell has no `versionArgs`. */
 type InstallableAgent = AgentDefinition & { versionArgs: string[] };
 
 const GIT: Omit<Requirement, "installed"> = {
@@ -15,38 +15,33 @@ const GIT: Omit<Requirement, "installed"> = {
   command: "git"
 };
 
-/** Named as the sbx dialog names it. Only the binary is asked for here: signing in and the network
- *  policy are what SbxSettingsDialog walks the user through, and asking for them would make the
- *  startup check talk to Docker. */
+/** Only the binary: sign-in and policy are SbxSettingsDialog's; checking them would call Docker. */
 const SBX: Omit<Requirement, "installed"> = {
   name: "Docker Sandboxes",
   command: "sbx"
 };
 
-/** The commands `--simulate` names, reported missing however installed they are, so the dialog is
- *  reachable on a machine that has everything: `npm start -- --simulate=git,claude` (npm's own
- *  `--` hands the flag past the script to electron). */
+/** Commands reported missing regardless, to reach the dialog on a full machine:
+ *  `npm start -- --simulate=git,claude`. */
 const SIMULATED_MISSING = (process.argv.find((arg) => arg.startsWith("--simulate=")) ?? "")
   .slice("--simulate=".length)
   .split(",")
   .map((entry) => entry.trim())
   .filter((entry) => entry !== "");
 
-/** The opposite, for test/app.test.ts: a machine with git and no agent at all — a CI runner —
- *  still opens, with the shell as its one terminal. Only the verdict changes. */
+/** For test/app.test.ts: a CI runner with git and no agent still opens, shell only. */
 const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
 
 /**
- * Checking an agent spawns it (`checkAgentInstalled`), and on win32 most go through cmd.exe, whose
- * process creation blocks the event loop for as long as Windows (and any antivirus scanning the
- * shim) takes. Dispatched in the same tick, four such blocks merge into one multi-second freeze at
- * startup (measured in event-loop.log); a tick of daylight between each keeps them separate.
+ * Checking an agent spawns it, on win32 mostly via cmd.exe, whose process creation blocks the event
+ * loop (antivirus included). In one tick, four such blocks merge into a multi-second startup freeze
+ * (measured in event-loop.log); a tick between each keeps them apart.
  */
 function yieldToLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-/** Every installable agent, checked one tick apart — see yieldToLoop. */
+/** Checked one tick apart (yieldToLoop). */
 async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
   const installable = AGENTS.filter((agent): agent is InstallableAgent => agent.versionArgs !== undefined);
   const agentChecks: Promise<Requirement>[] = [];
@@ -65,24 +60,19 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
 }
 
 /**
- * What has to be on the machine before the app opens: git, because the whole git side is the local
- * CLI, and either one of the agents or sbx — a sandboxed tab runs the agent's CLI inside its
- * container, so a machine with sbx alone can still work (see session-manager's AgentRuntime.sbxOnly).
- * Nothing is answered from memory here — the dialog this feeds offers a re-check, and each one
- * looks again for the managers' bin directories (`augmentAgentPath`); a program installed into a
- * folder this process cannot know of needs a restart, and the dialog says so. The projects opened
- * afterwards do take the answer given here (`isAgentInstalled`).
+ * Needed before the app opens: git, and an agent or sbx — a sandboxed tab runs the agent's CLI in
+ * its container (session-manager's AgentRuntime.sbxOnly). Never answered from memory: each re-check
+ * re-scans the managers' bin dirs (`augmentAgentPath`); an install elsewhere needs a restart.
+ * Projects opened afterwards reuse this answer (`isAgentInstalled`).
  */
 export async function checkRequirements(): Promise<Requirements> {
-  // Somewhere every machine has and no repository owns: the checks are about the programs.
+  // No repository's directory: the checks are about the programs.
   const cwd = os.tmpdir();
 
-  // Runs in its own utility process (git-client.ts), so it never blocks this one — started
-  // alongside the agent checks rather than awaited first.
+  // In the git utility process (git-client.ts), so started alongside the agent checks.
   const gitInstalled = SIMULATED_MISSING.includes(GIT.command) ? Promise.resolve(false) : git.isAvailable().catch(() => false);
 
-  // Started before the agents and a tick ahead of them: sbx is one more process creation, and
-  // what makes those hurt on win32 is sharing a tick, not running at once (see yieldToLoop).
+  // A tick ahead of the agents: on win32 process creations hurt when sharing a tick (yieldToLoop).
   const sbxInstalled = SIMULATED_MISSING.includes(SBX.command) ? Promise.resolve(false) : isSbxInstalled();
   await yieldToLoop();
 
@@ -97,12 +87,10 @@ export async function checkRequirements(): Promise<Requirements> {
 }
 
 /**
- * Whether any agent CLI is on this machine right now — what decides that a project runs sbx-only:
- * the add-repository flow opens the sbx settings for a new project when nothing is installed, and
- * SbxSettingsDialog locks itself on the same answer. Never stored, and never polled: it is asked
- * where tet already refreshes host state, and PATH is re-read first because the point of asking
- * again is that the user has just installed something (`augmentAgentPath` joins a running call
- * rather than starting a second login shell, so asking beside `sbx:status` costs one).
+ * Whether any agent CLI is installed now — deciding sbx-only: add-repository opens the sbx settings
+ * when none is, and SbxSettingsDialog locks on it. Never stored or polled; asked where tet refreshes
+ * host state, PATH re-read first since the user may just have installed one (`augmentAgentPath`
+ * joins a running call, so beside `sbx:status` it costs one login shell).
  */
 export async function anyAgentInstalled(): Promise<boolean> {
   await augmentAgentPath();

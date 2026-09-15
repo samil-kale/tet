@@ -1,12 +1,11 @@
 /*
- * The theme layer: every color the UI uses comes from a --vscode-* custom property, the same
- * names the VS Code plugins style against. One file per theme in this folder, each declaring
- * the *complete* list — nothing falls through from another theme, so every value a theme shows
- * is one somebody decided (pieces.test.ts holds the lists equal). Which block applies is set in
- * main.tsx from the id in src/shared/themes.ts, at start and again on `app:theme`; this one, VS Code's "Dark Modern", is
- * also the bare `:root` so an unknown id still gets a whole theme. The values come from VS
- * Code's own theme files (extensions/theme-defaults) and color registry, not from eyeballing.
- * The fonts are not a theme's — they sit in styles.css.
+ * The theme layer: every UI color is a --vscode-* custom property, under VS Code's own names.
+ * One file per theme, each declaring the *complete* list — nothing falls through from another
+ * theme (pieces.test.ts holds the lists equal). main.tsx picks the block from the id in
+ * src/shared/themes.ts, at start and on `app:theme`. This one, VS Code's "Dark Modern", is also
+ * the bare `:root`, so an unknown id still gets a whole theme. Values come from VS Code's theme
+ * files (extensions/theme-defaults) and color registry, not from eyeballing. Fonts live in
+ * styles.css.
  */
 :root,
 :root[data-theme="dark-modern"] {
@@ -38,8 +37,8 @@
   --vscode-tab-inactiveForeground: #9d9d9d;
   --vscode-tab-border: #2b2b2b;
 
-  /* Translucent on purpose: an action button sits on list rows, on the blue of a selected
-     one and on plain bars, and this is the one hover that reads on all of them. */
+  /* Translucent on purpose: an action button sits on rows, on a selected row's blue and on
+     plain bars, and only a translucent hover reads on all of them. */
   --vscode-toolbar-hoverBackground: #5a5d5e50;
 
   --vscode-list-activeSelectionBackground: #04395e;
@@ -92,9 +91,8 @@
   --vscode-gitDecoration-addedResourceForeground: #81b88b;
   --vscode-gitDecoration-conflictingResourceForeground: #e4676b;
 
-  /* Three weights of the same two hues: a changed line's ground, the changed words inside it (so
-     they read against that ground), and the overview ruler, which is 15px against the editor's own
-     background and disappears at anything lighter. */
+  /* Three weights of two hues: a changed line's ground, the changed words on it, and the 15px
+     overview ruler, which disappears against the editor background at anything lighter. */
   --vscode-diffEditor-insertedLineBackground: #2ea04326;
   --vscode-diffEditor-removedLineBackground: #f8514926;
   --vscode-diffEditor-insertedTextBackground: #2ea04340;
@@ -112,8 +110,8 @@
   --vscode-editorIndentGuide-background1: #404040;
   --vscode-editorIndentGuide-activeBackground1: #707070;
 
-  /* xterm's own defaults for these are white, invisible on a light background — see
-     buildXtermTheme. VS Code leaves the cursor unset in Dark Modern, which is its foreground. */
+  /* xterm defaults these to white, invisible on a light ground (buildXtermTheme). Dark Modern
+     leaves the cursor unset, which means its foreground. */
   --vscode-terminalCursor-foreground: #cccccc;
   --vscode-terminal-selectionBackground: #264f78;
   --vscode-terminal-inactiveSelectionBackground: #3a3d41;

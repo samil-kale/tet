@@ -7,10 +7,10 @@ import { opencodeAgent } from "./opencode";
 import { piAgent } from "./pi";
 import { shellAgent } from "./shell";
 
-/** Registration order; also the order of the "new terminal" menu. */
+/** Also the order of the "new terminal" menu. */
 export const AGENTS: AgentDefinition[] = [claudeAgent, opencodeAgent, codexAgent, piAgent, shellAgent];
 
-/** The first installed agent with `askArgs`, in registration order (the shell has none). */
+/** The first installed agent with `askArgs`, in registration order. */
 export async function findAskableAgent(
   cwd: string
 ): Promise<{ executable: string; agent: AgentDefinition } | undefined> {

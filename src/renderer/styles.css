@@ -2,7 +2,7 @@
   box-sizing: border-box;
 }
 
-/* The fonts are the app's, not a theme's — the same under every value set in themes/. */
+/* The app's fonts, not a theme's: the same under every theme in themes/. */
 :root {
   --vscode-font-family: "Segoe UI", system-ui, sans-serif;
   --vscode-font-size: 13px;
@@ -16,8 +16,8 @@ body,
   margin: 0;
 }
 
-/* The panel colour, not the editor's: it fills the window before the views have drawn, and
-   matches BrowserWindow's backgroundColor in main.ts. */
+/* The panel colour, not the editor's: it fills the window before the views draw, matching
+   BrowserWindow's backgroundColor in main.ts. */
 body {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
@@ -35,18 +35,18 @@ button {
   cursor: pointer;
 }
 
-/* Monaco and xterm draw their own selection; this is for the plain-text spots that opt back in. */
+/* Monaco and xterm draw their own selection; this is for plain text that opts back in. */
 ::selection {
   background: var(--vscode-editor-selectionBackground);
 }
 
-/* Keyboard focus only (:focus-visible), never a mouse click. 1px in --vscode-focusBorder. */
+/* Keyboard focus only, never a mouse click. */
 button:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
 }
 
-/* One box for both: neither may set the font, the border or the padding on its own. */
+/* One box for fields and dropdowns: neither sets font, border or padding on its own. */
 input,
 textarea,
 .dropdown-trigger {
@@ -72,8 +72,8 @@ textarea:focus {
   border-color: var(--vscode-focusBorder);
 }
 
-/* Styled like a `<select>`. A native select's open list is drawn by Chrome itself, ignoring
-   every color and :hover rule on this page (measured), so its highlighted row cannot be themed. */
+/* Styled like a `<select>`: a native select's open list is drawn by Chrome, ignoring every color
+   and :hover rule here (measured), so its highlighted row cannot be themed. */
 .dropdown-trigger {
   color: var(--vscode-dropdown-foreground);
   background: var(--vscode-dropdown-background);
@@ -82,11 +82,11 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* Room for `.select-arrow`, drawn over this button's right edge rather than laid out beside it. */
+  /* Room for `.select-arrow`, drawn over this button's right edge. */
   padding-right: 26px;
 }
 
-/* Holds the arrow over the dropdown's right edge; it takes no clicks. */
+/* Anchors `.select-arrow` over the dropdown's right edge. */
 .select-field {
   position: relative;
   display: flex;
@@ -134,39 +134,34 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* The floors every pane shares — MIN_PANE_* in Sash.tsx. Stated here too: a sash only
-     bounds a drag, and shrinking the window reaches the same panes. */
+  /* Pane floors, as MIN_PANE_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
+     shrinking the window reaches the same panes. */
   --pane-min-width: 180px;
   --pane-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 28px;
-  /**
-   * Every icon in the window: the single knob that resizes them all. `extent` in icons.tsx
-   * settles how much of that box each drawing covers.
-   */
+  /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
   --icon-size: 13px;
 }
 
 /* Title bar ------------------------------------------------------------------------------ */
 
-/* Carries the app name, the drag region, and the space the window controls overlay needs. */
 .titlebar {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* VS Code's own title bar height when the window controls overlay is in use. */
+  /* VS Code's title bar height with the window controls overlay. */
   height: 35px;
   flex: none;
   padding-left: 12px;
-  /* Where the platform's own controls end up, so the bar stops short of them. The overlay
-     publishes its geometry as the Window Controls Overlay environment variables. With no
-     overlay (macOS, whose controls sit left) the fallback leaves the padding at 0. */
+  /* Stops short of the platform's window controls, whose geometry the overlay publishes as
+     env() variables. No overlay (macOS, controls on the left): the fallback gives 0. */
   padding-right: calc(100% - env(titlebar-area-width, 100%));
   background: var(--vscode-titleBar-activeBackground);
   -webkit-app-region: drag;
 }
 
-/* Scaled down from the full-size icon.png; the taskbar is served by icon.ico instead. */
+/* icon.png scaled down; the taskbar uses icon.ico. */
 .titlebar-icon {
   width: 18px;
   height: 18px;
@@ -184,7 +179,7 @@ textarea:focus {
   white-space: nowrap;
 }
 
-/* 24px around the icon — the box only has to leave the hover background something to draw. */
+/* 24px: just enough room around the icon for the hover background. */
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -192,9 +187,8 @@ textarea:focus {
   width: 24px;
   height: 24px;
   flex: none;
-  /* The reset above drops a button's border and background but not its padding, and Chrome's
-     default is `1px 6px`: with border-box that left 12px of content, and a flex item shrinks
-     into it, rendering every icon 12 wide by 18 tall. Measured in the browser. */
+  /* The reset above keeps Chrome's default `1px 6px` padding, which with border-box leaves 12px
+     of content and squeezes every icon to 12 by 18 (measured). */
   padding: 0;
   border-radius: 3px;
   color: inherit;
@@ -207,7 +201,7 @@ textarea:focus {
   height: var(--icon-size);
 }
 
-/* Never the list's own hover colour: invisible on a hovered row, a patch on a selected one. */
+/* Never the list hover colour: invisible on a hovered row, a patch on a selected one. */
 .icon-button:hover:not(:disabled) {
   background: var(--vscode-toolbar-hoverBackground);
   opacity: 1;
@@ -232,8 +226,8 @@ textarea:focus {
 
 /* Body ----------------------------------------------------------------------------------- */
 
-/* Carries the line under the title bar: with border-box that border would otherwise sit inside
-   the 35px the window controls overlay paints over. */
+/* Carries the line under the title bar: on `.titlebar` (border-box) it would sit inside the 35px
+   the window controls overlay paints over. */
 .body {
   display: flex;
   flex: 1;
@@ -251,7 +245,7 @@ textarea:focus {
 
 /* Project list --------------------------------------------------------------------------- */
 
-/* The whole left column. Width comes from the sash beside it (default and limits in App). */
+/* The left column; its width comes from the sash (default and limits in App). */
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -262,8 +256,8 @@ textarea:focus {
   border-right: 1px solid var(--vscode-panel-border);
 }
 
-/* One titled section of a column. One of each pair is sized by the sash between them and may
-   still shrink to the floor below; the other (`.grows`) takes what is left. */
+/* A titled section of a column. One of a pair is sized by the sash and may still shrink to the
+   floor; the other (`.grows`) takes the rest. */
 .section {
   display: flex;
   flex-direction: column;
@@ -275,7 +269,6 @@ textarea:focus {
   flex: 1;
 }
 
-/* The line between two sections of one column; the first draws none. */
 .section ~ .section {
   border-top: 1px solid var(--vscode-panel-border);
 }
@@ -305,10 +298,10 @@ textarea:focus {
   font-family: var(--vscode-editor-font-family);
 }
 
-/* Every section header: the tab strip's 35px, border included, so titles and tabs sit on one
-   line. The line above comes from whatever the section sits under, so no header draws two. */
+/* The tab strip's 35px, border included, so titles and tabs line up. The line above is drawn by
+   whatever the section sits under, so no header draws two. */
 .section-header {
-  /* What lets its own `.progress-bar` anchor to its bottom edge. */
+  /* Anchors its `.progress-bar` to the bottom edge. */
   position: relative;
   display: flex;
   align-items: center;
@@ -329,8 +322,8 @@ textarea:focus {
   overflow-y: auto;
 }
 
-/* Every list in the window is one row tall. Stated rather than padded, so a row with a 24px
-   action button cannot stand taller than one holding only text. */
+/* Every list row is one height. Stated rather than padded, so a row with a 24px action button
+   stands no taller than one holding only text. */
 .project-item,
 .command-item,
 .tree-item,
@@ -341,8 +334,8 @@ textarea:focus {
   flex: none;
 }
 
-/* One row shape for both sidebar lists. No gap: a row ends in icon buttons, each already
-   carrying 5.5px around a 13px drawing in a 24px box. */
+/* One row shape for both sidebar lists. No gap: the icon buttons ending a row already carry
+   5.5px around a 13px drawing in a 24px box. */
 .project-item,
 .command-item {
   display: flex;
@@ -364,13 +357,13 @@ textarea:focus {
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-/* The row is being dragged elsewhere; it stays where it is until the drop decides. */
+/* Being dragged; it stays in place until the drop. */
 .project-item.dragging,
 .command-item.dragging {
   opacity: 0.5;
 }
 
-/* Where the drop would put it: a line between two rows, inset so it adds no height. */
+/* Where the drop lands: a line between rows, inset so it adds no height. */
 .project-item.drop-above,
 .command-item.drop-above {
   box-shadow: inset 0 1px 0 var(--vscode-focusBorder);
@@ -399,8 +392,7 @@ textarea:focus {
   white-space: nowrap;
 }
 
-/* What a row stands on: a command's variables, a repository's branch. Declared with the row
-   shape above so the two cannot drift. */
+/* A command's variables, a repository's branch. Declared together so the two cannot drift. */
 .command-extra,
 .project-extra {
   flex: 0 1 auto;
@@ -420,8 +412,7 @@ textarea:focus {
   min-height: 0;
 }
 
-/* A branch command is running. Acting on one is off, a second command racing the first for
-   the index lock. */
+/* A branch command is running; a second one would race it for the index lock. */
 .branch-tree.busy .tree-item {
   pointer-events: none;
 }
@@ -435,7 +426,7 @@ textarea:focus {
   padding: 8px 6px;
 }
 
-/* Leaves the search icon its own room, which is why this is not the plain input padding. */
+/* Room for the search icon. */
 .filter-field input {
   width: 100%;
   padding-left: 28px;
@@ -494,15 +485,14 @@ textarea:focus {
   background: var(--vscode-list-hoverBackground);
 }
 
-/* HEAD, marked with a background, not a recolored label, which keeps a track badge legible. */
+/* HEAD gets a background, not a recolored label, which keeps a track badge legible. */
 .tree-item.current,
 .tree-item.selected {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-/* The files pane's EXPLORER tree. It nests to whatever depth a repository's folders do, so
-   its rows set `padding-left` inline. */
+/* The files pane's EXPLORER tree. It nests arbitrarily deep, so rows set `padding-left` inline. */
 .explorer-tree {
   display: flex;
   flex-direction: column;
@@ -510,16 +500,14 @@ textarea:focus {
   min-height: 0;
 }
 
-/* VS Code's explorer row (ExplorerDelegate.ITEM_HEIGHT is 22px), 1px short of it like every other
-   measurement in Explorer.tsx, at the window's own 13px type. No flex gap: the twistie slot
-   carries its own. */
+/* VS Code's explorer row (ExplorerDelegate.ITEM_HEIGHT 22px), 1px short like every measurement in
+   Explorer.tsx. No flex gap: the twistie slot carries its own. */
 .explorer-tree .tree-item {
   height: 21px;
   gap: 0;
 }
 
-/* The twistie slot's icons — the chevron and a file's mark — 2px down from the shared
-   --icon-size, for the smaller slot. */
+/* The twistie slot's chevron and file mark: 2px under --icon-size, for the smaller slot. */
 .explorer-tree .tree-icon {
   width: 11px;
   height: 11px;
@@ -543,9 +531,8 @@ textarea:focus {
   line-height: 1;
 }
 
-/* A file mark's color, by Seti's palette (FileMarkColor in git/file-icons.ts). Every theme names
-   the terminal's colors; Seti's orange has no ANSI slot and takes the bright red, its pink the
-   bright magenta. */
+/* Seti's palette (FileMarkColor in git/file-icons.ts) in the terminal's ANSI colors, which every
+   theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
 .explorer-tree .tree-icon.blue {
   color: var(--vscode-terminal-ansiBlue);
 }
@@ -597,15 +584,15 @@ textarea:focus {
   font-weight: 400;
 }
 
-/* Ahead/behind on a local branch row: only the non-zero direction shows. Pushed right by a
-   margin, a `flex: 1` on every label also moving `.count-badge` on rows with no track. */
+/* Ahead/behind on a local branch row, non-zero directions only. Pushed right by a margin: a
+   `flex: 1` label would also move `.count-badge` on rows with no track. */
 .tree-track {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: none;
   margin-left: auto;
-  /* Matches how far `.icon-button` insets its icon in the header, so the right edges align. */
+  /* `.icon-button`'s icon inset in the header, so the right edges align. */
   padding-right: 5px;
 }
 
@@ -640,9 +627,9 @@ textarea:focus {
   min-width: 0;
 }
 
-/* One project's split: 1–4 `.terminal-pane` cells side by side (see "Split view" in
-   CLAUDE.md). Row direction, every preset's first divider being vertical; one that stacks two
-   panes wraps them in a nested column. Relative for `.snap-preview`; no stacking context. */
+/* One project's split: 1–4 `.terminal-pane`s ("Split view" in CLAUDE.md). A row, since every
+   preset's first divider is vertical; stacked panes nest in a column. Relative for
+   `.snap-preview`; no stacking context. */
 .panes-grid {
   position: relative;
   display: flex;
@@ -651,8 +638,7 @@ textarea:focus {
   min-height: 0;
 }
 
-/* A preset that stacks two panes puts them in one of these; the sized one carries its width
-   inline. */
+/* Two stacked panes; a sized column carries its width inline. */
 .panes-column {
   display: flex;
   flex-direction: column;
@@ -660,8 +646,8 @@ textarea:focus {
   min-height: 0;
 }
 
-/* One pane: its own tab strip and terminal stack. Relative so `.drag-over`'s overlay can
-   anchor to it. `min-*: 0` is what lets a sized neighbour push the others below their content. */
+/* One pane: tab strip and terminal stack. Relative for `.drag-over`'s overlay; `min-*: 0` lets a
+   sized neighbour push the others below their content. */
 .terminal-pane {
   position: relative;
   display: flex;
@@ -675,9 +661,8 @@ textarea:focus {
   flex: 1;
 }
 
-/* The pane a dragged tab would land in. An overlay rather than a border on the pane, a border
-   shrinking the box its children measure; and not an inset box-shadow, whose top edge paints
-   behind the tab strip's opaque background. */
+/* The pane a dragged tab would land in. An overlay: a border would shrink the box its children
+   measure, and an inset box-shadow's top edge paints behind the opaque tab strip. */
 .terminal-pane.drag-over::after {
   content: "";
   position: absolute;
@@ -688,8 +673,8 @@ textarea:focus {
   pointer-events: none;
 }
 
-/* The pane a dragged tab would add, at even shares (`PANE_BOXES`). An overlay: the panes must
-   keep their sizes until the drop, or every pty under them refits mid-drag. */
+/* The pane a dragged tab would add, at even shares (`PANE_BOXES`). An overlay: panes keep their
+   sizes until the drop, or every pty under them refits mid-drag. */
 .snap-preview {
   position: absolute;
   border: 1px solid var(--vscode-focusBorder);
@@ -701,16 +686,16 @@ textarea:focus {
   position: relative;
   display: flex;
   align-items: stretch;
-  /* VS Code's own editor tab height. */
+  /* VS Code's editor tab height. */
   height: 35px;
   flex: none;
   background: var(--vscode-tab-inactiveBackground);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-/* Indeterminate: nothing this sits under reports real progress. Drawn only by `ProgressBar`,
-   whose bit width, offset, travel (`--travel`) and duration are absolute, so the bit is the
-   same length and speed in a 300px sidebar section and a 900px pane. */
+/* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
+   travel (`--travel`) and duration absolutely, so it looks alike in a 300px section and a 900px
+   pane. */
 .progress-bar {
   position: absolute;
   left: 0;
@@ -748,7 +733,7 @@ textarea:focus {
   scrollbar-width: none;
 }
 
-/* No bar of its own; the ::-webkit-scrollbar rule above outweighs scrollbar-width. */
+/* Needed too: the ::-webkit-scrollbar rule above outweighs scrollbar-width. */
 .tabs::-webkit-scrollbar {
   display: none;
 }
@@ -773,12 +758,12 @@ textarea:focus {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
-/* One row of plain icon buttons at the strip's start, none shaped like a tab. Its separator
-   matches `.new-tab`'s box at the strip's other end. */
+/* Plain icon buttons at the strip's start, none tab-shaped; boxed like `.new-tab` at the other
+   end. */
 .tab-strip-actions {
   display: flex;
   align-items: center;
-  /* The same 2px `.section-header-actions` keeps between the buttons of a section header. */
+  /* As `.section-header-actions`. */
   gap: 2px;
   flex: none;
   border-right: 1px solid var(--vscode-tab-border);
@@ -796,9 +781,8 @@ textarea:focus {
   text-decoration: line-through;
 }
 
-/* What a session is doing: spinner while a turn runs, question mark while it waits, speech
-   bubble once one finished out of sight. One rule for all three and for both places they
-   appear. Only the colour: size comes from where the mark stands. */
+/* Spinner while a turn runs, question mark while it waits, speech bubble once it finished out of
+   sight. One rule for all three, on tab and project row; colour only, size is the site's. */
 .session-mark {
   flex: none;
   color: var(--vscode-focusBorder);
@@ -857,7 +841,7 @@ textarea:focus {
   cursor: default;
 }
 
-/* The compact look an icon-less list of choices takes, apart from the context menu's padding. */
+/* Compact, icon-less lists of choices: the context menu without its padding. */
 .new-session-menu,
 .dropdown-menu {
   border-radius: 3px;
@@ -888,23 +872,22 @@ textarea:focus {
   position: relative;
   flex: 1;
   min-height: 0;
-  /* The same 6px gutter a row keeps from its pane elsewhere in the app. */
+  /* The 6px gutter rows keep from their pane elsewhere. */
   padding: 6px;
   background: var(--vscode-terminal-background);
 }
 
-/* Where one xterm is mounted. Named `-host`, never `terminal`: xterm's own element carries the
-   class "terminal xterm ...", so a rule named for the plain word lands on both. It carries the
-   terminal background itself, `theme.ts` reading the same variable, so the two cannot drift. */
+/* Where one xterm mounts. `-host`, never `terminal`: xterm's own element has class "terminal",
+   so a rule on the plain word lands on both. Paints the terminal background from the variable
+   `theme.ts` reads, so the two cannot drift. */
 .terminal-host {
   position: absolute;
-  /* Repeats the stack's padding: an absolutely positioned child is laid out against the
-     padding box. */
+  /* The stack's padding: an absolute child is placed against the padding box. */
   inset: 6px;
   background: var(--vscode-terminal-background);
-  /* Keeps the DOM renderer's row updates from invalidating style and layout of the whole
-     window: the renderer logged 0.7-1.2s long tasks on writes of ~100 chars. No `paint`
-     containment, which would clip the drag-over frame reaching past the host. */
+  /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window
+     (measured: 0.7-1.2s long tasks on ~100-char writes). No `paint`: it would clip the
+     drag-over frame reaching past the host. */
   contain: size layout style;
 }
 
@@ -913,26 +896,24 @@ textarea:focus {
   visibility: hidden;
 }
 
-/* A file is being held over this terminal. An overlay, not a border on the host: a border
-   shrinks the box xterm measures, so every drag would refit it and resize the pty. */
+/* A file held over this terminal. An overlay, not a border: a border shrinks the box xterm
+   measures, so every drag would refit it and resize the pty. */
 .terminal-host.drag-over::after {
   content: "";
   position: absolute;
-  /* Negates the host's inset, so the frame lands on the pane's edges. Right and bottom are one
-     pixel short: those are the window's own edges, where a line is not drawn. */
+  /* Undoes the host's inset to frame the pane. Right and bottom are 1px short: the window's own
+     edges, where no line is drawn. */
   inset: -6px -5px -5px -6px;
-  /* 1px, like every other line that points at something. */
   border: 1px solid var(--vscode-focusBorder);
-  /* Above xterm's own layers, which reach 7 for its decorations. */
+  /* Above xterm's layers, which reach 7 for decorations. */
   z-index: 10;
   pointer-events: none;
 }
 
 /*
- * xterm.css hardcodes a black background here ("required on OS X for the scroll bar to appear
- * fully opaque"), which shows wherever the viewport is larger than the rows drawn in it. The
- * selector matches xterm.css's own two-class one, or it would lose the cascade despite loading
- * later. The scrollbar is hidden: a TUI repaints its whole viewport, so one would only twitch.
+ * xterm.css hardcodes a black background here, showing wherever the viewport outgrows its rows.
+ * The selector copies xterm.css's two-class one, or it loses the cascade despite loading later.
+ * No scrollbar: a TUI repaints its whole viewport, so one would only twitch.
  */
 .xterm .xterm-viewport {
   background-color: transparent;
@@ -944,26 +925,26 @@ textarea:focus {
 }
 
 /*
- * The rules above only hide a native scrollbar. Since xterm 6 the rows sit in a copy of VS
- * Code's scrollable element, whose bar is a <div class="slider"> xterm rebuilds and no rule
- * here reaches. That one is made invisible by its color in `theme.ts`, with the overview ruler.
+ * These only hide a native scrollbar. Since xterm 6 the bar is a <div class="slider"> in a copy
+ * of VS Code's scrollable element, out of CSS's reach; `theme.ts` hides it by color, with the
+ * overview ruler.
  */
 
 /* Side pane: git or files ----------------------------------------------------------------- */
 
-/* Its own column between the navigation and the terminals; width dragged like the sidebar's. */
+/* A column between navigation and terminals; width dragged like the sidebar's. */
 .side-pane {
   display: flex;
   flex: none;
-  /* No floor on the host: it is the box the slide animates to zero, and the pane's own minimum
-     below keeps the content laid out while it is clipped. */
+  /* No floor: the slide animates this box to zero, while the content's own minimum keeps it
+     laid out under the clip. */
   min-width: 0;
   overflow: hidden;
   background: var(--vscode-sideBar-background);
   border-right: 1px solid var(--vscode-panel-border);
 }
 
-/* Only while it slides: a transition left on animates the width the sash sets too. */
+/* Only while sliding: left on, it would animate sash drags too. */
 .side-pane.sliding {
   transition: width 0.15s ease;
 }
@@ -974,7 +955,7 @@ textarea:focus {
   flex: 1;
   min-width: var(--pane-min-width);
   min-height: 0;
-  /* Restarts on every switch between the views: leaving `display: none` starts an animation anew. */
+  /* Replays on every view switch: leaving `display: none` restarts an animation. */
   animation: side-pane-fade-in 0.1s ease-out;
 }
 
@@ -984,7 +965,7 @@ textarea:focus {
   }
 }
 
-/* The side pane's other view, kept mounted for its state. Nothing in it measures itself. */
+/* The other view, kept mounted for its state; `display` is safe, nothing in it measures itself. */
 .side-pane-content.hidden {
   display: none;
 }
@@ -1030,8 +1011,8 @@ textarea:focus {
   white-space: nowrap;
 }
 
-/* The letter git uses for the change, in the colour the theme gives it in its own SCM list.
-   `renamed` has none: git treats it as a modification of a file that moved. */
+/* git's letter for the change, in the theme's SCM colour. `renamed` has none: git treats it as a
+   modification of a moved file. */
 .change-status {
   flex: none;
   width: 14px;
@@ -1060,8 +1041,8 @@ textarea:focus {
   color: var(--vscode-gitDecoration-conflictingResourceForeground);
 }
 
-/* The editor tab's slot in `.terminal-stack`, over the stack's padding: monaco keeps a gutter of
-   its own. Hidden by visibility, like `.terminal-host`, so monaco keeps a laid-out box. */
+/* The editor tab's slot in `.terminal-stack`, over its padding: monaco has its own gutter. Hidden
+   by visibility, like `.terminal-host`, so monaco keeps a laid-out box. */
 .editor-tab {
   position: absolute;
   inset: 0;
@@ -1070,9 +1051,8 @@ textarea:focus {
   background: var(--vscode-editor-background);
 }
 
-/* Descendants too, and `!important`: monaco's diff editor writes `visibility: visible` inline on
-   both of its editors (for its accessible diff viewer), which would show them through a hidden
-   ancestor. */
+/* Descendants too, `!important`: monaco's diff editor writes `visibility: visible` inline on both
+   editors (for its accessible diff viewer), showing them through a hidden ancestor. */
 .editor-tab.hidden,
 .editor-tab.hidden *,
 .editor-frame.hidden,
@@ -1080,7 +1060,7 @@ textarea:focus {
   visibility: hidden !important;
 }
 
-/* The file below the bar: a placeholder or the image view in flow, the editor's frame over them. */
+/* Below the bar: a placeholder or the image view in flow, the editor's frame over them. */
 .editor-body {
   position: relative;
   display: flex;
@@ -1096,27 +1076,26 @@ textarea:focus {
   inset: 0;
 }
 
-/* Where monaco mounts itself. Not clipped with `overflow: hidden`: monaco contains its own
-   content, so clipping would only catch an overlay widget rendering outside this box. */
+/* Where monaco mounts. No `overflow: hidden`: monaco clips its own content, so it would only cut
+   off overlay widgets reaching outside this box. */
 .editor-host {
   position: absolute;
   inset: 0;
 }
 
-/* Ctrl+S turns this on the moment a keystroke lands, off again once it reaches disk. */
+/* Unsaved edits: on from the first keystroke until Ctrl+S reaches disk. */
 .editor-dirty {
   color: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
 
-/* Monaco's tooltip widget, turned off. `.workbench-hover-pointer` (the arrow) is a sibling of
-   `.monaco-hover` in this container, so hiding the shared container catches both. */
+/* Monaco's tooltips off. The container holds both `.monaco-hover` and its arrow
+   (`.workbench-hover-pointer`), so hiding it catches both. */
 .editor-host .workbench-hover-container {
   display: none !important;
 }
 
-/* The find widget's buttons, made to look like every other icon-button. `!important` because
-   monaco's findWidget.css is bundled after this file, so equal specificity loses on order.
-   The `.toggle` ones keep their box: a 24px box overflows the compact search field. */
+/* The find widget's buttons as icon-buttons. `!important`: monaco's findWidget.css is bundled
+   after this file and wins on order. `.toggle`s keep their box: 24px overflows the search field. */
 .editor-host .find-widget .button {
   background-color: transparent !important;
 }
@@ -1137,7 +1116,7 @@ textarea:focus {
   opacity: 1;
 }
 
-/* The editor tab's bar. Its progress shows in the pane's tab strip, like a starting agent's. */
+/* No progress bar of its own: that shows in the pane's tab strip, like a starting agent's. */
 .editor-bar {
   display: flex;
   align-items: center;
@@ -1149,7 +1128,7 @@ textarea:focus {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-/* The bar's buttons at its start, separated as `.tab-strip-actions` is in the tab strip. */
+/* Boxed like `.tab-strip-actions`. */
 .editor-bar-actions {
   display: flex;
   align-items: center;
@@ -1169,8 +1148,8 @@ textarea:focus {
   font-size: 13px;
 }
 
-/* A toggle whose pane is out — the side pane's view buttons. The marking blue, as everything that
-   points at something: `--vscode-button-background` is near white in Dark Slate. */
+/* A toggle whose pane is out (the side pane's view buttons). focusBorder, as everything that
+   points: `--vscode-button-background` is near white in Dark Slate. */
 .icon-button.active {
   opacity: 1;
   color: var(--vscode-focusBorder);
@@ -1202,8 +1181,8 @@ textarea:focus {
   min-width: 0;
 }
 
-/* Natural size, not `max-width: 100%`: the images must stay at one scale to line up, and the
-   box scrolls. The checkerboard sits on the box, showing through a faded image as a haze. */
+/* Natural size, not `max-width: 100%`: both images stay at one scale to line up; the box scrolls.
+   The checkerboard sits on the box, a haze through a faded image. */
 .image-diff-stack {
   position: relative;
   flex: 1;
@@ -1243,7 +1222,7 @@ textarea:focus {
   color: var(--vscode-descriptionForeground);
 }
 
-/* Picks the comparison layout; the active one carries an active tab's 1px focusBorder underline. */
+/* Picks the comparison layout; the active one takes an active tab's underline. */
 .image-diff-modes {
   display: flex;
   align-items: center;
@@ -1269,7 +1248,7 @@ textarea:focus {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
-/* The onion-skin fade; a range input has no other use, so its track and thumb are built here. */
+/* The onion-skin fade, the only range input, so its track and thumb are styled here. */
 .image-diff-blend {
   display: flex;
   align-items: center;
@@ -1300,22 +1279,20 @@ textarea:focus {
 
 /* Sashes --------------------------------------------------------------------------------- */
 
-/* The draggable divider between two panes: a 4px hit area straddling the border it sits on,
-   pulled out of the layout by negative margins so it costs the panes no space. */
+/* A 4px hit area straddling a pane border, negative margins so it costs the panes no space. */
 .sash {
   position: relative;
-  /* Above both neighbours, so their borders and contents don't take the pointer instead. */
+  /* Above both neighbours, so they don't take the pointer. */
   z-index: 1;
   flex: none;
 }
 
-/* The line between the two panes it sizes, always drawn: the same 1px `--vscode-panel-border`
-   every other pane boundary uses, rather than filling the 4px hit area. */
+/* Always drawn: the 1px `--vscode-panel-border` of every pane boundary, not the 4px hit area. */
 .sash::before {
   content: "";
   position: absolute;
   background: var(--vscode-panel-border);
-  /* Fades to the drag/highlight color and back, not to and from nothing. */
+  /* Fades to the drag color and back, not from nothing. */
   transition: background 0.1s linear;
 }
 
@@ -1345,16 +1322,14 @@ textarea:focus {
   height: 1px;
 }
 
-/* Only while it is dragged, not on hover, which would recolor the line whenever the pointer
-   came to rest near a pane border. */
+/* Only while dragged: on hover it would recolor whenever the pointer rests near a border. */
 .sash.dragging::before {
   background: var(--vscode-sash-hoverBorder);
 }
 
 /* Shared bits ---------------------------------------------------------------------------- */
 
-/* Takes a whole pane off screen. Late in the file: it must override the display the panes it
-   hides set on themselves, which are single classes too. */
+/* Late in the file: it must beat the `display` the hidden panes set with single classes too. */
 .pane-hidden {
   display: none;
 }
@@ -1400,7 +1375,7 @@ textarea:focus {
 
 /* Dialog --------------------------------------------------------------------------------- */
 
-/* Covers the window while a question stands. The dim is a fixed black, not a theme variable. */
+/* The dim is a fixed black, not a theme variable. */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1425,15 +1400,13 @@ textarea:focus {
   box-shadow: 0 4px 12px var(--vscode-widget-shadow);
 }
 
-/* The wider dialog: the commit and command prompts, whose fields hold whole lines, and the
-   settings dialogs. */
+/* Prompts whose fields hold whole lines (commit, command), and the settings dialogs. */
 .dialog.wide {
   width: 560px;
 }
 
-/* Every card dialog is headed by a title bar or a tab strip, both drawn by `DialogFrame` and
-   pulled to the dialog's edges by a negative margin, so the header is its first child.
-   `position: relative` is what lets the dialog's `.progress-bar` anchor to its bottom edge. */
+/* A card dialog's header (tab strip or title bar), drawn by `DialogFrame` as its first child and
+   pulled to the edges by a negative margin. Relative to anchor the dialog's `.progress-bar`. */
 .dialog-tabs {
   position: relative;
   display: flex;
@@ -1466,9 +1439,8 @@ textarea:focus {
   margin: 0 6px 0 auto;
 }
 
-/* Same height as .editor-bar, and shows progress with a bar of its own. It sits inside .dialog's
-   16px padding, cancelled on three sides so the bar is flush; the top corners then need
-   .dialog's own radius back. */
+/* .editor-bar's height, with a progress bar of its own. Cancels .dialog's 16px padding on three
+   sides to sit flush, so the top corners take .dialog's radius. */
 .dialog-bar {
   position: relative;
   display: flex;
@@ -1493,8 +1465,7 @@ textarea:focus {
   font-weight: 600;
 }
 
-/* Every field label bold in this dialog only. The direct-child selector keeps this off
-   .sbx-arrow's "→", nested deeper inside the same .dialog-field. */
+/* Bold field labels, this dialog only; `>` keeps it off .sbx-arrow's "→" nested deeper. */
 .sbx-settings-dialog .dialog-field > span {
   font-weight: 600;
 }
@@ -1536,8 +1507,7 @@ textarea:focus {
   padding: 4px 4px 4px 8px;
 }
 
-/* The path field's flex: 1 pushes its remove button right; the fixed-width port fields leave
-   no such stretch, so this does it explicitly. */
+/* The path field's flex: 1 pushes its remove button right; fixed-width port fields need this. */
 .sbx-port-row .icon-button {
   margin-left: auto;
 }
@@ -1560,8 +1530,7 @@ textarea:focus {
   color: var(--vscode-descriptionForeground);
 }
 
-/* Plain text, not an input. Line-height pins it to the row's 26px; a long path is cut with an
-   ellipsis and carried whole in the title. */
+/* Plain text, pinned to the row's 26px; a long path is cut, and whole in the title. */
 .sbx-path-value {
   flex: 1;
   min-width: 0;
@@ -1572,8 +1541,7 @@ textarea:focus {
   font-family: var(--vscode-editor-font-family);
 }
 
-/* The dropdown is a button (.dropdown-trigger, padding: 3px 6px), shorter than an input's own
-   padding — pinned to the same 26px so every row reads level. */
+/* The dropdown button is shorter than an input; pinned to 26px so every row reads level. */
 .sbx-path-row .dropdown-trigger,
 .sbx-knowledge-row .dropdown-trigger {
   height: 26px;
@@ -1599,7 +1567,7 @@ textarea:focus {
   min-height: 0;
 }
 
-/* Each settings tab scrolls independently when its rows outgrow the available dialog height. */
+/* Each tab scrolls on its own once its rows outgrow the dialog. */
 .sbx-settings-pane {
   flex: 1;
   min-height: 0;
@@ -1655,9 +1623,9 @@ textarea:focus {
 
 .dialog-checkbox input {
   accent-color: var(--vscode-focusBorder);
-  /* Chrome's own box, stated so the offset is arithmetic. The 10 is not that box: centring the
-     real 13 puts it high, a line box carrying the font's descender space. Read off the running
-     app, so re-check it if the theme's font changes. */
+  /* Chrome's own box, stated so the offset is arithmetic. The 10 is not the box: centring the
+     real 13 sits high, the line box holding descender space. Measured in the running app;
+     re-check if the font changes. */
   width: 13px;
   height: 13px;
   margin-top: calc((1lh - 10px) / 2);
@@ -1675,7 +1643,7 @@ textarea:focus {
   overflow-y: auto;
 }
 
-/* The Appearance tab's light / dark radio buttons, side by side. */
+/* The Appearance tab's light / dark radios. */
 .settings-color-schemes {
   display: flex;
   gap: 16px;
@@ -1709,8 +1677,7 @@ textarea:focus {
   gap: 6px;
 }
 
-/* The key combo in a column wide enough for "Ctrl+Shift+" plus a letter; the Info tab's labels
-   share it, so the two tabs' rows line up. */
+/* A column wide enough for "Ctrl+Shift+" plus a letter, shared with the Info tab's labels. */
 .settings-info-row,
 .settings-shortcut-row {
   display: flex;
@@ -1739,8 +1706,8 @@ textarea:focus {
   padding: 5px 6px;
 }
 
-/* The prompt's history dropdown, anchored to its field. Inside the dialog's DOM: the overlay
-   is a stacking context of its own (z-index 30), so anything beside it paints behind. */
+/* The prompt's history dropdown, inside the dialog's DOM: the overlay is its own stacking
+   context (z-index 30), so anything beside it paints behind. */
 .dialog-history-anchor {
   position: relative;
   display: flex;
@@ -1775,7 +1742,7 @@ textarea:focus {
   cursor: pointer;
 }
 
-/* A row, so the list hover — its pin and x are `.icon-button`s and keep the toolbar one. */
+/* A row, so the list hover; its pin and x are `.icon-button`s with the toolbar one. */
 .dialog-history-row:hover {
   background: var(--vscode-list-hoverBackground);
 }
@@ -1811,8 +1778,7 @@ textarea:focus {
   gap: 8px;
 }
 
-/* Submit labels vary and one may gain a spinner while it runs, so a floor keeps the row from
-   shifting. */
+/* Labels vary and may gain a spinner; a floor keeps the row from shifting. */
 .dialog-buttons .button {
   min-width: 76px;
   justify-content: center;
@@ -1855,8 +1821,7 @@ textarea:focus {
 
 .add-repository-dialog {
   width: 720px;
-  /* Sized to the remote tab, the fullest one, and fixed: switching tabs must not resize the
-     dialog under the pointer. */
+  /* Fixed, sized to the fullest (remote) tab: switching tabs must not resize the dialog. */
   height: 440px;
 }
 
@@ -1881,8 +1846,7 @@ textarea:focus {
   border-right: 1px solid var(--vscode-panel-border);
 }
 
-/* The one entry carrying two lines, so its height is its content's. The 5px is what a 28px row
-   leaves above and below its text. */
+/* Two lines, so content-high. The 5px is what a 28px row leaves around its text. */
 .account-item {
   display: flex;
   align-items: center;
@@ -1926,7 +1890,7 @@ textarea:focus {
   opacity: 0.8;
 }
 
-/* Shaped like a row of the list above it, not like a dialog button, but set off from it. */
+/* Shaped like a list row, not a dialog button, set off from the list. */
 .add-account {
   display: flex;
   align-items: center;
@@ -1988,7 +1952,7 @@ textarea:focus {
   color: var(--vscode-descriptionForeground);
 }
 
-/* The row's action: there on hover, not once per row all the time. */
+/* Shown on hover only. */
 .repository-clone {
   visibility: hidden;
   padding: 1px 8px;
@@ -2021,7 +1985,7 @@ textarea:focus {
   min-width: 0;
 }
 
-/* Carries its wand and nothing else: squared off, and as tall as the field beside it. */
+/* Just its wand: squared off, as tall as the field beside it. */
 .dialog-suggest {
   align-self: stretch;
   padding: 0 8px;
@@ -2029,8 +1993,8 @@ textarea:focus {
 
 /* Notices -------------------------------------------------------------------------------- */
 
-/* Laid over the window's bottom right corner: a message must not resize the panes underneath.
-   Only the messages take the pointer, so the space around them stays clickable. */
+/* Over the bottom right corner, so a message never resizes the panes. Only the messages take the
+   pointer. */
 .notices {
   position: absolute;
   right: 0;
@@ -2055,8 +2019,8 @@ textarea:focus {
   align-items: flex-start;
   /* With the 13px icon, the text starts where VS Code's does beside its 16px one. */
   gap: 7px;
-  /* VS Code's fixed width (MAX_WIDTH in notificationsToasts.ts), however short the message: a
-     notice sized to its text is easily missed. The window's width minus the margins caps it. */
+  /* VS Code's fixed width (MAX_WIDTH in notificationsToasts.ts): a notice sized to its text is
+     easily missed. Capped by the window minus margins. */
   width: min(450px, 100vw - 14px);
   margin: 4px;
   padding: 10px 9px;
@@ -2098,8 +2062,7 @@ textarea:focus {
   color: var(--vscode-notificationsInfoIcon-foreground);
 }
 
-/* Long paths break anywhere rather than widening the box; a multi-line git message keeps its
-   lines. */
+/* Long paths break anywhere; a multi-line git message keeps its lines. */
 .notice-message {
   overflow-wrap: anywhere;
   white-space: pre-line;

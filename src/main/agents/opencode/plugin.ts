@@ -5,37 +5,34 @@ import { sandboxHookDir, type HookTarget } from "../../terminals/hook-target";
 import { renderHookReport } from "../hook-report";
 
 /**
- * opencode is driven through one generated plugin per repository: a `.ts` file under a config
- * directory's `plugins/`, loaded in-process by the `opencode` the tab runs. It has no declarative
- * hook file; the plugin API is the one way into a message being composed (`chat.message`) and,
- * through the server's whole event bus (`event`), the one place every turn signal can be read.
- * Measured against 1.18.4 on the host and 1.18.23 in an sbx sandbox: the `event` hook receives
- * `session.created`, `session.updated` (with the whole session), `session.status`,
- * `session.idle`, `permission.asked`/`replied` and `question.asked` exactly as `/event` does.
+ * opencode is driven by one generated plugin per repository: a `.ts` under a config dir's
+ * `plugins/`, loaded in-process by the tab's `opencode`. There is no declarative hook file; the
+ * plugin API is the only way into a message being composed (`chat.message`) and, via the event
+ * bus (`event`), to every turn signal. Measured (1.18.4 host, 1.18.23 sbx): `event` receives
+ * `session.created`, `session.updated` (whole session), `session.status`, `session.idle`,
+ * `permission.asked`/`replied` and `question.asked` exactly as `/event` does.
  *
- * `OPENCODE_CONFIG_DIR` points opencode at the directory additively; it does not replace the
- * user's own `plugins/`. The first time opencode sees a `plugins/` file in a config dir it
- * bun-installs `@opencode-ai/plugin` *into that dir* (measured), taking seconds to minutes — so
- * the host's dir is shared across repositories and a sandbox gets a Linux one under agentDir.
+ * `OPENCODE_CONFIG_DIR` is additive to the user's `plugins/`. On first sight of a plugin in a
+ * config dir, opencode bun-installs `@opencode-ai/plugin` *into it* (measured, seconds to
+ * minutes) — so the host dir is shared across repositories and a sandbox gets a Linux one.
  */
 
-/** What one repository's plugin is baked with — see the header. The turns it reports go over the
- *  control channel, whose address it reads from its own environment at run time. */
+/** Baked into one repository's plugin; the control channel's address is read from its env. */
 export interface OpencodePluginOptions {
-  /** The repository's root as the plugin's own process sees it — the `TET_PROJECT_ROOT` guard. */
+  /** The repository root as the plugin's process sees it — the `TET_PROJECT_ROOT` guard. */
   projectRoot: string;
   contextFile: string;
-  /** Where a session record goes (sessions/<id>.json) and where a rename request is found. */
+  /** Session records (sessions/<id>.json) and rename requests. */
   sessionsDir: string;
   renameDir: string;
-  /** The sbx sandbox this plugin runs in, recorded on every session; null on the host. */
+  /** Recorded on every session; null on the host. */
   sandbox: string | null;
 }
 
-/** Set on the tab's process so the generated plugin can tell whose repository it is serving. */
+/** Tells the plugin which repository its process serves. */
 export const PROJECT_ROOT_ENV = "TET_PROJECT_ROOT";
 
-/** The record one session leaves under sessionsDir — what the listing reads. */
+/** One session's record under sessionsDir — what the listing reads. */
 export interface SessionRecord {
   id: string;
   title: string;
@@ -44,8 +41,7 @@ export interface SessionRecord {
   sandbox: string | null;
 }
 
-/** A sandboxed tab's plugin lives in its own config dir under agentDir, mounted into the sandbox
- *  whole, so its bun install is a Linux one and never collides with the host's. */
+/** A sandboxed tab's config dir under agentDir, mounted whole: its bun install is Linux's own. */
 export function sandboxConfigDir(agentDir: string): string {
   return path.join(sandboxHookDir(agentDir), "opencode");
 }
@@ -58,18 +54,16 @@ export function renameDir(agentDir: string): string {
   return path.join(agentDir, "rename");
 }
 
-/** The plugin's filename in a shared plugins dir: unique per repository. */
+/** Unique per repository in a shared plugins dir. */
 function pluginName(cwd: string): string {
   return `tet-${crypto.createHash("sha256").update(cwd).digest("hex").slice(0, 16)}.ts`;
 }
 
 /**
- * Writes this repository's plugin into `configDir/plugins/` for one target and returns the
- * environment that makes opencode load and scope it. The record directories are created here,
- * since the plugin only ever writes into them. Written beside the target and renamed into
- * place, and only when the content changed — opencode recompiles a changed plugin file, at a
- * cost of seconds to minutes, which is also why nothing per-run (the control channel's port and
- * token) is baked in: the plugin reads those from its own environment.
+ * Writes the repository's plugin into `configDir/plugins/`; returns the env that loads and scopes
+ * it. Creates the record directories. Renamed into place, and only when changed — opencode
+ * recompiles a changed plugin (seconds to minutes), so nothing per-run (control port, token) is
+ * baked in.
  */
 export function writeOpencodePlugin(
   configDir: string,
@@ -107,9 +101,8 @@ export function writeOpencodePlugin(
 }
 
 /**
- * The plugin's TypeScript source, pure so the test can compile and drive it without opencode.
- * Nothing is imported from opencode's packages — the file must be valid wherever the config dir
- * is — and every path and name is baked in as a JSON literal, never spliced raw.
+ * The plugin source; pure, so tests drive it without opencode. Imports nothing from opencode's
+ * packages (valid in any config dir); values are baked in as JSON literals, never spliced raw.
  */
 export function renderOpencodePlugin(options: OpencodePluginOptions): string {
   return `// Generated by tet for one repository, read by nothing but opencode. Turns are reported

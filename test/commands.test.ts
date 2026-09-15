@@ -186,7 +186,7 @@ describe("readSbxConfig", () => {
       paths: [
         { path: "~/data", access: "rw" as const },
         { path: elsewhere, access: "ro" as const },
-        // A single file is a row like any other — sbx mounts a file and a folder the same way.
+        // A single file is a row like any other: sbx mounts files and folders alike.
         { path: "~/.npmrc", access: "ro" as const }
       ],
       hosts: ["gitlab.example.com", "*.s3.example.net:443"]

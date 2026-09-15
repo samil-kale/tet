@@ -2,16 +2,15 @@ import * as fs from "node:fs";
 import type { UpdateResult } from "../shared/release";
 
 /**
- * The update, run once tet has quit: `tet-update.js <pid> <version> <staged root> <install root>
- * <result file>`. Started detached by the app's auto-update.ts under the *new* version's binary as
- * node, from the folder that version was unpacked into — never the installed binary, which is what
- * gets replaced, and which win32 keeps locked, like node-pty's native files, until tet's process is
- * gone. Hence the wait first.
+ * Run after tet quits: `tet-update.js <pid> <version> <staged root> <install root> <result file>`.
+ * Started detached by auto-update.ts under the *new* binary as node from its unpack folder — the
+ * installed binary gets replaced, and win32 locks it (and node-pty's native files) until tet's
+ * process is gone. Hence the wait first.
  */
 
 const EXIT_WAIT_MS = 60_000;
 const POLL_MS = 250;
-/** A handle outliving the process by a moment (a pty's console host) fails a rename with EBUSY. */
+/** A handle briefly outliving the process (a pty's console host) fails a rename with EBUSY. */
 const ATTEMPTS = 5;
 const RETRY_MS = 2000;
 
@@ -24,7 +23,7 @@ function alive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    // EPERM: there, only not ours to signal.
+    // EPERM: alive, just not ours to signal.
     return (error as NodeJS.ErrnoException).code === "EPERM";
   }
 }
@@ -43,7 +42,7 @@ function retried(action: () => void): void {
   }
 }
 
-/** Beside the target and renamed into place: the app may be starting again and reading it. */
+/** Written beside and renamed into place: the app may be starting and reading it. */
 function writeResult(file: string, result: UpdateResult): void {
   const temp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temp, JSON.stringify(result));
@@ -57,15 +56,14 @@ function main(): void {
   while (alive(pid) && Date.now() < deadline) {
     sleep(POLL_MS);
   }
-  // Never under a tet that is still there: measured on macOS, a quit can leave the process
-  // standing without a window, and its folder would be replaced under it. The version is found
-  // again at its next start, and installed at its next quit.
+  // Never under a running tet: on macOS a quit can leave a windowless process (measured). The
+  // next start finds the version again, and the next quit installs it.
   if (alive(pid)) {
     writeResult(resultFile, { version, ok: false, output: `tet (pid ${pid}) was still running after ${EXIT_WAIT_MS / 1000}s` });
     return;
   }
 
-  // The installed folder is moved aside rather than deleted first, so a failure can put it back.
+  // Moved aside, not deleted, so a failure can put it back.
   const old = `${root}.old`;
   try {
     fs.rmSync(old, { recursive: true, force: true });
@@ -83,8 +81,7 @@ function main(): void {
     }
   } catch (error) {
     let output = `could not put ${version} in place: ${String(error)}`;
-    // Retried like the move aside, and never in the way of the result: a scanner holding a file
-    // just copied must not leave the failure unreported.
+    // Retried, never blocking the result: a scanner holding a copied file must not hide the failure.
     try {
       retried(() => fs.rmSync(root, { recursive: true, force: true }));
       retried(() => fs.renameSync(old, root));
@@ -98,7 +95,7 @@ function main(): void {
   try {
     fs.rmSync(old, { recursive: true, force: true, maxRetries: ATTEMPTS });
   } catch {
-    // Left for the next update's rmSync above; the new version is in place either way.
+    // Left for the next update's rmSync; the new version is in place.
   }
 }
 

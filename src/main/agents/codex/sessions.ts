@@ -7,7 +7,7 @@ import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript
 import { deleteThread, renameThread } from "./app-server-client";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
-/** Codex's own config root — never overridden by tet, so this is what Codex itself resolves to. */
+/** Codex's config root; tet never overrides it. */
 function codexHome(): string {
   return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
 }
@@ -16,32 +16,32 @@ function sessionsRoot(home: string): string {
   return path.join(home, "sessions");
 }
 
-/** Codex's own name index — `{id, thread_name, updated_at}` lines, last one per id wins. */
+/** Codex's name index — `{id, thread_name, updated_at}` lines, the last per id wins. */
 function sessionIndexFile(home: string): string {
   return path.join(home, "session_index.jsonl");
 }
 
-/** Same budget as Claude's scan for the same reason: bounds a pathological single line. */
+/** Bounds a pathological single line, as Claude's scan does. */
 const TAIL_SCAN_BYTE_LIMIT = 256 * 1024;
-/** A rollout's `session_meta` line is first but not small: since 0.14x it carries the whole base
- *  instructions (measured), which a smaller budget cut short — no session was ever listed. */
+/** `session_meta` is first but not small: it carries the whole base instructions (measured,
+ *  0.14x), and a smaller budget cuts it short so no session lists. */
 const META_SCAN_BYTE_LIMIT = TAIL_SCAN_BYTE_LIMIT;
 
 interface SessionMeta {
   sessionId: string;
   cwd: string;
   source: string;
-  /** The line's own timestamp — a far more stable "created" signal than mtime. */
+  /** The line's own timestamp — steadier than mtime. */
   createdAt?: number;
 }
 
 /**
- * Cached by path once read: `session_meta` never changes, and a listing runs for every rollout on
- * the machine. A failed read is not cached — a just-created rollout can still be empty.
+ * `session_meta` never changes, and a listing reads every rollout on the machine. Failed reads are
+ * not cached — a just-created rollout can still be empty.
  */
 const metaCache = new Map<string, SessionMeta>();
 
-/** Reads only the first line of a rollout — `session_meta` is always written there, never later. */
+/** `session_meta` is always a rollout's first line. */
 async function readSessionMeta(filePath: string): Promise<SessionMeta | undefined> {
   const cached = metaCache.get(filePath);
   if (cached) {
@@ -88,13 +88,12 @@ async function parseSessionMeta(filePath: string): Promise<SessionMeta | undefin
 }
 
 /**
- * What a listing needs from a rollout's body: the first real prompt from its head, and the last
- * turn boundary from its end — `task_complete`/`turn_aborted` cover a normal end and an
- * interrupted one alike, the net under the Stop hook. Cached by path and size.
+ * A listing's needs from a rollout body: the first prompt from its head, and the last turn end —
+ * `task_complete` or `turn_aborted` (interrupted), the net under the Stop hook. Cached by path and size.
  */
 interface TailInfo {
   turnEndedAt?: number;
-  /** The first real user prompt — Codex assigns no title of its own, so this stands in for one. */
+  /** Stands in for a title; Codex assigns none. */
   firstPrompt?: string;
 }
 
@@ -103,7 +102,7 @@ const tailCache = new Map<string, { size: number; tail: TailInfo }>();
 const TURN_END_TYPES = ['"task_complete"', '"turn_aborted"'];
 const PROMPT_TYPES = ['"user_message"', '"role":"user"'];
 
-/** The last turn boundary in `lines`, if any — read backwards, since only the last one counts. */
+/** The last turn boundary in `lines`, if any. */
 function readTurnEnd(lines: string[]): number | undefined {
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
@@ -127,10 +126,7 @@ function readTurnEnd(lines: string[]): number | undefined {
   return undefined;
 }
 
-/**
- * The first real prompt, read forwards from the head: Codex writes its injected context blocks
- * first, so it sits a few lines in. Not looked for in the tail, which is read newest chunk first.
- */
+/** The first real prompt, read forwards: it follows Codex's injected context blocks. */
 async function readFirstPrompt(handle: fs.promises.FileHandle, size: number): Promise<string | undefined> {
   const buffer = Buffer.alloc(Math.min(size, TAIL_SCAN_BYTE_LIMIT));
   await handle.read(buffer, 0, buffer.length, 0);
@@ -152,7 +148,7 @@ async function readFirstPrompt(handle: fs.promises.FileHandle, size: number): Pr
   return undefined;
 }
 
-/** A real typed prompt, not the `<environment_context>`/`<skills_instructions>` blocks Codex injects. */
+/** A typed prompt, not an injected `<environment_context>`/`<skills_instructions>` block. */
 function extractUserPrompt(entry: Record<string, unknown>): string | undefined {
   const payload = entry.payload as Record<string, unknown> | undefined;
   if (entry.type === "event_msg" && payload?.type === "user_message") {
@@ -180,8 +176,7 @@ async function scanTail(filePath: string): Promise<TailInfo> {
     if (cached?.size === size) {
       return cached.tail;
     }
-    // The first prompt never changes once written, so only a session that had none yet looks
-    // again.
+    // A written first prompt never changes; only a session without one looks again.
     tail.firstPrompt = cached?.tail.firstPrompt ?? (await readFirstPrompt(handle, size));
     const previous = cached && cached.size < size ? cached : undefined;
     const floor = previous ? Math.max(0, previous.size - TAIL_SCAN_BYTE_LIMIT) : 0;
@@ -199,7 +194,7 @@ async function scanTail(filePath: string): Promise<TailInfo> {
   return tail;
 }
 
-/** `{id -> name}`, the last `session_index.jsonl` line per id — small file, read whole each time. */
+/** `{id -> name}` from `session_index.jsonl` — small, read whole each time. */
 async function readSessionNames(home: string): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   let text: string;
@@ -217,8 +212,7 @@ async function readSessionNames(home: string): Promise<Map<string, string>> {
       const id = nonEmptyString(entry.id);
       const name = nonEmptyString(entry.thread_name);
       if (id) {
-        // Last entry wins — a rename appends rather than replacing, an unset name is still an
-        // entry (Codex writes one on every name change including clearing it back to none).
+        // Last entry wins: renames append, and clearing a name appends an entry without one.
         if (name) {
           names.set(id, name);
         } else {
@@ -251,8 +245,8 @@ async function listRolloutFiles(home: string): Promise<string[]> {
   return files;
 }
 
-/** How many rollouts are read at once. A listing opens every rollout on the machine, and all at
- *  once is more file descriptors than a low `ulimit -n` allows past a thousand of them. */
+/** Rollouts read at once: a listing opens every rollout on the machine, and all at once exceeds a
+ *  low `ulimit -n`. */
 const READ_CONCURRENCY = 32;
 
 async function mapLimited<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -278,10 +272,9 @@ async function safeReaddir(dir: string): Promise<string[]> {
 }
 
 /**
- * Drops both caches' entries for rollouts that are gone — Codex's own picker deletes them behind
- * tet's back, and without this the caches only ever grow. Scoped to the tree just listed: a
- * sandbox's rollouts are read from a second root (SessionProvider.sandbox) into these same
- * caches, and unscoped the two would evict each other's entries on every pass.
+ * Evicts cached rollouts that are gone (Codex's picker deletes them behind tet's back). Scoped to
+ * `root`: a sandbox root (SessionProvider.sandbox) shares these caches, and the two would evict
+ * each other's entries.
  */
 function forgetMissing(files: string[], root: string): void {
   const present = new Set(files);
@@ -295,7 +288,7 @@ function forgetMissing(files: string[], root: string): void {
   }
 }
 
-/** win32 paths are case-insensitive; Codex itself lower-cases them for its own `cwd` matching. */
+/** win32 paths are case-insensitive; Codex lower-cases them for its own `cwd` matching. */
 function samePath(a: string, b: string): boolean {
   return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
@@ -318,12 +311,10 @@ export const codexSessionProvider: SessionProvider = {
   },
 
   /**
-   * `~/.codex/sessions` and the name index beside it, inside the sandbox. Two mounts because
-   * Codex keeps a session's name outside the rollout, in `session_index.jsonl`; without it every
-   * sandboxed session would list under its first prompt however often it was renamed. Measured:
-   * the codex template puts no volume of its own under `~/.codex`, sbx creates a missing target
-   * for either kind, and `auth.json` stays out of both paths. The mounted root is shaped like a
-   * `CODEX_HOME`, which is what lets rename and delete run against it — see `deleteThread`.
+   * The sandbox's `~/.codex/sessions` plus `session_index.jsonl`, where names live outside the
+   * rollout. Measured: the codex template has no volume under `~/.codex`, sbx creates a missing
+   * target of either kind, and `auth.json` stays unmounted. The root is shaped like a `CODEX_HOME`,
+   * so rename and delete run against it (`deleteThread`).
    */
   sandbox: {
     mounts: [
@@ -331,17 +322,16 @@ export const codexSessionProvider: SessionProvider = {
       { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
     ],
     list: (_executable, root, cwd) => listIn(root, cwd),
-    // The mounted root as the working directory too, not the sandbox's cwd: that one is a path
-    // inside the container, and `codex app-server` spawned in a cwd this host lacks fails with
-    // ENOENT. A thread is addressed by id under the CODEX_HOME these act on, so nothing is lost.
+    // The root as cwd too: the sandbox's cwd is a container path, and spawning there fails with
+    // ENOENT. Threads are addressed by id under CODEX_HOME anyway.
     remove: (executable, root, _cwd, sessionId) => deleteThread(executable, root, sessionId, root),
     rename: (executable, root, _cwd, sessionId, title) => renameIn(executable, root, sessionId, title, root)
   },
 
   /**
-   * Watches today's rollout folder for new/changed sessions and the name index for renames.
-   * Two-stage: the day's folder (and the month's and year's) may not exist yet, and `fs.watch`
-   * throws on a missing directory. There is no per-repository folder, so `list()` filters by cwd.
+   * Watches today's rollout folder and the name index. Its ancestors are watched too, since the
+   * day's folder may not exist yet and `fs.watch` throws on one. Not per repository: `list()`
+   * filters by cwd.
    */
   watch(_executable: string, _cwd: string, onChange: () => void): () => void {
     let stopped = false;
@@ -365,11 +355,11 @@ export const codexSessionProvider: SessionProvider = {
         watchers.push(watcher);
         armed.add(dir);
       } catch {
-        // Doesn't exist yet — the parent's own watch below re-checks once it's created.
+        // Doesn't exist yet — the parent's watch re-arms once it does.
       }
     };
 
-    // Re-resolving the chain on every event keeps this correct across midnight without a timer.
+    // Re-resolved on every event, so midnight needs no timer.
     const rearm = (): void => {
       if (stopped) {
         return;
@@ -411,7 +401,7 @@ async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
     const names = await readSessionNames(home);
     const entries = await mapLimited(files, async (filePath): Promise<AgentSessionInfo | undefined> => {
       const meta = await readSessionMeta(filePath);
-      // Only `source: "cli"` is an interactive session, matching Codex's own `/resume` picker.
+      // Only `source: "cli"` is interactive, as in Codex's `/resume` picker.
       if (!meta || meta.source !== "cli" || !samePath(meta.cwd, cwd)) {
         return undefined;
       }
@@ -434,7 +424,7 @@ async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
   }
 }
 
-/** The only writer of a thread's name is the app-server RPC — no CLI command, no rollout entry. */
+/** Only the app-server RPC writes a thread's name — no CLI command, no rollout entry. */
 async function renameIn(executable: string, cwd: string, sessionId: string, title: string, home?: string): Promise<void> {
   const trimmed = title.trim();
   if (!trimmed) {

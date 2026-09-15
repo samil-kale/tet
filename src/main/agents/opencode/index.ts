@@ -9,20 +9,19 @@ import { resolveOpencodeUrlPrefix } from "./session-urls";
 import { opencodeSessionProvider, registerAgentDir } from "./sessions";
 import { installTuiConfig } from "./tui-config";
 
-/** What a background question's session is called, so it can be found and removed again. */
+/** A background question's session title, so cleanupAsk can find it. */
 const ASK_TITLE = "tet: background question";
 
-/** The host's plugin directory, shared across repositories — see plugin.ts for why. */
+/** The host's plugin directory, shared across repositories (plugin.ts). */
 function hostConfigDir(storageRoot: string): string {
   return path.join(storageRoot, "opencode-plugins");
 }
 
 /**
- * opencode is client/server inside, but tet runs the plain `opencode` in each tab: its server is
- * a worker thread of that same process (measured: the generated plugin loads in
- * `src/cli/tui/worker.js`, and nothing listens on a port), and a generated plugin reports the
- * turns and sessions and takes the context in — see plugin.ts. The same on the host and in an sbx
- * sandbox; only the launcher differs. No `opencode serve` of tet's own, no `attach`.
+ * Each tab runs the plain `opencode`: its server is a worker thread of that process (measured: the
+ * plugin loads in `src/cli/tui/worker.js`, nothing listens on a port), and a generated plugin
+ * reports turns and sessions and injects the context (plugin.ts). Same on host and in sbx. No
+ * `opencode serve` or `attach` of tet's own.
  */
 export const opencodeAgent: AgentDefinition = {
   id: "opencode",
@@ -30,12 +29,12 @@ export const opencodeAgent: AgentDefinition = {
   executable: () => "opencode",
   versionArgs: ["--version"],
   /*
-   * Its own non-interactive mode: prints the reply and exits. It has no way to skip persisting
-   * the session, so the run is titled and `cleanupAsk` deletes it again by that title.
+   * Non-interactive mode. It cannot skip persisting the session, so the run is titled for
+   * `cleanupAsk`.
    */
   askArgs: ["run", "--title", ASK_TITLE],
-  // The question runs without the plugin (askAgent spawns with the machine's environment), so it
-  // leaves no record and opencode's own listing has to find it — a process each, affordable once.
+  // The question runs without the plugin (askAgent uses the machine's environment), so no record:
+  // opencode's own listing must find it, one process each.
   cleanupAsk: async (executable, cwd) => {
     const output = await runOpencode(executable, cwd, null, ["session", "list", "--format", "json"]);
     const entries = (output.trim() ? JSON.parse(output) : []) as { id?: unknown; title?: unknown }[];
@@ -55,45 +54,41 @@ export const opencodeAgent: AgentDefinition = {
     try {
       env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, paths.contextFile, HOST_TARGET, null);
     } catch (error) {
-      // A plugin that could not be written costs the turn marks, the records and the context —
-      // not the CLI. See prepareSpawn: swallow, never reject.
+      // Costs turn marks, records and context, not the CLI — swallow (see prepareSpawn).
       console.error("[tet] could not write opencode's plugin:", error);
     }
     return Promise.resolve({
       args: [],
-      // Passed as defaults, so a user who sets OPENCODE_CONFIG_DIR or OPENCODE_TUI_CONFIG
-      // themselves keeps their own (see spawnAgentProcess).
+      // Defaults: a user's own OPENCODE_CONFIG_DIR or OPENCODE_TUI_CONFIG wins (spawnAgentProcess).
       env: { ...env, ...installTuiConfig(paths.storageRoot) }
     });
   },
   prepareSandboxSpawn: (cwd, paths, sandbox) => {
     try {
-      // Its own config dir (a Linux bun install), but the records and rename requests
-      // are agentDir's own, shared with a host tab — a session is a session wherever it ran.
+      // Its own config dir (a Linux bun install); records and rename requests stay agentDir's,
+      // shared with host tabs.
       const configDir = sandboxConfigDir(paths.agentDir);
       const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, paths.contextFile, SANDBOX_TARGET, sandbox);
-      // The tui config too goes under the mounted dir: storageRoot's copy is not in the sandbox.
+      // Under the mounted dir: storageRoot's copy is not in the sandbox.
       for (const [key, file] of Object.entries(installTuiConfig(configDir))) {
         env[key] = SANDBOX_TARGET.embed(file);
       }
-      // The sandbox is the safety boundary here, same reasoning as Claude Code's own kit
-      // (--dangerously-skip-permissions): opencode's permission prompts add nothing inside it.
-      // Unlike Claude's kit, sbx's opencode kit does not set this itself (measured, 0.42.1) —
-      // drop this flag if a future kit version does.
+      // The sandbox is the safety boundary, as with Claude Code's kit
+      // (--dangerously-skip-permissions). sbx's opencode kit does not set this itself (measured,
+      // 0.42.1) — drop it once a kit does.
       return { args: ["--auto"], env };
     } catch (error) {
       console.error("[tet] could not write opencode's sandbox plugin:", error);
       return { args: [] };
     }
   },
-  // See createNonAsciiThresholdCheck: a raw byte count fires mid-repaint of an empty screen while
-  // opencode is still fetching its model list (measured, 1.18.4). 20 sits below the 164 non-ASCII
-  // bytes the real frame always carries and above the 0 of every blank repaint before it.
+  // A raw byte count fires on blank repaints while opencode fetches its model list (measured,
+  // 1.18.4). 20 is below the 164 non-ASCII bytes of the real frame and above blank repaints' 0.
   createIsSessionReady: () => createNonAsciiThresholdCheck(20),
-  // One: its TUI starts leaving immediately (measured, 1.18.4: gone 213 ms after the byte).
+  // Its TUI leaves at once (measured, 1.18.4: gone 213 ms after the byte).
   quitPresses: 1,
-  // Its TUI handles the right click itself (it copies the selection).
+  // Its TUI takes the right click (it copies the selection).
   takesRightMouse: true,
-  // Observed with `"theme": "system"` (tui-config.ts); see the field's own doc.
+  // With `"theme": "system"` (tui-config.ts).
   swapsBlueMagenta: true
 };

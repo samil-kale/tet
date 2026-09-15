@@ -4,26 +4,24 @@ export interface IconProps {
   className?: string;
 }
 
-/** The share of its box a finished icon's drawing covers. Every icon is cut to this. */
+/** The share of its 16-unit box every icon's drawing is cut to cover. */
 const TARGET_EXTENT = 12.8;
 const GRID = 16;
 
 /**
- * How an icon is fitted, given how much of its own grid it actually draws on.
+ * Fits an icon by how much of its grid it actually draws on.
  *
- * A box is not a size: measured with `getBBox`, the icons here cover anywhere from 59% of their
- * grid (the chevron) to 100% (Claude's mark), so identical `width`s produce visibly different
- * icons. Each declares the extent it was measured at, and the viewBox is cropped to put that
- * extent at TARGET_EXTENT of the box. `strokeWidth` is scaled by the same factor, or a cropped
- * viewBox would thicken the stroke of every icon it enlarges.
+ * Measured with `getBBox`, the icons cover 59% (the chevron) to 100% (Claude's mark) of their
+ * grid, so equal `width`s look unequal. Each declares its measured extent, and the viewBox is
+ * cropped to put that extent at TARGET_EXTENT. `strokeWidth` scales by the same factor, or the
+ * crop would thicken every enlarged stroke.
  *
- * The extents are tuned to the icon's **geometric mean**, not its longer side: a shape 12 wide
- * and 9 tall carries far less ink than one 12 by 12. Each is capped at about 87% of its box in
- * the long axis, so a chevron or a row of dots does not grow out of its place trying to average
- * out.
+ * Extents are tuned to the **geometric mean**, not the longer side: 12 by 9 carries far less ink
+ * than 12 by 12. Each is capped at about 87% of the box in the long axis, so a chevron or a row of
+ * dots does not outgrow its place.
  *
- * Re-measure when a path changes; the numbers are observations, not intentions. The audit is a
- * page that renders every icon and reads `getBBox()` on each child, grown by half a stroke.
+ * Re-measure when a path changes: render every icon and read `getBBox()` on each child, grown by
+ * half a stroke.
  */
 function geometry(extent: number, cx: number, cy: number, grid: number, stroke: number) {
   const side = (extent * grid) / ((TARGET_EXTENT / GRID) * grid);
@@ -33,7 +31,7 @@ function geometry(extent: number, cx: number, cy: number, grid: number, stroke: 
   };
 }
 
-/** The same fitting for an icon that brings its own grid — see agent-icons.tsx. */
+/** The same fitting for an icon on its own grid (Lucide's 24, agent-icons.tsx). */
 export function fitIcon(extent: number, cx: number, cy: number, grid: number, stroke = 0): string {
   return geometry(extent, cx, cy, grid, stroke).viewBox;
 }
@@ -43,22 +41,17 @@ export function fitStroke(extent: number, grid: number, stroke: number): number 
 }
 
 /**
- * How much smaller than the rest an icon is drawn when it asks to be. Two pixels off the shared
- * `--icon-size`, as a ratio so it holds whatever that size is set to. The box does not change,
- * only the drawing inside it.
+ * Draws an icon two pixels under the shared `--icon-size`, as a ratio so it holds for any size.
+ * The box stays; only the drawing shrinks.
  */
 export const SMALLER = 11 / 13;
 
-/** The same two pixels the other way, for an icon that asks to read larger — see agent-icons.tsx. */
+/** Two pixels over, for an icon that should read larger. */
 export const LARGER = 15 / 13;
 
 /**
- * `extent` is how much of the 16 grid this icon draws on, stroke included, and `cx`/`cy` where
- * that drawing is centred. All three are measured.
- *
- * `scale` is the one number here that is a *choice* rather than an observation: it says this
- * icon should read smaller than its neighbours. Kept separate so a measured extent stays
- * re-measurable.
+ * `extent` (stroke included) and the centre `cx`/`cy` on the 16 grid are measured. `scale` is a
+ * *choice* — read smaller than the neighbours — kept apart so the extent stays re-measurable.
  */
 function Svg({
   children,
@@ -74,14 +67,12 @@ function Svg({
   cy?: number;
   scale?: number;
 }) {
-  // Dividing widens the crop, which leaves the drawing smaller inside an unchanged box.
+  // Dividing widens the crop, shrinking the drawing in the same box.
   const { viewBox, strokeWidth } = geometry(extent / scale, cx, cy, GRID, 1.5);
   return (
     <svg
       className={className}
-      // The shared icon size, the same one `--icon-size` states in CSS. CSS decides — a flex
-      // container renders over these attributes — so this is only the fallback, and must not
-      // disagree with it.
+      // Fallback only: CSS `--icon-size` renders over these in a flex container; keep them equal.
       width="13"
       height="13"
       viewBox={viewBox}
@@ -97,9 +88,8 @@ function Svg({
   );
 }
 
-/** Lucide's `plus` (lucide.dev, ISC), vendored on its own native 24-unit grid. Measured via
- *  `getBBox`: 16 by 16, extent 16, centered at (12, 12). Stroke bumped past Lucide's own 2 to
- *  2.3, so it reads a touch heavier where it leads a row. */
+/** Lucide's `plus` (lucide.dev, ISC), on its native 24-unit grid. Measured: 16 by 16, extent 16,
+ *  centered at (12, 12). Stroke 2.3 instead of Lucide's 2, to read heavier leading a row. */
 export function PlusIcon(props: IconProps) {
   return (
     <svg
@@ -120,9 +110,8 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `x`, vendored the same way. `SMALLER` widens the crop as it does for `Svg`'s own
- *  `scale`, so the extent fed to `fitIcon`/`fitStroke` is the measured one divided by it: 14 by
- *  14 (extent 14) becomes 16.55, centered at (12, 12). */
+/** Lucide's `x`, vendored the same way, drawn `SMALLER` (measured extent divided by it): 14 by 14,
+ *  extent 14 becomes 16.55, centered at (12, 12). */
 export function CloseIcon(props: IconProps) {
   return (
     <svg
@@ -143,10 +132,9 @@ export function CloseIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `pin`, vendored the same way, and `SMALLER` like the x beside it. Tall and narrow,
- *  so the extent is the long-side cap rather than the geometric mean: measured 16 by 22 (stroke
- *  included) gives extent 20.23, becoming 23.91, centered at (12, 12). The pinned state is CSS's
- *  to draw: `fill: currentColor` on a `pinned` class beats the `fill="none"` attribute below. */
+/** Lucide's `pin`, vendored the same way, `SMALLER` like the x. Tall, so the long-side cap:
+ *  measured 16 by 22 (stroke included), extent 20.23 becomes 23.91, centered at (12, 12). CSS
+ *  draws the pinned state: `fill: currentColor` on `.pinned` beats the `fill="none"` attribute. */
 export function PinIcon(props: IconProps) {
   return (
     <svg
@@ -167,10 +155,9 @@ export function PinIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `shield`, vendored the same way — a project whose agents run in an sbx sandbox.
- *  Tall and narrow like the pin above, so the long-side cap rather than the geometric mean:
- *  measured 18 by 22 (stroke included) gives extent 20.23, centered at (12, 12). Full size, not
- *  `SMALLER`: it stands in the project row beside the session marks. */
+/** Lucide's `shield`, vendored the same way — a project sandboxed by sbx. Tall, so the long-side
+ *  cap: measured 18 by 22 (stroke included), extent 20.23, centered at (12, 12). Full size: it
+ *  stands beside the session marks in the project row. */
 export function ShieldIcon(props: IconProps) {
   return (
     <svg
@@ -190,10 +177,9 @@ export function ShieldIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `file-diff`, vendored the same way — a repository with uncommitted changes, which is
- *  what the project row's mark stands for and what pressing it opens. Tall and narrow like the
- *  shield above, so the same long-side cap: measured 18 by 22 (stroke included) gives extent
- *  20.23, centered at (12, 12). */
+/** Lucide's `file-diff`, vendored the same way — the project row's mark for uncommitted changes.
+ *  Tall, so the long-side cap: measured 18 by 22 (stroke included), extent 20.23, centered at
+ *  (12, 12). */
 export function ChangesIcon(props: IconProps) {
   return (
     <svg
@@ -217,8 +203,8 @@ export function ChangesIcon(props: IconProps) {
 }
 
 /**
- * The three notification shapes: a cross for an error, an exclamation for a warning, an "i" for
- * information, each in the circle they share, so the outline carries the meaning the color does.
+ * Notice severities in a shared circle — cross, exclamation, "i" — so the shape carries the
+ * meaning as well as the color.
  */
 export function SeverityIcon({ severity, ...props }: IconProps & { severity: NoticeSeverity }) {
   return (
@@ -231,8 +217,8 @@ export function SeverityIcon({ severity, ...props }: IconProps & { severity: Not
   );
 }
 
-/** Lucide's `git-branch`, vendored on its own native 24-unit grid. Measured via `getBBox`: 20 by
- *  20, extent 20, centered at (12, 12). */
+/** Lucide's `git-branch`, on its native 24-unit grid. Measured: 20 by 20, extent 20, centered at
+ *  (12, 12). */
 export function BranchIcon(props: IconProps) {
   return (
     <svg
@@ -255,12 +241,9 @@ export function BranchIcon(props: IconProps) {
 }
 
 /**
- * Git's mark as a hollow outline (`git-alt`): a rotated square with rounded corners, drawn as one
- * filled path with the commits and the branch cut out of it, on a 32-unit grid. Measured: the
- * square's rounded tips sit at 2 and 30, so the bbox is a square of side 28 centred at (16, 16).
- * Drawn a step past `LARGER`, since a diamond inks only half of its own bbox and reads small
- * beside the square icons around it. Three pixels over the shared size is the limit — the drawing
- * then fills the box, and anything past that clips its tips.
+ * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. Measured: tips
+ * at 2 and 30, a bbox of side 28 centred at (16, 16). A step past `LARGER`, since a diamond inks
+ * half its bbox; three pixels over is the limit, beyond which the tips clip.
  */
 const GIT_SCALE = 16 / 13;
 
@@ -281,8 +264,8 @@ export function GitIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `search`, vendored on its own native 24-unit grid. Measured via `getBBox`: 20 by 20,
- *  extent 20, centered at (12, 12). */
+/** Lucide's `search`, on its native 24-unit grid. Measured: 20 by 20, extent 20, centered at
+ *  (12, 12). */
 export function SearchIcon(props: IconProps) {
   return (
     <svg
@@ -312,9 +295,8 @@ export function ChevronIcon({ expanded, scale, ...props }: IconProps & { expande
 }
 
 /**
- * A ring with a gap in it, which only reads as progress while it turns — pair it with the
- * `spinning` class. Takes the place of the icon whose action is running. The dash pattern is the
- * circumference: 2π·5 ≈ 31, an arc of 23 and a gap of 8. Re-cut it whenever the radius moves.
+ * A gapped ring, used with the `spinning` class in place of the running action's icon. The dash
+ * pattern splits the circumference 2π·5 ≈ 31 into arc 23 and gap 8; re-cut it if the radius moves.
  */
 export function SpinnerIcon(props: IconProps) {
   return (
@@ -324,8 +306,8 @@ export function SpinnerIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `wand` (lucide.dev, ISC), vendored on its own native 24-unit grid — "a model worked
- *  this out for you". Measured via `getBBox`: 21 by 21, extent 21, centered at (12.5, 11.5). */
+/** Lucide's `wand` (lucide.dev, ISC), on its native 24-unit grid — a model's suggestion.
+ *  Measured: 21 by 21, extent 21, centered at (12.5, 11.5). */
 export function SparkleIcon(props: IconProps) {
   return (
     <svg
@@ -353,8 +335,8 @@ export function SparkleIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `play`, vendored on its own native 24-unit grid. `SMALLER` like `CloseIcon`: measured
- *  18 by 20 (extent 18.98, stroke included) becomes 22.43, centered at (13, 12). */
+/** Lucide's `play`, on its native 24-unit grid, `SMALLER` like `CloseIcon`: measured 18 by 20
+ *  (stroke included), extent 18.98 becomes 22.43, centered at (13, 12). */
 export function PlayIcon(props: IconProps) {
   return (
     <svg
@@ -374,8 +356,8 @@ export function PlayIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `tag`, vendored on its own native 24-unit grid. Measured via `getBBox`: 22 by 22,
- *  extent 22, centered at (12, 12). */
+/** Lucide's `tag`, on its native 24-unit grid. Measured: 22 by 22, extent 22, centered at
+ *  (12, 12). */
 export function TagIcon(props: IconProps) {
   return (
     <svg
@@ -396,9 +378,8 @@ export function TagIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `git-commit-horizontal`, vendored the same way. Wide and flat, so the extent is the
- *  long-side cap rather than the geometric mean: measured 20 by 8 gives 18.39, centered at
- *  (12, 12). */
+/** Lucide's `git-commit-horizontal`, vendored the same way. Wide and flat, so the long-side cap:
+ *  measured 20 by 8, extent 18.39, centered at (12, 12). */
 export function CommitIcon(props: IconProps) {
   return (
     <svg
@@ -420,7 +401,7 @@ export function CommitIcon(props: IconProps) {
   );
 }
 
-/** A stash: work set aside in a box, the way an inbox tray is drawn. */
+/** A stash, drawn as an inbox tray. */
 export function StashIcon(props: IconProps) {
   return (
     <Svg {...props} extent={12.54} cy={8.5}>
@@ -430,10 +411,9 @@ export function StashIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `trash`, vendored on its own native 24-unit grid — throwing local changes away, and
- *  next to the stash box the pair reads as "put away" and "throw away". Measured via `getBBox`:
- *  20 by 22; the geometric mean would clip the bottom, so extent is the long-axis cap: 20.98,
- *  centered at (12, 12). */
+/** Lucide's `trash`, on its native 24-unit grid — discard, beside the stash's "put away".
+ *  Measured: 20 by 22; the geometric mean would clip the bottom, so the long-axis cap: extent
+ *  20.98, centered at (12, 12). */
 export function DiscardIcon(props: IconProps) {
   return (
     <svg
@@ -455,8 +435,8 @@ export function DiscardIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `arrow-up`, vendored on its own native 24-unit grid. Measured via `getBBox`: 16 by
- *  16, extent 16, centered at (12, 12). */
+/** Lucide's `arrow-up`, on its native 24-unit grid. Measured: 16 by 16, extent 16, centered at
+ *  (12, 12). */
 export function ArrowUpIcon(props: IconProps) {
   return (
     <svg
@@ -477,8 +457,8 @@ export function ArrowUpIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `arrow-down`, vendored the same way. Measured via `getBBox`: 16 by 16, extent 16,
- *  centered at (12, 12). */
+/** Lucide's `arrow-down`, vendored the same way. Measured: 16 by 16, extent 16, centered at
+ *  (12, 12). */
 export function ArrowDownIcon(props: IconProps) {
   return (
     <svg
@@ -499,8 +479,8 @@ export function ArrowDownIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `refresh-cw`, vendored on its own native 24-unit grid — fetch. Measured via
- *  `getBBox`: 20 by 20, extent 20, centered at (12, 12). */
+/** Lucide's `refresh-cw`, on its native 24-unit grid — fetch. Measured: 20 by 20, extent 20,
+ *  centered at (12, 12). */
 export function SyncIcon(props: IconProps) {
   return (
     <svg
@@ -524,9 +504,8 @@ export function SyncIcon(props: IconProps) {
 }
 
 /**
- * A session stopped mid-turn on a question nobody has answered — on its tab and on its project's
- * row. It shares the one mark slot with the bubble and the spinner, so the three have to be told
- * apart at a glance.
+ * A session stopped on an unanswered question, on its tab and project row. Shares the mark slot
+ * with the bubble and the spinner, so it must differ from them at a glance.
  */
 export function QuestionIcon(props: IconProps) {
   return (
@@ -538,9 +517,8 @@ export function QuestionIcon(props: IconProps) {
 }
 
 /**
- * A tab whose agent cannot start at all. Same mark slot as the question mark and the spinner, so
- * the same family of shape, not a circle-and-cross like a `SeverityIcon`. Its own color, not
- * `--vscode-focusBorder`: see `.session-mark-error`.
+ * A tab whose agent cannot start. Same mark slot and shape family as the question mark, not a
+ * circled `SeverityIcon`. Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
  */
 export function ExclamationIcon(props: IconProps) {
   return (
@@ -551,9 +529,8 @@ export function ExclamationIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `message-square`, vendored on its own native 24-unit grid — a session answered and
- *  nobody has looked yet. Measured via `getBBox`: 22 by 21, extent 21.49, centered at
- *  (12, 12.5). */
+/** Lucide's `message-square`, on its native 24-unit grid — a finished turn nobody has seen yet.
+ *  Measured: 22 by 21, extent 21.49, centered at (12, 12.5). */
 export function CommentIcon(props: IconProps) {
   return (
     <svg
@@ -582,9 +559,8 @@ export function RemoteIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `settings`, vendored on its own native 24-unit grid. Measured via `getBBox`: 20 by
- *  22, extent 20.91, centered at (12, 12). Drawn `LARGER`: a gear is mostly teeth and gaps, and
- *  at the shared extent it read small beside the git mark next to it. */
+/** Lucide's `settings`, on its native 24-unit grid. Measured: 20 by 22, extent 20.91, centered at
+ *  (12, 12). Drawn `LARGER`: a gear is mostly gaps and reads small beside the git mark. */
 export function GearIcon(props: IconProps) {
   return (
     <svg
@@ -605,9 +581,9 @@ export function GearIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `file-braces` (lucide.dev, ISC), vendored on its own native 24-unit grid — browsing
- *  the repository's files. Measured via `getBBox`: 18 by 22; the geometric mean would clip the
- *  bottom, so extent is the long-axis cap: 20.23, centered at (12, 12). */
+/** Lucide's `file-braces` (lucide.dev, ISC), on its native 24-unit grid — the files view.
+ *  Measured: 18 by 22; the geometric mean would clip the bottom, so the long-axis cap: extent
+ *  20.23, centered at (12, 12). */
 export function FilesIcon(props: IconProps) {
   return (
     <svg
@@ -630,11 +606,9 @@ export function FilesIcon(props: IconProps) {
   );
 }
 
-/** The EXPLORER header's own "New File...": Lucide's `file-plus` (lucide.dev, ISC), vendored on
- *  its own native 24-unit grid rather than rescaled into this file's 16-unit one — `fitIcon`/
- *  `fitStroke` take the grid as a parameter for exactly this. Measured via `getBBox`, stroke
- *  included: 18 by 22, whose geometric mean would clip the bottom, so extent is the long-axis
- *  cap: 20.23, centered at (12, 12). */
+/** The EXPLORER header's "New File...": Lucide's `file-plus` (lucide.dev, ISC), on its native
+ *  24-unit grid (`fitIcon`/`fitStroke` take the grid). Measured, stroke included: 18 by 22; the
+ *  geometric mean would clip the bottom, so the long-axis cap: extent 20.23, centered at (12, 12). */
 export function NewFileIcon(props: IconProps) {
   return (
     <svg
@@ -657,9 +631,9 @@ export function NewFileIcon(props: IconProps) {
   );
 }
 
-/** The EXPLORER header's own "New Folder...", next to `NewFileIcon` — Lucide's `folder-plus`,
- *  vendored the same way. Measured via `getBBox`: 22 by 19, square enough that the geometric
- *  mean needs no cap: extent 20.45, centered at (12, 11.5). */
+/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`, vendored the same way.
+ *  Measured: 22 by 19, square enough for the uncapped geometric mean: extent 20.45, centered at
+ *  (12, 11.5). */
 export function NewFolderIcon(props: IconProps) {
   return (
     <svg
@@ -681,8 +655,8 @@ export function NewFolderIcon(props: IconProps) {
   );
 }
 
-/** "Collapse Folders in Explorer": Lucide's `copy-minus`, a shrinking stack. Measured via
- *  `getBBox`: 22 by 22, extent 22, centered at (12, 12). */
+/** "Collapse Folders in Explorer": Lucide's `copy-minus`. Measured: 22 by 22, extent 22, centered
+ *  at (12, 12). */
 export function CollapseAllIcon(props: IconProps) {
   return (
     <svg
@@ -704,8 +678,7 @@ export function CollapseAllIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `save`, vendored the same way. Measured via `getBBox`: 20 by 20, extent 20, centered
- *  at (12, 12). */
+/** Lucide's `save`, vendored the same way. Measured: 20 by 20, extent 20, centered at (12, 12). */
 export function SaveIcon(props: IconProps) {
   return (
     <svg

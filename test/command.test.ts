@@ -27,7 +27,7 @@ describe("splitCommand", () => {
 
   it("leaves shell operators as words of their own, for the caller to refuse", () => {
     assert.deepEqual(splitCommand("a && b | c > out 2>&1"), ["a", "&&", "b", "|", "c", ">", "out", "2>&1"]);
-    // Not an operator: one that is part of an argument.
+    // Part of an argument, not an operator.
     assert.deepEqual(splitCommand("grep -e a>b"), ["grep", "-e", "a>b"]);
   });
 });

@@ -11,15 +11,15 @@ import {
   toggleCommitPin
 } from "./commit-history";
 
-/** Runs a file action against the repository; the owner shows it running on its own bar. */
+/** Runs a file action; the owner shows it running on its own bar. */
 export type FileAct = (action: () => Promise<GitActionResult>) => void;
 
 interface ChangesListProps {
   project: Project;
-  /** Its changes are the list; the rest is what a commit from the menu asks with. */
+  /** The changes are the list; the rest feeds a commit from the menu. */
   state: RepositoryState;
   act: FileAct;
-  /** A file to look at, on a double-click. */
+  /** On a double-click. */
   onOpenDiff: (path: string) => void;
 }
 
@@ -32,7 +32,7 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
   conflicted: "C"
 };
 
-/** Asks before throwing work away; untracked files go to the trash. */
+/** Untracked files go to the trash. */
 export async function confirmDiscard(projectId: string, paths: string[], act: FileAct): Promise<void> {
   const what = paths.length === 1 ? paths[0] : `${paths.length} files`;
   const answer = await confirm({
@@ -46,8 +46,7 @@ export async function confirmDiscard(projectId: string, paths: string[], act: Fi
   }
 }
 
-/** Stages and commits everything the changes list shows, or only `paths`, with an optional push
- *  in the same action: one message asked, `add` then `commit`. */
+/** One message, then `add` and `commit` of all changes or only `paths`, optionally pushing. */
 export async function askCommit(
   project: Project,
   state: RepositoryState,
@@ -66,13 +65,13 @@ export async function askCommit(
         : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
     value: "",
     confirmLabel: "Commit",
-    // The saved commands' width: 420px shows too little of the suggest row and the history list.
+    // The saved commands' width: 420px shows too little of the suggest row and history list.
     wide: true,
     suggestion: {
       title: "Suggest a commit message",
       run: () => window.tet.repository.suggestCommitMessage(project.id, paths)
     },
-    // No remote or a detached HEAD: nothing to offer, so no checkbox either.
+    // No checkbox without a remote or on a detached HEAD.
     checkboxLabel: canSync
       ? state.upstream === undefined
         ? `Also push ${state.head} to ${remote} and track it`
@@ -86,9 +85,8 @@ export async function askCommit(
     }
   });
   if (answer) {
-    // On submit, not on success: a message whose commit then fails is one worth having again.
+    // On submit, not success: a failed commit's message is worth having again.
     recordCommitMessage(project.id, answer.value);
-    // The push only runs when the commit went through.
     act(async () => {
       const committed = await (paths
         ? window.tet.repository.commitPaths(project.id, answer.value, paths)
@@ -98,14 +96,13 @@ export async function askCommit(
   }
 }
 
-/** The changed files with a filter and a per-file menu, under LOCAL CHANGES in the git pane. The
- *  owner hands in its `act`, so an action runs on that section's bar. */
+/** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */
 export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
-  /** Ctrl- and shift-click extend it, so one discard can cover several files. */
+  /** Ctrl- and shift-click extend it, so one action can cover several files. */
   const [selected, setSelected] = useState<string[]>([]);
-  /** Where a shift-click measures its range from: the row that was clicked plainly last. */
+  /** A shift-click range starts here: the last row clicked without shift. */
   const [anchor, setAnchor] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; change: FileChange } | null>(null);
 
@@ -115,8 +112,7 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
     [changes, query]
   );
 
-  // Another project's files: nothing chosen yet. Compared in render, so the previous project's
-  // selection never paints.
+  // Reset on a project switch, in render, so the previous selection never paints.
   const [projectId, setProjectId] = useState(project.id);
   if (projectId !== project.id) {
     setProjectId(project.id);
@@ -124,8 +120,7 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
     setAnchor(null);
   }
 
-  // A file that stopped being changed leaves the list; keeping it would let a later change
-  // reappear pre-selected.
+  // Drop files no longer changed, or a later change reappears pre-selected.
   useEffect(() => {
     setSelected((current) => {
       const kept = current.filter((path) => changes.some((change) => change.path === path));
@@ -154,10 +149,9 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
     setSelected([path]);
   };
 
-  /** The changed-file menu. It acts on the whole selection where that makes sense and on the one
-   *  file where it does not — a diff and a file manager each show exactly one thing. */
+  /** Acts on the selection, except where only one file makes sense (a diff, the file manager). */
   const menuEntries = (change: FileChange): ContextMenuEntry[] => {
-    // A right-click inside the selection keeps it; one outside has already replaced it.
+    // A right-click outside the selection has already replaced it.
     const paths = selected.includes(change.path) ? selected : [change.path];
     const one = paths.length === 1;
     const extension = /\.[^./]+$/.exec(change.path)?.[0];
@@ -180,7 +174,7 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
       { label: one ? "Discard changes..." : `Discard ${paths.length} selected changes...`, run: discard(paths) },
       {
         label: "Discard all changes...",
-        // With nothing but the selection changed it would be the entry above under another name.
+        // When the selection is everything, the entry above already does this.
         run: changes.length > paths.length ? discard(changes.map((entry) => entry.path)) : undefined
       },
       SEPARATOR,

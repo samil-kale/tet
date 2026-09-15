@@ -1,19 +1,17 @@
 /**
- * Which terminals may hold a WebGL context, kept apart from xterm and the DOM so the rules run in
- * node (test/webgl-pool.test.ts). The contexts themselves live in terminal-views.ts; keys here are
- * its view keys.
+ * Which terminals may hold a WebGL context, apart from xterm and the DOM so the rules run in node
+ * (test/webgl-pool.test.ts). Contexts live in terminal-views.ts; keys are its view keys.
  *
- * A terminal in front of the user always gets one. A hidden one keeps its context only while it is
- * among the most recently hidden — each context costs GPU memory, and a switch back to a warm one
- * never shows a DOM frame or rebuilds its renderer.
+ * A terminal in front of the user always gets one; a hidden one only while among the most recently
+ * hidden — each costs GPU memory, and switching back to a warm one shows no DOM frame.
  */
 
 /** How many hidden terminals keep their context: two projects split 2×2 stay warm. */
 export const MAX_HIDDEN_WEBGL = 8;
 
 /**
- * A terminal whose context was lost this often inside the window stays on the DOM renderer until
- * the window has passed: a context that keeps dying is a driver problem, not a transient one.
+ * A terminal losing its context this often within the window stays on the DOM until it passes: a
+ * context that keeps dying is a driver problem.
  */
 export const WEBGL_LOSS_LIMIT = 3;
 export const WEBGL_LOSS_WINDOW_MS = 60_000;
@@ -30,34 +28,31 @@ export class WebglPool {
   private readonly hidden: string[] = [];
   private readonly losses = new Map<string, number[]>();
 
-  /** The terminal came in front of the user: it no longer counts against the hidden budget. */
+  /** In front of the user: no longer counts against the hidden budget. */
   show(key: string): void {
     this.remove(key);
   }
 
-  /** A hidden terminal lost its context on its own; its place goes to the next one hidden. */
+  /** A hidden terminal lost its context on its own. */
   lost(key: string): void {
     this.remove(key);
   }
 
-  /** The terminal went out of sight, holding a context. Nothing is released until `trim`. */
+  /** Out of sight, holding a context. Nothing is released until `trim`. */
   hide(key: string): void {
     this.remove(key);
     this.hidden.push(key);
   }
 
   /**
-   * The keys whose contexts are to be released to get back under the budget, the ones hidden
-   * longest. Apart from `hide`, because the terminals leaving the screen are hidden before the ones
-   * coming onto it are shown: a project switch hides one project's panes, then shows the other's,
-   * which may be among the hidden. Trimmed at hide time, those would be released only to be built
-   * again a moment later.
+   * The keys to release to get back under the budget, hidden longest first. Apart from `hide`: a
+   * project switch hides one project's panes before showing the other's, which may be among the
+   * hidden — trimmed at hide time, they would be released only to be rebuilt.
    */
   trim(): string[] {
     return this.hidden.splice(0, Math.max(0, this.hidden.length - MAX_HIDDEN_WEBGL));
   }
 
-  /** A closed terminal. */
   forget(key: string): void {
     this.forgetWhere((candidate) => candidate === key);
   }

@@ -27,11 +27,11 @@ import type { ControlRequest } from "../src/shared/control";
 import { DEFAULT_KEYBINDING_PRESET_ID } from "../src/shared/types";
 import { eventually } from "./helpers";
 
-/** The small measured pieces: each was paid for once, and each is one edit away from silently wrong. */
+/** The small measured pieces, each one edit away from silently wrong. */
 
 describe("Codex's hook trust", () => {
-  // What this implementation answered when it was verified against a real Codex install (see
-  // hooks.ts): a change here is the "Hooks need review" screen coming back.
+  // Verified against a real Codex install (see hooks.ts): a change here brings back the "Hooks
+  // need review" screen.
   it("hashes the normalized hook the way Codex does", () => {
     assert.equal(
       hookTrustedHash("stop", "sh /tet/stop.sh"),
@@ -63,7 +63,7 @@ describe("Codex's hook trust", () => {
       for (const event of ["prompt-submit", "stop", "permission", "question"]) {
         assert.ok(hooks.includes(`command='tet-ctl hook ${event}'`), `${event} on ${target.posix ? "posix" : "win32"}`);
       }
-      // Nothing of the host's shows through into a sandbox's trust key, and nothing is written.
+      // No host path in a sandbox's trust key, and nothing written.
       assert.match(hooks, target.posix ? /'\/<session-flags>\/config\.toml:/ : /'C:\\<session-flags>\\config\.toml:/);
     }
   });
@@ -174,9 +174,8 @@ describe("sbx sandbox naming and mounts", () => {
 });
 
 describe("sbx's filesystem policy", () => {
-  // `sbx policy ls --type filesystem --json` on an organization-governed account, 2026-09-14,
-  // sbx 0.42.1 — trimmed to the fields read. The local defaults are what an ungoverned account
-  // has active.
+  // `sbx policy ls --type filesystem --json` on an organization-governed account, sbx 0.42.1
+  // (2026-09-14), trimmed to the fields read. `local` is an ungoverned account's active defaults.
   const governed = JSON.stringify({
     rules: [
       { resource_type: "filesystem:read", decision: "allow", resources: ["**"], status: "inactive" },
@@ -328,21 +327,18 @@ describe("session readiness checks", () => {
 
   it("counts only non-ASCII characters, ignoring escape codes and blank fills", () => {
     const ready = createNonAsciiThresholdCheck(1);
-    // opencode's blank full-screen repaint while it waits on its model list: all ASCII —
-    // escape codes and spaces — however many bytes of it arrive.
+    // opencode's blank repaint while it waits on its model list: escape codes and spaces only.
     assert.equal(ready("\x1b[38;2;255;255;255m\x1b[H" + " ".repeat(4800)), false);
     assert.equal(ready("\x1b[38;2;255;255;255m\x1b[H" + " ".repeat(4800)), false);
-    // The frame that actually has something on it: two box-drawing characters clear the
-    // threshold, one does not.
+    // A real frame: two box-drawing characters clear the threshold.
     assert.equal(ready("▄"), false);
     assert.equal(ready("▄"), true);
   });
 });
 
 /**
- * A stand-in for the control server plus the environment a tab's process carries: what a
- * generated plugin or extension reports lands here. They report fire-and-forget, so a test waits
- * for what it expects rather than awaiting the call itself.
+ * A stand-in control server plus a tab's environment, for a generated plugin or extension to
+ * report to. Reports are fire-and-forget, so a test waits for them rather than awaiting the call.
  */
 async function controlChannel(): Promise<{ reports: ControlRequest[]; close: () => Promise<void> }> {
   const reports: ControlRequest[] = [];
@@ -367,7 +363,6 @@ async function controlChannel(): Promise<{ reports: ControlRequest[]; close: () 
   };
 }
 
-/** The events reported so far, in order. */
 function reported(reports: ControlRequest[]): string[] {
   return reports.map((report) => String(report.args.event));
 }
@@ -386,7 +381,7 @@ describe("the session a hook report names", () => {
 });
 
 describe("which of two turn reports counts", () => {
-  // The direction of this comparison is what a finished turn going back to working hangs on.
+  // Get this comparison backwards and a finished turn goes back to working.
   it("drops the one that lost the race, and takes one whose clock jumped backwards", () => {
     const now = Date.now();
     assert.equal(reportApplies(undefined, now), true, "nothing has been applied here yet");
@@ -398,8 +393,8 @@ describe("which of two turn reports counts", () => {
 });
 
 describe("pi's extension", () => {
-  // Every path tet generates has the user's own name in it, and any of these characters could be
-  // in that; pi exits outright on an extension that does not compile.
+  // Generated paths hold the user's name, which may hold any of these; pi exits outright on an
+  // extension that does not compile.
   const nasty = "C:\\Users\\it's $x `y\\ctx.md";
 
   it("compiles as TypeScript whatever the paths hold", () => {
@@ -434,13 +429,12 @@ describe("pi's extension", () => {
       handlers.ui_prompt_start({}, {});
       await eventually("all three reported", () => channel.reports.length === 3, 3000);
       assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
-      // The tab is the address; the session goes along, for tet to bind the tab to it.
+      // The tab is the address; the session goes along to bind the tab to it.
       assert.deepEqual(channel.reports[0].caller, { projectId: "p1", tabId: "tab-1" });
       assert.equal(hookSessionId(String(channel.reports[0].args.payload)), "019eba31-566c-7911-bf09-14afe53d7c36");
       assert.equal(hookSessionId(String(channel.reports[2].args.payload)), undefined, "a context without a session");
       assert.equal(channel.reports[0].verb, "hook");
-      // Nothing here is awaited, so two reports of one turn race — each carries its own time,
-      // which is what tet orders them by.
+      // Reports are not awaited and race; tet orders them by the time each carries.
       assert.ok(
         channel.reports.every((report) => typeof report.at === "number" && report.at > 0),
         "every report says when it was made"
@@ -450,8 +444,7 @@ describe("pi's extension", () => {
     }
   });
 
-  // The file is written on the host and read inside the container: every path in it is the
-  // sandbox's own, and there is nothing else in there to translate.
+  // Written on the host, read inside the container: every path in it is the container's.
   it("writes a sandbox one with container paths and nothing beside it", () => {
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-sbx-"));
     const contextFile = path.join(storageDir, "context.md");
@@ -475,8 +468,8 @@ describe("opencode's plugin", () => {
     sandbox
   });
 
-  /** Compiles the plugin and returns its hooks, with a fake client that records renames and answers
-   *  each with `answer` — the SDK's `{ error }` for a session its process does not hold. */
+  /** Compiles the plugin; the fake client records renames and answers each with `answer` (the
+   *  SDK's `{ error }` for a session its process does not hold). */
   async function load(dir: string, sandbox: string | null = null, answer?: unknown): Promise<{ hooks: Hooks; renames: unknown[] }> {
     const source = renderOpencodePlugin(options(dir, sandbox));
     const compiled = path.join(dir, "tet.js");
@@ -536,7 +529,7 @@ describe("opencode's plugin", () => {
       await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
 
-      // The prompt being composed is the turn's one start, and the same call takes the context in.
+      // chat.message is the turn's one start, and takes the context in.
       fs.writeFileSync(path.join(dir, "context.md"), "\uFEFFhello\n");
       const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as { text: string; synthetic: boolean }[] };
       await hooks["chat.message"]({}, output);
@@ -545,14 +538,13 @@ describe("opencode's plugin", () => {
       assert.equal(output.parts[0].synthetic, true);
       await hooks["chat.message"]({}, { message: { id: "msg_2", sessionID: "ses_child" }, parts: [] });
 
-      // Every step of the turn raises this, and reporting each was twenty round trips for one
-      // turn \u2014 the last of them racing the idle below.
+      // Raised on every step of a turn, so not reported: each would be a round trip, the last
+      // racing the idle below.
       await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_a", status: { type: "busy" } } } });
       await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
       await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_child" } } });
       await hooks.event({ event: { type: "question.asked", properties: { sessionID: "ses_a" } } });
-      // A subagent's own turns are none of the tab's business, and neither is anything that is
-      // not a session id at all.
+      // A subagent's turns are not the tab's.
       await eventually("the root session's three", () => channel.reports.length === 3, 3000);
       assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
       assert.deepEqual(
@@ -580,8 +572,8 @@ describe("opencode's plugin", () => {
       await new Promise((resolve) => setTimeout(resolve, 700));
       assert.deepEqual(reported(channel.reports), ["permission"], "the auto-approved one never counted as a question");
 
-      // The slow one did stand as a question, so its answer has to take the mark away again —
-      // nothing else would before the turn ended.
+      // The slow one stood as a question, so its reply must clear the mark — nothing else would
+      // before the turn ends.
       await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_2", sessionID: "ses_b" } } });
       await eventually("the question taken back", () => channel.reports.length === 2, 3000);
       assert.deepEqual(reported(channel.reports), ["permission", "prompt-submit"]);
@@ -606,8 +598,8 @@ describe("opencode's plugin", () => {
   });
 
   it("leaves a rename request its own database has no session for", async () => {
-    // A host tab and a sandboxed tab of one repository poll the same folder; each holds its own
-    // sessions only, and the one that picks up the other's request must not throw it away.
+    // A host and a sandboxed tab of one repository poll the same folder, each holding only its own
+    // sessions: neither may drop the other's request.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
     process.env.TET_PROJECT_ROOT = dir;
     const { renames } = await load(dir, "tet-opencode-abc", { error: { name: "NotFoundError" } });
@@ -632,8 +624,7 @@ describe("the color themes", () => {
     }
   });
 
-  // Nothing falls through from another theme: a variable added to one stylesheet and forgotten
-  // in another would otherwise show that other theme a value nobody chose for it.
+  // A variable forgotten in one stylesheet would show a value falling through from another theme.
   it("declares the complete variable list in every stylesheet, each variable once", () => {
     const [reference, ...others] = [...sheets];
     const expected = declared(reference[1]).sort();
@@ -645,8 +636,7 @@ describe("the color themes", () => {
     }
   });
 
-  // The definition's copies of four stylesheet values, for the two processes that need them
-  // before or outside the renderer's CSS — kept by hand, so checked here.
+  // Hand-kept copies of four stylesheet values, for code that needs them outside the renderer's CSS.
   it("keeps each definition's window and terminal colors in step with its stylesheet", () => {
     for (const theme of THEMES) {
       const css = sheets.get(theme.id)!;
@@ -658,22 +648,16 @@ describe("the color themes", () => {
   });
 });
 
-/**
- * The net under a fault nobody handled — see uncaught.ts for why the main process survives one
- * instead of letting Electron freeze every terminal behind a modal dialog. Driven by emitting
- * the event the way node would, since the point is the handler, not how the throw got there.
- */
+/** The net under an unhandled fault — see uncaught.ts for why the main process survives one. */
 describe("an uncaught exception", () => {
   it("logs the whole stack, tells the user once, and lets the process live", () => {
     const logFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-uncaught-")), "errors.log");
     const notices: string[] = [];
     const before = process.listenerCount("uncaughtException");
     installUncaughtHandler(logFile, (_severity, message) => notices.push(message));
-    // The listener it registered, called the way node would call it — not `process.emit`, which
-    // node's own test runner also listens for and would count as this test having crashed.
+    // Called directly, not via `process.emit`: node's test runner listens too and would count a crash.
     const handler = process.listeners("uncaughtException")[before];
-    // The handler prints its report to stderr as well, which here would read like this run
-    // having crashed. Held back for the two calls below; the log file is what is asserted on.
+    // The handler's stderr report would read like a crashed run; the log file is asserted on.
     const printed = console.error;
     console.error = () => undefined;
     try {

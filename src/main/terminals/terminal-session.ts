@@ -9,21 +9,18 @@ export interface SessionCallbacks {
   onStatusChange: (status: TerminalStatus) => void;
 }
 
-// Ending an agent asks it to quit before killing it, by writing the Ctrl+C bytes its own quit
-// convention expects (`AgentDefinition.quitPresses`), so the CLI runs its exit handlers, which a
-// hard kill never does. Claude Code arms a record in `~/.claude.json` while its fullscreen renderer
-// boots and clears it ten seconds later, counting every process that died in between as a strike
-// against the renderer — twice, and it turns fullscreen off machine-wide. A tab spawned at tet's
-// startup sits inside that window. `\x03` is safe here only because an agent TUI is in raw mode by
-// then and reads it as an ordinary byte (measured); in cooked mode ConPTY turns it into a
-// process-level CTRL_C_EVENT that kills without running anything.
+// Stopping writes the Ctrl+C bytes an agent quits on (`AgentDefinition.quitPresses`) before a
+// kill, so the CLI runs its exit handlers. Claude Code arms a record in `~/.claude.json` while its
+// fullscreen renderer boots and clears it ten seconds later; a process dying in between counts as a
+// strike, and two turn fullscreen off machine-wide — a tab spawned at tet's startup is in that
+// window. `\x03` is safe only because an agent TUI in raw mode reads it as a byte (measured); in
+// cooked mode ConPTY makes it a CTRL_C_EVENT that kills without running anything.
 
-/** Between two Ctrl+C bytes. Long enough that the first is read as its own keypress (a much
- *  shorter gap still was, measured), short enough for the offer the second answers. */
+/** Between two Ctrl+C bytes: long enough to be read as two keypresses (measured), short enough for
+ *  the offer the second answers. */
 const CTRL_C_GAP_MS = 250;
-/** After the last one. Measured through this same pty: Claude Code, opencode and Codex are gone well
- *  inside it.
- *  A session that read Ctrl+C as "interrupt the turn" never leaves at all. */
+/** After the last one. Measured: Claude Code, opencode and Codex are gone well inside it. A session
+ *  that read Ctrl+C as "interrupt the turn" never leaves. */
 const GRACEFUL_EXIT_MS = 2000;
 /** After the kill, so stopping cannot hang on a pty that never reports its exit. */
 const FORCE_KILL_MS = 1000;
@@ -34,15 +31,14 @@ function exitedWithin(exited: Promise<void>, ms: number): Promise<boolean> {
   const timedOut = new Promise<boolean>((resolve) => {
     timer = setTimeout(() => resolve(false), ms);
   });
-  // Whichever loses the race would leave its timer behind; a fast exit is the common case.
+  // A fast exit would otherwise leave the timer running.
   return Promise.race([exited.then(() => true), timedOut]).finally(() => clearTimeout(timer));
 }
 
-/** The last answer per executable. Whether a CLI is installed is a fact about the machine, and a
- *  program installed while the app runs is not on this process's PATH anyway. */
+/** The last answer per executable — a program installed while tet runs is not on its PATH anyway. */
 const installedChecks = new Map<string, Promise<boolean>>();
 
-/** Always spawns the check, as the requirements dialog's re-check needs, and remembers the answer. */
+/** Always spawns (the requirements re-check needs that) and remembers the answer. */
 export function checkAgentInstalled(executable: string, versionArgs: string[], cwd: string): Promise<boolean> {
   const check = new Promise<boolean>((resolve) => {
     const { command, args } = resolveCommand(executable, versionArgs);
@@ -61,7 +57,6 @@ export function checkAgentInstalled(executable: string, versionArgs: string[], c
   return check;
 }
 
-/** The remembered answer where there is one, otherwise the check. */
 export function isAgentInstalled(executable: string, versionArgs: string[], cwd: string): Promise<boolean> {
   return installedChecks.get(`${executable}\0${versionArgs.join("\0")}`) ?? checkAgentInstalled(executable, versionArgs, cwd);
 }
@@ -74,9 +69,9 @@ export class TerminalSession {
   /** The size of the last `ensureStarted` call — what `restart` respawns at. */
   private lastCols: number | undefined;
   private lastRows: number | undefined;
-  /** Set while a process is being killed for a restart, so a second click can't queue another. */
+  /** Set while killing for a restart, so a second click can't queue another. */
   private restartQueued = false;
-  /** The teardown underway, so a second `stop()` joins it rather than starting its own. */
+  /** The teardown underway, which a second `stop()` joins. */
   private stopping: Promise<void> | undefined;
 
   constructor(
@@ -87,9 +82,9 @@ export class TerminalSession {
     /** How many Ctrl+C bytes this agent wants before it is killed; 0 asks for none. */
     private readonly quitPresses: number,
     private readonly args: string[] = [],
-    /** A saved command's own variables, which outrank the ones inherited from the machine. */
+    /** A saved command's variables, outranking the machine's. */
     private readonly envOverride?: Record<string, string>,
-    /** tet's own for this process — which project and tab it is; see SpawnOptions.own. */
+    /** See SpawnOptions.own. */
     private readonly own?: Record<string, string>
   ) {}
 
@@ -103,18 +98,16 @@ export class TerminalSession {
     this.setStatus(installed ? "ready" : "missing");
   }
 
-  /** Called with the terminal's real dimensions. Starts the agent on the first call, so it never
-   *  renders for a size the view does not have; afterwards it forwards resizes. */
+  /** Starts the agent on the first call, at the view's real size; afterwards forwards resizes. */
   ensureStarted(cols: number, rows: number): void {
     this.lastCols = cols;
     this.lastRows = rows;
     if (this.process) {
-      // A pty that has just died is still held here until node-pty's exit event arrives, and
-      // resizing one throws, which took the main process down.
+      // A dead pty is held until node-pty's exit event, and resizing it throws in the main process.
       try {
         this.process.resize(cols, rows);
       } catch {
-        // The exit handler is on its way and is what sets the status.
+        // The exit handler sets the status.
       }
       return;
     }
@@ -122,14 +115,13 @@ export class TerminalSession {
   }
 
   private start(cols: number, rows: number): void {
-    // "ready" is the state a session is in before its first spawn and never again. Without the
-    // check, a later resize would respawn a terminal the user closed with `exit` or a crashed agent.
+    // "ready" only precedes the first spawn; else a resize would respawn an exited or crashed one.
     if (this.process || this.status !== "ready") {
       return;
     }
 
     try {
-      // Timed: node-pty's spawn is a synchronous CreateProcess/fork on every start.
+      // Timed: node-pty's spawn is a synchronous CreateProcess/fork.
       this.process = timeStartup(`spawn ${this.executable}`, () =>
         spawnAgentProcess(this.executable, this.args, {
           cwd: this.cwd,
@@ -154,8 +146,7 @@ export class TerminalSession {
       if (!this.intentionalStop) {
         this.callbacks.onOutput(`\r\n[tet] ${this.executable} exited with code ${exitCode}\r\n`);
       }
-      // What the process said, not merely that it is gone: a build that passed is not an error.
-      // Killed by us is "stopped" whatever the code, that code being ours not the command's.
+      // By exit code, so a passed build is no error; killed by us is "stopped" whatever the code.
       this.setStatus(this.intentionalStop || exitCode === 0 ? "stopped" : "error");
       this.intentionalStop = false;
     });
@@ -165,9 +156,8 @@ export class TerminalSession {
     this.process?.write(data);
   }
 
-  /** Ends the process and resolves once it is actually gone, not merely once a kill was asked
-   *  for: a caller deleting what the session persisted (`destroyTab`) must not race a process
-   *  still writing it. Every agent is asked to quit first, see the Ctrl+C comment above. */
+  /** Resolves once the process is gone, not once a kill was asked for: `destroyTab` deletes what the
+   *  session persisted and must not race it. Asks to quit first (see the Ctrl+C comment above). */
   stop(): Promise<void> {
     this.stopping ??= this.runStop().finally(() => {
       this.stopping = undefined;
@@ -180,20 +170,17 @@ export class TerminalSession {
     if (!proc) {
       return;
     }
-    // Before the first write, not after: whichever way the process ends from here is our doing,
-    // and `start`'s exit handler reads this to tell "stopped" from a failure of its own.
+    // Before the first write: `start`'s exit handler reads it to tell "stopped" from a failure.
     this.intentionalStop = true;
-    // A second listener beside `start`'s; node-pty's onExit is multicast. It only observes:
-    // clearing `this.process` and setting the status stay with `start`'s.
+    // node-pty's onExit is multicast; this one only observes, `start`'s clears and sets status.
     const exited = new Promise<void>((resolve) => {
       proc.onExit(() => resolve());
     });
 
     for (let press = 0; press < this.quitPresses; press += 1) {
       this.writeQuit(proc);
-      // The last press gets the long wait; earlier ones only wait to be told apart as keypresses.
-      // Returning early on an exit keeps a byte from reaching an agent already leaving: Codex
-      // gives up raw mode as it goes, so a second lands as CTRL_C_EVENT and kills the shutdown.
+      // Return on exit so no byte reaches an agent already leaving: Codex drops raw mode as it
+      // goes, and a second byte lands as CTRL_C_EVENT and kills the shutdown.
       const last = press === this.quitPresses - 1;
       if (await exitedWithin(exited, last ? GRACEFUL_EXIT_MS : CTRL_C_GAP_MS)) {
         return;
@@ -212,14 +199,13 @@ export class TerminalSession {
     try {
       proc.write("\x03");
     } catch {
-      // A pty that died between the two writes: the exit race decides what happens next.
+      // Died meanwhile: the exit race decides.
     }
   }
 
-  /** Kills the current process, if any, and spawns it again at the same size once it is gone.
-   *  Registered on the process's own exit: `start`'s exit handler clears `this.process`, so an
-   *  immediate second spawn would have its reference clobbered by that handler firing late.
-   *  No-op before the first `ensureStarted`. */
+  /** Kills and respawns at the same size, on the old process's exit: `start`'s handler clears
+   *  `this.process`, and firing late it would clobber an immediate respawn. No-op before the first
+   *  `ensureStarted`. */
   restart(): void {
     if (this.lastCols === undefined || this.lastRows === undefined || this.restartQueued) {
       return;
@@ -228,7 +214,7 @@ export class TerminalSession {
     const rows = this.lastRows;
     const respawn = (): void => {
       this.restartQueued = false;
-      // A `stop()` landing mid-kill wins: a process spawned now would never be killed.
+      // A `stop()` mid-kill wins: a process spawned now would never be killed.
       if (this.stopping) {
         return;
       }

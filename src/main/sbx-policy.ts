@@ -1,16 +1,13 @@
 /**
- * sbx's filesystem policy, evaluated in tet — sbx has `policy check network` but no filesystem
- * counterpart (0.42.1, and none in the release notes up to 0.43.0-rc3), while it enforces mounts
- * itself at `create`, `mount` and every start. This only has to predict that enforcement well
- * enough to tell a user up front what to ask their organization for; a mount sbx refuses anyway
- * still stops the tab (prepareSbxRun). Pure, so the rules are testable against measured output.
+ * sbx's filesystem policy, evaluated in tet: sbx has `policy check network` but no filesystem
+ * counterpart (0.42.1, none up to 0.43.0-rc3). This only predicts sbx's own enforcement well enough
+ * to tell a user what to ask their organization for; a refused mount still stops the tab
+ * (prepareSbxRun). Pure, so testable against measured output.
  *
- * Pattern grammar per Docker's docs (governance concepts, "Filesystem rules"): `*` stays within
- * one path segment, `**` crosses any depth, `~` is the home directory on every platform, `*:` is
- * any drive letter on Windows, a pattern matches only the path format it is written in, and no
- * environment variable is expanded. Undocumented, and decided leniently here since a wrong
- * blocker costs more than a mount refused at start: case (ignored on win32, as its paths are),
- * and whether `dir/**` covers `dir` itself (it does).
+ * Grammar per Docker's docs ("Filesystem rules"): `*` within one segment, `**` any depth, `~` home
+ * on every platform, `*:` any Windows drive, a pattern matches only its own path format, no env
+ * expansion. Undocumented, decided leniently (a wrong blocker costs more than a refused mount):
+ * case is ignored on win32, and `dir/**` covers `dir`.
  */
 
 export type FilesystemAction = "read" | "write";
@@ -22,10 +19,9 @@ export interface FilesystemRule {
 }
 
 /**
- * The active filesystem rules of `sbx policy ls --type filesystem --json` (`rules[]` with
- * `resource_type` "filesystem:read" | "filesystem:write" | "filesystem", `decision`, `resources`,
- * and `status` "inactive" for a local rule an organization's policy overrides). Anything
- * unreadable is no rules — which evaluates as everything denied.
+ * The active rules of `sbx policy ls --type filesystem --json` (`rules[]`: `resource_type`
+ * "filesystem:read" | "filesystem:write" | "filesystem", `decision`, `resources`, `status`
+ * "inactive" for a local rule an organization overrides). Unreadable is no rules — all denied.
  */
 export function parseFilesystemRules(json: string): FilesystemRule[] {
   let parsed: unknown;
@@ -63,7 +59,7 @@ export interface PathFlavor {
   home: string;
 }
 
-/** Separators as `/`, no trailing one — the one form both a pattern and a path are compared in. */
+/** `/` separators, no trailing one — the form patterns and paths are compared in. */
 function normalize(value: string, flavor: PathFlavor): string {
   const slashed = flavor.platform === "win32" ? value.replace(/\\/g, "/") : value;
   return slashed.length > 1 ? slashed.replace(/\/+$/, "") : slashed;
@@ -101,12 +97,10 @@ function patternRegExp(pattern: string, flavor: PathFlavor): RegExp {
 }
 
 /**
- * Whether sbx would let `hostPath` be mounted with `access`. A deny for an action the mount needs
- * wins over every allow; otherwise an allow has to match, default deny. Read-write needs a write
- * allow; read-only a read *or* write allow. Docker's docs say a writable mount needs both a read
- * and a write rule and a read-only one a read rule — but an organization granting write alone
- * (`C:\**`, `/**`) was measured to let both kinds mount (sbx 0.42.1), so what the binary does
- * decides here.
+ * Whether sbx would mount `hostPath` with `access`. A matching deny wins; else an allow must match
+ * (default deny): read-write needs a write allow, read-only a read *or* write allow. Docker's docs
+ * ask for read plus write and read respectively, but a write-only grant (`C:\**`, `/**`) was
+ * measured to allow both (sbx 0.42.1) — the binary decides.
  */
 export function isMountAllowed(rules: FilesystemRule[], hostPath: string, access: "ro" | "rw", flavor: PathFlavor): boolean {
   const target = normalize(hostPath, flavor);

@@ -1,17 +1,15 @@
 import { isMac, isModifierHeld } from "./platform";
 
 /**
- * The window's own shortcuts, all of them on combinations xterm's `Keyboard.ts` never turns into
- * bytes (verified against the installed `@xterm/xterm`). See "The keyboard belongs to the
- * terminal" in CLAUDE.md.
+ * The window's shortcuts, all on combinations xterm's `Keyboard.ts` never turns into bytes
+ * (verified against the installed `@xterm/xterm`). See "The keyboard belongs to the terminal" in
+ * CLAUDE.md.
  *
- * What that reading found, for the next shortcut: `evaluateKeyboardEvent`'s ctrl branch requires
- * `!shiftKey`, so `Ctrl+<letter>` is the agent's control byte (`Ctrl+G` is `\x07`) but
- * `Ctrl+Shift+<letter>` falls through every branch and sends nothing. `Alt+1…9` is out (`ESC 1`,
- * readline's digit argument), so is `Ctrl+Tab`/`Ctrl+Shift+Tab`: keyCode 9's case never looks at
- * `ctrlKey`, so both are byte-identical to plain Tab/Shift+Tab, and the latter is Claude Code's
- * own mode toggle. `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` appear in no branch, modified or
- * not. None of these close a tab.
+ * Findings, for the next shortcut: `evaluateKeyboardEvent`'s ctrl branch requires `!shiftKey`, so
+ * `Ctrl+<letter>` is a control byte (`Ctrl+G` is `\x07`) but `Ctrl+Shift+<letter>` sends nothing.
+ * `Alt+1…9` is out (`ESC 1`, readline's digit argument). `Ctrl+Tab`/`Ctrl+Shift+Tab` are out:
+ * keyCode 9 ignores `ctrlKey`, so they equal Tab/Shift+Tab — the latter Claude Code's mode toggle.
+ * `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` appear in no branch. None of these close a tab.
  */
 export type ShortcutId =
   | "settings"
@@ -28,12 +26,9 @@ interface ShortcutDef {
   shift: boolean;
   /** `event.key.toLowerCase()` to match. */
   key: string;
-  /**
-   * `event.code` to match as well: with Shift held, `key` is the shifted character, layout
-   * dependent for punctuation (`Ctrl+Shift+.` reports `:` on a German keyboard).
-   */
+  /** Also matched: under Shift, `key` is layout-dependent (`Ctrl+Shift+.` is `:` on German). */
   code?: string;
-  /** The key as shown to the user, unlowercased. */
+  /** As shown to the user, unlowercased. */
   label: string;
 }
 
@@ -54,9 +49,8 @@ const DEFS: ShortcutDef[] = [
 ];
 
 /**
- * A key whose `code` one of the shortcuts names is decided by that `code` alone: on French AZERTY
- * the `Comma`-code key reports `.` under Shift, which by `key` would be "next tab" too, and
- * "previous tab" was on no key at all.
+ * A key whose `code` a shortcut names is matched by `code` alone: on French AZERTY the `Comma` key
+ * reports `.` under Shift, which by `key` would be "next tab" and leave "previous tab" on no key.
  */
 export function matchesShortcut(event: KeyboardEvent, id: ShortcutId): boolean {
   const def = DEFS.find((entry) => entry.id === id);
@@ -78,7 +72,7 @@ export function shortcutLabel(id: ShortcutId): string {
   return def.shift ? `${mod}+Shift+${def.label}` : `${mod}+${def.label}`;
 }
 
-/** What the settings dialog's Shortcuts tab lists, in the order defined above. */
+/** The settings dialog's Shortcuts tab, in DEFS order. */
 export const SHORTCUTS: { id: ShortcutId; description: string }[] = DEFS.map(({ id, description }) => ({
   id,
   description

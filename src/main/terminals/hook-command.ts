@@ -1,21 +1,16 @@
 import type { HookEvent } from "../../shared/control";
 
 /**
- * How an agent whose hooks are commands reports one event: `tet-ctl` off the terminal's PATH,
- * the same channel its toast already went through. Shared by Claude Code and Codex; opencode and
- * pi report from inside their own process and speak the wire contract directly.
+ * The hook command Claude Code and Codex run to report one event: `tet-ctl` off the terminal's
+ * PATH. opencode and pi report from inside their own process over the wire contract.
  *
- * A bare name and nothing else — no interpreter, no generated script, no redirection — because
- * the command is parsed by whichever shell the agent chose, and that is not ours to pick: on
- * win32 Claude Code runs hooks under `/usr/bin/bash`, and PowerShell and cmd.exe have both been
- * seen too. All three resolve a bare name off PATH and hand the two arguments over unchanged;
- * anything richer is where they start to differ (measured: `cmd.exe /c` has MSYS rewrite the
- * `/c` into `C:\`, and cmd then opens interactively, banner and all, into the very prompt the
- * hook was reporting). What makes the bare name resolve in all three is the pair of launchers
- * written into tet's data folder — see control-launcher.ts.
+ * A bare name plus arguments, nothing else, because the agent picks the shell: on win32 Claude
+ * Code uses `/usr/bin/bash`, and PowerShell and cmd.exe have been seen too. All three resolve a
+ * bare name off PATH; anything richer differs (measured: in `cmd.exe /c` MSYS rewrites `/c` to
+ * `C:\` and cmd opens interactively into the agent's prompt). The launchers making the name
+ * resolve are control-launcher.ts's.
  *
- * The event is tet's own vocabulary, not the CLI's: each agent's setup maps its own events onto
- * these, and the session manager gives all of them the same meaning.
+ * The event is tet's vocabulary; each agent's setup maps its own events onto it.
  */
 export function hookCommand(event: HookEvent): string {
   return `tet-ctl hook ${event}`;

@@ -7,8 +7,8 @@ import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu
 import { confirm, prompt } from "../ui/Dialog";
 import { ChevronIcon, SearchIcon, SMALLER } from "../ui/icons";
 
-/** A file's mark, as VS Code resolves an icon theme: the name, then each extension from the
- *  longest (`a.spec.ts` is `spec.ts`, then `ts`). The tables come from scripts/file-icons.js. */
+/** As VS Code resolves an icon theme: the name, then each extension from the longest (`a.spec.ts`
+ *  is `spec.ts`, then `ts`). Tables from scripts/file-icons.js. */
 function fileMark(name: string): FileMark | null {
   const lower = name.toLowerCase();
   if (Object.hasOwn(FILE_NAMES, lower)) {
@@ -23,9 +23,8 @@ function fileMark(name: string): FileMark | null {
   return null;
 }
 
-/** A glyph of Seti's font, sized by styles.css's `.file-mark` rather than run through `Svg`'s
- *  extent-cropping, which only reaches a path. The color is the class styles.css draws in the
- *  theme's terminal colors. */
+/** A Seti font glyph, sized by `.file-mark` in styles.css (`Svg`'s extent-cropping reaches only a
+ *  path); its color class maps to the theme's terminal colors. */
 function FileMarkIcon({ mark: [glyph, color] }: { mark: FileMark }) {
   return (
     <span className={`tree-icon file-mark${color ? ` ${color}` : ""}`} aria-hidden="true">
@@ -35,30 +34,28 @@ function FileMarkIcon({ mark: [glyph, color] }: { mark: FileMark }) {
 }
 
 interface TreeNode {
-  /** What `expanded`, the row map and React keys go by. The path alone, until the project lists
-   *  `folders`: the same file can then sit under two roots, so each root prefixes its own index
-   *  ("1:src/a.ts") and the two rows fold and scroll independently. */
+  /** Key for `expanded`, the row map and React. The path; with `folders`, prefixed by the root's
+   *  index ("1:src/a.ts"), so a file under two roots folds and scrolls independently. */
   id: string;
-  /** The label; a compacted chain's is `a/b/c`. */
+  /** A compacted chain's is `a/b/c`. */
   name: string;
   /** Repository-relative, forward-slashed; for a compacted chain, the innermost folder's. */
   path: string;
-  /** Present for a folder, absent for a file — what tells the two apart while rendering. */
+  /** Present exactly for a folder. */
   children?: TreeNode[];
   /** A `folders` entry's top-level node: open by default, removable, never compacted. */
   root?: true;
 }
 
-/* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), 1px short of it across the
- * board, at the window's own 13px type; the chevron glyph stays small (see .explorer-tree
- * .tree-icon in styles.css). */
+/* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), 1px short throughout, at 13px
+ * type; the chevron stays small (.explorer-tree .tree-icon in styles.css). */
 const INDENT_STEP = 7;
 const INDENT_BASE = 7;
-/** Wide enough for a folder's chevron or a file's language badge, both centred in the same box. */
+/** Fits a folder's chevron or a file's mark, centred. */
 const TWISTIE_WIDTH = 17;
 const TWISTIE_GAP = 5;
 
-/** Name order: case-insensitive, locale-aware. */
+/** Case-insensitive, locale-aware. */
 function compareNames(a: TreeNode, b: TreeNode): number {
   return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
@@ -75,9 +72,8 @@ function extensionOf(name: string): string {
   return index > 0 ? name.slice(index + 1).toLowerCase() : "";
 }
 
-/** `explorer.sortOrder`: `default` (and `foldersNestsFiles`) is folders before files then name;
- *  `mixed` name alone; `filesFirst` the reverse grouping; `type` files by extension then name;
- *  `modified` newest first, name on a tie. */
+/** `explorer.sortOrder`: `default` (and `foldersNestsFiles`) folders first, then name; `mixed` name
+ *  alone; `filesFirst` files first; `type` by extension, then name; `modified` newest first. */
 function comparatorFor(order: ExplorerSortOrder, mtimes: Record<string, number>): (a: TreeNode, b: TreeNode) => number {
   switch (order) {
     case "mixed":
@@ -107,9 +103,8 @@ function sortTree(nodes: TreeNode[], compare: (a: TreeNode, b: TreeNode) => numb
   }
 }
 
-/** Every file under `under` ("" for all of them), split on `/` into nested folders, plus any
- *  directory `files` alone wouldn't imply (see `ExplorerListing`). Paths stay
- *  repository-relative; `idOf` is the root prefix (see `TreeNode.id`). */
+/** Files under `under` ("" for all) nested into folders, plus `emptyDirs`. Paths stay
+ *  repository-relative; `idOf` adds the root prefix (`TreeNode.id`). */
 function buildTree(files: string[], emptyDirs: string[], under: string, idOf: (path: string) => string): TreeNode[] {
   const top: TreeNode[] = [];
   const folders = new Map<string, TreeNode>();
@@ -149,9 +144,8 @@ function buildTree(files: string[], emptyDirs: string[], under: string, idOf: (p
   return top;
 }
 
-/** `explorer.compactFolders`: a folder whose only child is another folder becomes one row down
- *  the whole chain. The row is the innermost folder, so folding, reveal and the menu act on
- *  that one. Roots are left as they are. */
+/** `explorer.compactFolders`: a chain of only-child folders becomes one row, acting as the innermost
+ *  folder for folding, reveal and the menu. Roots are never compacted. */
 function compactTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((node) => {
     if (!node.children) {
@@ -166,8 +160,7 @@ function compactTree(nodes: TreeNode[]): TreeNode[] {
   });
 }
 
-/** The whole tree: every file where the project names no `folders`, otherwise one subtree per
- *  root, a file under two overlapping roots getting a row in each. Sorted by `sortOrder`. */
+/** One tree without `folders`, else a subtree per root — overlapping roots each list the file. */
 function buildForest(files: ExplorerListing): TreeNode[] {
   const compare = comparatorFor(files.sortOrder, files.mtimes ?? {});
   if (!files.roots) {
@@ -182,7 +175,7 @@ function buildForest(files: ExplorerListing): TreeNode[] {
   });
 }
 
-/** Is there a root with an open, collapsible child? Defaults match `toggle`'s. */
+/** A root with an open child folder? Defaults match `toggle`'s. */
 function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolean>): boolean {
   return roots.some(
     (root) =>
@@ -191,7 +184,7 @@ function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolea
   );
 }
 
-/** The innermost root containing the path, or undefined when it lies under none. */
+/** The innermost root containing the path. */
 function rootIndexFor(roots: ExplorerRoot[], filePath: string): number | undefined {
   let best: number | undefined;
   roots.forEach((root, index) => {
@@ -203,14 +196,13 @@ function rootIndexFor(roots: ExplorerRoot[], filePath: string): number | undefin
   return best;
 }
 
-/** A path's parent folder, "" at the root. */
+/** "" at the root. */
 function parentOf(entryPath: string): string {
   const index = entryPath.lastIndexOf("/");
   return index === -1 ? "" : entryPath.slice(0, index);
 }
 
-/** The filtered tree: a folder whose own path matches keeps its whole subtree; otherwise only
- *  descendants that match survive, their ancestors kept to carry them. */
+/** A matching folder keeps its whole subtree; otherwise only matches survive, with their ancestors. */
 function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
   const result: TreeNode[] = [];
   for (const node of nodes) {
@@ -231,7 +223,7 @@ function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
   return result;
 }
 
-/** Every folder on the way down to a path, root first. */
+/** Outermost first. */
 function ancestorsOf(filePath: string): string[] {
   const parts = filePath.split("/");
   const ancestors: string[] = [];
@@ -320,22 +312,22 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
 
 interface ExplorerProps {
   project: Project;
-  /** Undefined while the listing is still being read — the EXPLORER header's own bar says so. */
+  /** Undefined while the listing is read. */
   files: ExplorerListing | undefined;
-  /** False while hidden behind the git view: a row there cannot be scrolled to. */
+  /** False while hidden behind the git view, where a row can't be scrolled to. */
   shown: boolean;
-  /** The open file, if any — reveals and highlights it. */
+  /** The open file — revealed and highlighted. */
   selected: string | null;
   onOpen: (path: string) => void;
-  /** Runs a file-tree action; the owner shows it running on its own bar. */
+  /** The owner shows it running on its own bar. */
   act: FileAct;
-  /** A create, rename or delete settled: an empty new folder never touches git status, so
-   *  nothing else would tell the tree to read the listing again. */
+  /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
+   *  else triggers a re-read. */
   onExplorerChanged: () => void;
   ref?: React.Ref<ExplorerHandle>;
 }
 
-/** What the EXPLORER header's own title-bar buttons reach in. */
+/** For the EXPLORER header's title-bar buttons. */
 export interface ExplorerHandle {
   newFile(): void;
   newFolder(): void;
@@ -343,11 +335,9 @@ export interface ExplorerHandle {
 }
 
 /**
- * The files pane's tree: every file in the repository, not just the changed ones under the git
- * view's LOCAL CHANGES. No ↑/↓ of its own. How it is shown
- * comes from the project's tet.json, carried in by the listing: `folders` make it a multi-root
- * explorer, overlapping allowed; `exclude`/`excludeGitIgnore` have already thinned it, and
- * `sortOrder`/`compactFolders` are applied on the way to the screen.
+ * The files pane's tree of every repository file. No ↑/↓ of its own. Shaped by tet.json via the
+ * listing: `folders` make it multi-root (overlap allowed); `exclude`/`excludeGitIgnore` are already
+ * applied; `sortOrder`/`compactFolders` are applied here.
  */
 export function Explorer({ project, files, shown: visible, selected, onOpen, act, onExplorerChanged, ref }: ExplorerProps) {
   const [filter, setFilter] = useState("");
@@ -358,13 +348,13 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
   const query = filter.trim().toLowerCase();
   const filtering = query.length > 0;
-  // Compacted last, on what is shown: a filter pruning a folder to one subfolder folds them.
+  // Compacted after filtering: a folder pruned to one subfolder folds with it.
   const shown = useMemo(() => {
     const filtered = filtering ? filterTree(tree, query) : tree;
     return files?.compactFolders ? compactTree(filtered) : filtered;
   }, [tree, query, filtering, files?.compactFolders]);
 
-  // Reveals the file the editor tab shows, in the innermost root containing it.
+  // Reveals the editor tab's file in the innermost root containing it.
   const roots = files?.roots;
   const pendingReveal = useRef<string | null>(null);
   useEffect(() => {
@@ -382,7 +372,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
       ids.push(idOf(""));
     }
     pendingReveal.current = idOf(selected);
-    // Every ancestor, folded-away ones included: an id no row carries is never read.
+    // Compacted-away ancestors too: an id no row carries is simply never read.
     ids.push(...ancestorsOf(selected).map(idOf));
     setExpanded((current) => {
       const next = { ...current };
@@ -396,11 +386,9 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
       return changed ? next : current;
     });
   }, [selected, roots]);
-  // The scroll itself, one effect later: a row inside a still-collapsed folder is not in the DOM
-  // on the pass that expands it, so watching `expanded` runs this again once it exists. The
-  // pending ref keeps an ordinary fold toggle from yanking the view back to an old selection.
-  // `shown` too: the view opens before its listing arrives, and the rows only exist after that. Kept
-  // pending while hidden behind the git view, where a row has no box to scroll to.
+  // The scroll, once the row exists: re-run on `expanded` (a collapsed folder's rows aren't in the
+  // DOM yet) and `shown` (the listing arrives after the view opens). The pending ref keeps a fold
+  // toggle from yanking back to an old selection; it stays pending while hidden behind git.
   useEffect(() => {
     if (visible && pendingReveal.current) {
       const row = rows.current.get(pendingReveal.current);
@@ -414,9 +402,8 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
   const toggle = (node: TreeNode): void =>
     setExpanded((current) => ({ ...current, [node.id]: !(current[node.id] ?? node.root === true) }));
 
-  /** "Collapse Folders in Explorer", in two stages: with something expanded below a root, a
-   *  press shuts only that; once nothing is (or there are no roots), it folds everything. Walks
-   *  the unfiltered, uncompacted `tree`, whose ids a compacted row keeps (see `compactTree`). */
+  /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything
+   *  (at once without roots). Walks the uncompacted `tree`, whose ids compacted rows keep. */
   const collapseAll = (): void => {
     const ids: string[] = [];
     const collect = (nodes: TreeNode[]): void => {
@@ -441,7 +428,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
     });
   };
 
-  /** `act`, plus telling the EXPLORER header to read the listing again once the action lands. */
+  /** `act`, then a listing re-read on success. */
   const run: FileAct = (action) =>
     act(() =>
       action().then((result) => {
@@ -481,8 +468,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
   const askRename = async (node: TreeNode): Promise<void> => {
     const answer = await prompt({ title: "Rename", label: "Name", value: node.name, confirmLabel: "Rename" });
     if (answer && answer.value !== node.name) {
-      // A compacted row's name is the whole chain `a/b/c`, its path the innermost folder's: the
-      // answer replaces the chain, so it goes where the chain's outermost folder is.
+      // A compacted row's answer replaces the whole chain, so it goes where the outermost folder is.
       const dir = node.path.split("/").slice(0, -node.name.split("/").length).join("/");
       run(() => window.tet.repository.renamePath(project.id, node.path, dir ? `${dir}/${answer.value}` : answer.value));
     }
@@ -501,16 +487,15 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
     }
   };
 
-  // The EXPLORER header's buttons act on the repository root.
+  // The header's buttons act on the repository root.
   useImperativeHandle(ref, () => ({
     newFile: () => void askNewFile(""),
     newFolder: () => void askNewFolder(""),
     collapseAll
   }));
 
-  /** `ChangesList`'s menu minus what only suits a change, plus new/rename/delete and the workspace
-   *  entries, which edit the project's tet.json (see CLAUDE.md, "Explorer"). A root is neither
-   *  renamed nor deleted here: it is a view onto a folder, not the folder. */
+  /** `ChangesList`'s menu minus the change-only entries, plus new/rename/delete and the workspace
+   *  entries writing tet.json. A root is a view onto a folder, so it is never renamed or deleted. */
   const menuEntries = (node: TreeNode | null): ContextMenuEntry[] => {
     const dir = node ? (node.children !== undefined ? node.path : parentOf(node.path)) : "";
     const isFile = node !== null && node.children === undefined;
@@ -590,7 +575,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
       <div
         className="tree"
         onContextMenu={(event) => {
-          // A row's own handler sets `event.target` to itself, so this is the space below.
+          // Only the empty space below the rows.
           if (event.target === event.currentTarget) {
             event.preventDefault();
             setMenu({ x: event.clientX, y: event.clientY, node: null });
@@ -621,16 +606,12 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
 }
 
 /**
- * The Explorer tree's listing, which carries the `folders`, `exclude` and sort settings with it.
- * Re-read whenever a file starts or stops existing, when tet.json changed, and through
- * `refreshExplorer` after the tree's own create/rename/delete — an empty new folder never touches
- * git status, and a plain edit leaves `changes` at "modified", so neither shows up there. Starting
- * or stopping to exist is what the watcher reports (`onFilesChanged`) on top of `changes`: a
- * checkout, pull or reset adds and removes files none of which ever stands in `changes`, and git's
- * ignored files never do.
+ * The Explorer's listing, carrying the tet.json view settings. Re-read when a non-"modified" entry
+ * in `changes` comes or goes, on tet.json writes, on `onFilesChanged` (a checkout, pull or reset
+ * adds and removes files never in `changes`, and ignored files never are), and via
+ * `refreshExplorer` after the tree's own edits (an empty new folder never touches git status).
  *
- * Held with the project it was read for: one files pane serves every project, and a switch must not
- * show the previous project's tree until the new listing lands.
+ * Held with its project: one files pane serves all, and a switch must not show the previous tree.
  */
 export function useExplorerListing(
   projectId: string,
@@ -662,7 +643,7 @@ export function useExplorerListing(
         .join("\n"),
     [changes]
   );
-  // Only read while on screen, and read again on coming back: what changed meanwhile went unread.
+  // Read only while shown, and again on return: changes meanwhile went unread.
   useEffect(() => {
     if (!shown) {
       return;

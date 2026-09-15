@@ -26,8 +26,8 @@ function fail(message: string): void {
   pending.clear();
 }
 
-/** Starts the git process, or hands back the running one. Restarted on the next call after a crash
- *  rather than supervised: git commands are short-lived and independent, so no state is lost. */
+/** Starts the git process, or returns the running one. Restarted on the next call after a crash, not
+ *  supervised: git commands are short-lived and independent, so no state is lost. */
 function host(): UtilityProcess {
   if (child) {
     return child;
@@ -46,8 +46,7 @@ function host(): UtilityProcess {
     }
   });
   started.on("exit", (code) => {
-    // A process stopGitProcess already let go of ends later: by then a newer one may be running,
-    // and its reference and its calls are not this one's to drop.
+    // A process stopGitProcess let go of may exit after a newer one started; leave that one alone.
     if (child !== started) {
       return;
     }
@@ -81,7 +80,7 @@ export const git: GitApi = new Proxy({} as GitApi, {
       call(method, args)
 });
 
-/** Starts the process up front, so the first repository does not wait for it to boot. */
+/** Starts the process up front, so the first repository doesn't wait for it to boot. */
 export function startGitProcess(): void {
   host();
 }

@@ -16,11 +16,11 @@ import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
 import { CLI, eventually } from "./helpers";
 
-/** The pieces around the control channel that need no app and no server: pure, or a file. */
+/** Pieces around the control channel needing no app and no server. */
 
 describe("a turn's toast", () => {
-  // A shell tab stands in for an agent, as in app.test.ts: it has no version check and no
-  // sessions to list, so the manager starts nothing, and the hook is about the tab.
+  // A shell tab stands in for an agent: no version check and no sessions, so the manager starts
+  // nothing.
   it("is left out for a tab in front of the user, and only while it is", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-toast-"));
     const settings = new SettingsStore(root);
@@ -60,8 +60,8 @@ describe("a turn's toast", () => {
         }
       }
     } finally {
-      // The manager writes its context file on its own time; removed under it, the write logs.
-      // Never the reason this test fails: this runs after the assertions, as cleanup.
+      // The manager writes its context file asynchronously; removed under it, the write logs.
+      // Cleanup only, never a failure.
       await eventually("the context file written", () =>
         fs.existsSync(path.join(contextDirFor(root, "p"), "context.md"))
       ).catch(() => undefined);
@@ -83,7 +83,7 @@ describe("a terminal's environment", () => {
     });
     assert.equal(env.TET_TEST_MACHINE, "machine", "the machine's beats the agent's default");
     assert.equal(env.TET_TEST_AGENT, "agent", "the agent's default stands where the machine has none");
-    // A tet started from one of its own shell tabs: the outer app's value is in process.env.
+    // A tet started from its own shell tab has the outer app's value in process.env.
     assert.equal(env.TET_TEST_OUTER, "inner", "tet's own beats what an outer tet left");
     assert.equal(env.TET_TEST_CONTROL, "own", "the tab's own beats the app-wide");
     assert.equal(env.TET_TEST_OWN, "command", "a saved command's beats everything");
@@ -110,12 +110,10 @@ describe("a terminal's environment", () => {
 describe("the tet-ctl launcher", () => {
   it("is found on PATH and runs the CLI", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-launcher-"));
-    // In here `process.execPath` is node, which ignores ELECTRON_RUN_AS_NODE — the same line
-    // the app writes, with electron in that place.
+    // Here `process.execPath` is node, which ignores ELECTRON_RUN_AS_NODE; the app writes electron.
     const bin = writeLaunchers(dir, CLI);
     const run = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
-      // cmd.exe is what resolves a .cmd on PATH, and it takes the line whole; a POSIX sh
-      // script needs no shell to be found.
+      // cmd.exe resolves a .cmd on PATH and takes the line whole; a POSIX script needs no shell.
       const win32 = process.platform === "win32";
       const child = spawn(win32 ? "tet-ctl help" : "tet-ctl", win32 ? [] : ["help"], {
         env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined },
@@ -134,7 +132,7 @@ describe("the tet-ctl launcher", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-launcher-"));
     const bin = writeLaunchers(dir, CLI);
     const after = await new Promise<string>((resolve) => {
-      // One cmd.exe session, as a user typing both lines at its prompt: the launcher, then a look.
+      // One cmd.exe session: the launcher, then a look at the variable.
       const child = spawn(`call tet-ctl help >nul & set ELECTRON_RUN_AS_NODE`, [], {
         env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined, ELECTRON_RUN_AS_NODE: undefined },
         shell: true
@@ -189,8 +187,8 @@ describe("the context file", () => {
 
   it("tries a failed write again by itself, and answers with the text meanwhile", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
-    // A directory in each file's place: the rename onto it fails on every platform, the way it does
-    // on win32 while a reader holds the file without delete sharing.
+    // A directory in each file's place makes the rename fail everywhere, as on win32 while a
+    // reader holds the file without delete sharing.
     fs.mkdirSync(path.join(dir, "context.md"));
     fs.mkdirSync(path.join(dir, "shell-output.log"));
     const context = new ShellContext(dir, "repo");
@@ -199,7 +197,7 @@ describe("the context file", () => {
     assert.match(context.text, /Shell output/, "what the prompt-submit hook is answered with");
     fs.rmdirSync(context.contextFile);
     fs.rmdirSync(context.logFile);
-    // No further output: nothing but a retry of its own writes them.
+    // No further output: only its own retry writes them.
     const written = (file: string, pattern: RegExp): boolean =>
       fs.statSync(file, { throwIfNoEntry: false })?.isFile() === true && pattern.test(fs.readFileSync(file, "utf8"));
     await eventually("the retried writes", () => written(context.logFile, /done/) && written(context.contextFile, /Shell output/), 5000);
@@ -240,7 +238,7 @@ describe("the agent PATH", () => {
 
   it("names npm's reported prefix, the manager roots from the environment, and the fixed shim dirs", () => {
     const j = (...p: string[]): string => p.join(path.sep);
-    // Everything a manager exposes, plus what npm reported — the moved prefix included.
+    // Every manager's variable, plus npm's reported (moved) prefix.
     const full = win32AgentDirs(
       { APPDATA: j("C:", "u", "AppData", "Roaming"), LOCALAPPDATA: j("C:", "u", "AppData", "Local"), USERPROFILE: j("C:", "u"), NVM_SYMLINK: j("C:", "nvm", "node"), VOLTA_HOME: j("C:", "volta"), SCOOP: j("C:", "scoop") },
       j("D:", "npm-global")
@@ -254,7 +252,7 @@ describe("the agent PATH", () => {
       j("C:", "u", "AppData", "Local", "Microsoft", "WinGet", "Links"),
       j("C:", "u", "AppData", "Local", "DockerSandboxes", "bin")
     ]);
-    // With nothing exported and no npm answer, it falls back to the managers' default roots.
+    // Nothing exported, no npm answer: the managers' default roots.
     const defaults = win32AgentDirs({ APPDATA: j("C:", "Roaming"), LOCALAPPDATA: j("C:", "Local"), USERPROFILE: j("C:", "u") }, undefined);
     assert.deepEqual(defaults, [
       j("C:", "Roaming", "npm"),
@@ -263,17 +261,16 @@ describe("the agent PATH", () => {
       j("C:", "Local", "Microsoft", "WinGet", "Links"),
       j("C:", "Local", "DockerSandboxes", "bin")
     ]);
-    // A bare environment contributes only what it can name — no empty entries.
+    // No empty entries.
     assert.deepEqual(win32AgentDirs({}, undefined), []);
   });
 
-  // What the timeout around the login shell is worth depends on the signal behind it: the shell is
-  // asked to be interactive, and an interactive one ignores SIGTERM. Measured before the fix: the
-  // call never came back, and with the requirements check waiting on it the app never opened.
+  // The login shell is asked to be interactive, and an interactive shell ignores SIGTERM: the
+  // timeout must not rely on it, or the requirements check waits forever and the app never opens.
   it("gives up on a login shell that ignores being asked to stop", { skip: process.platform === "win32" && "posix only", timeout: 30_000 }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-shell-"));
     const shell = path.join(dir, "hanging-shell");
-    // Ignores SIGTERM and blocks in the shell itself — no child that could be killed in its place.
+    // Ignores SIGTERM and blocks in the shell itself, with no child to kill in its place.
     fs.writeFileSync(shell, ["#!/bin/sh", 'trap "" TERM', "read ignored", ""].join("\n"), { mode: 0o755 });
     const shellBefore = process.env.SHELL;
     const pathBefore = process.env.PATH;

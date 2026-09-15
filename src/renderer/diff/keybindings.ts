@@ -1,12 +1,12 @@
 import type { Monaco } from "./editor";
 import { KEYBINDING_PRESETS } from "./keybinding-presets";
 
-/** Defaults for the commands tet adds itself, layered under the chosen preset. */
+/** tet's own commands, layered under the chosen preset. */
 const DEFAULT_KEYBINDINGS: Record<string, string> = {
   "ctrl+s": "tet.save"
 };
 
-/** Key names a preset may use after the last `+`, in VS Code's spelling. Not exhaustive. */
+/** Key names after the last `+`, VS Code's spelling. Not exhaustive. */
 const KEY_NAMES: Record<string, string> = {
   backspace: "Backspace",
   tab: "Tab",
@@ -63,7 +63,7 @@ for (const letter of "abcdefghijklmnopqrstuvwxyz") {
   KEY_NAMES[letter] = `Key${letter.toUpperCase()}`;
 }
 
-/** A key-combo string ("ctrl+shift+s") as monaco's keybinding number; undefined for anything unknown. */
+/** "ctrl+shift+s" as monaco's keybinding number; undefined for anything unknown. */
 export function parseKeyCombo(monaco: Monaco, combo: string): number | undefined {
   const parts = combo
     .toLowerCase()
@@ -94,7 +94,7 @@ export function parseKeyCombo(monaco: Monaco, combo: string): number | undefined
   return keyCode === undefined ? undefined : mods | keyCode;
 }
 
-/** The chosen preset's bindings over tet's defaults. An unknown id yields the defaults alone. */
+/** The preset's bindings over tet's defaults; an unknown id yields the defaults. */
 export function resolveKeybindings(presetId: string): Record<string, string> {
   const preset = KEYBINDING_PRESETS.find((entry) => entry.id === presetId);
   return { ...DEFAULT_KEYBINDINGS, ...preset?.bindings };

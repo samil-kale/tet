@@ -1,37 +1,30 @@
 import * as fs from "node:fs";
 
-/** How often the loop is sampled. A keystroke on its way to a pty waits in the same queue as this
- *  timer, so how late the timer runs is how late the keystroke would be. */
+/** A keystroke bound for a pty waits in the same queue as this timer, so its lag is typing lag. */
 const SAMPLE_MS = 20;
-/** Below this, a late sample is scheduling noise rather than something a typist could feel. */
+/** Below this, lag is scheduling noise. */
 const STALL_MS = 50;
-/** A stall this long is worth a line of its own, not just a tally. */
+/** A stall this long gets a line of its own. */
 const LOUD_STALL_MS = 200;
-/** One summary per interval, and only when there was something to report. */
+/** One summary per interval, only when there is something to report. */
 const REPORT_MS = 60_000;
-/** Below this a single measured block is scheduling noise; above it, worth a line naming the block
- *  itself rather than leaving it to the "ran last" guess. */
+/** A measured block above this gets a line naming it. */
 const SLOW_MS = 100;
-/** The log is appended across sessions, so a stall can be looked up days later; past this size it
- *  is rotated to `<file>.1`, so at most two files of this size ever exist. */
+/** Appended across sessions; rotated to `<file>.1` past this size. */
 const MAX_LOG_BYTES = 1_000_000;
 
-/** The main process's continuous work, in the places it happens. */
 export type Activity = "output" | "input" | "reconcile" | "git" | "emit" | "startup";
 
 const counts = new Map<Activity, number>();
-/** What ran last. A stall is only noticed by the sample that follows it, so whatever was running
- *  just before is the likeliest thing to have blocked it. */
+/** A stall is noticed by the next sample, so what ran last is the likeliest culprit. */
 let lastActivity: Activity | undefined;
 /**
- * The stretches of "startup" running now, each with how many are running (every project runs its
- * own `list claude`): the one activity that is a set of different things, none of them counted
- * elsewhere — so a stall before the first output or refresh, which the tally alone can only call
- * "nothing", is put to the stretches it fell in. All of them, since projects and agents start side
- * by side: the stretch entered last is only the last in line, not the one that blocked.
+ * Startup phases running now, with their count (each project runs its own `list claude`). A stall
+ * before any output or refresh is blamed on all of them, since projects and agents start side by
+ * side — the last one entered is not necessarily the blocker.
  */
 const startupPhases = new Map<string, number>();
-/** The stretch entered last, for a stall after every stretch has ended. */
+/** For a stall after every phase has ended. */
 let lastStartupPhase: string | undefined;
 
 export function countActivity(activity: Activity): void {
@@ -39,7 +32,7 @@ export function countActivity(activity: Activity): void {
   lastActivity = activity;
 }
 
-/** Enters a stretch of startup; the returned function leaves it. */
+/** Returns the function that leaves the phase. */
 function enterStartup(phase: string): () => void {
   countActivity("startup");
   lastStartupPhase = phase;
@@ -54,8 +47,7 @@ function enterStartup(phase: string): () => void {
   };
 }
 
-/** A stretch of startup that runs asynchronously, from `run`'s call until its promise settles;
- *  returns that promise. For the synchronous ones, `timeStartup`. */
+/** An async startup phase, until `run`'s promise settles. Sync ones use `timeStartup`. */
 export async function markStartup<T>(phase: string, run: () => Promise<T>): Promise<T> {
   const leave = enterStartup(phase);
   try {
@@ -65,8 +57,7 @@ export async function markStartup<T>(phase: string, run: () => Promise<T>): Prom
   }
 }
 
-/** A stretch of startup that runs synchronously, timed as `logSlow` times a block; returns what
- *  `run` returns. For the async ones, `markStartup`. */
+/** A sync startup phase, timed like `logSlow`. Async ones use `markStartup`. */
 export function timeStartup<T>(phase: string, run: () => T): T {
   const leave = enterStartup(phase);
   const start = performance.now();
@@ -101,9 +92,8 @@ function tally(): string {
 
 let append: ((line: string) => void) | undefined;
 
-/** The renderer's half of the same question: the sampler above cannot see xterm parsing a busy
- *  TUI's repaint or React re-rendering the git pane, so the renderer reports its own long tasks
- *  (Chromium's Long Tasks API, main.tsx) into this log and the same summary. */
+/** The sampler cannot see renderer work (xterm parsing, React), so the renderer reports its long
+ *  tasks (Long Tasks API, main.tsx) into this log and summary. */
 let rendererTasks = 0;
 let rendererMs = 0;
 let rendererWorst = 0;
@@ -117,16 +107,14 @@ export function reportRendererTask(ms: number, context: string): void {
   }
 }
 
-/** A block of the renderer's own work, named — its half of `logSlow`. Filtered in the renderer
- *  already (slow-report.ts), so an ordinary render costs no message. */
+/** The renderer's `logSlow`; pre-filtered there (slow-report.ts), so ordinary renders send nothing. */
 export function reportRendererSlow(label: string, ms: number): void {
   if (ms >= SLOW_MS) {
     append?.(`renderer:${label} took ${Math.round(ms)}ms`);
   }
 }
 
-/** Names a block of work directly instead of leaving it to a stall sample's "ran last" guess.
- *  Callers still call `countActivity` themselves for the tally. */
+/** Names a slow block instead of the "ran last" guess. Callers still call `countActivity`. */
 export function logSlow(activity: Activity, ms: number): void {
   if (ms >= SLOW_MS) {
     append?.(`${activity} took ${Math.round(ms)}ms`);
@@ -134,10 +122,8 @@ export function logSlow(activity: Activity, ms: number): void {
 }
 
 /**
- * Records how long the main process's event loop is blocked and what was running when it was.
- * Writes to a file and nowhere else: the `tet` command starts the app detached, where stdout
- * goes nowhere. Runs in every session rather than behind a switch — by the time a stall is worth
- * investigating, the run that produced it is over. A sample every 20ms is the price.
+ * Logs main-loop stalls and what ran before them. To a file only: `tet` starts detached, stdout
+ * goes nowhere. Always on — by the time a stall matters, its run is over.
  */
 export function startEventLoopMonitor(logFile: string): void {
   try {
@@ -186,8 +172,7 @@ export function startEventLoopMonitor(logFile: string): void {
     if (now >= reportAt) {
       reportAt = now + REPORT_MS;
       if (stalls > 0 || rendererTasks > 0) {
-        // A stall no activity accounts for, regular and growing, is garbage collection on a heap
-        // that is filling up — which only the heap's own numbers can tell from a busy loop.
+        // Regular, growing unexplained stalls are GC on a filling heap; only heap numbers tell.
         const { heapUsed, heapTotal } = process.memoryUsage();
         append?.(
           `loop: ${stalls} stalls in ${REPORT_MS / 1000}s, ${stalledMs}ms lost,` +
@@ -207,6 +192,6 @@ export function startEventLoopMonitor(logFile: string): void {
       counts.clear();
     }
   }, SAMPLE_MS);
-  // Diagnostics must not be the reason the process stays alive.
+  // Diagnostics must not keep the process alive.
   timer.unref();
 }

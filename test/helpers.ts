@@ -14,15 +14,13 @@ export interface Run {
 }
 
 /**
- * Runs the built CLI the way a terminal of tet would — the channel in its environment.
- * Asynchronously, and not for style: in control.test.ts the server it talks to runs on this
- * very event loop, and a `spawnSync` would hold that loop until the child gave up waiting.
+ * Runs the built CLI with the channel in its environment, as a tet terminal would. Async because
+ * in control.test.ts the server runs on this event loop, which a `spawnSync` would block.
  */
 export function tetCtl(args: string[], env: Record<string, string | undefined>, input = ""): Promise<Run> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI, ...args], { env: { ...process.env, ...env } });
-    // Always closed, whether or not the verb reads it: a hook's payload arrives this way, and one
-    // left open would have the CLI wait for an end that never comes.
+    // Always closed: a hook reads its payload here, and would wait forever on an open stdin.
     child.stdin.end(input);
     let stdout = "";
     let stderr = "";
@@ -41,9 +39,8 @@ export function tetCtl(args: string[], env: Record<string, string | undefined>, 
 }
 
 /**
- * Polls until `check` holds, or fails with `what` after `ms`. `what` can be a thunk so a
- * message built from state gathered while polling (e.g. accumulated stderr) reflects that state
- * at failure time, not whatever it was when `eventually` was first called.
+ * Polls until `check` holds, or fails with `what` after `ms`. A thunk `what` is evaluated at
+ * failure time, so it can include state gathered while polling (e.g. stderr).
  */
 export async function eventually(
   what: string | (() => string),

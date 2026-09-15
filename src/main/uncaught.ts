@@ -2,31 +2,24 @@ import * as fs from "node:fs";
 import type { NoticeSeverity } from "../shared/types";
 
 /**
- * What an uncaught exception in the main process does instead of ending the session. Electron's
- * default is a modal error dialog, and the main process relays every pty's output, so that dialog
- * freezes every terminal in every project — live agent turns among them — over a fault that often
- * has nothing to do with them. Seen for real: a stream write failing *after* it was handed over
- * (`write EAGAIN` on a socket the other side had dropped), which no `try` can catch. Nothing is
- * swallowed silently — the user gets a notice naming the error, and the full stack goes to
- * `errors.log` beside the settings, written every session rather than behind a switch.
+ * Uncaught main-process exceptions. Electron's default modal dialog would freeze every terminal,
+ * since this process relays all pty output. Such faults exist beyond any `try` — e.g. `write
+ * EAGAIN` on a socket the other side dropped. The user gets a notice; the stack goes to `errors.log`.
  */
 
-/** Rotated like the event loop's log, so a long-lived profile never grows one without end. */
+/** Rotated like the event loop's log. */
 const MAX_LOG_BYTES = 512 * 1024;
 
-/** Every report starts with this — what test/app.test.ts fails a run on, and what to grep for. */
+/** Starts every report; test/app.test.ts fails a run on it. */
 export const UNCAUGHT_MARKER = "[tet] uncaught exception";
 
 /** One notice per distinct error per run; every occurrence is still logged, numbered. */
 const seen = new Map<string, number>();
 
-/** `errors.log`, once installUncaughtHandler has named it. */
+/** Set by installUncaughtHandler. */
 let errorLog: string | undefined;
 
-/**
- * One line into `errors.log` for a failure that is no exception but would otherwise go unseen — a
- * toast Windows refused, say. Console first, as for an uncaught one; never throws.
- */
+/** Logs a non-exception failure that would go unseen (e.g. a refused toast); never throws. */
 export function logError(line: string): void {
   const entry = `[tet] ${line} ${new Date().toISOString()}\n`;
   console.error(entry);
@@ -36,7 +29,7 @@ export function logError(line: string): void {
   try {
     fs.appendFileSync(errorLog, entry);
   } catch {
-    // The console copy is all there is then.
+    // Console copy only.
   }
 }
 
@@ -47,22 +40,21 @@ export function installUncaughtHandler(logFile: string, notify: (severity: Notic
       fs.renameSync(logFile, `${logFile}.1`);
     }
   } catch {
-    // No log yet, or it cannot be rotated — the append below is what matters.
+    // No log yet, or not rotatable.
   }
-  // An unhandled promise rejection arrives here too — node re-throws it as an uncaught
-  // exception. `origin` says which it was.
+  // Unhandled rejections arrive here too; `origin` tells them apart.
   process.on("uncaughtException", (error: unknown, origin: string) => {
     const summary = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     const count = (seen.get(summary) ?? 0) + 1;
     seen.set(summary, count);
     const stack = error instanceof Error ? (error.stack ?? summary) : summary;
     const report = `${UNCAUGHT_MARKER} (${origin}, #${count}) ${new Date().toISOString()}\n${stack}\n`;
-    // Both, console first: the log survives the run, but a test driving the app reads stderr.
+    // Console too: tests driving the app read stderr.
     console.error(report);
     try {
       fs.appendFileSync(logFile, report);
     } catch {
-      // The console copy above is all there is then; a failure to log must not itself throw.
+      // Logging must not itself throw.
     }
     if (count === 1) {
       notify("error", `TET hit an unexpected error and kept running: ${summary}. The details are in errors.log in TET's data folder (~/.tet).`);

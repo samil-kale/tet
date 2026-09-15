@@ -8,49 +8,45 @@ export interface DialogTab<T extends string> {
 }
 
 /**
- * What heads the dialog — one of two shapes, nothing else. A title bar names one thing and may
- * carry a close button; a tab strip stands in for the title where the dialog has more than one
- * pane.
+ * What heads the dialog, one of two shapes: a title bar, optionally with a close button, or a tab
+ * strip in place of the title for a dialog with several panes.
  */
 export type DialogHeader<T extends string> =
   | {
       title: string;
-      /** The bar's close button; left out for a dialog that must stay up (RequirementsDialog). */
+      /** Left out for a dialog that must stay up (RequirementsDialog). */
       onClose?: () => void;
     }
   | {
       tabs: readonly DialogTab<T>[];
       active: T;
       onSelect: (id: T) => void;
-      /** Optional close action at the right edge of the tab strip. */
+      /** Close button at the tab strip's right edge. */
       onClose?: () => void;
     };
 
 interface DialogFrameProps<T extends string> {
   header: DialogHeader<T>;
-  /** Draws the header's progress bar — the dialog's one indicator, as with any other pane. */
+  /** Draws the header's progress bar, the dialog's one indicator. */
   busy?: boolean;
-  /** Variants on `.dialog` — `wide`, or the dialog's own class for its rules alone. */
+  /** Variants on `.dialog`: `wide`, or the dialog's own class. */
   className?: string;
   /**
-   * Given, the card is a form and Enter submits from wherever the focus sits. A caller that
-   * isn't ready yet checks that inside; the frame only prevents the browser's own submit.
+   * Given, the card is a form and Enter submits from anywhere in it. A caller not ready checks
+   * that itself; the frame only prevents the browser's own submit.
    */
   onSubmit?: () => void;
-  /** What goes in the button row, the one being suggested last. */
+  /** The button row, the suggested button last. */
   buttons: React.ReactNode;
   children: React.ReactNode;
 }
 
 /**
- * The one shell every card dialog is drawn in: the overlay, the card, a header of one of the two
- * shapes above, the body, the button row. Used by the questions in `Dialog.tsx` and every dialog
- * under `dialogs/`.
+ * The shell of every card dialog — the questions in `Dialog.tsx` and everything under `dialogs/`:
+ * overlay, card, header, body, button row.
  *
- * Escape is the caller's: a question listens on `window`, the others on `document`
- * (`useEscape`), and RequirementsDialog takes none at all.
- *
- * While one is up, no tab is in front of the user (`window-covered.ts`).
+ * Escape is the caller's: a question listens on `window`, the others on `document` (`useEscape`),
+ * RequirementsDialog on neither. While one is up, no tab is in front (`window-covered.ts`).
  */
 export function DialogFrame<T extends string>({ header, busy, className, onSubmit, buttons, children }: DialogFrameProps<T>) {
   useCoversWindow();

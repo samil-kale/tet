@@ -5,19 +5,15 @@ import * as path from "node:path";
 import { pathKey } from "./pty";
 
 /**
- * Puts the directories the agents actually land in on this process's PATH, at startup and on every
- * re-check of the requirements. Both halves of tet read `process.env.PATH`: the startup check
- * spawns `<agent> --version`, and every terminal derives its env from it (buildEnv). Idempotent,
- * and a call while one runs joins it rather than starting a second shell. Started by its `tet`
- * command, tet inherits the PATH of whatever ran that — a terminal's, but just as well a desktop
- * launcher's, which the login shell has not yet extended (nvm, Homebrew, `~/.local/bin` live in
- * `.zshrc`/`.bashrc`).
+ * Puts the directories agents are installed in on `process.env.PATH`, at startup and on every
+ * requirements re-check — both the `<agent> --version` check and every terminal's env (buildEnv)
+ * read it. A concurrent call joins the running one. tet may be started by a desktop launcher whose
+ * PATH the login shell never extended (nvm, Homebrew, `~/.local/bin` live in `.zshrc`/`.bashrc`).
  *
- * On macOS/Linux the login shell's PATH *replaces* the inherited one (what was inherited and not in
- * it goes last): an npm-installed agent is a `#!/usr/bin/env node` shim, and with the shell's
- * entries merely appended a distro's old `/usr/bin/node` would win over the nvm node it was
- * installed with, killing it on start. On win32 the manager directories are *appended*: there is no
- * shell PATH to trust, only guesses, and a guess must not shadow something already found.
+ * On macOS/Linux the login shell's PATH *replaces* the inherited one (leftovers go last): an npm
+ * agent is a `#!/usr/bin/env node` shim, and with the shell's entries merely appended a distro's
+ * old `/usr/bin/node` would win over the nvm node and kill it on start. On win32 the manager
+ * directories are *appended*: they are only guesses, and a guess must not shadow what was found.
  */
 export function augmentAgentPath(): Promise<void> {
   pending ??= augment().finally(() => {
@@ -51,10 +47,9 @@ async function augment(): Promise<void> {
 }
 
 /**
- * The bin directories a win32 agent installer writes to that the inherited PATH may miss: where a
- * package manager says it puts global binaries (`npmPrefix` — the global bin *is* the prefix on
- * win32 — plus `NVM_SYMLINK`, `VOLTA_HOME`, `SCOOP`), and the fixed shim directories used when
- * they export nothing. The caller keeps only those that exist; `mergePath` drops duplicates.
+ * win32 bin directories the inherited PATH may miss: the package managers' declared global bins
+ * (`npmPrefix` — on win32 the bin *is* the prefix — `NVM_SYMLINK`, `VOLTA_HOME`, `SCOOP`), else
+ * their fixed shim directories. The caller keeps those that exist; `mergePath` drops duplicates.
  */
 export function win32AgentDirs(env: NodeJS.ProcessEnv, npmPrefix: string | undefined): string[] {
   const dirs: string[] = [];
@@ -71,19 +66,16 @@ export function win32AgentDirs(env: NodeJS.ProcessEnv, npmPrefix: string | undef
   dirs.push(env.SCOOP ? path.join(env.SCOOP, "shims") : env.USERPROFILE ? path.join(env.USERPROFILE, "scoop", "shims") : "");
   if (env.LOCALAPPDATA) {
     dirs.push(path.join(env.LOCALAPPDATA, "Microsoft", "WinGet", "Links"));
-    // Docker Sandboxes' installer (winget) writes straight to the user PATH rather than through a
-    // WinGet Links shim (verified against a real install).
+    // Docker Sandboxes' winget installer writes to the user PATH, not a WinGet Links shim (verified).
     dirs.push(path.join(env.LOCALAPPDATA, "DockerSandboxes", "bin"));
   }
   return dirs.filter(Boolean);
 }
 
 /**
- * A global prefix the user moved with `npm config set prefix`, read the way npm reads it — the
- * environment (`NPM_CONFIG_PREFIX`, `npm_config_prefix`) before `~/.npmrc`. Never by asking npm:
- * `npm config get prefix` through cmd.exe measured as a noticeable part of every start, for an
- * answer nearly always the `%APPDATA%\npm` default win32AgentDirs already has. `${VAR}` is
- * expanded from `env` as npm does it. win32 only, undefined when nothing names one.
+ * A global prefix moved with `npm config set prefix`, read as npm reads it: env before `~/.npmrc`,
+ * `${VAR}` expanded. Never by asking npm — `npm config get prefix` through cmd.exe measured as a
+ * noticeable part of every start, for what is nearly always the `%APPDATA%\npm` default. win32 only.
  */
 export function npmGlobalPrefix(env: NodeJS.ProcessEnv, npmrc: string | undefined = readUserNpmrc()): string | undefined {
   const fromEnv = env.NPM_CONFIG_PREFIX ?? env.npm_config_prefix;
@@ -99,7 +91,6 @@ function readUserNpmrc(): string | undefined {
   }
 }
 
-/** Only an existing directory is worth adding. */
 function directoryExists(dir: string): boolean {
   try {
     return fs.statSync(dir).isDirectory();
@@ -113,9 +104,9 @@ const START = "__TET_PATH_START__";
 const END = "__TET_PATH_END__";
 
 /**
- * How to make `shell` source its profile and run one line. `-ilc` for the Bourne family (`-l` the
- * login files, `-i` the rc); csh and tcsh take `-l` only on its own and have no `command` builtin,
- * so they get `-ic` and a bare printf. `command` sidesteps an alias shadowing printf.
+ * Makes `shell` source its profile and run one line: `-ilc` for the Bourne family (`-l` login
+ * files, `-i` the rc); csh/tcsh take `-l` only alone and lack `command`, so `-ic` and a bare printf.
+ * `command` sidesteps an alias shadowing printf.
  */
 export function shellInvocation(shell: string): string[] {
   const csh = ["csh", "tcsh"].includes(path.basename(shell));
@@ -124,20 +115,14 @@ export function shellInvocation(shell: string): string[] {
 }
 
 /**
- * The PATH of the user's login shell, where the tool directories live on macOS/Linux — the
- * version-managed ones (nvm's per-version `node/<v>/bin`) can be known no other way. `$SHELL`
- * names it, else the account's shell. Timeout-bounded so a hanging profile cannot hold startup;
- * `TET_RESOLVING_ENVIRONMENT` lets such a profile skip its slow part.
+ * The login shell's PATH (`$SHELL`, else the account's) — the only way to know version-managed
+ * directories like nvm's `node/<v>/bin`. Timeout-bounded so a hanging profile cannot hold startup;
+ * `TET_RESOLVING_ENVIRONMENT` lets a profile skip its slow part.
  *
- * The kill has to be SIGKILL: the shell is asked to be *interactive* (shellInvocation), and an
- * interactive shell ignores SIGTERM — measured, a bash whose profile hung sat through the whole
- * timeout and died only when something else signalled it 40 s later, with the requirements check
- * waiting on it all that time. With the default killSignal the timeout above ends nothing.
- *
- * The signal is all it takes, though: measured, the timeout settles the call whatever the shell
- * left running — a profile's background process still holding stdout, still writing to it, or in
- * a session of its own, all came back at the 5 s mark, output collected. So no killing of the
- * process group, which would take down whatever that profile deliberately started.
+ * SIGKILL, because an interactive shell ignores SIGTERM (measured: a hung bash outlived the
+ * timeout). It suffices: measured, the timeout settles the call even with a profile's background
+ * process holding or writing stdout, or in its own session — so no process-group kill, which would
+ * take down what the profile deliberately started.
  */
 function loginShellPath(): Promise<string[]> {
   return new Promise((resolve, reject) => {
@@ -168,9 +153,8 @@ export function parseShellPath(output: string): string | undefined {
   return output.slice(start + START.length, end);
 }
 
-/** `base` with each of `additions` not already in it appended, keeping order and dropping blanks.
- *  Which list is the base differs per platform, see augmentAgentPath. Case-sensitive: win32's own
- *  resolution is case-insensitive, but a duplicate entry is only cosmetic. */
+/** `base` plus the `additions` not already in it, in order, blanks dropped. Which list is the base
+ *  differs per platform (augmentAgentPath). Case-sensitive: a win32 duplicate is only cosmetic. */
 export function mergePath(base: string, additions: string[], delimiter: string): string {
   const seen = new Set(base.split(delimiter).filter(Boolean));
   const added = additions.filter((dir) => dir && !seen.has(dir));

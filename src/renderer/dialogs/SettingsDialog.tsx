@@ -20,14 +20,14 @@ import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 
 interface SettingsDialogProps {
-  /** Whose tet.json the Files tab's Explorer settings read and write; null hides that part. */
+  /** Whose tet.json the Files tab's Explorer settings edit; null hides them. */
   activeProject: Project | null;
   onClose: () => void;
 }
 
 type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "info";
 
-/** The dialog's panes; the first is the one it opens on. */
+/** The dialog opens on the first. */
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "appearance", label: "Appearance" },
   { id: "notifications", label: "Notifications" },
@@ -37,30 +37,27 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "info", label: "Info" }
 ];
 
-/** The Appearance tab's radio buttons. */
 const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
   system: "System",
   light: "Light",
   dark: "Dark"
 };
 
-/** The Prompts tab's picker, one label per question. */
 const PROMPT_LABELS: Record<PromptId, string> = {
   commitMessage: "Commit message"
 };
 
-/** One switch per line: the turn ended, it is stuck, it is idle. */
 const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
   { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
-  // The one switch that is not live: its hook is registered per tab, since nothing but the
-  // toast comes of it (AgentPaths.idleReminder).
+  // Not live: its hook is registered per tab only when on, since only a toast comes of it
+  // (AgentPaths.idleReminder).
   { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only, from the next tab on)" }
 ];
 
 /**
- * The Files tab's sort-order picker. `foldersNestsFiles` is left out: the Explorer tree has no
- * file nesting, so it sorts identically to `default`. A hand-written tet.json can still hold it.
+ * `foldersNestsFiles` is left out: without file nesting it sorts like `default`. A hand-written
+ * tet.json can still hold it.
  */
 const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "default", label: "Default" },
@@ -70,10 +67,9 @@ const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "modified", label: "Modified" }
 ];
 
-/** The Files tab's own keys, one write each — in the order Save goes through them. */
+/** The Files tab's tet.json keys, one write each, in Save's order. */
 const EXPLORER_KEYS: (keyof ExplorerSettings)[] = ["excludeGitIgnore", "compactFolders", "sortOrder"];
 
-/** The Info tab's rows: tet, then what it runs on. */
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
   { key: "version", label: "TET" },
   { key: "electron", label: "Electron" },
@@ -83,9 +79,8 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 ];
 
 /**
- * Everything tet keeps about itself rather than about one repository. Not part of Dialog.tsx:
- * this asks nothing — it edits its own copy of the settings and writes on Save, like every
- * other dialog. Cancel and Escape drop what was edited.
+ * Everything tet keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits
+ * its own copy and writes on Save; Cancel and Escape drop the edits.
  */
 export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
@@ -94,19 +89,18 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
-  /** What tet.json held when the dialog opened: Save writes only the keys that differ from it. */
+  /** tet.json as opened: Save writes only the keys that differ. */
   const loadedExplorer = useRef<ExplorerSettings | null>(null);
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
-    // Asked alongside the settings: none of it can change while the process runs.
+    // Cannot change while the process runs.
     void window.tet.app.info().then(setInfo);
   }, []);
 
-  // Read once, on open. Nothing follows tet.json while the dialog stands: Save reaches the file
-  // through patchSetting (commands.ts), which reads it fresh and leaves every other key alone.
-  // By id: the project list is rebuilt whole when a project is added elsewhere, and a new object
-  // for the same project must not throw away what was edited here.
+  // Read once, on open; Save goes through patchSetting (commands.ts), which reads the file fresh
+  // and leaves other keys alone. Keyed by id: the project list is rebuilt whole when a project is
+  // added elsewhere, and a new object for the same project must not discard the edits.
   const activeProjectId = activeProject?.id;
   useEffect(() => {
     if (!activeProjectId) {
@@ -122,7 +116,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   useEscape(onClose);
 
-  /** Edits the dialog's own copy; settings.json is written whole on Save (see settings.ts). */
+  /** Edits the local copy; settings.json is written whole on Save (settings.ts). */
   const patch = (change: (current: AppSettings) => Partial<AppSettings>): void =>
     setSettings((current) => (current ? { ...current, ...change(current) } : current));
 
@@ -136,20 +130,20 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyTheme = (kind: ThemeKind, id: string): void =>
     patch(() => ({ [themeKey(kind)]: id }));
 
-  // The kind the window is drawn in, and the one Save would ask for — "system" answered by the OS as
-  // it is now (Electron's prefers-color-scheme follows nativeTheme, which main.ts's currentTheme reads).
+  // The kind shown now, and the one Save asks for — "system" resolved by the OS now (Electron's
+  // prefers-color-scheme follows nativeTheme, which main.ts's currentTheme reads).
   const shownKind = resolveTheme(document.documentElement.dataset.theme).kind;
   const scheme = settings?.colorScheme ?? "system";
   const chosenKind = schemeKind(scheme, window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-  /** Tet's own text is stored as "" (settings.ts does the same); the reset button reads off it. */
+  /** Tet's own text is stored as "", as in settings.ts; the reset button reads that. */
   const applyPrompt = (id: PromptId, text: string): void =>
     patch((current) => ({ prompts: { ...current.prompts, [id]: text === DEFAULT_PROMPTS[id] ? "" : text } }));
 
   const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
     setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
 
-  /** One write of settings.json, then one of tet.json per Explorer key the dialog changed. */
+  /** One settings.json write, then one tet.json write per changed Explorer key. */
   const save = async (): Promise<void> => {
     setSaving(true);
     if (settings) {
@@ -174,7 +168,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   };
 
   return (
-    // The tabs head the dialog instead of a title, as in the add-repository dialog.
     <DialogFrame
       header={{ tabs: TABS, active: tab, onSelect: setTab, onClose }}
       className="wide settings-dialog"
@@ -216,8 +209,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               }))}
             />
           </label>
-          {/* Live within one kind only: an agent is handed light or dark when its tab starts, and
-              one already running would go on drawing for the other (main.ts's applyTheme). */}
+          {/* Live within one kind only: an agent gets light or dark when its tab starts
+              (main.ts's applyTheme). */}
           {settings && chosenKind !== shownKind && (
             <p className="dialog-detail">Switching between light and dark applies after tet is restarted.</p>
           )}
@@ -237,9 +230,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <span>{label}</span>
               </label>
             ))}
-          {/* No caveat to make: an agent's hooks report every turn either way, and the toast is
-              composed when the report arrives (session-manager's `toast`), off the settings as
-              they stand at that moment. */}
+          {/* No restart caveat: hooks report every turn, and the toast reads the settings as they
+              stand on arrival (session-manager's `toast`). */}
         </>
       )}
       {tab === "shortcuts" && (
@@ -310,9 +302,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               Reset to default
             </button>
           </div>
-          {/* Always the text the agent will get, never a placeholder. Read at the moment the
-              commit-message suggestion is asked for, so Save is all it takes — unlike
-              everything else here. */}
+          {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
+              asked for, so it applies on Save. */}
           <textarea
             className="settings-prompt"
             spellCheck={false}

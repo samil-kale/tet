@@ -1,8 +1,7 @@
 /**
- * Considers everything from a `<scheme>://` up to the first whitespace, `"` or `'` a url. Adapted
- * from @xterm/addon-web-links's WebLinksAddon, with the scheme matched generically (RFC 3986) so an
- * agent's deep links — `msteams://`, `vscode://` — are recognized too. Used on terminal rows, one
- * line at a time; large text goes through findUrls() instead.
+ * A url: `<scheme>://` up to whitespace, `"` or `'`. Adapted from @xterm/addon-web-links with a
+ * generic RFC 3986 scheme, so deep links (`msteams://`, `vscode://`) match. For single terminal
+ * rows; large text goes through findUrls().
  */
 export const URL_REGEX = /[A-Za-z][A-Za-z0-9+.-]*:[/]{2}[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~[\]`()<>]/;
 
@@ -16,11 +15,9 @@ const SCHEME_CHAR = /[A-Za-z0-9+.-]/;
 const LETTER = /[A-Za-z]/;
 
 /**
- * Every url in a chunk of text, in order of appearance. Deliberately not URL_REGEX: its
- * `[A-Za-z][A-Za-z0-9+.-]*` prefix backtracks through every alphanumeric run not followed by a
- * colon, which is quadratic on the text this is called with (raw JSON with base64 blobs and file
- * contents in it). Anchoring on "://" and expanding outwards visits each character a bounded number
- * of times. The result matches URL_REGEX's, bar a url ending in "*".
+ * Every url in the text, in order. Not URL_REGEX: its scheme prefix backtracks through every
+ * alphanumeric run, quadratic on raw JSON with base64 blobs. Anchoring on "://" and expanding
+ * outwards is linear. Matches URL_REGEX, bar a url ending in "*".
  */
 export function findUrls(text: string): string[] {
   const urls: string[] = [];
@@ -29,7 +26,7 @@ export function findUrls(text: string): string[] {
     while (start > 0 && SCHEME_CHAR.test(text[start - 1])) {
       start--;
     }
-    // A scheme starts with a letter; anything before that belongs to whatever precedes it.
+    // A scheme starts with a letter.
     while (start < at && !LETTER.test(text[start])) {
       start++;
     }

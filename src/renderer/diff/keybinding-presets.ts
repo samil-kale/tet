@@ -5,10 +5,9 @@ export interface KeybindingPreset {
 }
 
 /**
- * Curated per-editor keymaps, each sourced from that editor's VS Code keymap extension and
- * trimmed to the commands monaco-core.ts registers; `resolveKeybindings` layers the chosen one
- * over this editor's defaults in memory. No chords (`parseKeyCombo` takes one combo), no
- * bindings identical to the default. Modal/chord-only editors and VS Code forks have no preset.
+ * Curated keymaps from each editor's VS Code keymap extension, trimmed to commands monaco-core.ts
+ * registers and layered over the defaults by `resolveKeybindings`. No chords (`parseKeyCombo` takes
+ * one combo), nothing equal to the default. Modal/chord-only editors and VS Code forks get none.
  */
 export const KEYBINDING_PRESETS: KeybindingPreset[] = [
   {
@@ -67,8 +66,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/microsoft/vscode-vs-keybindings. Visual Studio's comment/move-line
-    // defaults are chords or absent, so only these two carry over.
+    // Source: github.com/microsoft/vscode-vs-keybindings. Its comment/move-line keys are chords or
+    // absent.
     id: "visualstudio",
     label: "Visual Studio",
     bindings: {
@@ -88,8 +87,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/stevemoser/vscode-xcode-keybindings. Xcode's "cmd" is written "ctrl"
-    // here: KeyMod.CtrlCmd resolves per platform (see parseKeyCombo).
+    // Source: github.com/stevemoser/vscode-xcode-keybindings. "cmd" written "ctrl": KeyMod.CtrlCmd
+    // resolves per platform (parseKeyCombo).
     id: "xcode",
     label: "Xcode",
     bindings: {

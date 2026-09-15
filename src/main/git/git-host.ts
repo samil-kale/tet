@@ -1,9 +1,9 @@
 import * as git from "./git";
 
 /**
- * The git process: everything in `git.ts` runs here, in a `utilityProcess` of its own, and the main
- * process only sends a method name and arguments (see `git-client.ts`). Nothing here touches
- * Electron, so it can block for as long as git does without anything noticing.
+ * The git process: all of `git.ts` runs here, in its own `utilityProcess`; the main process sends
+ * only a method name and arguments (`git-client.ts`). Nothing here touches Electron, so it may
+ * block as long as git does.
  */
 export interface GitRequest {
   id: number;
@@ -31,7 +31,7 @@ process.parentPort.on("message", (event) => {
     try {
       respond({ id, value: await call(...args) });
     } catch (error) {
-      // Errors do not survive a structured clone as errors, so only the message crosses over.
+      // An Error doesn't survive a structured clone, so only its message crosses.
       respond({ id, error: error instanceof Error ? error.message : String(error) });
     }
   })();

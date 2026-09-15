@@ -3,38 +3,33 @@ import * as path from "node:path";
 import { shellSingleQuote, writePosixScript } from "../../shared/script-text";
 
 /**
- * The `tet-ctl` command a terminal finds on its PATH: one launcher per platform, written into
- * tet's data folder at every start (an install and `npm start` run tet from different places) and prepended to every
- * pty's PATH in `spawnAgentProcess`, never installed machine-wide. It runs the bundled CLI with
- * tet's own electron binary under `ELECTRON_RUN_AS_NODE`: a `node` on the machine is not a given
- * (opencode and Codex ship as native binaries), the electron running tet is.
+ * The `tet-ctl` launcher, rewritten into the data folder at every start (install and `npm start`
+ * run from different places) and prepended to each pty's PATH in `spawnAgentProcess`, never
+ * installed machine-wide. Runs the CLI with tet's own electron under `ELECTRON_RUN_AS_NODE`: a
+ * `node` is not a given (opencode and Codex ship native binaries).
  */
 export function writeLaunchers(dataRoot: string, cliPath: string): string {
   const binDir = path.join(dataRoot, "bin");
   fs.mkdirSync(binDir, { recursive: true });
   const posix = path.join(binDir, "tet-ctl");
   if (process.platform === "win32") {
-    // A .cmd rather than a .ps1: cmd.exe finds only the former on PATH. Known limit: a `%` in
-    // either path would be expanded by cmd — batch has no literal quoting. `setlocal`: a batch
-    // file sets its variables in the cmd.exe that ran it, and an interactive one would keep
-    // ELECTRON_RUN_AS_NODE for every electron app started there afterwards (measured).
+    // .cmd, not .ps1: cmd.exe finds only .cmd on PATH. Known limit: cmd expands a `%` in either
+    // path. `setlocal`, or an interactive cmd.exe keeps ELECTRON_RUN_AS_NODE for every electron
+    // app started there later (measured).
     fs.writeFileSync(
       path.join(binDir, "tet-ctl.cmd"),
       `@echo off\r\nsetlocal\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cliPath}" %*\r\n`
     );
-    // And the POSIX one beside it, because a hook command is run by whichever shell the agent
-    // picked: measured, Claude Code runs its hooks on win32 under `/usr/bin/bash`, where a bare
-    // `tet-ctl` is `command not found` (MSYS resolves .exe and .com on PATH, never .cmd) and
-    // `cmd.exe /c` is worse — MSYS rewrites the `/c` into `C:\` and cmd opens interactively,
-    // banner and all, straight into the prompt the hook was reporting. An extensionless file
-    // with a shebang is what all three observed hook shells agree on: bash runs this one,
-    // PowerShell and cmd.exe keep resolving the .cmd through PATHEXT (both measured).
+    // The POSIX one too: hooks run in the agent's shell. Measured: Claude Code on win32 uses
+    // `/usr/bin/bash`, where MSYS never resolves .cmd, and `cmd.exe /c` has its `/c` rewritten to
+    // `C:\`, opening an interactive cmd into the prompt. bash runs the extensionless shebang file;
+    // PowerShell and cmd.exe still resolve the .cmd via PATHEXT (both measured).
   }
   writePosixScript(
     posix,
     `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shellSingleQuote(process.execPath)} ${shellSingleQuote(cliPath)} "$@"\n`
   );
-  // Found on PATH means run directly, which takes the executable bit.
+  // Run directly from PATH, so it needs the executable bit.
   fs.chmodSync(posix, 0o755);
   return binDir;
 }

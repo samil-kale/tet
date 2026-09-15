@@ -6,9 +6,8 @@ interface TerminalHostProps {
   projectId: string;
   tabId: string;
   /**
-   * Which agent's terminal this is — the view bakes its flags in at construction (one colour of
-   * the theme among them, see theme.ts). Undefined until `agents.list()` resolves, and attaching
-   * waits for it: a view built without the flags keeps the wrong ones for its whole life.
+   * The view bakes the agent's flags in at construction (see theme.ts). Undefined until
+   * `agents.list()` resolves, and attaching waits: a view built without them keeps them wrong.
    */
   agent: AgentInfo | undefined;
   /** The one on screen in its pane; the others keep their layout but stay hidden. */
@@ -18,17 +17,15 @@ interface TerminalHostProps {
 }
 
 /**
- * Where one xterm instance is mounted. The instance lives outside React in `terminal-views.ts`
- * and survives this component — attaching is what moves it into the DOM.
+ * Where one xterm is mounted. The instance lives outside React in `terminal-views.ts`; attaching
+ * moves it into the DOM.
  *
- * Attached the first time the tab is in front of the user, not on mount: every tab of every
- * project mounts at startup, and building an xterm for each of them before the first paint was
- * most of the window's start. Nothing is lost by waiting: a tab's process is only started by its
- * first fit, which needs the view, and output for a view that does not exist is dropped.
+ * Attached the first time the tab is in front of the user, not on mount: building every tab's
+ * xterm at startup was most of the window's start. Nothing is lost: a tab's process starts on its
+ * first fit, which needs the view.
  *
- * Once attached it stays attached, to a container that is in the tree. A tab moved into another
- * pane gets a fresh host, and its xterm follows at once whether or not it is the active tab
- * there: left in the old, unmounted container it would take output into a node with no layout.
+ * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm
+ * follows at once, active or not: an unmounted container has no layout to take output into.
  */
 export function TerminalHost({ projectId, tabId, agent, active, visible }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -39,7 +36,6 @@ export function TerminalHost({ projectId, tabId, agent, active, visible }: Termi
     }
   }, [projectId, tabId, agent, active, visible]);
 
-  // "hidden" is visibility, not display — xterm needs a laid-out element to measure itself,
-  // both when it opens and when output arrives for a background tab.
+  // "hidden" is visibility, not display — xterm needs a laid-out element to measure itself.
   return <div ref={container} className={`terminal-host${active ? "" : " hidden"}`} />;
 }

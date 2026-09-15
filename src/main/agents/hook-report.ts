@@ -1,16 +1,13 @@
 import { CONTROL_ENV } from "../../shared/control";
 
 /**
- * The source of `report(event, sessionId)` for an agent that reports its turns from inside its own
- * process — opencode's generated plugin and pi's generated extension — rather than through a
- * `tet-ctl` hook process. The same wire contract tet-ctl speaks (src/shared/control.ts). The file
- * it is spliced into must import `node:http` as `http`.
+ * Source of `report(event, sessionId)` for agents reporting turns from inside their own process
+ * (opencode's plugin, pi's extension) instead of a `tet-ctl` hook; tet-ctl's wire contract
+ * (src/shared/control.ts). The host file must import `node:http` as `http`.
  *
- * node:http rather than fetch: measured through both runtimes opencode ships as, and one
- * assumption fewer about the runtime pi brings. Never awaited: both agents wait for a handler to
- * return, and a turn mark must not hold up the TUI. The session goes along in the payload, as
- * Claude Code's and Codex's hooks carry it: it is what binds the tab to its session
- * (`hookSessionId`). `agentName` only names who is left uninformed when a report fails.
+ * node:http, not fetch: measured in both runtimes opencode ships as, and one assumption fewer
+ * about pi's. Never awaited: both agents wait for handlers, and a mark must not hold up the TUI.
+ * The payload carries the session id, which binds the tab to its session (`hookSessionId`).
  */
 export function renderHookReport(agentName: string): string {
   return `// The names only: the port and token behind them are new on every start of tet, and baking

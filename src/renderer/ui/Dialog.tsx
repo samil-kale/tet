@@ -5,13 +5,13 @@ import { notify } from "./Notices";
 
 export interface ConfirmOptions {
   title: string;
-  /** The question itself, in one line. */
+  /** The question, in one line. */
   message: string;
-  /** What it means, when that is not obvious from the question. */
+  /** What it means, when the question does not say. */
   detail?: string;
-  /** The button that goes through with it; "Cancel" is always the other one. */
+  /** The button that goes through; the other is always "Cancel". */
   confirmLabel: string;
-  /** An option the question carries along, e.g. "delete it on the remote too". */
+  /** An option carried along, e.g. "delete it on the remote too". */
   checkboxLabel?: string;
 }
 
@@ -29,11 +29,11 @@ export interface PromptHistoryLists {
 }
 
 /**
- * Past answers for a prompt's own field, shown under it once the user clicks in. The callbacks
- * persist immediately and return the lists as they now stand, so housekeeping survives a Cancel.
+ * Past answers for a prompt's field, shown under it once clicked in. The callbacks persist at once
+ * and return the updated lists, so housekeeping survives a Cancel.
  */
 export interface PromptHistory extends PromptHistoryLists {
-  /** Where pinning stops; the pin buttons disable there rather than ask. */
+  /** Pin limit; the pin buttons disable there rather than ask. */
   maxPinned: number;
   onDelete: (text: string) => PromptHistoryLists;
   onTogglePin: (text: string) => PromptHistoryLists;
@@ -41,25 +41,25 @@ export interface PromptHistory extends PromptHistoryLists {
 
 export interface PromptOptions {
   title: string;
-  /** What the field holds, above it. */
+  /** The field's label. */
   label: string;
-  /** What it is for, when the label alone does not say — the branch a new one starts from. */
+  /** What it is for, when the label does not say — e.g. the branch a new one starts from. */
   detail?: string;
-  /** What the field starts out with, selected so typing replaces it. */
+  /** The initial value, selected so typing replaces it. */
   value: string;
   confirmLabel: string;
   maxLength?: number;
-  /** Further fields beside the answer; empty is valid for each, unlike the answer's own field. */
+  /** Further fields; each may be empty, unlike the answer's own field. */
   extras?: { label: string; placeholder?: string; value?: string }[];
-  /** Where the answer's own field sits among the extras, first by default. */
+  /** Where the answer's field sits among the extras, first by default. */
   valueIndex?: number;
   /** The wider dialog (`.dialog.wide`), for fields holding lines rather than words. */
   wide?: boolean;
-  /** An optional yes/no under the fields — the push after a commit. See ConfirmOptions. */
+  /** A yes/no under the fields, e.g. the push after a commit. See ConfirmOptions. */
   checkboxLabel?: string;
-  /** Past answers under the field, absent for the prompts that keep none. See PromptHistory. */
+  /** Past answers under the field. See PromptHistory. */
   history?: PromptHistory;
-  /** An optional asynchronous way to fill the answer's field, shown as a wand beside it. */
+  /** An async way to fill the answer's field, shown as a wand beside it. */
   suggestion?: {
     title: string;
     run: () => Promise<string>;
@@ -68,7 +68,7 @@ export interface PromptOptions {
 
 export interface PromptAnswer {
   value: string;
-  /** The extra fields' values in the order they were declared, "" where one was left blank. */
+  /** The extra fields' values in declared order, "" where blank. */
   extras: string[];
   /** Whether the checkbox was ticked; always false when the question had none. */
   checked: boolean;
@@ -79,13 +79,12 @@ type Pending =
   | ({ kind: "prompt"; answer: (answer: PromptAnswer | null) => void } & PromptOptions);
 
 /**
- * Asking the user something, the way `notify` tells them something: one function anything can
- * call, and one component mounted once that draws whatever is pending. Rendered in the window
- * rather than through Electron's `dialog.showMessageBox`.
+ * Asking the user, as `notify` tells them: a function anything can call, and one mounted component
+ * drawing what is pending, in the window rather than Electron's `dialog.showMessageBox`.
  *
- * `confirm` is for something that cannot be undone — a question answered the same way every time
- * is not worth asking. `prompt` is for a name, and is where every rename happens: a tab is too
- * narrow to name inline, and a field committing on blur loses what was typed to a stray click.
+ * `confirm` is for the irreversible only. `prompt` is for a name, and is where every rename
+ * happens: a tab is too narrow to name inline, and a commit-on-blur field loses typing to a stray
+ * click.
  */
 let pending: Pending | null = null;
 const listeners = new Set<() => void>();
@@ -103,8 +102,8 @@ function ask<T>(build: (answer: (value: T) => void) => Pending, cancelled: T): P
     return Promise.resolve(cancelled);
   }
   return new Promise((resolve) => {
-    // Answered once: a second call — an Escape landing between the click and the listener coming
-    // down — would clear whatever dialog is up by then, which may already be the next one.
+    // Answered once: a second call (an Escape between the click and the listener's removal) would
+    // clear whatever dialog is up by then, possibly the next one.
     let answered = false;
     publish(
       build((value) => {
@@ -139,11 +138,11 @@ function subscribe(listener: () => void): () => void {
 interface FrameProps {
   title: string;
   confirmLabel: string;
-  /** Nothing to go through with yet — an empty name, say. */
+  /** Nothing to go through with yet, e.g. an empty name. */
   disabled?: boolean;
   /** See PromptOptions.wide. */
   wide?: boolean;
-  /** The confirm button takes the focus, for a dialog with no field of its own to take it. */
+  /** The confirm button takes the focus, for a dialog with no field. */
   focusSubmit?: boolean;
   onSubmit: () => void;
   onCancel: () => void;
@@ -155,7 +154,7 @@ function Frame({ title, confirmLabel, disabled, wide, focusSubmit, onSubmit, onC
     <DialogFrame
       header={{ title, onClose: onCancel }}
       className={wide ? "wide" : undefined}
-      // A form, so Enter answers from wherever the focus sits — the field or the checkbox.
+      // A form, so Enter answers from the field or the checkbox alike.
       onSubmit={() => {
         if (!disabled) {
           onSubmit();
@@ -183,8 +182,8 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
     <Frame
       title={dialog.title}
       confirmLabel={dialog.confirmLabel}
-      // Opened from a context menu, the focus would otherwise stay in the terminal it was in and
-      // Enter would answer nothing.
+      // Opened from a context menu, focus would otherwise stay in the terminal and Enter answer
+      // nothing.
       focusSubmit
       onSubmit={() => dialog.answer({ confirmed: true, checked })}
       onCancel={() => dialog.answer({ confirmed: false, checked: false })}
@@ -202,10 +201,9 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
 }
 
 /**
- * Set while a prompt's history dropdown is open; the Escape handler in `Dialogs` asks it first,
- * so one press closes the dropdown and only the next cancels the dialog. A module-level claim
- * rather than a second listener: registration order against a window capture handler is nothing
- * to build an ordering on.
+ * Asked first by `Dialogs`' Escape handler while a history dropdown is open, so one press closes
+ * the dropdown and the next cancels. A claim, not a second listener: listener registration order
+ * is no ordering to rely on.
  */
 let claimEscape: (() => boolean) | null = null;
 
@@ -222,8 +220,7 @@ function HistoryDropdown({
 }) {
   const atCap = lists.pinned.length >= history.maxPinned;
   const row = (text: string, pinned: boolean) => (
-    // The row itself is the pick; its two buttons stop the click there. `type="button"` on
-    // both, since everything here sits inside the dialog's form and the default would submit.
+    // The row is the pick; its buttons stop the click. `type="button"`, or they submit the form.
     <div key={(pinned ? "p:" : "r:") + text} className="dialog-history-row" title={text} onClick={() => onPick(text)}>
       <span className="dialog-history-text">{text}</span>
       <button
@@ -252,8 +249,8 @@ function HistoryDropdown({
     </div>
   );
   return (
-    // Preventing mousedown keeps the focus in the field, so picking or housekeeping never
-    // blurs it — and a mousedown anywhere else does, which is what closes the dropdown.
+    // Preventing mousedown keeps focus in the field; a mousedown elsewhere blurs it, closing the
+    // dropdown.
     <div className="dialog-history" onMouseDown={(event) => event.preventDefault()}>
       {lists.pinned.map((text) => row(text, true))}
       {lists.pinned.length > 0 && lists.recent.length > 0 && <div className="dialog-history-separator" />}
@@ -268,21 +265,18 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const [checked, setChecked] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const field = useRef<HTMLInputElement>(null);
-  // Seeded once: `prompt()` froze the options into `pending`, so the caller cannot re-render this
-  // dialog; its callbacks hand the lists back instead.
+  // Seeded once: the options are frozen in `pending`, so the callbacks hand the lists back.
   const [lists, setLists] = useState<PromptHistoryLists>(() => ({
     pinned: dialog.history?.pinned ?? [],
     recent: dialog.history?.recent ?? []
   }));
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
-  // Not yet the user's focus: the mount effect below focuses the field itself, and the dropdown
-  // must wait for their own click.
+  // False during the mount effect's own focus, so the dropdown waits for the user's click.
   const interactive = useRef(false);
 
-  // The focus has to land in the first field, not on a button. Once, on the way in — selecting
-  // on every render would swallow each keystroke after it. The flag comes after: `focus()`
-  // delivers its event synchronously, so the focus handler has already seen it unset.
+  // Focus and select the first field once on mount; per render would swallow keystrokes. The flag
+  // is set after, since `focus()` fires its event synchronously.
   useEffect(() => {
     field.current?.focus();
     field.current?.select();
@@ -328,7 +322,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     }
   };
 
-  // Optional by construction: only the answer's own field can hold the dialog back.
+  // Optional: only the answer's own field can hold the dialog back.
   const fields = (dialog.extras ?? []).map((entry, index) => (
     <label key={entry.label} className="dialog-field">
       <span>{entry.label}</span>
@@ -342,7 +336,6 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       />
     </label>
   ));
-  // Empty history means no dropdown at all.
   const hasEntries = lists.pinned.length + lists.recent.length > 0;
   const input = (
     <input
@@ -350,23 +343,20 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       value={value}
       maxLength={dialog.maxLength}
       disabled={suggesting}
-      // The dropdown follows the field's emptiness: typing the first character closes it,
-      // emptying the field brings it back. A no-op for the prompts without one.
+      // The dropdown shows only while the field is empty.
       onChange={(event) => {
         setValue(event.target.value);
         setOpen(event.target.value.length === 0 && hasEntries);
       }}
-      // Mousedown rather than click: it re-opens after an Escape left the field focused, and the
-      // label around this input forwards clicks on the rows below as synthetic *clicks*, which
-      // must not reopen what a pick just closed.
+      // Mousedown, not click: it reopens after an Escape left the field focused, and the wrapping
+      // label forwards clicks on the rows as synthetic *clicks*, which must not reopen after a pick.
       onMouseDown={dialog.history && (() => value.length === 0 && hasEntries && setOpen(true))}
       onFocus={dialog.history && (() => interactive.current && value.length === 0 && hasEntries && setOpen(true))}
       onBlur={dialog.history && (() => setOpen(false))}
       ref={field}
     />
   );
-  // The dropdown is positioned against this anchor, wrapped around the field alone; the suggest
-  // button beside it is laid out one level up.
+  // The dropdown's anchor wraps the field alone; the suggest button sits one level up.
   const anchored = dialog.history ? (
     <div className="dialog-history-anchor">
       {input}
@@ -396,8 +386,8 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     <label key="value" className="dialog-field">
       <span>{dialog.label}</span>
       {dialog.suggestion ? (
-        // The same pairing as a path field and its Browse button, carrying only its wand — in
-        // whose exact place the spinner goes while the answer is being prepared.
+        // Paired like a path field and its Browse button; the spinner replaces the wand while
+        // suggesting.
         <div className="dialog-field-row">
           {anchored}
           <button
@@ -438,7 +428,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   );
 }
 
-/** Mounted once, next to `Notices`; draws nothing until something asks. */
+/** Mounted once, next to `Notices`. */
 export function Dialogs() {
   const dialog = useSyncExternalStore(subscribe, () => pending);
 
@@ -448,14 +438,12 @@ export function Dialogs() {
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
-        // Capture phase and swallowed here, so dismissing the question can't double as an ESC
-        // keystroke for the terminal that had focus before it opened. On `window` rather than
-        // `document`: the dialogs a question is asked from listen on `document` in the capture
-        // phase, and `stopPropagation` does not stop listeners on the same node.
+        // Captured and swallowed so the ESC never reaches the terminal. On `window`, not
+        // `document`: dialogs a question is asked from capture on `document`, and
+        // `stopPropagation` does not stop listeners on the same node.
         event.preventDefault();
         event.stopPropagation();
-        // A prompt's open history dropdown takes the press first: one Escape closes it, the
-        // next one cancels the dialog.
+        // An open history dropdown takes the press first.
         if (claimEscape?.()) {
           return;
         }

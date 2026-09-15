@@ -6,10 +6,9 @@ import { isModifierHeld, isModifierKey } from "../../platform";
 const MAX_CONTINUATION_ROWS = 8;
 
 /**
- * Completes a url the agent's own line wrapping cut off, from what the agent recorded printing
- * (see AgentDefinition.resolveUrlPrefix). Split into a synchronous lookup and a fire-and-forget
- * request: provideLinks runs on every render while the mouse is over the terminal, so the answer
- * may only be read from a cache, never waited for.
+ * Completes a url the agent's own wrapping cut off, from what it recorded printing
+ * (AgentDefinition.resolveUrlPrefix). A sync lookup plus a fire-and-forget request: provideLinks
+ * runs on every render under the pointer, so the answer is only read from a cache.
  */
 export interface WrappedUrlResolver {
   /** The full url for a fragment, null once known to have none, undefined if not asked yet. */
@@ -19,10 +18,9 @@ export interface WrappedUrlResolver {
 }
 
 /**
- * How many rows the search for a wrapped token may walk in each direction. The character budget
- * below cannot bound this on its own: a row that trims to nothing contributes zero to it, and
- * isContinuation() reports every isWrapped row as one, so a run of blank rows written by autowrap
- * (a TUI's start screen) would let the walk run to the end of the scrollback on every render.
+ * Rows the search for a wrapped token may walk each way. The character budget alone cannot bound
+ * it: blank isWrapped rows (a TUI's start screen) add zero, letting the walk run through the whole
+ * scrollback on every render.
  */
 const MAX_WINDOW_ROWS = 20;
 
@@ -35,18 +33,15 @@ interface LinkSegment {
 }
 
 /**
- * A regex-based xterm link provider where links are only clickable — and only show their hover
- * underline and pointer cursor — while Ctrl (Cmd on macOS) is held, so the click is not taken
- * from CLIs that enable their own mouse tracking.
+ * A regex link provider whose links are clickable, underlined and pointer-cursored only while Ctrl
+ * (Cmd on macOS) is held, so the click is not taken from CLIs with their own mouse tracking.
  */
 export function createModifierGatedLinkProvider(
   terminal: Terminal,
   regex: RegExp,
   /**
-   * A substring every match of `regex` contains. The window a row is matched in runs to 2048
-   * space-free characters, and both regexes backtrack through every alphanumeric run in it —
-   * quadratic on a wrapped base64 blob or minified line, on every render the pointer rests over
-   * one. `includes` is linear and rules such a window out first.
+   * A substring every match contains. Both regexes backtrack quadratically through a 2048-char
+   * space-free window (a wrapped base64 blob), every render; a linear `includes` rules it out first.
    */
   anchor: string,
   onActivate: (text: string) => void,
@@ -88,13 +83,12 @@ function computeLinks(
       continue;
     }
 
-    // Where the match actually has characters, row by row — what gets underlined.
+    // Where the match has characters, row by row — what gets underlined.
     const segments: LinkSegment[] = [];
     for (let row = startY; row <= endY; row++) {
       const sx = row === startY ? startX : (offsets[row - startLineIndex] ?? 0);
       const ex = row === endY ? endX : rowTextEnd(terminal, row);
-      // Skips the empty tail segment mapStrIdx yields when a match ends exactly at a
-      // row's right edge (it reports the position as the start of the row below).
+      // mapStrIdx reports a match ending at the right edge as the start of the row below.
       if (ex > sx) {
         segments.push({ row, sx, ex });
       }
@@ -104,16 +98,13 @@ function computeLinks(
       continue;
     }
 
-    // Stitching rows by geometry (see getWindowedLineStrings) only catches a wrap that ran into
-    // the right edge. opencode breaks a long token at the last "." before its wrap width, which
-    // leaves nothing in the buffer to recognize it by, so the agent is asked what it printed.
+    // Geometric stitching only catches a wrap at the right edge. opencode breaks a long token at
+    // the last "." before its wrap width, leaving no trace in the buffer, so the agent is asked.
     const linkText = completeWrapped(terminal, line, match.index, text, segments, resolveWrapped);
 
-    // One link for the whole match, spanning every row it covers: xterm keeps only one link per
-    // column of the queried row (Linkifier._removeIntersectingLinks), so a link per row would
-    // have its later rows silently dropped. The range decides what is clickable, the underline
-    // is drawn from `segments`. Read back rather than reusing the earlier last: a completed url
-    // appends further rows.
+    // One link across all rows: xterm keeps one link per column of the queried row
+    // (Linkifier._removeIntersectingLinks), dropping a per-row link's later rows. The range is
+    // what's clickable, `segments` what's underlined. Read back: a completed url appends rows.
     const end = segments[segments.length - 1];
     // range expects values 1-based, right side including, thus +1 except for ex.
     const range = {
@@ -127,10 +118,7 @@ function computeLinks(
   return result;
 }
 
-/**
- * Extends `segments` over the rows a cut-off url continues on and returns the url to open.
- * Falls back to `text` unchanged whenever anything doesn't line up.
- */
+/** Extends `segments` over a cut-off url's continuation and returns the url; `text` if unsure. */
 function completeWrapped(
   terminal: Terminal,
   line: string,
@@ -140,16 +128,14 @@ function completeWrapped(
   resolveWrapped: WrappedUrlResolver | undefined
 ): string {
   const last = segments[segments.length - 1];
-  // The file-link provider shares this function and passes no resolver.
   if (!resolveWrapped) {
     return text;
   }
-  // No modifier gate: the resolver is asked once per distinct fragment and the answer is cached
-  // (including "nothing"), so hovering costs a Map lookup either way.
+  // No modifier gate: answers are cached per fragment (including "nothing"), so a hover costs a
+  // Map lookup.
   //
-  // The url as it stands on screen: the match plus whatever non-space characters follow it. That
-  // tail is what URL_REGEX refuses to end a match on and exactly where opencode cuts a url. Not
-  // "up to the end of the row": opencode's status column sits right of a row's own text.
+  // The url on screen: the match plus the non-space tail URL_REGEX refuses to end on, which is
+  // where opencode cuts a url. Not to the row's end: opencode's status column sits to the right.
   const trailing = /^\S*/.exec(line.slice(matchIndex + text.length))?.[0] ?? "";
   const visible = text + trailing;
   const known = resolveWrapped.lookup(visible);
@@ -160,14 +146,13 @@ function completeWrapped(
   if (known === null || known.length <= visible.length) {
     return text;
   }
-  // The agent knows a longer url, believed only if the rows below actually spell it out.
+  // A longer url is believed only if the rows below spell it out.
   const rows = continuationRows(terminal, last.row);
   const candidate = visible + rows.map((row) => row.text).join("");
   if (!candidate.startsWith(known)) {
     return text;
   }
-  // Extend the underline over `trailing` only, not to the row's last visible cell — with
-  // opencode's status column showing, that sits far right of this row's own text.
+  // Over `trailing` only, not to the row's last cell — opencode's status column sits there.
   last.ex = Math.min(last.ex + trailing.length, rowTextEnd(terminal, last.row));
   let pending = known.length - visible.length;
   for (const row of rows) {
@@ -182,9 +167,8 @@ function completeWrapped(
 }
 
 /**
- * What the rows below `fromRow` could contribute to a url cut off at its end: each row's leading
- * run of url characters, with the indent a CLI puts in front of a wrapped line dropped. A
- * candidate only — the caller checks it against what the agent reports.
+ * Each row below `fromRow`'s leading run of url characters, a CLI's wrap indent dropped. A
+ * candidate only — the caller checks it against the agent's report.
  */
 function continuationRows(terminal: Terminal, fromRow: number): { row: number; offset: number; text: string }[] {
   const rows: { row: number; offset: number; text: string }[] = [];
@@ -203,9 +187,8 @@ function continuationRows(terminal: Terminal, fromRow: number): { row: number; o
       break;
     }
     rows.push({ row, offset: content.length - unindented.length, text: unindented.slice(0, end) });
-    // No "stop once the row continues with something no url could contain": with opencode's
-    // status column showing, every row does. A row contributing junk makes the caller's match
-    // against the agent's own record fail, which is the right outcome.
+    // No stop at non-url text after the run: opencode's status column puts some on every row.
+    // Junk just fails the caller's check against the agent's record.
   }
   return rows;
 }
@@ -229,14 +212,11 @@ function buildLink(
   };
 
   /**
-   * xterm's own link underline follows the text from the range's start to its end, which across
-   * rows also covers the gap left of a row's right edge and the indent in front of a wrapped one.
-   * One rule per segment puts it exactly under the characters.
+   * xterm's own underline runs start to end across rows, gaps and wrap indents included; one rule
+   * per segment sits exactly under the characters.
    *
-   * Hand-placed rather than via terminal.registerDecoration(): decorations are hidden outright
-   * while the alternate screen is active (`display = altBufferIsActive ? "none" : "block"` in
-   * xterm's BufferDecorationRenderer), which is exactly a full-screen agent TUI. Nothing here
-   * outlives the hover, so not tracking the buffer costs nothing.
+   * Not terminal.registerDecoration(): xterm's BufferDecorationRenderer hides decorations on the
+   * alternate screen, i.e. in a full-screen agent TUI. Nothing outlives the hover.
    */
   const drawUnderline = () => {
     clearUnderline();
@@ -244,8 +224,7 @@ function buildLink(
     if (!(screen instanceof HTMLElement)) {
       return;
     }
-    // xterm sizes the screen to exactly cols x rows cells (it absorbs the remainder into
-    // letter-spacing), so dividing gives the cell size back without measuring a glyph.
+    // xterm sizes the screen to exactly cols x rows cells, so dividing gives the cell size.
     const cellWidth = screen.clientWidth / terminal.cols;
     const cellHeight = screen.clientHeight / terminal.rows;
     for (const segment of segments) {
@@ -260,7 +239,7 @@ function buildLink(
       element.style.width = `${(segment.ex - segment.sx) * cellWidth}px`;
       element.style.height = "1px";
       element.style.backgroundColor = "currentColor";
-      // The link's own range handles hit testing; this element must not swallow those clicks.
+      // The link's range does hit testing; this must not swallow clicks.
       element.style.pointerEvents = "none";
       screen.appendChild(element);
       underlines.push(element);
@@ -270,12 +249,11 @@ function buildLink(
   const link: ILink = {
     range,
     text,
-    // Hidden by default, shown while the modifier is held (see hover()). `underline` stays off
-    // for good: the one drawn in drawUnderline() replaces it.
+    // The cursor shows while the modifier is held (hover()); `underline` stays off for
+    // drawUnderline().
     decorations: { pointerCursor: false, underline: false },
     activate(event) {
-      // A plain click is a no-op: the running CLI may have its own mouse tracking enabled and
-      // handle the click itself.
+      // A plain click belongs to the CLI's own mouse tracking.
       if (isModifierHeld(event)) {
         onActivate(text);
       }
@@ -292,12 +270,11 @@ function buildLink(
           clearUnderline();
         }
       };
-      // xterm calls hover() before it replaces link.decorations with its own live-tracked proxy,
-      // so a synchronous mutation here is silently discarded. The microtask runs once the proxy
-      // is installed.
+      // xterm calls hover() before swapping link.decorations for its proxy, discarding a sync
+      // mutation; the microtask runs after.
       queueMicrotask(() => setDecorations(isModifierHeld(event)));
       onKeyDown = (e) => {
-        // A held modifier auto-repeats; each repeat would redraw the underline from scratch.
+        // A held modifier auto-repeats.
         if (isModifierKey(e) && !e.repeat) {
           setDecorations(true);
         }
@@ -325,15 +302,12 @@ function buildLink(
   return link;
 }
 
-// Adapted from @xterm/addon-web-links's LinkComputer (not publicly exported). Stitches wrapped
-// lines together so a token that wraps across columns is still matched as one string, and maps
-// a match's string index back to buffer cell coordinates.
+// Adapted from @xterm/addon-web-links's LinkComputer (not exported): stitches wrapped rows into
+// one string and maps a match's string index back to buffer cells.
 //
-// The original only stitched xterm's own soft wrap (`isWrapped`). A CLI that wraps its output
-// itself — Claude Code's Ink renderer writes each visual row followed by a real newline — leaves
-// `isWrapped` false on every row, so `isContinuation()` below also takes a row whose predecessor
-// was filled to the last column, and `readLine()` drops the indent such a CLI puts in front of
-// continuation rows.
+// Beyond xterm's soft wrap (`isWrapped`): a CLI wrapping itself (Claude Code's Ink writes a real
+// newline per visual row) leaves `isWrapped` false, so `isContinuation()` also takes a row whose
+// predecessor filled the last column, and `readLine()` drops such a CLI's continuation indent.
 
 /** Whether the row at `lineIndex` continues the text of the row above it. */
 function isContinuation(terminal: Terminal, lineIndex: number): boolean {
@@ -345,8 +319,7 @@ function isContinuation(terminal: Terminal, lineIndex: number): boolean {
     return true;
   }
   const previous = terminal.buffer.active.getLine(lineIndex - 1);
-  // translateToString(true) trims trailing whitespace, so a result still as wide as the row
-  // means its last cell holds text — it ran into the right edge, and the next row continues it.
+  // Trimmed and still as wide as the row: it ran into the right edge.
   return !!previous && previous.translateToString(true).length >= previous.length;
 }
 
@@ -363,8 +336,7 @@ function readLine(terminal: Terminal, lineIndex: number): [string, number] {
     return ["", 0];
   }
   const content = line.translateToString(true);
-  // Only a CLI's own hard break can carry an inserted indent; xterm's soft wrap never adds one,
-  // so leading spaces on an isWrapped row are real content.
+  // xterm's soft wrap adds no indent: leading spaces on an isWrapped row are content.
   if (line.isWrapped || !isContinuation(terminal, lineIndex)) {
     return [content, 0];
   }
@@ -389,7 +361,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
     if (isContinuation(terminal, lineIndex) && currentContent[0] !== " ") {
       length = 0;
       rows = 0;
-      // The caps are checked before the step, so `topIdx` never names a row that was not read.
+      // Caps checked before the step: `topIdx` never names an unread row.
       while (length < 2048 && rows < MAX_WINDOW_ROWS && terminal.buffer.active.getLine(topIdx - 1)) {
         topIdx--;
         rows++;
@@ -472,7 +444,7 @@ function mapStrIdx(
       }
     }
     lineIndex++;
-    // Resume at the cell the next row's text starts at, skipping an indent readLine() dropped.
+    // Skip the indent readLine() dropped.
     start = offsets[lineIndex - startLineIndex] ?? 0;
   }
   return [lineIndex, start];

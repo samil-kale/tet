@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { NoticeSeverity } from "../../shared/types";
 import { SeverityIcon } from "./icons";
 
-/** VS Code's own durations (notificationsToasts.ts): the more serious, the longer it stays. */
+/** VS Code's durations (notificationsToasts.ts). */
 const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_000, error: 15_000 };
 
 interface ShownNotice {
@@ -12,14 +12,13 @@ interface ShownNotice {
 }
 
 /**
- * Everything the user is told goes through here — there is no second way to say something in
- * this app, and views keep no messages of their own. A plain function rather than a hook or a
- * prop, so whatever fails, wherever, can report it without a callback threaded to it first.
+ * The only way to tell the user something; views keep no messages of their own. A plain function,
+ * not a hook or prop, so anything anywhere can report without a threaded callback.
  */
 let shown: ShownNotice[] = [];
 const listeners = new Set<() => void>();
 let nextId = 0;
-/** The notice under the pointer, which is not taken away while it is being read. */
+/** The notice under the pointer, kept while hovered. */
 let hovered: number | undefined;
 
 function publish(next: ShownNotice[]): void {
@@ -41,9 +40,8 @@ export function notify(severity: NoticeSeverity, message: string): void {
 }
 
 /**
- * As VS Code does: a notice due while hovered gets its whole time again, and one due while the
- * window is out of focus waits for the focus to return and then gets its whole time — it would
- * otherwise be gone before anyone looked.
+ * As in VS Code: a notice due while hovered gets its full time again; one due while the window is
+ * unfocused waits for focus, then gets its full time.
  */
 function scheduleDismiss(id: number, severity: NoticeSeverity): void {
   setTimeout(() => {
@@ -73,7 +71,7 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Stacked over the window's bottom right corner, newest at the bottom, each dismissed by clicking it. */
+/** Stacked in the bottom right corner, newest at the bottom, dismissed by a click. */
 export function Notices() {
   const notices = useSyncExternalStore(subscribe, () => shown);
   if (notices.length === 0) {

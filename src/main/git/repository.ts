@@ -26,42 +26,41 @@ import { isImage, toDataUrl } from "./git";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;
-/** Least time between two finished refreshes: continuous change would otherwise keep one running
- *  back to back. Measured with instrumented process creation: the git start is the cost, three per
- *  refresh, and that is main-process time a keystroke on its way to a terminal waits for. */
+/** Least time between two finished refreshes, or continuous change runs them back to back. Measured
+ *  with instrumented process creation: the git start is the cost, three per refresh, and that is
+ *  main-process time a keystroke on its way to a terminal waits for. */
 const REFRESH_MIN_INTERVAL_MS = 2000;
-/** How often a repository fetches on its own — GitHub Desktop's interval. */
+/** GitHub Desktop's auto-fetch interval. */
 const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
-/** How long the periodic fetch may hold back a click (runAction waits for it) before it is
- *  stopped. Well past the minute a silent connection gets from git and ssh themselves (git.ts's
- *  NETWORK_ENV); this is for what they cannot see, a credential helper waiting on its own. */
+/** How long the periodic fetch may hold back a click (runAction waits for it). Well past the minute
+ *  git and ssh give a silent connection (git.ts's NETWORK_ENV): this catches a credential helper
+ *  waiting on its own. */
 const AUTO_FETCH_TIMEOUT_MS = 2 * 60_000;
 
-/** How long before a failed watcher is put back, and the ceiling the delay doubles up to. A dead
- *  watcher takes every change with it silently; a filesystem that cannot watch recursively at all
- *  (a network share) fails every time, and retrying that once a second would be a busy loop. */
+/** Delay before a failed watcher is put back, doubling up to the max: a filesystem that can't watch
+ *  recursively (a network share) fails every time, and a fixed one-second retry is a busy loop. */
 const WATCH_RETRY_MS = 1000;
 const WATCH_RETRY_MAX_MS = 60_000;
 /** Above this, the editor shows "too large" instead of reading the file into the renderer. */
 const MAX_EDIT_BYTES = 4 * 1024 * 1024;
 
-/** Paths that change constantly without affecting the UI; watching them would mean a `git status`
- *  for every object git writes. */
+/** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
+ *  `git status`. */
 function isIgnoredEvent(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/");
   return (
     normalized.endsWith(".lock") ||
     normalized.startsWith(".git/objects/") ||
     normalized.startsWith(".git/logs/") ||
-    // Bookkeeping git rewrites on nearly every command, none of it visible in the status or the
-    // branch list. `.git/index` is deliberately not here: the status letters would go stale.
+    // Bookkeeping git rewrites on nearly every command, invisible in status and branches. Not
+    // `.git/index`: the status letters would go stale.
     /^\.git\/(COMMIT_EDITMSG|ORIG_HEAD|FETCH_HEAD|MERGE_MSG|rebase-)/.test(normalized) ||
     normalized.includes("node_modules/")
   );
 }
 
-/** Whether two paths name the one file or folder — the same path in another case, where the
- *  filesystem does not tell case apart. By file id, as bigints: a win32 file id overflows a number. */
+/** Whether two paths name one entry, e.g. differing in case on a case-insensitive filesystem. By
+ *  file id, as bigints: a win32 file id overflows a number. */
 function sameEntry(a: string, b: string): boolean {
   try {
     const [first, second] = [fs.statSync(a, { bigint: true }), fs.statSync(b, { bigint: true })];
@@ -71,65 +70,61 @@ function sameEntry(a: string, b: string): boolean {
   }
 }
 
-/** One repository's shared state: the single source of truth for the git views and the terminals.
- *  Refreshed from the git CLI after filesystem changes, so a branch switched in a terminal shows up. */
+/** One repository's state, the single source of truth for the git views and the terminals.
+ *  Refreshed after filesystem changes, so a branch switched in a terminal shows up. */
 export class Repository {
   private state: RepositoryState = EMPTY_REPOSITORY_STATE;
-  /** `state` serialized, kept so a refresh compares against it rather than serializing both sides. */
+  /** `state` serialized, so a refresh serializes only its own side to compare. */
   private stateJson = JSON.stringify(EMPTY_REPOSITORY_STATE);
   private watcher: fs.FSWatcher | undefined;
   private watchRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private watchRetryDelay = WATCH_RETRY_MS;
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Same debounce as the refresh, for the one watched file that is not git state. */
+  /** Debounce for tet.json, the one watched file that is not git state. */
   private commandsTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The same again, for a path starting or stopping to exist. */
+  /** Debounce for a path appearing or disappearing. */
   private filesTimer: ReturnType<typeof setTimeout> | undefined;
   /** The file the project's editor tab shows, repository-relative with "/" — see watchFile. */
   private watchedFile: string | undefined;
-  /** The same debounce, for a write to that file. */
+  /** Debounce for a write to that file. */
   private watchedFileTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The refresh underway, if one is. */
   private inflight: Promise<RepositoryState> | undefined;
   private refreshPending = false;
   private lastRefreshAt = 0;
   private actionRunning = false;
   private autoFetchTimer: ReturnType<typeof setInterval> | undefined;
-  /** The periodic fetch underway, if one is — an action waits for it rather than being refused. */
+  /** The periodic fetch underway; an action waits for it rather than being refused. */
   private autoFetching: Promise<void> | undefined;
-  /** Each remote's url, read when the project opens and again after `.git/config` changed. Not part
-   *  of every refresh: a url changes about never, and a refresh costs the git processes it starts. */
+  /** Each remote's url, read on open and after `.git/config` changes — not on every refresh, which
+   *  pays per git process for a url that almost never changes. */
   private remoteUrls: Record<string, string> = {};
   private remoteUrlsStale = false;
-  /** Checked once when the project opens; without it there is nothing to read or watch. */
+  /** Checked once on open; if false, nothing is read or watched. */
   private isGit = false;
-  /** The project was closed; anything still in flight stops short of reporting. */
+  /** The project was closed; anything still in flight doesn't report. */
   private disposed = false;
 
   constructor(
     readonly project: Project,
     private readonly onState: (state: RepositoryState) => void,
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
-    /** tet.json in the root changed — an editor, an agent or a checkout rewrites it behind the
-     *  list's back, and the watcher sees every such write anyway. */
+    /** tet.json changed — an editor, an agent or a checkout may rewrite it. */
     private readonly onCommandsChanged: () => void,
-    /** A path in the working tree was created, deleted or renamed — for the Explorer, which lists
-     *  git's ignored files too, and no refresh ever reports one of those. */
+    /** A path was created, deleted or renamed — for the Explorer, which also lists ignored files no
+     *  refresh reports. */
     private readonly onFilesChanged: () => void,
-    /** The file `watchFile` names was written — an edit to a file already "modified" changes
-     *  nothing a refresh reports, and the editor tab showing it would go stale. */
+    /** The `watchFile` file was written — an edit to an already "modified" file changes nothing a
+     *  refresh reports, so the editor tab would go stale. */
     private readonly onFileChanged: (filePath: string) => void
   ) {}
 
-  /** Which file the project's editor tab shows, or undefined once none is; one at a time, as the
-   *  tab shows one. */
+  /** The file the project's editor tab shows, or undefined. */
   watchFile(filePath: string | undefined): void {
     clearTimeout(this.watchedFileTimer);
     this.watchedFile = filePath?.replace(/\\/g, "/");
   }
 
-  /** Reports a repository that could not be read, named by project since several are open. Only on
-   *  a change, so a folder that stays unreadable is not announced again on every refresh. */
+  /** Reports a read error, named by project, only when it changed — not again on every refresh. */
   private reportError(next: RepositoryState): void {
     if (next.error && next.error !== this.state.error) {
       this.onNotice("error", `${this.project.name}: ${next.error}`);
@@ -141,8 +136,8 @@ export class Repository {
   }
 
   async start(): Promise<void> {
-    // All three at once: each is a git start (the measured cost), and back to back that was a
-    // visible wait before the pane showed anything.
+    // All three at once: each is a git start (the measured cost); in sequence they visibly delay
+    // the pane.
     const [isGit, urls, read] = await Promise.all([
       git.isRepository(this.project.path).catch(() => false),
       git.readRemoteUrls(this.project.path).catch(() => ({})),
@@ -154,10 +149,9 @@ export class Repository {
       return;
     }
     this.remoteUrls = urls;
-    // The first read ran before the remotes were known; only a name holding a "/" reads differently
-    // with them, so only then is it read again.
+    // The first read ran without the remote names; only a name holding a "/" changes it.
     this.emit(Object.keys(urls).some((name) => name.includes("/")) ? await this.read() : read);
-    // Closed while the first refresh ran: a watcher started now would have nothing to close it.
+    // Closed during the first read: a watcher started now would never be closed.
     if (this.disposed) {
       return;
     }
@@ -170,8 +164,8 @@ export class Repository {
     this.remoteUrls = await git.readRemoteUrls(this.project.path).catch(() => ({}));
   }
 
-  /** The periodic fetch. Silent when it fails: an offline machine would otherwise put the same notice
-   *  up every ten minutes unasked. It does not take the action slot — a click during it waits. */
+  /** The periodic fetch. Silent on failure, or an offline machine gets a notice every ten minutes.
+   *  It doesn't take the action slot — a click during it waits. */
   private async autoFetch(): Promise<void> {
     if (this.actionRunning || this.autoFetching || this.state.remotes.length === 0) {
       return;
@@ -190,23 +184,21 @@ export class Repository {
     await this.autoFetching;
   }
 
-  /** What git says the repository is right now; a dead git process is an error like any other. */
   private read(): Promise<RepositoryState> {
-    // readState answers with an error rather than throwing; a rejection is the git process gone.
+    // readState reports errors in its result; a rejection is the git process gone.
     return git.readState(this.project.path, Object.keys(this.remoteUrls)).catch((error: Error) => ({
       ...EMPTY_REPOSITORY_STATE,
       error: error.message
     }));
   }
 
-  /** Refreshes now — *after* the one already underway, which may have read a tree the caller was
-   *  still changing: a commit's `add --all` wakes the watcher while the `commit` still runs, so
-   *  that refresh reports the staged, uncommitted state. */
+  /** Refreshes now — *after* any refresh underway, which may have read a tree still changing: a
+   *  commit's `add --all` wakes the watcher while `commit` runs, reporting the staged state. */
   async refresh(): Promise<RepositoryState> {
     while (this.inflight) {
       await this.inflight;
     }
-    // Whatever the watcher was waiting to see, this run sees.
+    // This run covers whatever the watcher was waiting for.
     this.refreshPending = false;
     return this.runRefresh();
   }
@@ -235,9 +227,9 @@ export class Repository {
     return this.inflight;
   }
 
-  /** The read's state with the remotes completed from this side: each remote's url, and the remote
-   *  itself where it has no remote-tracking refs yet — `for-each-ref` cannot name it, and there
-   *  would be nothing to push to. `origin` goes first: the first remote is the one commands use. */
+  /** The read's state with remotes completed: each url, and a remote without remote-tracking refs
+   *  (`for-each-ref` can't name it, leaving nothing to push to). `origin` first: commands use the
+   *  first remote. */
   private emit(read: RepositoryState): void {
     const names = new Set([...read.remotes.map((remote) => remote.name), ...Object.keys(this.remoteUrls)]);
     const remotes = [...names]
@@ -249,9 +241,8 @@ export class Repository {
       }));
     const next: RepositoryState = { ...read, remotes };
     this.reportError(next);
-    // Only emit on an actual change: the watcher fires for edits that leave the state identical,
-    // and every emit re-renders the views. Labeled "emit" rather than "git": this runs after the
-    // refresh's git process has finished, well past whatever countActivity("git") caught.
+    // Only on an actual change: the watcher fires for edits leaving the state identical, and every
+    // emit re-renders the views. Labeled "emit", not "git": this runs after git has finished.
     const stringifyStart = performance.now();
     const nextJson = JSON.stringify(next);
     countActivity("emit");
@@ -263,9 +254,8 @@ export class Repository {
     }
   }
 
-  /** Refreshes once the events have settled, never sooner than REFRESH_MIN_INTERVAL_MS after the
-   *  last one finished. Only the watcher goes through here; a refresh the user asked for runs at
-   *  once. One already underway is not joined — it schedules this again when it read too early. */
+  /** For the watcher: refreshes once events settle, at least REFRESH_MIN_INTERVAL_MS after the last
+   *  one finished. A refresh underway is not joined — it reschedules when it read too early. */
   private scheduleRefresh(): void {
     clearTimeout(this.debounceTimer);
     const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastRefreshAt + REFRESH_MIN_INTERVAL_MS - Date.now());
@@ -278,10 +268,10 @@ export class Repository {
     }, delay);
   }
 
-  /** Runs one command at a time and refreshes after it: two in one repository race for the index
-   *  lock. Anything that gets here while one runs is refused. */
+  /** One command at a time, refreshing after: two race for the index lock. Another arriving
+   *  meanwhile is refused. */
   private async runAction(action: () => Promise<GitActionResult>): Promise<GitActionResult> {
-    // The periodic fetch holds the lock too; a click during it waits rather than fails.
+    // The periodic fetch holds the lock too; a click waits for it rather than fails.
     while (this.autoFetching) {
       await this.autoFetching;
     }
@@ -290,7 +280,7 @@ export class Repository {
     }
     this.actionRunning = true;
     try {
-      // A rejection here is the git process having stopped; the caller shows it the same way.
+      // A rejection is the git process gone; reported like any failure.
       const result = await action().catch((error: Error) => ({ ok: false, error: error.message }));
       await this.refresh();
       return result;
@@ -311,7 +301,7 @@ export class Repository {
     return this.runAction(() => git.pull(this.project.path));
   }
 
-  /** Pushes the current branch, publishing it when it has no upstream yet — to `remote` below. */
+  /** Pushes the current branch to `remote`, publishing it when it has no upstream. */
   push(): Promise<GitActionResult> {
     return this.runAction(() => {
       const remote = this.remote;
@@ -325,12 +315,12 @@ export class Repository {
     });
   }
 
-  /** The remote every command uses: the first, which `emit` makes "origin" wherever there is one. */
+  /** The remote every command uses: the first, which `emit` makes "origin" where there is one. */
   private get remote(): string | undefined {
     return this.state.remotes[0]?.name;
   }
 
-  /** Points the remote somewhere else and re-reads the urls, since only this changes them. */
+  /** Re-reads the urls after, since only this changes them. */
   setRemoteUrl(remote: string, url: string): Promise<GitActionResult> {
     return this.runAction(async () => {
       const result = await git.setRemoteUrl(this.project.path, remote, url);
@@ -347,8 +337,7 @@ export class Repository {
     return this.runAction(() => git.renameBranch(this.project.path, from, to));
   }
 
-  /** Deletes the branch locally and, when asked, on the remote too. The local one goes first: it
-   *  cannot fail for reasons outside the machine. */
+  /** Locally and, if asked, on the remote. Local first: it can't fail for reasons off the machine. */
   deleteBranch(name: string, onRemote: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
       const local = await git.deleteBranch(this.project.path, name);
@@ -369,7 +358,6 @@ export class Repository {
     return this.runAction(() => git.rebase(this.project.path, ref));
   }
 
-  /** Takes back the merge or rebase git is half-way through, whichever one that is. */
   abort(): Promise<GitActionResult> {
     return this.runAction(() => {
       const operation = this.state.operation;
@@ -407,12 +395,12 @@ export class Repository {
     return this.runAction(() => git.checkoutTag(this.project.path, name));
   }
 
-  /** Commits the working tree, untracked files and all, and leaves it clean. */
+  /** Commits everything, untracked files included. */
   commitAll(message: string): Promise<GitActionResult> {
     return this.runAction(() => git.commitAll(this.project.path, message));
   }
 
-  /** Commits these files alone, untracked ones included; the rest stays as it is. */
+  /** Commits only these files, untracked ones included. */
   commitPaths(message: string, paths: string[]): Promise<GitActionResult> {
     return this.runAction(() => {
       const untracked = paths.filter((filePath) =>
@@ -422,13 +410,12 @@ export class Repository {
     });
   }
 
-  /** Puts the working tree away, untracked files and all, and leaves it clean. */
+  /** Stashes everything, untracked files included. */
   stashPush(message: string): Promise<GitActionResult> {
     return this.runAction(() => git.stashPush(this.project.path, message));
   }
 
-  /** These paths plus each rename's old one: a rename is one entry over two paths, and a commit
-   *  handed only the new one would take half of it. */
+  /** These paths plus each rename's old one: a commit given only the new path takes half a rename. */
   pathspec(paths: string[]): string[] {
     const expanded = [...paths];
     for (const filePath of paths) {
@@ -440,17 +427,16 @@ export class Repository {
     return expanded;
   }
 
-  /** One of the three commands that take a stash. The ref is a *position* — dropping one renumbers
-   *  the rest — so it is only ever the one the last refresh reported. */
+  /** The ref is a *position* (a drop renumbers the rest), so only ever the last refresh's. */
   stash(command: StashCommand, ref: string): Promise<GitActionResult> {
     const commands = { apply: git.stashApply, pop: git.stashPop, drop: git.stashDrop };
     return this.runAction(() => commands[command](this.project.path, ref));
   }
 
-  /** Throws away the local changes to these files; what HEAD does not hold goes to the trash. */
+  /** Throws away changes to these files; what HEAD lacks goes to the trash. */
   discard(paths: string[]): Promise<GitActionResult> {
-    // Through runAction: `git restore` takes the index lock, so a discard during a fetch or
-    // checkout would fail on it — with the untracked files already in the trash by then.
+    // Through runAction: `git restore` takes the index lock, and failing on it during a fetch or
+    // checkout would leave the untracked files already trashed.
     return this.runAction(async () => {
       const targets: DiscardTargets = { restore: [], drop: [] };
       for (const filePath of paths) {
@@ -458,14 +444,13 @@ export class Repository {
         if (!change) {
           continue;
         }
-        // A rename is one entry over two paths, and only the old one is in HEAD: the new one is a
-        // file HEAD does not know, restored from nothing it would simply be deleted.
+        // Only a rename's old path is in HEAD; the new one is trashed like an untracked file.
         if (change.status === "renamed" && change.origPath) {
           targets.restore.push(change.origPath);
         }
         if (change.status === "untracked" || change.status === "added" || change.status === "renamed") {
           targets.drop.push(filePath);
-          // Staged and then deleted on disk still reads as "added"; nothing left to move.
+          // Staged, then deleted on disk, still reads "added"; nothing to trash.
           const absolute = path.join(this.project.path, filePath);
           if (fs.existsSync(absolute)) {
             try {
@@ -483,18 +468,16 @@ export class Repository {
     });
   }
 
-  /** Adds the file, or everything with its extension, to the repository's .gitignore. */
   ignore(filePath: string, scope: "file" | "extension"): Promise<GitActionResult> {
     return this.runAction(() => git.ignorePath(this.project.path, filePath, scope));
   }
 
   /**
-   * Every file in the repository, plus any directory nothing else implies — see `ExplorerListing`.
-   * A real scan rather than a git process: off the index lock `runAction` serialises, and
-   * `fs.promises` so a large `node_modules` doesn't hold the main process's event loop. tet.json's
-   * `exclude` globs and, when opted into, git's ignore list (one `ls-files` per listing, never on
-   * the refresh path) are skipped during the walk, which covers only the outermost configured
-   * `folders`. Modification times cost a `stat` per entry, so only `modified` reads them.
+   * Every file, plus empty directories — see `ExplorerListing`. A filesystem walk, not a git
+   * process: off the index lock `runAction` serialises, and `fs.promises` so a large `node_modules`
+   * doesn't hold the main event loop. Skips `exclude` globs and, if opted in, git's ignore list (one
+   * `ls-files` per listing, never on the refresh path); walks only the outermost `folders`. Mtimes
+   * cost a `stat` per entry, so only `modified` reads them.
    */
   async listExplorer(): Promise<ExplorerListing> {
     const view = await readExplorerView(this.project.path);
@@ -513,7 +496,7 @@ export class Repository {
       try {
         mtimes[relativePath] = (await fs.promises.stat(absolutePath)).mtimeMs;
       } catch {
-        // A vanished entry sorts with the oldest; the tree still lists it until the next read.
+        // Vanished: sorts with the oldest until the next listing.
       }
     };
     const walk = async (absoluteDir: string, relativeDir: string): Promise<void> => {
@@ -546,15 +529,14 @@ export class Repository {
         if (isDirectory) {
           pending.push(walk(absolutePath, relativePath));
         } else {
-          // A symlink is listed as a file row: a dirent reports it as neither file nor directory,
-          // and it is never descended into, which keeps a link cycle harmless.
+          // A symlink is a file row, never descended into, so a link cycle is harmless.
           files.push(relativePath);
         }
         if (wantMtimes) {
           pending.push(stat(absolutePath, relativePath));
         }
       }
-      // Sibling directories in parallel; the final sorts keep the listing deterministic.
+      // In parallel; the final sorts keep the listing deterministic.
       await Promise.all(pending);
     };
     const roots = view.folders;
@@ -576,9 +558,9 @@ export class Repository {
     };
   }
 
-  /** A repository-relative path, checked to exist (or not) and resolved, or an error either way.
-   *  `renaming` is the path being renamed there: on a case-insensitive filesystem `Readme.md` →
-   *  `README.md` finds the source itself standing at the target, which is no conflict. */
+  /** A repository-relative path for a new entry, resolved, or an error if outside or taken.
+   *  `renaming` is the source: on a case-insensitive filesystem `Readme.md` → `README.md` finds the
+   *  source at the target, which is no conflict. */
   private async resolveNew(filePath: string, renaming?: string): Promise<{ absolute: string } | { error: string }> {
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
@@ -590,7 +572,7 @@ export class Repository {
     return { absolute };
   }
 
-  /** An empty file, for the Explorer tree's "New File..." — parent directories are created with it. */
+  /** The Explorer's "New File...", creating parent directories. */
   async createFile(filePath: string): Promise<GitActionResult> {
     const target = await this.resolveNew(filePath);
     if ("error" in target) {
@@ -605,7 +587,7 @@ export class Repository {
     }
   }
 
-  /** An empty directory, for the Explorer tree's "New Folder...". */
+  /** The Explorer's "New Folder...". */
   async createDirectory(dirPath: string): Promise<GitActionResult> {
     const target = await this.resolveNew(dirPath);
     if ("error" in target) {
@@ -619,7 +601,7 @@ export class Repository {
     }
   }
 
-  /** A file or directory moved to the trash — the Explorer tree's "Delete...", like `discard`. */
+  /** The Explorer's "Delete...": to the trash, like `discard`. */
   async deletePath(filePath: string): Promise<GitActionResult> {
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
@@ -633,7 +615,7 @@ export class Repository {
     }
   }
 
-  /** Renames or moves a file or directory — the Explorer tree's own "Rename...". */
+  /** The Explorer's "Rename...", which may also move. */
   async renamePath(fromPath: string, toPath: string): Promise<GitActionResult> {
     const from = this.resolveInside(fromPath);
     if (!from) {
@@ -652,8 +634,8 @@ export class Repository {
     }
   }
 
-  /** The Explorer tree's three edits of the project's own tet.json — "Add Folder to Workspace",
-   *  "Remove Folder from Workspace", "Exclude from Files"; the watcher sees the write and re-lists. */
+  /** The Explorer's tet.json edits ("Add Folder to Workspace", "Remove Folder from Workspace",
+   *  "Exclude from Files"); the watcher sees the write and re-lists. */
   addFolder(folderPath: string): Promise<GitActionResult> {
     return this.editExplorer(() => addFolder(this.project.path, folderPath));
   }
@@ -666,8 +648,7 @@ export class Repository {
     return this.editExplorer(() => addExclude(this.project.path, relPath));
   }
 
-  /** The settings dialog's Files tab reads and writes these three the same way. Only they cross:
-   *  the folders and the exclude globs are the tree's, edited from its own context menu. */
+  /** For the settings dialog's Files tab; folders and exclude globs stay the tree's own. */
   async readExplorerSettings(): Promise<ExplorerSettings> {
     const { excludeGitIgnore, compactFolders, sortOrder } = await readExplorerView(this.project.path);
     return { excludeGitIgnore, compactFolders, sortOrder };
@@ -686,15 +667,14 @@ export class Repository {
     }
   }
 
-  /** A repository-relative path resolved to an absolute one, or undefined if it escapes the root. */
+  /** The absolute path, or undefined if it escapes the root. */
   private resolveInside(filePath: string): string | undefined {
     const absolute = path.resolve(this.project.path, filePath);
     return relativeInside(this.project.path, absolute) === undefined ? undefined : absolute;
   }
 
-  /** A file for the editor tab: the working tree's text, and what HEAD has of it wherever git
-   *  reports a change — that second text is the diff editor's original side, and a file git sees no
-   *  change to needs none. */
+  /** A file for the editor tab: the working tree's text, plus HEAD's (the diff's original side)
+   *  only where git reports a change. */
   async readFile(filePath: string): Promise<FileContent> {
     const base = { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false };
     const absolute = this.resolveInside(filePath);
@@ -705,8 +685,7 @@ export class Repository {
     try {
       const stat = await fs.promises.stat(absolute).catch(() => null);
       if (!stat) {
-        // Nothing in the working tree: a file git reports as deleted is shown as all removed, any
-        // other missing path is simply not a file to open.
+        // Missing: a file git reports deleted shows as all removed, anything else is an error.
         return change?.status === "deleted"
           ? { ...base, deleted: true, head: await this.headBlob(filePath, change) }
           : { ...base, error: "Not a file" };
@@ -726,8 +705,7 @@ export class Repository {
         binary,
         image,
         content: binary ? "" : buffer.toString("utf8"),
-        // No side to compare where there is no text and no image either: a binary file shows as
-        // one, and starting git for that is a process spent on nothing.
+        // A non-image binary has nothing to compare; don't spend a git process on it.
         head: binary && !image ? undefined : await this.headBlob(filePath, change)
       };
     } catch (error) {
@@ -735,9 +713,8 @@ export class Repository {
     }
   }
 
-  /** The diff editor's original side, for a file git reports a change to. An untracked one costs no
-   *  git process: HEAD has nothing of it by definition. A git process that died leaves the side out
-   *  rather than failing the open — the file still reads, it just carries no marks. */
+  /** The diff editor's original side for a changed file. Untracked costs no git process. A dead git
+   *  process leaves the side out rather than failing the open — the file just carries no marks. */
   private headBlob(filePath: string, change: FileChange | undefined): Promise<HeadBlob | undefined> {
     if (!change) {
       return Promise.resolve(undefined);
@@ -750,9 +727,9 @@ export class Repository {
       .catch(() => undefined);
   }
 
-  /** Writes a file's content, refusing when it changed on disk since it was read — the mtime is all
-   *  that stands between a save and silently overwriting someone else's edit. Written in place: the
-   *  user's own source file, not one of the files other processes read, and it keeps mode and links. */
+  /** Refuses when the mtime changed since the read, so a save never silently overwrites another
+   *  edit. Written in place: the user's source file, not one other processes read, and in place
+   *  keeps mode and links. */
   async writeFile(filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> {
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
@@ -778,31 +755,30 @@ export class Repository {
         if (name && isIgnoredEvent(name)) {
           return;
         }
-        // The retry loop takes it from here and picks the directory back up when it reappears.
+        // The retry loop picks the directory back up when it reappears.
         if (watchedDirectoryGone(this.project.path, name)) {
           this.watcher?.close();
           this.watcher = undefined;
           this.retryWatching();
           return;
         }
-        // Events are arriving, so the next failure backs off from the bottom again.
+        // Events arrive, so the next failure backs off from the start.
         this.watchRetryDelay = WATCH_RETRY_MS;
         if (name && /^\.git[\\/]config$/.test(name)) {
           this.remoteUrlsStale = true;
         }
-        // The saved commands' file in the root, reported for the list rather than the repository.
         if (name === PROJECT_FILE) {
-          // Debounced: the file is written in place, and a read mid-write would find half of it.
+          // Debounced: the file is written in place, and a read mid-write finds half of it.
           clearTimeout(this.commandsTimer);
           this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);
         }
-        // A path appearing or going is "rename", a write to one that stays only "change" (measured
-        // on win32), so an edit never re-lists the tree. Nothing under .git is in it.
+        // A path appearing or going is "rename", a write only "change" (measured on win32), so an
+        // edit never re-lists the tree. Nothing under .git is in it.
         if (event === "rename" && name && !/^\.git(?:[\\/]|$)/.test(name)) {
           clearTimeout(this.filesTimer);
           this.filesTimer = setTimeout(this.onFilesChanged, REFRESH_DEBOUNCE_MS);
         }
-        // Any event: an agent writing beside and renaming into place reports "rename", not "change".
+        // Any event: writing beside and renaming into place reports "rename", not "change".
         const watchedFile = this.watchedFile;
         if (watchedFile !== undefined && name?.replace(/\\/g, "/") === watchedFile) {
           clearTimeout(this.watchedFileTimer);
@@ -817,14 +793,13 @@ export class Repository {
         this.retryWatching();
       });
     } catch (error) {
-      // A filesystem that cannot watch recursively throws here rather than emitting an error.
+      // A filesystem that can't watch recursively throws here instead of emitting an error.
       console.error(`[tet] could not watch ${this.project.path}:`, error);
       this.retryWatching();
     }
   }
 
-  /** Puts a failed watcher back and refreshes once one is up: whatever changed while nothing was
-   *  watching has to come in from somewhere. */
+  /** Puts a failed watcher back, then refreshes to catch what changed unwatched. */
   private retryWatching(): void {
     clearTimeout(this.watchRetryTimer);
     const delay = this.watchRetryDelay;
@@ -841,7 +816,7 @@ export class Repository {
   }
 
   dispose(): void {
-    // Read by refresh, which may be half-way through a git call that outlives this.
+    // Read by a refresh whose git call may outlive this.
     this.disposed = true;
     clearTimeout(this.debounceTimer);
     clearTimeout(this.commandsTimer);
@@ -851,7 +826,7 @@ export class Repository {
     clearInterval(this.autoFetchTimer);
     this.watcher?.close();
     this.watcher = undefined;
-    // The git process remembers per-directory answers; on quit it is stopped right after this.
+    // The git process caches per-directory answers; on quit it is stopped right after this.
     void git.forget(this.project.path).catch(() => undefined);
   }
 }

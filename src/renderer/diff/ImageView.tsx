@@ -1,24 +1,22 @@
 import { useState } from "react";
 
-/** Both versions of an image as data URLs, as `FileContent` carries them. */
+/** Both versions as data URLs, as `FileContent` carries them. */
 export interface ImageSides {
-  /** What HEAD has of it. */
+  /** HEAD's. */
   before?: string;
-  /** What the working tree has. */
+  /** The working tree's. */
   after?: string;
 }
 
 /**
- * A changed image, the one file the diff editor cannot show: the committed version beside the
- * current one, or the two laid over each other. Either side is absent when the file was added or
- * deleted; the editor tab draws this only once at least one of them is there.
+ * An image, side by side with HEAD's or laid over it. A side is absent for an added or deleted file;
+ * at least one is always there.
  */
 export function ImageView({ image }: { image: ImageSides }) {
   const [overlay, setOverlay] = useState(false);
-  // 0 shows the old version, 100 the new one, the middle an onion-skin overlay.
+  // 0 old, 100 new, between an onion skin.
   const [blend, setBlend] = useState(50);
 
-  // Only a modified image has two versions to lay over each other.
   const both = Boolean(image.before && image.after);
   const showOverlay = both && overlay;
 
@@ -48,13 +46,12 @@ export function ImageView({ image }: { image: ImageSides }) {
         </div>
       )}
       {showOverlay ? (
-        // Aligned top-left, so a size change reads as the images not covering each other.
+        // Top-left, so a size change shows as uncovered area.
         <div className="image-diff-stack">
           <img src={image.before} alt="" />
           <img src={image.after} alt="" style={{ opacity: blend / 100 }} />
         </div>
       ) : (
-        // Two-up: the committed version beside the current one.
         <div className="image-diff-pair">
           {image.before && (
             <figure>

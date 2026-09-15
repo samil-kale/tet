@@ -2,35 +2,29 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { WIN_BOM } from "../../shared/script-text";
 
-/** Collapses the burst of chunks a single command's output arrives in into one write. */
 const WRITE_DEBOUNCE_MS = 250;
-/** Under continuous output the debounce never fires; this is the longest a write is held back. */
+/** The longest a write is held back under continuous output. */
 const WRITE_MAX_WAIT_MS = 2000;
-/** A write that failed — on win32 a reader holding the file without delete sharing — is tried
- *  again this much later, rather than only once more output happens to arrive. */
+/** Retry of a failed write (on win32, a reader holding the file without delete sharing), rather
+ *  than waiting for more output. */
 const WRITE_RETRY_MS = 1000;
-/** A verbose producer fills the log without bound, so only the most recent slice is kept. */
 const MAX_LOG_CHARS = 500_000;
 const LOG_TRUNCATION_NOTE = "... [earlier output dropped, showing most recent]\n";
-// PowerShell 5.1's Get-Content decodes BOM-less files as ANSI, so on win32 the context file
-// needs a UTF-8 BOM or non-ASCII output gets garbled on its way into the prompt.
+// PowerShell 5.1's Get-Content reads BOM-less files as ANSI, garbling non-ASCII output.
 const CONTEXT_FILE_BOM = process.platform === "win32" ? WIN_BOM : "";
 
-/** Replaces a file's contents without holding it open for writing. Everything written here is read
- *  by another process, and on Windows opening a file mid-write fails outright. Writing beside it
- *  and renaming gives a reader either version, whole. */
+/** Write beside and rename: another process reads these, and on Windows a read mid-write fails. */
 async function replaceFile(file: string, contents: string): Promise<void> {
   const temp = `${file}.tmp`;
   await fs.promises.writeFile(temp, contents);
   await fs.promises.rename(temp, file);
 }
 
-/** A bounded log file, written only when its contents actually changed. */
 class CappedLogFile {
   private content = "";
   private truncated = false;
   private dirty = false;
-  /** Writes are chained rather than started concurrently — they share one temp path. */
+  /** Chained, not concurrent — writes share one temp path. */
   private writing: Promise<void> = Promise.resolve();
 
   constructor(
@@ -44,8 +38,7 @@ class CappedLogFile {
 
   append(text: string): void {
     this.content += text;
-    // Trimmed at twice the cap here and to the cap in flush(): a slice copies the whole buffer,
-    // so trimming per chunk once the log is full is half a megabyte of copying per pty read.
+    // Trimmed at twice the cap, to the cap in flush(): trimming per chunk would copy 0.5 MB per read.
     if (this.content.length > 2 * MAX_LOG_CHARS) {
       this.trim();
     }
@@ -70,7 +63,6 @@ class CappedLogFile {
       .then(() => replaceFile(this.file, contents))
       .catch((error) => {
         console.error(`[tet] failed to write ${path.basename(this.file)}:`, error);
-        // Nothing landed on disk, so the next flush has to retry.
         this.dirty = true;
         this.onFailure();
       });
@@ -80,9 +72,8 @@ class CappedLogFile {
 // eslint-disable-next-line no-control-regex
 const ANSI_PATTERN = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
 
-/** Terminal data arrives raw. Escape sequences mean nothing in a log file, and a progress bar
- *  redraws its line with a bare carriage return, so keeping only what follows the last one leaves
- *  the line as the terminal finally showed it. */
+/** Strips escape sequences and keeps what follows a line's last bare `\r` — a progress bar's
+ *  redraws leave the line as finally shown. */
 function cleanTerminalOutput(data: string): string {
   return data
     .replace(ANSI_PATTERN, "")
@@ -94,13 +85,12 @@ function cleanTerminalOutput(data: string): string {
 
 // eslint-disable-next-line no-control-regex
 const ANSI_AT_START = /^(?:\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_])/;
-/** How much of a chunk may be held back for the next one before it counts as never ending. */
+/** The most of a chunk held back for the next one. */
 const MAX_CARRY = 4096;
 
-/** Where a chunk has to be cut so that what `cleanTerminalOutput` acts on is whole: pty reads end
- *  anywhere, a chunk ending in the `\r` of a `\r\n` would lose its whole line to the
- *  carriage-return rule, and an escape sequence split in two would leave both halves in the log.
- *  The rest waits for the next chunk, as does a line still being written, up to the same limit. */
+/** Where to cut a chunk so `cleanTerminalOutput` sees whole lines: a chunk ending in the `\r` of a
+ *  `\r\n` would lose its line to the carriage-return rule, and a split escape sequence would leave
+ *  both halves in the log. The rest waits for the next chunk, up to MAX_CARRY. */
 function carryFrom(data: string): number {
   const newline = data.lastIndexOf("\n");
   if (data.length - newline - 1 < MAX_CARRY) {
@@ -114,28 +104,26 @@ function carryFrom(data: string): number {
 }
 
 /**
- * What tet tells an agent about the repository it is working in: the running transcript of the
- * shell tabs the user opened next to it, as a capped file the agent is pointed at and reads on
- * demand. Only shell tabs feed it; an agent tab's output is its TUI redrawing itself. Every shell
- * tab of a project writes into the one file in arrival order, so tabs interleave — but never
- * mid-line (each keeps its unfinished line back), and a header names the tab at every change.
+ * The context file an agent is pointed at, and the capped transcript of the project's shell tabs
+ * (not agent tabs — that output is a TUI redrawing). Tabs write in arrival order, never mid-line
+ * (each holds its unfinished line back), with a header at every change of tab.
  */
 export class ShellContext {
   private readonly log: CappedLogFile;
   /** The pending flush, a debounced one or a retry; undefined once it has run. */
   private writeTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Set on the first append after a flush; the latest the next flush may come. */
+  /** The latest the next flush may come; set on the first append after a flush. */
   private flushDeadline: number | undefined;
   /** What the context says, whether or not the file holds it yet. */
   private contents = "";
-  /** What was last written, so an unchanged context isn't rewritten on every burst. */
+  /** What was last written, so an unchanged context isn't rewritten. */
   private written: string | undefined;
   private disposed = false;
-  /** Writes are chained rather than started concurrently — they share one temp path. */
+  /** Chained, not concurrent — writes share one temp path. */
   private writing: Promise<void> = Promise.resolve();
-  /** Per tab, the end of its last chunk that could not be cleaned until the next one arrives. */
+  /** Per tab, the tail of its last chunk held back for the next one. */
   private readonly carries = new Map<string, string>();
-  /** The tab whose output the log currently ends in; any other tab opens a new section. */
+  /** The tab the log currently ends in; any other opens a new section. */
   private lastWriter: string | undefined;
 
   constructor(
@@ -156,14 +144,13 @@ export class ShellContext {
     return path.join(this.directory, "context.md");
   }
 
-  /** The same text the file holds, for an agent that asks over the control channel rather than
-   *  reading it (`prompt-submit`) — even while a write of it is failing. Never the BOM: that is
-   *  the file's, for PowerShell's sake. */
+  /** The file's text for `prompt-submit` over the control channel — even while writing it fails.
+   *  Without the BOM, which is only for PowerShell. */
   get text(): string {
     return this.contents;
   }
 
-  /** `label` is what a section header calls the tab — its title, or its id where it has none. */
+  /** `label` names the tab in a section header. */
   append(tabId: string, label: string, data: string): void {
     const whole = (this.carries.get(tabId) ?? "") + data;
     const cut = carryFrom(whole);
@@ -189,8 +176,7 @@ export class ShellContext {
       this.log.append(`${this.log.chars === 0 ? "" : "\n"}=== shell tab: ${label} ===\n`);
     }
     this.log.append(text);
-    // Debounced, but no further than the deadline: a build or a `tail -f` never pauses long enough
-    // for the debounce alone, and the agent has to read the file while output still runs.
+    // Capped by the deadline: a build or `tail -f` never pauses long enough for the debounce alone.
     const now = Date.now();
     this.flushDeadline ??= now + WRITE_MAX_WAIT_MS;
     clearTimeout(this.writeTimer);
@@ -212,8 +198,8 @@ export class ShellContext {
   }
 
   private writeContext(): void {
-    // The `tet-ctl` line is there from the first prompt on: nothing else tells an agent the app
-    // around it can be asked anything. The shell paragraph only once something ran.
+    // The `tet-ctl` line is always there — nothing else tells an agent about it. The shell
+    // paragraph only once something ran.
     const contents = [
       "<tet_context>",
       "You are running inside TET. Its own settings, projects and terminal tabs are",
@@ -239,7 +225,7 @@ export class ShellContext {
       .then(() => replaceFile(this.contextFile, CONTEXT_FILE_BOM + contents))
       .catch((error) => {
         console.error("[tet] failed to write the context file:", error);
-        // Nothing landed on disk, so the next write must not be skipped as unchanged.
+        // Not on disk, so the next write must not be skipped as unchanged.
         this.written = undefined;
         this.retryLater();
       });

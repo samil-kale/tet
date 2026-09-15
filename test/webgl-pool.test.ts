@@ -40,7 +40,7 @@ describe("WebglPool", () => {
 
   it("keeps a split project warm across a switch away and back", () => {
     const pool = new WebglPool();
-    // Two projects of four panes each, and the hidden budget taken up by other terminals already.
+    // Two projects of four panes each, the hidden budget already full.
     hideMany(pool, "other", MAX_HIDDEN_WEBGL);
     hideMany(pool, "a", 4);
     assert.deepEqual(pool.trim(), ["other t0", "other t1", "other t2", "other t3"]);
@@ -68,7 +68,6 @@ describe("WebglPool", () => {
     pool.forget("p t1");
     pool.forgetPrefix("q ");
     hideMany(pool, "r", MAX_HIDDEN_WEBGL);
-    // Only "p t10" is left from before, so it is the one to go.
     assert.deepEqual(pool.trim(), ["p t10"]);
   });
 

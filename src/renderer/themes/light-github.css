@@ -1,12 +1,10 @@
 /*
- * "Light GitHub":the Light Default variant of GitHub.github-vscode-theme. The values come from the
- * theme file as shiki ships it (@shikijs/themes/github-light-default), which is also where the token
- * half comes from.
- * See dark-modern.css for the layer itself. The theme leaves some colors unset; where it does, the
- * value is the one VS Code's color registry falls back to — so what VS Code draws with this theme —
- * or, for a border, the theme's own border color, and says so below. The exceptions are a few
- * translucent greys that all but vanish on this white ground; each is made opaque or stronger and
- * says so where it stands.
+ * "Light GitHub": the Light Default variant of GitHub.github-vscode-theme. Values, token colors
+ * included, come from the theme file as shiki ships it (@shikijs/themes/github-light-default).
+ * See dark-modern.css for the layer. A color the theme leaves unset takes VS Code's registry
+ * fallback — what VS Code draws with this theme — or, for a border, the theme's own border
+ * color; each is marked below. Exceptions: a few translucent greys that vanish on white are
+ * made opaque or stronger, marked where they stand.
  */
 :root[data-theme="light-github"] {
   color-scheme: light;
@@ -61,8 +59,8 @@
   --vscode-button-hoverBackground: #1a7f37;
   --vscode-button-secondaryBackground: #ebecf0;
   --vscode-button-secondaryForeground: #24292f;
-  /* Not the theme's #f3f4f6, which lightens the button towards the white dialog it stands on
-     until the hover is gone: the theme's own secondaryBackground darkened by the same step. */
+  /* Not the theme's #f3f4f6, which lightens the button into the white dialog behind it: the
+     theme's secondaryBackground darkened by the same step. */
   --vscode-button-secondaryHoverBackground: #dfe1e6;
 
   --vscode-editorWidget-background: #ffffff;

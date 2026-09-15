@@ -21,9 +21,8 @@ const ANSI_CSS_VARS: Record<string, string> = {
 };
 
 /**
- * xterm renders on canvas and needs resolved color values, not CSS var() references, so the
- * --vscode-* custom properties are read out into a plain xterm ITheme. One thing in it depends
- * on the agent (see the swap below), so this is built per terminal, not once for the window.
+ * xterm draws on canvas and needs resolved colors, not var() references. Built per terminal: the
+ * blue/magenta swap below depends on the agent.
  */
 export function buildXtermTheme(agent: AgentInfo): ITheme {
   const styles = getComputedStyle(document.documentElement);
@@ -34,31 +33,25 @@ export function buildXtermTheme(agent: AgentInfo): ITheme {
   const theme: ITheme = {
     background,
     foreground,
-    // Left to xterm, cursor and selection are white (`#ffffff`, `rgba(255, 255, 255, .3)`) —
-    // invisible on a light background. An unset terminal cursor falls back to the terminal
-    // foreground, an unset terminal selection to the editor's. xterm thins an opaque selection
-    // to 30% itself.
+    // xterm's default cursor and selection are white — invisible on a light background. xterm
+    // thins an opaque selection to 30% itself.
     cursor: read("--vscode-terminalCursor-foreground") ?? foreground,
     cursorAccent: background,
     selectionBackground: read("--vscode-terminal-selectionBackground") ?? read("--vscode-editor-selectionBackground"),
     selectionInactiveBackground:
       read("--vscode-terminal-inactiveSelectionBackground") ?? read("--vscode-editor-inactiveSelectionBackground"),
-    // Everything xterm draws down the lane at the right edge, made invisible. Color rather than
-    // CSS: both are xterm's own elements, redrawn as the buffer grows, and this is the value
-    // they are painted with. Spelled `#00000000` and not `transparent`, since it goes through
-    // xterm's color parser on the way to a stylesheet and a canvas. The theme layer's own
-    // scrollbar variables are not read here — they are for the app's lists.
+    // xterm's right-edge lane, invisible. A theme color, not CSS: xterm repaints its own elements
+    // with it. `#00000000`, not `transparent`: it goes through xterm's color parser. The theme's
+    // scrollbar variables are for the app's lists.
     scrollbarSliderBackground: "#00000000",
     scrollbarSliderHoverBackground: "#00000000",
     scrollbarSliderActiveBackground: "#00000000",
-    // The ruler outlines itself on every frame whether or not a mark is in it, and this is the
-    // color it uses (`_renderRulerOutline`). Left unset, xterm's default is light: a white line
-    // down the right of every terminal.
+    // The ruler outlines itself every frame (`_renderRulerOutline`); xterm's default draws a
+    // white line down the right of every terminal.
     overviewRulerBorder: "#00000000"
   };
 
-  // opencode's TUI draws blue and magenta the other way round (observed, not derived — see
-  // AgentDefinition.swapsBlueMagenta).
+  // opencode draws blue and magenta swapped (measured, see AgentDefinition.swapsBlueMagenta).
   const ansiCssVars = agent.swapsBlueMagenta
     ? { ...ANSI_CSS_VARS, blue: ANSI_CSS_VARS.magenta, magenta: ANSI_CSS_VARS.blue }
     : ANSI_CSS_VARS;
@@ -70,7 +63,7 @@ export function buildXtermTheme(agent: AgentInfo): ITheme {
   return theme;
 }
 
-/** Reads a map of theme color ids to --vscode-* variables into resolved values, skipping unset ones. */
+/** Resolves color id → --vscode-* variable, skipping unset ones. */
 function readCssVars(vars: Record<string, string>): Record<string, string> {
   const styles = getComputedStyle(document.documentElement);
   const colors: Record<string, string> = {};
@@ -84,10 +77,9 @@ function readCssVars(vars: Record<string, string>): Record<string, string> {
 }
 
 /**
- * VS Code color ids to the --vscode-* variable they read, for the editor surface itself — the
- * same dotted namespace shiki's own theme.colors uses. Read once here: shiki's theme is patched
- * with these at load time (`diff-highlight.ts`), and monaco inherits them from shiki's theme in
- * turn (`editor.ts`'s `applyChrome`).
+ * The editor surface's VS Code color ids (shiki's theme.colors namespace). Shiki's theme is patched
+ * with these at load (`diff-highlight.ts`); monaco inherits them from it (`editor.ts`'s
+ * `applyChrome`).
  */
 const EDITOR_CSS_VARS: Record<string, string> = {
   "editor.background": "--vscode-editor-background",
@@ -113,14 +105,12 @@ export function buildShikiColors(): Record<string, string> {
 }
 
 /**
- * monaco color id to the --vscode-* variable it reads, for chrome shiki's theme has no notion of
- * (menus, inputs, lists) and for the diff. The editor surface is not repeated here: it comes from
- * shiki's own theme, already patched with `EDITOR_CSS_VARS`.
+ * monaco colors shiki's theme has no notion of: chrome (menus, inputs, lists) and the diff. The
+ * editor surface comes from shiki's theme (`EDITOR_CSS_VARS`).
  *
- * The diff colors have to travel this way rather than through CSS alone: monaco writes its own
- * `--vscode-*` block onto `.monaco-editor, .monaco-diff-editor` (its `standaloneThemeService`),
- * which is more specific than our `:root` and shadows every variable inside the widget. A theme
- * value only reaches the diff through `defineTheme`'s colors, which is what this map feeds.
+ * Not CSS alone: monaco writes its own `--vscode-*` block onto `.monaco-editor,
+ * .monaco-diff-editor` (`standaloneThemeService`), shadowing our `:root` inside the widget. Only
+ * `defineTheme`'s colors reach it.
  */
 const MONACO_CSS_VARS: Record<string, string> = {
   "input.background": "--vscode-input-background",
@@ -128,8 +118,7 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "input.border": "--vscode-input-border",
   "input.placeholderForeground": "--vscode-input-placeholderForeground",
   focusBorder: "--vscode-focusBorder",
-  // The find widget's Aa/ab/.* toggles: the same translucent grey an action button hovers with,
-  // rather than monaco's default `#007ACC` border and recoloured icon.
+  // The find widget's Aa/ab/.* toggles: an action button's hover grey, not monaco's `#007ACC`.
   "inputOption.activeForeground": "--vscode-foreground",
   "inputOption.activeBackground": "--vscode-toolbar-hoverBackground",
   "scrollbarSlider.background": "--vscode-scrollbarSlider-background",
@@ -144,9 +133,8 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "list.hoverBackground": "--vscode-list-hoverBackground",
   "list.activeSelectionBackground": "--vscode-list-activeSelectionBackground",
   "list.activeSelectionForeground": "--vscode-list-activeSelectionForeground",
-  // The diff, inline: a changed line's ground, the changed words within it, the same tone in the
-  // gutter beside a removed-line view zone, and the overview ruler beside the scrollbar — which is
-  // how a change is found at all, so it is set rather than left to monaco's doubled-alpha fallback.
+  // The inline diff: lines, words, gutter, and the overview ruler — how a change is found at all,
+  // so set rather than left to monaco's doubled-alpha fallback.
   "diffEditor.insertedLineBackground": "--vscode-diffEditor-insertedLineBackground",
   "diffEditor.removedLineBackground": "--vscode-diffEditor-removedLineBackground",
   "diffEditor.insertedTextBackground": "--vscode-diffEditor-insertedTextBackground",
@@ -157,17 +145,12 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "diffEditorOverview.removedForeground": "--vscode-diffEditorOverview-removedForeground"
 };
 
-/**
- * What `MONACO_CSS_VARS` names, as color overrides laid over shiki's theme, plus the few fixed
- * values below. The editor surface is not part of this — monaco gets that from shiki's theme
- * (`editor.ts`'s `applyChrome`).
- */
+/** `MONACO_CSS_VARS` plus a few fixed values, laid over shiki's theme. */
 export function buildMonacoColors(): Record<string, string> {
   const colors = readCssVars(MONACO_CSS_VARS);
-  // No border box around an active toggle — just the background set through the map above.
+  // No border around an active toggle, just its background.
   colors["inputOption.activeBorder"] = "#00000000";
-  // Monaco paints a shadow along the top edge once the editor is scrolled (its `.shadow.top`
-  // decoration, black in vs-dark). Nothing else in the app marks "scrolled" that way.
+  // No `.shadow.top` once scrolled — nothing else in the app marks "scrolled" that way.
   colors["scrollbar.shadow"] = "#00000000";
   return colors;
 }

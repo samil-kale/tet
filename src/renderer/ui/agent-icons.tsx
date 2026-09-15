@@ -2,10 +2,9 @@ import type { AgentId } from "../../shared/types";
 import { LARGER, fitIcon, fitStroke } from "./icons";
 
 /**
- * Which icon belongs to which agent. The one piece of agent-specific knowledge outside
- * `src/main/agents/`, which is the main process's: an icon on an `AgentDefinition` would pull
- * JSX into that bundle and the agent's setup code into this one. Adding an agent means a folder,
- * an entry in `src/main/agents/index.ts`, and a case below.
+ * Which icon belongs to which agent — the one agent-specific thing outside `src/main/agents/`: an
+ * icon on `AgentDefinition` would pull JSX into the main bundle and agent setup into this one. A
+ * new agent is a folder, an entry in `src/main/agents/index.ts`, and a case below.
  */
 interface AgentIconProps {
   agentId: AgentId;
@@ -14,7 +13,7 @@ interface AgentIconProps {
 
 /**
  * Claude Code's own extension icon (sbc-claude-code/media/icon.svg). Drawn `LARGER`: dividing the
- * measured extent tightens the crop, so the glyph grows inside the shared box.
+ * measured extent tightens the crop, growing the glyph in the shared box.
  */
 function ClaudeIcon({ className }: { className?: string }) {
   return (
@@ -58,12 +57,10 @@ function OpencodeIcon({ className }: { className?: string }) {
 }
 
 /**
- * Codex CLI's own icon, not OpenAI's company mark: a terminal prompt inside a circle, the way
- * terminaltrove.com lists it. No first-party SVG exists, so this redraws that glyph in
- * `ShellIcon`'s stroke style. Measured: the bbox is a circle of r=6 centered at (8, 8), so extent
- * 13.6 (diameter plus the 1.6 stroke) and center (8, 8) fall out of that — the chevron and
- * underscore sit well inside it. Drawn `LARGER`, like Claude's mark: a plain outline circle reads
- * smaller than the filled marks beside it at the same measured extent.
+ * Codex CLI's own icon (not OpenAI's mark): a prompt in a circle, as terminaltrove.com lists it,
+ * redrawn in `ShellIcon`'s stroke style since no first-party SVG exists. Measured: the bbox is the
+ * r=6 circle at (8, 8), so extent 13.6 (diameter plus the 1.6 stroke). Drawn `LARGER`: an outline
+ * circle reads smaller than the filled marks beside it at the same extent.
  */
 function CodexIcon({ className }: { className?: string }) {
   return (
@@ -87,17 +84,16 @@ function CodexIcon({ className }: { className?: string }) {
 }
 
 /**
- * pi's mark is a 4×4 grid of cells, and at TARGET_EXTENT — 10.4px in the 13px box — a cell is
- * 2.6px: every edge on a fraction, the whole thing a blur. `crispEdges` snaps each edge to a
- * pixel, and at exactly 10px the snapping comes out even, cells of 2, 3, 2 and 3 with the hole a
- * square 2×2. At 8px it read too small, at 11px too heavy. Verified by rendering the sizes at
- * 13px and reading the pixels, not by eye.
+ * pi's mark is a 4×4 grid; at TARGET_EXTENT (10.4px in the 13px box) a cell is 2.6px and blurs.
+ * `crispEdges` snaps edges to pixels, and at exactly 10px that comes out even: cells of 2, 3, 2, 3,
+ * the hole a square 2×2. 8px reads too small, 11px too heavy — verified by reading the rendered
+ * pixels at 13px.
  */
 const PI_PIXEL_CELLS = 10 / 10.4;
 
 /**
- * pi's own mark (pi.dev/logo-auto.svg) on its native 800 grid, fill only. Measured off the path:
- * both axes run 165.29–634.72, so the extent is 469.43 square about (400, 400).
+ * pi's own mark (pi.dev/logo-auto.svg) on its native 800 grid, fill only. Measured: both axes run
+ * 165.29–634.72, so the extent is 469.43 square about (400, 400).
  */
 function PiIcon({ className }: { className?: string }) {
   return (
@@ -120,7 +116,7 @@ function PiIcon({ className }: { className?: string }) {
   );
 }
 
-/** No upstream icon exists for the plain shell, so this is the familiar prompt glyph. */
+/** The shell has no upstream icon: a plain prompt glyph. */
 function ShellIcon({ className }: { className?: string }) {
   return (
     <svg

@@ -13,9 +13,8 @@ import { eventually, tetCtl as runCli } from "./helpers";
 import type { Run } from "./helpers";
 
 /**
- * The control channel end to end below the app: the real server on a real loopback TCP port, the
- * real CLI as the child process an agent would run, and everything that needs electron faked
- * behind ControlDeps. Bundled into dist-test/ by esbuild.js; `npm test` runs it.
+ * The control channel below the app: the real server on a loopback port, the real CLI as a child
+ * process, and everything needing electron faked behind ControlDeps.
  */
 
 const TOKEN = "test-token";
@@ -28,7 +27,7 @@ function tab(projectId: string, tabId: string): TerminalDescriptor {
   return { tabId, projectId, agentId: "shell", title: "", status: "running" };
 }
 
-/** What every fake remembers of what the verbs did to it. */
+/** What the verbs did to the fakes. */
 interface Calls {
   shown: [string, string][];
   closed: string[];
@@ -41,7 +40,7 @@ interface Calls {
   shutdown: boolean[];
   notified: [string, string, ToastTarget | undefined][];
   hooks: [string, string, string][];
-  /** What each hook said its own time was — see ControlRequest.at. */
+  /** Each hook's own time — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
   started: string[];
   restarted: string[];
@@ -49,7 +48,7 @@ interface Calls {
   editorsOpened: [string, string][];
 }
 
-/** The session "tab-2" reports once a test sets it — what tabs-wait waits on. */
+/** The session "tab-2" reports once set — what tabs-wait waits on. */
 let tab2Session: string | undefined;
 
 let tempDir: string;
@@ -86,7 +85,7 @@ function terminalsOf(projectId: string): ControlTerminals {
     },
     createCommandTab: (command: ProjectCommand) => {
       calls.commands.push(command.command);
-      // The one a shell operator would have been refused for, see createCommandTab.
+      // Refused for a shell operator, as createCommandTab does.
       return command.command.includes("&&") ? undefined : tab(projectId, "tab-cmd");
     },
     closeTabs: async (tabIds) => {
@@ -162,7 +161,7 @@ function deps(ownProfile = true): ControlDeps {
     notify: (title, body, target) => {
       calls.notified.push([title, body, target]);
     },
-    // What main.ts's applyTheme decides, set by the test.
+    // Stands in for main.ts's applyTheme.
     applyTheme: () => themeWaits
   };
 }
@@ -253,9 +252,7 @@ describe("tet-ctl against the control server", () => {
     assert.match(run.stderr, /unknown verb: frobnicate/);
   });
 
-  /** Not through the CLI, which will not send such a request: the wire itself (HTTP, see
-   *  control-server.ts and tet-ctl.ts's own send — the one transport that also reaches the server
-   *  from inside an sbx sandbox). */
+  /** A raw HTTP request, bypassing the CLI, which would not send such a request. */
   async function post(body: string): Promise<string> {
     const http = await import("node:http");
     return new Promise<string>((resolve) => {
@@ -583,8 +580,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.shutdown, [true]);
   });
 
-  // The hook verb is the one an agent's own hooks run, so its stdout is the agent's, not a
-  // person's: verbatim, and never a word of tet's own on top.
+  // A hook's stdout belongs to the agent: verbatim, with nothing of tet's own added.
   it("hands a hook's payload over and answers with what the agent must see", async () => {
     const payload = '{"session_id":"abc","background_tasks":[]}';
     const before = Date.now();
@@ -593,8 +589,8 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.stdout, "<tet_context>the repository</tet_context>\n", "the answer, and nothing else");
     assert.deepEqual(calls.hooks, [[OWN_TAB, "prompt-submit", payload]]);
     assert.deepEqual(calls.notified, [], "nothing to toast about a prompt");
-    // When the hook fired, not when it was handled: what two racing reports of one turn are
-    // ordered by, and the whole reason a finished turn does not go back to working.
+    // When the hook fired, not when handled: racing reports of one turn are ordered by it, so a
+    // finished turn does not go back to working.
     const [at] = calls.hookTimes;
     assert.ok(typeof at === "number" && at >= before && at <= Date.now(), `own time carried through, got ${String(at)}`);
   });
@@ -610,8 +606,7 @@ describe("tet-ctl against the control server", () => {
     );
   });
 
-  // A prompt's answer is the prompt's own text, so a tab that is gone must add nothing to it —
-  // not even the `{}` every other event answers with.
+  // A prompt-submit answer is added to the prompt, so a gone tab adds nothing — not even `{}`.
   it("says nothing at all into a prompt it has nothing for", async () => {
     const run = await tetCtl(["hook", "prompt-submit"], { [CONTROL_ENV.tabId]: "tab-gone" });
     assert.equal(run.status, EXIT_CODES.ok);
@@ -627,8 +622,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.hooks, [[OWN_TAB, "stop", payload]], "whole and unmangled");
   });
 
-  // Never the agent's problem: a non-zero exit or a stray line on stdout would land in the very
-  // turn the hook was reporting.
+  // A non-zero exit or a stray stdout line would land in the turn the hook reports.
   it("says nothing and fails nothing when the event, the tab or TET itself is not there", async () => {
     for (const [what, run] of [
       ["an unknown event", await tetCtl(["hook", "wat"])],
@@ -642,8 +636,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.hooks, [], "none of them reached a tab");
   });
 
-  // The agent's turn waits on its hook: a tet that took the request and then stalled must not
-  // hold that turn up for good.
+  // The agent's turn waits on its hook, so a stalled tet must not hold it up for good.
   it("gives up on a TET that accepts a hook and never answers", async () => {
     const stalled = http.createServer(() => undefined);
     await new Promise<void>((resolve) => stalled.listen(0, "127.0.0.1", () => resolve()));

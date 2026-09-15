@@ -19,13 +19,12 @@ import type {
 } from "../../shared/types";
 
 /**
- * What the control channel acts on, handed over by main.ts rather than imported: nothing here
- * reaches for electron or node-pty, so the server runs under plain node with these faked — how
- * test/control.test.ts drives it, through the real CLI.
+ * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
+ * the server under plain node with these faked.
  */
 export interface ControlDeps {
   version: string;
-  /** Answered with the version: what a test started tet by is gone after restart-app. */
+  /** Lets a test tell that restart-app replaced the process. */
   pid: number;
   store: {
     list(): Project[];
@@ -41,66 +40,61 @@ export interface ControlDeps {
   repositories: {
     get(projectId: string): { getState(): RepositoryState; listExplorer(): Promise<ExplorerListing> } | undefined;
   };
-  /** What the window reported and what the terminals printed — see ControlRecords. */
+  /** See ControlRecords. */
   records: {
     editor(projectId: string): EditorReport | undefined;
     notices(): NoticeReport[];
     output(projectId: string, tabId: string): string | undefined;
   };
-  /** tet runs with a profile of its own (`--user-data-dir`) — see ControlVerb.ownProfileOnly. */
+  /** `--user-data-dir` given — see ControlVerb.ownProfileOnly. */
   ownProfile: boolean;
   /** Opens a file in the project's editor tab and brings that tab to the front. */
   openEditor(projectId: string, path: string): void;
-  /** The text the project's editor tab shows, asked of the window at the moment — the one thing
-   *  the server asks it rather than keeping a report (see EditorReport). */
+  /** Asked of the window live — the one thing not kept as a report (see EditorReport). */
   editorContent(projectId: string): Promise<string | undefined>;
-  /** Every agent, and whether it is installed — the requirements dialog's answer, by id. */
+  /** The requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
-  /** The ids `tabs-create` accepts — `AGENTS`', so a new agent needs nothing here. */
+  /** `AGENTS`' ids, so a new agent needs nothing here. */
   agentIds: readonly string[];
   addProject(directory: string): Promise<AddRepositoryResult>;
   removeProject(projectId: string): void;
   readCommands(root: string): Promise<ProjectCommand[]>;
-  /** Ends every session and quits, relaunching first when asked — main.ts's teardown. */
+  /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
-  /** Brings a tab to the front — its process starts with the first resize that draws it. */
+  /** Its process starts with the first resize that draws it. */
   showTab(projectId: string, tabId: string): void;
-  /** Tells the window the project list changed under it, and which entry to activate or forget. */
+  /** Tells the window which project to activate or forget. */
   projectsChanged(change: { added?: string; removed?: string }): void;
-  /** Shows a real desktop notification from this process, the one holding the desktop session. A
-   *  sandboxed hook has none, so its report is toasted here instead. Fire-and-forget, and it must
-   *  never throw: `hook` shows its toast on the way to answering, and that answer is a turn.
-   *  `target` is the tab it is about, which a click on it brings to the front. */
+  /** A desktop toast from this process, which holds the desktop session (a sandboxed hook has
+   *  none). Must never throw: `hook` toasts on the way to answering a turn. A click brings
+   *  `target` to the front. */
   notify(title: string, body: string, target?: ToastTarget): void;
-  /** Brings the saved theme onto the window, answering whether a restart is still needed for it —
-   *  main.ts's `applyTheme`. */
+  /** main.ts's `applyTheme`: returns whether a restart is still needed. */
   applyTheme(): boolean;
 }
 
-/** Which tab a toast is about. */
 export interface ToastTarget {
   projectId: string;
   tabId: string;
 }
 
-/** What a hook's report leaves for the server to do — see ControlTerminals.hookEvent. */
+/** See ControlTerminals.hookEvent. */
 export interface HookToast {
   title: string;
   body: string;
 }
 
 export interface HookOutcome {
-  /** What the reporting agent is to see on the hook's stdout; the verb's own default otherwise. */
+  /** The hook's stdout for the agent; the verb's default otherwise. */
   stdout?: string;
-  /** The toast to show, or nothing where the notification settings say so. */
+  /** None where the notification settings say so. */
   toast?: HookToast;
 }
 
-/** A tab as `tabs-list` answers it: what the window gets, plus what only the session manager knows. */
+/** A `tabs-list` entry: the window's descriptor plus what only the session manager knows. */
 export interface InspectedTab extends TerminalDescriptor {
-  /** The session this tab's own hooks named, claimed or not yet. */
+  /** The session this tab's hooks named, claimed or not. */
   reportedSessionId?: string;
-  /** The sbx sandbox its session lives in. */
   sandbox?: string;
 }
 
@@ -108,21 +102,19 @@ export interface InspectedTab extends TerminalDescriptor {
 export interface ControlTerminals {
   snapshot(): TerminalDescriptor[];
   inspect(): InspectedTab[];
-  /** Starts a tab's process at the size it was last fitted to, or a default one; false for a tab
-   *  that is not waiting for its first start. */
+  /** At the last fitted size or a default; false unless the tab awaits its first start. */
   start(tabId: string): boolean;
-  /** False for a tab that neither stopped nor failed to start — nothing to restart. */
+  /** False for a tab that neither stopped nor failed to start. */
   restart(tabId: string): boolean;
   write(tabId: string, data: string): void;
-  /** What the session manager heard lately, oldest first. */
+  /** Oldest first. */
   events(): ControlEvent[];
   createTab(agentId: AgentId): TerminalDescriptor;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   renameTab(tabId: string, title: string): Promise<void>;
-  /** A turn reported by one tab's own agent hook, `at` being when the hook fired rather than
-   *  when it arrived (ControlRequest.at). An unknown tab is not an error — the tab can have been
-   *  closed while its CLI was still ending its turn. */
+  /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
+   *  may have closed while its CLI ended the turn. */
   hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined): HookOutcome;
 }
 
@@ -135,8 +127,8 @@ class ControlError extends Error {
   }
 }
 
-/** A verb's answer. `after` runs once the response has reached the CLI: a verb that ends the
- *  caller's own process must get the reply out first, or the CLI dies with an empty stdout. */
+/** `after` runs once the response reached the CLI: a verb ending the caller's process must reply
+ *  first, or the CLI dies with an empty stdout. */
 interface Answer {
   result: unknown;
   after?: () => void;
@@ -145,7 +137,7 @@ interface Answer {
 type Handler = (
   args: Record<string, unknown>,
   caller: ControlRequest["caller"],
-  /** When the caller spoke — see ControlRequest.at. */
+  /** See ControlRequest.at. */
   at: number | undefined
 ) => Promise<Answer> | Answer;
 
@@ -157,7 +149,7 @@ function text(args: Record<string, unknown>, name: string, what: string): string
   return value;
 }
 
-/** A positive whole number given as a flag's string, or `fallback` where the flag was left out. */
+/** A positive integer flag, or `fallback` when absent. */
 function count(args: Record<string, unknown>, name: string, fallback: number): number {
   if (args[name] === undefined) {
     return fallback;
@@ -169,7 +161,7 @@ function count(args: Record<string, unknown>, name: string, fallback: number): n
   return value;
 }
 
-/** Terminal output as text: CSI, OSC and two-byte escape sequences taken out, CRLF made LF. */
+/** Strips CSI, OSC and two-byte escapes; CRLF to LF. */
 function plainText(data: string): string {
   return (
     data
@@ -179,18 +171,18 @@ function plainText(data: string): string {
   );
 }
 
-/** How long `tabs-wait` waits by default, and how often it looks. */
+/** `tabs-wait` default timeout and poll interval. */
 const WAIT_TIMEOUT_S = 30;
 const WAIT_POLL_MS = 100;
-/** How many entries `events-tail` answers by default. */
+/** `events-tail` default. */
 const EVENTS_TAIL = 50;
-/** How much of a tab's output `tabs-output` answers by default. */
+/** `tabs-output` default. */
 const OUTPUT_TAIL_CHARS = 4000;
 
 const DYNAMIC_PORT_START = 49152;
 const DYNAMIC_PORT_RANGE = 65535 - DYNAMIC_PORT_START;
 
-/** Where the data folder alone would put the port, before checking it is actually free. */
+/** The preferred port for this data folder, before checking it is free. */
 function hashPort(dataRoot: string): number {
   const hash = crypto.createHash("sha1").update(dataRoot).digest("hex");
   return DYNAMIC_PORT_START + (parseInt(hash.slice(0, 8), 16) % DYNAMIC_PORT_RANGE);
@@ -205,13 +197,10 @@ function canBind(port: number): Promise<boolean> {
 }
 
 /**
- * The port the control server will listen on, derived from tet's data folder (data-root.ts) so two
- * accounts on one machine, or a test's own profile beside the tet it runs in, each land on a port
- * of their own. Bound and released
- * here rather than trusted outright: Windows carves pieces out of the dynamic range for
- * Hyper-V/WSL/Docker NAT (`netsh int ipv4 show excludedportrange`), and a bind into one fails with
- * `EACCES`, not `EADDRINUSE` — static enough that reusing the probed port at the real bind is
- * reliable. Probed rather than assigned by the OS because the port has to be in every terminal's
+ * Derived from the data folder (data-root.ts), so two accounts, or a test profile beside the tet it
+ * runs in, get ports of their own. Probed by binding: Windows excludes dynamic-range pieces for
+ * Hyper-V/WSL/Docker NAT (`netsh int ipv4 show excludedportrange`), failing with `EACCES` — static
+ * enough to reuse the probed port. Not OS-assigned: the port must be in every terminal's
  * environment (setControlEnv) before the server starts.
  */
 export async function findControlPort(dataRoot: string): Promise<number> {
@@ -248,7 +237,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     return manager;
   };
 
-  /** The project's terminals and the id of one of its tabs, checked to exist. */
+  /** A tab id checked to exist, with its project and terminals. */
   const knownTab = (args: Record<string, unknown>, caller: ControlRequest["caller"]): { tabs: ControlTerminals; tabId: string; found: Project } => {
     const found = project(args, caller);
     const tabId = text(args, "tabId", "tab id");
@@ -270,15 +259,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "settings-set-theme": (args) => {
       const id = text(args, "theme", "theme id");
-      // The store keeps any string (settings.ts); what it would silently fall back from is
-      // refused here, where the caller can be told.
+      // The store keeps any string and silently falls back (settings.ts); refuse it here instead.
       const theme = THEMES.find((candidate) => candidate.id === id);
       if (!theme) {
         throw new ControlError("bad_args", `unknown theme: ${id} (see list-themes)`);
       }
       settings.save({ ...settings.get(), [themeKey(theme.kind)]: id });
-      // The theme of its own kind: shown at once while the window is drawn in that kind. The flag
-      // is for the agent to relay; restarting is the user's call.
+      // Shown at once if the window is in that kind. The flag is for the agent to relay; restarting
+      // is the user's call.
       return { result: { saved: true, restartRequired: deps.applyTheme() } };
     },
 
@@ -298,7 +286,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!PROMPT_IDS.some((candidate) => candidate === id)) {
         throw new ControlError("bad_args", `unknown prompt: ${id} (one of ${PROMPT_IDS.join(", ")})`);
       }
-      // No text is the reset: the store keeps "" for tet's own, and ipc.ts reads it when asking.
+      // No text resets: "" means tet's own prompt, read by ipc.ts when asking.
       const value = args.text;
       const current = settings.get();
       settings.save({ ...current, prompts: { ...current.prompts, [id]: typeof value === "string" ? value : "" } });
@@ -458,14 +446,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const found = project(args, caller);
       const name = text(args, "name", "command name");
       const commands = await deps.readCommands(found.path);
-      // By the name the row shows or by the line itself — an agent reading tet.json may hold either.
+      // By name or by the line itself — an agent reading tet.json may hold either.
       const command = commands.find((candidate) => candidate.name === name || candidate.command === name);
       if (!command) {
         throw new ControlError("not_found", `no saved command named ${name} in ${found.name}'s tet.json`);
       }
       const tab = terminals(found).createCommandTab(command);
       if (!tab) {
-        // createCommandTab has already said why, as a notice in the window.
+        // createCommandTab already showed a notice saying why.
         throw new ControlError("bad_args", `${name} cannot be run without a shell — see the notice in TET`);
       }
       deps.showTab(found.id, tab.tabId);
@@ -500,10 +488,8 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     notify: (args, caller) => {
-      // A title alone is a notification; the body is for what does not fit in one. Every toast
-      // tet composes itself has both, so only a caller of the verb ever leaves it out.
       const body = args.body;
-      // Called from one of tet's own terminals, the toast is about that tab.
+      // From one of tet's terminals, the toast is about that tab.
       const target = caller.projectId && caller.tabId ? { projectId: caller.projectId, tabId: caller.tabId } : undefined;
       deps.notify(text(args, "title", "title"), typeof body === "string" ? body : "", target);
       return { result: { notified: true } };
@@ -523,11 +509,9 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (outcome.toast) {
         deps.notify(outcome.toast.title, outcome.toast.body, { projectId: where.id, tabId: caller.tabId });
       }
-      // `{}` where the event has nothing to say, rather than nothing at all: Codex reads its Stop
-      // hook's stdout as one JSON value, and every agent whose hooks tet registers takes JSON on
-      // the channels it does not append to the prompt (measured — the toast's own result used to
-      // land there). `prompt-submit` is the exception at both ends: its answer is the prompt's
-      // own text, so having nothing to say there means saying nothing.
+      // `{}` rather than nothing: Codex parses its Stop hook's stdout as JSON, and every agent
+      // takes JSON on hook channels not appended to the prompt (measured). `prompt-submit`'s
+      // answer is prompt text, so nothing to say there is "".
       return { result: { stdout: outcome.stdout ?? (event === "prompt-submit" ? "" : "{}") } };
     }
   };
@@ -537,18 +521,14 @@ function reject(code: ControlErrorCode, message: string): ControlResponse {
   return { ok: false, error: { code, message } };
 }
 
-/** How long a connection may sit without a full request line — a tet-ctl writes it at once. */
+/** A tet-ctl writes its request at once. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /**
- * The local server an agent's `tet-ctl` talks to — one POST per connection, on 127.0.0.1 for a
- * plain host terminal. HTTP, not a bare TCP socket with an NDJSON line, because that is the one
- * transport that also reaches this server from inside an sbx sandbox: a sandbox reaches
- * `host.docker.internal` through sbx's own proxy, and that proxy is HTTP-only — verified live, a
- * raw TCP echo server behind it accepted the connection but never saw a byte written to it, while
- * a plain `curl http://host.docker.internal:<port>` reached the same host process immediately.
- * Every request carries the token main.ts made for this run; anything else is answered
- * `unauthorized` and dropped.
+ * The server `tet-ctl` talks to: one POST per connection on 127.0.0.1. HTTP, not raw TCP, because
+ * a sandbox reaches `host.docker.internal` through sbx's HTTP-only proxy (measured: raw TCP
+ * connects but no bytes arrive; curl works). Every request must carry this run's token from
+ * main.ts, else `unauthorized`.
  */
 export async function startControlServer(
   deps: ControlDeps,
@@ -589,8 +569,7 @@ export async function startControlServer(
   const respond = (res: http.ServerResponse, response: ControlResponse, after?: () => void): void => {
     res.writeHead(200, { "Content-Type": "application/json", Connection: "close" });
     if (after) {
-      // Only once the CLI has the answer: `close` is the response fully flushed and the connection
-      // gone, not merely handed to the OS to send.
+      // `close` means flushed and disconnected, not merely handed to the OS.
       res.once("close", after);
     }
     res.end(JSON.stringify(response) + "\n");
@@ -614,8 +593,7 @@ export async function startControlServer(
         respond(res, reject("bad_args", "not a JSON request"));
         return;
       }
-      // Valid JSON that is not an object (`null`, a number) would throw inside `handle`, and the
-      // connection would never be answered.
+      // A non-object would throw inside `handle`, leaving the connection unanswered.
       if (typeof request !== "object" || request === null || Array.isArray(request)) {
         respond(res, reject("bad_args", "not a JSON request"));
         return;
@@ -623,21 +601,16 @@ export async function startControlServer(
       void handle(request).then(({ response, after }) => respond(res, response, after));
     });
     req.on("error", () => undefined);
-    // The response side needs the same, and for a sharper reason: a write failing *after* it was
-    // handed over — the CLI gone, the connection reset, or this process leaving because the verb
-    // it just answered ends it — surfaces as an uncaught exception, which would block the whole
-    // app. Seen for real as `write EAGAIN` while the test suite drove a live instance.
+    // A response write failing after hand-over (CLI gone, reset, or this process exiting) is
+    // otherwise an uncaught exception, e.g. `write EAGAIN`.
     res.on("error", () => undefined);
   });
 
-  // A TCP port leaves nothing behind for a killed run to hand over — the OS reclaims it the moment
-  // the process is gone — so EADDRINUSE here only ever means another tet is genuinely listening.
-  // Nothing to recover: bind once and let that error surface.
+  // The OS reclaims a killed run's port, so EADDRINUSE means another tet is listening: let it surface.
   await bind(server, port);
 
   return {
-    // closeAllConnections (Node 18.2+): a client that connected and never finished its request
-    // would otherwise hold server.close()'s callback open indefinitely.
+    // closeAllConnections (Node 18.2+): else an unfinished request holds server.close() open forever.
     close: () =>
       new Promise((resolve) => {
         server.close(() => resolve());

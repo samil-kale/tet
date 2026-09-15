@@ -19,19 +19,18 @@ interface ContextMenuProps {
   y: number;
   entries: ContextMenuEntry[];
   onClose: () => void;
-  /** Appended to "context-menu", for a caller that needs its own look on top of the shared one. */
+  /** Appended to "context-menu" for a caller's own look. */
   className?: string;
-  /** Matches the menu to a trigger's own width, e.g. `Dropdown` standing in for a `<select>`. */
+  /** Matches a trigger's width, e.g. `Dropdown` standing in for a `<select>`. */
   width?: number;
-  /** Caps the menu's height, which then scrolls; kept within the window, it is never clamped upward. */
+  /** Caps the height, which then scrolls; kept within the window, it is never clamped upward. */
   maxHeight?: number;
 }
 
 export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
 
-  // Anchored at the pointer, then clamped so a menu opened near an edge doesn't hang outside the
-  // window. Written to the node rather than held in state: no first paint at the unclamped spot.
+  // Clamped into the window, written to the node rather than state so nothing paints unclamped.
   useLayoutEffect(() => {
     const element = menu.current;
     if (!element) {
@@ -42,8 +41,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     element.style.top = `${Math.max(0, Math.min(y, window.innerHeight - height))}px`;
   }, [x, y]);
 
-  // Held in a ref: callers pass an inline arrow, and the listeners below must not be re-attached
-  // on every parent render (a repository or tab push while the menu stands).
+  // A ref: callers pass inline arrows, and the listeners must not re-attach on every parent render.
   const close = useRef(onClose);
   close.current = onClose;
 
@@ -56,8 +54,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
-        // Capture phase and swallowed here, so dismissing the menu can't double as an ESC
-        // keystroke for the (still focused) terminal's CLI.
+        // Captured and swallowed so the ESC never reaches the still-focused terminal.
         event.preventDefault();
         event.stopPropagation();
         onClose();
@@ -66,8 +63,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     document.addEventListener("mousedown", onMouseDown, true);
     document.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("blur", onClose);
-    // Anchored to raw pointer coordinates, not a moving element, so a resize leaves it pointing
-    // at nothing.
+    // Anchored to pointer coordinates, so after a resize it points at nothing.
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", onMouseDown, true);

@@ -8,42 +8,36 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
 import { buildShikiColors } from "../terminal/theme";
 
-/** Syntax colors for the diff editor, through Shiki: monaco carries no grammar of its own here
- *  (see monaco-core.ts), and `ensureLanguage` hands it shiki's tokenizer and shiki's theme.
- *  Per-token colors are the one thing not from a --vscode-* variable: a theme assigns them per
- *  grammar scope and Shiki hands them back per token. The theme is the token half of the one picked
- *  in Settings (Dark Modern's tokens come from Dark+, Light Modern's from Light+); its
- *  editor-surface colors are patched in `loadTheme`. Changed by `switchHighlightTheme`. */
+/** The shiki theme coloring the editor (monaco has no grammars, see monaco-core.ts). Token colors
+ *  are the one thing not from a --vscode-* variable; this is the token half of the Settings theme
+ *  (Dark Modern's from Dark+, Light Modern's from Light+), its surface patched in `loadTheme`. */
 let theme = resolveTheme(window.tet.initialTheme).shikiTheme;
 
-/** The shiki theme — and monaco's, named after it — the editor draws in now. */
+/** The current shiki theme, and monaco's, named after it. */
 export function highlightTheme(): ThemeDefinition["shikiTheme"] {
   return theme;
 }
 
-/** One import per theme, spelled out: esbuild can only bundle an import whose path it can read
- *  off the call — the same reason GRAMMARS below is a map rather than a template. */
+/** Spelled out: esbuild bundles only an import whose path it can read off the call (as GRAMMARS). */
 const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ default: ThemeRegistration }>> = {
   "dark-plus": () => import("@shikijs/themes/dark-plus"),
   "light-plus": () => import("@shikijs/themes/light-plus"),
   "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
   "github-light-default": () => import("@shikijs/themes/github-light-default"),
-  // A JSON import is typed by its literal content, which ThemeRegistration's colors do not admit
-  // (GitHub's theme carries one color as an array).
+  // A JSON import is typed literally, and one color here is an array ThemeRegistration rejects.
   "dark-slate": () => import("../themes/dark-slate.json") as unknown as Promise<{ default: ThemeRegistration }>
 };
 
-/** Loads `highlightTheme()` and patches its editor-surface colors with tet's own --vscode-* values,
- *  so shiki's theme — and monaco's, layered on it in editor.ts — draw tet's chrome. */
+/** `highlightTheme()` with its editor surface patched from tet's --vscode-* values, for shiki and
+ *  the monaco theme built on it (editor.ts). */
 async function loadTheme(): Promise<ThemeRegistration> {
   const { default: registration } = await THEME_MODULES[theme]();
   return { ...registration, colors: { ...registration.colors, ...buildShikiColors() } };
 }
 
 /**
- * Switches to the theme with this id, once its stylesheet is on the root element. Loaded again even
- * under a name shiki already has: the editor-surface colors patched into it are read off the
- * stylesheet at load. A highlighter not created yet loads it when it is.
+ * Switches to theme `id` once its stylesheet is applied. Reloaded even under a known name: the
+ * patched surface colors are read off the stylesheet at load.
  */
 export async function switchHighlightTheme(id: string): Promise<void> {
   theme = resolveTheme(id).shikiTheme;
@@ -52,10 +46,8 @@ export async function switchHighlightTheme(id: string): Promise<void> {
   }
 }
 
-/** The grammars tet bundles: what an agent's repository plausibly holds, not all two hundred
- *  Shiki ships, the renderer being one file with no code splitting. Anything missing shows
- *  uncolored. Each is imported lazily — esbuild keeps a dynamic import in its own module and
- *  evaluates it when awaited, so an unopened language costs parse time, not startup. */
+/** What a repository plausibly holds, not all ~200 Shiki ships: the renderer is one file, no code
+ *  splitting. Anything else is uncolored. Lazy, so an unopened language costs parse, not startup. */
 const GRAMMARS: Record<string, () => Promise<{ default: LanguageRegistration[] }>> = {
   bat: () => import("@shikijs/langs/bat"),
   c: () => import("@shikijs/langs/c"),
@@ -105,7 +97,7 @@ const GRAMMARS: Record<string, () => Promise<{ default: LanguageRegistration[] }
   yaml: () => import("@shikijs/langs/yaml")
 };
 
-/** File extension, lowercased, to the grammar that colors it. */
+/** Lowercased extension to grammar. */
 const EXTENSIONS: Record<string, string> = {
   bash: "shellscript",
   bat: "bat",
@@ -179,17 +171,16 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 let core: Promise<HighlighterCore> | undefined;
-/** One load per grammar, kept as the promise so two files of a kind don't race it. */
+/** Promises, so two files of one kind don't race the load. */
 const grammars = new Map<string, Promise<void>>();
 
-/** The one shiki instance, shared with the editor (see editor.ts): the theme `highlightTheme()`
- *  names, and grammars loaded lazily. */
+/** The one shiki instance, shared with editor.ts; grammars load lazily. */
 export function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
     themes: [loadTheme()],
     langs: [],
-    // The JavaScript engine, not oniguruma: that pulls in a wasm binary, which a single-file
-    // bundle can only carry base64-encoded. "forgiving" skips patterns it cannot express.
+    // Not oniguruma: its wasm would ride base64 in the single-file bundle. "forgiving" skips
+    // patterns the JS engine cannot express.
     engine: createJavaScriptRegexEngine({ forgiving: true })
   });
   return core;
@@ -204,7 +195,6 @@ export function loadGrammar(shiki: HighlighterCore, language: string): Promise<v
   return pending;
 }
 
-/** The grammar a path's extension colors as, for the editor tab. */
 export function languageForPath(filePath: string): string | undefined {
   const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
   return EXTENSIONS[name.slice(name.lastIndexOf(".") + 1)];

@@ -11,9 +11,8 @@ import { rethemeTerminals, takeOutputStats } from "./terminal/terminal-views";
 import { switchEditorTheme } from "./diff/editor";
 
 /**
- * A file dropped anywhere but on a terminal navigates the Electron window to it, replacing the
- * app with no way back. The terminals act on their own drops; here it is only swallowed. Files
- * alone: text dragged into a field is a drop the field itself still has to get.
+ * A file dropped outside a terminal would navigate the window to it, replacing the app. Files only:
+ * text dragged into a field must still reach it.
  */
 function swallowStrayDrop(event: DragEvent): void {
   if (event.dataTransfer?.types.includes("Files")) {
@@ -24,15 +23,12 @@ function swallowStrayDrop(event: DragEvent): void {
 document.addEventListener("dragover", swallowStrayDrop);
 document.addEventListener("drop", swallowStrayDrop);
 
-// This process's half of event-loop.log (src/main/event-loop-monitor.ts): stalls on this thread
-// are invisible to the main process's sampler. Chromium reports every task past 50ms; the
-// threshold for a line of its own is the monitor's. Each report carries what the terminals were
-// doing just before it (takeOutputStats), whose window is the sweep below, since the stats are
-// only ever taken here.
+// The renderer's half of event-loop.log (src/main/event-loop-monitor.ts), whose sampler cannot see
+// this thread. Chromium reports tasks past 50ms. Each report carries the terminals' recent output
+// (takeOutputStats), over the window this sweep sets.
 const OUTPUT_STATS_WINDOW_MS = 2000;
 
-/** Chromium's own, non-standard: how full this thread's heap is, so a long task that is a major
- *  garbage collection shows as one on a heap near its size. */
+/** Chromium's non-standard heap usage, so a long task that is a major GC shows as one. */
 function rendererHeap(): string {
   const { memory } = performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } };
   return memory ? `${Math.round(memory.usedJSHeapSize / 1_048_576)}/${Math.round(memory.totalJSHeapSize / 1_048_576)}MB` : "?";
@@ -50,7 +46,7 @@ try {
   }).observe({ entryTypes: ["longtask"] });
   setInterval(takeOutputStats, OUTPUT_STATS_WINDOW_MS);
 } catch {
-  // An older Chromium without the entry type is no reason not to start.
+  // A Chromium without the entry type still starts.
 }
 
 const container = document.getElementById("root");
@@ -58,13 +54,12 @@ if (!container) {
   throw new Error("Root container not found");
 }
 
-// Set before anything is rendered: xterm, shiki and monaco read those variables when they are
-// built and keep the result.
+// Before any render: xterm, shiki and monaco read the variables once, when built.
 document.documentElement.dataset.theme = window.tet.initialTheme;
 
-// A theme applied while tet runs (main.ts's applyTheme): the stylesheet first, since every one of
-// them reads its colors off it again. Subscribed here, before anything renders: main repeats the
-// theme after each load of the page, which the arguments of a reloaded window may no longer match.
+// A runtime theme change (main.ts's applyTheme): the stylesheet first, since the others re-read it.
+// Subscribed before any render: main repeats the theme after each page load, which a reloaded
+// window's arguments may no longer match.
 window.tet.onTheme((themeId) => {
   if (themeId === document.documentElement.dataset.theme) {
     return;

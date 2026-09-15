@@ -12,10 +12,9 @@ import type {
   SbxProjectConfig
 } from "../../shared/types";
 
-/** What a project keeps about itself in its own root: shell commands and how its Explorer tree is
- *  shown. Shaped like a VS Code `.code-workspace`: `folders` at the top level, the view settings
- *  nested under `settings` by their full VS Code name (see `readExplorerView`). It lives in the
- *  repository rather than in tet's own storage, so it travels with it. */
+/** A project's saved commands and Explorer view, in its own root so it travels with the repository.
+ *  Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
+ *  their VS Code name (`readExplorerView`). */
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs cwd, env or shell. */
@@ -27,17 +26,17 @@ interface ProjectFile {
   commands?: StoredCommand[];
   folders?: unknown;
   settings?: unknown;
-  /** The sbx-settings dialog's Save button — see readSbxConfig/writeSbxConfig. Never a credential. */
+  /** The sbx-settings dialog's state (readSbxConfig/writeSbxConfig). Never a credential. */
   sbx?: unknown;
 }
 
-/** The four view settings' keys, spelled the way VS Code itself does inside `settings`. */
+/** The view settings' keys inside `settings`, as VS Code spells them. */
 const KEY_EXCLUDE = "files.exclude";
 const KEY_EXCLUDE_GIT_IGNORE = "explorer.excludeGitIgnore";
 const KEY_COMPACT_FOLDERS = "explorer.compactFolders";
 const KEY_SORT_ORDER = "explorer.sortOrder";
 
-/** How the Explorer tree shows this project. Anything not of the expected shape is its default. */
+/** How the Explorer shows this project; anything of the wrong shape is its default. */
 export interface ExplorerView {
   /** Top-level nodes; empty means the whole repository as one tree. */
   folders: ExplorerRoot[];
@@ -53,15 +52,15 @@ export interface ExplorerView {
 
 const SORT_ORDERS: readonly ExplorerSortOrder[] = ["default", "mixed", "filesFirst", "type", "modified", "foldersNestsFiles"];
 
-/** What `read` answers for a file that is there but does not parse; `patch` must never write over it. */
+/** `read`'s answer for a file that doesn't parse; `patch` must never write over it. */
 const UNREADABLE: ProjectFile = {};
 
 function file(root: string): string {
   return path.join(root, PROJECT_FILE);
 }
 
-/** The file's contents, or **null** when there is no tet.json at all. A write may create a missing
- *  file, but must refuse to replace a broken one — it is a file in the user's repository. */
+/** The file's contents, or **null** when there is none. A write may create a missing file but never
+ *  replaces a broken one — it is a file in the user's repository. */
 async function read(root: string): Promise<ProjectFile | null> {
   let content: string;
   try {
@@ -72,7 +71,6 @@ async function read(root: string): Promise<ProjectFile | null> {
   try {
     return JSON.parse(content) as ProjectFile;
   } catch {
-    // There is a file, it just isn't ours to read. Not nothing, but nothing usable.
     return UNREADABLE;
   }
 }
@@ -82,7 +80,7 @@ async function patch(root: string, changes: Partial<ProjectFile>): Promise<void>
   await write(root, { ...(await readForPatch(root)), ...changes });
 }
 
-/** The file as it is, for an edit — the one a broken file must not be written over by. */
+/** The file for an edit; throws on a broken one rather than have it written over. */
 async function readForPatch(root: string): Promise<ProjectFile> {
   const content = (await read(root)) ?? {};
   if (content === UNREADABLE) {
@@ -95,7 +93,7 @@ function write(root: string, content: ProjectFile): Promise<void> {
   return fs.writeFile(file(root), `${JSON.stringify(content, undefined, 2)}\n`, "utf8");
 }
 
-/** Only the string values of an `env`; anything else in there is not an environment. */
+/** Only the string values of an `env`. */
 function toEnv(value: unknown): Record<string, string> | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
@@ -106,7 +104,7 @@ function toEnv(value: unknown): Record<string, string> | undefined {
   return Object.keys(env).length > 0 ? env : undefined;
 }
 
-/** Both spellings in, one shape out; anything that is neither is dropped. */
+/** Both spellings in, one shape out; anything else is dropped. */
 function toCommand(entry: StoredCommand): ProjectCommand | undefined {
   if (typeof entry === "string") {
     return entry.trim() ? { command: entry } : undefined;
@@ -141,7 +139,7 @@ export async function readCommands(root: string): Promise<ProjectCommand[]> {
 }
 
 export function writeCommands(root: string, commands: ProjectCommand[]): Promise<void> {
-  // Back to the short form wherever there is nothing else to say about the command.
+  // The short form wherever the command line alone says it all.
   return patch(root, {
     commands: commands.map((command) =>
       command.name || command.cwd || command.env || command.shell ? command : command.command
@@ -149,8 +147,8 @@ export function writeCommands(root: string, commands: ProjectCommand[]): Promise
   });
 }
 
-/** A `folders` entry's path as the tree keys it: repository-relative, forward slashes, "" for the
- *  root. Undefined for anything not inside the repository, which is simply skipped. */
+/** A `folders` path as the tree keys it: repository-relative, forward slashes, "" for the root;
+ *  undefined (skipped) for anything outside the repository. */
 function toFolderPath(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -165,12 +163,12 @@ function toFolderPath(value: unknown): string | undefined {
   return normalized;
 }
 
-/** The path of a stored entry — `{ path }` or, tolerated, a bare string. */
+/** A stored entry's path — `{ path }` or, tolerated, a bare string. */
 function storedPath(entry: unknown): string | undefined {
   return toFolderPath(typeof entry === "string" ? entry : (entry as { path?: unknown } | null)?.path);
 }
 
-/** `folders` as stored, turned into roots; a duplicate path is one root. */
+/** `folders` as roots; a duplicate path is one root. */
 function toFolders(value: unknown, root: string): ExplorerRoot[] {
   if (!Array.isArray(value)) {
     return [];
@@ -188,15 +186,14 @@ function toFolders(value: unknown, root: string): ExplorerRoot[] {
   return folders;
 }
 
-/** `settings` (or any nested object tet.json holds), defensively: anything not a plain object is an
- *  empty one. */
+/** Any nested object of tet.json; anything not a plain object is an empty one. */
 function toSettings(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
-/** `files.exclude`'s patterns: VS Code's map of glob → true; only the ones set to true count. */
+/** `files.exclude`: VS Code's map of glob → true; only `true` counts. */
 function toExclude(value: unknown): string[] {
   return Object.entries(toSettings(value))
     .filter(([pattern, enabled]) => enabled === true && pattern.trim())
@@ -219,15 +216,15 @@ function booleanOr(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-/** `readExplorerView`'s defaults, also ipc.ts's fallbacks for a missing repository — one source. */
+/** `readExplorerView`'s defaults, and ipc.ts's for a missing repository. */
 export const DEFAULT_EXPLORER_VIEW: ExplorerSettings = {
   excludeGitIgnore: false,
   compactFolders: true,
   sortOrder: "default"
 };
 
-/** "Add Folder to Workspace". A project with no `folders` yet is the whole repository as one tree,
- *  so the first add writes that root down alongside the new one. Entries are kept as written. */
+/** "Add Folder to Workspace". No `folders` means the whole repository, so the first add also writes
+ *  that root. Existing entries are kept as written. */
 export async function addFolder(root: string, folderPath: string): Promise<void> {
   const content = await readForPatch(root);
   const folders = Array.isArray(content.folders) ? (content.folders as unknown[]) : [];
@@ -253,14 +250,14 @@ export async function removeFolder(root: string, folderPath: string): Promise<vo
   await write(root, rest);
 }
 
-/** Writes one key inside `settings`, keeping every other setting and top-level key as they are. */
+/** Writes one key inside `settings`, keeping every other key. */
 async function patchSetting(root: string, key: string, value: unknown): Promise<void> {
   const content = await readForPatch(root);
   const settings = toSettings(content.settings);
   await write(root, { ...content, settings: { ...settings, [key]: value } });
 }
 
-/** "Exclude from Files": the path itself as a pattern, set to true the way VS Code stores it. */
+/** "Exclude from Files": the path itself as a pattern, set to true. */
 export async function addExclude(root: string, relPath: string): Promise<void> {
   const content = await readForPatch(root);
   const settings = toSettings(content.settings);
@@ -271,7 +268,6 @@ export async function addExclude(root: string, relPath: string): Promise<void> {
   });
 }
 
-/** Each of the three file-only view settings under the key VS Code spells it with. */
 const EXPLORER_SETTING_KEYS: Record<keyof ExplorerSettings, string> = {
   excludeGitIgnore: KEY_EXCLUDE_GIT_IGNORE,
   compactFolders: KEY_COMPACT_FOLDERS,
@@ -314,15 +310,13 @@ function toSbxHosts(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean);
 }
 
-/** An allowed-path row as tet.json holds it: the dialog's row plus, for a path outside the home, the
- *  platform it was entered on. tet.json travels with the repository and an absolute path means
- *  nothing on another OS, so readSbxConfig hands out only this platform's rows and writeSbxConfig
- *  replaces only those. A `~/…` row resolves everywhere, carries no `os` and is everyone's. */
+/** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path
+ *  means nothing on another OS, so readSbxConfig reads and writeSbxConfig replaces only this
+ *  platform's rows. A `~/…` row carries no `os` and applies everywhere. */
 interface StoredSbxPath extends SbxPath {
   os?: string;
 }
 
-/** Whether a stored row applies here — its platform's, or everyone's. */
 function appliesHere(entry: StoredSbxPath): boolean {
   return entry.os === undefined || entry.os === process.platform;
 }
@@ -359,8 +353,7 @@ function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
   return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
 }
 
-/** The sbx-settings dialog's persisted state. Never holds a token: each sandboxed agent signs in
- *  with its own `/login` inside the sandbox. */
+/** Never holds a token: each sandboxed agent signs in with its own `/login` inside the sandbox. */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)
@@ -375,7 +368,7 @@ export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   };
 }
 
-/** Writes the rows that apply here in place of the previous ones — see StoredSbxPath. */
+/** Replaces only the rows that apply here — see StoredSbxPath. */
 export async function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<void> {
   const content = await readForPatch(root);
   const others = toSbxPaths(sbxSection(content).paths).filter((entry) => !appliesHere(entry));

@@ -6,24 +6,24 @@ import { writePiExtension } from "./extension";
 import { piSessionProvider } from "./sessions";
 
 /**
- * pi (pi.dev, `@earendil-works/pi-coding-agent`): a minimal TUI harness driven through JSONL
- * transcripts on disk and turn signals from a file tet generates and points it at. Every value
- * here was measured through tet's own pty against pi 0.85.1.
+ * pi (pi.dev, `@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts,
+ * reporting turns through a generated extension. Every value here measured through tet's pty
+ * against pi 0.85.1.
  *
- * Deliberately not set for the spawned process: `PI_CODING_AGENT_DIR` (it would move the user's
- * sessions and auth) and `PI_OFFLINE`.
+ * Deliberately unset: `PI_CODING_AGENT_DIR` (would move the user's sessions and auth) and
+ * `PI_OFFLINE`.
  *
- * A tab of it runs in an sbx sandbox through a community kit — see sbx.ts's SBX_CREATE_TARGET,
- * including that pi has no `/login`, so its Anthropic credential comes from sbx's own store.
+ * Sandboxed through a community kit — see sbx.ts's SBX_CREATE_TARGET (pi has no `/login`; its
+ * Anthropic credential comes from sbx's store).
  */
 export const piAgent: AgentDefinition = {
   id: "pi",
   displayName: "Pi",
   executable: () => "pi",
-  // On win32 the npm install is a `pi.cmd` shim, which resolveCommand routes through cmd.exe.
+  // On win32 a `pi.cmd` npm shim, routed through cmd.exe by resolveCommand.
   versionArgs: ["--version"],
-  // Print mode: stdin alone is the prompt, the answer comes on stdout (~2.6 s measured).
-  // `--no-session` leaves no transcript behind, so there is no cleanupAsk.
+  // Print mode: the prompt on stdin, the answer on stdout (~2.6 s measured). `--no-session` leaves
+  // no transcript, so no cleanupAsk.
   askArgs: ["-p", "--no-session"],
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
@@ -34,40 +34,37 @@ export const piAgent: AgentDefinition = {
       const extension = writePiExtension(paths.agentDir, paths.contextFile);
       args.push("-e", extension);
     } catch (error) {
-      // A `-e` file pi cannot load is fatal to it (measured: it prints "Failed to load
-      // extension" and exits), so a file that failed to write is not passed at all. See
-      // prepareSpawn: swallow, never reject.
+      // An unloadable `-e` file is fatal (measured: "Failed to load extension", exit), so an
+      // unwritten one is not passed. Swallow, never reject (see prepareSpawn).
       console.error("[tet] could not write pi's extension:", error);
     }
-    // pi's built-in themes are named after the background's kind, `dark` and `light`, and
-    // `--use-theme` sets one for this run only — its settings.json stays untouched (measured).
+    // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
+    // settings.json untouched (measured).
     args.push("--use-theme", paths.theme.kind);
     return Promise.resolve({ args });
   },
   prepareSandboxSpawn: (_cwd, paths) => {
     try {
       const extension = writePiExtension(sandboxHookDir(paths.agentDir), paths.contextFile, SANDBOX_TARGET);
-      // The file is written at its host path and read at the sandbox's — agentDir is mounted
-      // whole (sbx.ts's fixedMountSpecs) and this sits inside it. On a failed write pi is started
-      // without the argument, never pointed at a file that is not there.
-      // `-a`/`--approve` skips the project-trust dialog (pi has no other permission gate): the
-      // sandbox is the safety boundary, same reasoning as Claude Code's and opencode's own flag.
-      // The community pi-kit does not set this itself (measured, docker/sbx-kits-contrib pi/spec.yaml).
+      // Written at the host path, read at the sandbox's: agentDir is mounted whole (sbx.ts's
+      // fixedMountSpecs). On a failed write pi starts without `-e`.
+      // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the safety
+      // boundary, as for Claude Code and opencode. The community pi-kit does not set it (measured,
+      // docker/sbx-kits-contrib pi/spec.yaml).
       return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind, "-a"] };
     } catch (error) {
       console.error("[tet] could not write pi's sandbox extension:", error);
       return { args: ["--use-theme", paths.theme.kind, "-a"] };
     }
   },
-  // Measured startup: ~130 B of handshake by 120 ms, a 1037 B chunk at ~680 ms, ~3 KB in 0.9 s.
-  // With the project-trust dialog (`defaultProjectTrust: "ask"`) output stops at 1458 B until the
-  // user answers, so 1500 would spin the bar until then; 1000 clears the handshake either way.
+  // Measured startup: ~130 B handshake by 120 ms, a 1037 B chunk at ~680 ms, ~3 KB by 0.9 s. The
+  // project-trust dialog (`defaultProjectTrust: "ask"`) holds output at 1458 B until answered, so
+  // 1000 clears the handshake either way without spinning until then.
   createIsSessionReady: () => createByteThresholdCheck(1000),
-  // One Ctrl+C clears the editor; two within 500 ms (pi's handleCtrlC) exit cleanly with code 0
-  // in ~1.1 s, and 700 ms apart do nothing. TET's 250 ms gap and 2 s grace fit inside that.
+  // One Ctrl+C clears the editor; two within 500 ms (pi's handleCtrlC) exit 0 in ~1.1 s, 700 ms
+  // apart do nothing. TET's 250 ms gap and 2 s grace fit.
   quitPresses: 2
-  // Left out on purpose, each measured through this pty: takesRightMouse (no mouse reporting at
-  // all), swapsBlueMagenta (truecolor
-  // `38;2` only, no palette indices, no OSC 10/11), resolveUrlPrefix (pi wraps a long url in
-  // OSC 8 with the full url, which the renderer's linkHandler already opens).
+  // Omitted on purpose, each measured: takesRightMouse (no mouse reporting), swapsBlueMagenta
+  // (truecolor `38;2` only, no palette indices, no OSC 10/11), resolveUrlPrefix (a long url comes
+  // in OSC 8 with the full url, which the renderer's linkHandler opens).
 };

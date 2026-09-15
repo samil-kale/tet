@@ -1,8 +1,8 @@
 /*
- * VS Code's "Light Modern" (light_modern.json, with what it inherits from light_plus.json and
- * light_vs.json; the rest from the `light:` branch of the color registry). See dark-modern.css
- * for the layer itself. A handful of values are Dark Modern's rather than the light files',
- * on purpose, and say so where they stand: they read the same on either ground.
+ * VS Code's "Light Modern" (light_modern.json plus what it inherits from light_plus.json and
+ * light_vs.json; the rest from the color registry's `light:` branch). See dark-modern.css for
+ * the layer. A few values are Dark Modern's on purpose, marked where they stand: they read the
+ * same on either ground.
  */
 :root[data-theme="light-modern"] {
   color-scheme: light;
@@ -34,8 +34,7 @@
   --vscode-tab-inactiveForeground: #868686;
   --vscode-tab-border: #e5e5e5;
 
-  /* tet's own, the same as Dark Modern's: a translucent grey that reads as a neutral tint on
-     either ground — see the note there. */
+  /* tet's own, the same as Dark Modern's — see the note there. */
   --vscode-toolbar-hoverBackground: #5a5d5e50;
 
   --vscode-list-activeSelectionBackground: #e8e8e8;
@@ -120,11 +119,9 @@
   --vscode-terminal-ansiRed: #cd3131;
   --vscode-terminal-ansiGreen: #107c10;
   --vscode-terminal-ansiYellow: #949800;
-  /* Not the registry's values: opencode's own accent, drawn as ANSI blue, ends up painted from
-     this variable (buildXtermTheme swaps blue and magenta for it — see AgentDefinition's
-     swapsBlueMagenta), so this is the terminal-side half of the same orange the app chrome
-     took. Kept two shades apart from ansiMagenta, the way blue and magenta always were, rather
-     than collapsing both to one color. */
+  /* Not the registry's: opencode draws its accent as ANSI blue (buildXtermTheme swaps blue and
+     magenta for it, AgentDefinition.swapsBlueMagenta), so blue carries the chrome's orange.
+     Magenta stays two shades apart rather than collapsing both into one color. */
   --vscode-terminal-ansiBlue: var(--vscode-focusBorder);
   --vscode-terminal-ansiMagenta: var(--vscode-button-hoverBackground);
   --vscode-terminal-ansiCyan: #0598bc;

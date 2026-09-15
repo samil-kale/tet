@@ -10,15 +10,12 @@ import { isEditorTab, type PaneTab } from "./editor-tab";
 import { useAgents } from "../ui/use-agents";
 
 /**
- * A divider's position as a *share* of the room it divides, not a pixel count: `renderGrid`
- * multiplies it by `.panes-grid`'s own current measurement on every render, so a divider nobody
- * has dragged is an exact even split at any size and a dragged one stays the share it was set
- * to. A drag reports itself in pixels, the only unit `Sash` deals in, and is turned back into a
- * fraction of the room it was dragged against — see `divider` below.
+ * A divider's position as a *share* of its room, not pixels: `renderGrid` multiplies it by
+ * `.panes-grid`'s live measurement, so an undragged divider is an even split at any size. A drag,
+ * in `Sash`'s pixels, is turned back into a fraction (`divider` below).
  *
- * Restored on the next start under the project (`layoutStorageKey`). Anything but a fraction
- * strictly between 0 and 1 is ignored on both ends: read back, since the value is a file the user
- * can edit, and written, since a room too small for two minimum panes has no valid share.
+ * Persisted per project (`layoutStorageKey`). Anything outside (0, 1) is ignored both ways: read,
+ * since the user can edit it, and written, since a room too small for two panes has no share.
  */
 function useDividerFraction(projectId: string, name: string, initial: number): [number, (fraction: number) => void] {
   const [fraction, setFraction] = usePersistedNumber(layoutStorageKey(projectId, `divider.${name}`), (stored) =>
@@ -41,21 +38,20 @@ function clampPixels(pixels: number, min: number, minOther: number, containerSiz
 }
 
 /**
- * The pixel size a divider is rendered at: `fraction` of `containerSize`, clamped, since a share
- * stored against a wider room can ask for more than a narrower one has. `null` (the grid not
- * measured yet) gives `min`.
+ * A divider's pixels: `fraction` of `containerSize`, clamped — a share set in a wider room can ask
+ * for more than a narrower one has. `null` (not measured yet) gives `min`.
  */
 function pixelsFor(fraction: number, min: number, minOther: number, containerSize: number | null): number {
   return containerSize === null ? min : clampPixels(Math.round(containerSize * fraction), min, minOther, containerSize);
 }
 
-/** Every divider's own default share — what an even split is, and what "single" resets back to. */
+/** Every divider's default share, and what "single" resets to. */
 const HALF = 1 / 2;
 
-/** The tabs of a pane that has none — one shared instance, so an empty pane's prop is stable. */
+/** Shared, so an empty pane's prop is stable. */
 const NO_PANE_TABS: PaneTab[] = [];
 
-/** The pane a dragged tab is over, and the snap zone the pointer is in, if any — see `dragTarget`. */
+/** The pane a dragged tab is over, and the snap zone under the pointer, if any. */
 interface DragTarget {
   paneId: PaneId;
   zone: SnapZone | null;
@@ -70,40 +66,32 @@ function percentStyle(box: FractionBox): { left: string; top: string; width: str
 
 interface TerminalsPaneProps {
   project: Project;
-  /** This project's tabs, its editor tab last. Held by App, since the project list needs every
-   *  project's. */
+  /** This project's tabs, its editor tab last. Held by App, since the project list needs all. */
   tabs: PaneTab[];
   visible: boolean;
-  /** What the side pane beside this one shows, if it is out; the buttons in the strip show which. */
+  /** What the side pane shows, if it is out. */
   sideView: SideView | null;
   onToggleGit: () => void;
   onToggleFiles: () => void;
-  /** Bootstrap's own session listing: the one project-wide reason with no tab of its own to show
-      on, so it falls to pane "a". */
+  /** Bootstrap's session listing: project-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
-  /** A file to look at, in the project's editor tab — here, a path ctrl-clicked in a terminal. */
+  /** Opens a path ctrl-clicked in a terminal in the project's editor tab. */
   onOpenDiff: (projectId: string, path: string) => void;
   onCloseEditor: (projectId: string) => void;
-  /** This project's split state — preset, focus, and which pane every tab and its selection live in. */
   layout: ProjectLayout;
   onActivateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
-  /** A tab dropped on one of the snap zones below — the preset switch and the move in one. */
   onSnapTab: (projectId: string, tabId: string, transition: SnapTransition) => void;
   onFocusPane: (projectId: string, paneId: PaneId) => void;
-  /** The settings dialog — opened from pane "a"'s row of icon buttons. */
   onOpenSettings: () => void;
-  /** Tabs whose finished turn is still waiting to be looked at — App decides, this draws it. */
+  /** Tabs whose finished turn is not yet seen — App decides, this draws. */
   markedTabIds: string[];
-  /** Tabs stopped mid-turn on an unanswered question — decided in App for the same reason. */
+  /** Tabs stopped on an unanswered question — App decides, this draws. */
   waitingTabIds: string[];
-  /** Tabs the progress bar is currently about — shown on whichever pane each one lives in. */
+  /** Tabs the progress bar is about, shown on each one's pane. */
   startingTabIds: string[];
 }
 
-/**
- * One project's terminals: how many panes there are, how big, and which tabs each one holds.
- * See "Split view" in CLAUDE.md.
- */
+/** One project's terminals: how many panes, how big, which tabs each holds. */
 export const TerminalsPane = memo(function TerminalsPane({
   project,
   tabs,
@@ -125,51 +113,43 @@ export const TerminalsPane = memo(function TerminalsPane({
 }: TerminalsPaneProps) {
   const agents = useAgents();
   /**
-   * Where a dragged tab is: the pane under it, and what a snap zone under the pointer would do.
-   * Mirrored in a ref for the drop handler, which needs the answer synchronously without becoming
-   * a new callback on every change. What the tab came from is a ref alone: it is set on
-   * `dragstart`, before any render this state causes.
+   * Mirrored in a ref for the drop handler, which reads it synchronously without becoming a new
+   * callback on each change. The source pane is a ref alone: set on `dragstart`, before any render.
    */
   const [dragTarget, setDragTargetState] = useState<DragTarget | null>(null);
   const dragTargetRef = useRef<DragTarget | null>(null);
   const dragSource = useRef<PaneId | null>(null);
   const knownTabs = useRef<PaneTab[]>([]);
 
-  // Ctrl+clicking a file in a terminal opens it in the project's editor tab.
   useEffect(() => setRevealHandler(project.id, (path) => onOpenDiff(project.id, path)), [project.id, onOpenDiff]);
 
   const onCloseEditorHere = useCallback(() => onCloseEditor(project.id), [onCloseEditor, project.id]);
 
-  // The xterm instances live outside React, keyed by tab id. Let go of only for a tab gone for
-  // good, not one moved to another pane.
+  // Disposed only for a tab gone for good, not one moved to another pane.
   useEffect(() => {
     const previous = knownTabs.current;
     knownTabs.current = tabs;
     const ids = new Set(tabs.map((tab) => tab.tabId));
     for (const tab of previous) {
-      // The editor tab has no xterm; its editor is let go of where it closes (App).
+      // The editor tab's editor is disposed where it closes (App).
       if (!ids.has(tab.tabId) && !isEditorTab(tab)) {
         disposeTerminal(project.id, tab.tabId);
       }
     }
   }, [tabs, project.id]);
 
-  // One share per divider *line*, not per preset: every split preset that has a line reads the
-  // same stored share, so switching presets adds or removes a sash and moves nothing already on
-  // screen. Declared unconditionally, since hooks cannot follow which preset is active.
+  // One share per divider *line*, not per preset, so a preset switch moves no line on screen.
+  // Unconditional: hooks cannot follow the preset.
   const [colFraction, setColFraction] = useDividerFraction(project.id, "col", HALF);
   const [leftRowFraction, setLeftRowFraction] = useDividerFraction(project.id, "row-left", HALF);
   const [rightRowFraction, setRightRowFraction] = useDividerFraction(project.id, "row-right", HALF);
 
   const gridRef = useRef<HTMLDivElement>(null);
   /**
-   * `.panes-grid`'s own last measured size — what every divider's fraction is multiplied by in
-   * `renderGrid`. No stored value is ever rewritten: a fraction means the same thing at any size.
+   * `.panes-grid`'s last measured size, what the divider fractions multiply.
    *
-   * `useLayoutEffect`, not `useEffect`, and seeded with a synchronous `getBoundingClientRect()`
-   * rather than waiting on the observer's first callback, which is asynchronous by spec: React
-   * has the real number *before* the first paint, so a project whose persisted preset is already
-   * "cols2" shows an even split immediately rather than flashing the wrong one first.
+   * A layout effect seeded with a synchronous `getBoundingClientRect()`, since the observer's first
+   * callback is async: a restored split is right on the first paint, not flashed wrong first.
    */
   const [gridSize, setGridSize] = useState<{ width: number; height: number } | null>(null);
 
@@ -191,21 +171,19 @@ export const TerminalsPane = memo(function TerminalsPane({
     });
     observer.observe(element);
     return () => observer.disconnect();
-    // Re-seeded when the project comes on screen: hidden (`display: none`) it measured zero, and
-    // the observer's callback comes after the paint a restored split would draw at minimum widths.
+    // Re-seeded on coming on screen: hidden it measured zero, and the observer fires after the
+    // paint, which would draw a restored split at minimum widths.
   }, [visible]);
 
-  // Everything a `Pane` takes is kept stable across renders that do not change it, or its memo
-  // is switched off: a focus change, a spinner in another pane and a resize all re-render this.
-  /** Switching to "single" resets every divider; switching between two *split* presets does not. */
+  // Every `Pane` prop stays stable, or its memo is off: focus, spinners and resizes re-render this.
+  /** "single" resets every divider; a switch between two *split* presets does not. */
   const resetDividerFractions = useCallback(() => {
     setColFraction(HALF);
     setLeftRowFraction(HALF);
     setRightRowFraction(HALF);
   }, [setColFraction, setLeftRowFraction, setRightRowFraction]);
 
-  // On the preset arriving at "single" — a pane emptied and collapsed away (`collapseEmptied`,
-  // decided in `App`).
+  // On arriving at "single" — a pane collapsed away (`collapseEmptied`, in `App`).
   const previousPreset = useRef(layout.preset);
   useEffect(() => {
     if (layout.preset === "single" && previousPreset.current !== "single") {
@@ -234,7 +212,7 @@ export const TerminalsPane = memo(function TerminalsPane({
     setDragTargetState(next);
   }, []);
 
-  /** `preset` as the drop would find it — read through a ref so the drag callbacks stay stable. */
+  /** A ref so the drag callbacks stay stable. */
   const presetRef = useRef(layout.preset);
   presetRef.current = layout.preset;
 
@@ -243,10 +221,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   }, []);
 
   /**
-   * Called for every `dragover`; the state only changes when the pane or the zone does. The zones
-   * map the whole grid (`SNAP_ZONES`), so the pointer is turned into fractions of it here, the
-   * one place with the grid's own box. Left (`position` null) clears only the pane it names: a
-   * stale "left" arriving after the pointer has crossed into its neighbour must not blank it out.
+   * Every `dragover`; state changes only with the pane or zone. The pointer becomes grid fractions
+   * here (`SNAP_ZONES`). Left (`position` null) clears only its own pane: a stale "left" after
+   * crossing into the neighbour must not blank that out.
    */
   const onDragOverChange = useCallback(
     (paneId: PaneId, position: DragPosition | null) => {
@@ -258,8 +235,8 @@ export const TerminalsPane = memo(function TerminalsPane({
         return;
       }
       const grid = gridRef.current?.getBoundingClientRect();
-      // Over a tab strip the drop is a plain move into that pane, whatever zone lies under it:
-      // in cols2 the zones cover all of b, and the strip is what is left to drop into b with.
+      // Over a tab strip, a plain move whatever zone lies under it: in cols2 the zones cover all of
+      // b, leaving the strip to drop into b.
       const hit =
         position.overStrip || !grid || grid.width === 0 || grid.height === 0
           ? null
@@ -277,8 +254,7 @@ export const TerminalsPane = memo(function TerminalsPane({
     [setDragTarget]
   );
 
-  // The zone comes from state: `dragover` never sees the tab id, so the drop is the first moment
-  // both are known.
+  // `dragover` never sees the tab id, so the drop joins it with the zone.
   const onDropTab = useCallback(
     (paneId: PaneId, tabId: string) => {
       const target = dragTargetRef.current;
@@ -293,16 +269,15 @@ export const TerminalsPane = memo(function TerminalsPane({
     [setDragTarget, onSnapTab, project.id, onActivate]
   );
 
-  // Unconditional, unlike "left" above: nothing stale can follow the end of a drag, and a
-  // preview would otherwise survive an Escape.
+  // Unconditional, unlike "left": nothing stale follows a drag's end, and a preview would survive
+  // an Escape.
   const onDragEnd = useCallback(() => {
     setDragTarget(null);
     dragSource.current = null;
   }, [setDragTarget]);
 
-  // Each pane's tabs, by identity where the answer did not change. Keyed on the two fields
-  // `paneOf` reads rather than the whole layout: a selection change must not hand every pane a
-  // fresh list.
+  // Each pane's tabs, identity kept when unchanged. Keyed on the fields `paneOf` reads, not the
+  // layout: a selection change must not hand every pane a fresh list.
   const { tabPane, focusedPane } = layout;
   const paneTabsRef = useRef<Partial<Record<PaneId, PaneTab[]>>>({});
   const paneTabs = useMemo(() => {
@@ -318,8 +293,7 @@ export const TerminalsPane = memo(function TerminalsPane({
     return next;
   }, [tabs, tabPane, focusedPane]);
 
-  // Whether one of a pane's *own* tabs is what the progress bar is about, independent of
-  // `first`/`chrome`.
+  // Whether a pane's *own* tab is starting, apart from `first`/`chrome`.
   const startingHere = useMemo(() => {
     const ids = new Set(startingTabIds);
     const next: Partial<Record<PaneId, boolean>> = {};
@@ -329,9 +303,8 @@ export const TerminalsPane = memo(function TerminalsPane({
     return next;
   }, [paneTabs, startingTabIds]);
 
-  // The pane the drop would land in: the one under the pointer for a plain drop, the zone's own
-  // pane for a zone the preset already has. Not the one the tab came from, and not while a zone
-  // would switch the preset.
+  // Where the drop would land: the pane under the pointer, or a zone's pane the preset already
+  // has. Not the source pane, nor while a zone would switch the preset.
   const framedPane =
     dragTarget === null
       ? null
@@ -361,7 +334,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       markedTabIds={markedTabIds}
       waitingTabIds={waitingTabIds}
       chrome={first ? chrome : undefined}
-      // Pane "a" also carries whatever project-wide reason has no tab of its own to point at.
+      // Pane "a" also carries the project-wide reason.
       showProgress={(first && externalBusy) || (startingHere[paneId] ?? false)}
       dragOver={dragOverPane === paneId}
       onDragStart={onDragStart}
@@ -383,13 +356,11 @@ export const TerminalsPane = memo(function TerminalsPane({
       orientation={orientation}
       size={pixels}
       min={min}
-      // Sash clamps against its own container, the whole grid, while `containerSize` may be only
-      // the room left of it — the rest of the grid is "other" too, or dragging back from that
-      // edge first works off an overshoot.
+      // Sash clamps against the whole grid, `containerSize` may be only part of it: the rest is
+      // "other" too, or dragging back from that edge first works off an overshoot.
       minOther={minOther + ((orientation === "vertical" ? gridSize?.width : gridSize?.height) ?? 0) - (containerSize ?? 0)}
-      // A drag reports itself in pixels, turned back into a fraction of the same room
-      // `pixelsFor` measured it against and through the same bounds, so no share gets stored
-      // that the room cannot show.
+      // Back to a fraction of the room and bounds `pixelsFor` used, so no share is stored that
+      // the room cannot show.
       onResize={(next) => {
         if (containerSize !== null && containerSize > 0) {
           commit(clampPixels(next, min, minOther, containerSize) / containerSize);
@@ -398,17 +369,15 @@ export const TerminalsPane = memo(function TerminalsPane({
     />
   );
 
-  // Where the three divider lines are, in pixels of the grid — computed whatever the preset,
-  // since the preview below needs the line a preset switch would keep.
+  // All three lines whatever the preset: the preview needs the lines a switch would keep.
   const width = gridSize?.width ?? null;
   const height = gridSize?.height ?? null;
   const colPixels = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
   const leftRowPixels = pixelsFor(leftRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
   const rightRowPixels = pixelsFor(rightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
 
-  // The box of the pane a zone drop would add: the clamped pixels the panes are laid out at, back
-  // as shares of the grid, not the stored fractions — the preview has to agree with what the drop
-  // shows. Only for a zone that switches the preset.
+  // The pane a preset-switching zone drop would add, from the clamped pixels, not the stored
+  // fractions, so the preview agrees with the drop.
   const snapPreview =
     dragTarget?.transition && dragTarget.transition.preset !== layout.preset && gridSize !== null
       ? paneBox(dragTarget.transition.preset, dragTarget.transition.target, {
@@ -465,8 +434,8 @@ export const TerminalsPane = memo(function TerminalsPane({
     <div className={`pane-layout${visible ? "" : " pane-hidden"}`}>
       <div className="panes-grid" ref={gridRef}>
         {renderGrid()}
-        {/* An overlay and nothing more: the panes keep their sizes until the drop, since any
-            resize refits every pty under it, mid-drag — see `fitTerminal`. */}
+        {/* An overlay only: panes resize on the drop, since a resize refits every pty
+            (`fitTerminal`). */}
         {snapPreview && <div className="snap-preview" style={percentStyle(snapPreview)} />}
       </div>
     </div>

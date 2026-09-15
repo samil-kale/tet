@@ -9,10 +9,9 @@ import { opencodeSessionProvider, registerAgentDir, sessionSandbox } from "../sr
 import { encodeCwd, piSessionProvider } from "../src/main/agents/pi/sessions";
 
 /**
- * The four agents whose sessions are read off disk, against transcripts written the way the
- * CLIs write them — and, for opencode, records written the way its plugin writes them. The title rules and the turn forensics are what CLAUDE.md warns about: a
- * regression there shows the wrong title, or a spinner that never stops, with nothing to
- * catch it but this.
+ * The session providers against transcripts written the way the CLIs write them (for opencode,
+ * the way its plugin writes records). A regression in the title rules or turn forensics shows a
+ * wrong title or a spinner that never stops, caught only here.
  */
 
 const AT = "2026-03-04T10:00:00.000Z";
@@ -24,7 +23,7 @@ describe("Claude Code's transcripts", () => {
   const cwd = process.platform === "win32" ? "C:\\work\\Repo One" : "/work/repo one";
   const encoded = cwd.replace(/[^a-zA-Z0-9]/g, "-");
 
-  /** A config dir of its own per case: the provider caches by path, and every case is new. */
+  /** A fresh config dir per case: the provider caches by path. */
   function transcripts(files: Record<string, unknown[]>): string {
     const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-claude-"));
     process.env.CLAUDE_CONFIG_DIR = configDir;
@@ -250,7 +249,7 @@ describe("pi's transcripts", () => {
   const cwd = process.platform === "win32" ? "C:\\work\\Repo One" : "/work/repo one";
   const fileName = (id: string, at = AT): string => `${at.replace(/[:.]/g, "-")}_${id}.jsonl`;
 
-  /** A config dir of its own per case: the provider caches by path, and every case is new. */
+  /** A fresh config dir per case: the provider caches by path. */
   function transcripts(files: Record<string, unknown[]>, dirName = encodeCwd(cwd)): string {
     const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-"));
     process.env.PI_CODING_AGENT_DIR = agentDir;
@@ -347,8 +346,8 @@ describe("pi's transcripts", () => {
 });
 
 describe("opencode's session records", () => {
-  /** An agentDir of its own per case, registered for a cwd of its own, already seeded: the
-   *  seeding runs opencode itself, which these tests never do. */
+  /** A fresh agentDir per case, registered for its own cwd and marked seeded: seeding runs
+   *  opencode itself, which these tests never do. */
   function records(files: Record<string, unknown>): { cwd: string; dir: string } {
     const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-"));
     const cwd = path.join(agentDir, "repo");
@@ -390,7 +389,7 @@ describe("opencode's session records", () => {
     assert.deepEqual(opencodeSessionProvider.resumeArgs("ses_a"), ["--session", "ses_a"]);
     const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null } });
     const requests = path.join(path.dirname(dir), "rename");
-    // The plugin's side of it: the request appears, the record follows.
+    // Stands in for the plugin: the request appears, the record follows.
     const plugin = setInterval(() => {
       const request = path.join(requests, "ses_a");
       if (fs.existsSync(request)) {
@@ -410,11 +409,9 @@ describe("opencode's session records", () => {
 });
 
 /**
- * The same three providers read through the directory tet mounts into an sbx sandbox — the
- * sandbox's own view, so the paths are the container's (`/c/work/...`, what `toContainerPath`
- * makes of a Windows path) and the root is the mounted host directory rather than this host's
- * config. What the CLI writes in there is byte-for-byte what it writes on the host, which is
- * the whole point: only the two inputs differ.
+ * The providers read through the directory tet mounts into an sbx sandbox: paths are the
+ * container's (`/c/work/...`, as `toContainerPath` makes them) and the root is the mounted host
+ * directory. The CLI writes byte-for-byte what it writes on the host; only these two inputs differ.
  */
 describe("sessions written inside a sandbox", () => {
   const cwd = "/c/work/Repo One";
@@ -465,8 +462,8 @@ describe("sessions written inside a sandbox", () => {
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {
     const dir = root("tet-sbx-pi-");
-    // Spelled out rather than encodeCwd's: what pi on the sandbox's Linux makes of the container
-    // path, which a win32 host's own resolution would read as `C:\c\work\...`.
+    // Spelled out, not encodeCwd: pi on the sandbox's Linux encodes the container path, which a
+    // win32 host would resolve as `C:\c\work\...`.
     const sessionDir = path.join(dir, "sessions", "--c-work-Repo One--");
     fs.mkdirSync(sessionDir, { recursive: true });
     fs.writeFileSync(

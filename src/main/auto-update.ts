@@ -10,22 +10,19 @@ import { assetName, installCommand, installRoot, rootExecutable } from "../share
 import type { UpdateResult } from "../shared/release";
 import type { NoticeSeverity } from "../shared/types";
 
-/** How often to look again after the check at startup. Nothing is urgent: an update installs only
- *  once tet quits. */
+/** Not urgent: an update installs only once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
 
-/** Asking which release is the newest is one small request. */
 const CHECK_TIMEOUT_MS = 15_000;
-/** The archive is over 100 MB, on whatever connection the machine has. */
+/** The archive is over 100 MB. */
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 
 type Notify = (severity: NoticeSeverity, message: string) => void;
 
-/** The update found and unpacked this session, for `installPendingUpdate` to run. */
+/** Unpacked this session, for `installPendingUpdate`. */
 let pending: { version: string; root: string } | undefined;
 
-/** tet's data folder (data-root.ts), handed over by startAutoUpdate; `pending` is only ever set
- *  after it. */
+/** Set by startAutoUpdate, always before `pending`. */
 let dataRoot = "";
 
 function updateDir(): string {
@@ -36,7 +33,7 @@ function resultPath(): string {
   return path.join(updateDir(), "result.json");
 }
 
-/** What the last update left behind, reported once and deleted. */
+/** The last update's result, reported once and deleted. */
 function reportLastUpdate(notify: Notify): void {
   const file = resultPath();
   let result: UpdateResult;
@@ -55,9 +52,9 @@ function reportLastUpdate(notify: Notify): void {
 }
 
 /**
- * Whatever an earlier session unpacked: installed by now, or given up on. Best effort — on win32 the
- * update that ran from one of these may still hold its executable a moment after writing its result.
- * Awaited before the first check, whose `stage` may unpack into the very folder being swept.
+ * Removes earlier sessions' unpacked updates. Best effort: on win32 the updater may still hold its
+ * executable briefly after writing its result. Awaited before the first check, whose `stage` may
+ * unpack into the swept folder.
  */
 async function sweepUpdateDir(): Promise<void> {
   let entries: string[];
@@ -73,7 +70,6 @@ async function sweepUpdateDir(): Promise<void> {
   );
 }
 
-/** Whether the update can write where tet is installed, without asking for more rights. */
 function isWritable(dir: string): boolean {
   try {
     fs.accessSync(dir, fs.constants.W_OK);
@@ -83,10 +79,7 @@ function isWritable(dir: string): boolean {
   }
 }
 
-/**
- * The newest release's version, off the redirect GitHub answers `<releases>/latest` with — no API
- * request, so no API rate limit. Undefined on any failure.
- */
+/** Read off the redirect of `<releases>/latest` — no API request, no rate limit. */
 async function latestVersion(releasesUrl: string): Promise<string | undefined> {
   try {
     const response = await fetch(`${releasesUrl}/latest`, { redirect: "manual", signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
@@ -97,7 +90,7 @@ async function latestVersion(releasesUrl: string): Promise<string | undefined> {
   }
 }
 
-/** `tar` unpacks the zip as well: the one Windows ships (since 10 1803) is bsdtar. */
+/** Also unpacks the zip: Windows' tar (since 10 1803) is bsdtar. */
 function unpack(archive: string, into: string): Promise<void> {
   const tar =
     process.platform === "win32" ? path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
@@ -123,9 +116,8 @@ function findRoot(dir: string): string | undefined {
 }
 
 /**
- * Fetches and unpacks a version beside tet, ready for the quit. Fetched by this process into a
- * plain file, never through electron's download manager: on macOS that one marks what it saves as
- * quarantined, and Gatekeeper would then refuse the ad-hoc signed bundle it holds.
+ * Fetches and unpacks a version for the quit. Plain fetch, never electron's download manager: on
+ * macOS it quarantines the file, and Gatekeeper would refuse the ad-hoc signed bundle.
  */
 async function stage(releasesUrl: string, asset: string, version: string): Promise<string> {
   const dir = path.join(updateDir(), version);
@@ -150,13 +142,12 @@ async function stage(releasesUrl: string, asset: string, version: string): Promi
 }
 
 /**
- * Only for tet running as an install (`app.isPackaged`), never `npm start`. Asks the GitHub
- * Release at startup and every four hours; a newer version is fetched and unpacked right away,
- * announced once, and installed when tet quits (`installPendingUpdate`) — never in the middle of a
- * session, a terminal tab being a live agent session. Where tet cannot replace its own folder, the
+ * Installs only (`app.isPackaged`). Checks at startup and every four hours; a newer version is
+ * fetched and unpacked at once, announced once, and installed on quit (`installPendingUpdate`) —
+ * never mid-session, a tab being a live agent session. If tet cannot replace its own folder, the
  * notice carries the install command instead.
  *
- * `releasesUrl` is `RELEASES_URL` but for test/install.test.ts, which serves its own.
+ * `releasesUrl` is `RELEASES_URL` except for test/install.test.ts.
  */
 export function startAutoUpdate(installed: boolean, releasesUrl: string, tetDataRoot: string, notify: Notify): void {
   dataRoot = tetDataRoot;
@@ -175,8 +166,7 @@ export function startAutoUpdate(installed: boolean, releasesUrl: string, tetData
     }
     checking = true;
     try {
-      // Silent on failure: an offline machine would otherwise put the same notice up every four
-      // hours for something nobody asked for.
+      // Silent on failure, or an offline machine gets a notice every four hours.
       const latest = await latestVersion(releasesUrl);
       if (!latest || !semver.gt(latest, app.getVersion()) || latest === announced) {
         return;
@@ -205,10 +195,9 @@ export function startAutoUpdate(installed: boolean, releasesUrl: string, tetData
 }
 
 /**
- * Starts the update found this session, to run once this process is gone: called at the very end
- * of a quit, not a restart (a relaunched tet would hold the very folder being replaced). Run by the
- * *new* version's binary as node, from the folder it was unpacked into — there is no node on the
- * machine to count on, and the installed binary is what gets replaced.
+ * Starts the pending update to run after this process exits: at the end of a quit, not a restart
+ * (a relaunched tet would hold the folder being replaced). Run by the *new* binary as node from its
+ * unpack folder — no node on the machine to count on, and the installed binary gets replaced.
  */
 export function installPendingUpdate(): void {
   if (!pending) {

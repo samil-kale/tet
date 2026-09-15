@@ -16,8 +16,8 @@ export interface ProjectDeps {
 
 /**
  * Opens a folder as a project, shared by the add-repository dialog (`projects:open-path`) and the
- * control channel so both answer a typed path the same way. The folder may not exist; a project
- * that does not watches nothing and spawns nothing, with a notice per action to say why.
+ * control channel. A stored project whose folder is gone watches and spawns nothing, with a notice
+ * per action.
  */
 export async function addProject({ store, openProject }: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
   if (!(await fs.promises.stat(directory).then((stat) => stat.isDirectory(), () => false))) {
@@ -29,10 +29,9 @@ export async function addProject({ store, openProject }: ProjectDeps, directory:
   return { project };
 }
 
-/** Closes a project: its terminals, its repository, then the stored entry. */
 export function removeProject({ store, repositories, sessions }: ProjectDeps, projectId: string): void {
-  // Not awaited: the project is gone from the window either way, and its sessions still get their
-  // moment to end by themselves (TerminalSession.stop).
+  // Not awaited: the project leaves the window either way; its sessions still end by themselves
+  // (TerminalSession.stop).
   void sessions.close(projectId);
   repositories.close(projectId);
   store.remove(projectId);
@@ -78,8 +77,7 @@ export class ProjectStore {
     this.save();
   }
 
-  /** Puts the projects in the given order. Unknown ids are dropped, ones left out keep their place
-   *  at the end: the renderer sends the list it had on screen, which can be a moment behind. */
+  /** Unknown ids are dropped, missing ones kept at the end: the renderer's list may lag behind. */
   reorder(projectIds: string[]): void {
     const known = new Map(this.projects.map((project) => [project.id, project]));
     const ordered = projectIds
@@ -105,7 +103,7 @@ export class ProjectStore {
         );
       }
     } catch {
-      // No file yet (first start) or unreadable — start with an empty workspace.
+      // No file yet, or unreadable.
       this.projects = [];
     }
   }

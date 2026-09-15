@@ -15,16 +15,13 @@ import type { UpdateResult } from "../src/shared/release";
 import { eventually, tetCtl } from "./helpers";
 
 /**
- * What a user does with tet, on the platform this runs on: install it with the install script,
- * start it, let it find a newer version, quit, and start what the update installed. The releases
- * are served from here, standing in for GitHub's (TET_RELEASES_URL): the archive `npm run dist`
- * built into release/, and the same build packaged again one patch version up — what changes is
- * only what the update sees.
+ * Install with the script, start, find a newer version, quit, start the update. Releases are
+ * served from here in place of GitHub's (TET_RELEASES_URL): the archive `npm run dist` built, and
+ * the same build packaged again one patch version up.
  *
- * Only with TET_INSTALL_TEST=1 (the release workflow's package job), after `npm run dist`. The
- * install lands in a throwaway folder (HOME, or LOCALAPPDATA on Windows), but on Windows the Start
- * menu entry, the desktop icon and the PATH entry are the account's own. Needs a display, like
- * app.test.ts.
+ * Only with TET_INSTALL_TEST=1, after `npm run dist`. The install lands in a throwaway HOME (or
+ * LOCALAPPDATA), but on Windows the Start menu entry, desktop icon and PATH entry are the
+ * account's own. Needs a display.
  */
 
 const ENABLED = process.env.TET_INSTALL_TEST === "1";
@@ -41,13 +38,12 @@ let releasesUrl: string;
 let env: NodeJS.ProcessEnv;
 let current: string;
 let next: string;
-/** The version `/latest` answers with, raised once the first one is installed. */
+/** What `/latest` answers, raised once the first version is installed. */
 let served: string;
 const archives = new Map<string, string>();
 /**
- * Worked out once, before tet first starts, as app.test.ts does: `findControlPort` looks for a
- * free port, and asked again while tet listens it names the one after. Both starts share the
- * profile, so tet takes the same port again.
+ * Found once before tet starts: asked while tet listens, `findControlPort` names the next free
+ * port. Both starts share the profile, so tet takes the same port again.
  */
 let port: number;
 
@@ -63,7 +59,7 @@ function installedRoot(): string {
   }
 }
 
-/** Asynchronously, and not for style: the releases it fetches are served from this very event loop. */
+/** Async because the releases it fetches are served from this event loop. */
 async function install(): Promise<void> {
   const [command, args] =
     process.platform === "win32"
@@ -77,7 +73,7 @@ async function install(): Promise<void> {
   assert.equal(status, 0, `install script\n${output}`);
 }
 
-/** The installed executable, started directly: `open` on macOS would not hand tet this environment. */
+/** Started directly: `open` on macOS would not pass this environment. */
 function startTet(): void {
   const args = [`--user-data-dir=${userData}`, "--allow-shell-only"];
   if (process.platform === "linux") {
@@ -105,7 +101,7 @@ function alive(pid: number): boolean {
   }
 }
 
-/** The quit a user gives, per platform: closing the window, SIGTERM, Cmd+Q's Apple Event. */
+/** A user's quit per platform: closing the window, SIGTERM, Cmd+Q's Apple Event. */
 function quit(pid: number): void {
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/pid", String(pid)], { stdio: "ignore" });
@@ -129,8 +125,8 @@ function kill(pid: number): void {
 }
 
 /**
- * This checkout packaged again with its version raised, for this platform and architecture alone.
- * A target named on the command line overrides the config's list of architectures.
+ * This checkout packaged with its version raised, for this platform and arch only (a target on the
+ * command line overrides the config's architectures).
  */
 function packageNext(): string {
   const output = path.join(work, "next");
@@ -204,7 +200,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
       await eventually("tet gone", () => !alive(running.pid), 30_000).catch(() => undefined);
     }
     server?.close();
-    // A killed tet's processes and a pty's console host hold its files a while longer on win32.
+    // On win32 a killed tet's processes and a pty's console host hold files a while longer.
     await eventually(
       `${work} removed`,
       () => {
@@ -230,7 +226,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
         { encoding: "utf8" }
       );
       const [target, args] = link.stdout.trim().split("|");
-      // Real paths on both sides: a runner's temp directory can come as an 8.3 short name.
+      // Real paths on both sides: a runner's temp directory can be an 8.3 short name.
       assert.equal(fs.realpathSync.native(target), fs.realpathSync.native(rootExecutable(installedRoot())), "the Start menu entry, on TET.exe");
       assert.equal(args, "", "the Start menu entry, without arguments");
       assert.ok(fs.existsSync(path.join(installedRoot(), "bin", "tet.cmd")), "the tet command");
@@ -248,7 +244,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
   it("fetches the newer version, and installs it once tet has quit", async () => {
     const running = await version();
     assert.ok(running, "tet running");
-    // Unpacked beside tet, and the archive gone: what arms the update for the quit.
+    // Unpacked, and the archive gone: the update is armed for the quit.
     const staged = path.join(userData, "update", next);
     await eventually(
       "the update unpacked",

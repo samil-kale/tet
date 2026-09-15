@@ -4,19 +4,17 @@ import type { languages } from "monaco-editor";
 import type { HighlighterCore } from "shiki/core";
 
 /**
- * `monaco-core.ts`, not monaco's `editor.main`: colouring goes through tet's own shiki
- * instance (`@shikijs/monaco`), so no language service is loaded and no Monarch tokenizer is
- * registered. Nothing here is evaluated until an editor is opened.
+ * `monaco-core.ts`, not `editor.main`: shiki colors (`@shikijs/monaco`), so no language service or
+ * Monarch tokenizer is loaded. Evaluated only once an editor opens.
  */
 export type Monaco = typeof import("./monaco-core");
 
 let monacoPromise: Promise<Monaco> | undefined;
 
-/** Loads monaco once, sharing the promise across every project's editor (`editor-views.ts`). */
+/** One monaco for every project's editor (`editor-views.ts`). */
 export function loadMonaco(): Promise<Monaco> {
   if (!monacoPromise) {
-    // Set once, before the first editor. `getWorker`, not `getWorkerUrl`: monaco makes a module
-    // worker from the latter, which fails to start from a `file://` origin.
+    // `getWorker`, not `getWorkerUrl`: the latter makes a module worker, which fails from `file://`.
     (self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
       getWorker: () => new Worker("./editor.worker.js")
     };
@@ -26,10 +24,9 @@ export function loadMonaco(): Promise<Monaco> {
 }
 
 /**
- * Comment tokens, brackets, auto-closing pairs, on-enter rules and folding markers per grammar
- * (`GRAMMARS` in diff-highlight.ts), read off monaco's own language definitions: shiki only
- * colours, and without these toggle comment, bracket matching and auto-closing do nothing. Spelled
- * out per import for esbuild, like `GRAMMARS`; a grammar monaco has no definition for gets none.
+ * Monaco's language configurations (comments, brackets, auto-closing, folding) per `GRAMMARS` entry:
+ * shiki only colors, and without these toggle comment, bracket matching and auto-closing do nothing.
+ * One import each for esbuild; a grammar monaco has no definition for gets none.
  */
 const LANGUAGE_CONFIGURATIONS: Record<string, () => Promise<{ conf: languages.LanguageConfiguration }>> = {
   bat: () => import("monaco-editor/languages/definitions/bat/bat.js"),
@@ -72,17 +69,14 @@ const LANGUAGE_CONFIGURATIONS: Record<string, () => Promise<{ conf: languages.La
   yaml: () => import("monaco-editor/languages/definitions/yaml/yaml.js")
 };
 
-/** Languages already wired into monaco. */
 const registered = new Set<string>();
-/** Whether `applyChrome` has run and still stands — false again after `shikiToMonaco` re-themes. */
+/** False again after `shikiToMonaco` re-themes. */
 let chromeApplied = false;
 
 /**
- * Wires a language into monaco through shiki, so a token is colored by shiki's grammar.
- * `shikiToMonaco` only sees languages loaded and registered at call time, so it
- * re-runs per new grammar, and each run redefines the theme from shiki's colors — `applyChrome`
- * must follow every run. It must run at least once even for plaintext (`language: null`): an
- * unknown theme name makes monaco fall back to its built-in light theme.
+ * Wires a language into monaco through shiki. `shikiToMonaco` sees only languages registered at call
+ * time, so it re-runs per grammar and redefines the theme each time — `applyChrome` must follow. It
+ * runs even for plaintext (`null`): an unknown theme name falls back to monaco's light theme.
  */
 export async function ensureLanguage(monaco: Monaco, language: string | null): Promise<void> {
   const shiki = await highlighter();
@@ -94,8 +88,7 @@ export async function ensureLanguage(monaco: Monaco, language: string | null): P
     }
     registered.add(language);
     const { shikiToMonaco } = await import("@shikijs/monaco");
-    // @shikijs/monaco is typed against `monaco-editor-core`, not `monaco-editor`'s re-export of
-    // the same API.
+    // @shikijs/monaco is typed against `monaco-editor-core`, not `monaco-editor`'s re-export.
     shikiToMonaco(shiki, monaco as never);
     chromeApplied = false;
   }
@@ -106,12 +99,9 @@ export async function ensureLanguage(monaco: Monaco, language: string | null): P
 }
 
 /**
- * Turns shiki's theme into a monaco one. `defineTheme` only inherits from monaco's built-in
- * bases, not from another custom theme, so this rebuilds shiki's rules through the same
- * `textmateThemeToMonacoTheme` that `@shikijs/monaco` uses. The editor surface is already
- * patched with tet's `--vscode-*` values by `loadTheme` (`diff-highlight.ts`); `buildMonacoColors`
- * adds the chrome shiki has no notion of — menus, inputs, lists.
- *
+ * Shiki's theme as a monaco one. `defineTheme` inherits only from built-in bases, so shiki's rules
+ * are rebuilt through `@shikijs/monaco`'s `textmateThemeToMonacoTheme`. The editor surface is
+ * patched by `loadTheme` (`diff-highlight.ts`); `buildMonacoColors` adds the chrome shiki lacks.
  * Must resolve before `monaco.editor.create`, or the editor paints once in monaco's own colors.
  */
 async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void> {
@@ -123,10 +113,9 @@ async function applyChrome(monaco: Monaco, shiki: HighlighterCore): Promise<void
 }
 
 /**
- * Switches shiki and monaco to the theme with this id, once its stylesheet is on the root element.
- * `setTheme` is monaco's global, so every editor already open takes it. `shikiToMonaco` runs again
- * when it has run before: its token provider only knows the themes loaded at the time it ran. A
- * monaco not loaded yet reads the theme when it is.
+ * Switches shiki and monaco to theme `id`, once its stylesheet is applied. `setTheme` is global, so
+ * open editors follow. `shikiToMonaco` re-runs if it ran before: its token provider knows only the
+ * themes loaded then. A monaco not loaded yet picks the theme up on load.
  */
 export async function switchEditorTheme(id: string): Promise<void> {
   await switchHighlightTheme(id);
@@ -142,11 +131,7 @@ export async function switchEditorTheme(id: string): Promise<void> {
   chromeApplied = true;
 }
 
-/**
- * Options for the editor tab's editor, 13px/18px and stripped of everything a code editor
- * offers that this one does not: no bracket-pair colors, no suggestions, no sticky scroll, no
- * minimap. The diff half is `diffEditorOptions`; both go into the same construction call.
- */
+/** The editor tab's options, stripped of suggestions, minimap and the like. See `diffEditorOptions`. */
 export function editorOptions(fontFamily: string): Record<string, unknown> {
   return {
     theme: highlightTheme(),
@@ -168,19 +153,14 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
 }
 
 /**
- * The diff half of the same editor. Inline, never two columns — a side-by-side text diff is one of
- * the things the git half deliberately does not do — and the whole file rather than hunks, which is
- * what leaves the overview ruler beside the scrollbar as the way to find the changes: it is drawn
- * into its own strip there, and a click on it scrolls like a click on the scrollbar itself.
+ * The diff half. Inline — a side-by-side text diff is deliberately not offered — and the whole file,
+ * not hunks, so the overview ruler beside the scrollbar is how changes are found (a click scrolls).
+ * Whitespace-only changes never count; hunk boundaries are monaco's (`advanced`), not git's.
  *
- * Whitespace-only differences never count (`ignoreTrimWhitespace`), and the hunk boundaries are
- * monaco's (`advanced`), not git's. Left at its default on purpose: `renderGutterMenu`, whose
- * "Revert Block" button takes one block back in the editor — a save away from disk, and never a
- * git discard; `maxFileSize`, whose 50 MB our own 4 MB ceiling keeps out of reach; and
- * `renderMarginRevertIcon`, which inline mode ignores outright.
- *
- * Several of these are monaco's defaults too, and they are spelled out anyway: each one is a
- * decision the editor tab rests on, and a default is not a promise across upgrades.
+ * Left at default on purpose: `renderGutterMenu` (its "Revert Block" edits the buffer, a save away
+ * from disk, never a git discard); `maxFileSize` (50 MB, beyond our 4 MB ceiling);
+ * `renderMarginRevertIcon` (ignored inline). Defaults below are spelled out: each is a decision the
+ * tab rests on, and a default is no promise across upgrades.
  */
 export function diffEditorOptions(): Record<string, unknown> {
   return {

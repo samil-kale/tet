@@ -1,19 +1,16 @@
 /**
- * Monaco's `editor.main` pulls in ~80 Monarch languages plus the CSS/HTML/JSON/TypeScript
- * language services, each with a worker; colouring goes through shiki (`editor.ts`) instead.
- * 0.56.0 ships no narrower entry point, so this file reproduces `editor.main.js`'s import list
- * minus the language blocks and every contribution that only talks to a language provider
- * (hover, suggestions, format, rename, go-to-definition, ...). Re-diff against
- * `node_modules/monaco-editor/editor/editor.main.js` on a monaco upgrade — the list is not a
- * public API.
+ * `editor.main` pulls in ~80 Monarch languages and four language services with workers; tet colors
+ * through shiki (`editor.ts`). 0.56.0 has no narrower entry point, so this is `editor.main.js`'s
+ * import list minus the languages and every contribution that only talks to a language provider
+ * (hover, suggestions, format, rename, go-to-definition, ...). Not a public API: re-diff against
+ * `node_modules/monaco-editor/editor/editor.main.js` on a monaco upgrade.
  */
 import "monaco-editor/editor/contrib/anchorSelect/browser/anchorSelect.js";
 import "monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js";
 import "monaco-editor/editor/contrib/caretOperations/browser/transpose.js";
 import "monaco-editor/editor/contrib/clipboard/browser/clipboard.js";
 import "monaco-editor/editor/browser/widget/codeEditor/codeEditorWidget.js";
-// monaco-editor's package.json "exports" maps "./*" to "./esm/vs/*.js", appending .js even to a
-// .css request. A relative path bypasses the map — hence the two CSS imports look unlike the rest.
+// A relative path: monaco-editor's "exports" maps "./*" to "./esm/vs/*.js", appending .js to .css.
 import "../../../node_modules/monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css";
 import "monaco-editor/editor/contrib/comment/browser/comment.js";
 import "monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js";
@@ -35,13 +32,12 @@ import "monaco-editor/editor/contrib/links/browser/links.js";
 import "monaco-editor/editor/contrib/longLinesHelper/browser/longLinesHelper.js";
 import "monaco-editor/editor/contrib/multicursor/browser/multicursor.js";
 // placeholderText.contribution.js left out: no editor here sets a placeholder.
-// standaloneCommandsQuickAccess.js (F1's command palette) deliberately left out, and with it
-// standaloneHelpQuickAccess.js, which would only list go-to-line; standaloneGotoSymbolQuickAccess.js
-// needs a document symbol provider, which only a language service registers.
+// standaloneCommandsQuickAccess.js (F1's palette) left out on purpose, and standaloneHelpQuickAccess.js
+// with it (it would list only go-to-line); standaloneGotoSymbolQuickAccess.js needs a language service.
 import "monaco-editor/editor/contrib/readOnlyMessage/browser/contribution.js";
 import "monaco-editor/editor/contrib/sectionHeaders/browser/sectionHeaders.js";
 import "monaco-editor/editor/contrib/smartSelect/browser/smartSelect.js";
-// snippetController2.js left out: snippets only arrive through suggestions, which are off.
+// snippetController2.js left out: snippets arrive only through suggestions, which are off.
 import "monaco-editor/editor/contrib/toggleTabFocusMode/browser/toggleTabFocusMode.js";
 import "monaco-editor/editor/contrib/tokenization/browser/tokenization.js";
 import "monaco-editor/editor/contrib/unicodeHighlighter/browser/unicodeHighlighter.js";

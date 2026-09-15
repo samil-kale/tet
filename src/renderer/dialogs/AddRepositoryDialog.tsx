@@ -13,8 +13,8 @@ import { CloseIcon, PlusIcon, SpinnerIcon } from "../ui/icons";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
 
-/** The four ways a repository comes in: picked off an account's list, cloned from a url, added
- *  from the filesystem, or created empty. Not part of Dialog.tsx, which puts one question. */
+/** Picked off an account's list, cloned from a url, added from disk, or created empty. Not in
+ *  Dialog.tsx, which asks one question. */
 type Mode = "remote" | "clone" | "add" | "create";
 
 const MODES: { id: Mode; label: string }[] = [
@@ -27,13 +27,13 @@ const MODES: { id: Mode; label: string }[] = [
 const PROVIDER_LABEL: Record<ProviderId, string> = { github: "GitHub", gitlab: "GitLab" };
 const DEFAULT_HOST: Record<ProviderId, string> = { github: "github.com", gitlab: "gitlab.com" };
 
-/** The folder a url clones into: git's own rule, the last path segment without ".git". */
+/** The folder a url clones into, by git's rule: the last path segment without ".git". */
 function cloneFolder(url: string): string {
   const segment = url.replace(/[/\\]+$/, "").split(/[/\\:]/).pop() ?? "";
   return segment.replace(/\.git$/, "");
 }
 
-/** The host an http url names, and "" for anything that is not one. */
+/** An http url's host, or "". */
 function hostOf(url: string): string {
   try {
     return new URL(url.trim()).host;
@@ -42,12 +42,12 @@ function hostOf(url: string): string {
   }
 }
 
-/** Which of the two a host is likely to be. A guess: a self-hosted one gives nothing away. */
+/** A guess by name; a self-hosted host gives nothing away. */
 function guessProvider(host: string): ProviderId {
   return host.includes("gitlab") ? "gitlab" : "github";
 }
 
-/** Which host family a token belongs to — each is validated against its own API. */
+/** Which provider a token is for; each validates against its own API. */
 function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (provider: ProviderId) => void }) {
   return (
     <div className="dialog-field">
@@ -71,24 +71,24 @@ function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (p
 interface PathFieldProps {
   label: string;
   value: string;
-  /** The native picker's window title, which is all the picker says about why it is open. */
+  /** The native picker's window title. */
   pickTitle: string;
   onChange: (value: string) => void;
-  /** Where the dialog's focus effect reaches the input, when this is a mode's first field. */
+  /** For the dialog's focus effect, when this is a mode's first field. */
   inputRef?: React.Ref<HTMLInputElement>;
 }
 
-/** The folder the picker opens in when the field is empty. Kept in the renderer's own storage:
- *  it describes how this window is used, not any one project; every such field shares it. */
+/** Where the picker opens for an empty field. Renderer storage, shared by every such field: it
+ *  describes this window's use, not a project. */
 const LAST_DIRECTORY_KEY = "tet.dialog.lastDirectory";
 
 function PathField({ label, value, pickTitle, onChange, inputRef }: PathFieldProps) {
   const browse = async (): Promise<void> => {
-    // What the field already names comes first, being the more specific answer.
+    // The field's own value is more specific, so it wins.
     const start = value.trim() || localStorage.getItem(LAST_DIRECTORY_KEY) || undefined;
     const picked = await window.tet.projects.pickDirectory(pickTitle, start);
     if (picked) {
-      // A folder that is itself a repository is not where the picker opens next; its parent is.
+      // A picked repository's parent is where the picker opens next.
       localStorage.setItem(LAST_DIRECTORY_KEY, await window.tet.projects.directoryToRemember(picked));
       onChange(picked);
     }
@@ -110,14 +110,14 @@ interface AccountFormProps {
   onAdded: (account: ProviderAccount) => void;
 }
 
-/** Provider, host and token; the token is validated on the way in and never shown again. */
+/** Provider, host and token; the token is validated on entry and never shown again. */
 function AccountForm({ onAdded }: AccountFormProps) {
   const [provider, setProvider] = useState<ProviderId>("github");
   const [host, setHost] = useState(DEFAULT_HOST.github);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
 
-  /** Switching the provider replaces the host only while it is still the other one's default. */
+  /** Replaces the host only while it is empty or a provider default. */
   const pick = (next: ProviderId): void => {
     setProvider(next);
     setHost((current) =>
@@ -167,7 +167,7 @@ function AccountForm({ onAdded }: AccountFormProps) {
           }}
         />
       </label>
-      {/* Its own row rather than the dialog's, whose Cancel closes the whole thing. */}
+      {/* Its own row: the dialog's Cancel closes the whole dialog. */}
       <div className="dialog-buttons">
         <button
           type="button"
@@ -183,7 +183,7 @@ function AccountForm({ onAdded }: AccountFormProps) {
   );
 }
 
-/** Everything before the last segment of a full name: the group or owner it sits in. */
+/** A full name's group or owner: everything before the last segment. */
 function namespaceOf(fullName: string): string {
   const cut = fullName.lastIndexOf("/");
   return cut === -1 ? "" : fullName.slice(0, cut);
@@ -191,15 +191,14 @@ function namespaceOf(fullName: string): string {
 
 interface Namespace {
   path: string;
-  /** How many repositories the entry covers, everything below it included. */
+  /** Repositories covered, subgroups included. */
   count: number;
-  /** How far the path is nested, which is what the entry is indented by. */
+  /** Nesting level, the entry's indent. */
   depth: number;
 }
 
-/** The filter's entries: every level of every namespace, whether or not a repository sits in one
- *  directly. A GitLab group nests several deep and picking it covers its subgroups, so the
- *  counting goes by prefix and a parent's number is the sum below it. */
+/** The filter's entries: every level of every namespace, even one holding no repository directly.
+ *  A GitLab group nests and covers its subgroups, so counts go by prefix. */
 function namespacesOf(repos: RemoteRepository[]): Namespace[] {
   const counts = new Map<string, number>();
   for (const repo of repos) {
@@ -214,26 +213,26 @@ function namespacesOf(repos: RemoteRepository[]): Namespace[] {
     .map(([path, count]) => ({ path, count, depth: path.split("/").length - 1 }));
 }
 
-/** In a namespace means in it or in anything below it, never merely starting with its name. */
+/** In the namespace or below it — not merely sharing its name as a prefix. */
 function inNamespace(fullName: string, namespace: string): boolean {
   const own = namespaceOf(fullName);
   return own === namespace || own.startsWith(`${namespace}/`);
 }
 
 interface RemoteTabProps {
-  /** Jumps to the clone tab with the repository's url, name and account filled in. */
+  /** Opens the clone tab with url, name and account filled in. */
   onClone: (repo: RemoteRepository, accountId: string) => void;
 }
 
 function RemoteTab({ onClone }: RemoteTabProps) {
-  /** null while the stored accounts are still being asked for. */
+  /** null while loading. */
   const [accounts, setAccounts] = useState<ProviderAccount[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** Loaded lists by account, for the lifetime of the dialog. */
+  /** Loaded lists by account, kept while the dialog is open. */
   const [repos, setRepos] = useState<Record<string, RemoteRepository[]>>({});
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
-  /** The group picked in this dialog, "" for all of them; null while none was picked here. */
+  /** The group picked in this dialog, "" for all; null while none was picked here. */
   const [namespace, setNamespace] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
@@ -241,13 +240,13 @@ function RemoteTab({ onClone }: RemoteTabProps) {
     void window.tet.providers.accounts().then((list) => {
       setAccounts(list);
       setSelectedId(list[0]?.id ?? null);
-      // Straight into the form when there is nothing yet.
+      // Straight into the form when there is no account.
       setAdding(list.length === 0);
     });
   }, []);
 
-  // The groups are the listed account's own, so a pick made in another would filter this list
-  // to nothing. Back to null rather than "": the next account opens at its own stored group.
+  // Groups are per account, so a pick would filter another's list to nothing. null, not "", so
+  // the next account opens at its stored group.
   useEffect(() => {
     setNamespace(null);
   }, [selectedId]);
@@ -272,19 +271,19 @@ function RemoteTab({ onClone }: RemoteTabProps) {
     });
     return () => {
       cancelled = true;
-      // The next run only turns it back on when it fetches, so switching to an already-listed
-      // account leaves no spinner standing over that list.
+      // The next run turns it on only when it fetches, so an already-listed account shows no
+      // spinner.
       setLoading(false);
     };
   }, [selectedId, repos]);
 
   const accountAdded = (account: ProviderAccount): void => {
-    // Replacing, not just appending: entering a fresh token answers with the same account id.
+    // Replace, not append: a fresh token answers with the same account id.
     setAccounts((current) => [
       ...(current ?? []).filter((entry) => entry.id !== account.id),
       account
     ]);
-    // A re-entered token may reach further than the old one did, so the cached list is stale.
+    // A re-entered token may reach further, so the cached list is stale.
     setRepos((current) => {
       const next = { ...current };
       delete next[account.id];
@@ -310,7 +309,7 @@ function RemoteTab({ onClone }: RemoteTabProps) {
     setSelectedId((current) => (current === account.id ? (remaining[0]?.id ?? null) : current));
   };
 
-  /** Keeps the pick with the account it was made in, so the tab opens there next time. */
+  /** Stores the pick on its account, so the tab opens there next time. */
   const pickNamespace = (next: string): void => {
     setNamespace(next);
     if (selectedId !== null) {
@@ -324,9 +323,8 @@ function RemoteTab({ onClone }: RemoteTabProps) {
   const list = selectedId !== null ? repos[selectedId] : undefined;
   const query = filter.trim().toLowerCase();
   const groups = namespacesOf(list ?? []);
-  /** What the dropdown stands at: this dialog's pick, else the account's stored group, else the
-   *  first row's (the list arrives sorted by recent activity). Back to all of them only when a
-   *  stored group is gone from the list, where it would filter everything away. */
+  /** The dropdown's value: this dialog's pick, else the stored group, else the first row's (the
+   *  list is sorted by recent activity). "All" only when that group is gone from the list. */
   const stored = (accounts ?? []).find((entry) => entry.id === selectedId)?.namespace;
   const wanted = namespace ?? stored ?? (list?.[0] ? namespaceOf(list[0].fullName) : "");
   const active = wanted === "" || groups.some((group) => group.path === wanted) ? wanted : "";
@@ -382,7 +380,7 @@ function RemoteTab({ onClone }: RemoteTabProps) {
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
             />
-            {/* Only once there is something to narrow down to. */}
+            {/* Only with more than one group. */}
             {groups.length > 1 && (
               <Dropdown
                 value={active}
@@ -391,7 +389,7 @@ function RemoteTab({ onClone }: RemoteTabProps) {
                   { value: "", label: `All repositories (${list?.length ?? 0})` },
                   ...groups.map((group) => ({
                     value: group.path,
-                    // Non-breaking, since a leading plain space in the rendered label is collapsed.
+                    // Non-breaking: leading plain spaces collapse.
                     label: `${"\u00a0\u00a0".repeat(group.depth)}${group.path} (${group.count})`
                   }))
                 ]}
@@ -429,9 +427,9 @@ function RemoteTab({ onClone }: RemoteTabProps) {
 type CloneAuthMode = "account" | "token";
 
 interface CloneAuthProps {
-  /** The stored accounts for this url's own host; a token for another host is no use here. */
+  /** The stored accounts for this url's host. */
   accounts: ProviderAccount[];
-  /** Already resolved: "token" whenever there is no account to pick, whatever was switched to. */
+  /** Resolved: "token" whenever there is no account to pick. */
   mode: CloneAuthMode;
   onMode: (mode: CloneAuthMode) => void;
   accountId: string | null;
@@ -442,8 +440,8 @@ interface CloneAuthProps {
   onToken: (token: string) => void;
 }
 
-/** How to authenticate a clone that came back asking for credentials: a stored account, or a
- *  token typed in now and kept as an account. Drawn only when there is an account to pick. */
+/** Credentials for a clone that came back `authRequired`: a stored account, or a token typed now
+ *  and kept as an account. The switch is drawn only when there is an account to pick. */
 function CloneAuth({
   accounts,
   mode,
@@ -515,14 +513,13 @@ interface AddRepositoryDialogProps {
 export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");
-  /** Where the new folder goes (clone and create); the folder that already exists (add). */
+  /** The parent of the new folder (clone, create), or the existing folder (add). */
   const [directory, setDirectory] = useState("");
-  /** null follows the url; a string is the user's own and stays. */
+  /** null follows the url; a string is the user's and stays. */
   const [name, setName] = useState<string | null>(null);
-  /** The account whose token authenticates the clone: the remote tab's row, or CloneAuth's pick. */
+  /** The account authenticating the clone: the remote tab's row, or CloneAuth's pick. */
   const [accountId, setAccountId] = useState<string | null>(null);
-  /** The credentials block: null until a clone asked for credentials, then this host's own
-   *  accounts, of which there may be none. */
+  /** null until a clone asked for credentials, then this host's accounts (maybe none). */
   const [authAccounts, setAuthAccounts] = useState<ProviderAccount[] | null>(null);
   const [authMode, setAuthMode] = useState<CloneAuthMode>("account");
   const [token, setToken] = useState("");
@@ -530,7 +527,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   const [busy, setBusy] = useState(false);
   const firstField = useRef<HTMLInputElement>(null);
 
-  // The focus lands in the first field of the mode on screen.
+  // Focus the current mode's first field.
   useEffect(() => {
     firstField.current?.focus();
   }, [mode]);
@@ -538,9 +535,9 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   useEscape(onClose);
 
   const folderName = name ?? cloneFolder(url.trim());
-  // With no account for this host the token applies however the switch stands.
+  // With no account for this host, the token applies whatever the switch says.
   const authWith: CloneAuthMode = authAccounts?.length ? authMode : "token";
-  /** Nothing to answer while the block is down; once it is up, its half has to be filled in. */
+  /** True while no credentials are asked; otherwise the chosen half must be filled in. */
   const authAnswered =
     authAccounts === null || (authWith === "token" ? token.trim() !== "" : accountId !== null);
   const ready =
@@ -552,8 +549,8 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
           ? directory.trim() !== "" && folderName.trim() !== ""
           : false;
 
-  /** Puts the credentials block up: this host's accounts, and a provider guessed from its name
-   *  for the token half. Asked for when needed rather than kept current. */
+  /** Shows the credentials block: this host's accounts, and a guessed provider for the token.
+   *  Read on demand, not kept current. */
   const askForCredentials = async (): Promise<void> => {
     const host = hostOf(url);
     const stored = await window.tet.providers.accounts();
@@ -567,8 +564,8 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   const cloneRepository = async (): Promise<AddRepositoryResult> => {
     let id = accountId ?? undefined;
     if (authAccounts !== null && authWith === "token") {
-      // Validated and stored on the way through: the same call replaces an expired account's
-      // token, and one the host rejects fails here, before git is run again.
+      // Validated and stored first: this replaces an expired account's token, and a rejected one
+      // fails here, before git runs again.
       const added = await window.tet.providers.addAccount(tokenProvider, hostOf(url), token.trim());
       if (!added.account) {
         return { error: added.error ?? "The token could not be verified", authRequired: true };
@@ -593,7 +590,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
         return;
       }
       notify("error", result.error ?? "The repository could not be added");
-      // Only on the way in: a second failure must not throw away what was typed.
+      // Only the first time: a second failure must not discard what was typed.
       if (result.authRequired && authAccounts === null) {
         await askForCredentials();
       }
@@ -602,19 +599,18 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
     }
   };
 
-  // Fields keep what was typed across a tab switch; only the name resets, only clone deriving it.
+  // Fields survive a tab switch; only the name resets, since only clone derives it.
   const switchMode = (next: Mode): void => {
     setMode(next);
     setName(null);
   };
 
-  /** A remote row's Clone: the clone tab, filled in, with the account's token along. */
+  /** A remote row's Clone: the clone tab filled in, with the row's account. */
   const cloneFromRemote = (repo: RemoteRepository, fromAccountId: string): void => {
     setUrl(repo.cloneUrl);
     setName(repo.name);
     setAccountId(fromAccountId);
-    // A block a previous url put up would hold this clone back for a token and use that instead
-    // of the row's own account.
+    // A block left from a previous url would demand a token instead of using the row's account.
     setAuthAccounts(null);
     setToken("");
     setMode("clone");
@@ -654,7 +650,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
               placeholder="https://github.com/owner/repository.git"
               onChange={(event) => {
                 setUrl(event.target.value);
-                // Edited by hand: the remote tab's account must not be offered to a new host.
+                // Hand-edited: the remote tab's account must not carry over to a new host.
                 setAccountId(null);
                 setAuthAccounts(null);
                 setToken("");

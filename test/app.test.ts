@@ -15,12 +15,11 @@ import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "
 import { eventually, tetCtl } from "./helpers";
 
 /**
- * The real app, driven through tet-ctl alone: started with a profile of its own
- * (`--user-data-dir`, see main.ts) and a token handed in, then asked to open a project, spawn
- * a tab, change a setting and restart. Nothing looks into the window — what the renderer does
- * shows in the main process: a tab it never drew never spawns, and stays "ready".
+ * The real app, driven through tet-ctl alone, on a profile of its own (`--user-data-dir`) with a
+ * token handed in. Nothing looks into the window — the renderer shows in the main process: a tab
+ * it never drew never spawns, and stays "ready".
  *
- * Needs a display (xvfb on a Linux runner) and git, like the app itself.
+ * Needs a display (xvfb on a Linux runner) and git.
  */
 
 const ROOT = path.join(__dirname, "..");
@@ -48,7 +47,7 @@ async function alive(): Promise<number | undefined> {
 
 function kill(target: number): void {
   if (process.platform === "win32") {
-    // The whole tree: the app's shell tab is a process of its own under it.
+    // The whole tree: a shell tab is a process of its own under the app.
     spawnSync("taskkill", ["/pid", String(target), "/t", "/f"], { stdio: "ignore" });
   } else {
     try {
@@ -68,10 +67,8 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     env[CONTROL_ENV.port] = String(port);
     const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
     if (process.platform === "linux") {
-      // The GitHub-hosted ubuntu-latest runner ships chrome-sandbox without the setuid bit, and
-      // its AppArmor profile also blocks the unprivileged-userns fallback — Electron aborts on
-      // launch rather than run unsandboxed. The installed `tet` command and desktop entry pass the
-      // same flag on Linux for the same reason (scripts/install.sh).
+      // ubuntu-latest ships chrome-sandbox without the setuid bit and AppArmor blocks the userns
+      // fallback, so Electron aborts on launch. The installed `tet` passes it too (install.sh).
       args.push("--no-sandbox");
     }
     child = spawn(electronPath, args, {
@@ -83,23 +80,20 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
   });
 
   after(async () => {
-    // The pid tet reported, or — when it never answered — the electron that was spawned, so a
-    // startup that failed leaves no process behind holding the profile directory.
+    // The spawned electron when tet never answered, so a failed startup leaves nothing holding
+    // the profile directory.
     const target = pid ?? child?.pid;
     if (target !== undefined) {
       kill(target);
     }
     await eventually("tet gone", async () => (await alive()) === undefined, 10_000).catch(() => undefined);
     for (const dir of [userData, repo]) {
-      // A pty's conhost can hold a file a moment longer than the app; the OS temp dir is where
-      // this is allowed to fail.
+      // A pty's conhost can hold a file a moment longer than the app; in the temp dir that's fine.
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
     }
-    // Last, after the cleanup that must happen either way: an exception nobody handled is a
-    // failure of this run even when every assertion passed, and the stack is right here in the
-    // app's own stderr. Without it such a fault only showed as whatever it happened to break —
-    // once, as a four-minute timeout, because Electron's own dialog had frozen the app. Covers
-    // the instance this spawned; the one `restart-app` leaves behind is no longer on this pipe.
+    // After the cleanup: an unhandled exception fails the run even when every assertion passed —
+    // otherwise it shows only as what it broke (e.g. a timeout behind Electron's frozen dialog).
+    // Covers the spawned instance only; the one `restart-app` leaves is not on this pipe.
     const uncaught = stderr.indexOf(UNCAUGHT_MARKER);
     if (uncaught >= 0) {
       assert.fail(`tet reported an uncaught exception:
@@ -112,10 +106,8 @@ ${stderr.slice(uncaught)}`);
     const added = await ctl("projects-add", repo);
     assert.equal(added.status, 0, added.stderr);
     const project = added.result as Project;
-    // Against resolveRoot(repo), not fs.realpathSync/path.resolve: addProject prefers git's own
-    // resolved root over the raw directory whenever it is one (see src/main/projects.ts), and
-    // git's resolution is a fuller canonicalization than either — it expands a Windows runner's
-    // 8.3 short %TEMP% and macOS's /var -> /private/var symlink, neither of which the others do.
+    // resolveRoot, not realpathSync: addProject stores git's root, which also expands Windows' 8.3
+    // short %TEMP% and macOS's /var -> /private/var symlink.
     assert.equal(project.path, await resolveRoot(repo));
     assert.deepEqual(((await ctl("projects-list")).result as Project[]).map((entry) => entry.id), [project.id]);
   });
@@ -127,8 +119,8 @@ ${stderr.slice(uncaught)}`);
     const tab = created.result as TerminalDescriptor;
     const tabs = async (): Promise<TerminalDescriptor[]> =>
       (await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[];
-    // "running" is the whole chain: terminal:show reached the window, which drew the tab,
-    // whose first resize spawned the process. A tab nobody showed stays "ready" forever.
+    // "running" is the whole chain: terminal:show reached the window, which drew the tab, whose
+    // first resize spawned the process.
     await eventually(
       "the shell tab running",
       async () => (await tabs()).some((entry) => entry.tabId === tab.tabId && entry.status === "running"),
@@ -139,17 +131,14 @@ ${stderr.slice(uncaught)}`);
     await eventually("the tab gone", async () => !(await tabs()).some((entry) => entry.tabId === tab.tabId), 10_000);
   });
 
-  // The whole chain an agent's hook takes, end to end in the real app: the CLI off a tab's own
-  // environment, the control server, the session manager, and back out through tabs-list. No
-  // agent can be driven in a test, so a shell tab stands in for one — the verb is about the tab,
-  // not about who is running in it.
+  // An agent's hook end to end: CLI off the tab's environment, control server, session manager,
+  // tabs-list. A shell tab stands in for the agent — the verb is about the tab, not its program.
   it("marks a tab's turn from its own hook, and answers with the context", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const open = async (): Promise<string> =>
       ((await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TerminalDescriptor).tabId;
     const tab = await open();
-    // A second tab takes the front, so the first one's finished turn is one the user has not
-    // seen — the mark only stands out of sight, and the renderer clears what is in front of it.
+    // A second tab takes the front: the renderer clears a finished mark on the tab in front.
     const inFront = await open();
     const hook = (event: string): Promise<{ status: number; stdout: string }> =>
       tetCtl(["hook", event], { ...env, [CONTROL_ENV.projectId]: project.id, [CONTROL_ENV.tabId]: tab }, "{}");
@@ -173,18 +162,15 @@ ${stderr.slice(uncaught)}`);
     const [project] = (await ctl("projects-list")).result as Project[];
     const contextFile = path.join(contextDirFor(userData, project.id), "context.md");
     const logFile = path.join(contextDirFor(userData, project.id), "shell-output.log");
-    // A saved command that prints a whole line, not a plain shell tab: the transcript holds an
-    // unfinished line back until something ends it (`carryFrom` in shell-context.ts), and a
-    // prompt is one — a shell that only drew its prompt has written nothing yet. Whether a shell
-    // says anything more at startup is the machine's call (the GitHub runner's bash stopped
-    // doing so with an image update), so the test prints its own line.
+    // A saved command printing a whole line, not a plain shell: the transcript holds back an
+    // unfinished line such as a prompt (`carryFrom` in shell-context.ts), and whether a shell
+    // prints more at startup depends on the machine.
     fs.writeFileSync(
       path.join(repo, "tet.json"),
       JSON.stringify({ commands: [{ command: "node -e \"console.log('tet-context-probe')\"", name: "probe" }] })
     );
     assert.equal((await ctl("tabs-run-command", "probe", "--project", project.id)).status, 0);
-    // The line itself, not just the paragraph: a shell that did say something at startup (the
-    // tab the test above closed) has put the paragraph there already.
+    // The line itself, not just the paragraph: an earlier tab's startup output may have put that there.
     const has = (file: string, pattern: RegExp): boolean => fs.existsSync(file) && pattern.test(fs.readFileSync(file, "utf8"));
     await eventually(
       "the command's line in the transcript, and the shell paragraph",
@@ -252,8 +238,7 @@ ${stderr.slice(uncaught)}`);
   });
 
   it("changes a kind's theme without a restart", async () => {
-    // The window starts in "system", light or dark by the machine: a dark theme is either shown at
-    // once or not shown at all, and neither waits for a restart.
+    // The window starts in "system", so dark may not be on screen; either way no restart is needed.
     const set = await ctl("settings-set-theme", "dark-slate");
     assert.deepEqual(set.result, { saved: true, restartRequired: false });
     assert.equal(((await ctl("settings-get")).result as AppSettings).darkTheme, "dark-slate");
@@ -279,8 +264,7 @@ ${stderr.slice(uncaught)}`);
 
   it("closes a project with a running tab, and forgets it", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
-    // No waiting for the project's terminals: the socket that answered `version` after the
-    // restart only exists once the workspace is open (see main.ts's startControl).
+    // No wait needed: the control socket exists only once the workspace is open (startControl).
     const created = await ctl("tabs-create", "--agent", "shell", "--project", project.id);
     assert.equal(created.status, 0, created.stderr);
     const tab = created.result as TerminalDescriptor;

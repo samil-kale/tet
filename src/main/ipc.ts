@@ -54,47 +54,42 @@ import { augmentAgentPath } from "./terminals/agent-path";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 import type { SettingsStore } from "./settings";
 
-/**
- * Everything the renderer can ask the main process for, in one place: main.ts builds these
- * singletons and the window, this is the surface between the two processes.
- */
+/** The singletons main.ts builds, for the renderer-facing IPC surface. */
 export interface IpcDeps {
   store: ProjectStore;
   settings: SettingsStore;
   accounts: AccountStore;
   repositories: RepositoryManager;
   sessions: SessionManagerRegistry;
-  /** Where the window's reports for the control verbs go. */
+  /** The window's reports for the control verbs. */
   records: ControlRecords;
   /** Posts to the window, or nowhere while none is open. */
   send: (channel: string, payload: unknown) => void;
-  /** Brings a project's repository and terminals up; shared with the bootstrap's restore. */
+  /** Shared with the bootstrap's restore. */
   openProject: (project: Project) => void;
-  /** Opens the stored projects, once and only once the requirements are met. */
+  /** Opens the stored projects, once, when the requirements are met. */
   openWorkspace: () => void;
-  /** Brings a saved theme onto the window, answering whether a restart is still needed for it. */
+  /** Returns whether a restart is still needed. */
   applyTheme: () => boolean;
 }
 
 const MISSING_REPOSITORY: RepositoryState = { ...EMPTY_REPOSITORY_STATE, error: "Project not found" };
 
 const TEMP_FILE_NAME = /^tet-(\d+)-/;
-/** A pasted path is meant to be read within the turn it was typed into — a day is generous. */
+/** A pasted file is read within its turn; a day is generous. */
 const TEMP_FILE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-/** Writes bytes the renderer holds but has no path for to a temp file, and returns it. */
+/** Writes pathless renderer bytes to a temp file and returns its path. */
 async function writeTempFile(name: string, data: Buffer): Promise<string> {
   const file = path.join(os.tmpdir(), `tet-${Date.now()}-${path.basename(name)}`);
-  // Asynchronously: a pasted screenshot is megabytes, and a synchronous write would hold the
-  // ptys' output and keystrokes for as long as the disk takes.
+  // Async: a screenshot is megabytes, and a sync write would stall pty output and keystrokes.
   await fs.promises.writeFile(file, data);
   return file;
 }
 
 /**
- * Clears what writeTempFile left behind — nothing marks one of its files as "already read". Once
- * at startup rather than after each paste: the file may still be read a moment later. The write
- * time is in the name already, so this costs one `readdir`, no `stat`.
+ * Clears old writeTempFile files, at startup rather than per paste (a file may still be read). The
+ * write time is in the name: one `readdir`, no `stat`.
  */
 export function sweepTempFiles(): void {
   void (async () => {
@@ -130,13 +125,9 @@ export function registerIpc({
   openWorkspace,
   applyTheme
 }: IpcDeps): void {
-  /**
-   * The gate the window opens with: nothing is restored until git and either an agent or sbx are
-   * there. Asked again after every re-check, and passing is what starts the app.
-   */
+  /** The startup gate, asked on every re-check; passing opens the workspace. */
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
-    // A manager's bin directory that did not exist at startup is on PATH only once looked for
-    // again — that is what makes "Check again" find it.
+    // Re-scans for manager bin dirs created since startup, so "Check again" finds them.
     await markStartup("path", augmentAgentPath);
     const requirements = await markStartup("requirements", checkRequirements);
     if (requirements.met) {
@@ -145,13 +136,12 @@ export function registerIpc({
     return requirements;
   });
 
-  // Not the check above: that one opens the workspace when it passes, which belongs to startup
-  // alone. This is the same question asked mid-session — see anyAgentInstalled.
+  // Mid-session, so not the check above, which opens the workspace (anyAgentInstalled).
   ipcMain.handle("startup:any-agent-installed", () => anyAgentInstalled());
 
   ipcMain.on("startup:quit", () => app.quit());
 
-  // The Info tab's rows, all fixed for the life of the process — asked once when the dialog opens.
+  // The settings Info tab, fixed for the process's life.
   ipcMain.handle(
     "app:info",
     (): AppInfo => ({
@@ -163,7 +153,7 @@ export function registerIpc({
     })
   );
 
-  // Per project: what the policy has to allow includes the project's own folder.
+  // Per project: the policy has to allow the project's folder.
   ipcMain.handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
     const project = store.get(projectId);
     return readSbxStatus(project?.path ?? "", projectId);
@@ -172,14 +162,12 @@ export function registerIpc({
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
-  // What the dialog reopens with — read fresh, never cached; the hosts from the sandboxes
-  // themselves (sbx.ts's readLiveSbxConfig).
+  // Read fresh; the hosts from the sandboxes themselves (sbx.ts's readLiveSbxConfig).
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
     return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
-  // The dialog's Save button — writes tet.json; the notices below are about the sandbox removals
-  // saveSbxConfig reports.
+  // Writes tet.json; notices for the sandboxes saveSbxConfig removed.
   ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxProjectConfig): Promise<GitActionResult> => {
     const project = store.get(projectId);
     if (!project) {
@@ -213,8 +201,7 @@ export function registerIpc({
 
   ipcMain.handle("settings:get", (): AppSettings => settings.get());
 
-  // Written whole, like a project's saved commands: the dialog holds all of it.
-  // The dialog says in so many words when a theme waits for a restart; nothing to answer it.
+  // Written whole. The dialog itself says when a theme waits for a restart.
   ipcMain.handle("settings:save", (_event, next: AppSettings): void => {
     settings.save(next);
     applyTheme();
@@ -225,8 +212,7 @@ export function registerIpc({
   ipcMain.handle(
     "projects:pick-directory",
     async (_event, title: string, defaultPath?: string): Promise<string | null> => {
-      // Undefined rather than "" for a folder nobody has picked yet: an empty defaultPath is a
-      // path too, and the platform opens wherever it resolves to.
+      // An empty defaultPath is a path too, opening wherever it resolves to.
       const result = await dialog.showOpenDialog({
         title,
         defaultPath: defaultPath === "" ? undefined : defaultPath,
@@ -236,9 +222,8 @@ export function registerIpc({
     }
   );
 
-  // Its own handler, not a mode on the one above: Electron only honours ["openFile",
-  // "openDirectory"] together on macOS — on Windows and Linux the platform dialog is one or the
-  // other and silently shows the directory selector. So the sbx dialog offers two buttons.
+  // Separate handler: ["openFile", "openDirectory"] together works only on macOS; Windows and Linux
+  // silently show the directory selector. Hence two buttons in the sbx dialog.
   ipcMain.handle("projects:pick-file", async (_event, title: string): Promise<string | null> => {
     const result = await dialog.showOpenDialog({ title, properties: ["openFile"] });
     return result.canceled ? null : (result.filePaths[0] ?? null);
@@ -247,8 +232,7 @@ export function registerIpc({
   ipcMain.handle(
     "projects:directory-to-remember",
     async (_event, directory: string): Promise<string> => {
-      // The Add tab points the picker at a repository directly, so remembering that folder would
-      // open the next picker inside one. Only when the picked folder is a root itself.
+      // A picked repository root remembers its parent, or the next picker opens inside it.
       const root = await git.resolveRoot(directory).catch(() => undefined);
       if (root !== undefined && path.relative(root, directory) === "") {
         const parent = path.dirname(directory);
@@ -266,7 +250,7 @@ export function registerIpc({
     addProject(projectDeps, directory)
   );
 
-  /** Clone and create both end the same way: the new folder becomes a project like any picked one. */
+  /** Clone and create both end with the new folder added as a project. */
   const addRepository = async (
     action: Promise<GitActionResult>,
     directory: string,
@@ -275,12 +259,11 @@ export function registerIpc({
     try {
       const result = await action;
       if (!result.ok) {
-        // The dialog asks for an account or a token when credentials were what was missing, so
-        // that has to survive the trip rather than be flattened into the message.
+        // Kept apart from the message: the dialog asks for an account or token on it.
         return { error: result.error || `${label} failed`, authRequired: result.authRequired };
       }
     } catch (error) {
-      // The git process died mid-command; its message is all that is left to report.
+      // The git process died mid-command.
       return { error: error instanceof Error ? error.message : String(error) };
     }
     const project = store.add(directory);
@@ -290,8 +273,7 @@ export function registerIpc({
 
   ipcMain.handle("projects:clone", (_event, url: string, directory: string, name: string, accountId?: string) => {
     const target = path.join(directory, name);
-    // From the remote tab the account's token authenticates the clone itself, so it does not
-    // hinge on a credential helper too.
+    // With an account, its token authenticates the clone, independent of any credential helper.
     const account = accountId !== undefined ? accounts.get(accountId) : undefined;
     const token = accountId !== undefined ? accounts.token(accountId) : undefined;
     const action =
@@ -309,7 +291,7 @@ export function registerIpc({
   ipcMain.handle(
     "providers:add-account",
     async (_event, provider: ProviderId, host: string, token: string): Promise<AddAccountResult> => {
-      // "https://gitlab.company.com/" pasted as the host means the host inside it.
+      // A pasted "https://gitlab.company.com/" means its host.
       const bare = host
         .trim()
         .replace(/^[a-z]+:\/\//i, "")
@@ -354,8 +336,7 @@ export function registerIpc({
     return (await repositories.get(projectId)?.refresh()) ?? MISSING_REPOSITORY;
   });
 
-  /** Every command a repository can be asked to run: they all answer a GitActionResult, and all
-   *  have nothing to act on when the project is not open. */
+  /** A repository command answering a GitActionResult, or an error when the project is not open. */
   const onRepository = <A extends unknown[]>(
     channel: string,
     run: (repository: Repository, ...args: A) => Promise<GitActionResult>
@@ -413,7 +394,7 @@ export function registerIpc({
     }
     const { executable, agent } = askable;
     try {
-      // The same paths the commit will take, a rename's old one included.
+      // The commit's own paths, a rename's old one included.
       const pathspec = paths && (repositories.get(projectId)?.pathspec(paths) ?? paths);
       const context = await git.readCommitContext(project.path, pathspec);
       const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
@@ -463,7 +444,7 @@ export function registerIpc({
     );
   });
 
-  // The settings dialog's Files tab: the three view settings from tet.json alone, no walk.
+  // The settings Files tab: tet.json's view settings only, no walk.
   ipcMain.handle("repo:explorer-settings", async (_event, projectId: string): Promise<ExplorerSettings> => {
     return (await repositories.get(projectId)?.readExplorerSettings()) ?? DEFAULT_EXPLORER_VIEW;
   });
@@ -508,7 +489,7 @@ export function registerIpc({
     }
   });
 
-  /** Running one is opening a tab for it: the command is the tab's process. */
+  /** Opens a tab whose process is the command. */
   ipcMain.handle(
     "commands:run",
     (_event, projectId: string, command: ProjectCommand): TerminalDescriptor | null => {
@@ -540,13 +521,12 @@ export function registerIpc({
     sessions.get(projectId)?.restartTab(tabId);
   });
 
-  /** The tab is in front of the user, so the mark a finished turn left on it goes away. Only the
-   *  renderer knows which tab that is. */
+  /** The tab is in front of the user: clears its finished-turn mark. Only the renderer knows. */
   ipcMain.on("terminal:seen", (_event, projectId: string, tabId: string) => {
     sessions.get(projectId)?.markSeen(tabId);
   });
 
-  /** What the editor tab shows and which notices went up, for tet-ctl — only the renderer knows. */
+  /** The editor tab and shown notices, for tet-ctl — only the renderer knows. */
   ipcMain.on("editor:report", (_event, projectId: string, report: EditorReport | null) => {
     records.setEditor(projectId, report);  });
 
@@ -554,7 +534,7 @@ export function registerIpc({
     records.addNotice(report);
   });
 
-  /** The tabs in front of the user, which a turn does not toast about. Only the renderer knows. */
+  /** Tabs in front of the user get no turn toast. Only the renderer knows them. */
   ipcMain.on("terminal:in-front", (_event, projectId: string | null, tabIds: string[]) => {
     sessions.setInFront(projectId, tabIds);
   });
@@ -587,9 +567,8 @@ export function registerIpc({
   });
 
   /**
-   * A path the user ctrl-clicked in a terminal. A file inside the repository is answered with its
-   * repository-relative path, which the renderer opens in the editor tab; anything else is handed
-   * to the OS here.
+   * A ctrl-clicked terminal path: inside the repository, its relative path for the editor tab;
+   * otherwise opened by the OS here.
    */
   ipcMain.handle("shell:open-file", async (_event, projectId: string, rawPath: string): Promise<string | null> => {
     const repository = repositories.get(projectId);
@@ -610,7 +589,7 @@ export function registerIpc({
       send("app:notice", { severity: "error", message: `Could not find file: ${rawPath}` });
       return null;
     }
-    // git reports every path relative to the root with forward slashes, so match in that shape.
+    // In git's shape: root-relative, forward slashes.
     const relative = relativeInside(root, resolved);
     if (relative !== undefined) {
       return relative.replace(/\\/g, "/");
@@ -622,7 +601,7 @@ export function registerIpc({
     return null;
   });
 
-  /** A changed file shown in the OS file manager — the git pane's context menu. */
+  /** The git pane's "show in file manager". */
   ipcMain.handle("shell:reveal-file", (_event, projectId: string, filePath: string): void => {
     const repository = repositories.get(projectId);
     if (repository) {
@@ -630,8 +609,7 @@ export function registerIpc({
     }
   });
 
-  /** The changed-file menu's "Open in external editor". tet has no editor setting, so the file
-   *  goes to whatever the OS opens its type with. */
+  /** "Open in external editor": no editor setting, so the OS default for the type. */
   ipcMain.handle("shell:open-file-externally", async (_event, projectId: string, filePath: string): Promise<void> => {
     const repository = repositories.get(projectId);
     if (!repository) {
@@ -658,7 +636,7 @@ export function registerIpc({
     return writeTempFile(name, Buffer.from(dataBase64, "base64"));
   });
 
-  /** The clipboard's image as a file on disk, so its path can be typed into a CLI. */
+  /** The clipboard image as a file, so its path can be typed into a CLI. */
   ipcMain.handle("clipboard:image-file", (): Promise<string> | null => {
     const image = clipboard.readImage();
     return image.isEmpty() ? null : writeTempFile(`pasted-image-${Date.now()}.png`, image.toPNG());

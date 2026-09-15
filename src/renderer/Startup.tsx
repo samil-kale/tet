@@ -4,9 +4,8 @@ import { App } from "./App";
 import { RequirementsDialog } from "./dialogs/RequirementsDialog";
 
 /**
- * The app, once the programs it runs on are there. The main process opens the stored projects
- * only when the check passed, so a machine missing git or every agent gets the dialog and
- * nothing else: nothing watched, nothing spawned, `App` never mounted.
+ * The app, once its requirements are met. Main opens the stored projects only after the check
+ * passes, so a failing machine gets the dialog alone: nothing watched, spawned, or mounted.
  */
 export function Startup() {
   const [requirements, setRequirements] = useState<Requirements | null>(null);
@@ -22,7 +21,7 @@ export function Startup() {
     void check();
   }, [check]);
 
-  // The window's own background for the moment the version checks take.
+  // The window's background while the version checks run.
   if (!requirements) {
     return null;
   }

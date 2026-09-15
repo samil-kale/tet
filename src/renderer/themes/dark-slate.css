@@ -1,11 +1,10 @@
 /*
- * "Dark Slate": a cooler, blue-grey dark theme. The values come from its theme file, dark-slate.json
- * beside this stylesheet, which is also where the token half comes from. That file is GitHub Dark
- * Default (@shikijs/themes/github-dark-default) with the surfaces and accents recolored: those were
- * sampled off a reference screenshot (a dashboard with #14171c chrome, #1b1f27 cards, #58a6f0
- * accents); what the screenshot had no sample of is GitHub Dark Default's, marked as such where it
- * stands. See dark-modern.css for the layer itself. The primary button is the screenshot's own: a
- * light button with dark text, not a filled accent.
+ * "Dark Slate": a cooler, blue-grey dark theme. Values, token colors included, come from
+ * dark-slate.json beside this file: GitHub Dark Default (@shikijs/themes/github-dark-default)
+ * with surfaces and accents sampled off a reference screenshot (#14171c chrome, #1b1f27 cards,
+ * #58a6f0 accents). What the screenshot has no sample of stays GitHub Dark Default's, marked
+ * where it stands. The primary button is the screenshot's: light with dark text, not a filled
+ * accent. See dark-modern.css for the layer.
  */
 :root[data-theme="dark-slate"] {
   color-scheme: dark;

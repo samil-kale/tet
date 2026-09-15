@@ -1,24 +1,22 @@
 import type { ColorScheme } from "./types";
 
-/** The color themes the settings dialog offers. One entry is one stylesheet in
- *  src/renderer/themes/<id>.css (`:root[data-theme="<id>"]`) plus what both processes need before
- *  that stylesheet exists. pieces.test.ts checks the two halves agree. */
+/** A color theme: one stylesheet in src/renderer/themes/<id>.css (`:root[data-theme="<id>"]`) plus
+ *  what both processes need before it loads. pieces.test.ts checks the two halves agree. */
 export interface ThemeDefinition {
   id: string;
   /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */
   label: string;
-  /** The token half: Dark/Light Modern take their tokenColors from Dark+/Light+ by `include`;
-   *  Dark Slate's theme file is tet's own (src/renderer/themes/dark-slate.json). */
+  /** Token colors: Dark/Light Modern `include` Dark+/Light+; Dark Slate's is tet's own
+   *  (src/renderer/themes/dark-slate.json). */
   shikiTheme: "dark-plus" | "light-plus" | "github-dark-default" | "github-light-default" | "dark-slate";
-  /** Which way the background is — VS Code's theme `type`. Claude Code's `theme` and pi's
-   *  `--use-theme` name their built-in themes after it. */
+  /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
-  /** BrowserWindow's paint color and the Windows title-bar overlay — set in main.ts before the
-   *  renderer's CSS exists, so kept by hand in step with --vscode-titleBar-active{Background,Foreground}. */
+  /** BrowserWindow paint and Windows title-bar overlay, set before the CSS exists — kept in step
+   *  with --vscode-titleBar-active{Background,Foreground} by hand. */
   windowBackground: string;
   titleBarSymbolColor: string;
-  /** The terminal's colors, for an agent reading them off the console (Codex on win32). Kept in
-   *  step with --vscode-terminal-background / -foreground by hand. */
+  /** For an agent reading colors off the console (Codex on win32). Kept in step with
+   *  --vscode-terminal-background / -foreground by hand. */
   terminalBackground: string;
   terminalForeground: string;
 }
@@ -81,8 +79,7 @@ export type ThemeKind = ThemeDefinition["kind"];
 /** Each kind's theme before anyone picked one. */
 export const DEFAULT_THEME_IDS: Readonly<Record<ThemeKind, string>> = { dark: "dark-modern", light: "light-modern" };
 
-/** An id the list no longer knows — or, given a kind, one of the other kind — is the default: the
- *  same contract as the keybinding preset. */
+/** An unknown id, or one of the other kind, falls back to the default — as the keybinding preset. */
 export function resolveTheme(id: string | undefined, kind?: ThemeKind): ThemeDefinition {
   return (
     THEMES.find((theme) => theme.id === id && (!kind || theme.kind === kind)) ??
@@ -90,13 +87,11 @@ export function resolveTheme(id: string | undefined, kind?: ThemeKind): ThemeDef
   );
 }
 
-/** The kind a color scheme asks for, with "system" answered by whoever asks: `nativeTheme` in the
- *  main process, `prefers-color-scheme` in the window. */
+/** "system" is answered by the caller: `nativeTheme` in main, `prefers-color-scheme` in the window. */
 export function schemeKind(scheme: ColorScheme, systemDark: boolean): ThemeKind {
   return scheme === "system" ? (systemDark ? "dark" : "light") : scheme;
 }
 
-/** The setting holding a kind's theme. */
 export function themeKey(kind: ThemeKind): "darkTheme" | "lightTheme" {
   return kind === "dark" ? "darkTheme" : "lightTheme";
 }

@@ -20,8 +20,8 @@ function toAccount(entry: StoredAccount): ProviderAccount {
   };
 }
 
-/** The configured accounts. A token only leaves this class decrypted on its way into a provider
- *  call or a clone; the renderer sees accounts without tokens, full stop. */
+/** The configured accounts. A token leaves this class only decrypted into a provider call or a
+ *  clone; the renderer never sees one. */
 export class AccountStore {
   private readonly file: string;
   private accounts: StoredAccount[] = [];
@@ -74,7 +74,7 @@ export class AccountStore {
     this.save();
   }
 
-  /** The decrypted token, for a provider call or a clone; undefined when it cannot be had. */
+  /** The decrypted token; undefined when it cannot be decrypted. */
   token(accountId: string): string | undefined {
     const entry = this.accounts.find((account) => account.id === accountId);
     if (!entry) {
@@ -83,7 +83,7 @@ export class AccountStore {
     try {
       return safeStorage.decryptString(Buffer.from(entry.token, "base64"));
     } catch {
-      // Encrypted under a keychain this machine no longer has; the token must be entered again.
+      // Encrypted under a keychain this machine no longer has; the token must be re-entered.
       return undefined;
     }
   }

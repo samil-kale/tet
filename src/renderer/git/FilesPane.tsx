@@ -7,23 +7,20 @@ import { ProgressBar } from "../ui/ProgressBar";
 
 interface FilesPaneProps {
   project: Project;
-  /** Its changes are what the listing is read again on — a file starting or stopping to exist. */
+  /** Its changes trigger listing re-reads — a file starting or stopping to exist. */
   state: RepositoryState;
   /** False while the git view stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
-  /** The file the project's editor tab shows, if any — the tree reveals it. */
+  /** The editor tab's file — the tree reveals it. */
   openPath: string | null;
-  /** A file to look at — it opens in the project's editor tab. */
+  /** Opens in the project's editor tab. */
   onOpenDiff: (path: string) => void;
 }
 
-/**
- * How long the listing or an edit must run before the bar shows. The listing is read again every
- * time the view comes on screen and usually lands within milliseconds, which only flashed the bar.
- */
+/** The listing is re-read on every show and usually lands in milliseconds; no flashing bar. */
 const PROGRESS_DELAY_MS = 500;
 
-/** `active`, but only once it has stayed true for `delayMs`; false again the moment it ends. */
+/** `active` once it has held for `delayMs`; false the moment it ends. */
 function useDelayed(active: boolean, delayMs: number): boolean {
   const [delayed, setDelayed] = useState(false);
   useEffect(() => {
@@ -38,9 +35,8 @@ function useDelayed(active: boolean, delayMs: number): boolean {
 }
 
 /**
- * The side pane's other view: every file of the repository as one tree, shown instead of the
- * repository view rather than beside it (VS Code's Explorer and Source Control, one sidebar). The
- * listing is only read while this is on screen.
+ * The side pane's files view, shown instead of the git view (VS Code's Explorer and Source Control,
+ * one sidebar). The listing is read only while on screen.
  */
 export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpenDiff }: FilesPaneProps) {
   const { acting, act } = useFileAct(project.id);
@@ -82,11 +78,10 @@ export const FilesPane = memo(function FilesPane({ project, state, shown, openPa
               <CollapseAllIcon />
             </button>
           </span>
-          {/* This pane's one bar — the listing, and the tree's own edits. */}
+          {/* This pane's one bar — the listing and the tree's edits. */}
           {showProgress && <ProgressBar />}
         </div>
-        {/* Keyed by project: one mounted tree serves every project, and its fold and filter state
-            is keyed by paths that repeat across repositories. */}
+        {/* Keyed by project: fold and filter state is keyed by paths that repeat across repositories. */}
         <Explorer
           key={project.id}
           ref={explorerRef}

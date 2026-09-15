@@ -25,14 +25,11 @@ import {
 } from "../src/main/git/git";
 
 /**
- * git.ts against the real git, in a repository built up step by step — every reading the git
- * pane makes of a working tree, in the order a working tree goes through them. The module runs
- * in its own process in the app (git-host.ts) and imports nothing from electron, so here it
- * runs in this one.
+ * git.ts against the real git, in a repository built up step by step. It imports nothing from
+ * electron, so it runs in this process.
  */
 
-// A repository of the test's own, with an identity of its own, and without the machine's
-// config: a signing key or a hook there would turn a commit into a question.
+// Without the machine's config: a signing key or a hook there would turn a commit into a question.
 const identity = {
   GIT_AUTHOR_NAME: "tet test",
   GIT_AUTHOR_EMAIL: "test@tet.invalid",
@@ -54,7 +51,7 @@ function run(...args: string[]): string {
 
 const write = (name: string, content: string): void => fs.writeFileSync(path.join(cwd, name), content);
 
-/** The cap the editor tab reads both sides of a file under; `readHeadBlob` takes it per call. */
+/** The editor tab's read cap; `readHeadBlob` takes it per call. */
 const MAX_BYTES = 4 * 1024 * 1024;
 const head = (name: string, origPath?: string) => readHeadBlob(cwd, name, { origPath, maxBytes: MAX_BYTES });
 
@@ -76,7 +73,7 @@ describe("a repository, from init on", () => {
     assert.equal(state.operation, undefined);
     assert.equal(await isRepository(cwd), true);
     assert.equal(await isRepository(os.tmpdir()), false);
-    // The one point where HEAD does not resolve at all: every file reads as one HEAD never had.
+    // HEAD does not resolve: every file reads as one HEAD never had.
     assert.deepEqual(await head("a.txt"), { content: "", binary: false, missing: true });
   });
 
@@ -87,7 +84,7 @@ describe("a repository, from init on", () => {
   });
 
   it("hands a staged file to the commit message before there is a HEAD", async () => {
-    // An agent's `git add` before the first commit: no longer untracked, and no HEAD to diff against.
+    // A `git add` before the first commit: not untracked, and no HEAD to diff against.
     run("add", "a.txt");
     assert.match(await readCommitContext(cwd), /\+two/);
     run("rm", "-q", "--cached", "a.txt");
@@ -103,8 +100,7 @@ describe("a repository, from init on", () => {
   it("reads the committed version of a modified file, whole, and discards the change", async () => {
     write("a.txt", "one\n2\nthree\n");
     assert.deepEqual((await readState(cwd)).changes, [{ path: "a.txt", status: "modified" }]);
-    // Byte for byte, the trailing newline included: this text is one side of the diff editor, and
-    // a newline it invented would read as a change of its own.
+    // Byte for byte, trailing newline included: an invented newline would diff as a change.
     assert.deepEqual(await head("a.txt"), {
       content: "one\ntwo\nthree\n",
       binary: false,
@@ -115,8 +111,8 @@ describe("a repository, from init on", () => {
   });
 
   it("calls a blob past the cap binary, the way node reports the overflow", async () => {
-    // The cap is maxBuffer, so the answer to "too large" is node killing git mid-stream and
-    // reporting a code of its own — which is what tells it apart from a path HEAD does not have.
+    // The cap is maxBuffer: node kills git mid-stream with a code of its own, which tells "too
+    // large" apart from a path HEAD does not have.
     assert.deepEqual(await readHeadBlob(cwd, "a.txt", { maxBytes: 4 }), {
       content: "",
       binary: true,
@@ -135,9 +131,8 @@ describe("a repository, from init on", () => {
   });
 
   it("puts the blob through the checkout filters, so it reads like the working tree", async () => {
-    // The reason `cat-file --filters` is what reads HEAD and `show` is not: git stores this file
-    // with LF whatever the platform, and the working tree has CRLF. Only the filtered text can be
-    // compared against what the editor holds.
+    // Why HEAD is read with `cat-file --filters`, not `show`: git stores LF, the working tree has
+    // CRLF, and only the filtered text compares with what the editor holds.
     write(".gitattributes", "crlf.txt text eol=crlf\n");
     write("crlf.txt", "one\ntwo\n");
     assert.deepEqual(await commitAll(cwd, "a file checked out with crlf"), { ok: true });
@@ -147,7 +142,7 @@ describe("a repository, from init on", () => {
   it("reads a staged rename as one change with its old path", async () => {
     run("mv", "a.txt", "b.txt");
     assert.deepEqual((await readState(cwd)).changes, [{ path: "b.txt", status: "renamed", origPath: "a.txt" }]);
-    // HEAD knows the old path only, so without it every line of the file would read as new.
+    // HEAD knows only the old path; without it every line would read as new.
     assert.equal((await head("b.txt", "a.txt")).content, "one\ntwo\nthree\n");
     assert.equal((await head("b.txt")).missing, true);
     assert.deepEqual(await commitAll(cwd, "rename"), { ok: true });
@@ -208,7 +203,7 @@ describe("a repository, from init on", () => {
     state = await readState(cwd);
     assert.deepEqual([state.ahead, state.behind], [1, 0]);
     assert.deepEqual(state.branchTrack, {}, "only the checked-out branch, from the header");
-    // The same branch at another commit, as after a pull or a reset: what an open file reloads on.
+    // Same branch, another commit (a pull or reset): what an open file reloads on.
     assert.equal(state.headCommit, run("rev-parse", "HEAD"));
     run("reset", "-q", "--hard", "HEAD~1");
     assert.equal((await readState(cwd)).headCommit, run("rev-parse", "HEAD"));
@@ -235,9 +230,7 @@ describe("a repository, from init on", () => {
   it("resolves the root from a subdirectory", async () => {
     const sub = path.join(cwd, "deep", "er");
     fs.mkdirSync(sub, { recursive: true });
-    // Against resolveRoot(cwd) itself, not fs.realpathSync(cwd): on a Windows runner whose
-    // %TEMP% is an 8.3 short name, realpathSync doesn't expand it but git's own cwd resolution
-    // does, so the two disagree on a path that still names the same directory.
+    // Not realpathSync(cwd): it leaves an 8.3 short %TEMP% on Windows unexpanded, git expands it.
     assert.equal(await resolveRoot(sub), await resolveRoot(cwd));
     assert.equal(await resolveRoot(os.tmpdir()), undefined);
   });
@@ -288,7 +281,7 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
       fs.mkdirSync(path.join(cwd, dir));
       write(`${dir}/page.txt`, "page\n");
     }
-    // Literal here too, and only these two: b.txt is still staged from the test before.
+    // Literal, and only these two: b.txt is still staged from the test before.
     run("--literal-pathspecs", "add", "--", "[id]", "i");
     run("--literal-pathspecs", "commit", "-q", "--message", "routes", "--", "[id]", "i");
     write("[id]/page.txt", "id changed\n");

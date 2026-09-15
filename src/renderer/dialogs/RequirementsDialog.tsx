@@ -17,14 +17,13 @@ function RequirementRow({ requirement }: { requirement: Requirement }) {
 
 interface RequirementsDialogProps {
   requirements: Requirements;
-  /** Whether a check is running right now; the button turns while its own action does. */
+  /** A check is running; the button spins meanwhile. */
   checking: boolean;
   onRecheck: () => void;
 }
 
-/** What is missing, and where it comes from. Not part of Dialog.tsx: this is a wall, not a
- *  question — it stands until the programs it lists are there, and no Escape takes it away.
- *  Installs nothing: no command works on all three platforms. */
+/** What is missing. Not in Dialog.tsx: a wall, not a question — it stands until the programs are
+ *  there, with no Escape. Installs nothing: no command works on all three platforms. */
 export function RequirementsDialog({ requirements, checking, onRecheck }: RequirementsDialogProps) {
   return (
     <DialogFrame
