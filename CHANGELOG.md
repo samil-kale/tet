@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.7 (2026-09-16)
+
+- **Sandboxed projects start quicker.** A sandbox's bind mounts are applied several at a time
+  instead of one after another, so opening a project with `sbx` takes noticeably less time.
+
 ## 0.8.6 (2026-09-16)
 
 - **`tet.json` edits keep your formatting.** Adding folders, excludes, commands or sandbox
