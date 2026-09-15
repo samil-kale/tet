@@ -764,14 +764,15 @@ textarea:focus {
 }
 
 /* Plain icon buttons at the strip's start, none tab-shaped; boxed like `.new-tab` at the other
-   end. */
+   end. The panel's border, not the tabs': a theme may hide the line between tabs (Dark IntelliJ),
+   but this one marks the chrome off. */
 .tab-strip-actions {
   display: flex;
   align-items: center;
   /* As `.section-header-actions`. */
   gap: 2px;
   flex: none;
-  border-right: 1px solid var(--vscode-tab-border);
+  border-right: 1px solid var(--vscode-panel-border);
   padding: 0 4px;
 }
 
@@ -1141,7 +1142,7 @@ textarea:focus {
   gap: 2px;
   flex: none;
   align-self: stretch;
-  border-right: 1px solid var(--vscode-tab-border);
+  border-right: 1px solid var(--vscode-panel-border);
   padding: 0 4px;
 }
 
