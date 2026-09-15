@@ -197,7 +197,7 @@ textarea:focus {
   border-radius: 3px;
   color: inherit;
   /* Barely dimmed: line drawings on a dark ground lose readable contrast fast. */
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .icon-button svg {
@@ -577,7 +577,7 @@ textarea:focus {
   width: calc(var(--icon-size) - 1px);
   height: calc(var(--icon-size) - 1px);
   /* As `.icon-button`. */
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .tree-label {
@@ -623,7 +623,7 @@ textarea:focus {
   flex: none;
   width: calc(var(--icon-size) - 3px);
   height: calc(var(--icon-size) - 3px);
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 /* Terminals ------------------------------------------------------------------------------ */
@@ -805,7 +805,7 @@ textarea:focus {
   flex: none;
   width: var(--icon-size);
   height: var(--icon-size);
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .new-tab {
@@ -1113,12 +1113,12 @@ textarea:focus {
   width: 24px !important;
   height: 24px !important;
   border-radius: 3px !important;
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .editor-host .find-widget .button.toggle {
   border-radius: 3px !important;
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .editor-host .find-widget .button:not(.disabled):hover {
