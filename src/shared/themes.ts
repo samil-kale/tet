@@ -5,7 +5,7 @@ export interface ThemeDefinition {
   id: string;
   label: string;
   /** The token half: Dark/Light Modern take their tokenColors from Dark+/Light+ by `include`. */
-  shikiTheme: "dark-plus" | "light-plus";
+  shikiTheme: "dark-plus" | "light-plus" | "github-dark-default" | "github-light-default";
   /** Which way the background is — VS Code's theme `type`. Claude Code's `theme` and pi's
    *  `--use-theme` name their built-in themes after it. */
   kind: "dark" | "light";
@@ -22,7 +22,7 @@ export interface ThemeDefinition {
 export const THEMES: ThemeDefinition[] = [
   {
     id: "dark-modern",
-    label: "Dark",
+    label: "Dark Modern",
     shikiTheme: "dark-plus",
     kind: "dark",
     windowBackground: "#181818",
@@ -41,14 +41,34 @@ export const THEMES: ThemeDefinition[] = [
     terminalForeground: "#dde2e9"
   },
   {
+    id: "dark-github",
+    label: "Dark GitHub",
+    shikiTheme: "github-dark-default",
+    kind: "dark",
+    windowBackground: "#0d1117",
+    titleBarSymbolColor: "#7d8590",
+    terminalBackground: "#0d1117",
+    terminalForeground: "#e6edf3"
+  },
+  {
     id: "light-modern",
-    label: "Light",
+    label: "Light Modern",
     shikiTheme: "light-plus",
     kind: "light",
     windowBackground: "#f8f8f8",
     titleBarSymbolColor: "#1e1e1e",
     terminalBackground: "#ffffff",
     terminalForeground: "#3b3b3b"
+  },
+  {
+    id: "light-github",
+    label: "Light GitHub",
+    shikiTheme: "github-light-default",
+    kind: "light",
+    windowBackground: "#ffffff",
+    titleBarSymbolColor: "#656d76",
+    terminalBackground: "#ffffff",
+    terminalForeground: "#1f2328"
   }
 ];
 

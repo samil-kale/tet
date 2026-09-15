@@ -285,7 +285,13 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["list-themes"]);
     assert.equal(run.status, EXIT_CODES.ok);
     const themes = (run.result as { id: string; kind: string }[]).map(({ id, kind }) => `${id}:${kind}`);
-    assert.deepEqual(themes, ["dark-modern:dark", "dark-slate:dark", "light-modern:light"]);
+    assert.deepEqual(themes, [
+      "dark-modern:dark",
+      "dark-slate:dark",
+      "dark-github:dark",
+      "light-modern:light",
+      "light-github:light"
+    ]);
   });
 
   it("sets a known theme for its own kind and relays whether a restart is needed, without restarting", async () => {

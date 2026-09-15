@@ -25,7 +25,9 @@ export function highlightTheme(): ThemeDefinition["shikiTheme"] {
  *  off the call — the same reason GRAMMARS below is a map rather than a template. */
 const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ default: ThemeRegistration }>> = {
   "dark-plus": () => import("@shikijs/themes/dark-plus"),
-  "light-plus": () => import("@shikijs/themes/light-plus")
+  "light-plus": () => import("@shikijs/themes/light-plus"),
+  "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
+  "github-light-default": () => import("@shikijs/themes/github-light-default")
 };
 
 /** Loads `highlightTheme()` and patches its editor-surface colors with tet's own --vscode-* values,
