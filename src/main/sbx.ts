@@ -9,6 +9,7 @@ import { SBX_AGENT_IDS } from "../shared/types";
 import type { SbxAgentId, SbxBlocker, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStatus } from "../shared/types";
 import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
+import { mapLimited } from "./map-limited";
 import { relativeInside } from "./path-inside";
 import { isMountAllowed, parseFilesystemRules } from "./sbx-policy";
 import { agentDataDir, agentDirFor, contextDirFor } from "./terminals/agent-data";
@@ -700,25 +701,26 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
   }
 }
 
+const MOUNT_CONCURRENCY = 6;
+
 /**
  * Applies live bind mounts on *every* start: unlike a file on the sandbox's disk, a bind mount
  * does not survive a stop (measured: the target was empty again), and `sbx stop` can happen
  * outside tet, so "already mounted" cannot be cached. Re-mounting is idempotent; access changes and
  * removals are narrowed at Save (revokeMounts), so this never hits "already mounted read-write;
  * cannot also mount read-only" (verified, 2026-09-08).
+ *
+ * Concurrent, since each `sbx mount` costs ~0.45s: 6 at once took 1.6s instead of 2.6s, all binds
+ * present, ro honoured; 12 at once hit "docker hub refresh lock held by another process" (measured,
+ * 2026-09-16, 0.42.1), hence MOUNT_CONCURRENCY.
  */
 async function mountAll(name: string, specs: string[], onData?: OnData): Promise<string[]> {
   if (specs.length === 0) {
     return [];
   }
   await ensureRunning(name, onData);
-  const failed: string[] = [];
-  for (const spec of specs) {
-    if (!(await runSbx(["mount", name, spec], { onData })).ok) {
-      failed.push(spec);
-    }
-  }
-  return failed;
+  const mounted = await mapLimited(specs, MOUNT_CONCURRENCY, async (spec) => (await runSbx(["mount", name, spec], { onData })).ok);
+  return specs.filter((_, index) => !mounted[index]);
 }
 
 /**

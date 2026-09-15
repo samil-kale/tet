@@ -6,6 +6,7 @@ import type { AgentSessionInfo, SessionProvider } from "../agent";
 import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
 import { deleteThread, renameThread } from "./app-server-client";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
+import { mapLimited } from "../../map-limited";
 
 /** Codex's config root; tet never overrides it. */
 function codexHome(): string {
@@ -249,20 +250,6 @@ async function listRolloutFiles(home: string): Promise<string[]> {
  *  low `ulimit -n`. */
 const READ_CONCURRENCY = 32;
 
-async function mapLimited<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array<R>(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(READ_CONCURRENCY, items.length) }, async () => {
-      while (next < items.length) {
-        const index = next++;
-        results[index] = await fn(items[index]);
-      }
-    })
-  );
-  return results;
-}
-
 async function safeReaddir(dir: string): Promise<string[]> {
   try {
     return await fs.promises.readdir(dir);
@@ -399,7 +386,7 @@ async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
     const files = await listRolloutFiles(home);
     forgetMissing(files, sessionsRoot(home));
     const names = await readSessionNames(home);
-    const entries = await mapLimited(files, async (filePath): Promise<AgentSessionInfo | undefined> => {
+    const entries = await mapLimited(files, READ_CONCURRENCY, async (filePath): Promise<AgentSessionInfo | undefined> => {
       const meta = await readSessionMeta(filePath);
       // Only `source: "cli"` is interactive, as in Codex's `/resume` picker.
       if (!meta || meta.source !== "cli" || !samePath(meta.cwd, cwd)) {
