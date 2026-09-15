@@ -3,6 +3,7 @@
  *  that stylesheet exists. pieces.test.ts checks the two halves agree. */
 export interface ThemeDefinition {
   id: string;
+  /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */
   label: string;
   /** The token half: Dark/Light Modern take their tokenColors from Dark+/Light+ by `include`;
    *  Dark Slate's theme file is tet's own (src/renderer/themes/dark-slate.json). */
@@ -23,7 +24,7 @@ export interface ThemeDefinition {
 export const THEMES: ThemeDefinition[] = [
   {
     id: "dark-modern",
-    label: "Dark Modern",
+    label: "Modern",
     shikiTheme: "dark-plus",
     kind: "dark",
     windowBackground: "#181818",
@@ -33,7 +34,7 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "dark-slate",
-    label: "Dark Slate",
+    label: "Slate",
     shikiTheme: "dark-slate",
     kind: "dark",
     windowBackground: "#14171c",
@@ -43,7 +44,7 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "dark-github",
-    label: "Dark GitHub",
+    label: "GitHub",
     shikiTheme: "github-dark-default",
     kind: "dark",
     windowBackground: "#0d1117",
@@ -53,7 +54,7 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "light-modern",
-    label: "Light Modern",
+    label: "Modern",
     shikiTheme: "light-plus",
     kind: "light",
     windowBackground: "#f8f8f8",
@@ -63,7 +64,7 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "light-github",
-    label: "Light GitHub",
+    label: "GitHub",
     shikiTheme: "github-light-default",
     kind: "light",
     windowBackground: "#ffffff",
