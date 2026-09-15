@@ -39,6 +39,10 @@ const WATCH_DEBOUNCE_MS = 300;
 // A killed CLI gets a moment to die before its transcript is removed, so a final in-flight
 // write can't resurrect the deleted file.
 const SESSION_REMOVE_DELAY_MS = 500;
+// How long after a fresh tab's Enter its close waits for the hook naming its session
+// (reportBeforeQuit), counted from the Enter. Measured on win32 with Codex on the host: the report
+// arrived 1.2–1.3 s after the Enter.
+const REPORT_WAIT_MS = 3000;
 // Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
 /**
@@ -52,6 +56,8 @@ interface TabState extends TerminalDescriptor {
   /** The session this tab's own hooks named (AgentDefinition.sessionIdOf), claimed as `sessionId`
    *  once the listing shows it persisted. */
   reportedSessionId?: string;
+  /** When Enter last went into this tab while it had named no session — see reportBeforeQuit. */
+  submittedAt?: number;
   /** Mirrors AgentSessionInfo.provisionalTitle for this tab's session. */
   provisionalTitle?: boolean;
   /** Mirrors AgentSessionInfo.sandbox: the sbx sandbox this tab's session lives in, if any. */
@@ -235,6 +241,8 @@ export class ProjectSessionManager {
   private readonly deletingSessionIds = new Set<string>();
   /** Tabs already removed from the UI that still need their persisted session claimed for deletion. */
   private readonly detachedTabs: TabState[] = [];
+  /** Per tab id, what ends a close's wait for the report naming its session (reportBeforeQuit). */
+  private readonly reportWaiters = new Map<string, () => void>();
   private newTabCounter = 0;
   /** The project was closed; nothing that was still in flight may start anything back up. */
   private disposed = false;
@@ -907,6 +915,9 @@ export class ProjectSessionManager {
       tab.waitingAt = undefined;
       this.postTabs();
     }
+    if (tab && !tab.sessionId && tab.reportedSessionId === undefined && data.includes("\r")) {
+      tab.submittedAt = Date.now();
+    }
     this.sessions.get(tabId)?.write(data);
   }
 
@@ -945,39 +956,69 @@ export class ProjectSessionManager {
     this.tabs = this.tabs.filter((tab) => !doomed.has(tab.tabId));
     this.postTabs();
 
-    // Every stop started before any is awaited: each takes a grace period (TerminalSession.stop),
-    // and closing four tabs must not cost four. `destroyTab` joins the stop already underway.
+    // A fresh tab may have persisted a session already — claim its id so it gets deleted too.
+    // detachedTabs lets a hook name the session and reconcile match a tab already spliced out;
+    // joined before any stop, since the first hook of a tab closed right after its prompt
+    // arrives during the stop's grace period. The same for a tab whose session was just replaced
+    // (bindReportedSession): the one it moved on to is the one to delete.
     for (const tab of tabs) {
-      void this.sessions.get(tab.tabId)?.stop();
+      if (getAgent(tab.agentId).sessions && (!tab.sessionId || awaitsClaim(tab)) && this.sessions.has(tab.tabId)) {
+        this.detachedTabs.push(tab);
+      }
     }
+    // Every stop started before any is awaited: each takes a grace period (TerminalSession.stop),
+    // and closing four tabs must not cost four. `destroyTab` awaits the stop already underway.
+    const stops = new Map(
+      tabs.map((tab) => {
+        const session = this.sessions.get(tab.tabId);
+        return [tab.tabId, this.reportBeforeQuit(tab).then(() => session?.stop())] as const;
+      })
+    );
     for (const tab of tabs) {
-      await this.destroyTab(tab, indices.get(tab.tabId) ?? this.tabs.length);
+      await this.destroyTab(tab, indices.get(tab.tabId) ?? this.tabs.length, stops.get(tab.tabId));
     }
   }
 
   /**
-   * Kills a removed tab's pty and deletes its persisted session; `index` is where the tab
-   * sat before removal, used to put it back if the deletion fails.
+   * Resolves once a tab closed right after its first prompt has named its session, or at once for
+   * any other. The quit waits for it: Codex takes the Ctrl+C that ends it as an abort of the
+   * `UserPromptSubmit` hook still running (measured), the one report naming the session, which
+   * then outlives the tab and comes back as a tab of its own. Bounded: a report that never comes
+   * holds the close only so long.
    */
-  private async destroyTab(tab: TabState, index: number): Promise<void> {
+  private reportBeforeQuit(tab: TabState): Promise<void> {
+    const waited = tab.submittedAt === undefined ? 0 : Date.now() - tab.submittedAt;
+    if (tab.sessionId || tab.reportedSessionId !== undefined || tab.submittedAt === undefined || waited >= REPORT_WAIT_MS) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer);
+        this.reportWaiters.delete(tab.tabId);
+        resolve();
+      };
+      const timer = setTimeout(done, REPORT_WAIT_MS - waited);
+      this.reportWaiters.set(tab.tabId, done);
+    });
+  }
+
+  /**
+   * Kills a removed tab's pty and deletes its persisted session; `index` is where the tab
+   * sat before removal, used to put it back if the deletion fails. `stopped` is the stop
+   * closeTabs started.
+   */
+  private async destroyTab(tab: TabState, index: number, stopped: Promise<void> | undefined): Promise<void> {
     const session = this.sessions.get(tab.tabId);
     this.lastSizes.delete(tab.tabId);
     const runtime = this.runtimeFor(tab.agentId);
     const { agent, executable } = runtime;
-    // A fresh tab may have persisted a session already — claim its id so it gets deleted too.
-    // detachedTabs lets a hook name the session and reconcile match a tab already spliced out;
-    // joined before the stop, since the first hook of a tab closed right after its prompt
-    // arrives during the stop's grace period. The same for a tab whose session was just replaced
-    // (bindReportedSession): the one it moved on to is the one to delete.
-    const detached = Boolean(agent.sessions && (!tab.sessionId || awaitsClaim(tab)) && session);
-    if (detached) {
-      this.detachedTabs.push(tab);
-    }
+    const detached = this.detachedTabs.includes(tab);
     try {
       if (session) {
+        // Awaited: the persisted session is deleted after the process is gone. Still listed while
+        // closeTabs holds the quit for a report (reportBeforeQuit), so a dispose meanwhile stops it.
+        await stopped;
         this.sessions.delete(tab.tabId);
-        // Awaited: the persisted session is deleted after the process is gone.
-        await session.stop();
       }
       if (!agent.sessions) {
         this.shellContext.close(tab.tabId);
@@ -1164,6 +1205,7 @@ export class ProjectSessionManager {
       return;
     }
     tab.reportedSessionId = reported;
+    this.reportWaiters.get(tab.tabId)?.();
     if (awaitsClaim(tab)) {
       this.scheduleReconcile(this.runtimeFor(tab.agentId));
     }
