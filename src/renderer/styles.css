@@ -197,7 +197,7 @@ textarea:focus {
   border-radius: 3px;
   color: inherit;
   /* Barely dimmed: line drawings on a dark ground lose readable contrast fast. */
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .icon-button svg {
@@ -332,6 +332,7 @@ textarea:focus {
    stands no taller than one holding only text. */
 .project-item,
 .command-item,
+.tree-header,
 .tree-item,
 .change-item,
 .repository-item,
@@ -454,18 +455,15 @@ textarea:focus {
   padding-bottom: 8px;
 }
 
-.tree-section + .tree-section {
-  margin-top: 6px;
-}
-
 .tree-header {
   display: flex;
   align-items: center;
   gap: 4px;
   width: 100%;
-  padding: 3px 6px;
+  /* The chevron's centre at 15px, as LOCAL CHANGES' status letter and the Explorer's marks. */
+  padding: 0 6px 0 9px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.3px;
   color: var(--vscode-sideBarSectionHeader-foreground);
 }
@@ -479,13 +477,13 @@ textarea:focus {
   align-items: center;
   gap: 5px;
   width: 100%;
-  padding: 0 6px 0 20px;
+  padding: 0 6px 0 23px;
   text-align: left;
   font-size: 13px;
 }
 
 .tree-item.nested {
-  padding-left: 40px;
+  padding-left: 43px;
 }
 
 .tree-item:hover {
@@ -563,15 +561,14 @@ textarea:focus {
   color: var(--vscode-terminal-ansiBrightMagenta);
 }
 
+/* 1px under --icon-size, like the Explorer's. */
 .tree-icon,
 .tree-header svg,
 .tree-item.remote > svg {
   flex: none;
-  width: var(--icon-size);
-  height: var(--icon-size);
-}
-
-.tree-icon {
+  width: calc(var(--icon-size) - 1px);
+  height: calc(var(--icon-size) - 1px);
+  /* As `.icon-button`. */
   opacity: 0.8;
 }
 
@@ -618,6 +615,7 @@ textarea:focus {
   flex: none;
   width: calc(var(--icon-size) - 3px);
   height: calc(var(--icon-size) - 3px);
+  opacity: 0.8;
 }
 
 /* Terminals ------------------------------------------------------------------------------ */
@@ -761,14 +759,15 @@ textarea:focus {
 }
 
 /* Plain icon buttons at the strip's start, none tab-shaped; boxed like `.new-tab` at the other
-   end. */
+   end. The panel's border, not the tabs': a theme may hide the line between tabs (Dark IntelliJ),
+   but this one marks the chrome off. */
 .tab-strip-actions {
   display: flex;
   align-items: center;
   /* As `.section-header-actions`. */
   gap: 2px;
   flex: none;
-  border-right: 1px solid var(--vscode-tab-border);
+  border-right: 1px solid var(--vscode-panel-border);
   padding: 0 4px;
 }
 
@@ -799,7 +798,7 @@ textarea:focus {
   flex: none;
   width: var(--icon-size);
   height: var(--icon-size);
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .new-tab {
@@ -1107,12 +1106,12 @@ textarea:focus {
   width: 24px !important;
   height: 24px !important;
   border-radius: 3px !important;
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .editor-host .find-widget .button.toggle {
   border-radius: 3px !important;
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .editor-host .find-widget .button:not(.disabled):hover {
@@ -1138,7 +1137,7 @@ textarea:focus {
   gap: 2px;
   flex: none;
   align-self: stretch;
-  border-right: 1px solid var(--vscode-tab-border);
+  border-right: 1px solid var(--vscode-panel-border);
   padding: 0 4px;
 }
 
@@ -1358,7 +1357,8 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 11px;
+  border: 1px solid var(--vscode-button-border);
   border-radius: 2px;
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
