@@ -53,6 +53,10 @@ export const SMALLER = 11 / 13;
 /** Two pixels over, for an icon that should read larger. */
 export const LARGER = 15 / 13;
 
+/** A tree's folding chevron, in the git pane and the Explorer alike: 10px drawn at the 13px
+ *  `--icon-size`, which draws TARGET_EXTENT/GRID of it (10.4px) unscaled. */
+export const TREE_CHEVRON = 10 / 10.4;
+
 /**
  * `extent` (stroke included) and the centre `cx`/`cy` on the 16 grid are measured. `scale` is a
  * *choice* — read smaller than the neighbours — kept apart so the extent stays re-measurable.

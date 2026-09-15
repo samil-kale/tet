@@ -3,7 +3,7 @@ import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry } fro
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { useCollapsedSections } from "../ui/Sash";
-import { ArrowDownIcon, ArrowUpIcon, BranchIcon, ChevronIcon, RemoteIcon, SearchIcon, StashIcon, TagIcon } from "../ui/icons";
+import { ArrowDownIcon, ArrowUpIcon, BranchIcon, ChevronIcon, RemoteIcon, SearchIcon, StashIcon, TagIcon, TREE_CHEVRON } from "../ui/icons";
 
 /** One git command at a time per project, labelled while it runs. The tree asks its questions
  *  itself, knowing which remote holds a branch and where HEAD is. */
@@ -248,7 +248,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
       <div className="tree">
         <div className="tree-section">
           <button className="tree-header" onClick={() => toggle("local")}>
-            <ChevronIcon expanded={!isCollapsed("local")} />
+            <ChevronIcon expanded={!isCollapsed("local")} scale={TREE_CHEVRON} />
             <span>LOCAL BRANCHES</span>
             <span className="count-badge">({state.localBranches.length})</span>
           </button>
@@ -288,7 +288,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
 
         <div className="tree-section">
           <button className="tree-header" onClick={() => toggle("remotes")}>
-            <ChevronIcon expanded={!isCollapsed("remotes")} />
+            <ChevronIcon expanded={!isCollapsed("remotes")} scale={TREE_CHEVRON} />
             <span>REMOTES</span>
             <span className="count-badge">({state.remotes.length})</span>
           </button>
@@ -296,7 +296,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
             remotes.map((entry) => (
               <div key={entry.name}>
                 <button className="tree-item remote" onClick={() => toggle(`remote:${entry.name}`)}>
-                  <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} />
+                  <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} scale={TREE_CHEVRON} />
                   <RemoteIcon className="tree-icon" />
                   <span className="tree-label">{entry.name}</span>
                   <span className="count-badge">({entry.branches.length})</span>
@@ -322,7 +322,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
 
         <div className="tree-section">
           <button className="tree-header" onClick={() => toggle("tags")}>
-            <ChevronIcon expanded={!isCollapsed("tags")} />
+            <ChevronIcon expanded={!isCollapsed("tags")} scale={TREE_CHEVRON} />
             <span>TAGS</span>
             <span className="count-badge">({state.tags.length})</span>
           </button>
@@ -343,7 +343,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
 
         <div className="tree-section">
           <button className="tree-header" onClick={() => toggle("stashes")}>
-            <ChevronIcon expanded={!isCollapsed("stashes")} />
+            <ChevronIcon expanded={!isCollapsed("stashes")} scale={TREE_CHEVRON} />
             <span>STASHES</span>
             <span className="count-badge">({state.stashes.length})</span>
           </button>

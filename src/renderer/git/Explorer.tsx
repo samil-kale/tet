@@ -5,7 +5,7 @@ import { type FileAct } from "./ChangesList";
 import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
-import { ChevronIcon, SearchIcon, SMALLER } from "../ui/icons";
+import { ChevronIcon, SearchIcon, TREE_CHEVRON } from "../ui/icons";
 
 /** As VS Code resolves an icon theme: the name, then each extension from the longest (`a.spec.ts`
  *  is `spec.ts`, then `ts`). Tables from scripts/file-icons.js. */
@@ -47,13 +47,16 @@ interface TreeNode {
   root?: true;
 }
 
-/* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), 1px short throughout, at 13px
- * type; the chevron stays small (.explorer-tree .tree-icon in styles.css). */
-const INDENT_STEP = 7;
-const INDENT_BASE = 7;
-/** Fits a folder's chevron or a file's mark, centred. */
-const TWISTIE_WIDTH = 17;
-const TWISTIE_GAP = 5;
+/* VS Code's explorer geometry: TreeRenderer's DefaultIndent and `workbench.tree.indent` (both 8),
+ * `.monaco-tl-twistie` in tree.css (16px wide, 6px right padding, nudged 3px right). A file has no
+ * twistie — views.css zeroes it under `align-icons-and-twisties`, which Seti (file icons, no folder
+ * icons) turns on — so its mark sits where a sibling folder's chevron does (.file-mark in styles.css). */
+const INDENT_STEP = 8;
+const INDENT_BASE = 8;
+/** Holds a folder's chevron; empty on a file. */
+const TWISTIE_WIDTH = 16;
+const TWISTIE_GAP = 6;
+const TWISTIE_NUDGE = 3;
 
 /** Case-insensitive, locale-aware. */
 function compareNames(a: TreeNode, b: TreeNode): number {
@@ -271,23 +274,27 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
               onClick={() => (isFolder ? toggle(node) : onOpen(node.path))}
               onContextMenu={(event) => onContextMenu(event, node)}
             >
-              <span
-                style={{
-                  display: "flex",
-                  flex: "none",
-                  width: TWISTIE_WIDTH,
-                  alignSelf: "stretch",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: TWISTIE_GAP,
-                }}
-              >
-                {isFolder ? (
-                  <ChevronIcon expanded={open} className="tree-icon" scale={SMALLER} />
-                ) : (
-                  mark && <FileMarkIcon mark={mark} />
-                )}
-              </span>
+              {isFolder ? (
+                <span
+                  style={{
+                    display: "flex",
+                    flex: "none",
+                    width: TWISTIE_WIDTH,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: TWISTIE_GAP,
+                    transform: `translateX(${TWISTIE_NUDGE}px)`,
+                  }}
+                >
+                  <ChevronIcon expanded={open} className="tree-icon" scale={TREE_CHEVRON} />
+                </span>
+              ) : mark ? (
+                <FileMarkIcon mark={mark} />
+              ) : (
+                // Seti gives every file an icon, so the slot is kept even where tet draws no mark.
+                <span className="tree-icon file-mark" aria-hidden="true" />
+              )}
               <span className="tree-label">{node.name}</span>
             </button>
             {isFolder && open && (

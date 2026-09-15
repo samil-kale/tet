@@ -507,21 +507,16 @@ textarea:focus {
   min-height: 0;
 }
 
-/* VS Code's explorer row (ExplorerDelegate.ITEM_HEIGHT 22px), 1px short like every measurement in
-   Explorer.tsx. No flex gap: the twistie slot carries its own. */
+/* VS Code's explorer row (ExplorerDelegate.ITEM_HEIGHT 22px). No flex gap: the twistie and the
+   file mark carry their own. */
 .explorer-tree .tree-item {
-  height: 21px;
+  height: 22px;
   gap: 0;
 }
 
-/* The twistie slot's chevron and file mark: 2px under --icon-size, for the smaller slot. */
-.explorer-tree .tree-icon {
-  width: 11px;
-  height: 11px;
-}
-
-/* A file mark is a glyph of Seti's font (git/file-icons.ts). VS Code draws it at 150% of the
-   13px label in a 16px box; the same share of this 11px box. */
+/* A file mark is a glyph of Seti's font (git/file-icons.ts), laid out like VS Code's
+   `.monaco-icon-label::before` (iconlabel.css): a 16px slot with 6px after it, the glyph at 150% of
+   the 13px label, left-aligned on the 22px line. */
 @font-face {
   font-family: "seti";
   src: url("./git/seti.woff") format("woff");
@@ -530,12 +525,12 @@ textarea:focus {
 }
 
 .explorer-tree .file-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 16px;
+  height: 22px;
+  margin-right: 6px;
   font-family: "seti";
-  font-size: 13.4px;
-  line-height: 1;
+  font-size: 19.5px;
+  line-height: 22px;
 }
 
 /* Seti's palette (FileMarkColor in git/file-icons.ts) in the terminal's ANSI colors, which every
