@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.3 (2026-09-15)
+
+- **Explorer file icons as in VS Code.** Files show the icons of VS Code's Seti theme, picked by
+  the same file names and extensions VS Code uses.
+
 ## 0.8.2 (2026-09-15)
 
 - **Light and dark themes are chosen apart.** Settings picks a color scheme and one theme for
