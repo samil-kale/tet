@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
-import { resolveTheme, THEMES, type ThemeKind } from "../../shared/themes";
+import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../../shared/types";
 import type {
   AppInfo,
@@ -134,14 +134,13 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyColorScheme = (scheme: ColorScheme): void => patch(() => ({ colorScheme: scheme }));
 
   const applyTheme = (kind: ThemeKind, id: string): void =>
-    patch(() => (kind === "dark" ? { darkTheme: id } : { lightTheme: id }));
+    patch(() => ({ [themeKey(kind)]: id }));
 
   // The kind the window is drawn in, and the one Save would ask for — "system" answered by the OS as
   // it is now (Electron's prefers-color-scheme follows nativeTheme, which main.ts's currentTheme reads).
   const shownKind = resolveTheme(document.documentElement.dataset.theme).kind;
   const scheme = settings?.colorScheme ?? "system";
-  const chosenKind: ThemeKind =
-    scheme === "system" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : scheme;
+  const chosenKind = schemeKind(scheme, window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   /** Tet's own text is stored as "" (settings.ts does the same); the reset button reads off it. */
   const applyPrompt = (id: PromptId, text: string): void =>
@@ -209,7 +208,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <label className="dialog-field">
             <span>{chosenKind === "dark" ? "Dark theme" : "Light theme"}</span>
             <Dropdown
-              value={resolveTheme(chosenKind === "dark" ? settings?.darkTheme : settings?.lightTheme, chosenKind).id}
+              value={resolveTheme(settings?.[themeKey(chosenKind)], chosenKind).id}
               onChange={(id) => applyTheme(chosenKind, id)}
               options={THEMES.filter((theme) => theme.kind === chosenKind).map((theme) => ({
                 value: theme.id,

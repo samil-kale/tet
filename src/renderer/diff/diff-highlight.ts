@@ -42,9 +42,8 @@ async function loadTheme(): Promise<ThemeRegistration> {
 
 /**
  * Switches to the theme with this id, once its stylesheet is on the root element. Loaded again even
- * under a name shiki already has: two tet themes can share one token half (`dark-plus`), and the
- * editor-surface colors patched into it are the stylesheet's. A highlighter not created yet loads it
- * when it is.
+ * under a name shiki already has: the editor-surface colors patched into it are read off the
+ * stylesheet at load. A highlighter not created yet loads it when it is.
  */
 export async function switchHighlightTheme(id: string): Promise<void> {
   theme = resolveTheme(id).shikiTheme;

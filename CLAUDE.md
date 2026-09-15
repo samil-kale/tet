@@ -105,7 +105,8 @@ instead of mounting `App` — a wall (no Escape), and **it installs nothing**, n
 `--version` results are remembered (`isAgentInstalled`); `npm start -- --simulate=git,claude`
 makes the dialog reachable on a machine that has everything. `--allow-shell-only` lets a runner
 with no agent open, and `--user-data-dir=<dir>` gives that run a profile and data folder of its
-own (and, only then, a control token from its environment) — `test/app.test.ts` uses both.
+own (and, only then, a control token from its environment and the `ownProfileOnly` verbs) —
+`test/app.test.ts` uses both.
 `anyAgentInstalled` asks the same question mid-session, where a *project* decides whether it is
 sbx-only: nothing is stored for that, it is derived at each of tet's own refresh points.
 
@@ -503,7 +504,8 @@ acts.
 `tabs-send` and `tabs-output` type into and read another tab's terminal, so they answer only in a
 run with a profile of its own (`ControlVerb.ownProfileOnly`) — the verbs for testing tet against
 real agents. What only the window knows (the editor tab, the notices it showed) it reports to
-`ControlRecords` as it happens, the way it reports `inFront`; the server never asks the window.
+`ControlRecords` as it happens, the way it reports `inFront`; the server asks the window only for
+the editor tab's text (`editorContent`), too large to report on every change.
 
 **Direction of travel**: every setting in `settings-get` is to be settable through `tet-ctl`
 (`settings-set-color-scheme`, `settings-set-theme`, `settings-set-prompt` so far), toward letting an agent drive the whole

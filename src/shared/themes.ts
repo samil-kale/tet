@@ -1,3 +1,5 @@
+import type { ColorScheme } from "./types";
+
 /** The color themes the settings dialog offers. One entry is one stylesheet in
  *  src/renderer/themes/<id>.css (`:root[data-theme="<id>"]`) plus what both processes need before
  *  that stylesheet exists. pieces.test.ts checks the two halves agree. */
@@ -79,13 +81,22 @@ export type ThemeKind = ThemeDefinition["kind"];
 /** Each kind's theme before anyone picked one. */
 export const DEFAULT_THEME_IDS: Readonly<Record<ThemeKind, string>> = { dark: "dark-modern", light: "light-modern" };
 
-export const DEFAULT_THEME_ID = DEFAULT_THEME_IDS.dark;
-
 /** An id the list no longer knows — or, given a kind, one of the other kind — is the default: the
  *  same contract as the keybinding preset. */
 export function resolveTheme(id: string | undefined, kind?: ThemeKind): ThemeDefinition {
   return (
     THEMES.find((theme) => theme.id === id && (!kind || theme.kind === kind)) ??
-    THEMES.find((theme) => theme.id === (kind ? DEFAULT_THEME_IDS[kind] : DEFAULT_THEME_ID))!
+    THEMES.find((theme) => theme.id === DEFAULT_THEME_IDS[kind ?? "dark"])!
   );
+}
+
+/** The kind a color scheme asks for, with "system" answered by whoever asks: `nativeTheme` in the
+ *  main process, `prefers-color-scheme` in the window. */
+export function schemeKind(scheme: ColorScheme, systemDark: boolean): ThemeKind {
+  return scheme === "system" ? (systemDark ? "dark" : "light") : scheme;
+}
+
+/** The setting holding a kind's theme. */
+export function themeKey(kind: ThemeKind): "darkTheme" | "lightTheme" {
+  return kind === "dark" ? "darkTheme" : "lightTheme";
 }

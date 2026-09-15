@@ -189,6 +189,9 @@ export interface TETApi {
     onFileChanged(listener: (payload: { projectId: string; path: string }) => void): Unsubscribe;
     /** What the project's editor tab shows now, for `tet-ctl editor-state`; null once it is closed. */
     reportEditor(projectId: string, report: EditorReport | null): void;
+    /** `tet-ctl editor-state` asks for the text of the project's editor tab; the listener's answer
+     *  goes back to the main process. */
+    onEditorContentRequest(listener: (projectId: string) => string | undefined): Unsubscribe;
     /** `tet-ctl editor-open` asks for a file in the project's editor tab. */
     onOpenEditor(listener: (payload: { projectId: string; path: string }) => void): Unsubscribe;
   };

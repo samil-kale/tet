@@ -1,4 +1,4 @@
-import { COLOR_SCHEMES, PROMPT_IDS } from "./types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
 
 /**
  * The control channel's wire contract, shared by the server (`src/main/control/control-server.ts`)
@@ -173,7 +173,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   },
   {
     verb: "tabs-wait",
-    usage: "tabs-wait <tab-id> [--session] [--busy] [--idle] [--status <status>] [--timeout <seconds>] [--project <id>]",
+    usage: `tabs-wait <tab-id> [--session] [--busy] [--idle] [--status <${TERMINAL_STATUSES.join("|")}>] [--timeout <seconds>] [--project <id>]`,
     summary:
       "Wait until a tab has a session (--session), is working a turn (--busy), is not (--idle) or has a status; every condition given must hold. Exits 4 after the timeout (30 s).",
     positionals: ["tabId"]

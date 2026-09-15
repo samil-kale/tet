@@ -67,11 +67,14 @@ function terminalsOf(projectId: string): ControlTerminals {
       tab(projectId, OWN_TAB),
       { ...tab(projectId, "tab-2"), sessionId: tab2Session, reportedSessionId: "reported-2", sandbox: "tet-claude-abc" }
     ],
+    // The caller's own tab is running: nothing to start or restart there.
     start: (tabId) => {
       calls.started.push(tabId);
+      return tabId !== OWN_TAB;
     },
     restart: (tabId) => {
       calls.restarted.push(tabId);
+      return tabId !== OWN_TAB;
     },
     write: (tabId, data) => {
       calls.written.push([tabId, data]);
@@ -110,10 +113,11 @@ function deps(ownProfile = true): ControlDeps {
   return {
     ownProfile,
     records: {
-      editor: (id) => (id === PROJECT.id ? { path: "a.txt", loading: false, dirty: true, readOnly: false, content: "edited" } : undefined),
+      editor: (id) => (id === PROJECT.id ? { path: "a.txt", loading: false, dirty: true, readOnly: false } : undefined),
       notices: () => [{ severity: "error", message: "Could not delete", at: 1 }],
       output: (id, tabId) => (id === PROJECT.id && tabId === "tab-2" ? "\x1b[1mbold\x1b[0m line\r\n\x1b]0;title\x07next" : undefined)
     },
+    editorContent: (id) => Promise.resolve(id === PROJECT.id ? "edited" : undefined),
     openEditor: (projectId, filePath) => {
       calls.editorsOpened.push([projectId, filePath]);
     },
@@ -281,7 +285,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["version"])).result, { version: "1.2.3", pid: 4242 });
   });
 
-  it("lists the themes with system first", async () => {
+  it("lists the themes with their kind", async () => {
     const run = await tetCtl(["list-themes"]);
     assert.equal(run.status, EXIT_CODES.ok);
     const themes = (run.result as { id: string; kind: string }[]).map(({ id, kind }) => `${id}:${kind}`);
@@ -435,6 +439,15 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual([calls.started, calls.restarted], [["tab-2"], ["tab-2"]]);
   });
 
+  it("refuses to start or restart a tab with nothing to do", async () => {
+    const started = await tetCtl(["tabs-start", OWN_TAB]);
+    assert.equal(started.status, EXIT_CODES.usage);
+    assert.match(started.stderr, /not waiting for its first start/);
+    const restarted = await tetCtl(["tabs-restart", OWN_TAB]);
+    assert.equal(restarted.status, EXIT_CODES.usage);
+    assert.match(restarted.stderr, /nothing to restart/);
+  });
+
   it("waits until a tab has what was asked for", async () => {
     setTimeout(() => (tab2Session = "s-2"), 300);
     const run = await tetCtl(["tabs-wait", "tab-2", "--session", "--status", "running"]);
@@ -450,6 +463,10 @@ describe("tet-ctl against the control server", () => {
 
   it("refuses to wait for nothing", async () => {
     assert.equal((await tetCtl(["tabs-wait", "tab-2"])).status, EXIT_CODES.usage);
+  });
+
+  it("refuses to wait for a status there is none of", async () => {
+    assert.equal((await tetCtl(["tabs-wait", "tab-2", "--status", "runing"])).status, EXIT_CODES.usage);
   });
 
   it("types into a tab, with Enter when asked", async () => {

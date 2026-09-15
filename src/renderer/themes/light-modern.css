@@ -130,7 +130,7 @@
   --vscode-terminal-ansiCyan: #0598bc;
   --vscode-terminal-ansiWhite: #555555;
   --vscode-terminal-ansiBrightBlack: #666666;
-  --vscode-terminal-ansiBrightRed: #cd3131;
+  --vscode-terminal-ansiBrightRed: #f14c4c;
   --vscode-terminal-ansiBrightGreen: #14ce14;
   --vscode-terminal-ansiBrightYellow: #b5ba00;
   --vscode-terminal-ansiBrightBlue: var(--vscode-focusBorder);

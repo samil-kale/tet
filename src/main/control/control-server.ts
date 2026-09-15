@@ -3,8 +3,8 @@ import * as http from "node:http";
 import * as net from "node:net";
 import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
-import { THEMES } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS } from "../../shared/types";
+import { THEMES, themeKey } from "../../shared/themes";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -51,6 +51,9 @@ export interface ControlDeps {
   ownProfile: boolean;
   /** Opens a file in the project's editor tab and brings that tab to the front. */
   openEditor(projectId: string, path: string): void;
+  /** The text the project's editor tab shows, asked of the window at the moment — the one thing
+   *  the server asks it rather than keeping a report (see EditorReport). */
+  editorContent(projectId: string): Promise<string | undefined>;
   /** Every agent, and whether it is installed — the requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
   /** The ids `tabs-create` accepts — `AGENTS`', so a new agent needs nothing here. */
@@ -105,9 +108,11 @@ export interface InspectedTab extends TerminalDescriptor {
 export interface ControlTerminals {
   snapshot(): TerminalDescriptor[];
   inspect(): InspectedTab[];
-  /** Starts a tab's process at the size it was last fitted to, or a default one. */
-  start(tabId: string): void;
-  restart(tabId: string): void;
+  /** Starts a tab's process at the size it was last fitted to, or a default one; false for a tab
+   *  that is not waiting for its first start. */
+  start(tabId: string): boolean;
+  /** False for a tab that neither stopped nor failed to start — nothing to restart. */
+  restart(tabId: string): boolean;
   write(tabId: string, data: string): void;
   /** What the session manager heard lately, oldest first. */
   events(): ControlEvent[];
@@ -271,7 +276,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!theme) {
         throw new ControlError("bad_args", `unknown theme: ${id} (see list-themes)`);
       }
-      settings.save({ ...settings.get(), [theme.kind === "dark" ? "darkTheme" : "lightTheme"]: id });
+      settings.save({ ...settings.get(), [themeKey(theme.kind)]: id });
       // The theme of its own kind: shown at once while the window is drawn in that kind. The flag
       // is for the agent to relay; restarting is the user's call.
       return { result: { saved: true, restartRequired: deps.applyTheme() } };
@@ -341,13 +346,17 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "tabs-start": (args, caller) => {
       const { tabs, tabId } = knownTab(args, caller);
-      tabs.start(tabId);
+      if (!tabs.start(tabId)) {
+        throw new ControlError("bad_args", `tab ${tabId} is not waiting for its first start (see tabs-list; tabs-restart for one that stopped)`);
+      }
       return { result: { started: tabId } };
     },
 
     "tabs-restart": (args, caller) => {
       const { tabs, tabId } = knownTab(args, caller);
-      tabs.restart(tabId);
+      if (!tabs.restart(tabId)) {
+        throw new ControlError("bad_args", `tab ${tabId} has nothing to restart: it neither stopped nor failed to start (see tabs-list)`);
+      }
       return { result: { restarted: tabId } };
     },
 
@@ -365,6 +374,9 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         conditions.push(["idle", (tab) => tab.busy !== true]);
       }
       if (typeof status === "string") {
+        if (!TERMINAL_STATUSES.some((candidate) => candidate === status)) {
+          throw new ControlError("bad_args", `unknown status: ${status} (one of ${TERMINAL_STATUSES.join(", ")})`);
+        }
         conditions.push([status, (tab) => tab.status === status]);
       }
       if (conditions.length === 0) {
@@ -414,9 +426,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { opened: filePath } };
     },
 
-    "editor-state": (args, caller) => {
+    "editor-state": async (args, caller) => {
       const found = project(args, caller);
-      return { result: deps.records.editor(found.id) ?? null };
+      const report = deps.records.editor(found.id);
+      return { result: report ? { ...report, content: await deps.editorContent(found.id) } : null };
     },
 
     "explorer-list": async (args, caller) => {
@@ -460,12 +473,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-close": (args, caller) => {
-      const found = project(args, caller);
-      const tabId = text(args, "tabId", "tab id");
-      const tabs = terminals(found);
-      if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
-        throw new ControlError("not_found", `unknown tab: ${tabId} (see tabs-list)`);
-      }
+      const { tabs, tabId, found } = knownTab(args, caller);
       const close = (): void => void tabs.closeTabs([tabId]);
       // Closing the tab the CLI runs in kills the CLI — answer first.
       if (found.id === caller.projectId && tabId === caller.tabId) {
@@ -476,12 +484,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-rename": async (args, caller) => {
-      const found = project(args, caller);
-      const tabId = text(args, "tabId", "tab id");
-      const tabs = terminals(found);
-      if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
-        throw new ControlError("not_found", `unknown tab: ${tabId} (see tabs-list)`);
-      }
+      const { tabs, tabId } = knownTab(args, caller);
       await tabs.renameTab(tabId, text(args, "title", "title"));
       return { result: { renamed: tabId } };
     },

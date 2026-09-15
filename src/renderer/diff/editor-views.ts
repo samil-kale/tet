@@ -104,19 +104,20 @@ function publish(projectId: string, view: EditorView, patch: Partial<EditorSnaps
   report(projectId, view);
 }
 
-/** The snapshot for `tet-ctl editor-state` — see EditorReport. The edited side's text is the
- *  model's once there is one; typing into it changes nothing reported until `dirty` does. */
+/** The snapshot for `tet-ctl editor-state` — see EditorReport. */
 function report(projectId: string, view: EditorView): void {
   const { path, file, loading, dirty } = view.snapshot;
-  const text = editorKind(file) === "text";
-  window.tet.repository.reportEditor(projectId, {
-    path,
-    loading,
-    dirty,
-    readOnly: isReadOnly(file),
-    content: text ? (view.models?.modified.getValue() ?? file?.content) : undefined,
-    error: file?.error
-  });
+  window.tet.repository.reportEditor(projectId, { path, loading, dirty, readOnly: isReadOnly(file), error: file?.error });
+}
+
+/** The edited side's text as it stands now, the model's once there is one — asked for by
+ *  `tet-ctl editor-state`. Undefined for no editor tab, an image, a binary or a file too large. */
+export function editorContent(projectId: string): string | undefined {
+  const view = views.get(projectId);
+  if (!view || editorKind(view.snapshot.file) !== "text") {
+    return undefined;
+  }
+  return view.models?.modified.getValue() ?? view.snapshot.file?.content;
 }
 
 /**

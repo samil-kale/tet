@@ -322,15 +322,14 @@ export interface NoticeReport {
 }
 
 /** What a project's editor tab shows, as the renderer reports it on every change of its snapshot
- *  for `tet-ctl editor-state` — the editor lives in the renderer alone. */
+ *  for `tet-ctl editor-state` — the editor lives in the renderer alone. Not its text: that is up
+ *  to 4 MB, and a snapshot changes several times per write of the file on disk (measured). */
 export interface EditorReport {
   path: string;
   /** The read of `path` still in flight. */
   loading: boolean;
   dirty: boolean;
   readOnly: boolean;
-  /** The edited side's text as it stood at the report; absent for an image, a binary or a file too large. */
-  content?: string;
   /** Why the file could not be read. */
   error?: string;
 }
@@ -436,7 +435,8 @@ export interface TerminalOutput {
   data: string;
 }
 
-export type TerminalStatus = "missing" | "ready" | "running" | "stopped" | "error";
+export const TERMINAL_STATUSES = ["missing", "ready", "running", "stopped", "error"] as const;
+export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
 export interface TerminalDescriptor {
   /** Unique within its project; equals the agent's session id for a restored tab. */

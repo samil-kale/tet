@@ -102,6 +102,8 @@ interface AgentRuntime {
   /** Resolves once the agent's version check, spawn preparation and initial listing are done. */
   ready: Promise<void>;
   preparation?: SpawnPreparation;
+  /** The theme `preparation` was written for — see themeChanged. */
+  preparedTheme?: string;
   prepareFailed: boolean;
   /** One setup at a time: two tabs opened at once must not write the same setup twice. */
   preparing?: Promise<boolean>;
@@ -319,18 +321,24 @@ export class ProjectSessionManager {
   }
 
   /** Starts a tab's process without a window having fitted it — `tet-ctl tabs-start`. The size is
-   *  the last fit's where there was one; the window's first fit resizes it like any other. */
-  start(tabId: string): void {
+   *  the last fit's where there was one; the window's first fit resizes it like any other. False
+   *  for a tab that is not waiting for its first start, which a fit would leave alone too. */
+  start(tabId: string): boolean {
+    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    if (!tab || tab.status !== "ready" || this.sessions.has(tabId)) {
+      return false;
+    }
     const size = this.lastSizes.get(tabId) ?? CONTROL_START_SIZE;
     this.handleResize(tabId, size.cols, size.rows);
+    return true;
   }
 
   /** `restartTab` for `tet-ctl tabs-restart`, which may come before any window fitted the tab. */
-  restart(tabId: string): void {
+  restart(tabId: string): boolean {
     if (!this.lastSizes.has(tabId)) {
       this.lastSizes.set(tabId, CONTROL_START_SIZE);
     }
-    this.restartTab(tabId);
+    return this.restartTab(tabId);
   }
 
   private postTabs(): void {
@@ -585,33 +593,50 @@ export class ProjectSessionManager {
   }
 
   /**
-   * Runs the agent's setup, at most one at a time. False means it failed and the agent must not
-   * be started at all.
+   * The window shows the saved theme: every agent set up for another one is set up again, since its
+   * setup was written for the theme of its day (AgentPaths.theme — Codex's win32 launcher carries
+   * the colors). The old setup stands until the new one replaces it, so a tab spawned meanwhile
+   * still gets one.
    */
-  private prepare(runtime: AgentRuntime): Promise<boolean> {
-    runtime.preparing ??= this.doPrepare(runtime).finally(() => {
+  themeChanged(): void {
+    const { id } = currentTheme(this.settings);
+    for (const runtime of this.runtimes.values()) {
+      if (runtime.preparation && runtime.preparedTheme !== id) {
+        void this.prepare(runtime, true);
+      }
+    }
+  }
+
+  /**
+   * Runs the agent's setup, at most one at a time — once, unless `again`. False means it failed
+   * and the agent must not be started at all.
+   */
+  private prepare(runtime: AgentRuntime, again = false): Promise<boolean> {
+    runtime.preparing ??= this.doPrepare(runtime, again).finally(() => {
       runtime.preparing = undefined;
     });
     return runtime.preparing;
   }
 
-  private async doPrepare(runtime: AgentRuntime): Promise<boolean> {
+  private async doPrepare(runtime: AgentRuntime, again: boolean): Promise<boolean> {
     const { agent, executable } = runtime;
     if (this.disposed) {
       return false;
     }
-    if (!agent.prepareSpawn || runtime.preparation) {
+    if (!agent.prepareSpawn || (runtime.preparation && !again)) {
       return !runtime.prepareFailed;
     }
     try {
+      const paths = this.pathsFor(runtime);
       const preparation = await markStartup(`prepare ${agent.id}`, () =>
-        agent.prepareSpawn!(executable, this.project.path, this.pathsFor(runtime))
+        agent.prepareSpawn!(executable, this.project.path, paths)
       );
       // Closed while that ran: nothing of it may be kept, since nothing may spawn from here on.
       if (this.disposed) {
         return false;
       }
       runtime.preparation = preparation;
+      runtime.preparedTheme = paths.theme.id;
       // Nothing else clears an earlier failure.
       runtime.prepareFailed = false;
       return true;
@@ -1142,23 +1167,26 @@ export class ProjectSessionManager {
    * `error`, the latter also a start that gave up before spawning); one not fitted yet has its
    * first fit for that.
    */
-  restartTab(tabId: string): void {
+  /** False where there was nothing to restart. */
+  restartTab(tabId: string): boolean {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
     if (!tab) {
-      return;
+      return false;
     }
     if (isSavedCommandTab(tab)) {
-      this.sessions.get(tabId)?.restart();
-      return;
+      const session = this.sessions.get(tabId);
+      session?.restart();
+      return session !== undefined;
     }
     if (!this.lastSizes.has(tabId) || (tab.status !== "stopped" && tab.status !== "error")) {
-      return;
+      return false;
     }
     // `startTab` gives up on a tab that already has a session.
     this.sessions.delete(tabId);
     // The status stays until the new process reports its own, so a start that gives up again
     // still offers Restart.
     this.startTab(tab);
+    return true;
   }
 
   /**
@@ -1178,7 +1206,9 @@ export class ProjectSessionManager {
     const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
     const sessionId = bound ? getAgent(bound.agentId).sessionIdOf?.(payload) : undefined;
     this.record({ tabId, kind: "hook", event, reportedAt, sessionId });
-    this.bindReportedSession(bound, payload);
+    if (bound && sessionId) {
+      this.bindReportedSession(bound, sessionId);
+    }
     if (!tab) {
       return {};
     }
@@ -1241,12 +1271,8 @@ export class ProjectSessionManager {
    * session. Claimed by reconcile once the listing has it, so the title and the rest arrive the
    * way they do for every other tab. The session left behind stays, a tab of its own next start.
    */
-  private bindReportedSession(tab: TabState | undefined, payload: string): void {
-    if (!tab) {
-      return;
-    }
-    const reported = getAgent(tab.agentId).sessionIdOf?.(payload);
-    if (!reported || reported === tab.reportedSessionId) {
+  private bindReportedSession(tab: TabState, reported: string): void {
+    if (reported === tab.reportedSessionId) {
       return;
     }
     tab.reportedSessionId = reported;
@@ -1497,6 +1523,13 @@ export class SessionManagerRegistry {
     this.inFront = { projectId, tabIds };
     for (const [id, manager] of this.managers) {
       manager.setInFront(id === projectId ? tabIds : []);
+    }
+  }
+
+  /** See ProjectSessionManager.themeChanged. */
+  themeChanged(): void {
+    for (const manager of this.managers.values()) {
+      manager.themeChanged();
     }
   }
 

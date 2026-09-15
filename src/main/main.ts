@@ -7,7 +7,7 @@ import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
-import type { ThemeDefinition } from "../shared/themes";
+import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
@@ -65,6 +65,33 @@ ipcMain.on("app:notice-listening", () => {
   }
 });
 
+/** How long `editor-state` waits for the window's answer: a window still in its requirements
+ *  check, or reloading, has no App listening and never answers. */
+const EDITOR_CONTENT_TIMEOUT_MS = 2000;
+let editorContentRequests = 0;
+
+/** Asks the window for the text of a project's editor tab (ControlDeps.editorContent), on a reply
+ *  channel of its own so two questions never take each other's answer. */
+function editorContent(projectId: string): Promise<string | undefined> {
+  if (!window || window.isDestroyed()) {
+    return Promise.resolve(undefined);
+  }
+  editorContentRequests += 1;
+  const reply = `editor:content:${editorContentRequests}`;
+  return new Promise((resolve) => {
+    const answer = (_event: Electron.IpcMainEvent, content: string | undefined): void => {
+      clearTimeout(timer);
+      resolve(content);
+    };
+    const timer = setTimeout(() => {
+      ipcMain.removeListener(reply, answer);
+      resolve(undefined);
+    }, EDITOR_CONTENT_TIMEOUT_MS);
+    ipcMain.once(reply, answer);
+    send("editor:content-request", { projectId, reply });
+  });
+}
+
 const pendingOutput = new Map<string, TerminalOutput>();
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -98,6 +125,8 @@ function queueOutput(projectId: string, tabId: string, data: string): void {
  */
 const USER_DATA_ARG = "--user-data-dir=";
 const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
+/** A run with a profile of its own: the one that answers ControlVerb.ownProfileOnly verbs. */
+const ownProfile = Boolean(userDataArg);
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
 }
@@ -181,7 +210,7 @@ const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
 /** What the control verbs answer from beyond the stores; terminal output only with a profile of its own. */
-const records = new ControlRecords(Boolean(userDataArg));
+const records = new ControlRecords(ownProfile);
 const repositories = new RepositoryManager(
   (projectId, state) => send("repo:state-changed", { projectId, state }),
   (severity, message) => send("app:notice", { severity, message }),
@@ -469,8 +498,9 @@ async function startControl(): Promise<void> {
         readCommands,
         shutdown,
         records,
-        ownProfile: Boolean(userDataArg),
+        ownProfile,
         openEditor: (projectId, filePath) => send("editor:open", { projectId, path: filePath }),
+        editorContent,
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
         projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
         notify: showDesktopNotification,
@@ -494,20 +524,27 @@ let shownTheme: ThemeDefinition | undefined;
  * its tab starts (`AgentPaths.theme`), and a running one would go on drawing for the other.
  */
 function applyTheme(): boolean {
-  const theme = currentTheme(settings);
-  if (!window || window.isDestroyed() || !shownTheme || theme.id === shownTheme.id) {
+  if (!window || window.isDestroyed() || !shownTheme) {
     return false;
   }
-  if (theme.kind !== shownTheme.kind) {
-    return true;
+  // The theme saved for the kind on screen, whichever kind is saved: a switch to the other kind
+  // waiting for its restart must not hold back a change within this one.
+  const { kind } = shownTheme;
+  const theme = resolveTheme(settings.get()[themeKey(kind)], kind);
+  if (theme.id !== shownTheme.id) {
+    shownTheme = theme;
+    window.setBackgroundColor(theme.windowBackground);
+    if (process.platform !== "darwin") {
+      window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
+    }
+    send("app:theme", theme.id);  }
+  const saved = currentTheme(settings);
+  // Agents are set up for the saved theme (AgentPaths.theme), so only once that is the one on
+  // screen: a kind waiting for its restart is not handed to the tabs of projects already open.
+  if (saved.id === shownTheme.id) {
+    sessions.themeChanged();
   }
-  shownTheme = theme;
-  window.setBackgroundColor(theme.windowBackground);
-  if (process.platform !== "darwin") {
-    window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
-  }
-  send("app:theme", theme.id);
-  return false;
+  return saved.kind !== kind;
 }
 
 function createWindow(): void {

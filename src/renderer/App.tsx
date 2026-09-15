@@ -31,7 +31,7 @@ import { reportSlow } from "./slow-report";
 import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 import { EDITOR_TAB_ID, type EditorTab, type PaneTab } from "./terminal/editor-tab";
-import { canDiscardEdit, disposeEditor, openEditorFile, setEditorVersion } from "./diff/editor-views";
+import { canDiscardEdit, disposeEditor, editorContent, openEditorFile, setEditorVersion } from "./diff/editor-views";
 
 /** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const SIDE_PANE_SLIDE_MS = 180;
@@ -722,6 +722,7 @@ export function App() {
       }),
     [openDiff]
   );
+  useEffect(() => window.tet.repository.onEditorContentRequest(editorContent), []);
   const openActiveDiff = useCallback(
     (path: string) => {
       if (activeProjectId) {

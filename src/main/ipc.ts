@@ -548,8 +548,7 @@ export function registerIpc({
 
   /** What the editor tab shows and which notices went up, for tet-ctl — only the renderer knows. */
   ipcMain.on("editor:report", (_event, projectId: string, report: EditorReport | null) => {
-    records.setEditor(projectId, report);
-  });
+    records.setEditor(projectId, report);  });
 
   ipcMain.on("app:notice-shown", (_event, report: NoticeReport) => {
     records.addNotice(report);

@@ -518,7 +518,7 @@ textarea:focus {
   gap: 0;
 }
 
-/* The twistie slot's icons — the chevron and a file's language mark — 2px down from the shared
+/* The twistie slot's icons — the chevron and a file's mark — 2px down from the shared
    --icon-size, for the smaller slot. */
 .explorer-tree .tree-icon {
   width: 11px;

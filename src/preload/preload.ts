@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { TETApi, Unsubscribe } from "../shared/api";
-import { DEFAULT_THEME_ID } from "../shared/themes";
+import { DEFAULT_THEME_IDS } from "../shared/themes";
 
 function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscribe {
   const handler = (_event: Electron.IpcRendererEvent, payload: T): void => listener(payload);
@@ -10,7 +10,7 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscr
 
 /** Handed in by main.ts's createWindow through webPreferences.additionalArguments — see there. */
 const THEME_ARG = "--tet-theme=";
-const initialTheme = process.argv.find((arg) => arg.startsWith(THEME_ARG))?.slice(THEME_ARG.length) || DEFAULT_THEME_ID;
+const initialTheme = process.argv.find((arg) => arg.startsWith(THEME_ARG))?.slice(THEME_ARG.length) || DEFAULT_THEME_IDS.dark;
 const waylandSession = process.argv.includes("--tet-wayland");
 
 const api: TETApi = {
@@ -103,6 +103,10 @@ const api: TETApi = {
     watchFile: (projectId, filePath) => ipcRenderer.invoke("repo:watch-file", projectId, filePath),
     onFileChanged: (listener) => subscribe("repo:file-changed", listener),
     reportEditor: (projectId, report) => ipcRenderer.send("editor:report", projectId, report),
+    onEditorContentRequest: (listener) =>
+      subscribe<{ projectId: string; reply: string }>("editor:content-request", ({ projectId, reply }) =>
+        ipcRenderer.send(reply, listener(projectId))
+      ),
     onOpenEditor: (listener) => subscribe("editor:open", listener)
   },
   commands: {
