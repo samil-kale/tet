@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.5 (2026-09-15)
+
+- **Trees laid out as in VS Code.** The Explorer and the git pane's branch tree share VS Code's
+  row geometry: chevrons, file labels, file marks and section headers line up and are sized alike.
+- **Buttons with the theme's border.** Buttons draw the border each VS Code theme defines, and
+  the tab strip's action separators use the panel border.
+- **Quieter icons.** Icons in the side pane are dimmed a little further.
+
 ## 0.8.4 (2026-09-15)
 
 - **IntelliJ themes.** Dark IntelliJ and Light IntelliJ join the list, with IntelliJ's syntax
