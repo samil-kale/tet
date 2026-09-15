@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.4 (2026-09-15)
+
+- **IntelliJ themes.** Dark IntelliJ and Light IntelliJ join the list, with IntelliJ's syntax
+  colors in the editor.
+- **Light Modern as in VS Code.** The light theme is back to VS Code's blue accent and terminal
+  colors.
+- **Theme changes reach running projects.** Agents of projects already open pick up a newly
+  chosen theme for the tabs they start next.
+- **`tet-ctl` fixes.** `editor-state` returns the editor's current text, and `tabs-start`,
+  `tabs-restart` and `tabs-wait --status` report an error instead of silently doing nothing.
+
 ## 0.8.3 (2026-09-15)
 
 - **Explorer file icons as in VS Code.** Files show the icons of VS Code's Seti theme, picked by
