@@ -500,6 +500,11 @@ only when the user asked. A theme change answers `restartRequired`; that is a fa
 to relay, never a reason to restart on its own. A verb that ends its caller replies before it
 acts.
 
+`tabs-send` and `tabs-output` type into and read another tab's terminal, so they answer only in a
+run with a profile of its own (`ControlVerb.ownProfileOnly`) — the verbs for testing tet against
+real agents. What only the window knows (the editor tab, the notices it showed) it reports to
+`ControlRecords` as it happens, the way it reports `inFront`; the server never asks the window.
+
 **Direction of travel**: every setting in `settings-get` is to be settable through `tet-ctl`
 (`settings-set-theme`, `settings-set-prompt` so far), toward letting an agent drive the whole
 app. A new or extended setting comes with an offer to add its verb: the same `ControlVerb` entry,

@@ -43,7 +43,14 @@ interface Calls {
   hooks: [string, string, string][];
   /** What each hook said its own time was — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
+  started: string[];
+  restarted: string[];
+  written: [string, string][];
+  editorsOpened: [string, string][];
 }
+
+/** The session "tab-2" reports once a test sets it — what tabs-wait waits on. */
+let tab2Session: string | undefined;
 
 let tempDir: string;
 let port: number;
@@ -54,6 +61,20 @@ let calls: Calls;
 function terminalsOf(projectId: string): ControlTerminals {
   return {
     snapshot: () => [tab(projectId, OWN_TAB), tab(projectId, "tab-2")],
+    inspect: () => [
+      tab(projectId, OWN_TAB),
+      { ...tab(projectId, "tab-2"), sessionId: tab2Session, reportedSessionId: "reported-2", sandbox: "tet-claude-abc" }
+    ],
+    start: (tabId) => {
+      calls.started.push(tabId);
+    },
+    restart: (tabId) => {
+      calls.restarted.push(tabId);
+    },
+    write: (tabId, data) => {
+      calls.written.push([tabId, data]);
+    },
+    events: () => [1, 2, 3].map((at) => ({ at, tabId: "tab-2", kind: "hook" as const, event: "stop" as const })),
     createTab: (agentId) => {
       calls.created.push(agentId);
       return tab(projectId, "tab-new");
@@ -82,9 +103,18 @@ function terminalsOf(projectId: string): ControlTerminals {
   };
 }
 
-function deps(): ControlDeps {
+function deps(ownProfile = true): ControlDeps {
   const projects = [PROJECT, OTHER];
   return {
+    ownProfile,
+    records: {
+      editor: (id) => (id === PROJECT.id ? { path: "a.txt", loading: false, dirty: true, readOnly: false, content: "edited" } : undefined),
+      notices: () => [{ severity: "error", message: "Could not delete", at: 1 }],
+      output: (id, tabId) => (id === PROJECT.id && tabId === "tab-2" ? "\x1b[1mbold\x1b[0m line\r\n\x1b]0;title\x07next" : undefined)
+    },
+    openEditor: (projectId, filePath) => {
+      calls.editorsOpened.push([projectId, filePath]);
+    },
     version: "1.2.3",
     pid: 4242,
     store: { list: () => projects, get: (id) => projects.find((project) => project.id === id) },
@@ -98,7 +128,10 @@ function deps(): ControlDeps {
     repositories: {
       get: (id) =>
         projects.some((project) => project.id === id)
-          ? { getState: () => ({ ...EMPTY_REPOSITORY_STATE, head: `main-of-${id}` }) }
+          ? {
+              getState: () => ({ ...EMPTY_REPOSITORY_STATE, head: `main-of-${id}` }),
+              listExplorer: async () => ({ files: [`${id}.txt`], emptyDirs: [], compactFolders: true, sortOrder: "default" as const })
+            }
           : undefined
     },
     listAgents: async () => [{ id: "shell", name: "Shell", installed: true }],
@@ -157,7 +190,11 @@ describe("tet-ctl against the control server", () => {
       shutdown: [],
       notified: [],
       hooks: [],
-      hookTimes: []
+      hookTimes: [],
+      started: [],
+      restarted: [],
+      written: [],
+      editorsOpened: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -177,6 +214,7 @@ describe("tet-ctl against the control server", () => {
     for (const list of Object.values(calls)) {
       list.length = 0;
     }
+    tab2Session = undefined;
   });
 
   it("answers help by itself, with every verb", async () => {
@@ -352,6 +390,92 @@ describe("tet-ctl against the control server", () => {
   it("refuses to rename a tab it does not know", async () => {
     assert.equal((await tetCtl(["tabs-rename", "tab-9", "Build log"])).status, EXIT_CODES.usage);
     assert.deepEqual(calls.renamed, []);
+  });
+
+  it("lists what only the session manager knows of a tab", async () => {
+    const [, second] = (await tetCtl(["tabs-list"])).result as { reportedSessionId?: string; sandbox?: string }[];
+    assert.deepEqual([second.reportedSessionId, second.sandbox], ["reported-2", "tet-claude-abc"]);
+  });
+
+  it("starts and restarts a tab it knows, and refuses one it does not", async () => {
+    assert.deepEqual((await tetCtl(["tabs-start", "tab-2"])).result, { started: "tab-2" });
+    assert.deepEqual((await tetCtl(["tabs-restart", "tab-2"])).result, { restarted: "tab-2" });
+    assert.equal((await tetCtl(["tabs-start", "tab-9"])).status, EXIT_CODES.usage);
+    assert.deepEqual([calls.started, calls.restarted], [["tab-2"], ["tab-2"]]);
+  });
+
+  it("waits until a tab has what was asked for", async () => {
+    setTimeout(() => (tab2Session = "s-2"), 300);
+    const run = await tetCtl(["tabs-wait", "tab-2", "--session", "--status", "running"]);
+    assert.equal(run.status, EXIT_CODES.ok);
+    assert.equal((run.result as TerminalDescriptor).sessionId, "s-2");
+  });
+
+  it("gives up waiting after the timeout, saying what is missing", async () => {
+    const run = await tetCtl(["tabs-wait", "tab-2", "--session", "--timeout", "1"]);
+    assert.equal(run.status, EXIT_CODES.timeout);
+    assert.match(run.stderr, /tab-2 is still not bound to a session/);
+  });
+
+  it("refuses to wait for nothing", async () => {
+    assert.equal((await tetCtl(["tabs-wait", "tab-2"])).status, EXIT_CODES.usage);
+  });
+
+  it("types into a tab, with Enter when asked", async () => {
+    assert.deepEqual((await tetCtl(["tabs-send", "tab-2", "hello", "--enter"])).result, { sent: "tab-2" });
+    assert.deepEqual((await tetCtl(["tabs-send", "tab-2", "--enter"])).result, { sent: "tab-2" });
+    assert.deepEqual(calls.written, [
+      ["tab-2", "hello\r"],
+      ["tab-2", "\r"]
+    ]);
+  });
+
+  it("answers a tab's output as text, its tail when asked", async () => {
+    assert.deepEqual((await tetCtl(["tabs-output", "tab-2"])).result, { output: "bold line\nnext" });
+    assert.deepEqual((await tetCtl(["tabs-output", "tab-2", "--tail", "4"])).result, { output: "next" });
+    assert.equal((await tetCtl(["tabs-output", "tab-2", "--tail", "x"])).status, EXIT_CODES.usage);
+  });
+
+  it("answers the latest events, as many as asked for", async () => {
+    const run = await tetCtl(["events-tail", "--tail", "2"]);
+    assert.deepEqual((run.result as { at: number }[]).map((event) => event.at), [2, 3]);
+  });
+
+  it("opens a file in the editor tab and answers what it shows", async () => {
+    assert.deepEqual((await tetCtl(["editor-open", "src/a.ts"])).result, { opened: "src/a.ts" });
+    assert.deepEqual(calls.editorsOpened, [[PROJECT.id, "src/a.ts"]]);
+    assert.deepEqual((await tetCtl(["editor-state"])).result, {
+      path: "a.txt",
+      loading: false,
+      dirty: true,
+      readOnly: false,
+      content: "edited"
+    });
+    assert.equal((await tetCtl(["editor-state", "--project", OTHER.id])).result, null, "no editor tab there");
+  });
+
+  it("lists the files view's files and the notices shown", async () => {
+    assert.deepEqual(((await tetCtl(["explorer-list"])).result as { files: string[] }).files, ["p1.txt"]);
+    assert.deepEqual((await tetCtl(["notices-list"])).result, [{ severity: "error", message: "Could not delete", at: 1 }]);
+  });
+
+  it("refuses to type into or read a terminal in a run without a profile of its own", async () => {
+    const ordinaryPort = await findControlPort(path.join(tempDir, "ordinary"));
+    const ordinary = await startControlServer(deps(false), TOKEN, ordinaryPort);
+    try {
+      for (const args of [
+        ["tabs-send", "tab-2", "x"],
+        ["tabs-output", "tab-2"]
+      ]) {
+        const run = await tetCtl(args, { [CONTROL_ENV.port]: String(ordinaryPort) });
+        assert.equal(run.status, EXIT_CODES.unauthorized, args[0]);
+        assert.match(run.stderr, /profile of its own/);
+      }
+      assert.equal((await tetCtl(["tabs-list"], { [CONTROL_ENV.port]: String(ordinaryPort) })).status, EXIT_CODES.ok);
+      assert.deepEqual(calls.written, []);
+    } finally {
+      await ordinary.close();
+    }
   });
 
   it("refuses too many arguments", async () => {

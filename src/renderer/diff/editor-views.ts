@@ -101,6 +101,22 @@ function publish(projectId: string, view: EditorView, patch: Partial<EditorSnaps
   }
   view.snapshot = { ...view.snapshot, ...patch };
   emit(projectId);
+  report(projectId, view);
+}
+
+/** The snapshot for `tet-ctl editor-state` — see EditorReport. The edited side's text is the
+ *  model's once there is one; typing into it changes nothing reported until `dirty` does. */
+function report(projectId: string, view: EditorView): void {
+  const { path, file, loading, dirty } = view.snapshot;
+  const text = editorKind(file) === "text";
+  window.tet.repository.reportEditor(projectId, {
+    path,
+    loading,
+    dirty,
+    readOnly: isReadOnly(file),
+    content: text ? (view.models?.modified.getValue() ?? file?.content) : undefined,
+    error: file?.error
+  });
 }
 
 /**
@@ -282,6 +298,7 @@ export function disposeEditor(projectId: string): void {
   view.editor?.dispose();
   view.host.remove();
   emit(projectId);
+  window.tet.repository.reportEditor(projectId, null);
 }
 
 /**

@@ -306,6 +306,28 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
 /** How loudly a notice asks to be read; it decides how long the notice stands (Notices.tsx). */
 export type NoticeSeverity = "error" | "warning" | "info";
 
+/** A notice the window put up, as it reports each for `tet-ctl notices-list`. */
+export interface NoticeReport {
+  severity: NoticeSeverity;
+  message: string;
+  /** When it went up, ms since epoch. */
+  at: number;
+}
+
+/** What a project's editor tab shows, as the renderer reports it on every change of its snapshot
+ *  for `tet-ctl editor-state` — the editor lives in the renderer alone. */
+export interface EditorReport {
+  path: string;
+  /** The read of `path` still in flight. */
+  loading: boolean;
+  dirty: boolean;
+  readOnly: boolean;
+  /** The edited side's text as it stood at the report; absent for an image, a binary or a file too large. */
+  content?: string;
+  /** Why the file could not be read. */
+  error?: string;
+}
+
 /** Anything the user is told, without exception — not a *status*, which a view draws for itself. */
 export interface Notice {
   severity: NoticeSeverity;

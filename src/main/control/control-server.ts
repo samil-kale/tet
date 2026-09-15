@@ -2,13 +2,16 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import * as net from "node:net";
 import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
-import type { ControlErrorCode, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
+import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { SYSTEM_THEME_ID, THEMES } from "../../shared/themes";
 import { PROMPT_IDS } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
   AppSettings,
+  EditorReport,
+  ExplorerListing,
+  NoticeReport,
   Project,
   ProjectCommand,
   RepositoryState,
@@ -36,8 +39,18 @@ export interface ControlDeps {
     get(projectId: string): ControlTerminals | undefined;
   };
   repositories: {
-    get(projectId: string): { getState(): RepositoryState } | undefined;
+    get(projectId: string): { getState(): RepositoryState; listExplorer(): Promise<ExplorerListing> } | undefined;
   };
+  /** What the window reported and what the terminals printed — see ControlRecords. */
+  records: {
+    editor(projectId: string): EditorReport | undefined;
+    notices(): NoticeReport[];
+    output(projectId: string, tabId: string): string | undefined;
+  };
+  /** tet runs with a profile of its own (`--user-data-dir`) — see ControlVerb.ownProfileOnly. */
+  ownProfile: boolean;
+  /** Opens a file in the project's editor tab and brings that tab to the front. */
+  openEditor(projectId: string, path: string): void;
   /** Every agent, and whether it is installed — the requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
   /** The ids `tabs-create` accepts — `AGENTS`', so a new agent needs nothing here. */
@@ -77,9 +90,24 @@ export interface HookOutcome {
   toast?: HookToast;
 }
 
+/** A tab as `tabs-list` answers it: what the window gets, plus what only the session manager knows. */
+export interface InspectedTab extends TerminalDescriptor {
+  /** The session this tab's own hooks named, claimed or not yet. */
+  reportedSessionId?: string;
+  /** The sbx sandbox its session lives in. */
+  sandbox?: string;
+}
+
 /** The slice of ProjectSessionManager the verbs use. */
 export interface ControlTerminals {
   snapshot(): TerminalDescriptor[];
+  inspect(): InspectedTab[];
+  /** Starts a tab's process at the size it was last fitted to, or a default one. */
+  start(tabId: string): void;
+  restart(tabId: string): void;
+  write(tabId: string, data: string): void;
+  /** What the session manager heard lately, oldest first. */
+  events(): ControlEvent[];
   createTab(agentId: AgentId): TerminalDescriptor;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
@@ -120,6 +148,36 @@ function text(args: Record<string, unknown>, name: string, what: string): string
   }
   return value;
 }
+
+/** A positive whole number given as a flag's string, or `fallback` where the flag was left out. */
+function count(args: Record<string, unknown>, name: string, fallback: number): number {
+  if (args[name] === undefined) {
+    return fallback;
+  }
+  const value = Number(args[name]);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new ControlError("bad_args", `--${name} takes a positive whole number`);
+  }
+  return value;
+}
+
+/** Terminal output as text: CSI, OSC and two-byte escape sequences taken out, CRLF made LF. */
+function plainText(data: string): string {
+  return (
+    data
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g, "")
+      .replace(/\r\n/g, "\n")
+  );
+}
+
+/** How long `tabs-wait` waits by default, and how often it looks. */
+const WAIT_TIMEOUT_S = 30;
+const WAIT_POLL_MS = 100;
+/** How many entries `events-tail` answers by default. */
+const EVENTS_TAIL = 50;
+/** How much of a tab's output `tabs-output` answers by default. */
+const OUTPUT_TAIL_CHARS = 4000;
 
 const DYNAMIC_PORT_START = 49152;
 const DYNAMIC_PORT_RANGE = 65535 - DYNAMIC_PORT_START;
@@ -180,6 +238,17 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       throw new ControlError("internal", `project ${found.id} has no terminals`);
     }
     return manager;
+  };
+
+  /** The project's terminals and the id of one of its tabs, checked to exist. */
+  const knownTab = (args: Record<string, unknown>, caller: ControlRequest["caller"]): { tabs: ControlTerminals; tabId: string; found: Project } => {
+    const found = project(args, caller);
+    const tabId = text(args, "tabId", "tab id");
+    const tabs = terminals(found);
+    if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
+      throw new ControlError("not_found", `unknown tab: ${tabId} (see tabs-list)`);
+    }
+    return { tabs, tabId, found };
   };
 
   return {
@@ -258,7 +327,98 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { removed: id } };
     },
 
-    "tabs-list": (args, caller) => ({ result: terminals(project(args, caller)).snapshot() }),
+    "tabs-list": (args, caller) => ({ result: terminals(project(args, caller)).inspect() }),
+
+    "tabs-start": (args, caller) => {
+      const { tabs, tabId } = knownTab(args, caller);
+      tabs.start(tabId);
+      return { result: { started: tabId } };
+    },
+
+    "tabs-restart": (args, caller) => {
+      const { tabs, tabId } = knownTab(args, caller);
+      tabs.restart(tabId);
+      return { result: { restarted: tabId } };
+    },
+
+    "tabs-wait": async (args, caller) => {
+      const { tabs, tabId } = knownTab(args, caller);
+      const status = args.status;
+      const conditions: [string, (tab: InspectedTab) => boolean][] = [];
+      if (args.session === true) {
+        conditions.push(["bound to a session", (tab) => tab.sessionId !== undefined]);
+      }
+      if (args.busy === true) {
+        conditions.push(["working a turn", (tab) => tab.busy === true]);
+      }
+      if (args.idle === true) {
+        conditions.push(["idle", (tab) => tab.busy !== true]);
+      }
+      if (typeof status === "string") {
+        conditions.push([status, (tab) => tab.status === status]);
+      }
+      if (conditions.length === 0) {
+        throw new ControlError("bad_args", "nothing to wait for: pass --session, --busy, --idle or --status <status>");
+      }
+      const deadline = Date.now() + count(args, "timeout", WAIT_TIMEOUT_S) * 1000;
+      for (;;) {
+        const tab = tabs.inspect().find((candidate) => candidate.tabId === tabId);
+        if (!tab) {
+          throw new ControlError("not_found", `tab ${tabId} was closed while waiting`);
+        }
+        if (conditions.every(([, holds]) => holds(tab))) {
+          return { result: tab };
+        }
+        if (Date.now() >= deadline) {
+          const missing = conditions.filter(([, holds]) => !holds(tab)).map(([what]) => what);
+          throw new ControlError("timeout", `tab ${tabId} is still not ${missing.join(" and not ")} (status ${tab.status})`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, WAIT_POLL_MS));
+      }
+    },
+
+    "tabs-send": (args, caller) => {
+      const { tabs, tabId } = knownTab(args, caller);
+      const value = args.text;
+      if (typeof value !== "string" && args.enter !== true) {
+        throw new ControlError("bad_args", "missing text (or --enter for Enter alone)");
+      }
+      tabs.write(tabId, `${typeof value === "string" ? value : ""}${args.enter === true ? "\r" : ""}`);
+      return { result: { sent: tabId } };
+    },
+
+    "tabs-output": (args, caller) => {
+      const { tabId, found } = knownTab(args, caller);
+      const output = plainText(deps.records.output(found.id, tabId) ?? "");
+      return { result: { output: output.slice(-count(args, "tail", OUTPUT_TAIL_CHARS)) } };
+    },
+
+    "events-tail": (args, caller) => ({
+      result: terminals(project(args, caller)).events().slice(-count(args, "tail", EVENTS_TAIL))
+    }),
+
+    "editor-open": (args, caller) => {
+      const found = project(args, caller);
+      const filePath = text(args, "path", "path");
+      deps.openEditor(found.id, filePath);
+      return { result: { opened: filePath } };
+    },
+
+    "editor-state": (args, caller) => {
+      const found = project(args, caller);
+      return { result: deps.records.editor(found.id) ?? null };
+    },
+
+    "explorer-list": async (args, caller) => {
+      const found = project(args, caller);
+      const repository = deps.repositories.get(found.id);
+      if (!repository) {
+        throw new ControlError("internal", `project ${found.id} has no repository`);
+      }
+      return { result: await repository.listExplorer() };
+    },
+
+    "notices-list": () => ({ result: deps.records.notices() }),
 
     "tabs-create": (args, caller) => {
       const found = project(args, caller);
@@ -396,6 +556,11 @@ export async function startControlServer(
         : undefined;
     if (!handler) {
       return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
+    }
+    if (!deps.ownProfile && CONTROL_VERBS.some((entry) => entry.verb === request.verb && entry.ownProfileOnly)) {
+      return {
+        response: reject("unauthorized", `${request.verb} only answers in a TET started with a profile of its own (--user-data-dir)`)
+      };
     }
     try {
       const answer = await handler(request.args ?? {}, request.caller ?? {}, request.at);

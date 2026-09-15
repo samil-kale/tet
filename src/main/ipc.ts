@@ -12,12 +12,14 @@ import type {
   AppInfo,
   AppSettings,
   CheckoutTarget,
+  EditorReport,
   ExplorerListing,
   ExplorerSettings,
   FileContent,
   FileWriteResult,
   GitActionResult,
   ListRepositoriesResult,
+  NoticeReport,
   Project,
   ProviderAccount,
   ProviderId,
@@ -39,6 +41,7 @@ import {
 } from "./sbx";
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
+import type { ControlRecords } from "./control/control-records";
 import { DEFAULT_EXPLORER_VIEW, readCommands, writeCommands } from "./git/commands";
 import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererSlow, reportRendererTask } from "./event-loop-monitor";
@@ -61,6 +64,8 @@ export interface IpcDeps {
   accounts: AccountStore;
   repositories: RepositoryManager;
   sessions: SessionManagerRegistry;
+  /** Where the window's reports for the control verbs go. */
+  records: ControlRecords;
   /** Posts to the window, or nowhere while none is open. */
   send: (channel: string, payload: unknown) => void;
   /** Brings a project's repository and terminals up; shared with the bootstrap's restore. */
@@ -117,6 +122,7 @@ export function registerIpc({
   accounts,
   repositories,
   sessions,
+  records,
   send,
   openProject,
   openWorkspace
@@ -531,6 +537,15 @@ export function registerIpc({
    *  renderer knows which tab that is. */
   ipcMain.on("terminal:seen", (_event, projectId: string, tabId: string) => {
     sessions.get(projectId)?.markSeen(tabId);
+  });
+
+  /** What the editor tab shows and which notices went up, for tet-ctl — only the renderer knows. */
+  ipcMain.on("editor:report", (_event, projectId: string, report: EditorReport | null) => {
+    records.setEditor(projectId, report);
+  });
+
+  ipcMain.on("app:notice-shown", (_event, report: NoticeReport) => {
+    records.addNotice(report);
   });
 
   /** The tabs in front of the user, which a turn does not toast about. Only the renderer knows. */

@@ -11,6 +11,7 @@ import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./git/commands";
 import { writeLaunchers } from "./control/control-launcher";
+import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
 import type { ToastTarget } from "./control/control-server";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
@@ -178,6 +179,8 @@ installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
+/** What the control verbs answer from beyond the stores; terminal output only with a profile of its own. */
+const records = new ControlRecords(Boolean(userDataArg));
 const repositories = new RepositoryManager(
   (projectId, state) => send("repo:state-changed", { projectId, state }),
   (severity, message) => send("app:notice", { severity, message }),
@@ -198,7 +201,10 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, {
     send("terminal:tabs", { projectId, tabs });
     awaitedToastTab(projectId);
   },
-  onOutput: queueOutput,
+  onOutput: (projectId, tabId, data) => {
+    records.addOutput(projectId, tabId, data);
+    queueOutput(projectId, tabId, data);
+  },
   onStatus: (projectId, tabId, status: TerminalStatus) => send("terminal:status", { projectId, tabId, status }),
   onStartupProgress: (projectId, show) => send("terminal:startup-progress", { projectId, show }),
   onNotice: (severity, message) => send("app:notice", { severity, message })
@@ -461,6 +467,9 @@ async function startControl(): Promise<void> {
         removeProject: (projectId) => removeProject(projectDeps, projectId),
         readCommands,
         shutdown,
+        records,
+        ownProfile: Boolean(userDataArg),
+        openEditor: (projectId, filePath) => send("editor:open", { projectId, path: filePath }),
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
         projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
         notify: showDesktopNotification
@@ -607,7 +616,7 @@ if (!app.requestSingleInstanceLock()) {
     // this file into the sandbox itself (ensureSandboxLauncher).
     configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
-    registerIpc({ store, settings, accounts, repositories, sessions, send, openProject, openWorkspace });
+    registerIpc({ store, settings, accounts, repositories, sessions, records, send, openProject, openWorkspace });
     timeStartup("window", createWindow);
     // The git process inherits its environment at the fork, so it waits for the PATH — still up
     // front rather than on the first repository, the renderer being busy loading meanwhile.

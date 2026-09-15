@@ -5,8 +5,8 @@ import { AGENTS, getAgent } from "../agents";
 import type { AgentDefinition, AgentPaths, AgentSessionInfo, SpawnPreparation } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { CONTROL_ENV } from "../../shared/control";
-import type { HookEvent } from "../../shared/control";
-import type { HookOutcome, HookToast } from "../control/control-server";
+import type { ControlEvent, HookEvent } from "../../shared/control";
+import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
 import { isSbxAgent } from "../../shared/types";
 import type {
   AgentId,
@@ -43,6 +43,10 @@ const SESSION_REMOVE_DELAY_MS = 500;
 // (reportBeforeQuit), counted from the Enter. Measured on win32 with Codex on the host: the report
 // arrived 1.2–1.3 s after the Enter.
 const REPORT_WAIT_MS = 3000;
+// How far back `tet-ctl events-tail` can look.
+const MAX_RECORDED_EVENTS = 200;
+// The size `tet-ctl tabs-start` gives a tab no window has fitted yet.
+const CONTROL_START_SIZE = { cols: 120, rows: 30 };
 // Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
 /**
@@ -243,6 +247,8 @@ export class ProjectSessionManager {
   private readonly detachedTabs: TabState[] = [];
   /** Per tab id, what ends a close's wait for the report naming its session (reportBeforeQuit). */
   private readonly reportWaiters = new Map<string, () => void>();
+  /** See `events`. */
+  private readonly recorded: ControlEvent[] = [];
   private newTabCounter = 0;
   /** The project was closed; nothing that was still in flight may start anything back up. */
   private disposed = false;
@@ -291,6 +297,40 @@ export class ProjectSessionManager {
 
   snapshot(): TerminalDescriptor[] {
     return this.tabs.map((tab) => toDescriptor(tab, this.tabIndicators.has(tab.tabId)));
+  }
+
+  /** `snapshot` plus what the window never gets, for `tet-ctl tabs-list`. */
+  inspect(): InspectedTab[] {
+    return this.tabs.map((tab) => ({
+      ...toDescriptor(tab, this.tabIndicators.has(tab.tabId)),
+      reportedSessionId: tab.reportedSessionId,
+      sandbox: tab.sandbox
+    }));
+  }
+
+  /** What `events-tail` answers: the latest hook reports, claims and closes, oldest first. */
+  events(): ControlEvent[] {
+    return [...this.recorded];
+  }
+
+  private record(event: Omit<ControlEvent, "at">): void {
+    this.recorded.push({ at: Date.now(), ...event });
+    this.recorded.splice(0, this.recorded.length - MAX_RECORDED_EVENTS);
+  }
+
+  /** Starts a tab's process without a window having fitted it — `tet-ctl tabs-start`. The size is
+   *  the last fit's where there was one; the window's first fit resizes it like any other. */
+  start(tabId: string): void {
+    const size = this.lastSizes.get(tabId) ?? CONTROL_START_SIZE;
+    this.handleResize(tabId, size.cols, size.rows);
+  }
+
+  /** `restartTab` for `tet-ctl tabs-restart`, which may come before any window fitted the tab. */
+  restart(tabId: string): void {
+    if (!this.lastSizes.has(tabId)) {
+      this.lastSizes.set(tabId, CONTROL_START_SIZE);
+    }
+    this.restartTab(tabId);
   }
 
   private postTabs(): void {
@@ -953,6 +993,9 @@ export class ProjectSessionManager {
       return;
     }
     const indices = new Map(tabs.map((tab) => [tab.tabId, this.tabs.indexOf(tab)]));
+    for (const tab of tabs) {
+      this.record({ tabId: tab.tabId, kind: "closed", sessionId: tab.sessionId });
+    }
     this.tabs = this.tabs.filter((tab) => !doomed.has(tab.tabId));
     this.postTabs();
 
@@ -1133,6 +1176,8 @@ export class ProjectSessionManager {
     const tab = this.disposed ? undefined : this.tabs.find((candidate) => candidate.tabId === tabId);
     // A tab closed moments after its first prompt still needs its session named, to delete it.
     const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
+    const sessionId = bound ? getAgent(bound.agentId).sessionIdOf?.(payload) : undefined;
+    this.record({ tabId, kind: "hook", event, reportedAt, sessionId });
     this.bindReportedSession(bound, payload);
     if (!tab) {
       return {};
@@ -1348,6 +1393,7 @@ export class ProjectSessionManager {
         continue;
       }
       claimed.add(match.id);
+      this.record({ tabId: tab.tabId, kind: "claimed", sessionId: match.id });
       tab.sessionId = match.id;
       tab.title = match.title;
       tab.updatedAt = match.updatedAt;

@@ -6,6 +6,7 @@ import type {
   AppInfo,
   AppSettings,
   CheckoutTarget,
+  EditorReport,
   ExplorerListing,
   ExplorerSettings,
   FileContent,
@@ -13,6 +14,7 @@ import type {
   GitActionResult,
   ListRepositoriesResult,
   Notice,
+  NoticeReport,
   Project,
   ProjectCommand,
   ProviderAccount,
@@ -48,6 +50,8 @@ export interface TETApi {
     reportLongTask(ms: number, context: string): void;
     /** A named block of the renderer's own work that ran long — into the same log. */
     reportSlow(label: string, ms: number): void;
+    /** A notice the window put up, for `tet-ctl notices-list`. */
+    reportNotice(report: NoticeReport): void;
   };
   /** Docker Sandboxes, opt-in per project — see the project row's "SBX Settings" entry. */
   sbx: {
@@ -183,6 +187,10 @@ export interface TETApi {
     watchFile(projectId: string, path: string | null): Promise<void>;
     /** Fires when the file `watchFile` named was written, by anyone. */
     onFileChanged(listener: (payload: { projectId: string; path: string }) => void): Unsubscribe;
+    /** What the project's editor tab shows now, for `tet-ctl editor-state`; null once it is closed. */
+    reportEditor(projectId: string, report: EditorReport | null): void;
+    /** `tet-ctl editor-open` asks for a file in the project's editor tab. */
+    onOpenEditor(listener: (payload: { projectId: string; path: string }) => void): Unsubscribe;
   };
   /** A project's saved shell commands, kept in a tet.json in its own root, so they travel with it. */
   commands: {

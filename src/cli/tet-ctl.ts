@@ -1,5 +1,5 @@
 import * as http from "node:http";
-import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
+import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
 
 /**
@@ -26,7 +26,7 @@ function fail(message: string, code: number): never {
   process.exit(code);
 }
 
-/** `verb [positionals...] [--project <id>] [--agent <id>] [--confirm]` into a request's verb and args. */
+/** `verb [positionals...] [--<flag> [value]...]` into a request's verb and args — see CONTROL_FLAGS. */
 function parse(argv: string[]): { verb: string; args: Record<string, unknown>; entry?: ControlVerb } {
   const [verb, ...rest] = argv;
   if (!verb || verb === HELP_VERB || verb === "--help" || verb === "-h") {
@@ -40,9 +40,10 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown>; e
   const positionals: string[] = [];
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
-    if (arg === "--confirm") {
-      args.confirm = true;
-    } else if (arg === "--project" || arg === "--agent") {
+    const flag = arg.startsWith("--") ? CONTROL_FLAGS[arg.slice(2)] : undefined;
+    if (flag === "switch") {
+      args[arg.slice(2)] = true;
+    } else if (flag === "value") {
       const value = rest[i + 1];
       if (value === undefined) {
         fail(`${arg} needs a value`, EXIT_CODES.usage);
@@ -207,7 +208,13 @@ async function main(): Promise<void> {
     const { code, message } = response.error;
     fail(
       message,
-      code === "unauthorized" ? EXIT_CODES.unauthorized : code === "internal" ? EXIT_CODES.internal : EXIT_CODES.usage
+      code === "unauthorized"
+        ? EXIT_CODES.unauthorized
+        : code === "internal"
+          ? EXIT_CODES.internal
+          : code === "timeout"
+            ? EXIT_CODES.timeout
+            : EXIT_CODES.usage
     );
   }
   if (quiet) {

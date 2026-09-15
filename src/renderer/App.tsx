@@ -713,6 +713,15 @@ export function App() {
     [activateTab]
   );
   const openDiffSync = useCallback((projectId: string, path: string) => void openDiff(projectId, path), [openDiff]);
+  // A file the control channel asked for, in front like a tab it opened.
+  useEffect(
+    () =>
+      window.tet.repository.onOpenEditor(({ projectId, path }) => {
+        setActiveProjectId(projectId);
+        void openDiff(projectId, path);
+      }),
+    [openDiff]
+  );
   const openActiveDiff = useCallback(
     (path: string) => {
       if (activeProjectId) {

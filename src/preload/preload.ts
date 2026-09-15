@@ -22,7 +22,8 @@ const api: TETApi = {
   app: {
     info: () => ipcRenderer.invoke("app:info"),
     reportLongTask: (ms, context) => ipcRenderer.send("app:long-task", ms, context),
-    reportSlow: (label, ms) => ipcRenderer.send("app:slow", label, ms)
+    reportSlow: (label, ms) => ipcRenderer.send("app:slow", label, ms),
+    reportNotice: (report) => ipcRenderer.send("app:notice-shown", report)
   },
   sbx: {
     status: (projectId: string) => ipcRenderer.invoke("sbx:status", projectId),
@@ -100,7 +101,9 @@ const api: TETApi = {
     onState: (listener) => subscribe("repo:state-changed", listener),
     onFilesChanged: (listener) => subscribe("repo:files-changed", listener),
     watchFile: (projectId, filePath) => ipcRenderer.invoke("repo:watch-file", projectId, filePath),
-    onFileChanged: (listener) => subscribe("repo:file-changed", listener)
+    onFileChanged: (listener) => subscribe("repo:file-changed", listener),
+    reportEditor: (projectId, report) => ipcRenderer.send("editor:report", projectId, report),
+    onOpenEditor: (listener) => subscribe("editor:open", listener)
   },
   commands: {
     list: (projectId) => ipcRenderer.invoke("commands:list", projectId),

@@ -21,7 +21,7 @@ export const CONTROL_ENV = {
   host: "TET_CONTROL_HOST"
 } as const;
 
-export type ControlErrorCode = "unauthorized" | "unknown_verb" | "bad_args" | "not_found" | "internal";
+export type ControlErrorCode = "unauthorized" | "unknown_verb" | "bad_args" | "not_found" | "internal" | "timeout";
 
 export interface ControlRequest {
   token: string;
@@ -47,9 +47,15 @@ export interface ControlVerb {
   verb: string;
   usage: string;
   summary: string;
-  /** The names the CLI gives its positional arguments, in order; `--project`, `--agent` and
-   *  `--confirm` are flags and go in as `project`, `agent` and `confirm`. */
+  /** The names the CLI gives its positional arguments, in order; flags go in under their own name
+   *  (CONTROL_FLAGS). */
   positionals: string[];
+  /**
+   * Only for a run with a profile of its own (`--user-data-dir`, as the tests start tet): the verb
+   * types into another agent's terminal or reads what it printed, which in an ordinary run would
+   * let one agent drive or overhear another.
+   */
+  ownProfileOnly?: true;
   /** Sends whatever the caller wrote to stdin as `args.payload` — an agent's hook payload. */
   stdin?: true;
   /**
@@ -69,6 +75,36 @@ export interface ControlVerb {
 export const HOOK_EVENTS = ["prompt-submit", "stop", "permission", "question", "idle"] as const;
 
 export type HookEvent = (typeof HOOK_EVENTS)[number];
+
+/** The flags the CLI knows, by name: a switch is `true` when given, a value flag takes the next
+ *  argument as a string. Every verb gets all of them; each reads the ones it has a use for. */
+export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
+  project: "value",
+  agent: "value",
+  confirm: "switch",
+  enter: "switch",
+  session: "switch",
+  busy: "switch",
+  idle: "switch",
+  status: "value",
+  tail: "value",
+  timeout: "value"
+};
+
+/** What `events-tail` lists: what the session manager heard and made of it, in arrival order. */
+export interface ControlEvent {
+  /** When it arrived here, ms since epoch. */
+  at: number;
+  tabId: string;
+  /** A hook report arrived; a tab took a reported session as its own (reconcile); a tab was closed. */
+  kind: "hook" | "claimed" | "closed";
+  /** The hook's event, for `hook`. */
+  event?: HookEvent;
+  /** When the hook fired by the agent's own clock (ControlRequest.at), for `hook`. */
+  reportedAt?: number;
+  /** The session the report named, or the one claimed. */
+  sessionId?: string;
+}
 
 /** Every verb, with the one line `tet-ctl help` prints for it. The CLI answers `help` by itself; the
  *  server refuses anything not in this list as `unknown_verb`. */
@@ -112,7 +148,70 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "tabs-list",
     usage: "tabs-list [--project <id>]",
-    summary: "A project's terminal tabs and their state.",
+    summary: "A project's terminal tabs and their state, with the session each tab's hooks named and its sandbox.",
+    positionals: []
+  },
+  {
+    verb: "tabs-start",
+    usage: "tabs-start <tab-id> [--project <id>]",
+    summary: "Start a tab's process without bringing it to the front.",
+    positionals: ["tabId"]
+  },
+  {
+    verb: "tabs-restart",
+    usage: "tabs-restart <tab-id> [--project <id>]",
+    summary: "Restart a tab that stopped or could not start, as its menu's Restart does.",
+    positionals: ["tabId"]
+  },
+  {
+    verb: "tabs-wait",
+    usage: "tabs-wait <tab-id> [--session] [--busy] [--idle] [--status <status>] [--timeout <seconds>] [--project <id>]",
+    summary:
+      "Wait until a tab has a session (--session), is working a turn (--busy), is not (--idle) or has a status; every condition given must hold. Exits 4 after the timeout (30 s).",
+    positionals: ["tabId"]
+  },
+  {
+    verb: "tabs-send",
+    usage: "tabs-send <tab-id> <text> [--enter] [--project <id>]",
+    summary: "Type text into a tab, then Enter with --enter. Only in a run with its own --user-data-dir.",
+    positionals: ["tabId", "text"],
+    ownProfileOnly: true
+  },
+  {
+    verb: "tabs-output",
+    usage: "tabs-output <tab-id> [--tail <chars>] [--project <id>]",
+    summary: "What a tab printed lately, escape sequences taken out. Only in a run with its own --user-data-dir.",
+    positionals: ["tabId"],
+    ownProfileOnly: true
+  },
+  {
+    verb: "events-tail",
+    usage: "events-tail [--tail <count>] [--project <id>]",
+    summary: "The latest hook reports, session claims and closed tabs, with when each arrived.",
+    positionals: []
+  },
+  {
+    verb: "editor-open",
+    usage: "editor-open <path> [--project <id>]",
+    summary: "Open a repository-relative file in the project's editor tab and bring it to the front.",
+    positionals: ["path"]
+  },
+  {
+    verb: "editor-state",
+    usage: "editor-state [--project <id>]",
+    summary: "What the project's editor tab shows: the file, its text, whether it is edited and whether it is read-only.",
+    positionals: []
+  },
+  {
+    verb: "explorer-list",
+    usage: "explorer-list [--project <id>]",
+    summary: "What the files view lists for a project, with tet.json's folders and excludes applied.",
+    positionals: []
+  },
+  {
+    verb: "notices-list",
+    usage: "notices-list",
+    summary: "The latest notices the window showed, oldest first.",
     positionals: []
   },
   {
@@ -169,5 +268,7 @@ export const EXIT_CODES = {
   ok: 0,
   internal: 1,
   unauthorized: 2,
-  usage: 3
+  usage: 3,
+  /** `tabs-wait` gave up. */
+  timeout: 4
 } as const;

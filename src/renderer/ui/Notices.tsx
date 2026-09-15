@@ -37,6 +37,7 @@ export function notify(severity: NoticeSeverity, message: string): void {
   }
   publish([...shown, { id, severity, message }]);
   scheduleDismiss(id, severity);
+  window.tet.app.reportNotice({ severity, message, at: Date.now() });
 }
 
 /**
