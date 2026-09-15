@@ -3,6 +3,26 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.2 (2026-09-15)
+
+- **Light and dark themes are chosen apart.** Settings picks a color scheme and one theme for
+  each kind; switching to a theme of the kind already on screen applies at once, without a
+  restart.
+- **New themes.** Dark GitHub and Light GitHub join the list, and Dark Slate gets its own syntax
+  colors.
+- **Colored file marks in the Explorer**, after the Seti icon colors VS Code uses.
+- **The editor follows the disk.** A file open in the editor tab reloads when something else
+  writes it, and no longer shows a stale version after a pull or reset.
+- **The Explorer re-lists itself** when a file or folder appears or goes, ignored ones included.
+- **More for agents in `tet-ctl`.** New verbs drive and inspect tabs, the editor, the Explorer
+  and notices.
+- **No more lost work.** Discarding or committing a path with `[`, `*` or `?` in its name no
+  longer touches other files, renaming a compacted Explorer folder puts it in the right place,
+  and editing saved commands while switching projects no longer overwrites another project's list.
+- **Fixes.** Commit messages can be suggested before the first commit, renames that only change
+  case work, AZERTY keyboards reach the tab shortcuts, and sandboxed pi and opencode sessions list
+  and rename correctly.
+
 ## 0.8.1 (2026-09-14)
 
 - **Notices stay long enough to read.** Info, warning and error notices stand for 10, 12 and 15
