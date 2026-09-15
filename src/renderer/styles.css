@@ -463,9 +463,10 @@ textarea:focus {
   align-items: center;
   gap: 4px;
   width: 100%;
-  padding: 3px 6px;
+  /* The chevron's centre at 15px, as LOCAL CHANGES' status letter and the Explorer's marks. */
+  padding: 3px 6px 3px 9px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.3px;
   color: var(--vscode-sideBarSectionHeader-foreground);
 }
@@ -479,13 +480,13 @@ textarea:focus {
   align-items: center;
   gap: 5px;
   width: 100%;
-  padding: 0 6px 0 20px;
+  padding: 0 6px 0 23px;
   text-align: left;
   font-size: 13px;
 }
 
 .tree-item.nested {
-  padding-left: 40px;
+  padding-left: 43px;
 }
 
 .tree-item:hover {
@@ -514,14 +515,14 @@ textarea:focus {
   gap: 0;
 }
 
-/* The twistie slot's chevron and file mark: 2px under --icon-size, for the smaller slot. */
+/* The twistie slot's chevron and file mark: 1px under --icon-size, for the smaller slot. */
 .explorer-tree .tree-icon {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
 }
 
 /* A file mark is a glyph of Seti's font (git/file-icons.ts). VS Code draws it at 150% of the
-   13px label in a 16px box; the same share of this 11px box. */
+   13px label in a 16px box; the same share of this 12px box. */
 @font-face {
   font-family: "seti";
   src: url("./git/seti.woff") format("woff");
@@ -534,7 +535,7 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   font-family: "seti";
-  font-size: 13.4px;
+  font-size: 14.6px;
   line-height: 1;
 }
 
@@ -568,16 +569,15 @@ textarea:focus {
   color: var(--vscode-terminal-ansiBrightMagenta);
 }
 
+/* 1px under --icon-size, like the Explorer's. */
 .tree-icon,
 .tree-header svg,
 .tree-item.remote > svg {
   flex: none;
-  width: var(--icon-size);
-  height: var(--icon-size);
-}
-
-.tree-icon {
-  opacity: 0.8;
+  width: calc(var(--icon-size) - 1px);
+  height: calc(var(--icon-size) - 1px);
+  /* As `.icon-button`. */
+  opacity: 0.9;
 }
 
 .tree-label {
@@ -623,6 +623,7 @@ textarea:focus {
   flex: none;
   width: calc(var(--icon-size) - 3px);
   height: calc(var(--icon-size) - 3px);
+  opacity: 0.9;
 }
 
 /* Terminals ------------------------------------------------------------------------------ */

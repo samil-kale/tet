@@ -5,7 +5,7 @@ import { type FileAct } from "./ChangesList";
 import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
-import { ChevronIcon, SearchIcon, SMALLER } from "../ui/icons";
+import { ChevronIcon, SearchIcon } from "../ui/icons";
 
 /** As VS Code resolves an icon theme: the name, then each extension from the longest (`a.spec.ts`
  *  is `spec.ts`, then `ts`). Tables from scripts/file-icons.js. */
@@ -48,7 +48,7 @@ interface TreeNode {
 }
 
 /* VS Code's explorer geometry (abstractTree.ts / explorerViewer.ts), 1px short throughout, at 13px
- * type; the chevron stays small (.explorer-tree .tree-icon in styles.css). */
+ * type; the chevron is sized by .explorer-tree .tree-icon in styles.css. */
 const INDENT_STEP = 7;
 const INDENT_BASE = 7;
 /** Fits a folder's chevron or a file's mark, centred. */
@@ -283,7 +283,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
                 }}
               >
                 {isFolder ? (
-                  <ChevronIcon expanded={open} className="tree-icon" scale={SMALLER} />
+                  <ChevronIcon expanded={open} className="tree-icon" />
                 ) : (
                   mark && <FileMarkIcon mark={mark} />
                 )}
