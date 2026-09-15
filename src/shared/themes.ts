@@ -4,8 +4,9 @@
 export interface ThemeDefinition {
   id: string;
   label: string;
-  /** The token half: Dark/Light Modern take their tokenColors from Dark+/Light+ by `include`. */
-  shikiTheme: "dark-plus" | "light-plus" | "github-dark-default" | "github-light-default";
+  /** The token half: Dark/Light Modern take their tokenColors from Dark+/Light+ by `include`;
+   *  Dark Slate's theme file is tet's own (src/renderer/themes/dark-slate.json). */
+  shikiTheme: "dark-plus" | "light-plus" | "github-dark-default" | "github-light-default" | "dark-slate";
   /** Which way the background is — VS Code's theme `type`. Claude Code's `theme` and pi's
    *  `--use-theme` name their built-in themes after it. */
   kind: "dark" | "light";
@@ -33,7 +34,7 @@ export const THEMES: ThemeDefinition[] = [
   {
     id: "dark-slate",
     label: "Dark Slate",
-    shikiTheme: "dark-plus",
+    shikiTheme: "dark-slate",
     kind: "dark",
     windowBackground: "#14171c",
     titleBarSymbolColor: "#dde2e9",

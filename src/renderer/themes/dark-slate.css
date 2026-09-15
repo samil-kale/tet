@@ -1,12 +1,11 @@
 /*
- * "Dark Slate": a cooler, blue-grey dark theme. Not one of VS Code's — the values were sampled
- * off a reference screenshot (a dashboard with #14171c chrome, #1b1f27 cards, #58a6f0 accents),
- * so unlike the two Modern themes the source is pixels, not a theme file. See dark-modern.css
- * for the layer itself. Two groups of values that screenshot had no sample of are derived rather
- * than sampled, and say so below: the yellow and magenta (chosen to sit at the same saturation
- * as the sampled red, green and blue) and the bright ANSI variants (the normal ones, lightened).
- * What is neither sampled nor derived is Dark Modern's, marked as such where it stands. The
- * primary button is the screenshot's own: a light button with dark text, not a filled accent.
+ * "Dark Slate": a cooler, blue-grey dark theme. The values come from its theme file, dark-slate.json
+ * beside this stylesheet, which is also where the token half comes from. That file is GitHub Dark
+ * Default (@shikijs/themes/github-dark-default) with the surfaces and accents recolored: those were
+ * sampled off a reference screenshot (a dashboard with #14171c chrome, #1b1f27 cards, #58a6f0
+ * accents); what the screenshot had no sample of is GitHub Dark Default's, marked as such where it
+ * stands. See dark-modern.css for the layer itself. The primary button is the screenshot's own: a
+ * light button with dark text, not a filled accent.
  */
 :root[data-theme="dark-slate"] {
   color-scheme: dark;
@@ -83,10 +82,10 @@
   --vscode-notificationsWarningIcon-foreground: #d9b45c;
   --vscode-notificationsInfoIcon-foreground: #58a6f0;
 
-  /* Dark Modern's: translucent greys, which read the same on this ground. */
-  --vscode-scrollbarSlider-background: #79797966;
-  --vscode-scrollbarSlider-hoverBackground: #646464b3;
-  --vscode-scrollbarSlider-activeBackground: #bfbfbf66;
+  /* GitHub Dark Default's. */
+  --vscode-scrollbarSlider-background: #8b949e33;
+  --vscode-scrollbarSlider-hoverBackground: #8b949e3d;
+  --vscode-scrollbarSlider-activeBackground: #8b949e47;
 
   --vscode-gitDecoration-modifiedResourceForeground: #d9b45c;
   --vscode-gitDecoration-deletedResourceForeground: #db5761;
@@ -106,9 +105,9 @@
   --vscode-editor-selectionBackground: #273a50;
   --vscode-editor-inactiveSelectionBackground: #232830;
   --vscode-editor-lineHighlightBorder: #232830;
-  /* Dark Modern's find colors: an orange the screenshot has no counterpart for. */
+  /* GitHub Dark Default's find colors: the screenshot has no counterpart for them. */
   --vscode-editor-findMatchBackground: #9e6a03;
-  --vscode-editor-findMatchHighlightBackground: #ea5c0055;
+  --vscode-editor-findMatchHighlightBackground: #f2cc6080;
   --vscode-editorIndentGuide-background1: #2a2d35;
   --vscode-editorIndentGuide-activeBackground1: #5a626f;
 
@@ -116,22 +115,22 @@
   --vscode-terminal-selectionBackground: #273a50;
   --vscode-terminal-inactiveSelectionBackground: #232830;
 
-  /* Red, green, blue and cyan are the screenshot's; yellow and magenta derived (above); black
-     is Dark Modern's. */
-  --vscode-terminal-ansiBlack: #000000;
+  /* Red, green, yellow (the modified mark), blue, cyan and white are the screenshot's; the rest
+     GitHub Dark Default's. */
+  --vscode-terminal-ansiBlack: #484f58;
   --vscode-terminal-ansiRed: #db5761;
   --vscode-terminal-ansiGreen: #82b65d;
   --vscode-terminal-ansiYellow: #d9b45c;
   --vscode-terminal-ansiBlue: #58a6f0;
-  --vscode-terminal-ansiMagenta: #c58ae6;
+  --vscode-terminal-ansiMagenta: #bc8cff;
   --vscode-terminal-ansiCyan: #5dcfbc;
   --vscode-terminal-ansiWhite: #dde2e9;
-  --vscode-terminal-ansiBrightBlack: #5a626f;
-  --vscode-terminal-ansiBrightRed: #e57079;
-  --vscode-terminal-ansiBrightGreen: #96c973;
-  --vscode-terminal-ansiBrightYellow: #e5c56f;
-  --vscode-terminal-ansiBrightBlue: #7ab8f5;
-  --vscode-terminal-ansiBrightMagenta: #d4a3ee;
-  --vscode-terminal-ansiBrightCyan: #7ddccb;
+  --vscode-terminal-ansiBrightBlack: #6e7681;
+  --vscode-terminal-ansiBrightRed: #ffa198;
+  --vscode-terminal-ansiBrightGreen: #56d364;
+  --vscode-terminal-ansiBrightYellow: #e3b341;
+  --vscode-terminal-ansiBrightBlue: #79c0ff;
+  --vscode-terminal-ansiBrightMagenta: #d2a8ff;
+  --vscode-terminal-ansiBrightCyan: #56d4dd;
   --vscode-terminal-ansiBrightWhite: #ffffff;
 }
