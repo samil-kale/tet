@@ -54,20 +54,22 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
-        // Captured and swallowed so the ESC never reaches the still-focused terminal.
+        // Captured and swallowed so the ESC never reaches the still-focused terminal. On `window`,
+        // like a question: a `Dropdown` sits in dialogs that capture Escape on `document`, and
+        // `stopPropagation` does not stop listeners on the same node.
         event.preventDefault();
         event.stopPropagation();
         onClose();
       }
     };
     document.addEventListener("mousedown", onMouseDown, true);
-    document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("blur", onClose);
     // Anchored to pointer coordinates, so after a resize it points at nothing.
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", onMouseDown, true);
-      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("blur", onClose);
       window.removeEventListener("resize", onClose);
     };

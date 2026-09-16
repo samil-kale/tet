@@ -110,7 +110,10 @@ function terminalsOf(projectId: string): ControlTerminals {
       if (tabId !== OWN_TAB) {
         return {};
       }
-      return event === "prompt-submit" ? {} : { toast: { title: "Claude: Finished", body: "Finished in one" } };
+      // As ProjectSessionManager.hookEvent: neither a session's start nor a prompt toasts.
+      return event === "session-start" || event === "prompt-submit"
+        ? {}
+        : { toast: { title: "Claude: Finished", body: "Finished in one" } };
     }
   };
 }

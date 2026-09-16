@@ -586,7 +586,8 @@ export class ProjectSessionManager {
     } catch (error) {
       console.error("[tet] spawn preparation failed:", error);
       this.callbacks.onNotice("error", `${agent.displayName} could not be started: ${String(error)}`);
-      runtime.prepareFailed = true;
+      // A rerun keeps the earlier setup, which still starts the agent (themeChanged).
+      runtime.prepareFailed = runtime.preparation === undefined;
       return false;
     }
   }

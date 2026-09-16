@@ -210,6 +210,13 @@ describe("a repository, from init on", () => {
     run("reset", "-q", "--hard", "HEAD@{1}");
   });
 
+  it("creates a branch from a remote branch without tracking it", async () => {
+    assert.deepEqual(await createBranch(cwd, "from-remote", "origin/main"), { ok: true });
+    assert.equal((await readState(cwd)).upstream, undefined);
+    run("switch", "-q", "main");
+    run("branch", "-q", "-D", "from-remote");
+  });
+
   it("hides what .gitignore hides, added the way the menu adds it", async () => {
     write("debug.log", "noise\n");
     assert.deepEqual(await ignorePath(cwd, "debug.log", "extension"), { ok: true });

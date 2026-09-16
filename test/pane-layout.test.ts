@@ -70,6 +70,17 @@ describe("normalizeLayout", () => {
     assert.equal(normalizeLayout(onT3, NONE, tabs).activeTab.a, null);
   });
 
+  it("moves the selection to the neighbour in a pane without the focus too", () => {
+    const tabs = [tab("t1"), tab("t2"), tab("t3")];
+    const layout: ProjectLayout = {
+      ...defaultLayout(),
+      preset: "cols2",
+      tabPane: { t1: "a", t2: "b", t3: "b" },
+      activeTab: { a: "t1", b: "t2" }
+    };
+    assert.deepEqual(normalizeLayout(layout, [tab("t1"), tab("t3")], tabs).activeTab, { a: "t1", b: "t3" });
+  });
+
   it("leaves a selection alone that names a tab not pushed yet, and drops a closed tab's pane", () => {
     const tabs = [tab("t1")];
     const layout: ProjectLayout = { ...defaultLayout(), tabPane: { t1: "a", gone: "a" }, activeTab: { a: "new-9" } };

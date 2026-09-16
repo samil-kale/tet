@@ -91,11 +91,17 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
+  /** settings.json as opened: Save writes only the keys that differ, over what is saved by then —
+   *  `tet-ctl` may have changed a setting meanwhile. */
+  const loadedSettings = useRef<AppSettings | null>(null);
   /** tet.json as opened: Save writes only the keys that differ. */
   const loadedExplorer = useRef<ExplorerSettings | null>(null);
 
   useEffect(() => {
-    void window.tet.settings.get().then(setSettings);
+    void window.tet.settings.get().then((loaded) => {
+      loadedSettings.current = loaded;
+      setSettings(loaded);
+    });
     // Cannot change while the process runs.
     void window.tet.app.info().then(setInfo);
   }, []);
@@ -148,8 +154,15 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   /** One settings.json write, then one tet.json write per changed Explorer key. */
   const save = async (): Promise<void> => {
     setSaving(true);
-    if (settings) {
-      await window.tet.settings.save(settings);
+    const loadedApp = loadedSettings.current;
+    if (settings && loadedApp) {
+      const changed = (Object.keys(settings) as (keyof AppSettings)[]).filter(
+        (key) => JSON.stringify(settings[key]) !== JSON.stringify(loadedApp[key])
+      );
+      if (changed.length > 0) {
+        const current = await window.tet.settings.get();
+        await window.tet.settings.save({ ...current, ...Object.fromEntries(changed.map((key) => [key, settings[key]])) });
+      }
     }
     const loaded = loadedExplorer.current;
     if (activeProject && explorerSettings && loaded) {

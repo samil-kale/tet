@@ -136,7 +136,10 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
 
 export function spawnAgentProcess(executable: string, args: string[], options: SpawnOptions): IPty {
   const env = buildEnv(options);
-  const resolved = resolveCommand(executable, args);
+  // A path is the tab's folder's, as child_process takes it; node-pty looks from this process's
+  // (measured on win32: "File not found" for a relative `bin\tool.exe`). A bare name stays a search.
+  const program = path.basename(executable) === executable ? executable : path.resolve(options.cwd, executable);
+  const resolved = resolveCommand(program, args);
 
   return pty.spawn(resolved.command, resolved.windowsVerbatimArguments ? resolved.args.join(" ") : resolved.args, {
     name: "xterm-256color",

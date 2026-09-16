@@ -155,13 +155,22 @@ ${stderr.slice(uncaught)}`);
   it("runs a saved command in a tab that ends the way the command did", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     // node is what runs this very test, so it is on the app's PATH too.
+    const relative = path.join("bin", process.platform === "win32" ? "tool.exe" : "tool");
+    fs.mkdirSync(path.join(repo, "bin"), { recursive: true });
+    if (process.platform === "win32") {
+      // A native program: node-pty takes it directly, where a relative path once missed the folder.
+      fs.copyFileSync(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "whoami.exe"), path.join(repo, relative));
+    } else {
+      fs.writeFileSync(path.join(repo, relative), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    }
     fs.writeFileSync(
       path.join(repo, "tet.json"),
       JSON.stringify({
         commands: [
           { command: "node -e process.exit(3)", name: "fails" },
           { command: "node -e 0", name: "passes" },
-          { command: "node -e 0 && node -e 0", name: "chained" }
+          { command: "node -e 0 && node -e 0", name: "chained" },
+          { command: relative, name: "relative" }
         ]
       })
     );
@@ -174,6 +183,8 @@ ${stderr.slice(uncaught)}`);
     await eventually("the failing command's tab in error", async () => (await statusOf(failing.tabId)) === "error", STARTUP_MS);
     const passing = (await ctl("tabs-run-command", "passes", "--project", project.id)).result as TerminalDescriptor;
     await eventually("the passing command's tab stopped", async () => (await statusOf(passing.tabId)) === "stopped", STARTUP_MS);
+    const byPath = (await ctl("tabs-run-command", "relative", "--project", project.id)).result as TerminalDescriptor;
+    await eventually("the command by a relative path stopped", async () => (await statusOf(byPath.tabId)) === "stopped", STARTUP_MS);
     const chained = await ctl("tabs-run-command", "chained", "--project", project.id);
     assert.equal(chained.status, 3, "a shell operator is refused");
     assert.match(chained.stderr, /cannot be run without a shell/);
@@ -207,6 +218,31 @@ ${stderr.slice(uncaught)}`);
       10_000
     );
     assert.equal((await state()).localBranches.length, 1);
+    // Named like git's own locks, which the watcher skips.
+    fs.writeFileSync(path.join(repo, "yarn.lock"), "# lockfile\n");
+    await eventually(
+      "a lockfile seen",
+      async () => (await state()).changes.some((change) => change.path === "yarn.lock"),
+      10_000
+    );
+  });
+
+  it("reflects a branch switched in a linked worktree, whose git directory lies outside it", async () => {
+    const worktree = `${repo}-worktree`;
+    assert.equal(spawnSync("git", ["worktree", "add", "-q", "-b", "in-worktree", worktree], { cwd: repo }).status, 0);
+    const added = await ctl("projects-add", worktree);
+    assert.equal(added.status, 0, added.stderr);
+    const project = added.result as Project;
+    const head = async (): Promise<string | undefined> =>
+      ((await ctl("repo-state", "--project", project.id)).result as RepositoryState).head;
+    try {
+      await eventually("the first read", async () => (await head()) === "in-worktree", STARTUP_MS);
+      assert.equal(spawnSync("git", ["switch", "-q", "-c", "switched"], { cwd: worktree }).status, 0);
+      await eventually("the switch seen", async () => (await head()) === "switched", 10_000);
+    } finally {
+      await ctl("projects-remove", project.id);
+      spawnSync("git", ["worktree", "remove", "--force", worktree], { cwd: repo });
+    }
   });
 
   it("changes a kind's theme without a restart", async () => {

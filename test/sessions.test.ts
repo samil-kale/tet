@@ -307,6 +307,14 @@ describe("pi's transcripts", () => {
     assert.deepEqual(sessions.map((s) => [s.id, s.turnEndedAt]), [["s1", ms(LATER)], ["s2", undefined]]);
   });
 
+  it("does not take an assistant message calling a tool as the turn's end", async () => {
+    transcripts({
+      s1: [header("s1"), modelChange, user("p"), assistant("stop", AT), user("q", "u2"), assistant("toolUse", LATER, "a2"), toolResult]
+    });
+    const sessions = await piSessionProvider.list("pi", cwd);
+    assert.deepEqual(sessions.map((s) => [s.id, s.turnEndedAt]), [["s1", ms(AT)]]);
+  });
+
   it("renames by appending a session_info parented to the last entry, and removes by deleting the file", async () => {
     const dir = transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] });
     await piSessionProvider.rename("pi", cwd, "s1", "  Renamed  ");

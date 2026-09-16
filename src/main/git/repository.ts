@@ -49,7 +49,8 @@ const MAX_EDIT_BYTES = 4 * 1024 * 1024;
 function isIgnoredEvent(relativePath: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/");
   return (
-    normalized.endsWith(".lock") ||
+    // git's own locks; a lockfile in the tree (yarn.lock, Cargo.lock) is a change like any other.
+    (normalized.startsWith(".git/") && normalized.endsWith(".lock")) ||
     normalized.startsWith(".git/objects/") ||
     normalized.startsWith(".git/logs/") ||
     // Bookkeeping git rewrites on nearly every command, invisible in status and branches. Not
@@ -77,6 +78,8 @@ export class Repository {
   /** `state` serialized, so a refresh serializes only its own side to compare. */
   private stateJson = JSON.stringify(EMPTY_REPOSITORY_STATE);
   private watcher: fs.FSWatcher | undefined;
+  /** A linked worktree's or submodule's git directory — see watchLinkedGitDir. */
+  private gitDirWatcher: fs.FSWatcher | undefined;
   private watchRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private watchRetryDelay = WATCH_RETRY_MS;
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -759,8 +762,7 @@ export class Repository {
         }
         // The retry loop picks the directory back up when it reappears.
         if (watchedDirectoryGone(this.project.path, name)) {
-          this.watcher?.close();
-          this.watcher = undefined;
+          this.closeWatchers();
           this.retryWatching();
           return;
         }
@@ -797,15 +799,65 @@ export class Repository {
       });
       this.watcher.on("error", (error) => {
         console.error(`[tet] watcher failed for ${this.project.path}:`, error);
-        this.watcher?.close();
-        this.watcher = undefined;
+        this.closeWatchers();
         this.retryWatching();
       });
+      this.watchLinkedGitDir();
     } catch (error) {
-      // A filesystem that can't watch recursively throws here instead of emitting an error.
+      // A filesystem that can't watch recursively throws here instead of emitting an error. The
+      // root's watcher may already stand when the git directory's threw.
       console.error(`[tet] could not watch ${this.project.path}:`, error);
+      this.closeWatchers();
       this.retryWatching();
     }
+  }
+
+  /**
+   * A linked worktree's or a submodule's `.git` is a file naming the git directory elsewhere, where
+   * a commit or checkout in a terminal writes HEAD, index and refs without an event under the root
+   * (measured). Read off the file, no git process: `gitdir`, and for a worktree the `commondir`
+   * holding it, whose events are named as the root's `.git/` ones.
+   */
+  private watchLinkedGitDir(): void {
+    let gitDir: string;
+    try {
+      const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(path.join(this.project.path, ".git"), "utf8"));
+      if (!pointer) {
+        return;
+      }
+      gitDir = path.resolve(this.project.path, pointer[1]);
+    } catch {
+      // A directory (the usual repository), or none.
+      return;
+    }
+    let dir = gitDir;
+    try {
+      dir = path.resolve(gitDir, fs.readFileSync(path.join(gitDir, "commondir"), "utf8").trim());
+    } catch {
+      // A submodule: no common directory.
+    }
+    this.gitDirWatcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
+      const name = filename === null ? undefined : `.git/${filename.toString().replace(/\\/g, "/")}`;
+      if (name && isIgnoredEvent(name)) {
+        return;
+      }
+      if (name === ".git/config") {
+        this.remoteUrlsStale = true;
+      }
+      this.scheduleRefresh();
+    });
+    this.gitDirWatcher.on("error", (error) => {
+      console.error(`[tet] watcher failed for ${dir}:`, error);
+      this.closeWatchers();
+      this.retryWatching();
+    });
+  }
+
+  private closeWatchers(): void {
+    this.watcher?.close();
+    this.watcher = undefined;
+    this.gitDirWatcher?.close();
+    this.gitDirWatcher = undefined;
   }
 
   /** Puts a failed watcher back, then refreshes to catch what changed unwatched. */
@@ -833,8 +885,7 @@ export class Repository {
     this.watchedFileTimers.forEach(clearTimeout);
     clearTimeout(this.watchRetryTimer);
     clearInterval(this.autoFetchTimer);
-    this.watcher?.close();
-    this.watcher = undefined;
+    this.closeWatchers();
     // The git process caches per-directory answers; on quit it is stopped right after this.
     void git.forget(this.project.path).catch(() => undefined);
   }

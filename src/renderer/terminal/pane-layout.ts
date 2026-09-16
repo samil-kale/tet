@@ -159,11 +159,16 @@ export function normalizeLayout(
   for (const tab of tabs) {
     tabPane[tab.tabId] ??= layout.focusedPane;
   }
-  const listOf = (source: LayoutTab[], paneId: PaneId): LayoutTab[] =>
-    source.filter((tab) => (tabPane[tab.tabId] ?? layout.focusedPane) === paneId);
+  // The previous list by the previous assignment: a closed tab's is dropped above.
+  const listOf = (source: LayoutTab[], assignment: Record<string, PaneId>, paneId: PaneId): LayoutTab[] =>
+    source.filter((tab) => (assignment[tab.tabId] ?? layout.focusedPane) === paneId);
   const activeTab: Partial<Record<PaneId, string | null>> = {};
   for (const paneId of panes) {
-    activeTab[paneId] = pickActive(listOf(tabs, paneId), listOf(previousTabs, paneId), layout.activeTab[paneId]);
+    activeTab[paneId] = pickActive(
+      listOf(tabs, tabPane, paneId),
+      listOf(previousTabs, layout.tabPane, paneId),
+      layout.activeTab[paneId]
+    );
   }
   const focusedPane = panes.includes(layout.focusedPane) ? layout.focusedPane : panes[0];
   // A closing saved command's tab records its pane under its command line.

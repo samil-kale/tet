@@ -565,9 +565,10 @@ export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<
   return run(cwd, ["remote", "set-url", remote, url]);
 }
 
-/** Creates the branch and switches to it, as GitHub Desktop does. */
+/** Creates the branch and switches to it, as GitHub Desktop does: tracking nothing, since git would
+ *  track a remote start point and a push would then go to that branch — the first push publishes. */
 export function createBranch(cwd: string, name: string, startPoint: string): Promise<GitActionResult> {
-  return run(cwd, ["switch", "--create", name, startPoint]);
+  return run(cwd, ["switch", "--create", name, "--no-track", startPoint]);
 }
 
 export function renameBranch(cwd: string, from: string, to: string): Promise<GitActionResult> {

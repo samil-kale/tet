@@ -40,6 +40,8 @@ interface EditorView {
   models: { original: MonacoEditor.ITextModel; modified: MonacoEditor.ITextModel } | null;
   /** The modified model's version at the last load or save; anything else is dirty. */
   savedVersionId: number;
+  /** An outside change is being folded in: its content event is no edit. */
+  reloading: boolean;
   /** Bumped by every open (and a re-read that builds the models): a read overtaken is dropped. */
   readSeq: number;
   /** Bumped by every save that reached disk: an older re-read must not restore the replaced text
@@ -184,6 +186,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
       building: null,
       models: null,
       savedVersionId: 0,
+      reloading: false,
       readSeq: 0,
       saves: 0,
       version: undefined,
@@ -260,11 +263,18 @@ export function setEditorVersion(tabId: string, version: string): void {
       // save writes it twice. A BOM that came or went on disk needs a new buffer.
       const bom = result.content.startsWith("﻿");
       const modelBom = model.getValueLength(undefined, true) !== model.getValueLength();
-      if (bom === modelBom) {
-        const text = bom ? result.content.slice(1) : result.content;
-        model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
-      } else {
-        model.setValue(result.content);
+      // Monaco reports the change synchronously, before the new version is saved: read as an edit,
+      // it would keep a preview tab.
+      view.reloading = true;
+      try {
+        if (bom === modelBom) {
+          const text = bom ? result.content.slice(1) : result.content;
+          model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+        } else {
+          model.setValue(result.content);
+        }
+      } finally {
+        view.reloading = false;
       }
       view.savedVersionId = model.getAlternativeVersionId();
       // As in `showText`: deleted under the tab means read-only, restored means editable.
@@ -402,6 +412,9 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   };
   view.savedVersionId = models.modified.getAlternativeVersionId();
   models.modified.onDidChangeContent(() => {
+    if (view.reloading) {
+      return;
+    }
     const dirty = models.modified.getAlternativeVersionId() !== view.savedVersionId;
     if (dirty !== view.snapshot.dirty) {
       // An edit keeps a preview, in the same step: nothing can replace the tab in between.
@@ -445,11 +458,14 @@ function ensureEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDiffEdi
       run: (instance) => void instance.getAction("editor.action.startFindReplaceAction")?.run()
     });
     // Unknown combos are skipped at parse, unknown command ids silently at run. On a diff editor,
-    // `addCommand` and `addAction` reach the modified side, where these belong.
+    // `addCommand` and `addAction` reach the modified side, where these belong. A command's keybinding
+    // is page-wide and the last registered wins, so each is scoped to this editor the way `addAction`
+    // scopes its own.
+    const scope = `editorId == '${editor.getModifiedEditor().getId()}'`;
     for (const [combo, commandId] of Object.entries(resolveKeybindings(editorKeybindingPreset))) {
       const parsed = parseKeyCombo(monaco, combo);
       if (parsed !== undefined) {
-        editor.addCommand(parsed, () => editor.getModifiedEditor().getAction(commandId)?.run());
+        editor.addCommand(parsed, () => editor.getModifiedEditor().getAction(commandId)?.run(), scope);
       }
     }
     return editor;

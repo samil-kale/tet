@@ -288,7 +288,7 @@ interface TranscriptTail {
   /** The last session_info's name, trimmed; "" clears it (pi reads `entry.name?.trim() || undefined`). */
   name?: string;
   /** The last assistant message's time, however its turn ended (an Escape-abort is one with
-   *  `stopReason: "aborted"`). Its ms timestamp, else the entry's ISO one, as pi's
+   *  `stopReason: "aborted"`), bar one calling a tool. Its ms timestamp, else the entry's ISO one, as pi's
    *  getMessageActivityTime reads it. */
   turnEndedAt?: number;
 }
@@ -335,7 +335,8 @@ function readTailEntries(lines: string[], tail: TranscriptTail): void {
       tail.name = typeof entry.name === "string" ? entry.name.trim() : "";
     } else if (tail.turnEndedAt === undefined && entry.type === "message") {
       const message = entry.message as Record<string, unknown> | undefined;
-      if (message?.role !== "assistant") {
+      // pi writes each assistant message as it ends, and one calling a tool is mid-turn (measured).
+      if (message?.role !== "assistant" || message.stopReason === "toolUse") {
         continue;
       }
       const ms = typeof message.timestamp === "number" ? message.timestamp : Date.parse(nonEmptyString(entry.timestamp) ?? "");
