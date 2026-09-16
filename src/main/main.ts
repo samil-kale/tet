@@ -197,8 +197,8 @@ installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
-/** What control verbs answer beyond the stores; terminal output only with a profile of its own. */
-const records = new ControlRecords(ownProfile);
+/** What control verbs answer beyond the stores. */
+const records = new ControlRecords();
 const repositories = new RepositoryManager(
   (projectId, state) => send("repo:state-changed", { projectId, state }),
   (severity, message) => send("app:notice", { severity, message }),
@@ -218,8 +218,8 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, {
     send("terminal:tabs", { projectId, tabs });
     awaitedToastTab(projectId);
   },
-  onOutput: (projectId, tabId, data) => {
-    records.addOutput(projectId, tabId, data);
+  onOutput: (projectId, tabId, agentId, data) => {
+    records.addOutput(projectId, tabId, agentId, data);
     queueOutput(projectId, tabId, data);
   },
   onStatus: (projectId, tabId, status: TerminalStatus) => send("terminal:status", { projectId, tabId, status }),

@@ -23,8 +23,9 @@ const PROJECT: Project = { id: "p1", path: "", name: "one" };
 const OTHER: Project = { id: "p2", path: "", name: "two" };
 const OWN_TAB = "tab-own";
 
+/** The caller's own tab is a shell; "tab-2" an agent, with a session and a sandbox. */
 function tab(projectId: string, tabId: string): TerminalDescriptor {
-  return { tabId, projectId, agentId: "shell", title: "", status: "running" };
+  return { tabId, projectId, agentId: tabId === OWN_TAB ? "shell" : "claude", title: "", status: "running" };
 }
 
 /** What the verbs did to the fakes. */
@@ -79,6 +80,7 @@ function terminalsOf(projectId: string): ControlTerminals {
       calls.written.push([tabId, data]);
     },
     events: () => [1, 2, 3].map((at) => ({ at, tabId: "tab-2", kind: "hook" as const, event: "stop" as const })),
+    shellOutput: (_tabId, count) => ["one", "two", "three"].slice(-count).join("\n"),
     createTab: (agentId) => {
       calls.created.push(agentId);
       return tab(projectId, "tab-new");
@@ -477,10 +479,31 @@ describe("tet-ctl against the control server", () => {
     ]);
   });
 
-  it("answers a tab's output as text, its tail when asked", async () => {
-    assert.deepEqual((await tetCtl(["tabs-output", "tab-2"])).result, { output: "bold line\nnext" });
-    assert.deepEqual((await tetCtl(["tabs-output", "tab-2", "--tail", "4"])).result, { output: "next" });
-    assert.equal((await tetCtl(["tabs-output", "tab-2", "--tail", "x"])).status, EXIT_CODES.usage);
+  it("answers an agent tab's output as text, and refuses a shell tab", async () => {
+    assert.deepEqual((await tetCtl(["tabs-agent-output", "tab-2"])).result, { output: "bold line\nnext" });
+    assert.deepEqual((await tetCtl(["tabs-agent-output", "tab-2", "--kb", "1"])).result, { output: "bold line\nnext" });
+    assert.equal((await tetCtl(["tabs-agent-output", "tab-2", "--kb", "x"])).status, EXIT_CODES.usage);
+    assert.equal((await tetCtl(["tabs-agent-output", OWN_TAB])).status, EXIT_CODES.usage);
+  });
+
+  it("answers a shell tab's last lines, and refuses an agent tab", async () => {
+    assert.deepEqual((await tetCtl(["tabs-shell-output", OWN_TAB])).result, { output: "one\ntwo\nthree" });
+    assert.deepEqual((await tetCtl(["tabs-shell-output", OWN_TAB, "--lines", "2"])).result, { output: "two\nthree" });
+    assert.equal((await tetCtl(["tabs-shell-output", OWN_TAB, "--lines", "0"])).status, EXIT_CODES.usage);
+    assert.equal((await tetCtl(["tabs-shell-output", "tab-2"])).status, EXIT_CODES.usage);
+  });
+
+  it("reads no tab of another project, nor from outside a project", async () => {
+    const other = await tetCtl(["tabs-shell-output", OWN_TAB, "--project", OTHER.id]);
+    const outside = await tetCtl(["tabs-agent-output", "tab-2", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
+    for (const [what, run] of [
+      ["another project", other],
+      ["no project of its own", outside]
+    ] as const) {
+      assert.equal(run.status, EXIT_CODES.unauthorized, what);
+      assert.match(run.stderr, /own project/, what);
+    }
+    assert.equal((await tetCtl(["tabs-shell-output", OWN_TAB, "--project", PROJECT.id])).status, EXIT_CODES.ok, "its own, named");
   });
 
   it("answers the latest events, as many as asked for", async () => {
@@ -506,19 +529,16 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["notices-list"])).result, [{ severity: "error", message: "Could not delete", at: 1 }]);
   });
 
-  it("refuses to type into or read a terminal in a run without a profile of its own", async () => {
+  it("refuses to type into a terminal in a run without a profile of its own, but reads one", async () => {
     const ordinaryPort = await findControlPort(path.join(tempDir, "ordinary"));
     const ordinary = await startControlServer(deps(false), TOKEN, ordinaryPort);
     try {
-      for (const args of [
-        ["tabs-send", "tab-2", "x"],
-        ["tabs-output", "tab-2"]
-      ]) {
-        const run = await tetCtl(args, { [CONTROL_ENV.port]: String(ordinaryPort) });
-        assert.equal(run.status, EXIT_CODES.unauthorized, args[0]);
-        assert.match(run.stderr, /profile of its own/);
+      const sent = await tetCtl(["tabs-send", "tab-2", "x"], { [CONTROL_ENV.port]: String(ordinaryPort) });
+      assert.equal(sent.status, EXIT_CODES.unauthorized);
+      assert.match(sent.stderr, /profile of its own/);
+      for (const args of [["tabs-agent-output", "tab-2"], ["tabs-shell-output", OWN_TAB], ["tabs-list"]]) {
+        assert.equal((await tetCtl(args, { [CONTROL_ENV.port]: String(ordinaryPort) })).status, EXIT_CODES.ok, args[0]);
       }
-      assert.equal((await tetCtl(["tabs-list"], { [CONTROL_ENV.port]: String(ordinaryPort) })).status, EXIT_CODES.ok);
       assert.deepEqual(calls.written, []);
     } finally {
       await ordinary.close();

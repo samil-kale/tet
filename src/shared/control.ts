@@ -46,10 +46,13 @@ export interface ControlVerb {
   /** Argument names for the positionals, in order; flags keep their own name (CONTROL_FLAGS). */
   positionals: string[];
   /**
-   * Only in a run with its own `--user-data-dir` (tests): the verb types into or reads another
-   * tab's terminal, which would otherwise let one agent drive or overhear another.
+   * Only in a run with its own `--user-data-dir` (tests): the verb types into another tab's
+   * terminal, which would otherwise let one agent drive another.
    */
   ownProfileOnly?: true;
+  /** Only from a tab of the project it targets: the verb reads a terminal, and one project's
+   *  agent has no business in another project's. */
+  ownProjectOnly?: true;
   /** Stdin goes in as `args.payload` — an agent's hook payload. */
   stdin?: true;
   /**
@@ -79,6 +82,8 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   idle: "switch",
   status: "value",
   tail: "value",
+  kb: "value",
+  lines: "value",
   timeout: "value"
 };
 
@@ -177,11 +182,20 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     ownProfileOnly: true
   },
   {
-    verb: "tabs-output",
-    usage: "tabs-output <tab-id> [--tail <chars>] [--project <id>]",
-    summary: "What a tab printed lately, escape sequences taken out. Only in a run with its own --user-data-dir.",
+    verb: "tabs-agent-output",
+    usage: "tabs-agent-output <tab-id> [--kb <n>]",
+    summary:
+      "What an agent tab printed lately, escape sequences taken out: its TUI's redraws, the last n KB (4, at most 64). Only a tab of the caller's own project.",
     positionals: ["tabId"],
-    ownProfileOnly: true
+    ownProjectOnly: true
+  },
+  {
+    verb: "tabs-shell-output",
+    usage: "tabs-shell-output <tab-id> [--lines <n>]",
+    summary:
+      "The last n lines a shell tab printed (100, at most 10000), escape sequences and redraws taken out. Only a tab of the caller's own project.",
+    positionals: ["tabId"],
+    ownProjectOnly: true
   },
   {
     verb: "events-tail",

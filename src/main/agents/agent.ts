@@ -78,8 +78,6 @@ export interface AgentPaths {
   agentDir: string;
   /** The repository's context file, kept current by tet; the agent only makes it reach the model. */
   contextFile: string;
-  /** Files the context file points at; outside the repository, so path-gated reads must grant them. */
-  contextReadPaths: string[];
   /** TET's data folder (`~/.tet`, data-root.ts), for anything installed machine-wide. */
   storageRoot: string;
   /**

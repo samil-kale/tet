@@ -111,6 +111,8 @@ export interface ControlTerminals {
   write(tabId: string, data: string): void;
   /** Oldest first. */
   events(): ControlEvent[];
+  /** A shell tab's last `count` lines, cleaned of escape sequences and redraws. */
+  shellOutput(tabId: string, count: number): string;
   createTab(agentId: AgentId): TerminalDescriptor;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
@@ -173,8 +175,9 @@ const WAIT_TIMEOUT_S = 30;
 const WAIT_POLL_MS = 100;
 /** `events-tail` default. */
 const EVENTS_TAIL = 50;
-/** `tabs-output` default. */
-const OUTPUT_TAIL_CHARS = 4000;
+/** `tabs-agent-output` and `tabs-shell-output` defaults. */
+const AGENT_OUTPUT_KB = 4;
+const SHELL_OUTPUT_LINES = 100;
 
 const DYNAMIC_PORT_START = 49152;
 const DYNAMIC_PORT_RANGE = 65535 - DYNAMIC_PORT_START;
@@ -235,14 +238,18 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
   };
 
   /** A tab id checked to exist, with its project and terminals. */
-  const knownTab = (args: Record<string, unknown>, caller: ControlRequest["caller"]): { tabs: ControlTerminals; tabId: string; found: Project } => {
+  const knownTab = (
+    args: Record<string, unknown>,
+    caller: ControlRequest["caller"]
+  ): { tabs: ControlTerminals; tabId: string; found: Project; tab: TerminalDescriptor } => {
     const found = project(args, caller);
     const tabId = text(args, "tabId", "tab id");
     const tabs = terminals(found);
-    if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
+    const tab = tabs.snapshot().find((entry) => entry.tabId === tabId);
+    if (!tab) {
       throw new ControlError("not_found", `unknown tab: ${tabId} (see tabs-list)`);
     }
-    return { tabs, tabId, found };
+    return { tabs, tabId, found, tab };
   };
 
   return {
@@ -394,10 +401,21 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { sent: tabId } };
     },
 
-    "tabs-output": (args, caller) => {
-      const { tabId, found } = knownTab(args, caller);
+    "tabs-agent-output": (args, caller) => {
+      const { tabId, found, tab } = knownTab(args, caller);
+      if (tab.agentId === "shell") {
+        throw new ControlError("bad_args", `${tabId} is a shell tab (see tabs-shell-output)`);
+      }
       const output = plainText(deps.records.output(found.id, tabId) ?? "");
-      return { result: { output: output.slice(-count(args, "tail", OUTPUT_TAIL_CHARS)) } };
+      return { result: { output: output.slice(-count(args, "kb", AGENT_OUTPUT_KB) * 1024) } };
+    },
+
+    "tabs-shell-output": (args, caller) => {
+      const { tabs, tabId, tab } = knownTab(args, caller);
+      if (tab.agentId !== "shell") {
+        throw new ControlError("bad_args", `${tabId} is an agent tab (see tabs-agent-output)`);
+      }
+      return { result: { output: tabs.shellOutput(tabId, count(args, "lines", SHELL_OUTPUT_LINES)) } };
     },
 
     "events-tail": (args, caller) => ({
@@ -551,6 +569,13 @@ export async function startControlServer(
       return {
         response: reject("unauthorized", `${request.verb} only answers in a TET started with a profile of its own (--user-data-dir)`)
       };
+    }
+    if (CONTROL_VERBS.some((entry) => entry.verb === request.verb && entry.ownProjectOnly)) {
+      const own = request.caller?.projectId;
+      const asked = request.args?.project;
+      if (!own || (typeof asked === "string" && asked !== "" && asked !== own)) {
+        return { response: reject("unauthorized", `${request.verb} only answers for a tab of the caller's own project`) };
+      }
     }
     try {
       const answer = await handler(request.args ?? {}, request.caller ?? {}, request.at);

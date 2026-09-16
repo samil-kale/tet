@@ -34,7 +34,7 @@ export function claudeHoldsTurnEnd(payload: string): boolean {
  */
 export function setupClaudeHooks(
   storageDir: string,
-  paths: { contextReadPaths: string[]; idleReminder: boolean },
+  paths: { idleReminder: boolean },
   themeName: string,
   target: HookTarget = HOST_TARGET
 ): string[] {
@@ -56,16 +56,12 @@ export function setupClaudeHooks(
     PreToolUse: [{ matcher: "AskUserQuestion", hooks: command("question") }]
   };
 
-  // The shell transcript is outside the repository, where reads need a grant. Per file, not the
-  // directory (which also holds this settings file).
-  const permissions = { allow: paths.contextReadPaths.map((file) => `Read(${target.embed(file)})`) };
-
   // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process
   // (measured). Built-in only: a custom theme loads after the first render, drawing a dark frame
   // meanwhile (measured).
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.mkdirSync(storageDir, { recursive: true });
   // Rename into place: a sandbox's copy is rewritten on every spawn while another tab may read it.
-  writeFileAtomic.sync(settingsFile, JSON.stringify({ hooks, permissions, theme: themeName }, null, 2));
+  writeFileAtomic.sync(settingsFile, JSON.stringify({ hooks, theme: themeName }, null, 2));
   return ["--settings", target.embed(settingsFile)];
 }

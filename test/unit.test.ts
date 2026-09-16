@@ -147,7 +147,7 @@ describe("the tet-ctl launcher", () => {
 });
 
 describe("the context file", () => {
-  it("names tet-ctl from the start, and the shell log only once something ran", async () => {
+  it("names tet-ctl from the start, and how to read the shell tabs only once something ran", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
     const context = new ShellContext(dir, "repo");
     const read = (): string => {
@@ -157,50 +157,45 @@ describe("the context file", () => {
     };
     await eventually("the first write", () => fs.existsSync(context.contextFile));
     assert.match(read(), /controlled with `tet-ctl`/);
-    assert.doesNotMatch(read(), /Shell output/);
+    assert.doesNotMatch(read(), /tabs-shell-output/);
 
-    context.append("tab-1", "build", "npm run build\r\ndone\r\n");
-    await eventually("the shell paragraph", () => /Shell output/.test(read()));
-    assert.match(read(), new RegExp(`shell tabs in repo: ${context.logFile.replace(/\\/g, "\\\\")}`));
-    assert.doesNotMatch(read(), / KB\)/, "no size — it changes with every write");
+    context.append("tab-1", "npm run build\r\ndone\r\n");
+    await eventually("the shell paragraph", () => /tabs-shell-output/.test(read()));
+    assert.match(read(), /shell tabs in repo are read with `tet-ctl tabs-list`/);
     context.dispose();
-    await eventually("the log", () => fs.existsSync(context.logFile) && /done/.test(fs.readFileSync(context.logFile, "utf8")));
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it("keeps each shell tab's lines whole and marks where the writer changes", async () => {
+  it("keeps each shell tab's lines whole, and answers the last ones asked for", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
     const context = new ShellContext(dir, "repo");
-    context.append("tab-1", "build", "compiling");
-    context.append("tab-2", "tab-2", "abc123 first commit\r\n");
-    context.append("tab-1", "build", " main.ts\r\n");
-    context.append("tab-1", "build", "unfinished");
+    context.append("tab-1", "compiling");
+    context.append("tab-2", "abc123 first commit\r\n");
+    context.append("tab-1", " main.ts\r\n");
+    context.append("tab-1", "\x1b[32mok\x1b[0m\r\n40%\r80%\r100%\r\nunfinished");
+    assert.equal(context.output("tab-1", 100), "compiling main.ts\nok\n100%\nunfinished", "the open line included");
+    assert.equal(context.output("tab-1", 2), "100%\nunfinished");
+    assert.equal(context.output("tab-2", 100), "abc123 first commit");
     context.close("tab-1");
+    assert.equal(context.output("tab-1", 100), "", "a closed tab's lines go with it");
     context.dispose();
-    await eventually("the log", () => fs.existsSync(context.logFile));
-    assert.equal(
-      fs.readFileSync(context.logFile, "utf8"),
-      "=== shell tab: tab-2 ===\nabc123 first commit\n\n=== shell tab: build ===\ncompiling main.ts\nunfinished"
-    );
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it("tries a failed write again by itself, and answers with the text meanwhile", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
-    // A directory in each file's place makes the rename fail everywhere, as on win32 while a
-    // reader holds the file without delete sharing.
+    // A directory in the file's place makes the rename fail everywhere, as on win32 while a reader
+    // holds the file without delete sharing.
     fs.mkdirSync(path.join(dir, "context.md"));
-    fs.mkdirSync(path.join(dir, "shell-output.log"));
     const context = new ShellContext(dir, "repo");
-    context.append("tab-1", "build", "done\r\n");
+    context.append("tab-1", "done\r\n");
     await new Promise((resolve) => setTimeout(resolve, 600));
-    assert.match(context.text, /Shell output/, "what the prompt-submit hook is answered with");
+    assert.match(context.text, /tabs-shell-output/, "what the prompt-submit hook is answered with");
     fs.rmdirSync(context.contextFile);
-    fs.rmdirSync(context.logFile);
-    // No further output: only its own retry writes them.
+    // No further output: only its own retry writes it.
     const written = (file: string, pattern: RegExp): boolean =>
       fs.statSync(file, { throwIfNoEntry: false })?.isFile() === true && pattern.test(fs.readFileSync(file, "utf8"));
-    await eventually("the retried writes", () => written(context.logFile, /done/) && written(context.contextFile, /Shell output/), 5000);
+    await eventually("the retried write", () => written(context.contextFile, /tabs-shell-output/), 5000);
     context.dispose();
     fs.rmSync(dir, { recursive: true, force: true });
   });

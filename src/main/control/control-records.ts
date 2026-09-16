@@ -1,4 +1,4 @@
-import type { EditorReport, NoticeReport } from "../../shared/types";
+import type { AgentId, EditorReport, NoticeReport } from "../../shared/types";
 
 const MAX_NOTICES = 50;
 /** A few screens of a TUI's redraws. */
@@ -6,15 +6,12 @@ const MAX_OUTPUT_CHARS = 64 * 1024;
 
 /**
  * Control-verb data no main-process store holds: what the window reports (editor tab, shown
- * notices) and each terminal's latest output — the latter only with a profile of its own
- * (ControlVerb.ownProfileOnly).
+ * notices) and each agent tab's latest output. A shell tab's lines are ShellContext's.
  */
 export class ControlRecords {
   private readonly editors = new Map<string, EditorReport>();
   private readonly shownNotices: NoticeReport[] = [];
   private readonly outputs = new Map<string, string>();
-
-  constructor(private readonly keepOutput: boolean) {}
 
   /** null once the editor tab is closed. */
   setEditor(projectId: string, report: EditorReport | null): void {
@@ -38,15 +35,15 @@ export class ControlRecords {
     return [...this.shownNotices];
   }
 
-  addOutput(projectId: string, tabId: string, data: string): void {
-    if (!this.keepOutput) {
+  addOutput(projectId: string, tabId: string, agentId: AgentId, data: string): void {
+    if (agentId === "shell") {
       return;
     }
     const key = `${projectId}\u0000${tabId}`;
     this.outputs.set(key, ((this.outputs.get(key) ?? "") + data).slice(-MAX_OUTPUT_CHARS));
   }
 
-  /** Undefined before any output, and always in an ordinary run. */
+  /** Undefined before any output, and for a shell tab. */
   output(projectId: string, tabId: string): string | undefined {
     return this.outputs.get(`${projectId}\u0000${tabId}`);
   }

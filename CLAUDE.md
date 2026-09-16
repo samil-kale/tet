@@ -66,7 +66,7 @@ others.
   written into a script is quoted with `shellSingleQuote` (`src/shared/script-text.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
   `tet-ctl hook <event>`.
-- A file another process reads (context file, shell transcript, opencode records) is written
+- A file another process reads (context file, opencode records) is written
   beside the target and renamed into place.
 
 ## Git
@@ -158,7 +158,9 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 
 - `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
-- `tabs-send`/`tabs-output` answer only in a run with a profile of its own (`ownProfileOnly`).
+- `tabs-send` answers only in a run with a profile of its own (`ownProfileOnly`);
+  `tabs-agent-output`/`tabs-shell-output` only for a tab of the caller's own project
+  (`ownProjectOnly`).
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.

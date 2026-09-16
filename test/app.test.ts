@@ -158,23 +158,25 @@ ${stderr.slice(uncaught)}`);
     }
   });
 
-  it("writes the shell's output into the context file the agents read", async () => {
+  it("answers a shell tab's lines, and tells the agents so in the context file", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const contextFile = path.join(contextDirFor(userData, project.id), "context.md");
-    const logFile = path.join(contextDirFor(userData, project.id), "shell-output.log");
-    // A saved command printing a whole line, not a plain shell: the transcript holds back an
-    // unfinished line such as a prompt (`carryFrom` in shell-context.ts), and whether a shell
-    // prints more at startup depends on the machine.
+    // A saved command printing a whole line, not a plain shell: whether a shell prints more at
+    // startup depends on the machine.
     fs.writeFileSync(
       path.join(repo, "tet.json"),
       JSON.stringify({ commands: [{ command: "node -e \"console.log('tet-context-probe')\"", name: "probe" }] })
     );
-    assert.equal((await ctl("tabs-run-command", "probe", "--project", project.id)).status, 0);
-    // The line itself, not just the paragraph: an earlier tab's startup output may have put that there.
+    const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TerminalDescriptor;
+    // Read as a tab of that project does: the verb answers only there.
+    const lines = async (): Promise<string> =>
+      ((await tetCtl(["tabs-shell-output", probe.tabId], { ...env, [CONTROL_ENV.projectId]: project.id })).result as
+        | { output: string }
+        | undefined)?.output ?? "";
     const has = (file: string, pattern: RegExp): boolean => fs.existsSync(file) && pattern.test(fs.readFileSync(file, "utf8"));
     await eventually(
-      "the command's line in the transcript, and the shell paragraph",
-      () => has(logFile, /tet-context-probe/) && has(contextFile, /Shell output from the user's shell tabs/),
+      "the command's line, and the shell paragraph",
+      async () => /tet-context-probe/.test(await lines()) && has(contextFile, /tabs-shell-output/),
       STARTUP_MS
     );
     assert.match(fs.readFileSync(contextFile, "utf8"), /tet-ctl/);

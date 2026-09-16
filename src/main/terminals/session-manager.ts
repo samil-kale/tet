@@ -109,7 +109,7 @@ interface AgentRuntime {
 
 export interface SessionManagerCallbacks {
   onTabs: (projectId: string, tabs: TerminalDescriptor[]) => void;
-  onOutput: (projectId: string, tabId: string, data: string) => void;
+  onOutput: (projectId: string, tabId: string, agentId: AgentId, data: string) => void;
   onStatus: (projectId: string, tabId: string, status: TerminalStatus) => void;
   /** Whether anything in this project is still starting — drives the tab strip's bar. */
   onStartupProgress: (projectId: string, show: boolean) => void;
@@ -271,7 +271,6 @@ export class ProjectSessionManager {
     return {
       agentDir,
       contextFile: this.shellContext.contextFile,
-      contextReadPaths: [this.shellContext.logFile],
       storageRoot: this.storageRoot,
       idleReminder: this.settings.get().notifications.idleReminder,
       theme: currentTheme(this.settings)
@@ -294,6 +293,11 @@ export class ProjectSessionManager {
   /** What `events-tail` answers: the latest hook reports, claims and closes, oldest first. */
   events(): ControlEvent[] {
     return [...this.recorded];
+  }
+
+  /** What `tabs-shell-output` answers: a shell tab's last `count` lines (ShellContext.output). */
+  shellOutput(tabId: string, count: number): string {
+    return this.shellContext.output(tabId, count);
   }
 
   private record(event: Omit<ControlEvent, "at">): void {
@@ -804,7 +808,7 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
-      onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
+      onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, tab.agentId, data)
     });
     if (missing.length > 0) {
       this.callbacks.onNotice(
@@ -866,10 +870,10 @@ export class ProjectSessionManager {
       sbxArgs ? undefined : preparation?.env,
       {
         onOutput: (data) => {
-          this.callbacks.onOutput(this.project.id, tabId, data);
+          this.callbacks.onOutput(this.project.id, tabId, agent.id, data);
           // Only shells: an agent tab's output is its TUI redrawing.
           if (!agent.sessions) {
-            this.shellContext.append(tabId, tab.title || tabId, data);
+            this.shellContext.append(tabId, data);
           }
           if (isSessionReady?.(data)) {
             hideIndicator();

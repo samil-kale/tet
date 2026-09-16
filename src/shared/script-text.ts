@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 
 /**
  * Encoding, line endings and quoting for files tet generates for other processes to run (control
- * launchers, shell transcript).
+ * launchers, context file).
  */
 
 /** PowerShell 5.1 decodes a BOM-less file as ANSI. */

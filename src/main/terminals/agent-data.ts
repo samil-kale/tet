@@ -15,7 +15,7 @@ export function agentDirFor(storageRoot: string, agentId: string, projectId: str
   return path.join(agentDataDir(storageRoot), "agents", agentId, projectId);
 }
 
-/** Where a project's context file and shell transcript live — see ShellContext. */
+/** Where a project's context file lives — see ShellContext. */
 export function contextDirFor(storageRoot: string, projectId: string): string {
   return path.join(agentDataDir(storageRoot), "projects", projectId);
 }
