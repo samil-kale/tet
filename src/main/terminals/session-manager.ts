@@ -797,7 +797,7 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
-      onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, tab.agentId, data)
+      onData: (data) => this.reportOutput(tab, data)
     });
     if (missing.length > 0) {
       this.callbacks.onNotice(
@@ -826,6 +826,16 @@ export class ProjectSessionManager {
       `${what}: ${reason}. The tab menu's Restart tries again once that has changed.`
     );
     return true;
+  }
+
+  /**
+   * A closed tab's session keeps printing while it quits (closeTabs lists the tab as gone first);
+   * that output reaches nobody, or it would be recorded again after keepOutputs dropped it.
+   */
+  private reportOutput(tab: TabState, data: string): void {
+    if (this.tabs.includes(tab)) {
+      this.callbacks.onOutput(this.project.id, tab.tabId, tab.agentId, data);
+    }
   }
 
   private startSession(tab: TabState, sbxArgs: string[] | null): TerminalSession {
@@ -859,7 +869,7 @@ export class ProjectSessionManager {
       sbxArgs ? undefined : preparation?.env,
       {
         onOutput: (data) => {
-          this.callbacks.onOutput(this.project.id, tabId, agent.id, data);
+          this.reportOutput(tab, data);
           if (isSessionReady?.(data)) {
             hideIndicator();
           }
