@@ -159,8 +159,8 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 - `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
 - Agents learn of `tet-ctl` once per session: `TET_SYSTEM_PROMPT` (`src/main/agents/system-prompt.ts`),
-  appended to each agent's system prompt at spawn — one plain line, since it crosses cmd.exe,
-  `sbx run` and TOML.
+  appended to each agent's system prompt, never replacing the user's instructions (Codex: its
+  `SessionStart` hook's answer) — one plain line, since it crosses cmd.exe and `sbx run`.
 - A caller's project and tab ids count only with the token made for them
   (`src/main/control/control-token.ts`): a terminal gets its tab's token, never the run's.
 - `tabs-send` answers only in a run with a profile of its own (`ownProfileOnly`);

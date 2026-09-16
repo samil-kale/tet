@@ -50,20 +50,20 @@ describe("Codex's hook trust", () => {
   it("hands every hook in as one TOML value with its trust entry, quoted literally", () => {
     const args = setupCodexHooks();
     const hooks = args[args.indexOf("-c") + 1];
-    assert.match(hooks, /^hooks=\{UserPromptSubmit=\[/);
-    for (const event of ["Stop", "PermissionRequest", "PreToolUse"]) {
+    assert.match(hooks, /^hooks=\{SessionStart=\[/);
+    for (const event of ["UserPromptSubmit", "Stop", "PermissionRequest", "PreToolUse"]) {
       assert.ok(hooks.includes(`${event}=[`), event);
     }
     assert.match(hooks, /matcher='request_user_input'/);
     const trusted = hooks.match(/trusted_hash='sha256:[0-9a-f]{64}'/g) ?? [];
-    assert.equal(trusted.length, 4, "one per event, each its own handler");
+    assert.equal(trusted.length, 5, "one per event, each its own handler");
     assert.ok(!args.some((arg) => arg.startsWith("hooks.")), "one value, never key paths");
   });
 
   it("registers one plain tet-ctl call per event, host and sandbox alike", () => {
     for (const target of [HOST_TARGET, SANDBOX_TARGET]) {
       const hooks = setupCodexHooks(target)[1];
-      for (const event of ["prompt-submit", "stop", "permission", "question"]) {
+      for (const event of ["session-start", "prompt-submit", "stop", "permission", "question"]) {
         assert.ok(hooks.includes(`command='tet-ctl hook ${event}'`), `${event} on ${target.posix ? "posix" : "win32"}`);
       }
       // No host path in a sandbox's trust key, and nothing written.

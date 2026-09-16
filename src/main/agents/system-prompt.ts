@@ -1,13 +1,13 @@
 /**
- * What every agent tab is told about TET, once per session: appended to its system prompt when it
- * starts (each agent's prepareSpawn and prepareSandboxSpawn), not repeated with every message. It
- * only says when to look; `tet-ctl help` holds the verbs.
+ * What every agent tab is told about TET, once per session: appended to its system prompt, never
+ * replacing the user's own instructions, not repeated with every message. Claude Code, opencode and
+ * pi take it at spawn (prepareSpawn and prepareSandboxSpawn), Codex as its `SessionStart` hook's
+ * answer (codex/hooks.ts). It only says when to look; `tet-ctl help` holds the verbs.
  *
  * One line with no `"`, `\`, backtick or cmd.exe/shell metacharacter (pieces.test.ts): it travels
- * as a plain argument through cmd.exe (pi's npm shim, Codex's launch.cmd), through `sbx run`, and
- * inside a TOML basic string (Codex). Measured with this text, 2026-09-16, win32 host and sbx
- * 0.42.1 — Claude Code 2.1.273, Codex 0.154.0, opencode 1.18.4, pi 0.85.1: each answered a canary
- * word only this text carried, and Codex's command line held it as one argument.
+ * as a plain argument through cmd.exe (pi's npm shim) and through `sbx run`. Measured with this
+ * text, 2026-09-16, win32 host and sbx 0.42.1 — Claude Code 2.1.273, opencode 1.18.4, pi 0.85.1:
+ * each answered a canary word only this text carried.
  */
 export const TET_SYSTEM_PROMPT =
   "You are running inside TET, which runs coding agents and shells as terminal tabs. " +

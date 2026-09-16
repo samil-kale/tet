@@ -7,15 +7,6 @@ import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { setupCodexHooks } from "./hooks";
 import { codexSessionProvider } from "./sessions";
-import { TET_SYSTEM_PROMPT } from "../system-prompt";
-
-/**
- * Codex's developer instructions for this process, as a TOML basic string: `-c` parses its value
- * as TOML, and a bare sentence only works through the fallback to a raw string. Measured through
- * launch.cmd too, where codex.exe's command line held it as one argument (see system-prompt.ts).
- * It replaces a `developer_instructions` of the user's own config.toml for this process.
- */
-const SYSTEM_PROMPT_ARGS = ["-c", `developer_instructions="${TET_SYSTEM_PROMPT}"`];
 
 /**
  * On win32 Codex reads its colors from the *console* (`GetConsoleScreenBufferInfoEx` on ConPTY,
@@ -61,14 +52,14 @@ export const codexAgent: AgentDefinition = {
       // See prepareSpawn: swallow, never reject.
       console.error("[tet] could not set up Codex hooks:", error);
     }
-    return Promise.resolve({ args: [...args, ...SYSTEM_PROMPT_ARGS], executable: launcher });
+    return Promise.resolve({ args, executable: launcher });
   },
   prepareSandboxSpawn: () => {
     try {
-      return { args: [...setupCodexHooks(SANDBOX_TARGET), ...SYSTEM_PROMPT_ARGS] };
+      return { args: setupCodexHooks(SANDBOX_TARGET) };
     } catch (error) {
       console.error("[tet] could not set up Codex sandbox hooks:", error);
-      return { args: SYSTEM_PROMPT_ARGS };
+      return { args: [] };
     }
   },
   // Observed: setup and onboarding total a few hundred bytes before the first real redraw, one

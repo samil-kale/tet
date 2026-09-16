@@ -40,7 +40,7 @@ describe("a turn's toast", () => {
     const needsYou = ["permission", "question", "idle"] as const;
     try {
       manager.setInFront([tabId]);
-      assert.deepEqual(hook("prompt-submit"), {}, "nothing for the prompt: TET's system prompt went in at spawn");
+      assert.deepEqual(hook("prompt-submit"), {}, "nothing for the prompt: TET's system prompt went in once per session");
       assert.equal(hook("stop").toast, undefined, "a turn finished in front of the user");
       assert.notEqual(
         pushed.find((tab) => tab.tabId === tabId)?.finishedAt,

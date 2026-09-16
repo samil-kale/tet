@@ -18,6 +18,7 @@ import type {
   RepositoryState,
   TerminalDescriptor
 } from "../../shared/types";
+import { TET_SYSTEM_PROMPT } from "../agents/system-prompt";
 import { tabControlToken } from "./control-token";
 
 /**
@@ -192,6 +193,24 @@ const EVENTS_TAIL = 50;
 /** `tabs-agent-output` and `tabs-shell-output` defaults. */
 const AGENT_OUTPUT_KB = 4;
 const SHELL_OUTPUT_LINES = 100;
+
+/**
+ * What a hook prints back into its agent. `{}` rather than nothing: Codex parses its Stop hook's
+ * stdout as JSON, and every agent takes JSON on hook channels not appended to the prompt
+ * (measured). `prompt-submit`'s stdout would be appended to the prompt: "". `session-start`
+ * carries TET's system prompt as added context, appended to the user's instructions (measured,
+ * Codex 0.154.0: in the first turn, and again on `resume`).
+ */
+const HOOK_STDOUT: Record<HookEvent, string> = {
+  "session-start": JSON.stringify({
+    hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: TET_SYSTEM_PROMPT }
+  }),
+  "prompt-submit": "",
+  stop: "{}",
+  permission: "{}",
+  question: "{}",
+  idle: "{}"
+};
 
 const DYNAMIC_PORT_START = 49152;
 const DYNAMIC_PORT_RANGE = 65535 - DYNAMIC_PORT_START;
@@ -539,10 +558,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (outcome.toast) {
         deps.notify(outcome.toast.title, outcome.toast.body, { projectId: where.id, tabId: caller.tabId });
       }
-      // `{}` rather than nothing: Codex parses its Stop hook's stdout as JSON, and every agent
-      // takes JSON on hook channels not appended to the prompt (measured). `prompt-submit`'s
-      // stdout would be appended to the prompt, and TET's system prompt went in at spawn: "".
-      return { result: { stdout: event === "prompt-submit" ? "" : "{}" } };
+      return { result: { stdout: HOOK_STDOUT[event as HookEvent] } };
     }
   };
 }

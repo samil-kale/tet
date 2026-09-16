@@ -976,8 +976,9 @@ export class ProjectSessionManager {
 
   /**
    * For a tab closed right after its first prompt, resolves once it named its session (bounded).
-   * Codex takes the quitting Ctrl+C as an abort of the still-running `UserPromptSubmit` hook
-   * (measured), the one report naming the session, which would then come back as a tab of its own.
+   * Codex takes the quitting Ctrl+C as an abort of a still-running `UserPromptSubmit` hook
+   * (measured), and its hooks are the only reports naming the session, which would then come back
+   * as a tab of its own.
    */
   private reportBeforeQuit(tab: TabState): Promise<void> {
     const waited = tab.submittedAt === undefined ? 0 : Date.now() - tab.submittedAt;
@@ -1133,12 +1134,16 @@ export class ProjectSessionManager {
     // a tab working again (turn-order.ts).
     const fresh = reportApplies(tab.signalAt, at);
     switch (event) {
+      case "session-start":
+        // Only names the session (above). Codex fires it with the first prompt (measured), whose
+        // turn prompt-submit marks.
+        return {};
       case "prompt-submit":
         if (fresh) {
           setTurn(tab, true, at);
           this.postTabs();
         }
-        // No context for the model: TET's system prompt went in once, at spawn (system-prompt.ts).
+        // No context for the model: TET's system prompt went in once per session (system-prompt.ts).
         return {};
       case "stop": {
         const agent = getAgent(tab.agentId);

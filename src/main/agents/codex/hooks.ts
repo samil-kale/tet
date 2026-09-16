@@ -110,14 +110,17 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  * `config.toml` and `hooks.json` are never touched.
  *
  * One command per event: `UserPromptSubmit`'s plain stdout would be appended to the prompt
- * (`hooks/src/events/user_prompt_submit.rs`), so the `prompt-submit` answer stays empty — TET's
- * system prompt goes in once at spawn (index.ts). Stop must write one JSON value and gets `{}`
- * (control-server.ts's `hook`).
+ * (`hooks/src/events/user_prompt_submit.rs`), so the `prompt-submit` answer stays empty. Stop must
+ * write one JSON value and gets `{}` (control-server.ts's `HOOK_STDOUT`).
+ *
+ * TET's system prompt is `SessionStart`'s added context, not `-c developer_instructions`, which
+ * replaces the user's own; `-c hooks` adds to the user's hooks (both measured, 0.154.0).
  *
  * No end-of-turn guard: a subagent-only turn reports through `SubagentStop`, which tet does not hook.
  */
 export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
   const entries: HookEntry[] = [
+    { event: "SessionStart", label: "session_start", commands: [hookCommand("session-start")] },
     { event: "UserPromptSubmit", label: "user_prompt_submit", commands: [hookCommand("prompt-submit")] },
     { event: "Stop", label: "stop", commands: [hookCommand("stop")] },
     // Waiting: an approval about to be asked, or the question tool about to run.

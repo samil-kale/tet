@@ -4,6 +4,7 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { TET_SYSTEM_PROMPT } from "../src/main/agents/system-prompt";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
 import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
 import { tabControlToken } from "../src/main/control/control-token";
@@ -624,13 +625,24 @@ describe("tet-ctl against the control server", () => {
     const before = Date.now();
     const run = await tetCtl(["hook", "prompt-submit"], {}, payload);
     assert.equal(run.status, EXIT_CODES.ok);
-    assert.equal(run.stdout, "", "TET's system prompt went in at spawn");
+    assert.equal(run.stdout, "", "TET's system prompt went in once per session");
     assert.deepEqual(calls.hooks, [[OWN_TAB, "prompt-submit", payload]]);
     assert.deepEqual(calls.notified, [], "nothing to toast about a prompt");
     // When the hook fired, not when handled: racing reports of one turn are ordered by it, so a
     // finished turn does not go back to working.
     const [at] = calls.hookTimes;
     assert.ok(typeof at === "number" && at >= before && at <= Date.now(), `own time carried through, got ${String(at)}`);
+  });
+
+  it("answers a session start with TET's system prompt as added context", async () => {
+    const payload = '{"session_id":"abc","source":"startup"}';
+    const run = await tetCtl(["hook", "session-start"], {}, payload);
+    assert.equal(run.status, EXIT_CODES.ok);
+    assert.deepEqual(JSON.parse(run.stdout), {
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: TET_SYSTEM_PROMPT }
+    });
+    assert.deepEqual(calls.hooks, [[OWN_TAB, "session-start", payload]]);
+    assert.deepEqual(calls.notified, [], "nothing to toast about a session");
   });
 
   it("answers one JSON value where the event has nothing to say, and shows its toast", async () => {
