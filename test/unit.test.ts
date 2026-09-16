@@ -161,6 +161,8 @@ describe("a tab's recorded output", () => {
     assert.equal(records.output("p1", "tab-1"), "onetwo");
     assert.equal(records.output("p1", "tab-2"), undefined, "a closed tab's output goes with it");
     assert.equal(records.output("p2", "tab-3"), "other project", "another project's tabs untouched");
+    records.forgetProject("p2");
+    assert.equal(records.output("p2", "tab-3"), undefined, "a removed project's output goes with it");
   });
 
   it("holds a megabyte of a shell and whole lines only, a few screens of an agent", () => {

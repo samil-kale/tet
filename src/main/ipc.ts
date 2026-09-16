@@ -244,7 +244,7 @@ export function registerIpc({
     }
   );
 
-  const projectDeps = { store, repositories, sessions, openProject };
+  const projectDeps = { store, repositories, sessions, records, openProject };
 
   ipcMain.handle("projects:open-path", (_event, directory: string): Promise<AddRepositoryResult> =>
     addProject(projectDeps, directory)

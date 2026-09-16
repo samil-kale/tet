@@ -75,11 +75,20 @@ export class ControlRecords {
   /** Drops what closed tabs printed, given a project's open tabs. */
   keepOutputs(projectId: string, tabIds: ReadonlySet<string>): void {
     const tabs = this.outputs.get(projectId);
-    for (const tabId of tabs?.keys() ?? []) {
+    if (!tabs) {
+      return;
+    }
+    for (const tabId of tabs.keys()) {
       if (!tabIds.has(tabId)) {
-        tabs?.delete(tabId);
+        tabs.delete(tabId);
       }
     }
+  }
+
+  /** A removed project's editor report and tab output. */
+  forgetProject(projectId: string): void {
+    this.editors.delete(projectId);
+    this.outputs.delete(projectId);
   }
 
   /** Raw, escape sequences included; undefined before any output. */

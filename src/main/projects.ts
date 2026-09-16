@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import type { AddRepositoryResult, Project } from "../shared/types";
+import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import type { RepositoryManager } from "./git/repository";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
@@ -12,6 +13,7 @@ export interface ProjectDeps {
   store: ProjectStore;
   repositories: RepositoryManager;
   sessions: SessionManagerRegistry;
+  records: ControlRecords;
   openProject: (project: Project) => void;
 }
 
@@ -30,10 +32,10 @@ export async function addProject({ store, openProject }: ProjectDeps, directory:
   return { project };
 }
 
-export function removeProject({ store, repositories, sessions }: ProjectDeps, projectId: string): void {
+export function removeProject({ store, repositories, sessions, records }: ProjectDeps, projectId: string): void {
   // Not awaited: the project leaves the window either way; its sessions still end by themselves
-  // (TerminalSession.stop).
-  void sessions.close(projectId);
+  // (TerminalSession.stop). Its records go once they have: a stopping tab still prints.
+  void sessions.close(projectId).finally(() => records.forgetProject(projectId));
   repositories.close(projectId);
   store.remove(projectId);
 }

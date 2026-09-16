@@ -443,7 +443,7 @@ async function startControl(): Promise<void> {
   if (!controlChannel) {
     return;
   }
-  const projectDeps = { store, repositories, sessions, openProject };
+  const projectDeps = { store, repositories, sessions, records, openProject };
   try {
     controlServer = await startControlServer(
       {

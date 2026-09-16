@@ -218,8 +218,8 @@ function folderRule(folder: string): string {
  * (isControlChannelAllowed), the project as workspace, and tet's mounted folders — each agentDir
  * rw (fixedMountSpecs). Checked as mounted, asked for as one rule under agentDataDir, read *and*
  * write as Docker's docs require (write alone measured to suffice). Rules come from one
- * `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge
- * are not asked for — a tab starts without them.
+ * `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
+ * for — a tab starts without them.
  *
  * Both questions are asked at once, for the same reason probeSbx asks its three that way.
  */
@@ -408,10 +408,10 @@ export type SandboxPaths = Pick<AgentPaths, "agentDir">;
 /**
  * tet's own mount for every sandboxed tab: `agentDir` rw (hook settings, agents' records). A live
  * mount, since a create positional cannot change afterwards ("already exists and can't be given
- * new workspaces"). The project stays create-time: `sbx run`
- * has no `--workdir` (docker/sbx-releases#394), and without a positional the agent starts in an
- * empty `/home/agent/workspace` (measured, 0.42.1). It lands at the host path's container form,
- * so `HookTarget` paths hold.
+ * new workspaces"). The project stays create-time: `sbx run` has no `--workdir`
+ * (docker/sbx-releases#394), and without a positional the agent starts in an empty
+ * `/home/agent/workspace` (measured, 0.42.1). It lands at the host path's container form, so
+ * `HookTarget` paths hold.
  *
  * Never the agent's config directory (`~/.claude`, `~/.codex`): pointed at by `CLAUDE_CONFIG_DIR`/
  * `CODEX_HOME`, the sandboxed CLI is signed in as the host (measured), and a `/login` inside would
@@ -419,9 +419,7 @@ export type SandboxPaths = Pick<AgentPaths, "agentDir">;
  * subpaths, never the directory holding credentials.
  */
 export function fixedMountSpecs(paths: SandboxPaths): string[] {
-  return [
-    pathMountSpecs({ path: paths.agentDir, access: "rw" }).mount
-  ];
+  return [pathMountSpecs({ path: paths.agentDir, access: "rw" }).mount];
 }
 
 interface KnowledgeEntry {
