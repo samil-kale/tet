@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.8 (2026-09-16)
+
+- **Sandboxed tabs open faster.** The checks a sandboxed tab makes before it starts now run at
+  the same time instead of one after another, and the sandbox is woken while they run, so an
+  agent tab in a project with `sbx` reaches its prompt noticeably sooner.
+- **Hooks survive a rebuilt sandbox.** After a sandbox was rebuilt, or removed outside tet with
+  `sbx rm`, `prune` or `reset`, the next agent started in it ran without tet's hooks, so its tab
+  showed no turn marks. The sandbox is set up again from scratch.
+
 ## 0.8.7 (2026-09-16)
 
 - **Sandboxed projects start quicker.** A sandbox's bind mounts are applied several at a time
