@@ -94,6 +94,15 @@ export function tabsInFront(layout: ProjectLayout, focused: boolean, covered: bo
   return focused && !covered ? visibleTabIds(layout) : [];
 }
 
+/**
+ * The project's active editor tab, given its editor tab ids: the one active in the focused pane,
+ * else the first on screen, else `previous` while still open, else the last opened.
+ */
+export function activeEditorTab(layout: ProjectLayout, editorTabIds: string[], previous: string | undefined): string | undefined {
+  const open = (tabId: string | null | undefined): tabId is string => tabId != null && editorTabIds.includes(tabId);
+  return [layout.activeTab[layout.focusedPane], ...visibleTabIds(layout), previous].find(open) ?? editorTabIds.at(-1);
+}
+
 /** The tab a pane keeps active once `wanted` (its previous active tab) is gone from `list`. */
 function pickActive(
   list: LayoutTab[],

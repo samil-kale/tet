@@ -11,6 +11,7 @@ import {
   moveTab,
   normalizeLayout,
   placeCommandTab,
+  activeEditorTab,
   serializeLayout,
   snapTab,
   snapZoneAt,
@@ -19,7 +20,7 @@ import {
 } from "../src/renderer/terminal/pane-layout";
 import type { ProjectLayout } from "../src/renderer/terminal/pane-layout";
 import type { TerminalDescriptor } from "../src/shared/types";
-import { EDITOR_TAB_ID, type EditorTab } from "../src/renderer/terminal/editor-tab";
+import { nextEditorTabId, type EditorTab } from "../src/renderer/terminal/editor-tab";
 
 /** The split view's rules — pure functions, needing no window. */
 
@@ -527,6 +528,7 @@ describe("what is persisted", () => {
 });
 
 describe("an editor tab", () => {
+  const EDITOR_TAB_ID = nextEditorTabId();
   const editor: EditorTab = { tabId: EDITOR_TAB_ID, projectId: "p", path: "src/index.ts" };
   const cols2 = (tabPane: Record<string, "a" | "b">, tabs: (TerminalDescriptor | EditorTab)[]): ProjectLayout =>
     normalizeLayout({ preset: "cols2", focusedPane: "a", tabPane, activeTab: {}, commandPane: {} }, tabs, NONE);
@@ -565,5 +567,17 @@ describe("an editor tab", () => {
   it("counts as occupying its pane at startup", () => {
     const tabs = [tab("t1", 1), editor];
     assert.equal(collapseEmpty(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs).preset, "cols2");
+  });
+
+  it("is the active one when in front of the focused pane, else the first on screen, else the last kept", () => {
+    const e2 = nextEditorTabId();
+    const editors = [EDITOR_TAB_ID, e2];
+    const tabs = [tab("t1", 1), editor, { ...editor, tabId: e2 }];
+    const layout = cols2({ t1: "a", [EDITOR_TAB_ID]: "a", [e2]: "b" }, tabs);
+    assert.equal(activeEditorTab({ ...layout, activeTab: { a: EDITOR_TAB_ID, b: e2 } }, editors, undefined), EDITOR_TAB_ID);
+    assert.equal(activeEditorTab({ ...layout, activeTab: { a: "t1", b: e2 } }, editors, undefined), e2);
+    assert.equal(activeEditorTab({ ...layout, activeTab: { a: "t1", b: null } }, editors, EDITOR_TAB_ID), EDITOR_TAB_ID);
+    assert.equal(activeEditorTab({ ...layout, activeTab: { a: "t1", b: null } }, editors, "closed"), e2);
+    assert.equal(activeEditorTab(layout, [], undefined), undefined);
   });
 });

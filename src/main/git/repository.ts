@@ -84,10 +84,10 @@ export class Repository {
   private commandsTimer: ReturnType<typeof setTimeout> | undefined;
   /** Debounce for a path appearing or disappearing. */
   private filesTimer: ReturnType<typeof setTimeout> | undefined;
-  /** The file the project's editor tab shows, repository-relative with "/" — see watchFile. */
-  private watchedFile: string | undefined;
-  /** Debounce for a write to that file. */
-  private watchedFileTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The files the project's editor tabs show, repository-relative with "/" — see watchFiles. */
+  private watchedFiles = new Set<string>();
+  /** Debounce for a write, per file: one timer would swallow a second file's write. */
+  private readonly watchedFileTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private inflight: Promise<RepositoryState> | undefined;
   private refreshPending = false;
   private lastRefreshAt = 0;
@@ -113,15 +113,15 @@ export class Repository {
     /** A path was created, deleted or renamed — for the Explorer, which also lists ignored files no
      *  refresh reports. */
     private readonly onFilesChanged: () => void,
-    /** The `watchFile` file was written — an edit to an already "modified" file changes nothing a
+    /** A `watchFiles` file was written — an edit to an already "modified" file changes nothing a
      *  refresh reports, so the editor tab would go stale. */
     private readonly onFileChanged: (filePath: string) => void
   ) {}
 
-  /** The file the project's editor tab shows, or undefined. */
-  watchFile(filePath: string | undefined): void {
-    clearTimeout(this.watchedFileTimer);
-    this.watchedFile = filePath?.replace(/\\/g, "/");
+  /** The files the project's editor tabs show. A pending report for a file just closed is
+   *  harmless: nothing shows it any more. */
+  watchFiles(paths: string[]): void {
+    this.watchedFiles = new Set(paths.map((filePath) => filePath.replace(/\\/g, "/")));
   }
 
   /** Reports a read error, named by project, only when it changed — not again on every refresh. */
@@ -780,11 +780,18 @@ export class Repository {
           clearTimeout(this.filesTimer);
           this.filesTimer = setTimeout(this.onFilesChanged, REFRESH_DEBOUNCE_MS);
         }
-        // Any event: writing beside and renaming into place reports "rename", not "change".
-        const watchedFile = this.watchedFile;
-        if (watchedFile !== undefined && name?.replace(/\\/g, "/") === watchedFile) {
-          clearTimeout(this.watchedFileTimer);
-          this.watchedFileTimer = setTimeout(() => this.onFileChanged(watchedFile), REFRESH_DEBOUNCE_MS);
+        // Any event: writing beside and renaming into place reports "rename", not "change". The
+        // size check first: this runs for every event under the root, mostly with no file open.
+        const watchedFile = this.watchedFiles.size > 0 ? name?.replace(/\\/g, "/") : undefined;
+        if (watchedFile !== undefined && this.watchedFiles.has(watchedFile)) {
+          clearTimeout(this.watchedFileTimers.get(watchedFile));
+          this.watchedFileTimers.set(
+            watchedFile,
+            setTimeout(() => {
+              this.watchedFileTimers.delete(watchedFile);
+              this.onFileChanged(watchedFile);
+            }, REFRESH_DEBOUNCE_MS)
+          );
         }
         this.scheduleRefresh();
       });
@@ -823,7 +830,7 @@ export class Repository {
     clearTimeout(this.debounceTimer);
     clearTimeout(this.commandsTimer);
     clearTimeout(this.filesTimer);
-    clearTimeout(this.watchedFileTimer);
+    this.watchedFileTimers.forEach(clearTimeout);
     clearTimeout(this.watchRetryTimer);
     clearInterval(this.autoFetchTimer);
     this.watcher?.close();

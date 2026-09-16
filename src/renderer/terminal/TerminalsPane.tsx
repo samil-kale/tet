@@ -66,7 +66,7 @@ function percentStyle(box: FractionBox): { left: string; top: string; width: str
 
 interface TerminalsPaneProps {
   project: Project;
-  /** This project's tabs, its editor tab last. Held by App, since the project list needs all. */
+  /** This project's tabs, its editor tabs last. Held by App, since the project list needs all. */
   tabs: PaneTab[];
   visible: boolean;
   /** What the side pane shows, if it is out. */
@@ -75,9 +75,9 @@ interface TerminalsPaneProps {
   onToggleFiles: () => void;
   /** Bootstrap's session listing: project-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
-  /** Opens a path ctrl-clicked in a terminal in the project's editor tab. */
+  /** Opens a path ctrl-clicked in a terminal in the project's preview tab. */
   onOpenDiff: (projectId: string, path: string) => void;
-  onCloseEditor: (projectId: string) => void;
+  onCloseEditors: (projectId: string, tabIds: string[]) => void;
   layout: ProjectLayout;
   onActivateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
   onSnapTab: (projectId: string, tabId: string, transition: SnapTransition) => void;
@@ -101,7 +101,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   onToggleFiles,
   externalBusy,
   onOpenDiff,
-  onCloseEditor,
+  onCloseEditors,
   layout,
   onActivateTab,
   onSnapTab,
@@ -123,7 +123,10 @@ export const TerminalsPane = memo(function TerminalsPane({
 
   useEffect(() => setRevealHandler(project.id, (path) => onOpenDiff(project.id, path)), [project.id, onOpenDiff]);
 
-  const onCloseEditorHere = useCallback(() => onCloseEditor(project.id), [onCloseEditor, project.id]);
+  const onCloseEditorsHere = useCallback(
+    (tabIds: string[]) => onCloseEditors(project.id, tabIds),
+    [onCloseEditors, project.id]
+  );
 
   // Disposed only for a tab gone for good, not one moved to another pane.
   useEffect(() => {
@@ -131,7 +134,7 @@ export const TerminalsPane = memo(function TerminalsPane({
     knownTabs.current = tabs;
     const ids = new Set(tabs.map((tab) => tab.tabId));
     for (const tab of previous) {
-      // The editor tab's editor is disposed where it closes (App).
+      // An editor tab's editor is disposed where it closes (App).
       if (!ids.has(tab.tabId) && !isEditorTab(tab)) {
         disposeTerminal(project.id, tab.tabId);
       }
@@ -330,7 +333,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       height={size.height}
       onActivate={onActivate}
       onFocus={onFocus}
-      onCloseEditor={onCloseEditorHere}
+      onCloseEditors={onCloseEditorsHere}
       markedTabIds={markedTabIds}
       waitingTabIds={waitingTabIds}
       chrome={first ? chrome : undefined}

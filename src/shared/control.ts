@@ -85,7 +85,8 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   tail: "value",
   kb: "value",
   lines: "value",
-  timeout: "value"
+  timeout: "value",
+  keep: "switch"
 };
 
 /** An `events-tail` entry: what the session manager heard, in arrival order. */
@@ -206,14 +207,22 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   },
   {
     verb: "editor-open",
-    usage: "editor-open <path> [--project <id>]",
-    summary: "Open a repository-relative file in the project's editor tab and bring it to the front.",
+    usage: "editor-open <path> [--keep] [--project <id>]",
+    summary:
+      "Open a repository-relative file in the project's preview tab, which the next file replaces, and bring it to the front; --keep gives it a tab of its own.",
     positionals: ["path"]
   },
   {
     verb: "editor-state",
     usage: "editor-state [--project <id>]",
-    summary: "What the project's editor tab shows: the file, its text, whether it is edited and whether it is read-only.",
+    summary:
+      "What the project's active editor tab shows: the file, its text, whether it is edited, read-only or a preview.",
+    positionals: []
+  },
+  {
+    verb: "editor-list",
+    usage: "editor-list [--project <id>]",
+    summary: "The project's open editor tabs: file, preview, edited, read-only, and which one is active.",
     positionals: []
   },
   {

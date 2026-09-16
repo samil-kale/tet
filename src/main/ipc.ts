@@ -449,8 +449,8 @@ export function registerIpc({
     return (await repositories.get(projectId)?.readExplorerSettings()) ?? DEFAULT_EXPLORER_VIEW;
   });
 
-  ipcMain.handle("repo:watch-file", (_event, projectId: string, filePath: string | null): void => {
-    repositories.get(projectId)?.watchFile(filePath ?? undefined);
+  ipcMain.handle("repo:watch-files", (_event, projectId: string, paths: string[]): void => {
+    repositories.get(projectId)?.watchFiles(paths);
   });
 
   ipcMain.handle("repo:file-read", async (_event, projectId: string, filePath: string): Promise<FileContent> => {
@@ -526,9 +526,13 @@ export function registerIpc({
     sessions.get(projectId)?.markSeen(tabId);
   });
 
-  /** The editor tab and shown notices, for tet-ctl — only the renderer knows. */
-  ipcMain.on("editor:report", (_event, projectId: string, report: EditorReport | null) => {
-    records.setEditor(projectId, report);  });
+  /** The editor tabs and shown notices, for tet-ctl — only the renderer knows. */
+  ipcMain.on("editor:report", (_event, projectId: string, tabId: string, report: EditorReport | null) => {
+    records.setEditor(projectId, tabId, report);
+  });
+  ipcMain.on("editor:active", (_event, projectId: string, tabId: string) => {
+    records.setActiveEditor(projectId, tabId);
+  });
 
   ipcMain.on("app:notice-shown", (_event, report: NoticeReport) => {
     records.addNotice(report);

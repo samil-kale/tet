@@ -100,9 +100,10 @@ const api: TETApi = {
       ipcRenderer.invoke("repo:file-write", projectId, filePath, content, expectedMtimeMs),
     onState: (listener) => subscribe("repo:state-changed", listener),
     onFilesChanged: (listener) => subscribe("repo:files-changed", listener),
-    watchFile: (projectId, filePath) => ipcRenderer.invoke("repo:watch-file", projectId, filePath),
+    watchFiles: (projectId, paths) => ipcRenderer.invoke("repo:watch-files", projectId, paths),
     onFileChanged: (listener) => subscribe("repo:file-changed", listener),
-    reportEditor: (projectId, report) => ipcRenderer.send("editor:report", projectId, report),
+    reportEditor: (projectId, tabId, report) => ipcRenderer.send("editor:report", projectId, tabId, report),
+    reportActiveEditor: (projectId, tabId) => ipcRenderer.send("editor:active", projectId, tabId),
     onEditorContentRequest: (listener) =>
       subscribe<{ projectId: string; reply: string }>("editor:content-request", ({ projectId, reply }) =>
         ipcRenderer.send(reply, listener(projectId))

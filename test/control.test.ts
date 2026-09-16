@@ -48,8 +48,15 @@ interface Calls {
   started: string[];
   restarted: string[];
   written: [string, string][];
-  editorsOpened: [string, string][];
+  editorsOpened: [string, string, boolean][];
 }
+
+/** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
+const ACTIVE_EDITOR = { path: "a.txt", loading: false, dirty: true, readOnly: false, preview: true };
+const EDITOR_LISTING = [
+  { path: "b.txt", loading: false, dirty: false, readOnly: false, preview: false, active: false },
+  { ...ACTIVE_EDITOR, active: true }
+];
 
 /** The session "tab-2" reports once set — what tabs-wait waits on. */
 let tab2Session: string | undefined;
@@ -113,7 +120,8 @@ function deps(ownProfile = true): ControlDeps {
   return {
     ownProfile,
     records: {
-      editor: (id) => (id === PROJECT.id ? { path: "a.txt", loading: false, dirty: true, readOnly: false } : undefined),
+      editor: (id) => (id === PROJECT.id ? ACTIVE_EDITOR : undefined),
+      editors: (id) => (id === PROJECT.id ? EDITOR_LISTING : []),
       notices: () => [{ severity: "error", message: "Could not delete", at: 1 }],
       output: (id, tabId) =>
         id !== PROJECT.id
@@ -125,8 +133,8 @@ function deps(ownProfile = true): ControlDeps {
               : undefined
     },
     editorContent: (id) => Promise.resolve(id === PROJECT.id ? "edited" : undefined),
-    openEditor: (projectId, filePath) => {
-      calls.editorsOpened.push([projectId, filePath]);
+    openEditor: (projectId, filePath, keep) => {
+      calls.editorsOpened.push([projectId, filePath, keep]);
     },
     version: "1.2.3",
     pid: 4242,
@@ -528,17 +536,17 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((run.result as { at: number }[]).map((event) => event.at), [2, 3]);
   });
 
-  it("opens a file in the editor tab and answers what it shows", async () => {
-    assert.deepEqual((await tetCtl(["editor-open", "src/a.ts"])).result, { opened: "src/a.ts" });
-    assert.deepEqual(calls.editorsOpened, [[PROJECT.id, "src/a.ts"]]);
-    assert.deepEqual((await tetCtl(["editor-state"])).result, {
-      path: "a.txt",
-      loading: false,
-      dirty: true,
-      readOnly: false,
-      content: "edited"
-    });
+  it("opens a file in the preview tab, or kept, and answers what the active tab shows", async () => {
+    assert.deepEqual((await tetCtl(["editor-open", "src/a.ts"])).result, { opened: "src/a.ts", keep: false });
+    assert.deepEqual((await tetCtl(["editor-open", "src/b.ts", "--keep"])).result, { opened: "src/b.ts", keep: true });
+    assert.deepEqual(calls.editorsOpened, [
+      [PROJECT.id, "src/a.ts", false],
+      [PROJECT.id, "src/b.ts", true]
+    ]);
+    assert.deepEqual((await tetCtl(["editor-state"])).result, { ...ACTIVE_EDITOR, content: "edited" });
     assert.equal((await tetCtl(["editor-state", "--project", OTHER.id])).result, null, "no editor tab there");
+    assert.deepEqual((await tetCtl(["editor-list"])).result, EDITOR_LISTING);
+    assert.deepEqual((await tetCtl(["editor-list", "--project", OTHER.id])).result, []);
   });
 
   it("lists the files view's files and the notices shown", async () => {

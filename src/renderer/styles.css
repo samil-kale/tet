@@ -784,6 +784,11 @@ textarea:focus {
   text-decoration: line-through;
 }
 
+/* VS Code's preview editor: the tab the next file replaces. */
+.tab-label.preview {
+  font-style: italic;
+}
+
 /* Spinner while a turn runs, question mark while it waits, speech bubble once it finished out of
    sight. One rule for all three, on tab and project row; colour only, size is the site's. */
 .session-mark {

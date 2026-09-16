@@ -8,8 +8,9 @@ import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { TerminalHost } from "./TerminalHost";
-import { EDITOR_TAB_ID, isEditorTab, type PaneTab } from "./editor-tab";
-import { EditorHost, useEditorBusy } from "../diff/EditorHost";
+import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
+import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
+import { getEditorSnapshot, keepEditor } from "../diff/editor-views";
 import {
   CloseIcon,
   CommentIcon,
@@ -55,7 +56,7 @@ interface PaneProps {
   paneId: PaneId;
   /** The project's preset, for this pane's "move to" siblings. */
   preset: SplitPreset;
-  /** This pane's tabs in project order, the editor tab last. */
+  /** This pane's tabs in project order, the editor tabs last. */
   tabs: PaneTab[];
   activeTabId: string | null;
   agents: AgentInfo[];
@@ -64,8 +65,8 @@ interface PaneProps {
   focused: boolean;
   onActivate: (paneId: PaneId, tabId: string) => void;
   onFocus: (paneId: PaneId) => void;
-  /** The editor tab is renderer-only, unknown to `terminals.close`. */
-  onCloseEditor: () => void;
+  /** Editor tabs are renderer-only, unknown to `terminals.close`. */
+  onCloseEditors: (tabIds: string[]) => void;
   markedTabIds: string[];
   waitingTabIds: string[];
   /** Only on pane "a". */
@@ -93,6 +94,12 @@ export interface DragPosition {
   overStrip: boolean;
 }
 
+/** An editor tab's label, in italics while it is the preview — the editor's own state. */
+const EditorTabLabel = memo(function EditorTabLabel({ tabId, label }: { tabId: string; label: string }) {
+  const preview = useEditorPreview(tabId);
+  return <span className={`tab-label${preview ? " preview" : ""}`}>{label}</span>;
+});
+
 export const Pane = memo(function Pane({
   projectId,
   paneId,
@@ -106,7 +113,7 @@ export const Pane = memo(function Pane({
   height,
   onActivate,
   onFocus,
-  onCloseEditor,
+  onCloseEditors,
   markedTabIds,
   waitingTabIds,
   chrome,
@@ -149,10 +156,9 @@ export const Pane = memo(function Pane({
     tabElements.current.get(activeTabId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeTabId]);
 
-  // The editor tab has no pty and focuses and measures itself (`EditorHost`).
-  const activeTerminalId = activeTabId === EDITOR_TAB_ID ? null : activeTabId;
-  const holdsEditor = tabs.some(isEditorTab);
-  const editorBusy = useEditorBusy(projectId);
+  // An editor tab has no pty and focuses and measures itself (`EditorHost`).
+  const activeTerminalId = activeTabId !== null && isEditorTabId(activeTabId) ? null : activeTabId;
+  const editorBusy = useEditorBusy(projectId, tabs);
 
   // Refit on becoming visible: hidden, its size went stale. The resize also starts its process.
   // Shown before the fit, since the renderer decides the cell width the fit measures
@@ -210,20 +216,21 @@ export const Pane = memo(function Pane({
   );
 
   /**
-   * The editor tab closes in the renderer, the rest in main. Its unsaved-edit question may keep it
+   * Editor tabs close in the renderer, the rest in main. Their unsaved-edit question may keep them
    * open while the same "Close All"'s terminals go.
    */
   const closeTabs = useCallback(
     (tabIds: string[]) => {
-      const terminalIds = tabIds.filter((tabId) => tabId !== EDITOR_TAB_ID);
-      if (terminalIds.length < tabIds.length) {
-        onCloseEditor();
+      const editorIds = tabIds.filter(isEditorTabId);
+      const terminalIds = tabIds.filter((tabId) => !isEditorTabId(tabId));
+      if (editorIds.length > 0) {
+        onCloseEditors(editorIds);
       }
       if (terminalIds.length > 0) {
         void window.tet.terminals.close(projectId, terminalIds);
       }
     },
-    [projectId, onCloseEditor]
+    [projectId, onCloseEditors]
   );
 
   const restartTab = useCallback(
@@ -286,7 +293,8 @@ export const Pane = memo(function Pane({
 
   /**
    * Restart, the close actions, rename, and the moves to sibling panes. A close with nothing to
-   * close is disabled. The editor tab gets only close and the moves.
+   * close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
+   * moves.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
@@ -312,8 +320,23 @@ export const Pane = memo(function Pane({
             )
           ]
         : [];
+    const closeEntries: ContextMenuEntry[] = [
+      closeAction("Close", [tabId]),
+      closeAction(
+        "Close Others",
+        ids.filter((id) => id !== tabId)
+      ),
+      closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
+      closeAction("Close All", ids)
+    ];
     if (!terminal) {
-      return [closeAction("Close", [tabId]), ...moveEntries];
+      return [
+        // VS Code's wording; a kept tab has nothing to keep.
+        { label: "Keep Open", run: getEditorSnapshot(tabId).preview ? () => keepEditor(tabId) : undefined },
+        SEPARATOR,
+        ...closeEntries,
+        ...moveEntries
+      ];
     }
     return [
       {
@@ -321,13 +344,7 @@ export const Pane = memo(function Pane({
         run: restartable ? () => restartTab(tabId) : undefined
       },
       SEPARATOR,
-      closeAction("Close", [tabId]),
-      closeAction(
-        "Close Others",
-        ids.filter((id) => id !== tabId)
-      ),
-      closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
-      closeAction("Close All", ids),
+      ...closeEntries,
       SEPARATOR,
       // No persisted session, nothing to rename: the host would revert the label.
       {
@@ -459,7 +476,11 @@ export const Pane = memo(function Pane({
               ) : (
                 <AgentIcon agentId={tab.agentId} className="tab-icon" />
               )}
-              <span className="tab-label">{tabLabel(tab)}</span>
+              {isEditorTab(tab) ? (
+                <EditorTabLabel tabId={tab.tabId} label={tabLabel(tab)} />
+              ) : (
+                <span className="tab-label">{tabLabel(tab)}</span>
+              )}
               <button
                 className="icon-button"
                 title={
@@ -479,9 +500,9 @@ export const Pane = memo(function Pane({
             </div>
           ))}
         </div>
-        {/* This pane's one progress bar: a tab starting, the editor tab busy, or in pane "a" the
+        {/* This pane's one progress bar: a tab starting, an editor tab busy, or in pane "a" the
             bootstrap session listing. */}
-        {(showProgress || (holdsEditor && editorBusy)) && <ProgressBar />}
+        {(showProgress || editorBusy) && <ProgressBar />}
         <div className="new-tab">
           <button
             className="icon-button"
@@ -506,7 +527,7 @@ export const Pane = memo(function Pane({
           isEditorTab(tab) ? (
             <EditorHost
               key={tab.tabId}
-              projectId={projectId}
+              tabId={tab.tabId}
               active={tab.tabId === activeTabId}
               visible={visible}
               focused={focused}

@@ -16,7 +16,7 @@ interface GitPaneProps {
   /** Set by the sash between tree and changes; held by the app, like the width. */
   treeHeight: number;
   onTreeHeight: (size: number) => void;
-  /** Opens in the project's editor tab. */
+  /** Opens in the project's preview tab. */
   onOpenDiff: (path: string) => void;
 }
 

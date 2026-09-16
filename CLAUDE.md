@@ -94,8 +94,9 @@ or a per-line decision is for an agent.
 
 ## UI rules
 
-- **Layout**: projects in the left sidebar; the tab strip is one project's terminals plus its one
-  editor tab. Git and files are not tabs but one side pane toggled from the strip. A split is up
+- **Layout**: projects in the left sidebar; the tab strip is one project's terminals plus its
+  editor tabs — VS Code's preview rule, one preview tab per project (`editor-tab.ts`). Git and
+  files are not tabs but one side pane toggled from the strip. A split is up
   to four panes in fixed presets, reached only by dragging a tab onto a snap zone — every rule in
   `src/renderer/terminal/pane-layout.ts`.
 - **Everything the user is told is a notice**: `notify()` (`src/renderer/ui/Notices.tsx`; main

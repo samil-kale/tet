@@ -307,9 +307,10 @@ export interface NoticeReport {
   at: number;
 }
 
-/** The editor tab's state, reported by the renderer (where the editor alone lives) on every
- *  snapshot change, for `tet-ctl editor-state`. Without the text: up to 4 MB, and a snapshot
- *  changes several times per write on disk (measured). */
+/** An editor tab's state, reported by the renderer (where the editor alone lives) on every
+ *  snapshot change, for `tet-ctl editor-state` and `editor-list`. Without the text: up to 4 MB,
+ *  and a snapshot changes several times per write on disk (measured). Which tab is active is
+ *  reported apart, by the window's layout. */
 export interface EditorReport {
   path: string;
   /** The read of `path` still in flight. */
@@ -318,6 +319,13 @@ export interface EditorReport {
   readOnly: boolean;
   /** Why the file could not be read. */
   error?: string;
+  /** The tab the next file opened replaces. */
+  preview: boolean;
+}
+
+/** `editor-list`'s entry: the report plus whether it is the project's active editor tab. */
+export interface EditorListing extends EditorReport {
+  active: boolean;
 }
 
 /** Anything the user is told — not a *status*, which a view draws itself. */

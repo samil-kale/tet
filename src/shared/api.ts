@@ -175,16 +175,18 @@ export interface TETApi {
     onState(listener: (payload: { projectId: string; state: RepositoryState }) => void): Unsubscribe;
     /** A working-tree entry appeared or vanished — ignored ones included, which no state reports. */
     onFilesChanged(listener: (payload: { projectId: string }) => void): Unsubscribe;
-    /** The editor tab's file, for `onFileChanged`; null for none. */
-    watchFile(projectId: string, path: string | null): Promise<void>;
-    /** The `watchFile` file was written, by anyone. */
+    /** The editor tabs' files, for `onFileChanged`; the whole set each time. */
+    watchFiles(projectId: string, paths: string[]): Promise<void>;
+    /** A `watchFiles` file was written, by anyone. */
     onFileChanged(listener: (payload: { projectId: string; path: string }) => void): Unsubscribe;
-    /** For `tet-ctl editor-state`; null once the editor tab is closed. */
-    reportEditor(projectId: string, report: EditorReport | null): void;
-    /** `tet-ctl editor-state` asks for the editor tab's text; the listener answers. */
+    /** For `tet-ctl editor-state` and `editor-list`; null once the tab is closed. */
+    reportEditor(projectId: string, tabId: string, report: EditorReport | null): void;
+    /** The project's active editor tab, which `editor-state` answers for — the window's layout knows. */
+    reportActiveEditor(projectId: string, tabId: string): void;
+    /** `tet-ctl editor-state` asks for the active editor tab's text; the listener answers. */
     onEditorContentRequest(listener: (projectId: string) => string | undefined): Unsubscribe;
-    /** `tet-ctl editor-open`. */
-    onOpenEditor(listener: (payload: { projectId: string; path: string }) => void): Unsubscribe;
+    /** `tet-ctl editor-open`: in the preview tab, or kept with `--keep`. */
+    onOpenEditor(listener: (payload: { projectId: string; path: string; keep: boolean }) => void): Unsubscribe;
   };
   /** Saved shell commands, in the project root's tet.json so they travel with it. */
   commands: {

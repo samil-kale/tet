@@ -11,7 +11,7 @@ export type Monaco = typeof import("./monaco-core");
 
 let monacoPromise: Promise<Monaco> | undefined;
 
-/** One monaco for every project's editor (`editor-views.ts`). */
+/** One monaco for every editor tab's editor (`editor-views.ts`). */
 export function loadMonaco(): Promise<Monaco> {
   if (!monacoPromise) {
     // `getWorker`, not `getWorkerUrl`: the latter makes a module worker, which fails from `file://`.

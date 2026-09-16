@@ -1,4 +1,4 @@
-import type { AgentId, EditorReport, NoticeReport } from "../../shared/types";
+import type { AgentId, EditorListing, EditorReport, NoticeReport } from "../../shared/types";
 
 const MAX_NOTICES = 50;
 /** A few screens of a TUI's redraws. */
@@ -28,26 +28,44 @@ function capped(output: TabOutput): string {
 }
 
 /**
- * Control-verb data no main-process store holds: what the window reports (editor tab, shown
+ * Control-verb data no main-process store holds: what the window reports (editor tabs, shown
  * notices) and each open tab's latest output.
  */
 export class ControlRecords {
-  private readonly editors = new Map<string, EditorReport>();
+  /** Per project, per editor tab, in the order first reported. */
+  private readonly editorTabs = new Map<string, Map<string, EditorReport>>();
+  /** Per project: the tab `editor-state` answers for. Kept past that tab's close — no report
+   *  under it then, and the next activation replaces it. */
+  private readonly activeEditors = new Map<string, string>();
   private readonly shownNotices: NoticeReport[] = [];
   /** Per project, per tab. */
   private readonly outputs = new Map<string, Map<string, TabOutput>>();
 
-  /** null once the editor tab is closed. */
-  setEditor(projectId: string, report: EditorReport | null): void {
+  /** null once the tab is closed. */
+  setEditor(projectId: string, tabId: string, report: EditorReport | null): void {
+    const tabs = this.editorTabs.get(projectId) ?? new Map<string, EditorReport>();
     if (report) {
-      this.editors.set(projectId, report);
+      tabs.set(tabId, report);
     } else {
-      this.editors.delete(projectId);
+      tabs.delete(tabId);
     }
+    this.editorTabs.set(projectId, tabs);
   }
 
+  setActiveEditor(projectId: string, tabId: string): void {
+    this.activeEditors.set(projectId, tabId);
+  }
+
+  /** The project's active editor tab — `editor-state`. */
   editor(projectId: string): EditorReport | undefined {
-    return this.editors.get(projectId);
+    const active = this.activeEditors.get(projectId);
+    return active === undefined ? undefined : this.editorTabs.get(projectId)?.get(active);
+  }
+
+  /** Every open editor tab of the project — `editor-list`. */
+  editors(projectId: string): EditorListing[] {
+    const active = this.activeEditors.get(projectId);
+    return [...(this.editorTabs.get(projectId) ?? [])].map(([tabId, report]) => ({ ...report, active: tabId === active }));
   }
 
   addNotice(report: NoticeReport): void {
@@ -85,9 +103,10 @@ export class ControlRecords {
     }
   }
 
-  /** A removed project's editor report and tab output. */
+  /** A removed project's editor reports and tab output. */
   forgetProject(projectId: string): void {
-    this.editors.delete(projectId);
+    this.editorTabs.delete(projectId);
+    this.activeEditors.delete(projectId);
     this.outputs.delete(projectId);
   }
 

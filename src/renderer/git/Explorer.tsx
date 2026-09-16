@@ -245,7 +245,7 @@ interface RowsProps {
   toggle: (node: TreeNode) => void;
   forceExpanded: boolean;
   selected: string | null;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, keep?: boolean) => void;
   onContextMenu: (event: React.MouseEvent, node: TreeNode) => void;
   rows: Map<string, HTMLButtonElement>;
 }
@@ -272,6 +272,9 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
               style={{ paddingLeft: INDENT_BASE + depth * INDENT_STEP }}
               title={node.path || "."}
               onClick={() => (isFolder ? toggle(node) : onOpen(node.path))}
+              // VS Code: a single click previews, a double click keeps. The clicks before it
+              // already opened the file, so this only keeps.
+              onDoubleClick={() => !isFolder && onOpen(node.path, true)}
               onContextMenu={(event) => onContextMenu(event, node)}
             >
               {isFolder ? (
@@ -322,9 +325,10 @@ interface ExplorerProps {
   files: ExplorerListing | undefined;
   /** False while hidden behind the git view, where a row can't be scrolled to. */
   shown: boolean;
-  /** The open file — revealed and highlighted. */
+  /** The active editor tab's file — revealed and highlighted. */
   selected: string | null;
-  onOpen: (path: string) => void;
+  /** In the preview tab, or kept (`editor-tab.ts`). */
+  onOpen: (path: string, keep?: boolean) => void;
   /** The owner shows it running on its own bar. */
   act: FileAct;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
@@ -360,7 +364,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
     return files?.compactFolders ? compactTree(filtered) : filtered;
   }, [tree, query, filtering, files?.compactFolders]);
 
-  // Reveals the editor tab's file in the innermost root containing it.
+  // Reveals the active editor tab's file in the innermost root containing it.
   const roots = files?.roots;
   const pendingReveal = useRef<string | null>(null);
   useEffect(() => {

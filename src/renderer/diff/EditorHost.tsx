@@ -8,26 +8,39 @@ import {
   isReadOnly,
   saveEditorFile,
   subscribeEditor,
+  subscribeProjectEditors,
   type EditorSnapshot
 } from "./editor-views";
+import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
 import { SaveIcon } from "../ui/icons";
 import { isMac, isModifierHeld } from "../platform";
 
-function useEditorStore<T>(projectId: string, select: (snapshot: EditorSnapshot) => T): T {
-  const subscribe = useCallback((listener: () => void) => subscribeEditor(projectId, listener), [projectId]);
-  return useSyncExternalStore(subscribe, () => select(getEditorSnapshot(projectId)));
+function useEditorStore<T>(tabId: string, select: (snapshot: EditorSnapshot) => T): T {
+  const subscribe = useCallback((listener: () => void) => subscribeEditor(tabId, listener), [tabId]);
+  return useSyncExternalStore(subscribe, () => select(getEditorSnapshot(tabId)));
 }
 
 const whole = (snapshot: EditorSnapshot): EditorSnapshot => snapshot;
 const busy = (snapshot: EditorSnapshot): boolean => snapshot.loading || snapshot.building || snapshot.saving;
+const preview = (snapshot: EditorSnapshot): boolean => snapshot.preview;
 
-/** Reading, building or saving — shown by the progress bar of the pane holding the editor tab. */
-export function useEditorBusy(projectId: string): boolean {
-  return useEditorStore(projectId, busy);
+/** Whether the tab is the preview — the tab strip's italics. */
+export function useEditorPreview(tabId: string): boolean {
+  return useEditorStore(tabId, preview);
+}
+
+/**
+ * Any editor tab among `tabs` reading, building or saving — shown by the progress bar of the pane
+ * holding them. One subscription for the project: a pane's tabs come and go, and hooks can't
+ * follow them.
+ */
+export function useEditorBusy(projectId: string, tabs: PaneTab[]): boolean {
+  const subscribe = useCallback((listener: () => void) => subscribeProjectEditors(projectId, listener), [projectId]);
+  return useSyncExternalStore(subscribe, () => tabs.some((tab) => isEditorTab(tab) && busy(getEditorSnapshot(tab.tabId))));
 }
 
 interface EditorHostProps {
-  projectId: string;
+  tabId: string;
   /** On screen in its pane; otherwise hidden but laid out. */
   active: boolean;
   /** The project is the one selected. */
@@ -41,30 +54,30 @@ interface EditorHostProps {
  * all drawn off the editor's snapshot. The editor lives outside React in `editor-views.ts` and is attached to a childless frame; on a pane move React
  * removes the frame with it inside, and the next host's attach takes it out again.
  */
-export const EditorHost = memo(function EditorHost({ projectId, active, visible, focused }: EditorHostProps) {
-  const { path, file, building, saving, dirty } = useEditorStore(projectId, whole);
+export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
+  const { path, file, building, saving, dirty } = useEditorStore(tabId, whole);
   const frame = useRef<HTMLDivElement>(null);
   const kind = editorKind(file);
 
   useEffect(() => {
     if (frame.current) {
-      attachEditor(projectId, frame.current);
+      attachEditor(tabId, frame.current);
     }
-  }, [projectId, path]);
+  }, [tabId, path]);
 
   // As `Pane`'s terminal focus rule: the focused pane's active tab, once the file is in the editor.
   const ready = kind === "text" && !building;
   useEffect(() => {
     if (visible && active && focused && ready) {
-      focusEditor(projectId);
+      focusEditor(tabId);
     }
-  }, [visible, active, focused, ready, projectId, path]);
+  }, [visible, active, focused, ready, tabId, path]);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     // Only keys nothing inside claimed arrive, so the editor's own Ctrl+S never saves twice.
     if (isModifierHeld(event) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "s") {
       event.preventDefault();
-      void saveEditorFile(projectId);
+      void saveEditorFile(tabId);
     }
   };
 
@@ -77,7 +90,7 @@ export const EditorHost = memo(function EditorHost({ projectId, active, visible,
             className="icon-button"
             title={`Save (${isMac() ? "⌘" : "Ctrl"}+S)`}
             disabled={isReadOnly(file) || !dirty || saving}
-            onClick={() => void saveEditorFile(projectId)}
+            onClick={() => void saveEditorFile(tabId)}
           >
             <SaveIcon />
           </button>

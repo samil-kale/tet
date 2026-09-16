@@ -25,13 +25,23 @@ import type { SideView } from "./terminal/Pane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
 import { useWindowCovered } from "./ui/window-covered";
-import { forget, sameList } from "./identity";
+import { forget, sameList, sameRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
-import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
+import { activeEditorTab, defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
-import { EDITOR_TAB_ID, type EditorTab, type PaneTab } from "./terminal/editor-tab";
-import { canDiscardEdit, disposeEditor, editorContent, openEditorFile, setEditorVersion } from "./diff/editor-views";
+import { nextEditorTabId, type EditorTab, type PaneTab } from "./terminal/editor-tab";
+import {
+  canDiscardEdits,
+  canDiscardProjectEdits,
+  disposeEditor,
+  disposeProjectEditors,
+  editorContent,
+  keepEditor,
+  openEditorFile,
+  previewEditorTab,
+  setEditorVersion
+} from "./diff/editor-views";
 
 /** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const SIDE_PANE_SLIDE_MS = 180;
@@ -69,22 +79,26 @@ export function App() {
    */
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
-  /** Renderer-only, see `editor-tab.ts`. */
-  const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab>>({});
+  /**
+   * Renderer-only, see `editor-tab.ts`; a project with none has no entry. Untouched tabs keep
+   * their instance across updates: `stripTabs` compares items.
+   */
+  const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab[]>>({});
   const editorTabsRef = useRef(editorTabs);
   editorTabsRef.current = editorTabs;
-  /** Per project, disk writes to the editor tab's file — see diffVersion. */
-  const [fileWrites, setFileWrites] = useState<Record<string, number>>({});
+  /** Per project, per watched path: writes on disk — see diffVersion. */
+  const [fileWrites, setFileWrites] = useState<Record<string, Record<string, number>>>({});
   /**
-   * Each project's tab strip: its terminals, then its editor tab. The layout reconciles against it,
-   * panes draw it, next/previous step through it; marks and `seen` stay on `tabs` (the editor has no
-   * turns). Identity: `tabs`' own list without a file open, else the previous list while unchanged.
+   * Each project's tab strip: its terminals, then its editor tabs. The layout reconciles against
+   * it, panes draw it, next/previous step through it; marks and `seen` stay on `tabs` (the editor
+   * has no turns). Identity: `tabs`' own list without a file open, else the previous list while
+   * unchanged.
    */
   const stripTabsRef = useRef<Record<string, PaneTab[]>>({});
   const stripTabs = useMemo(() => {
     const next: Record<string, PaneTab[]> = { ...tabs };
-    for (const [projectId, editor] of Object.entries(editorTabs)) {
-      next[projectId] = sameList(stripTabsRef.current[projectId], [...(tabs[projectId] ?? []), editor], NO_TABS);
+    for (const [projectId, editors] of Object.entries(editorTabs)) {
+      next[projectId] = sameList(stripTabsRef.current[projectId], [...(tabs[projectId] ?? []), ...editors], NO_TABS);
     }
     stripTabsRef.current = next;
     return next;
@@ -264,7 +278,8 @@ export function App() {
     setStarting((current) => forget(current, projectId));
     setSandboxed((current) => forget(current, projectId));
     setEditorTabs((current) => forget(current, projectId));
-    disposeEditor(projectId);
+    setFileWrites((current) => forget(current, projectId));
+    disposeProjectEditors(projectId);
     forgetLayout(projectId);
     busyCursor.current = forget(busyCursor.current, projectId);
     // The xterms live outside React; this is where a project ends for good.
@@ -273,7 +288,7 @@ export function App() {
 
   const closeProject = useCallback(
     async (projectId: string) => {
-      if (!(await canDiscardEdit(projectId))) {
+      if (!(await canDiscardProjectEdits(projectId))) {
         return;
       }
       await window.tet.projects.remove(projectId);
@@ -386,7 +401,7 @@ export function App() {
     return inFrontRef.current;
   }, [focused, covered, activeProjectId, layouts]);
 
-  // May include the editor tab, which matches no tab in the main process.
+  // May include editor tabs, which match no tab in the main process.
   useEffect(() => {
     window.tet.terminals.inFront(activeProjectId, inFront);
   }, [activeProjectId, inFront]);
@@ -675,82 +690,149 @@ export function App() {
     [activeProjectId, toggleSideView, setFilesShown, setSidePaneOpen]
   );
   /**
-   * Shows a file in the project's reused editor tab. The editor is told before the tab draws, since
-   * the tab attaches what it made; the tab is activated before it appears in `stripTabs`, as a new
-   * terminal tab is.
+   * Shows a file in an editor tab (the preview rule: `editor-tab.ts`). A path already open is
+   * brought to front, kept if asked; else the preview tab takes it, unless `keep`; else a new tab.
+   * The editor is told before the tab draws, since the tab attaches what it made; the tab is
+   * activated before it appears in `stripTabs`, as a new terminal tab is — both in one handler, so
+   * the layout and the list agree on the first render.
    */
   const openDiff = useCallback(
-    async (projectId: string, path: string) => {
-      if (editorTabsRef.current[projectId]?.path !== path) {
-        if (!(await canDiscardEdit(projectId))) {
-          return;
+    (projectId: string, path: string, keep = false) => {
+      const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path);
+      const preview = keep ? undefined : previewEditorTab(projectId);
+      let tabId: string;
+      if (open) {
+        tabId = open.tabId;
+        if (keep) {
+          keepEditor(tabId);
         }
-        openEditorFile(projectId, path);
-        setEditorTabs((current) => ({ ...current, [projectId]: { tabId: EDITOR_TAB_ID, projectId, path } }));
+      } else if (preview !== undefined) {
+        tabId = preview;
+        openEditorFile(projectId, tabId, path, true);
+        setEditorTabs((current) => ({
+          ...current,
+          [projectId]: (current[projectId] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
+        }));
+      } else {
+        tabId = nextEditorTabId();
+        openEditorFile(projectId, tabId, path, !keep);
+        setEditorTabs((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), { tabId, projectId, path }] }));
       }
-      activateTab(projectId, EDITOR_TAB_ID);
+      activateTab(projectId, tabId);
     },
     [activateTab]
   );
-  const openDiffSync = useCallback((projectId: string, path: string) => void openDiff(projectId, path), [openDiff]);
   // A file the control channel asked for, brought to front.
   useEffect(
     () =>
-      window.tet.repository.onOpenEditor(({ projectId, path }) => {
+      window.tet.repository.onOpenEditor(({ projectId, path, keep }) => {
         setActiveProjectId(projectId);
-        void openDiff(projectId, path);
+        openDiff(projectId, path, keep);
       }),
     [openDiff]
   );
-  useEffect(() => window.tet.repository.onEditorContentRequest(editorContent), []);
+  useEffect(
+    () =>
+      window.tet.repository.onEditorContentRequest((projectId) => {
+        const tabId = activeEditorsRef.current[projectId];
+        return tabId === undefined ? undefined : editorContent(tabId);
+      }),
+    []
+  );
   const openActiveDiff = useCallback(
-    (path: string) => {
+    (path: string, keep?: boolean) => {
       if (activeProjectId) {
-        void openDiff(activeProjectId, path);
+        openDiff(activeProjectId, path, keep);
       }
     },
     [activeProjectId, openDiff]
   );
-  /** Disposes the editor; the layout collapses a pane left empty. */
-  const closeEditor = useCallback((projectId: string) => {
-    void canDiscardEdit(projectId).then((discard) => {
-      if (discard) {
-        setEditorTabs((current) => forget(current, projectId));
-        disposeEditor(projectId);
+  /** Disposes the editors; the layout collapses a pane left empty. */
+  const closeEditors = useCallback((projectId: string, tabIds: string[]) => {
+    void canDiscardEdits(tabIds).then((discard) => {
+      if (!discard) {
+        return;
+      }
+      setEditorTabs((current) => {
+        const rest = (current[projectId] ?? []).filter((tab) => !tabIds.includes(tab.tabId));
+        return rest.length > 0 ? { ...current, [projectId]: rest } : forget(current, projectId);
+      });
+      for (const tabId of tabIds) {
+        disposeEditor(tabId);
       }
     });
   }, []);
-  // Each editor tab's file, whose writes the watcher reports (onFileChanged).
-  const watchedFiles = useRef<Record<string, string>>({});
+  /**
+   * Each project's active editor tab (`activeEditorTab`) — the file the Explorer reveals and
+   * `tet-ctl editor-state` answers. Derived, not tracked: a tab is activated from many places (a
+   * click, next/previous, a drop, a snap). Identity-stable where unchanged.
+   */
+  const activeEditorsRef = useRef<Record<string, string>>({});
+  const activeEditors = useMemo(() => {
+    const next: Record<string, string> = {};
+    for (const [projectId, editors] of Object.entries(editorTabs)) {
+      const tabId = activeEditorTab(
+        layouts[projectId] ?? DEFAULT_LAYOUT,
+        editors.map((tab) => tab.tabId),
+        activeEditorsRef.current[projectId]
+      );
+      if (tabId !== undefined) {
+        next[projectId] = tabId;
+      }
+    }
+    activeEditorsRef.current = sameRecord(activeEditorsRef.current, next);
+    return activeEditorsRef.current;
+  }, [editorTabs, layouts]);
+  // Reported to main as `inFront` is: only App knows. A project whose last editor tab closed
+  // reports nothing; main finds no report under the old id.
+  const reportedActive = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const [projectId, tabId] of Object.entries(activeEditors)) {
+      if (reportedActive.current[projectId] !== tabId) {
+        window.tet.repository.reportActiveEditor(projectId, tabId);
+      }
+    }
+    reportedActive.current = activeEditors;
+  }, [activeEditors]);
+  // Each editor tab's file, whose writes the watcher reports (onFileChanged): a project's open
+  // paths, sent when they change.
+  const watchedFiles = useRef<Record<string, string[]>>({});
   useEffect(() => {
     const previous = watchedFiles.current;
-    const next = Object.fromEntries(Object.values(editorTabs).map(({ projectId, path }) => [projectId, path]));
-    for (const [projectId, path] of Object.entries(next)) {
-      if (previous[projectId] !== path) {
-        void window.tet.repository.watchFile(projectId, path);
+    const next: Record<string, string[]> = {};
+    for (const [projectId, editors] of Object.entries(editorTabs)) {
+      next[projectId] = sameList(previous[projectId], editors.map((tab) => tab.path).sort(), NO_IDS);
+    }
+    for (const [projectId, paths] of Object.entries(next)) {
+      if (previous[projectId] !== paths) {
+        void window.tet.repository.watchFiles(projectId, paths);
       }
     }
     for (const projectId of Object.keys(previous)) {
       if (!(projectId in next)) {
-        void window.tet.repository.watchFile(projectId, null);
+        void window.tet.repository.watchFiles(projectId, NO_IDS);
       }
     }
     watchedFiles.current = next;
   }, [editorTabs]);
   useEffect(
     () =>
+      // Only watched paths are reported; a count left by a closed tab is inert.
       window.tet.repository.onFileChanged(({ projectId, path }) => {
-        if (editorTabsRef.current[projectId]?.path === path) {
-          setFileWrites((current) => ({ ...current, [projectId]: (current[projectId] ?? 0) + 1 }));
-        }
+        setFileWrites((current) => ({
+          ...current,
+          [projectId]: { ...current[projectId], [path]: (current[projectId]?.[path] ?? 0) + 1 }
+        }));
       }),
     []
   );
-  // Reloads the open file only when its diffVersion changes, not on every push: a reload re-reads
+  // Reloads an open file only when its diffVersion changes, not on every push: a reload re-reads
   // and recolours the whole diff, hundreds of ms for a long file.
   useEffect(() => {
-    for (const { projectId, path } of Object.values(editorTabs)) {
-      setEditorVersion(projectId, diffVersion(states[projectId], path, fileWrites[projectId]));
+    for (const [projectId, editors] of Object.entries(editorTabs)) {
+      for (const { tabId, path } of editors) {
+        setEditorVersion(tabId, diffVersion(states[projectId], path, fileWrites[projectId]?.[path]));
+      }
     }
   }, [editorTabs, states, fileWrites]);
   const runActiveBranchAction = useCallback(
@@ -824,8 +906,12 @@ export function App() {
                 project={activeProject}
                 state={activeState}
                 shown={filesShown}
-                openPath={activeProjectId ? (editorTabs[activeProjectId]?.path ?? null) : null}
-                onOpenDiff={openActiveDiff}
+                openPath={
+                  activeProjectId
+                    ? (editorTabs[activeProjectId]?.find((tab) => tab.tabId === activeEditors[activeProjectId])?.path ?? null)
+                    : null
+                }
+                onOpen={openActiveDiff}
               />
               <GitPane
                 project={activeProject}
@@ -862,8 +948,8 @@ export function App() {
               onToggleFiles={toggleFiles}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
-              onOpenDiff={openDiffSync}
-              onCloseEditor={closeEditor}
+              onOpenDiff={openDiff}
+              onCloseEditors={closeEditors}
               layout={layouts[project.id] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
               onSnapTab={snapTab}

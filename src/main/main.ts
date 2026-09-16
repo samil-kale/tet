@@ -68,7 +68,7 @@ ipcMain.on("app:notice-listening", () => {
 const EDITOR_CONTENT_TIMEOUT_MS = 2000;
 let editorContentRequests = 0;
 
-/** A project's editor tab text (ControlDeps.editorContent), on a per-request reply channel. */
+/** A project's active editor tab text (ControlDeps.editorContent), on a per-request reply channel. */
 function editorContent(projectId: string): Promise<string | undefined> {
   if (!window || window.isDestroyed()) {
     return Promise.resolve(undefined);
@@ -471,7 +471,7 @@ async function startControl(): Promise<void> {
         shutdown,
         records,
         ownProfile,
-        openEditor: (projectId, filePath) => send("editor:open", { projectId, path: filePath }),
+        openEditor: (projectId, filePath, keep) => send("editor:open", { projectId, path: filePath, keep }),
         editorContent,
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
         projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),

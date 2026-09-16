@@ -10,6 +10,7 @@ import type {
   AddRepositoryResult,
   AgentId,
   AppSettings,
+  EditorListing,
   EditorReport,
   ExplorerListing,
   NoticeReport,
@@ -47,14 +48,16 @@ export interface ControlDeps {
   /** See ControlRecords. */
   records: {
     editor(projectId: string): EditorReport | undefined;
+    editors(projectId: string): EditorListing[];
     notices(): NoticeReport[];
     output(projectId: string, tabId: string): string | undefined;
   };
   /** `--user-data-dir` given — see ControlVerb.ownProfileOnly. */
   ownProfile: boolean;
-  /** Opens a file in the project's editor tab and brings that tab to the front. */
-  openEditor(projectId: string, path: string): void;
-  /** Asked of the window live — the one thing not kept as a report (see EditorReport). */
+  /** Opens a file in the project's preview tab, or a kept tab, and brings it to the front. */
+  openEditor(projectId: string, path: string, keep: boolean): void;
+  /** The active editor tab's text, asked of the window live — the one thing not kept as a report
+   *  (see EditorReport). */
   editorContent(projectId: string): Promise<string | undefined>;
   /** The requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
@@ -459,8 +462,9 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "editor-open": (args, caller) => {
       const found = project(args, caller);
       const filePath = text(args, "path", "path");
-      deps.openEditor(found.id, filePath);
-      return { result: { opened: filePath } };
+      const keep = args.keep === true;
+      deps.openEditor(found.id, filePath, keep);
+      return { result: { opened: filePath, keep } };
     },
 
     "editor-state": async (args, caller) => {
@@ -468,6 +472,8 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const report = deps.records.editor(found.id);
       return { result: report ? { ...report, content: await deps.editorContent(found.id) } : null };
     },
+
+    "editor-list": (args, caller) => ({ result: deps.records.editors(project(args, caller).id) }),
 
     "explorer-list": async (args, caller) => {
       const found = project(args, caller);

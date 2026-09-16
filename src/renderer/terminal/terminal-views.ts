@@ -28,7 +28,7 @@ interface TerminalView {
  */
 const views = new Map<string, TerminalView>();
 
-/** Per project, opens a ctrl-clicked file inside the repository in the editor tab. Set by the pane. */
+/** Per project, opens a ctrl-clicked file inside the repository in the preview tab. Set by the pane. */
 const revealHandlers = new Map<string, (path: string) => void>();
 
 function viewKey(projectId: string, tabId: string): string {
