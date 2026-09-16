@@ -30,10 +30,9 @@ Use Claude Code, Codex, OpenCode or Pi, or all four together.
 
 TET deliberately does only a few things. Tasks that take one or two clicks belong in TET.
 For everything else, you have an agent or a shell. The agent does the work; Git is for navigation
-and control.
+and control. TET gives you the real agent CLIs, with a few quality-of-life features around them.
 
-TET gives you the real agent CLIs, with a few quality-of-life features around them. It never
-changes your agents' configuration or installs plugins.
+**TET never changes your agents' configuration**
 
 ---
 
@@ -45,7 +44,7 @@ changes your agents' configuration or installs plugins.
 
 ## Why
 
-tldr: IDEs are dead. Why show the code when the prompt is the thing you are working with?
+**TLDR**: IDEs are dead. Why show the code when the prompt is the thing you are working with?
 
 I've spent more than 15 years working in IDEs, usually with a clear favourite. But as coding
 agents became part of my workflow, I spent less time editing code directly and more time moving
@@ -69,12 +68,26 @@ straight into an agent session.
 - A project's terminals can be split into up to four panes. Files and images can be dropped into
   an agent session.
 - The git pane handles branches, fetch, pull, push, commit, discard and `.gitignore`. A changed
-  file opens in the editor tab as an inline diff you can edit, with visual image changes.
-  Repositories can be cloned from GitHub or GitLab.
+  file opens in the editor tab as an inline diff you can edit.
 - Desktop notifications and project marks point to sessions that need attention.
-- `tet-ctl` lets an agent inspect the workspace and git state, manage projects and tabs, run saved
-  commands and change TET's settings. Recent shell output reaches it as a file it is pointed at.
+- `tet-ctl` you can control tet via tet.
 - A project can run **Claude Code**, **OpenCode**, **Codex CLI** or **Pi** in a Docker sandbox.
+
+---
+
+## First-class SBX support ([Docker Sandboxes](https://docs.docker.com/ai/sandboxes/))
+
+Enable SBX for a project and Claude Code, Codex, OpenCode and
+Pi each run in a persistent, isolated microVM for that repository. 
+The agent does not even have to be installed on the host: `sbx` alone is enough.
+
+Sandboxed tabs behave like native TET tabs. Sessions can be resumed, renamed and deleted; turn
+marks, desktop notifications and `tet-ctl` continue to work across the sandbox boundary.
+
+**SBX Settings** keeps the boundary explicit and project-specific. Choose which skills, plugins,
+instruction files and additional paths enter the sandbox, with read-only or read-write access;
+forward development ports; and allow only the network hosts the project needs. The configuration
+lives in the repository's `tet.json`.
 
 ---
 
@@ -98,9 +111,7 @@ Then start TET from the Start menu, the desktop icon, or by typing `tet`.
 
 The script installs TET for your user alone: `~/Applications/TET.app` on macOS,
 `~/.local/share/tet` on Linux, `%LOCALAPPDATA%\Programs\TET` on Windows. Run it again to
-reinstall. When a new version is out, TET downloads it and installs it after you quit, never
-while terminal sessions are running. On Linux, TET runs without Chromium's sandbox, which an
-install without root cannot set up.
+reinstall.
 
 ### Build from source
 
