@@ -750,12 +750,11 @@ export class ProjectSessionManager {
       // A notice only for a tab that cannot run on this machine.
       return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : null;
     }
-    const onData = (data: string): void => this.callbacks.onOutput(this.project.id, tab.tabId, data);
     const sandbox = sandboxName(this.project.id, tab.agentId);
     // Started before it is known whether it may be used, since it is the slowest step and the
     // readiness check answers nothing it depends on (why that is safe: ensureRunning). Not for a
     // tab about to run on this machine, which would start a sandbox nobody asked for.
-    const warm = tab.sessionId && !tab.sandbox ? undefined : ensureRunning(sandbox, onData);
+    const warm = tab.sessionId && !tab.sandbox ? undefined : ensureRunning(sandbox);
     const ready = await checkSbxReady(this.project.path, this.project.id);
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, ready.notReady)) {
@@ -805,7 +804,7 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
-      onData
+      onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
     });
     if (missing.length > 0) {
       this.callbacks.onNotice(

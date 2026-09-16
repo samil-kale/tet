@@ -681,6 +681,10 @@ function ensureSandboxExists(
       if (!created.ok) {
         throw new Error(`sbx could not create the ${agentId} sandbox`);
       }
+      // A new sandbox holds nothing of the one that had this name — and one removed outside tet
+      // (`sbx rm`, `prune`, `reset`) never passed removeSandbox, which is the other place this is
+      // forgotten. Kept here, the launcher would be skipped and the agent would run without hooks.
+      launcherWritten.delete(name);
       return true;
     });
   sandboxSetups.set(name, setup);
@@ -729,14 +733,18 @@ const MOUNT_CONCURRENCY = 6;
  * present, ro honoured; 12 at once hit "docker hub refresh lock held by another process" (measured,
  * 2026-09-16, 0.42.1), hence MOUNT_CONCURRENCY.
  *
- * `started` is a start already underway (`SbxRunRequest.warm`), joined instead of started again;
- * its failure is not retried, as its reason is in the tab's output and the mounts report the rest.
+ * `started` is a start already underway (`SbxRunRequest.warm`), joined instead of started again —
+ * but only its *success* counts: it may have run before the sandbox existed (two tabs of one agent
+ * starting together, the second one seeing the first one's), and mounting a sandbox that is not
+ * running is what this line is here to prevent.
  */
 async function mountAll(name: string, specs: string[], onData?: OnData, started?: Promise<boolean>): Promise<string[]> {
   if (specs.length === 0) {
     return [];
   }
-  await (started ?? ensureRunning(name, onData));
+  if (!(await started)) {
+    await ensureRunning(name, onData);
+  }
   const mounted = await mapLimited(specs, MOUNT_CONCURRENCY, async (spec) => (await runSbx(["mount", name, spec], { onData })).ok);
   return specs.filter((_, index) => !mounted[index]);
 }
@@ -828,8 +836,9 @@ export interface SbxRunRequest {
   /** What `checkSbxReady` just listed, so it is not listed again. */
   sandboxes: SandboxList;
   /** The `ensureRunning` the caller began while `checkSbxReady` ran, so the two overlap; mountAll
-   *  waits on it. Dropped when the sandbox turned out to need building, as it answers for the one
-   *  that was there before. */
+   *  waits on it. Silent, since the tab it would write into may yet turn out to run on this machine
+   *  — a start worth reporting is the one mountAll repeats. Dropped when the sandbox turned out to
+   *  need building, as it answers for the one that was there before. */
   warm?: Promise<boolean>;
   paths: SandboxPaths;
   /** The agent's command line after `sbx run`'s "--" — hook and resume arguments. */
@@ -889,12 +898,8 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // sandbox this call created; after that its rules are the truth (allowHosts).
   const missing = config.paths.map((entry) => entry.path).filter((entry) => !statOf(normalizeHostPath(entry)));
   const own = [...fixedMountSpecs(request.paths), ...(await sessionMountSpecs(request.sessionMounts ?? []))];
-  const failed = await mountAll(
-    name,
-    [...own, ...grantedMounts(agentId, config).map((spec) => spec.mount)],
-    onData,
-    created ? undefined : request.warm
-  );
+  const granted = grantedMounts(agentId, config).map((spec) => spec.mount);
+  const failed = await mountAll(name, [...own, ...granted], onData, created ? undefined : request.warm);
   const ownFailed = failed.filter((spec) => own.includes(spec));
   if (ownFailed.length > 0) {
     throw new Error(`sbx did not mount tet's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);
