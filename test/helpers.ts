@@ -1,6 +1,11 @@
 import * as assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { createRequire } from "node:module";
 import * as path from "node:path";
+import { findControlPort } from "../src/main/control/control-server";
+import { tabControlToken } from "../src/main/control/control-token";
+import { CONTROL_ENV } from "../src/shared/control";
 
 /** The built CLI — the tests run what ships, not the source. */
 export const CLI = path.join(__dirname, "..", "dist", "tet-ctl.js");
@@ -55,4 +60,86 @@ export async function eventually(
     await new Promise((resolve) => setTimeout(resolve, Math.min(200, ms / 20)));
   }
   assert.ok(await check(), `${typeof what === "function" ? what() : what} — not within ${ms}ms`);
+}
+
+/**
+ * The real app on a profile of its own (`--user-data-dir`) with a token handed in, driven through
+ * tet-ctl alone (app.test.ts, agents.test.ts).
+ */
+export interface TestApp {
+  /** The electron started here — not the instance a `restart-app` leaves. */
+  child: ChildProcess;
+  /** Everything that electron wrote to stderr so far. */
+  stderr(): string;
+  ctl(...args: string[]): Promise<Run>;
+  /** The environment a tab of `projectId` is started with: its ids and the token made for them. */
+  asTab(projectId: string, tabId: string): Record<string, string | undefined>;
+  /** The pid of the instance answering right now, if any. */
+  alive(): Promise<number | undefined>;
+}
+
+/** Starts tet and resolves once it answers; a start that never answers is killed before rejecting. */
+export async function startApp(userData: string, token: string, startupMs: number): Promise<TestApp> {
+  // Speaks for no tab: the run's token takes no caller ids, and a run from a TET tab inherits some.
+  const env: Record<string, string | undefined> = {
+    [CONTROL_ENV.port]: String(await findControlPort(userData)),
+    [CONTROL_ENV.token]: token,
+    [CONTROL_ENV.projectId]: undefined,
+    [CONTROL_ENV.tabId]: undefined
+  };
+  const args = [path.join(__dirname, ".."), `--user-data-dir=${userData}`, "--allow-shell-only"];
+  if (process.platform === "linux") {
+    // ubuntu-latest ships chrome-sandbox without the setuid bit and AppArmor blocks the userns
+    // fallback, so Electron aborts on launch. The installed `tet` passes it too (install.sh).
+    args.push("--no-sandbox");
+  }
+  const electronPath: string = createRequire(__filename)("electron");
+  // Not a Claude Code session's own variables, when the tests run inside one (an agent tab): an
+  // interactive `claude` started with them answers but writes no transcript (measured, 2.1.273).
+  const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^CLAUDE(CODE$|_CODE_|_PID$|_EFFORT$)/.test(key)));
+  const child = spawn(electronPath, args, {
+    env: { ...inherited, [CONTROL_ENV.token]: token, ELECTRON_RUN_AS_NODE: undefined },
+    stdio: ["ignore", "ignore", "pipe"]
+  });
+  let stderr = "";
+  child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+  const ctl = (...ctlArgs: string[]): Promise<Run> => tetCtl(ctlArgs, env);
+  const app: TestApp = {
+    child,
+    stderr: () => stderr,
+    ctl,
+    asTab: (projectId, tabId) => ({
+      ...env,
+      [CONTROL_ENV.token]: tabControlToken(token, projectId, tabId),
+      [CONTROL_ENV.projectId]: projectId,
+      [CONTROL_ENV.tabId]: tabId
+    }),
+    alive: async () => {
+      const run = await ctl("version");
+      return run.status === 0 ? (run.result as { pid: number }).pid : undefined;
+    }
+  };
+  try {
+    await eventually(() => `tet answering on port ${env[CONTROL_ENV.port]}\n${stderr}`, async () => (await app.alive()) !== undefined, startupMs);
+  } catch (error) {
+    // Nothing left holding the profile directory.
+    if (child.pid !== undefined) {
+      killApp(child.pid);
+    }
+    throw error;
+  }
+  return app;
+}
+
+export function killApp(target: number): void {
+  if (process.platform === "win32") {
+    // The whole tree: a shell tab is a process of its own under the app.
+    spawnSync("taskkill", ["/pid", String(target), "/t", "/f"], { stdio: "ignore" });
+  } else {
+    try {
+      process.kill(target, "SIGTERM");
+    } catch {
+      // Already gone.
+    }
+  }
 }

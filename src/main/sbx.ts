@@ -123,6 +123,12 @@ export function cancelSbxSetup(): void {
   currentChild = undefined;
 }
 
+/**
+ * The sbx version test/agents.test.ts last passed against (TET_SBX_TEST=1): every measured value in
+ * this file held there. As `AgentDefinition.verifiedVersion`, read by nothing in the app.
+ */
+export const SBX_VERIFIED_VERSION = "0.42.1";
+
 /** `version` is a subcommand; `sbx --version` fails with "unknown flag". */
 export function isSbxInstalled(): Promise<boolean> {
   return checkAgentInstalled("sbx", ["version"], os.tmpdir());

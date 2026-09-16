@@ -129,6 +129,12 @@ export interface AgentDefinition {
   /** Tells "not installed" from a spawn that failed otherwise. Omitted where it always exists (the shell). */
   versionArgs?: string[];
   /**
+   * The CLI version test/agents.test.ts last passed against, on a signed-in machine: every measured
+   * value in this definition held there. Read by nothing in the app — a newer install is not
+   * refused; the test reports the difference. Omitted by the shell.
+   */
+  verifiedVersion?: string;
+  /**
    * One question without a terminal, answered on stdout. The question arrives on stdin
    * (`askAgent`), so these only name the mode. Omitted by the shell.
    */

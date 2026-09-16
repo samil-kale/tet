@@ -30,6 +30,7 @@ export const piAgent: AgentDefinition = {
   executable: () => "pi",
   // On win32 a `pi.cmd` npm shim, routed through cmd.exe by resolveCommand.
   versionArgs: ["--version"],
+  verifiedVersion: "0.85.1",
   // Print mode: the prompt on stdin, the answer on stdout (~2.6 s measured). `--no-session` leaves
   // no transcript, so no cleanupAsk.
   askArgs: ["-p", "--no-session"],

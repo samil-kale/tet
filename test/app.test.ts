@@ -1,18 +1,13 @@
 import * as assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
-import type { ChildProcess } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { findControlPort } from "../src/main/control/control-server";
-import { tabControlToken } from "../src/main/control/control-token";
 import { resolveRoot } from "../src/main/git/git";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
-import { CONTROL_ENV } from "../src/shared/control";
 import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
-import { eventually, tetCtl } from "./helpers";
+import { eventually, killApp, startApp, tetCtl, type TestApp } from "./helpers";
 
 /**
  * The real app, driven through tet-ctl alone, on a profile of its own (`--user-data-dir`) with a
@@ -22,56 +17,23 @@ import { eventually, tetCtl } from "./helpers";
  * Needs a display (xvfb on a Linux runner) and git.
  */
 
-const ROOT = path.join(__dirname, "..");
-const electronPath: string = createRequire(__filename)("electron");
 const TOKEN = "app-test-token";
 const STARTUP_MS = 60_000;
 
 let userData: string;
 let repo: string;
-let child: ChildProcess | undefined;
-let stderr = "";
+let app: TestApp | undefined;
 /** The instance answering right now — a different process after restart-app. */
 let pid: number | undefined;
 
-/** Speaks for no tab: the run's token takes no caller ids, and a run from a TET tab inherits some. */
-const env: Record<string, string | undefined> = {
-  [CONTROL_ENV.port]: "",
-  [CONTROL_ENV.token]: TOKEN,
-  [CONTROL_ENV.projectId]: undefined,
-  [CONTROL_ENV.tabId]: undefined
-};
-
 async function ctl(...args: string[]) {
-  return tetCtl(args, env);
+  assert.ok(app, "tet started");
+  return app.ctl(...args);
 }
 
-/** The environment a tab of `projectId` is started with: its ids and the token made for them. */
 function asTab(projectId: string, tabId: string): Record<string, string | undefined> {
-  return {
-    ...env,
-    [CONTROL_ENV.token]: tabControlToken(TOKEN, projectId, tabId),
-    [CONTROL_ENV.projectId]: projectId,
-    [CONTROL_ENV.tabId]: tabId
-  };
-}
-
-async function alive(): Promise<number | undefined> {
-  const run = await ctl("version");
-  return run.status === 0 ? (run.result as { pid: number }).pid : undefined;
-}
-
-function kill(target: number): void {
-  if (process.platform === "win32") {
-    // The whole tree: a shell tab is a process of its own under the app.
-    spawnSync("taskkill", ["/pid", String(target), "/t", "/f"], { stdio: "ignore" });
-  } else {
-    try {
-      process.kill(target, "SIGTERM");
-    } catch {
-      // Already gone.
-    }
-  }
+  assert.ok(app, "tet started");
+  return app.asTab(projectId, tabId);
 }
 
 describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
@@ -79,30 +41,15 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     userData = fs.mkdtempSync(path.join(os.tmpdir(), "tet-app-"));
     repo = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repo-"));
     spawnSync("git", ["init", "-q"], { cwd: repo });
-    const port = await findControlPort(userData);
-    env[CONTROL_ENV.port] = String(port);
-    const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
-    if (process.platform === "linux") {
-      // ubuntu-latest ships chrome-sandbox without the setuid bit and AppArmor blocks the userns
-      // fallback, so Electron aborts on launch. The installed `tet` passes it too (install.sh).
-      args.push("--no-sandbox");
-    }
-    child = spawn(electronPath, args, {
-      env: { ...process.env, [CONTROL_ENV.token]: TOKEN, ELECTRON_RUN_AS_NODE: undefined },
-      stdio: ["ignore", "ignore", "pipe"]
-    });
-    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
-    await eventually(() => `tet answering on port ${port}\n${stderr}`, async () => (pid = await alive()) !== undefined, STARTUP_MS);
+    app = await startApp(userData, TOKEN, STARTUP_MS);
+    pid = await app.alive();
   });
 
   after(async () => {
-    // The spawned electron when tet never answered, so a failed startup leaves nothing holding
-    // the profile directory.
-    const target = pid ?? child?.pid;
-    if (target !== undefined) {
-      kill(target);
+    if (pid !== undefined) {
+      killApp(pid);
     }
-    await eventually("tet gone", async () => (await alive()) === undefined, 10_000).catch(() => undefined);
+    await eventually("tet gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
     for (const dir of [userData, repo]) {
       // A pty's conhost can hold a file a moment longer than the app; in the temp dir that's fine.
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
@@ -110,6 +57,7 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     // After the cleanup: an unhandled exception fails the run even when every assertion passed —
     // otherwise it shows only as what it broke (e.g. a timeout behind Electron's frozen dialog).
     // Covers the spawned instance only; the one `restart-app` leaves is not on this pipe.
+    const stderr = app?.stderr() ?? "";
     const uncaught = stderr.indexOf(UNCAUGHT_MARKER);
     if (uncaught >= 0) {
       assert.fail(`tet reported an uncaught exception:
@@ -273,11 +221,11 @@ ${stderr.slice(uncaught)}`);
     const before = pid;
     const [project] = (await ctl("projects-list")).result as Project[];
     assert.deepEqual((await ctl("restart-app", "--confirm")).result, { restarting: true });
-    await new Promise<void>((resolve) => child?.once("exit", () => resolve()));
+    await new Promise<void>((resolve) => app?.child.once("exit", () => resolve()));
     await eventually(
       "the new instance",
       async () => {
-        pid = await alive();
+        pid = await app?.alive();
         return pid !== undefined && pid !== before;
       },
       STARTUP_MS

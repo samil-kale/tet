@@ -30,6 +30,7 @@ export const opencodeAgent: AgentDefinition = {
   displayName: "OpenCode",
   executable: () => "opencode",
   versionArgs: ["--version"],
+  verifiedVersion: "1.18.4",
   /*
    * Non-interactive mode. It cannot skip persisting the session, so the run is titled for
    * `cleanupAsk`.
