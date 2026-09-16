@@ -70,7 +70,7 @@ straight into an agent session.
 - The git pane handles branches, fetch, pull, push, commit, discard and `.gitignore`. A changed
   file opens in the editor tab as an inline diff you can edit.
 - Desktop notifications and project marks point to sessions that need attention.
-- `tet-ctl` you can control tet via tet.
+- With the `tet-ctl` interface your agent can remote-control tet autonomously.
 - A project can run **Claude Code**, **OpenCode**, **Codex CLI** or **Pi** in a Docker sandbox.
 
 ---
