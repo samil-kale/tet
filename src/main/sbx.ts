@@ -613,8 +613,14 @@ async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {
 /**
  * Starts a stopped sandbox with a cheap `exec`: `sbx mount`, `umount` and `ports` refuse one
  * ("409 Conflict"). False also when it does not exist — the same to its best-effort callers.
+ *
+ * A spawn starts it before it knows it may (`SbxRunRequest.warm`), because this is the slowest step
+ * of the lot: ~2.5 s for a stopped sandbox against 0.7 s for a running one (measured, 2026-09-16,
+ * 0.42.1). Safe that early because it creates nothing: for a sandbox that does not exist it fails
+ * in ~0.55 s with "sandbox '<name>' not found" (measured), and a rebuild removing the sandbox under
+ * a start still in flight leaves both exiting 0 and the `create` after it working (measured).
  */
-async function ensureRunning(name: string, onData?: OnData): Promise<boolean> {
+export async function ensureRunning(name: string, onData?: OnData): Promise<boolean> {
   return (await runSbx(["exec", "-i", name, "true"], { onData })).ok;
 }
 
@@ -722,12 +728,15 @@ const MOUNT_CONCURRENCY = 6;
  * Concurrent, since each `sbx mount` costs ~0.45s: 6 at once took 1.6s instead of 2.6s, all binds
  * present, ro honoured; 12 at once hit "docker hub refresh lock held by another process" (measured,
  * 2026-09-16, 0.42.1), hence MOUNT_CONCURRENCY.
+ *
+ * `started` is a start already underway (`SbxRunRequest.warm`), joined instead of started again;
+ * its failure is not retried, as its reason is in the tab's output and the mounts report the rest.
  */
-async function mountAll(name: string, specs: string[], onData?: OnData): Promise<string[]> {
+async function mountAll(name: string, specs: string[], onData?: OnData, started?: Promise<boolean>): Promise<string[]> {
   if (specs.length === 0) {
     return [];
   }
-  await ensureRunning(name, onData);
+  await (started ?? ensureRunning(name, onData));
   const mounted = await mapLimited(specs, MOUNT_CONCURRENCY, async (spec) => (await runSbx(["mount", name, spec], { onData })).ok);
   return specs.filter((_, index) => !mounted[index]);
 }
@@ -818,6 +827,10 @@ export interface SbxRunRequest {
   config: SbxProjectConfig;
   /** What `checkSbxReady` just listed, so it is not listed again. */
   sandboxes: SandboxList;
+  /** The `ensureRunning` the caller began while `checkSbxReady` ran, so the two overlap; mountAll
+   *  waits on it. Dropped when the sandbox turned out to need building, as it answers for the one
+   *  that was there before. */
+  warm?: Promise<boolean>;
   paths: SandboxPaths;
   /** The agent's command line after `sbx run`'s "--" — hook and resume arguments. */
   agentArgs: string[];
@@ -876,7 +889,12 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // sandbox this call created; after that its rules are the truth (allowHosts).
   const missing = config.paths.map((entry) => entry.path).filter((entry) => !statOf(normalizeHostPath(entry)));
   const own = [...fixedMountSpecs(request.paths), ...(await sessionMountSpecs(request.sessionMounts ?? []))];
-  const failed = await mountAll(name, [...own, ...grantedMounts(agentId, config).map((spec) => spec.mount)], onData);
+  const failed = await mountAll(
+    name,
+    [...own, ...grantedMounts(agentId, config).map((spec) => spec.mount)],
+    onData,
+    created ? undefined : request.warm
+  );
   const ownFailed = failed.filter((spec) => own.includes(spec));
   if (ownFailed.length > 0) {
     throw new Error(`sbx did not mount tet's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);

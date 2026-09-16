@@ -18,7 +18,7 @@ import type {
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig } from "../git/commands";
-import { checkSbxReady, prepareSbxRun, sandboxName } from "../sbx";
+import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
 import type { SettingsStore } from "../settings";
 import { agentDirFor, contextDirFor } from "./agent-data";
 import { ShellContext } from "./shell-context";
@@ -750,6 +750,12 @@ export class ProjectSessionManager {
       // A notice only for a tab that cannot run on this machine.
       return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : null;
     }
+    const onData = (data: string): void => this.callbacks.onOutput(this.project.id, tab.tabId, data);
+    const sandbox = sandboxName(this.project.id, tab.agentId);
+    // Started before it is known whether it may be used, since it is the slowest step and the
+    // readiness check answers nothing it depends on (why that is safe: ensureRunning). Not for a
+    // tab about to run on this machine, which would start a sandbox nobody asked for.
+    const warm = tab.sessionId && !tab.sandbox ? undefined : ensureRunning(sandbox, onData);
     const ready = await checkSbxReady(this.project.path, this.project.id);
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, ready.notReady)) {
@@ -782,7 +788,6 @@ export class ProjectSessionManager {
       return null;
     }
     const paths = this.pathsFor(runtime);
-    const sandbox = sandboxName(this.project.id, tab.agentId);
     const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
     const { args, missing } = await prepareSbxRun({
@@ -791,6 +796,7 @@ export class ProjectSessionManager {
       projectPath: this.project.path,
       config,
       sandboxes: ready.sandboxes,
+      warm,
       paths,
       agentArgs: [...hooks.args, ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])],
       env: [...(agent.sandboxEnv ?? []), ...Object.entries(hooks.env ?? {}).map(([key, value]) => `${key}=${value}`)],
@@ -799,7 +805,7 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
-      onData: (data) => this.callbacks.onOutput(this.project.id, tab.tabId, data)
+      onData
     });
     if (missing.length > 0) {
       this.callbacks.onNotice(
