@@ -220,13 +220,19 @@ function folderRule(folder: string): string {
  * agentDataDir, read *and* write as Docker's docs require (write alone measured to suffice). Rules
  * come from one `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge
  * are not asked for — a tab starts without them.
+ *
+ * Both questions are asked at once, for the same reason probeSbx asks its three that way.
  */
 export async function readSbxBlockers(projectPath: string, projectId: string): Promise<SbxBlocker[]> {
+  const [channelAllowed, filesystem] = await Promise.all([
+    isControlChannelAllowed(),
+    runSbx(["policy", "ls", "--type", "filesystem", "--json"])
+  ]);
   const blockers: SbxBlocker[] = [];
-  if (!(await isControlChannelAllowed())) {
+  if (!channelAllowed) {
     blockers.push({ what: "tet's hooks", allow: "localhost (network, no port)" });
   }
-  const rules = parseFilesystemRules((await runSbx(["policy", "ls", "--type", "filesystem", "--json"])).stdout);
+  const rules = parseFilesystemRules(filesystem.stdout);
   const flavor = { platform: process.platform, home: os.homedir() };
   const mountable = (hostPath: string, access: "ro" | "rw") => isMountAllowed(rules, hostPath, access, flavor);
   if (!mountable(projectPath, "rw")) {
@@ -245,8 +251,12 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
 }
 
 /**
- * Behind both. Stops at the first "no" — `sbx policy ls` fails when signed out too. At most three
- * processes: `policy ls`'s exit code says initialized, its output governed.
+ * Behind both. Three processes, always: `policy ls`'s exit code says initialized, its output
+ * governed, and asking it and `ls` before the answers are read costs nothing but two processes on a
+ * machine without sbx. They start together because an sbx invocation is ~0.45 s of CLI startup,
+ * which a spawn pays five times over (with readSbxBlockers): 2.26 s in a row against 1.58 s as
+ * these two groups, same answers (measured, 2026-09-16, 0.42.1). The answers are still read in
+ * order, so the first "no" is still the one reported — `sbx policy ls` fails when signed out too.
  *
  * `sbx ls` is the sign-in probe: side-effect-free, exits 1 with "Not authenticated to Docker" when
  * signed out, and `prepareSbxRun` needs its listing. Not `sbx policy ls`, which also exits 1 signed
@@ -261,16 +271,15 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   if (refreshPath) {
     await augmentAgentPath();
   }
-  status.installed = await isSbxInstalled();
+  const [installed, sandboxes, policy] = await Promise.all([isSbxInstalled(), listSandboxes(), runSbx(["policy", "ls"])]);
+  status.installed = installed;
   if (!status.installed) {
     return { status };
   }
-  const sandboxes = await listSandboxes();
   status.loggedIn = sandboxes !== undefined;
   if (!status.loggedIn) {
     return { status };
   }
-  const policy = await runSbx(["policy", "ls"]);
   status.policyInitialized = policy.ok;
   status.governed = policy.ok && /managed by/i.test(policy.stdout);
   return { status, sandboxes };
