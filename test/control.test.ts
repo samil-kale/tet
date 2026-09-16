@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
 import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
+import { tabControlToken } from "../src/main/control/control-token";
 import { CONTROL_ENV, EXIT_CODES } from "../src/shared/control";
 import { EMPTY_REPOSITORY_STATE } from "../src/shared/types";
 import type { AppSettings, Project, ProjectCommand, TerminalDescriptor } from "../src/shared/types";
@@ -80,7 +81,6 @@ function terminalsOf(projectId: string): ControlTerminals {
       calls.written.push([tabId, data]);
     },
     events: () => [1, 2, 3].map((at) => ({ at, tabId: "tab-2", kind: "hook" as const, event: "stop" as const })),
-    shellOutput: (_tabId, count) => ["one", "two", "three"].slice(-count).join("\n"),
     createTab: (agentId) => {
       calls.created.push(agentId);
       return tab(projectId, "tab-new");
@@ -102,9 +102,7 @@ function terminalsOf(projectId: string): ControlTerminals {
       if (tabId !== OWN_TAB) {
         return {};
       }
-      return event === "prompt-submit"
-        ? { stdout: "<tet_context>the repository</tet_context>\n" }
-        : { toast: { title: "Claude: Finished", body: "Finished in one" } };
+      return event === "prompt-submit" ? {} : { toast: { title: "Claude: Finished", body: "Finished in one" } };
     }
   };
 }
@@ -116,7 +114,14 @@ function deps(ownProfile = true): ControlDeps {
     records: {
       editor: (id) => (id === PROJECT.id ? { path: "a.txt", loading: false, dirty: true, readOnly: false } : undefined),
       notices: () => [{ severity: "error", message: "Could not delete", at: 1 }],
-      output: (id, tabId) => (id === PROJECT.id && tabId === "tab-2" ? "\x1b[1mbold\x1b[0m line\r\n\x1b]0;title\x07next" : undefined)
+      output: (id, tabId) =>
+        id !== PROJECT.id
+          ? undefined
+          : tabId === "tab-2"
+            ? "\x1b[1mbold\x1b[0m line\r\n\x1b]0;title\x07next"
+            : tabId === OWN_TAB
+              ? "\x1b[32mone\x1b[0m\r\nfetching 10%\rfetching 90%\rtwo\r\nthree\r"
+              : undefined
     },
     editorContent: (id) => Promise.resolve(id === PROJECT.id ? "edited" : undefined),
     openEditor: (projectId, filePath) => {
@@ -168,19 +173,14 @@ function deps(ownProfile = true): ControlDeps {
   };
 }
 
-/** The CLI as run from the caller's own tab of PROJECT; `env` overrides that. */
+/** The CLI as run from the caller's own tab of PROJECT; `env` overrides that. The token is the one
+ *  a tab with the resulting ids is started with, unless `env` names one. */
 function tetCtl(args: string[], env: Record<string, string | undefined> = {}, input = ""): Promise<Run> {
-  return runCli(
-    args,
-    {
-      [CONTROL_ENV.port]: String(port),
-      [CONTROL_ENV.token]: TOKEN,
-      [CONTROL_ENV.projectId]: PROJECT.id,
-      [CONTROL_ENV.tabId]: OWN_TAB,
-      ...env
-    },
-    input
-  );
+  const ids = { [CONTROL_ENV.projectId]: PROJECT.id, [CONTROL_ENV.tabId]: OWN_TAB, ...env };
+  const projectId = ids[CONTROL_ENV.projectId];
+  const tabId = ids[CONTROL_ENV.tabId];
+  const token = projectId === undefined && tabId === undefined ? TOKEN : tabControlToken(TOKEN, projectId ?? "", tabId ?? "");
+  return runCli(args, { [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: token, ...ids }, input);
 }
 
 describe("tet-ctl against the control server", () => {
@@ -246,6 +246,22 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["version"], { [CONTROL_ENV.token]: "other" });
     assert.equal(run.status, EXIT_CODES.unauthorized);
     assert.match(run.stderr, /not a terminal of this TET/);
+  });
+
+  it("takes a caller's ids only with the token made for them", async () => {
+    const ownToken = tabControlToken(TOKEN, PROJECT.id, OWN_TAB);
+    for (const [what, run] of [
+      ["another project named", await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: ownToken, [CONTROL_ENV.projectId]: OTHER.id })],
+      ["the run's token with a tab's ids", await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: TOKEN })]
+    ] as const) {
+      assert.equal(run.status, EXIT_CODES.unauthorized, what);
+      assert.match(run.stderr, /not a terminal of this TET/, what);
+    }
+    // A hook ends quietly whatever the answer: seen only in what reached the terminals.
+    await tetCtl(["hook", "stop"], { [CONTROL_ENV.token]: ownToken, [CONTROL_ENV.tabId]: "tab-2" });
+    assert.deepEqual(calls.hooks, [], "no report for a tab the caller is not");
+    const bare = await tetCtl(["version"], { [CONTROL_ENV.projectId]: undefined, [CONTROL_ENV.tabId]: undefined });
+    assert.equal(bare.status, EXIT_CODES.ok, "the run's token alone, as the tests' own caller");
   });
 
   it("refuses an unknown verb before connecting", async () => {
@@ -486,8 +502,8 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["tabs-agent-output", OWN_TAB])).status, EXIT_CODES.usage);
   });
 
-  it("answers a shell tab's last lines, and refuses an agent tab", async () => {
-    assert.deepEqual((await tetCtl(["tabs-shell-output", OWN_TAB])).result, { output: "one\ntwo\nthree" });
+  it("answers a shell tab's last lines as finally shown, and refuses an agent tab", async () => {
+    assert.deepEqual((await tetCtl(["tabs-shell-output", OWN_TAB])).result, { output: "one\ntwo\nthree" }, "redraws collapsed");
     assert.deepEqual((await tetCtl(["tabs-shell-output", OWN_TAB, "--lines", "2"])).result, { output: "two\nthree" });
     assert.equal((await tetCtl(["tabs-shell-output", OWN_TAB, "--lines", "0"])).status, EXIT_CODES.usage);
     assert.equal((await tetCtl(["tabs-shell-output", "tab-2"])).status, EXIT_CODES.usage);
@@ -602,13 +618,13 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.shutdown, [true]);
   });
 
-  // A hook's stdout belongs to the agent: verbatim, with nothing of tet's own added.
-  it("hands a hook's payload over and answers with what the agent must see", async () => {
+  // A prompt-submit hook's stdout is appended to the prompt: TET adds nothing there.
+  it("hands a hook's payload over and adds nothing to the prompt", async () => {
     const payload = '{"session_id":"abc","background_tasks":[]}';
     const before = Date.now();
     const run = await tetCtl(["hook", "prompt-submit"], {}, payload);
     assert.equal(run.status, EXIT_CODES.ok);
-    assert.equal(run.stdout, "<tet_context>the repository</tet_context>\n", "the answer, and nothing else");
+    assert.equal(run.stdout, "", "TET's system prompt went in at spawn");
     assert.deepEqual(calls.hooks, [[OWN_TAB, "prompt-submit", payload]]);
     assert.deepEqual(calls.notified, [], "nothing to toast about a prompt");
     // When the hook fired, not when handled: racing reports of one turn are ordered by it, so a

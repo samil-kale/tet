@@ -20,8 +20,7 @@ import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig } from "../git/commands";
 import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
 import type { SettingsStore } from "../settings";
-import { agentDirFor, contextDirFor } from "./agent-data";
-import { ShellContext } from "./shell-context";
+import { agentDirFor } from "./agent-data";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
 import { sandboxSessionDir, toContainerPath } from "./hook-target";
 import { reportApplies } from "./turn-order";
@@ -249,16 +248,12 @@ export class ProjectSessionManager {
   /** The tabs in front of the user, as last reported (`setInFront`). */
   private inFront: ReadonlySet<string> = new Set();
 
-  private readonly shellContext: ShellContext;
-
   constructor(
     private readonly project: Project,
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
     private readonly callbacks: SessionManagerCallbacks
-  ) {
-    this.shellContext = new ShellContext(contextDirFor(storageRoot, project.id), project.name);
-  }
+  ) {}
 
   private agentDirOf(agentId: AgentId): string {
     return agentDirFor(this.storageRoot, agentId, this.project.id);
@@ -270,7 +265,6 @@ export class ProjectSessionManager {
     fs.mkdirSync(agentDir, { recursive: true });
     return {
       agentDir,
-      contextFile: this.shellContext.contextFile,
       storageRoot: this.storageRoot,
       idleReminder: this.settings.get().notifications.idleReminder,
       theme: currentTheme(this.settings)
@@ -293,11 +287,6 @@ export class ProjectSessionManager {
   /** What `events-tail` answers: the latest hook reports, claims and closes, oldest first. */
   events(): ControlEvent[] {
     return [...this.recorded];
-  }
-
-  /** What `tabs-shell-output` answers: a shell tab's last `count` lines (ShellContext.output). */
-  shellOutput(tabId: string, count: number): string {
-    return this.shellContext.output(tabId, count);
   }
 
   private record(event: Omit<ControlEvent, "at">): void {
@@ -871,10 +860,6 @@ export class ProjectSessionManager {
       {
         onOutput: (data) => {
           this.callbacks.onOutput(this.project.id, tabId, agent.id, data);
-          // Only shells: an agent tab's output is its TUI redrawing.
-          if (!agent.sessions) {
-            this.shellContext.append(tabId, data);
-          }
           if (isSessionReady?.(data)) {
             hideIndicator();
           }
@@ -1018,7 +1003,6 @@ export class ProjectSessionManager {
         this.sessions.delete(tab.tabId);
       }
       if (!agent.sessions) {
-        this.shellContext.close(tab.tabId);
         return;
       }
       if (detached && awaitsClaim(tab)) {
@@ -1144,9 +1128,8 @@ export class ProjectSessionManager {
           setTurn(tab, true, at);
           this.postTabs();
         }
-        // The context for the model, whatever the report's age: it goes into this prompt. Hence
-        // Claude Code and Codex need only one UserPromptSubmit hook, both mark and context.
-        return { stdout: this.shellContext.text };
+        // No context for the model: TET's system prompt went in once, at spawn (system-prompt.ts).
+        return {};
       case "stop": {
         const agent = getAgent(tab.agentId);
         // Only the agent's payload knows whether the turn is really over.
@@ -1368,7 +1351,6 @@ export class ProjectSessionManager {
     this.lastSizes.clear();
     this.tabIndicators.clear();
     this.indicators = 0;
-    this.shellContext.dispose();
     for (const runtime of this.runtimes.values()) {
       clearTimeout(runtime.reconcileTimer);
       runtime.stopWatching?.();

@@ -12,7 +12,7 @@ import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { mapLimited } from "./map-limited";
 import { relativeInside } from "./path-inside";
 import { isMountAllowed, parseFilesystemRules } from "./sbx-policy";
-import { agentDataDir, agentDirFor, contextDirFor } from "./terminals/agent-data";
+import { agentDataDir, agentDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { SANDBOX_HOME, toContainerPath } from "./terminals/hook-target";
 import { resolveCommand } from "./terminals/pty";
@@ -216,9 +216,9 @@ function folderRule(folder: string): string {
 /**
  * What sbx's policy must still allow for a sandboxed tab: the control channel
  * (isControlChannelAllowed), the project as workspace, and tet's mounted folders — each agentDir
- * rw, the context directory ro (fixedMountSpecs). Checked as mounted, asked for as one rule under
- * agentDataDir, read *and* write as Docker's docs require (write alone measured to suffice). Rules
- * come from one `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge
+ * rw (fixedMountSpecs). Checked as mounted, asked for as one rule under agentDataDir, read *and*
+ * write as Docker's docs require (write alone measured to suffice). Rules come from one
+ * `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge
  * are not asked for — a tab starts without them.
  *
  * Both questions are asked at once, for the same reason probeSbx asks its three that way.
@@ -240,9 +240,7 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
   }
   if (storageRoot) {
     const root = storageRoot;
-    const own =
-      SBX_AGENT_IDS.every((agentId) => mountable(agentDirFor(root, agentId, projectId), "rw")) &&
-      mountable(contextDirFor(root, projectId), "ro");
+    const own = SBX_AGENT_IDS.every((agentId) => mountable(agentDirFor(root, agentId, projectId), "rw"));
     if (!own) {
       blockers.push({ what: "tet's agent data", allow: `${folderRule(agentDataDir(root))} (read and write)` });
     }
@@ -405,14 +403,14 @@ function statOf(candidate: string): Stats | undefined {
   }
 }
 
-export type SandboxPaths = Pick<AgentPaths, "agentDir" | "contextFile">;
+export type SandboxPaths = Pick<AgentPaths, "agentDir">;
 
 /**
- * tet's two mounts for every sandboxed tab: `agentDir` rw (hook settings, agents' records) and the
- * context file's directory ro. Live mounts, since a create positional cannot change afterwards
- * ("already exists and can't be given new workspaces"). The project stays create-time: `sbx run`
+ * tet's own mount for every sandboxed tab: `agentDir` rw (hook settings, agents' records). A live
+ * mount, since a create positional cannot change afterwards ("already exists and can't be given
+ * new workspaces"). The project stays create-time: `sbx run`
  * has no `--workdir` (docker/sbx-releases#394), and without a positional the agent starts in an
- * empty `/home/agent/workspace` (measured, 0.42.1). Both land at the host path's container form,
+ * empty `/home/agent/workspace` (measured, 0.42.1). It lands at the host path's container form,
  * so `HookTarget` paths hold.
  *
  * Never the agent's config directory (`~/.claude`, `~/.codex`): pointed at by `CLAUDE_CONFIG_DIR`/
@@ -422,8 +420,7 @@ export type SandboxPaths = Pick<AgentPaths, "agentDir" | "contextFile">;
  */
 export function fixedMountSpecs(paths: SandboxPaths): string[] {
   return [
-    pathMountSpecs({ path: paths.agentDir, access: "rw" }).mount,
-    pathMountSpecs({ path: path.dirname(paths.contextFile), access: "ro" }).mount
+    pathMountSpecs({ path: paths.agentDir, access: "rw" }).mount
   ];
 }
 
@@ -892,10 +889,10 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   const created = await ensureSandboxExists(agentId, request.projectPath, name, request.sandboxes, onData);
   // The user's grants are best-effort: their failure must not keep the agent from starting. A row
   // that exists is mounted (folder or file); one gone from this host is reported as missing.
-  // tet's own folders are not best-effort: without them the agent has no hook settings, shell
-  // transcript or listable sessions, silently. Everything else is in place by here, so a refusal is
-  // sbx's policy, and the tab stops with sbx's reason in its output. Hosts are seeded only into a
-  // sandbox this call created; after that its rules are the truth (allowHosts).
+  // tet's own folders are not best-effort: without them the agent has no hook settings or listable
+  // sessions, silently. Everything else is in place by here, so a refusal is sbx's policy, and the
+  // tab stops with sbx's reason in its output. Hosts are seeded only into a sandbox this call
+  // created; after that its rules are the truth (allowHosts).
   const missing = config.paths.map((entry) => entry.path).filter((entry) => !statOf(normalizeHostPath(entry)));
   const own = [...fixedMountSpecs(request.paths), ...(await sessionMountSpecs(request.sessionMounts ?? []))];
   const granted = grantedMounts(agentId, config).map((spec) => spec.mount);

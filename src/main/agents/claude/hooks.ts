@@ -29,8 +29,8 @@ export function claudeHoldsTurnEnd(payload: string): boolean {
  *
  * Every hook is a bare `tet-ctl hook <event>`, independent of Claude Code's shell (measured on
  * win32: `/usr/bin/bash`, where only the extensionless launcher resolves; control-launcher.ts).
- * One `UserPromptSubmit` command: the call marking the session busy answers with the context
- * file's text, which Claude Code appends to the prompt.
+ * One `UserPromptSubmit` command marks the session busy; its answer is empty, since TET's system
+ * prompt goes in once at spawn (index.ts).
  */
 export function setupClaudeHooks(
   storageDir: string,

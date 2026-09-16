@@ -11,10 +11,11 @@ import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks
 import { hookSessionId } from "../src/main/agents/hook-payload";
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
+import { TET_SYSTEM_PROMPT } from "../src/main/agents/system-prompt";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
-import { ANSI_SEQUENCE_AT_START, stripAnsi } from "../src/shared/ansi";
+import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/shared/script-text";
 import { ProjectStore } from "../src/main/projects";
 import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
@@ -199,13 +200,9 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(pathMountSpecs({ path: "~/data/", access: "rw" }).mount, home);
   });
 
-  it("mounts tet's own dirs live — agentDir read-write, the context file's directory read-only", () => {
+  it("mounts tet's own dir live — agentDir read-write, nothing else", () => {
     const agentDir = path.join(os.tmpdir(), "agents", "claude", "p");
-    const contextDir = path.join(os.tmpdir(), "ctx");
-    assert.deepEqual(fixedMountSpecs({ agentDir, contextFile: path.join(contextDir, "context.md") }), [
-      agentDir,
-      pathMountSpecs({ path: contextDir, access: "ro" }).mount
-    ]);
+    assert.deepEqual(fixedMountSpecs({ agentDir }), [agentDir]);
   });
 });
 
@@ -283,12 +280,6 @@ describe("stripping escape sequences", () => {
   it("removes CSI with any parameter bytes, OSC ended either way and two-byte escapes", () => {
     const text = "\x1b[1;31mred\x1b[0m \x1b[>4;1mkeys\x1b[<u \x1b]0;title\x07a\x1b]8;;url\x1b\\b \x1bMc\x1b[?25h";
     assert.equal(stripAnsi(text), "red keys ab c");
-  });
-
-  it("recognizes a sequence only when it starts the text", () => {
-    assert.ok(ANSI_SEQUENCE_AT_START.test("\x1b[>4;1mrest"));
-    assert.ok(!ANSI_SEQUENCE_AT_START.test("x\x1b[0m"));
-    assert.ok(!ANSI_SEQUENCE_AT_START.test("\x1b[1;3"), "cut off mid-sequence");
   });
 });
 
@@ -442,23 +433,25 @@ describe("which of two turn reports counts", () => {
   });
 });
 
-describe("pi's extension", () => {
-  // Generated paths hold the user's name, which may hold any of these; pi exits outright on an
-  // extension that does not compile.
-  const nasty = "C:\\Users\\it's $x `y\\ctx.md";
+describe("TET's system prompt", () => {
+  // It goes through cmd.exe, `sbx run` and a TOML basic string as measured — only as the plain
+  // line it was measured as (system-prompt.ts).
+  it("stays one line of letters, digits and plain punctuation", () => {
+    assert.match(TET_SYSTEM_PROMPT, /^[A-Za-z0-9 .,;:'-]+$/);
+  });
+});
 
-  it("compiles as TypeScript whatever the paths hold", () => {
-    const source = renderPiExtension({ contextFile: nasty });
-    assert.doesNotThrow(() => esbuild.transformSync(source, { loader: "ts" }));
-    assert.ok(source.includes(JSON.stringify(nasty)), "baked in as a JS literal, never spliced raw");
+describe("pi's extension", () => {
+  // pi exits outright on an extension that does not compile.
+  it("compiles as TypeScript", () => {
+    assert.doesNotThrow(() => esbuild.transformSync(renderPiExtension(), { loader: "ts" }));
   });
 
-  it("reports both ends of a turn and a question, and appends the context file to the prompt", async () => {
+  it("reports both ends of a turn and a question", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-ext-"));
-    const contextFile = path.join(dir, "context.md");
     const channel = await controlChannel();
     try {
-      const source = renderPiExtension({ contextFile });
+      const source = renderPiExtension();
       const compiled = path.join(dir, "tet.js");
       fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
       const handlers: Record<string, (event: unknown, ctx: unknown) => unknown> = {};
@@ -468,11 +461,7 @@ describe("pi's extension", () => {
         }
       });
 
-      fs.writeFileSync(contextFile, "﻿hello\n");
-      assert.deepEqual(handlers.before_agent_start({ systemPrompt: "base" }, {}), { systemPrompt: "base\n\nhello" });
-      fs.writeFileSync(contextFile, "  \n");
-      assert.equal(handlers.before_agent_start({ systemPrompt: "base" }, {}), undefined, "blank means nothing to say");
-
+      assert.equal(handlers.before_agent_start, undefined, "the system prompt comes from pi's own flag");
       const ctx = { sessionManager: { getSessionId: () => "019eba31-566c-7911-bf09-14afe53d7c36" } };
       handlers.agent_start({}, ctx);
       handlers.agent_settled({}, ctx);
@@ -494,15 +483,14 @@ describe("pi's extension", () => {
     }
   });
 
-  // Written on the host, read inside the container: every path in it is the container's.
-  it("writes a sandbox one with container paths and nothing beside it", () => {
+  // Written on the host, read inside a container too: nothing in it may depend on where it runs.
+  it("writes one file that reads the channel from its environment", () => {
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-sbx-"));
-    const contextFile = path.join(storageDir, "context.md");
-    const file = writePiExtension(storageDir, contextFile, SANDBOX_TARGET);
+    const file = writePiExtension(storageDir);
     const source = fs.readFileSync(file, "utf8");
 
-    assert.ok(source.includes(JSON.stringify(toContainerPath(contextFile))), "the context file as the container sees it");
-    assert.deepEqual(fs.readdirSync(storageDir), ["tet.ts"], "no notify script, no marker directories");
+    assert.equal(file, path.join(storageDir, "tet", "index.ts"), "pi lists it by its folder's name");
+    assert.deepEqual(fs.readdirSync(path.join(storageDir, "tet")), ["index.ts"], "no notify script, no marker directories");
     assert.ok(source.includes(JSON.stringify(CONTROL_ENV)), "the channel is read from the environment, not baked in");
   });
 });
@@ -512,7 +500,6 @@ describe("opencode's plugin", () => {
   type Hooks = Record<string, (...args: unknown[]) => Promise<void>>;
   const options = (dir: string, sandbox: string | null = null): OpencodePluginOptions => ({
     projectRoot: dir,
-    contextFile: path.join(dir, "context.md"),
     sessionsDir: path.join(dir, "sessions"),
     renameDir: path.join(dir, "rename"),
     sandbox
@@ -543,7 +530,7 @@ describe("opencode's plugin", () => {
   });
 
   it("compiles as TypeScript whatever the paths hold", () => {
-    const source = renderOpencodePlugin({ ...options(nasty), contextFile: nasty });
+    const source = renderOpencodePlugin(options(nasty));
     assert.doesNotThrow(() => esbuild.transformSync(source, { loader: "ts" }));
     assert.ok(source.includes(JSON.stringify(nasty)), "baked in as a JS literal, never spliced raw");
   });
@@ -559,12 +546,16 @@ describe("opencode's plugin", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
       assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
       assert.deepEqual(channel.reports, []);
+      // The plugins dir is shared across repositories: another one's prompt would be doubled.
+      const request = { system: ["opencode's own"] };
+      await hooks["experimental.chat.system.transform"]({ sessionID: "ses_a" }, request);
+      assert.deepEqual(request.system, ["opencode's own"]);
     } finally {
       await channel.close();
     }
   });
 
-  it("records root sessions, reports the turns, and appends the context file", async () => {
+  it("records root sessions, reports the turns, and appends TET's system prompt", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
     process.env.TET_PROJECT_ROOT = dir;
     const channel = await controlChannel();
@@ -579,14 +570,14 @@ describe("opencode's plugin", () => {
       await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
 
-      // chat.message is the turn's one start, and takes the context in.
-      fs.writeFileSync(path.join(dir, "context.md"), "\uFEFFhello\n");
-      const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as { text: string; synthetic: boolean }[] };
+      // chat.message is the turn's one start, and adds nothing to the message.
+      const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as unknown[] };
       await hooks["chat.message"]({}, output);
-      assert.equal(output.parts.length, 1);
-      assert.equal(output.parts[0].text, "hello\n");
-      assert.equal(output.parts[0].synthetic, true);
+      assert.equal(output.parts.length, 0);
       await hooks["chat.message"]({}, { message: { id: "msg_2", sessionID: "ses_child" }, parts: [] });
+      const request = { system: ["opencode's own"] };
+      await hooks["experimental.chat.system.transform"]({ sessionID: "ses_a" }, request);
+      assert.deepEqual(request.system, ["opencode's own", TET_SYSTEM_PROMPT]);
 
       // Raised on every step of a turn, so not reported: each would be a round trip, the last
       // racing the idle below.

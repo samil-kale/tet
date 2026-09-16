@@ -2,16 +2,40 @@ import type { AgentId, EditorReport, NoticeReport } from "../../shared/types";
 
 const MAX_NOTICES = 50;
 /** A few screens of a TUI's redraws. */
-const MAX_OUTPUT_CHARS = 64 * 1024;
+const MAX_AGENT_OUTPUT_CHARS = 64 * 1024;
+/** Thousands of a shell's lines — as far back as `tabs-shell-output` reaches. */
+const MAX_SHELL_OUTPUT_CHARS = 1024 * 1024;
+
+/** What a tab printed, raw: cleaned only when read, so a redraw spanning chunks still collapses. */
+interface TabOutput {
+  text: string;
+  shell: boolean;
+}
+
+function capOf(output: TabOutput): number {
+  return output.shell ? MAX_SHELL_OUTPUT_CHARS : MAX_AGENT_OUTPUT_CHARS;
+}
+
+/** The latest of a tab's output within its cap. A shell's first line cut by the cap is dropped,
+ *  since it would read as a whole one; a TUI's redraws have no lines to keep whole. */
+function capped(output: TabOutput): string {
+  const max = capOf(output);
+  if (output.text.length <= max) {
+    return output.text;
+  }
+  const text = output.text.slice(-max);
+  return output.shell ? text.slice(text.indexOf("\n") + 1) : text;
+}
 
 /**
  * Control-verb data no main-process store holds: what the window reports (editor tab, shown
- * notices) and each agent tab's latest output. A shell tab's lines are ShellContext's.
+ * notices) and each open tab's latest output.
  */
 export class ControlRecords {
   private readonly editors = new Map<string, EditorReport>();
   private readonly shownNotices: NoticeReport[] = [];
-  private readonly outputs = new Map<string, string>();
+  /** Per project, per tab. */
+  private readonly outputs = new Map<string, Map<string, TabOutput>>();
 
   /** null once the editor tab is closed. */
   setEditor(projectId: string, report: EditorReport | null): void {
@@ -36,15 +60,31 @@ export class ControlRecords {
   }
 
   addOutput(projectId: string, tabId: string, agentId: AgentId, data: string): void {
-    if (agentId === "shell") {
-      return;
+    const tabs = this.outputs.get(projectId) ?? new Map<string, TabOutput>();
+    const output = tabs.get(tabId) ?? { text: "", shell: agentId === "shell" };
+    output.text += data;
+    // Trimmed at twice the cap, to the cap when read: trimming every chunk would copy up to a
+    // megabyte per chunk.
+    if (output.text.length > 2 * capOf(output)) {
+      output.text = capped(output);
     }
-    const key = `${projectId}\u0000${tabId}`;
-    this.outputs.set(key, ((this.outputs.get(key) ?? "") + data).slice(-MAX_OUTPUT_CHARS));
+    tabs.set(tabId, output);
+    this.outputs.set(projectId, tabs);
   }
 
-  /** Undefined before any output, and for a shell tab. */
+  /** Drops what closed tabs printed, given a project's open tabs. */
+  keepOutputs(projectId: string, tabIds: ReadonlySet<string>): void {
+    const tabs = this.outputs.get(projectId);
+    for (const tabId of tabs?.keys() ?? []) {
+      if (!tabIds.has(tabId)) {
+        tabs?.delete(tabId);
+      }
+    }
+  }
+
+  /** Raw, escape sequences included; undefined before any output. */
   output(projectId: string, tabId: string): string | undefined {
-    return this.outputs.get(`${projectId}\u0000${tabId}`);
+    const output = this.outputs.get(projectId)?.get(tabId);
+    return output && capped(output);
   }
 }

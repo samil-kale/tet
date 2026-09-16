@@ -109,9 +109,10 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  * `tet-ctl hook <event>` (hook-command.ts), and `-c` applies to this process only — Codex's
  * `config.toml` and `hooks.json` are never touched.
  *
- * One command per event: `UserPromptSubmit`'s plain stdout is appended to the prompt
- * (`hooks/src/events/user_prompt_submit.rs`), which is the `prompt-submit` answer. Stop must write
- * one JSON value and gets `{}` (control-server.ts's `hook`).
+ * One command per event: `UserPromptSubmit`'s plain stdout would be appended to the prompt
+ * (`hooks/src/events/user_prompt_submit.rs`), so the `prompt-submit` answer stays empty — TET's
+ * system prompt goes in once at spawn (index.ts). Stop must write one JSON value and gets `{}`
+ * (control-server.ts's `hook`).
  *
  * No end-of-turn guard: a subagent-only turn reports through `SubagentStop`, which tet does not hook.
  */

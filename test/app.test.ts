@@ -7,8 +7,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { findControlPort } from "../src/main/control/control-server";
+import { tabControlToken } from "../src/main/control/control-token";
 import { resolveRoot } from "../src/main/git/git";
-import { contextDirFor } from "../src/main/terminals/agent-data";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
@@ -34,10 +34,26 @@ let stderr = "";
 /** The instance answering right now — a different process after restart-app. */
 let pid: number | undefined;
 
-const env = { [CONTROL_ENV.port]: "", [CONTROL_ENV.token]: TOKEN };
+/** Speaks for no tab: the run's token takes no caller ids, and a run from a TET tab inherits some. */
+const env: Record<string, string | undefined> = {
+  [CONTROL_ENV.port]: "",
+  [CONTROL_ENV.token]: TOKEN,
+  [CONTROL_ENV.projectId]: undefined,
+  [CONTROL_ENV.tabId]: undefined
+};
 
 async function ctl(...args: string[]) {
   return tetCtl(args, env);
+}
+
+/** The environment a tab of `projectId` is started with: its ids and the token made for them. */
+function asTab(projectId: string, tabId: string): Record<string, string | undefined> {
+  return {
+    ...env,
+    [CONTROL_ENV.token]: tabControlToken(TOKEN, projectId, tabId),
+    [CONTROL_ENV.projectId]: projectId,
+    [CONTROL_ENV.tabId]: tabId
+  };
 }
 
 async function alive(): Promise<number | undefined> {
@@ -133,7 +149,7 @@ ${stderr.slice(uncaught)}`);
 
   // An agent's hook end to end: CLI off the tab's environment, control server, session manager,
   // tabs-list. A shell tab stands in for the agent — the verb is about the tab, not its program.
-  it("marks a tab's turn from its own hook, and answers with the context", async () => {
+  it("marks a tab's turn from its own hook, and adds nothing to the prompt", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const open = async (): Promise<string> =>
       ((await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TerminalDescriptor).tabId;
@@ -141,13 +157,13 @@ ${stderr.slice(uncaught)}`);
     // A second tab takes the front: the renderer clears a finished mark on the tab in front.
     const inFront = await open();
     const hook = (event: string): Promise<{ status: number; stdout: string }> =>
-      tetCtl(["hook", event], { ...env, [CONTROL_ENV.projectId]: project.id, [CONTROL_ENV.tabId]: tab }, "{}");
+      tetCtl(["hook", event], asTab(project.id, tab), "{}");
     const state = async (): Promise<TerminalDescriptor | undefined> =>
       ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).find((entry) => entry.tabId === tab);
 
     const start = await hook("prompt-submit");
     assert.equal(start.status, 0);
-    assert.match(start.stdout, /<tet_context>/, "the answer is what the agent puts in front of the model");
+    assert.equal(start.stdout, "", "nothing for the prompt: TET's system prompt went in at spawn");
     await eventually("the tab busy", async () => (await state())?.busy === true, 10_000);
 
     assert.equal((await hook("stop")).status, 0);
@@ -158,9 +174,8 @@ ${stderr.slice(uncaught)}`);
     }
   });
 
-  it("answers a shell tab's lines, and tells the agents so in the context file", async () => {
+  it("answers a shell tab's lines", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
-    const contextFile = path.join(contextDirFor(userData, project.id), "context.md");
     // A saved command printing a whole line, not a plain shell: whether a shell prints more at
     // startup depends on the machine.
     fs.writeFileSync(
@@ -170,16 +185,23 @@ ${stderr.slice(uncaught)}`);
     const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TerminalDescriptor;
     // Read as a tab of that project does: the verb answers only there.
     const lines = async (): Promise<string> =>
-      ((await tetCtl(["tabs-shell-output", probe.tabId], { ...env, [CONTROL_ENV.projectId]: project.id })).result as
+      ((await tetCtl(["tabs-shell-output", probe.tabId], asTab(project.id, probe.tabId))).result as
         | { output: string }
         | undefined)?.output ?? "";
-    const has = (file: string, pattern: RegExp): boolean => fs.existsSync(file) && pattern.test(fs.readFileSync(file, "utf8"));
-    await eventually(
-      "the command's line, and the shell paragraph",
-      async () => /tet-context-probe/.test(await lines()) && has(contextFile, /tabs-shell-output/),
-      STARTUP_MS
-    );
-    assert.match(fs.readFileSync(contextFile, "utf8"), /tet-ctl/);
+    await eventually("the command's line", async () => /tet-context-probe/.test(await lines()), STARTUP_MS);
+  });
+
+  it("answers tet-ctl run inside a tab, which holds only its own tab's token", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    fs.writeFileSync(path.join(repo, "tet.json"), JSON.stringify({ commands: [{ command: "tet-ctl tabs-list", name: "list" }] }));
+    const list = (await ctl("tabs-run-command", "list", "--project", project.id)).result as TerminalDescriptor;
+    const lines = async (): Promise<string> =>
+      ((await tetCtl(["tabs-shell-output", list.tabId], asTab(project.id, list.tabId))).result as
+        | { output: string }
+        | undefined)?.output ?? "";
+    // Its own id in the listing: the server took the tab's token for the ids the tab reported.
+    await eventually("the tab's own listing", async () => (await lines()).includes(list.tabId), STARTUP_MS);
+    assert.doesNotMatch(await lines(), /not a terminal of this TET/);
   });
 
   it("runs a saved command in a tab that ends the way the command did", async () => {

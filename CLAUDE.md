@@ -66,8 +66,8 @@ others.
   written into a script is quoted with `shellSingleQuote` (`src/shared/script-text.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
   `tet-ctl hook <event>`.
-- A file another process reads (context file, opencode records) is written
-  beside the target and renamed into place.
+- A file another process reads (hook settings, opencode records) is written beside the target and
+  renamed into place.
 
 ## Git
 
@@ -158,6 +158,11 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 
 - `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
+- Agents learn of `tet-ctl` once per session: `TET_SYSTEM_PROMPT` (`src/main/agents/system-prompt.ts`),
+  appended to each agent's system prompt at spawn — one plain line, since it crosses cmd.exe,
+  `sbx run` and TOML.
+- A caller's project and tab ids count only with the token made for them
+  (`src/main/control/control-token.ts`): a terminal gets its tab's token, never the run's.
 - `tabs-send` answers only in a run with a profile of its own (`ownProfileOnly`);
   `tabs-agent-output`/`tabs-shell-output` only for a tab of the caller's own project
   (`ownProjectOnly`).

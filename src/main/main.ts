@@ -217,6 +217,7 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, {
   onTabs: (projectId, tabs) => {
     send("terminal:tabs", { projectId, tabs });
     awaitedToastTab(projectId);
+    records.keepOutputs(projectId, new Set(tabs.map((tab) => tab.tabId)));
   },
   onOutput: (projectId, tabId, agentId, data) => {
     records.addOutput(projectId, tabId, agentId, data);
@@ -626,8 +627,8 @@ if (!app.requestSingleInstanceLock()) {
     // second. The requirements re-check (ipc.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepTempFiles();
-    // Into every terminal's environment before the first spawn. The token lives in this process
-    // only — never on disk or a command line.
+    // Before the first spawn; each terminal gets only a token made from it for its own tab
+    // (control-token.ts). The token lives in this process only — never on disk or a command line.
     const controlToken =
       (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
     const port = await findControlPort(dataRoot);

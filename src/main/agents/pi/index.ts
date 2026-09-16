@@ -4,6 +4,11 @@ import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { writePiExtension } from "./extension";
 import { piSessionProvider } from "./sessions";
+import { TET_SYSTEM_PROMPT } from "../system-prompt";
+
+/** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32
+ *  (measured, see system-prompt.ts). */
+const SYSTEM_PROMPT_ARGS = ["--append-system-prompt", TET_SYSTEM_PROMPT];
 
 /**
  * pi (pi.dev, `@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts,
@@ -31,7 +36,7 @@ export const piAgent: AgentDefinition = {
   prepareSpawn: (_executable, _cwd, paths) => {
     const args: string[] = [];
     try {
-      const extension = writePiExtension(paths.agentDir, paths.contextFile);
+      const extension = writePiExtension(paths.agentDir);
       args.push("-e", extension);
     } catch (error) {
       // An unloadable `-e` file is fatal (measured: "Failed to load extension", exit), so an
@@ -40,21 +45,21 @@ export const piAgent: AgentDefinition = {
     }
     // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
     // settings.json untouched (measured).
-    args.push("--use-theme", paths.theme.kind);
+    args.push("--use-theme", paths.theme.kind, ...SYSTEM_PROMPT_ARGS);
     return Promise.resolve({ args });
   },
   prepareSandboxSpawn: (_cwd, paths) => {
     try {
-      const extension = writePiExtension(sandboxHookDir(paths.agentDir), paths.contextFile, SANDBOX_TARGET);
+      const extension = writePiExtension(sandboxHookDir(paths.agentDir));
       // Written at the host path, read at the sandbox's: agentDir is mounted whole (sbx.ts's
       // fixedMountSpecs). On a failed write pi starts without `-e`.
       // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the safety
       // boundary, as for Claude Code and opencode. The community pi-kit does not set it (measured,
       // docker/sbx-kits-contrib pi/spec.yaml).
-      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind, "-a"] };
+      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind, "-a", ...SYSTEM_PROMPT_ARGS] };
     } catch (error) {
       console.error("[tet] could not write pi's sandbox extension:", error);
-      return { args: ["--use-theme", paths.theme.kind, "-a"] };
+      return { args: ["--use-theme", paths.theme.kind, "-a", ...SYSTEM_PROMPT_ARGS] };
     }
   },
   // Measured startup: ~130 B handshake by 120 ms, a 1037 B chunk at ~680 ms, ~3 KB by 0.9 s. The

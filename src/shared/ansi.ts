@@ -7,9 +7,6 @@ const ANSI_SEQUENCE = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)
 
 const ANSI_SEQUENCES = new RegExp(ANSI_SEQUENCE.source, "g");
 
-/** A whole escape sequence at the start of the text. */
-export const ANSI_SEQUENCE_AT_START = new RegExp(`^(?:${ANSI_SEQUENCE.source})`);
-
 /** The text without its escape sequences. */
 export function stripAnsi(text: string): string {
   return text.replace(ANSI_SEQUENCES, "");

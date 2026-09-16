@@ -20,8 +20,8 @@ function hostConfigDir(storageRoot: string): string {
 /**
  * Each tab runs the plain `opencode`: its server is a worker thread of that process (measured: the
  * plugin loads in `src/cli/tui/worker.js`, nothing listens on a port), and a generated plugin
- * reports turns and sessions and injects the context (plugin.ts). Same on host and in sbx. No
- * `opencode serve` or `attach` of tet's own.
+ * reports turns and sessions and appends TET's system prompt (plugin.ts). Same on host and in sbx.
+ * No `opencode serve` or `attach` of tet's own.
  */
 export const opencodeAgent: AgentDefinition = {
   id: "opencode",
@@ -52,9 +52,9 @@ export const opencodeAgent: AgentDefinition = {
     registerAgentDir(cwd, paths.agentDir);
     let env: Record<string, string> = {};
     try {
-      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, paths.contextFile, HOST_TARGET, null);
+      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, HOST_TARGET, null);
     } catch (error) {
-      // Costs turn marks, records and context, not the CLI — swallow (see prepareSpawn).
+      // Costs turn marks, records and TET's system prompt, not the CLI — swallow (see prepareSpawn).
       console.error("[tet] could not write opencode's plugin:", error);
     }
     return Promise.resolve({
@@ -68,7 +68,7 @@ export const opencodeAgent: AgentDefinition = {
       // Its own config dir (a Linux bun install); records and rename requests stay agentDir's,
       // shared with host tabs.
       const configDir = sandboxConfigDir(paths.agentDir);
-      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, paths.contextFile, SANDBOX_TARGET, sandbox);
+      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, SANDBOX_TARGET, sandbox);
       // Under the mounted dir: storageRoot's copy is not in the sandbox.
       for (const [key, file] of Object.entries(installTuiConfig(configDir))) {
         env[key] = SANDBOX_TARGET.embed(file);

@@ -5,16 +5,17 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { writeLaunchers } from "../src/main/control/control-launcher";
-import { contextDirFor } from "../src/main/terminals/agent-data";
+import { ControlRecords } from "../src/main/control/control-records";
+import { tabControlToken } from "../src/main/control/control-token";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { relativeInside } from "../src/main/path-inside";
 import { SettingsStore } from "../src/main/settings";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager } from "../src/main/terminals/session-manager";
-import { ShellContext } from "../src/main/terminals/shell-context";
+import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
-import { CLI, eventually } from "./helpers";
+import { CLI } from "./helpers";
 
 /** Pieces around the control channel needing no app and no server. */
 
@@ -39,7 +40,7 @@ describe("a turn's toast", () => {
     const needsYou = ["permission", "question", "idle"] as const;
     try {
       manager.setInFront([tabId]);
-      assert.notEqual(hook("prompt-submit").stdout, undefined, "the agent still gets its context");
+      assert.deepEqual(hook("prompt-submit"), {}, "nothing for the prompt: TET's system prompt went in at spawn");
       assert.equal(hook("stop").toast, undefined, "a turn finished in front of the user");
       assert.notEqual(
         pushed.find((tab) => tab.tabId === tabId)?.finishedAt,
@@ -60,11 +61,6 @@ describe("a turn's toast", () => {
         }
       }
     } finally {
-      // The manager writes its context file asynchronously; removed under it, the write logs.
-      // Cleanup only, never a failure.
-      await eventually("the context file written", () =>
-        fs.existsSync(path.join(contextDirFor(root, "p"), "context.md"))
-      ).catch(() => undefined);
       await manager.dispose();
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
     }
@@ -87,6 +83,14 @@ describe("a terminal's environment", () => {
     assert.equal(env.TET_TEST_OUTER, "inner", "tet's own beats what an outer tet left");
     assert.equal(env.TET_TEST_CONTROL, "own", "the tab's own beats the app-wide");
     assert.equal(env.TET_TEST_OWN, "command", "a saved command's beats everything");
+  });
+
+  it("gives a terminal its own tab's control token, never the run's", () => {
+    setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
+    const env = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
+    assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-1"));
+    assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-2"), "another tab's differs");
+    setControlEnv({}, "");
   });
 
   it("prepends the launcher directory to PATH under whatever name PATH has", () => {
@@ -146,58 +150,34 @@ describe("the tet-ctl launcher", () => {
   });
 });
 
-describe("the context file", () => {
-  it("names tet-ctl from the start, and how to read the shell tabs only once something ran", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
-    const context = new ShellContext(dir, "repo");
-    const read = (): string => {
-      const raw = fs.readFileSync(context.contextFile, "utf8");
-      // The win32 BOM, stripped the way opencode's generated plugin does.
-      return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
-    };
-    await eventually("the first write", () => fs.existsSync(context.contextFile));
-    assert.match(read(), /controlled with `tet-ctl`/);
-    assert.doesNotMatch(read(), /tabs-shell-output/);
-
-    context.append("tab-1", "npm run build\r\ndone\r\n");
-    await eventually("the shell paragraph", () => /tabs-shell-output/.test(read()));
-    assert.match(read(), /shell tabs in repo are read with `tet-ctl tabs-list`/);
-    context.dispose();
-    fs.rmSync(dir, { recursive: true, force: true });
+describe("a tab's recorded output", () => {
+  it("keeps the latest output of open tabs only", () => {
+    const records = new ControlRecords();
+    records.addOutput("p1", "tab-1", "shell", "one");
+    records.addOutput("p1", "tab-1", "shell", "two");
+    records.addOutput("p1", "tab-2", "claude", "gone");
+    records.addOutput("p2", "tab-3", "shell", "other project");
+    records.keepOutputs("p1", new Set(["tab-1"]));
+    assert.equal(records.output("p1", "tab-1"), "onetwo");
+    assert.equal(records.output("p1", "tab-2"), undefined, "a closed tab's output goes with it");
+    assert.equal(records.output("p2", "tab-3"), "other project", "another project's tabs untouched");
   });
 
-  it("keeps each shell tab's lines whole, and answers the last ones asked for", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
-    const context = new ShellContext(dir, "repo");
-    context.append("tab-1", "compiling");
-    context.append("tab-2", "abc123 first commit\r\n");
-    context.append("tab-1", " main.ts\r\n");
-    context.append("tab-1", "\x1b[32mok\x1b[0m\r\n40%\r80%\r100%\r\nunfinished");
-    assert.equal(context.output("tab-1", 100), "compiling main.ts\nok\n100%\nunfinished", "the open line included");
-    assert.equal(context.output("tab-1", 2), "100%\nunfinished");
-    assert.equal(context.output("tab-2", 100), "abc123 first commit");
-    context.close("tab-1");
-    assert.equal(context.output("tab-1", 100), "", "a closed tab's lines go with it");
-    context.dispose();
-    fs.rmSync(dir, { recursive: true, force: true });
-  });
+  it("holds a megabyte of a shell and whole lines only, a few screens of an agent", () => {
+    const records = new ControlRecords();
+    // A progress bar redrawn for hours, never a newline: bounded all the same.
+    for (let i = 0; i < 400; i++) {
+      records.addOutput("p", "shell", "shell", "\rDownloading 42%".padEnd(16 * 1024, " "));
+      records.addOutput("p", "agent", "claude", "\x1b[H".padEnd(16 * 1024, "x"));
+    }
+    assert.equal(records.output("p", "shell")?.length, 1024 * 1024);
+    assert.equal(records.output("p", "agent")?.length, 64 * 1024);
 
-  it("tries a failed write again by itself, and answers with the text meanwhile", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-context-"));
-    // A directory in the file's place makes the rename fail everywhere, as on win32 while a reader
-    // holds the file without delete sharing.
-    fs.mkdirSync(path.join(dir, "context.md"));
-    const context = new ShellContext(dir, "repo");
-    context.append("tab-1", "done\r\n");
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    assert.match(context.text, /tabs-shell-output/, "what the prompt-submit hook is answered with");
-    fs.rmdirSync(context.contextFile);
-    // No further output: only its own retry writes it.
-    const written = (file: string, pattern: RegExp): boolean =>
-      fs.statSync(file, { throwIfNoEntry: false })?.isFile() === true && pattern.test(fs.readFileSync(file, "utf8"));
-    await eventually("the retried write", () => written(context.contextFile, /tabs-shell-output/), 5000);
-    context.dispose();
-    fs.rmSync(dir, { recursive: true, force: true });
+    const line = "a line\n".repeat(1024);
+    for (let i = 0; i < 300; i++) {
+      records.addOutput("p", "lines", "shell", line);
+    }
+    assert.match(records.output("p", "lines") ?? "", /^a line\n/, "no line cut at the start");
   });
 });
 

@@ -18,6 +18,7 @@ import type {
   RepositoryState,
   TerminalDescriptor
 } from "../../shared/types";
+import { tabControlToken } from "./control-token";
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
@@ -87,8 +88,6 @@ export interface HookToast {
 }
 
 export interface HookOutcome {
-  /** The hook's stdout for the agent; the verb's default otherwise. */
-  stdout?: string;
   /** None where the notification settings say so. */
   toast?: HookToast;
 }
@@ -111,8 +110,6 @@ export interface ControlTerminals {
   write(tabId: string, data: string): void;
   /** Oldest first. */
   events(): ControlEvent[];
-  /** A shell tab's last `count` lines, cleaned of escape sequences and redraws. */
-  shellOutput(tabId: string, count: number): string;
   createTab(agentId: AgentId): TerminalDescriptor;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
@@ -168,6 +165,23 @@ function count(args: Record<string, unknown>, name: string, fallback: number): n
 /** Strips escape sequences; CRLF to LF. */
 function plainText(data: string): string {
   return stripAnsi(data).replace(/\r\n/g, "\n");
+}
+
+/**
+ * A shell's lines as finally shown: each keeps what follows its last bare `\r`, so a progress bar's
+ * redraws leave one line. Over the whole output at once, a redraw split across chunks included;
+ * the `\r` of a `\r\n` not yet complete is no redraw. The open line after a last newline is empty
+ * then, not a line.
+ */
+function shellLines(data: string): string[] {
+  const lines = plainText(data)
+    .replace(/\r$/, "")
+    .split("\n")
+    .map((line) => line.slice(line.lastIndexOf("\r") + 1));
+  if (lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+  return lines;
 }
 
 /** `tabs-wait` default timeout and poll interval. */
@@ -411,11 +425,12 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-shell-output": (args, caller) => {
-      const { tabs, tabId, tab } = knownTab(args, caller);
+      const { tabId, found, tab } = knownTab(args, caller);
       if (tab.agentId !== "shell") {
         throw new ControlError("bad_args", `${tabId} is an agent tab (see tabs-agent-output)`);
       }
-      return { result: { output: tabs.shellOutput(tabId, count(args, "lines", SHELL_OUTPUT_LINES)) } };
+      const lines = shellLines(deps.records.output(found.id, tabId) ?? "");
+      return { result: { output: lines.slice(-count(args, "lines", SHELL_OUTPUT_LINES)).join("\n") } };
     },
 
     "events-tail": (args, caller) => ({
@@ -526,8 +541,8 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       }
       // `{}` rather than nothing: Codex parses its Stop hook's stdout as JSON, and every agent
       // takes JSON on hook channels not appended to the prompt (measured). `prompt-submit`'s
-      // answer is prompt text, so nothing to say there is "".
-      return { result: { stdout: outcome.stdout ?? (event === "prompt-submit" ? "" : "{}") } };
+      // stdout would be appended to the prompt, and TET's system prompt went in at spawn: "".
+      return { result: { stdout: event === "prompt-submit" ? "" : "{}" } };
     }
   };
 }
@@ -543,7 +558,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
  * The server `tet-ctl` talks to: one POST per connection on 127.0.0.1. HTTP, not raw TCP, because
  * a sandbox reaches `host.docker.internal` through sbx's HTTP-only proxy (measured: raw TCP
  * connects but no bytes arrive; curl works). Every request must carry this run's token from
- * main.ts, else `unauthorized`.
+ * main.ts, or its tab's token for the caller ids it names (control-token.ts), else `unauthorized`.
  */
 export async function startControlServer(
   deps: ControlDeps,
@@ -551,9 +566,19 @@ export async function startControlServer(
   port: number
 ): Promise<{ close: () => Promise<void> }> {
   const handlers = verbs(deps);
-  const expected = Buffer.from(token);
 
   const handle = async (request: ControlRequest): Promise<{ response: ControlResponse; after?: () => void }> => {
+    const caller: ControlRequest["caller"] = {
+      projectId: typeof request.caller?.projectId === "string" ? request.caller.projectId : undefined,
+      tabId: typeof request.caller?.tabId === "string" ? request.caller.tabId : undefined
+    };
+    // A caller's ids count only with the token made for them; the run's own token speaks for no
+    // tab, and no terminal has it (control-token.ts).
+    const expected = Buffer.from(
+      caller.projectId === undefined && caller.tabId === undefined
+        ? token
+        : tabControlToken(token, caller.projectId ?? "", caller.tabId ?? "")
+    );
     const given = Buffer.from(typeof request.token === "string" ? request.token : "");
     if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
       return { response: reject("unauthorized", "not a terminal of this TET") };
@@ -571,14 +596,14 @@ export async function startControlServer(
       };
     }
     if (CONTROL_VERBS.some((entry) => entry.verb === request.verb && entry.ownProjectOnly)) {
-      const own = request.caller?.projectId;
+      const own = caller.projectId;
       const asked = request.args?.project;
       if (!own || (typeof asked === "string" && asked !== "" && asked !== own)) {
         return { response: reject("unauthorized", `${request.verb} only answers for a tab of the caller's own project`) };
       }
     }
     try {
-      const answer = await handler(request.args ?? {}, request.caller ?? {}, request.at);
+      const answer = await handler(request.args ?? {}, caller, request.at);
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {
       if (error instanceof ControlError) {

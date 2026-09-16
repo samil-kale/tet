@@ -9,12 +9,13 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
  * stderr on failure, and an exit code to branch on.
  */
 
+/** Each verb's summary on its own indented line: padding every usage to the longest one (tabs-wait)
+ *  cost an agent reading this some 140 spaces a line. */
 function usage(): string {
-  const width = Math.max(...CONTROL_VERBS.map((entry) => entry.usage.length));
   return [
     "tet-ctl — control the TET app this terminal runs in",
     "",
-    ...CONTROL_VERBS.map((entry) => `  ${entry.usage.padEnd(width)}  ${entry.summary}`),
+    ...CONTROL_VERBS.flatMap((entry) => [`  ${entry.usage}`, `      ${entry.summary}`]),
     "",
     "Without --project, a verb acts on the project of the tab it is run from."
   ].join("\n");

@@ -88,7 +88,13 @@ function startTet(): void {
 }
 
 async function version(): Promise<{ version: string; pid: number } | undefined> {
-  const answer = await tetCtl(["version"], { [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: TOKEN });
+  // No caller ids, which a run from a TET tab inherits: the run's token speaks for no tab.
+  const answer = await tetCtl(["version"], {
+    [CONTROL_ENV.port]: String(port),
+    [CONTROL_ENV.token]: TOKEN,
+    [CONTROL_ENV.projectId]: undefined,
+    [CONTROL_ENV.tabId]: undefined
+  });
   return answer.status === 0 ? (answer.result as { version: string; pid: number }) : undefined;
 }
 

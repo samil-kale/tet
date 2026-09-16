@@ -3,6 +3,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
+import { CONTROL_ENV } from "../../shared/control";
+import { tabControlToken } from "../control/control-token";
 
 export interface SpawnOptions {
   cwd: string;
@@ -104,7 +106,8 @@ export function killProcessTree(child: ChildProcess): void {
 }
 
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), then
- *  tet's own (controlEnv, options.own), then a saved command's envOverride. Testable without a pty. */
+ *  tet's own (controlEnv, options.own) with the tab's own control token in place of the run's
+ *  (control-token.ts), then a saved command's envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own">): Record<string, string> {
   const env: Record<string, string> = {
     ...options.env,
@@ -112,6 +115,10 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     ...controlEnv,
     ...options.own
   };
+  const runToken = controlEnv[CONTROL_ENV.token];
+  if (runToken) {
+    env[CONTROL_ENV.token] = tabControlToken(runToken, env[CONTROL_ENV.projectId] ?? "", env[CONTROL_ENV.tabId] ?? "");
+  }
   if (launcherDir) {
     const key = pathKey(env);
     env[key] = env[key] ? `${launcherDir}${path.delimiter}${env[key]}` : launcherDir;

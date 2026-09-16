@@ -22,6 +22,7 @@ export const CONTROL_ENV = {
 export type ControlErrorCode = "unauthorized" | "unknown_verb" | "bad_args" | "not_found" | "internal" | "timeout";
 
 export interface ControlRequest {
+  /** The caller's tab's token (src/main/control/control-token.ts); the run's own without a caller. */
   token: string;
   verb: string;
   args: Record<string, unknown>;
@@ -193,7 +194,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "tabs-shell-output",
     usage: "tabs-shell-output <tab-id> [--lines <n>]",
     summary:
-      "The last n lines a shell tab printed (100, at most 10000), escape sequences and redraws taken out. Only a tab of the caller's own project.",
+      "The last n lines a shell tab printed (100, back as far as its last MB), escape sequences and redraws taken out. Only a tab of the caller's own project.",
     positionals: ["tabId"],
     ownProjectOnly: true
   },

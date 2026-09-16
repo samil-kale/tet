@@ -76,8 +76,6 @@ export interface SessionProvider {
 export interface AgentPaths {
   /** This agent's scratch directory for this repository, already created. */
   agentDir: string;
-  /** The repository's context file, kept current by tet; the agent only makes it reach the model. */
-  contextFile: string;
   /** TET's data folder (`~/.tet`, data-root.ts), for anything installed machine-wide. */
   storageRoot: string;
   /**
@@ -158,10 +156,10 @@ export interface AgentDefinition {
    */
   questionOutlivesTurn?: boolean;
   /**
-   * Setup before any session spawns: hooks, settings, plugins, and how the context file reaches
-   * the model — the only place an agent may write anything. A rejection marks the agent
-   * unstartable, so reject only for what truly makes it unusable; a failed optional write (an
-   * extension, a theme file) is swallowed.
+   * Setup before any session spawns: hooks, settings, plugins, and how TET's system prompt
+   * (system-prompt.ts) reaches the model — the only place an agent may write anything. A rejection
+   * marks the agent unstartable, so reject only for what truly makes it unusable; a failed optional
+   * write (an extension, a theme file) is swallowed.
    */
   prepareSpawn?: (executable: string, cwd: string, paths: AgentPaths) => Promise<SpawnPreparation>;
   /**
