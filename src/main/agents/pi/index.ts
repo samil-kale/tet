@@ -1,4 +1,7 @@
-import { sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { SANDBOX_HOME, sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
@@ -18,8 +21,8 @@ const SYSTEM_PROMPT_ARGS = ["--append-system-prompt", TET_SYSTEM_PROMPT];
  * Deliberately unset: `PI_CODING_AGENT_DIR` (would move the user's sessions and auth) and
  * `PI_OFFLINE`.
  *
- * Sandboxed through a community kit — see sbx.ts's SBX_CREATE_TARGET (pi has no `/login`; its
- * Anthropic credential comes from sbx's store).
+ * Sandboxed through a community kit — see `sandboxKit` (pi has no `/login`; its Anthropic credential
+ * comes from sbx's store).
  */
 export const piAgent: AgentDefinition = {
   id: "pi",
@@ -62,6 +65,33 @@ export const piAgent: AgentDefinition = {
       return { args: ["--use-theme", paths.theme.kind, "-a", ...SYSTEM_PROMPT_ARGS] };
     }
   },
+  // Per pi's bundled docs (0.85.1): skills in `~/.pi/agent/skills` and `~/.agents/skills`,
+  // extensions in `~/.pi/agent/extensions`, `~/.pi/agent/AGENTS.md` (`AGENTS.override.md`
+  // preferred) — at their defaults, as `PI_CODING_AGENT_DIR` is never set.
+  sandboxKnowledge: () => {
+    const home = os.homedir();
+    const instructionsHost = [path.join(home, ".pi", "agent", "AGENTS.override.md"), path.join(home, ".pi", "agent", "AGENTS.md")].find((file) => fs.existsSync(file));
+    return {
+      skills: [
+        { host: path.join(home, ".pi", "agent", "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` },
+        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
+      ],
+      plugins: [{ host: path.join(home, ".pi", "agent", "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
+      instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : []
+    };
+  },
+  // pi has no built-in kit (not in `sbx create --help` at 0.42.1), so it is the community kit
+  // (docker/sbx-kits-contrib), whose image (shell-docker plus pi, rebuilt nightly) sbx pulls on the
+  // first create — nothing installed here; home is `/home/agent` like every built-in.
+  //
+  // Verified live, 2026-09-09, sbx 0.42.1 (0.39.0 cannot read the kit's v2 manifest):
+  // - it is the *first positional*; `--kit` is deprecated there and means a mixin onto a built-in.
+  // - only `create` needs it: `sbx run` reattaches by `--name`, and `prepareSbxRun` passes plain
+  //   `pi`, the name the kit declares (and `sbx ls --json`'s `agent`).
+  // - auth is not tet's: pi has no `/login`, so its kit takes an Anthropic credential from sbx's
+  //   store (`sbx secret set anthropic`, a `claude` sandbox's OAuth login, or `claude setup-token`).
+  //   Without one the sandbox starts and every model call is a 401.
+  sandboxKit: "docker.io/sbx/pi-kit:latest",
   // Measured startup: ~130 B handshake by 120 ms, a 1037 B chunk at ~680 ms, ~3 KB by 0.9 s. The
   // project-trust dialog (`defaultProjectTrust: "ask"`) holds output at 1458 B until answered, so
   // 1000 clears the handshake either way without spinning until then.

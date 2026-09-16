@@ -1,5 +1,7 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
-import { HOST_TARGET, SANDBOX_TARGET } from "../../terminals/hook-target";
+import { HOST_TARGET, SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createNonAsciiThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
@@ -81,6 +83,26 @@ export const opencodeAgent: AgentDefinition = {
       console.error("[tet] could not write opencode's sandbox plugin:", error);
       return { args: [] };
     }
+  },
+  // Documented, not verified: skills in `~/.config/opencode/skills`, `~/.claude/skills`,
+  // `~/.agents/skills`; `~/.config/opencode/plugins`; rules `~/.config/opencode/AGENTS.md`, else
+  // `~/.claude/CLAUDE.md`. Its config directory (the user's providers in `opencode.json`) stays out;
+  // auth is under `~/.local/share/opencode`.
+  sandboxKnowledge: () => {
+    const home = os.homedir();
+    const rules = [
+      { host: path.join(home, ".config", "opencode", "AGENTS.md"), target: `${SANDBOX_HOME}/.config/opencode/AGENTS.md` },
+      { host: path.join(home, ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }
+    ].find((entry) => fs.existsSync(entry.host));
+    return {
+      skills: [
+        { host: path.join(home, ".config", "opencode", "skills"), target: `${SANDBOX_HOME}/.config/opencode/skills` },
+        { host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` },
+        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
+      ],
+      plugins: [{ host: path.join(home, ".config", "opencode", "plugins"), target: `${SANDBOX_HOME}/.config/opencode/plugins` }],
+      instructions: rules ? [rules] : []
+    };
   },
   // A raw byte count fires on blank repaints while opencode fetches its model list (measured,
   // 1.18.4). 20 is below the 164 non-ASCII bytes of the real frame and above blank repaints' 0.

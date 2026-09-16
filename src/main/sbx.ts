@@ -7,6 +7,7 @@ import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
 import type { SbxAgentId, SbxBlocker, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStatus } from "../shared/types";
+import { getAgent } from "./agents";
 import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { mapLimited } from "./map-limited";
@@ -14,7 +15,7 @@ import { relativeInside } from "./path-inside";
 import { isMountAllowed, parseFilesystemRules } from "./sbx-policy";
 import { agentDataDir, agentDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
-import { SANDBOX_HOME, toContainerPath } from "./terminals/hook-target";
+import { toContainerPath } from "./terminals/hook-target";
 import { resolveCommand } from "./terminals/pty";
 import { checkAgentInstalled } from "./terminals/terminal-session";
 
@@ -415,77 +416,11 @@ export type SandboxPaths = Pick<AgentPaths, "agentDir">;
  *
  * Never the agent's config directory (`~/.claude`, `~/.codex`): pointed at by `CLAUDE_CONFIG_DIR`/
  * `CODEX_HOME`, the sandboxed CLI is signed in as the host (measured), and a `/login` inside would
- * replace the host's. Knowledge (knowledgePaths) and sessions (sessionMountSpecs) are curated
- * subpaths, never the directory holding credentials.
+ * replace the host's. Knowledge (AgentDefinition.sandboxKnowledge) and sessions (sessionMountSpecs)
+ * are curated subpaths, never the directory holding credentials.
  */
 export function fixedMountSpecs(paths: SandboxPaths): string[] {
   return [pathMountSpecs({ path: paths.agentDir, access: "rw" }).mount];
-}
-
-interface KnowledgeEntry {
-  host: string;
-  target: string;
-}
-
-/**
- * The agent's shareable knowledge on the host, per `SbxKnowledgeConfig` kind — never the config
- * directory (fixedMountSpecs). The caller drops paths that do not exist.
- *
- * Claude (measured): `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/CLAUDE.md`. Codex
- * (measured): skills in `~/.codex/skills` and `~/.agents/skills` (its "failed to load skill" log
- * names both); all of `~/.codex/plugins` (code under `plugins/cache/…`); `~/.codex/AGENTS.md`,
- * `AGENTS.override.md` preferred per its load order. opencode (documented, not verified): skills in
- * `~/.config/opencode/skills`, `~/.claude/skills`, `~/.agents/skills`; `~/.config/opencode/plugins`;
- * rules `~/.config/opencode/AGENTS.md`, else `~/.claude/CLAUDE.md`. Its config directory (the
- * user's providers in `opencode.json`) stays out; auth is under `~/.local/share/opencode`.
- */
-function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, KnowledgeEntry[]> {
-  const home = os.homedir();
-  if (agentId === "pi") {
-    // Per pi's bundled docs (0.85.1): skills in `~/.pi/agent/skills` and `~/.agents/skills`,
-    // extensions in `~/.pi/agent/extensions`, `~/.pi/agent/AGENTS.md` (`AGENTS.override.md`
-    // preferred) — at their defaults, as `PI_CODING_AGENT_DIR` is never set.
-    const instructionsHost = [path.join(home, ".pi", "agent", "AGENTS.override.md"), path.join(home, ".pi", "agent", "AGENTS.md")].find(statOf);
-    return {
-      skills: [
-        { host: path.join(home, ".pi", "agent", "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` },
-        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
-      ],
-      plugins: [{ host: path.join(home, ".pi", "agent", "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
-      instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : []
-    };
-  }
-  if (agentId === "claude") {
-    return {
-      skills: [{ host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
-      plugins: [{ host: path.join(home, ".claude", "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
-      instructions: [{ host: path.join(home, ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }]
-    };
-  }
-  if (agentId === "opencode") {
-    const rules = [
-      { host: path.join(home, ".config", "opencode", "AGENTS.md"), target: `${SANDBOX_HOME}/.config/opencode/AGENTS.md` },
-      { host: path.join(home, ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }
-    ].find((entry) => statOf(entry.host));
-    return {
-      skills: [
-        { host: path.join(home, ".config", "opencode", "skills"), target: `${SANDBOX_HOME}/.config/opencode/skills` },
-        { host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` },
-        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
-      ],
-      plugins: [{ host: path.join(home, ".config", "opencode", "plugins"), target: `${SANDBOX_HOME}/.config/opencode/plugins` }],
-      instructions: rules ? [rules] : []
-    };
-  }
-  const instructionsHost = [path.join(home, ".codex", "AGENTS.override.md"), path.join(home, ".codex", "AGENTS.md")].find(statOf);
-  return {
-    skills: [
-      { host: path.join(home, ".codex", "skills"), target: `${SANDBOX_HOME}/.codex/skills` },
-      { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
-    ],
-    plugins: [{ host: path.join(home, ".codex", "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
-    instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
-  };
 }
 
 /**
@@ -493,14 +428,14 @@ function knowledgePaths(agentId: SbxAgentId): Record<keyof SbxKnowledgeConfig, K
  * symlink: sbx cannot follow one out of its workspace. Folders and files both work (measured).
  */
 function knowledgeMountSpecs(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig): MountSpec[] {
-  const paths = knowledgePaths(agentId);
+  const paths = getAgent(agentId).sandboxKnowledge?.();
   return (Object.keys(knowledge) as (keyof SbxKnowledgeConfig)[]).flatMap((kind) => {
     const access = knowledge[kind];
     if (!access) {
       return [];
     }
     const suffix = access === "ro" ? ":ro" : "";
-    return paths[kind]
+    return (paths?.[kind] ?? [])
       .filter((entry) => statOf(entry.host))
       .map((entry) => ({ mount: `${entry.host}:${entry.target}${suffix}`, unmount: `${entry.host}:${entry.target}` }));
   });
@@ -620,22 +555,6 @@ export async function ensureRunning(name: string, onData?: OnData): Promise<bool
 }
 
 /**
- * `sbx create`'s agent argument where it is not the agent id: pi has no built-in kit (not in
- * `sbx create --help` at 0.42.1), so it is the community kit `docker.io/sbx/pi-kit`
- * (docker/sbx-kits-contrib), whose image (shell-docker plus pi, rebuilt nightly) sbx pulls on the
- * first create — nothing installed here; home is `/home/agent` like every built-in.
- *
- * Verified live, 2026-09-09, sbx 0.42.1 (0.39.0 cannot read the kit's v2 manifest):
- * - it is the *first positional*; `--kit` is deprecated there and means a mixin onto a built-in.
- * - only `create` needs it: `sbx run` reattaches by `--name`, and `prepareSbxRun` passes plain
- *   `pi`, the name the kit declares (and `sbx ls --json`'s `agent`).
- * - auth is not tet's: pi has no `/login`, so its kit takes an Anthropic credential from sbx's
- *   store (`sbx secret set anthropic`, a `claude` sandbox's OAuth login, or `claude setup-token`).
- *   Without one the sandbox starts and every model call is a 401.
- */
-const SBX_CREATE_TARGET: Partial<Record<SbxAgentId, string>> = { pi: "docker.io/sbx/pi-kit:latest" };
-
-/**
  * Ensures a sandbox whose one workspace is this project — all else is mounted live, so this is
  * all `sbx create` is told. A different workspace means a rebuild: an older tet's sandbox with
  * create-time fixed paths, or a project whose path moved under the same id (`sandboxName` hashes
@@ -672,7 +591,7 @@ function ensureSandboxExists(
       if (existing !== undefined) {
         await removeSandbox(name, onData);
       }
-      const created = await runSbx(["create", SBX_CREATE_TARGET[agentId] ?? agentId, projectPath, "--name", name], { onData });
+      const created = await runSbx(["create", getAgent(agentId).sandboxKit ?? agentId, projectPath, "--name", name], { onData });
       if (!created.ok) {
         throw new Error(`sbx could not create the ${agentId} sandbox`);
       }
@@ -905,7 +824,7 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged (verified, 2026-09-08: "sandbox 'x'
   // already exists and can't be given new workspaces"). The agent positional is only verified by
-  // sbx; `--name` finds the sandbox. The plain agent id even for a kit (SBX_CREATE_TARGET).
+  // sbx; `--name` finds the sandbox. The plain agent id even for a kit (AgentDefinition.sandboxKit).
   const args = [
     "run",
     agentId,

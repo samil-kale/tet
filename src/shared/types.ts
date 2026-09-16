@@ -73,7 +73,7 @@ export type PromptId = "commitMessage";
 export type PromptSettings = Record<PromptId, string>;
 
 /** Agents that run in an sbx sandbox: three with Docker's built-in kit, pi through a community kit
- *  (sbx.ts's `SBX_CREATE_TARGET`). Not the shell. */
+ *  (`AgentDefinition.sandboxKit`). Not the shell. */
 export type SbxAgentId = "claude" | "codex" | "opencode" | "pi";
 
 export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex", "opencode", "pi"];
@@ -98,7 +98,7 @@ export interface SbxPath {
 }
 
 /** Which non-identity host knowledge to mount into the sandbox, with which access; `false` is off.
- *  Agent-agnostic — the paths per agent are sbx.ts's knowledgePaths. */
+ *  Agent-agnostic — the paths per agent are `AgentDefinition.sandboxKnowledge`. */
 export interface SbxKnowledgeConfig {
   skills: SbxAccess | false;
   plugins: SbxAccess | false;

@@ -1,5 +1,5 @@
 import type { ThemeDefinition } from "../../shared/themes";
-import type { AgentId } from "../../shared/types";
+import type { AgentId, SbxKnowledgeConfig } from "../../shared/types";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid; opencode: "ses_..."). */
@@ -102,6 +102,13 @@ export interface SpawnPreparation {
   executable?: string;
 }
 
+/** One piece of the agent's host knowledge, and where the sandboxed CLI reads it. */
+export interface SandboxKnowledgeEntry {
+  host: string;
+  /** Absolute container path, under `SANDBOX_HOME`. */
+  target: string;
+}
+
 /** What an agent hands a sandboxed tab — see AgentDefinition.prepareSandboxSpawn. */
 export interface SandboxPreparation {
   /** Appended after `sbx run`'s own "--". */
@@ -180,6 +187,16 @@ export interface AgentDefinition {
    * forces fullscreen (code.claude.com/docs/en/fullscreen).
    */
   sandboxEnv?: string[];
+  /**
+   * The agent's shareable knowledge on the host, per `SbxKnowledgeConfig` kind — never its config
+   * directory (sbx.ts's fixedMountSpecs). sbx.ts drops paths that do not exist. Omitted by the shell.
+   */
+  sandboxKnowledge?: () => Record<keyof SbxKnowledgeConfig, SandboxKnowledgeEntry[]>;
+  /**
+   * `sbx create`'s agent argument where it is not the agent id: a kit sbx does not ship. Only
+   * `create` takes it; `sbx run` reattaches by `--name` with the plain id. Omitted for a built-in kit.
+   */
+  sandboxKit?: string;
   /**
    * Completes a url the TUI wrapped across rows, from the agent's own record — in the buffer such
    * a row looks like one ending in a url (opencode breaks a long token at the last "." that fits).

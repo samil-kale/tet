@@ -9,7 +9,7 @@ const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
 ];
 
 /** One row per `SbxKnowledgeConfig` kind, in display order. Labels only; the per-agent host paths
- *  are sbx.ts's `knowledgePaths`. */
+ *  are `AgentDefinition.sandboxKnowledge`. */
 const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
   { kind: "skills", label: "Skills" },
   { kind: "plugins", label: "Plugins" },
@@ -20,7 +20,7 @@ const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
 type Row<T> = T & { id: string };
 
 export interface FieldsState {
-  /** tet.json's `knowledge`; what each kind mounts is sbx.ts's knowledgePaths. */
+  /** tet.json's `knowledge`; what each kind mounts is `AgentDefinition.sandboxKnowledge`. */
   knowledge: SbxKnowledgeConfig;
   ports: Row<SbxPort>[];
   paths: Row<SbxPath>[];

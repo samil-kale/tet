@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
-import { SANDBOX_TARGET } from "../../terminals/hook-target";
+import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";
@@ -61,6 +62,21 @@ export const codexAgent: AgentDefinition = {
       console.error("[tet] could not set up Codex sandbox hooks:", error);
       return { args: [] };
     }
+  },
+  // Measured: skills in `~/.codex/skills` and `~/.agents/skills` (its "failed to load skill" log
+  // names both); all of `~/.codex/plugins` (code under `plugins/cache/…`); `~/.codex/AGENTS.md`,
+  // `AGENTS.override.md` preferred per its load order.
+  sandboxKnowledge: () => {
+    const home = os.homedir();
+    const instructionsHost = [path.join(home, ".codex", "AGENTS.override.md"), path.join(home, ".codex", "AGENTS.md")].find((file) => fs.existsSync(file));
+    return {
+      skills: [
+        { host: path.join(home, ".codex", "skills"), target: `${SANDBOX_HOME}/.codex/skills` },
+        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
+      ],
+      plugins: [{ host: path.join(home, ".codex", "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
+      instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
+    };
   },
   // Observed: setup and onboarding total a few hundred bytes before the first real redraw, one
   // ~700-900 byte chunk. Unverified for a logged-in start, which may draw less.
