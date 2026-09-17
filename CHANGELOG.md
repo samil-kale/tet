@@ -3,6 +3,35 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.9 (2026-09-17)
+
+- **Several editor tabs.** Files open in a preview tab that the next file replaces, as in VS Code;
+  an edit, "Keep Open" or a double-click in the Explorer keeps it, and the next file gets a tab of
+  its own.
+- **The git pane works like GitHub Desktop.** Fetch and pull move local branches that are only
+  behind their upstream, pull no longer refuses a diverged branch, push goes to the branch's own
+  upstream, and deleting the checked-out branch switches to the default branch first. Remote
+  branches can be deleted from their row, rebasing commits already pushed asks first, and stash
+  actions hit the right stash even after one was made in a terminal.
+- **Discard keeps a way back.** Every discarded file goes to the trash first; when the trash
+  fails, tet asks before deleting permanently. Conflicted files and files removed with
+  `git rm --cached` are discarded correctly.
+- **Safer ctrl-click.** Links in terminal output open only web and mail addresses, and an executable
+  file is shown in its folder instead of being run.
+- **Worktrees and submodules refresh.** A commit or checkout in a linked worktree or submodule
+  now updates the git pane, and changes to lockfiles like `yarn.lock` are no longer missed.
+- **Agents know about `tet-ctl`.** Every agent learns of `tet-ctl` through its system prompt, and
+  `tabs-output` reads what any tab of the same project printed, agent or shell.
+- **Sandboxes stay in their project.** `tet-ctl` from a sandboxed tab sees only its own project
+  and cannot open tabs that would run on the host.
+- **Clearer SBX settings.** The dialog names the organization governing the SBX policy, marks
+  allowed paths the policy would refuse, and reports a failing sbx daemon instead of asking you to
+  sign in.
+- **Fixes.** AltGr combinations no longer trigger tab shortcuts, saving Settings no longer
+  overwrites a setting `tet-ctl` changed meanwhile, a tab opened while its agent was missing starts
+  once the agent is installed, and clones with a provider account work where the temp folder is
+  `noexec`.
+
 ## 0.8.8 (2026-09-16)
 
 - **Sandboxed tabs open faster.** The checks a sandboxed tab makes before it starts now run at
