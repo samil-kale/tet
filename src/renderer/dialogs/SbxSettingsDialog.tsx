@@ -16,8 +16,8 @@ type Phase =
   | { kind: "not-installed" }
   | { kind: "signing-in" }
   | { kind: "initializing-policy" }
-  | { kind: "ready"; governed: boolean }
-  | { kind: "blocked"; governed: boolean; blockers: SbxBlocker[] }
+  | { kind: "ready"; organization?: string }
+  | { kind: "blocked"; organization?: string; blockers: SbxBlocker[] }
   | { kind: "failed"; message: string };
 
 type SbxSettingsTab = "general" | keyof FieldsState;
@@ -96,14 +96,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       status = await window.tet.sbx.status(project.id);
     }
     if (status.blockers.length > 0) {
-      setPhase({ kind: "blocked", governed: status.governed, blockers: status.blockers });
+      setPhase({ kind: "blocked", organization: status.organization, blockers: status.blockers });
       return;
     }
     // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
     const config = await window.tet.sbx.getConfig(project.id);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
-    setPhase({ kind: "ready", governed: status.governed });
+    setPhase({ kind: "ready", organization: status.organization });
   };
 
   useEffect(() => {
@@ -125,8 +125,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   };
 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
-  // Knowledge from this machine is meaningless where no agent is installed.
-  const tabs = useMemo(() => (locked ? TABS.filter((entry) => entry.id !== "knowledge") : TABS), [locked]);
+  const organization = phase.kind === "ready" ? phase.organization : undefined;
+  // Knowledge from this machine is meaningless where no agent is installed; under an
+  // organization's governance a local host rule is inactive (sbx.ts's readSandboxHosts).
+  const tabs = useMemo(
+    () => TABS.filter((entry) => !(locked && entry.id === "knowledge") && !(organization && entry.id === "hosts")),
+    [locked, organization]
+  );
 
   return (
     <DialogFrame
@@ -165,7 +170,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       {phase.kind === "blocked" && (
         <>
           <p className="dialog-message">
-            {phase.governed ? "Your organization's SBX policy" : "SBX's policy"} has to allow these
+            {phase.organization ? "Your organization's SBX policy" : "SBX's policy"} has to allow these
             before tet can sandbox {project.name}:
           </p>
           <div className="requirement-list">
@@ -176,7 +181,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               </div>
             ))}
           </div>
-          {phase.governed && (
+          {phase.organization && (
             <p className="dialog-detail">Only your organization can add these rules. Check again once it has.</p>
           )}
         </>
@@ -203,15 +208,20 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         <div className="sbx-governance">
           <strong>Organization governance</strong>
           <p className="dialog-detail">
-            {phase.governed
-              ? "Active: your organization manages SBX's policy, so only it can change what sandboxes may reach."
-              : "Not active: SBX's policy is managed on this machine."}
+            {phase.organization ? (
+              <>
+                Active: SBX's policy is managed by <strong>{phase.organization}</strong>, so only it can allow hosts
+                for sandboxes.
+              </>
+            ) : (
+              "Not active: SBX's policy is managed on this machine."
+            )}
           </p>
         </div>
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <div className="sbx-settings-pane">
-          <SbxSettingsFields section={tab} state={state} setState={setState} />
+          <SbxSettingsFields section={tab} state={state} setState={setState} governed={organization !== undefined} />
         </div>
       )}
     </DialogFrame>

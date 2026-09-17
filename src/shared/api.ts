@@ -21,6 +21,7 @@ import type {
   ProviderId,
   RepositoryState,
   Requirements,
+  SbxPath,
   SbxProjectConfig,
   SbxStatus,
   StashCommand,
@@ -67,6 +68,8 @@ export interface TETApi {
     getConfig(projectId: string): Promise<SbxProjectConfig>;
     /** Writes tet.json; a sandbox whose folders changed is removed. */
     saveConfig(projectId: string, request: SbxProjectConfig): Promise<GitActionResult>;
+    /** Per entry, whether sbx's filesystem policy lets it be mounted with its access. */
+    mountsAllowed(paths: SbxPath[]): Promise<boolean[]>;
   };
   /** One set for the whole app. */
   settings: {

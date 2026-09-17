@@ -12,6 +12,16 @@
 
 export type FilesystemAction = "read" | "write";
 
+/**
+ * The organization in `sbx policy ls`'s first line on a governed account: "Governance: Managed by
+ * prehcmservice | Sync: OK, last synced 08:18:18 | Hidden: 34 inactive rules. …" (measured,
+ * 0.42.1). An ungoverned account has no such line. sbx words a failed lookup "managed by unknown
+ * organization (lookup failed)", which is shown as it stands.
+ */
+export function parseGovernance(policyList: string): string | undefined {
+  return /^Governance:\s*Managed by\s+([^|\r\n]+?)\s*(?:\||$)/im.exec(policyList)?.[1];
+}
+
 export interface FilesystemRule {
   actions: FilesystemAction[];
   decision: "allow" | "deny";

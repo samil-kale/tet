@@ -26,6 +26,7 @@ import type {
   ProjectCommand,
   RepositoryState,
   Requirements,
+  SbxPath,
   SbxProjectConfig,
   SbxStatus,
   StashCommand,
@@ -35,6 +36,7 @@ import {
   cancelSbxSetup,
   initSbxPolicy,
   readLiveSbxConfig,
+  readMountsAllowed,
   readSbxStatus,
   runSbxLogin,
   saveSbxConfig
@@ -164,6 +166,9 @@ export function registerIpc({
   ipcMain.handle("sbx:login", () => runSbxLogin());
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
+
+  // The Allowed paths rows' marks; asked fresh, as the policy changes outside tet.
+  ipcMain.handle("sbx:mounts-allowed", (_event, paths: SbxPath[]): Promise<boolean[]> => readMountsAllowed(paths));
 
   // Read fresh; the hosts from the sandboxes themselves (sbx.ts's readLiveSbxConfig).
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {

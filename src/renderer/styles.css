@@ -1552,6 +1552,13 @@ textarea:focus {
   font-family: var(--vscode-editor-font-family);
 }
 
+/* A path sbx's policy would refuse: the error mark's colour, as .session-mark-error. */
+.sbx-path-denied {
+  display: flex;
+  flex: none;
+  color: var(--vscode-errorForeground);
+}
+
 /* The dropdown button is shorter than an input; pinned to 26px so every row reads level. */
 .sbx-path-row .dropdown-trigger,
 .sbx-knowledge-row .dropdown-trigger {
@@ -1561,6 +1568,11 @@ textarea:focus {
 .sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail,
 .sbx-governance .dialog-detail {
   margin-top: 3px;
+}
+
+/* Twice the body's gap, so it reads as its own section below the checkbox. */
+.sbx-governance {
+  margin-top: 8px;
 }
 
 /* Stable across tabs with different amounts of content, capped to the window. */

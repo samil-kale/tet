@@ -31,7 +31,8 @@ const api: TETApi = {
     initPolicy: () => ipcRenderer.invoke("sbx:init-policy"),
     cancelSetup: () => ipcRenderer.send("sbx:cancel-setup"),
     getConfig: (projectId) => ipcRenderer.invoke("sbx:get-config", projectId),
-    saveConfig: (projectId, request) => ipcRenderer.invoke("sbx:save-config", projectId, request)
+    saveConfig: (projectId, request) => ipcRenderer.invoke("sbx:save-config", projectId, request),
+    mountsAllowed: (paths) => ipcRenderer.invoke("sbx:mounts-allowed", paths)
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

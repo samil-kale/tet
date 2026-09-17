@@ -136,8 +136,9 @@ export interface SbxStatus {
    *  with `loggedIn` false; signing in would not help. */
   failure?: string;
   policyInitialized: boolean;
-  /** An organization manages the account's policies; local rules do not apply. */
-  governed: boolean;
+  /** The organization managing the account's policies, when one does; local allow rules then do
+   *  not apply. */
+  organization?: string;
   /** Shown instead of the dialog's fields while non-empty. */
   blockers: SbxBlocker[];
 }

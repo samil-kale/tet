@@ -19,7 +19,7 @@ import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/shared/script-text";
 import { ProjectStore } from "../src/main/projects";
 import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
-import { isMountAllowed, parseFilesystemRules } from "../src/main/sbx-policy";
+import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
@@ -273,6 +273,21 @@ describe("sbx's filesystem policy", () => {
     assert.ok(isMountAllowed(denied, "/data/open", "rw", posix));
     assert.ok(!isMountAllowed(denied, "/data/secret/x", "ro", posix));
     assert.ok(!isMountAllowed(denied, "/data/secret/x", "rw", posix), "a read deny stops a writable mount too");
+  });
+});
+
+describe("sbx's governance line", () => {
+  it("names the organization of a governed account, nothing for an ungoverned one", () => {
+    // `sbx policy ls` on an organization-governed account, sbx 0.42.1 (2026-09-17).
+    const governed = [
+      "Governance: Managed by prehcmservice | Sync: OK, last synced 08:18:18 | Hidden: 34 inactive rules. Show with: sbx policy ls --include-inactive",
+      "",
+      "POLICY      SOURCE   APPLIES TO   SUMMARY",
+      "ALLOW ALL   org      all          filesystem write: 2 allow"
+    ].join("\r\n");
+    assert.equal(parseGovernance(governed), "prehcmservice");
+    assert.equal(parseGovernance("Governance: managed by unknown organization (lookup failed)"), "unknown organization (lookup failed)");
+    assert.equal(parseGovernance("POLICY    SOURCE   APPLIES TO   SUMMARY\nbalanced  local    all          network: 40 allow"), undefined);
   });
 });
 

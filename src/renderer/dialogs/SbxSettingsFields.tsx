@@ -1,6 +1,6 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
-import { CloseIcon } from "../ui/icons";
+import { CloseIcon, ExclamationIcon } from "../ui/icons";
 import { Dropdown } from "../ui/Dropdown";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
@@ -59,11 +59,33 @@ interface SbxSettingsFieldsProps {
   state: FieldsState;
   setState: Dispatch<SetStateAction<FieldsState>>;
   section: keyof FieldsState;
+  /** An organization manages sbx's policy; only words the Allowed paths marks. */
+  governed: boolean;
 }
 
 /** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
  *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({ state, setState, section, governed }: SbxSettingsFieldsProps) {
+  /** Row ids of Allowed paths sbx's policy would refuse to mount (sbx.ts's readMountsAllowed). */
+  const [denied, setDenied] = useState<ReadonlySet<string>>(() => new Set());
+  // Only a changed path or access asks again; an answer overtaken by an edit is dropped.
+  const pathsKey = JSON.stringify(state.paths.map(({ id, path, access }) => [id, path, access]));
+  useEffect(() => {
+    if (section !== "paths" || state.paths.length === 0) {
+      return;
+    }
+    const rows = state.paths;
+    let current = true;
+    void window.tet.sbx.mountsAllowed(rows.map(({ path, access }) => ({ path, access }))).then((allowed) => {
+      if (current) {
+        setDenied(new Set(rows.filter((_row, index) => !allowed[index]).map((row) => row.id)));
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [section, pathsKey]);
+
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -169,6 +191,14 @@ export function SbxSettingsFields({ state, setState, section }: SbxSettingsField
               <span className="sbx-path-value" title={row.path}>
                 {row.path}
               </span>
+              {denied.has(row.id) && (
+                <span
+                  className="sbx-path-denied"
+                  title={`${governed ? "Your organization's SBX policy" : "SBX's policy"} does not allow mounting this path${row.access === "rw" ? " with write access" : ""}`}
+                >
+                  <ExclamationIcon />
+                </span>
+              )}
               <Dropdown
                 value={row.access}
                 options={ACCESS_OPTIONS}

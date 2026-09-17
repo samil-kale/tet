@@ -12,7 +12,7 @@ import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
 import { mapLimited } from "./map-limited";
 import { relativeInside } from "./path-inside";
-import { isMountAllowed, parseFilesystemRules } from "./sbx-policy";
+import { isMountAllowed, parseFilesystemRules, parseGovernance, type PathFlavor } from "./sbx-policy";
 import { agentDataDir, agentDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/hook-target";
@@ -201,7 +201,7 @@ export async function checkSbxReady(projectPath: string, projectId: string): Pro
   }
   const blockers = await readSbxBlockers(projectPath, projectId);
   if (blockers.length > 0) {
-    const policy = status.governed ? "your organization's SBX policy" : "SBX's policy";
+    const policy = status.organization ? "your organization's SBX policy" : "SBX's policy";
     return { notReady: `${policy} does not allow ${blockers.map((blocker) => blocker.allow).join("; ")}` };
   }
   return { sandboxes };
@@ -246,8 +246,7 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
     blockers.push({ what: "tet's hooks", allow: "localhost (network, no port)" });
   }
   const rules = parseFilesystemRules(filesystem.stdout);
-  const flavor = { platform: process.platform, home: os.homedir() };
-  const mountable = (hostPath: string, access: "ro" | "rw") => isMountAllowed(rules, hostPath, access, flavor);
+  const mountable = (hostPath: string, access: "ro" | "rw") => isMountAllowed(rules, hostPath, access, hostFlavor());
   if (!mountable(projectPath, "rw")) {
     blockers.push({ what: "The project", allow: `${folderRule(projectPath)} (read and write)` });
   }
@@ -259,6 +258,20 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
     }
   }
   return blockers;
+}
+
+/** This machine's paths, as sbx-policy.ts compares them. */
+function hostFlavor(): PathFlavor {
+  return { platform: process.platform, home: os.homedir() };
+}
+
+/**
+ * For the dialog's Allowed paths: whether each row may be mounted with its access, from one
+ * `sbx policy ls`. Only marks a row — a refused grant is best-effort at spawn (prepareSbxRun).
+ */
+export async function readMountsAllowed(paths: SbxPath[]): Promise<boolean[]> {
+  const rules = parseFilesystemRules((await runSbx(["policy", "ls", "--type", "filesystem", "--json"])).stdout);
+  return paths.map((entry) => isMountAllowed(rules, normalizeHostPath(entry.path), entry.access, hostFlavor()));
 }
 
 /**
@@ -276,12 +289,12 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
  * "ERROR: ensure daemon: …" — `sbx daemon restart` does not help, only ending the shim (measured,
  * 0.42.1, Windows). That error is reported as sbx's own.
  *
- * A governed account's `sbx policy ls` opens with "Governance: Managed by <org>", SOURCE "org"
- * (measured, 0.42.1; ungoverned: "local" or "kit", no such line). Governance only words a blocker;
- * what is allowed is asked of the policy (readSbxBlockers).
+ * A governed account's `sbx policy ls` opens with "Governance: Managed by <org>" (parseGovernance).
+ * Governance words a blocker and hides the dialog's Allowed hosts; what is allowed is asked of the
+ * policy (readSbxBlockers).
  */
 async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList }> {
-  const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, governed: false, blockers: [] };
+  const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, blockers: [] };
   if (refreshPath) {
     await augmentAgentPath();
   }
@@ -301,7 +314,7 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   }
   status.loggedIn = true;
   status.policyInitialized = policy.ok;
-  status.governed = policy.ok && /managed by/i.test(policy.stdout);
+  status.organization = policy.ok ? parseGovernance(policy.stdout) : undefined;
   return { status, sandboxes };
 }
 
@@ -513,11 +526,13 @@ function parseSandboxes(result: RunResult): SandboxList | undefined {
  * readLiveSbxConfig), from one `policy ls`. A rule counts when an allow scoped `sandbox:<name>` and
  * editable, as `sbx policy allow network --sandbox` makes it (measured, 0.42.1); a kit's rule is
  * not editable, a global one is the machine's. One rule per resource, so the list is their union.
+ * Inactive rules count too: governance hides them by default (0 of 20 listed, measured, 0.42.1),
+ * and Save would then drop the hosts from tet.json while the dialog hides them.
  */
 async function readSandboxHosts(): Promise<Map<string, string[]>> {
   const hosts = new Map<string, string[]>();
   try {
-    const parsed = JSON.parse((await runSbx(["policy", "ls", "--type", "network", "--json"])).stdout) as {
+    const parsed = JSON.parse((await runSbx(["policy", "ls", "--type", "network", "--include-inactive", "--json"])).stdout) as {
       rules?: { scope?: string; decision?: string; editable?: boolean; resources?: string[] }[];
     };
     for (const rule of parsed.rules ?? []) {
