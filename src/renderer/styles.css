@@ -1558,7 +1558,8 @@ textarea:focus {
   height: 26px;
 }
 
-.sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail {
+.sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail,
+.sbx-governance .dialog-detail {
   margin-top: 3px;
 }
 

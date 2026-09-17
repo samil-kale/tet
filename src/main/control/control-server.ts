@@ -5,7 +5,7 @@ import { stripAnsi } from "../../shared/ansi";
 import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "../../shared/types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, isSbxAgent } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -114,7 +114,10 @@ export interface ControlTerminals {
   write(tabId: string, data: string): void;
   /** Oldest first. */
   events(): ControlEvent[];
-  createTab(agentId: AgentId): TerminalDescriptor;
+  /** `sandboxOnly`: opened from a sandbox, so it never runs on this machine. */
+  createTab(agentId: AgentId, sandboxOnly: boolean): TerminalDescriptor;
+  /** Whether this tab's process runs, or ran, in the project's sandbox. */
+  sandboxed(tabId: string): boolean;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   renameTab(tabId: string, title: string): Promise<void>;
@@ -139,9 +142,12 @@ interface Answer {
   after?: () => void;
 }
 
+/** The request's caller, and whether its tab runs in a sandbox (ControlVerb.sandbox). */
+type Caller = ControlRequest["caller"] & { sandboxed: boolean };
+
 type Handler = (
   args: Record<string, unknown>,
-  caller: ControlRequest["caller"],
+  caller: Caller,
   /** See ControlRequest.at. */
   at: number | undefined,
   /** Aborted once the CLI is gone (Ctrl+C) before its answer: nothing waits for it any more. */
@@ -330,7 +336,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { saved: true } };
     },
 
-    "projects-list": () => ({ result: store.list() }),
+    // A sandbox sees its own project only: the others' paths are outside what it mounts.
+    "projects-list": (_args, caller) => ({
+      result: store.list().filter((entry) => !caller.sandboxed || entry.id === caller.projectId)
+    }),
 
     "repo-state": (args, caller) => {
       const found = project(args, caller);
@@ -479,7 +488,11 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!deps.agentIds.includes(agent)) {
         throw new ControlError("bad_args", `unknown agent: ${agent} (see list-agents)`);
       }
-      const tab = terminals(found).createTab(agent as AgentId);
+      // A shell would run on this machine; an sbx agent's tab is held to the sandbox (createTab).
+      if (caller.sandboxed && !isSbxAgent(agent)) {
+        throw new ControlError("unauthorized", `a ${agent} tab does not run in a sandbox, so a sandbox cannot open one`);
+      }
+      const tab = terminals(found).createTab(agent as AgentId, caller.sandboxed);
       deps.showTab(found.id, tab.tabId);
       return { result: tab };
     },
@@ -609,7 +622,16 @@ export async function startControlServer(
         response: reject("unauthorized", `${request.verb} only answers in a TET started with a profile of its own (--user-data-dir)`)
       };
     }
-    if (CONTROL_VERBS.some((entry) => entry.verb === request.verb && entry.ownProjectOnly)) {
+    const entry = CONTROL_VERBS.find((candidate) => candidate.verb === request.verb);
+    // Looked up, not carried by the token: the session manager knows which tabs run in a sandbox.
+    const sandboxed =
+      caller.projectId !== undefined &&
+      caller.tabId !== undefined &&
+      deps.sessions.get(caller.projectId)?.sandboxed(caller.tabId) === true;
+    if (sandboxed && !entry?.sandbox) {
+      return { response: reject("unauthorized", `${request.verb} does not answer from inside a sandbox`) };
+    }
+    if (entry?.ownProjectOnly || (sandboxed && entry?.sandbox === "ownProject")) {
       const own = caller.projectId;
       const asked = request.args?.project;
       if (!own || (typeof asked === "string" && asked !== "" && asked !== own)) {
@@ -617,7 +639,7 @@ export async function startControlServer(
       }
     }
     try {
-      const answer = await handler(request.args ?? {}, caller, request.at, gone);
+      const answer = await handler(request.args ?? {}, { ...caller, sandboxed }, request.at, gone);
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {
       if (error instanceof ControlError) {

@@ -61,6 +61,12 @@ interface TabState extends TerminalDescriptor {
   provisionalTitle?: boolean;
   /** Mirrors AgentSessionInfo.sandbox. */
   sandbox?: string;
+  /** Spawned in the sandbox at least once. Never cleared: a process it left there still holds the
+   *  tab's control token after a restart on this machine. */
+  ranInSandbox?: true;
+  /** Opened by `tet-ctl` from a sandbox: runs in the sandbox or not at all (resolveSbxRun), or the
+   *  sandbox could switch sbx off in tet.json and open itself a tab on this machine. */
+  sandboxOnly?: true;
   /** When the running turn was reported started — what a turn end is dated against. */
   busySince?: number;
   /**
@@ -617,8 +623,14 @@ export class ProjectSessionManager {
     );
   }
 
-  createTab(agentId: AgentId): TerminalDescriptor {
-    return this.addTab(agentId, {});
+  createTab(agentId: AgentId, sandboxOnly = false): TerminalDescriptor {
+    return this.addTab(agentId, sandboxOnly ? { sandboxOnly } : {});
+  }
+
+  /** What `tet-ctl` from this tab may do (ControlVerb.sandbox). */
+  sandboxed(tabId: string): boolean {
+    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    return tab?.ranInSandbox === true || tab?.sandboxOnly === true;
   }
 
   /**
@@ -778,6 +790,10 @@ export class ProjectSessionManager {
     const runtime = this.runtimeFor(tab.agentId);
     const { agent } = runtime;
     if (tab.sessionId && !tab.sandbox) {
+      if (tab.sandboxOnly) {
+        this.sbxStranded(tab, "its session was found on this machine");
+        return "stranded";
+      }
       // A host session resumes only on the host, gone for an sbx-only agent. Not `sbxStranded`,
       // whose "Restart tries again" could never come true here.
       if (runtime.sbxOnly) {
@@ -832,12 +848,14 @@ export class ProjectSessionManager {
    */
   private sbxStranded(tab: TabState, reason: string): boolean {
     const { agent, sbxOnly } = this.runtimeFor(tab.agentId);
-    if (!tab.sandbox && !sbxOnly) {
+    if (!tab.sandbox && !sbxOnly && !tab.sandboxOnly) {
       return false;
     }
     const what = tab.sandbox
       ? `This ${agent.displayName} session lives in ${this.project.name}'s SBX sandbox and cannot run on this machine`
-      : `${agent.displayName} is not installed on this machine and only runs in ${this.project.name}'s SBX sandbox`;
+      : tab.sandboxOnly
+        ? `This ${agent.displayName} tab was opened from ${this.project.name}'s SBX sandbox and cannot run on this machine`
+        : `${agent.displayName} is not installed on this machine and only runs in ${this.project.name}'s SBX sandbox`;
     this.callbacks.onNotice(
       "warning",
       `${what}: ${reason}. The tab menu's Restart tries again once that has changed.`
@@ -917,6 +935,9 @@ export class ProjectSessionManager {
     );
 
     this.sessions.set(tabId, session);
+    if (sbxArgs) {
+      tab.ranInSandbox = true;
+    }
     session.markInstalled(this.canStart(runtime));
     return session;
   }

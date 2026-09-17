@@ -24,6 +24,8 @@ const TOKEN = "test-token";
 const PROJECT: Project = { id: "p1", path: "", name: "one" };
 const OTHER: Project = { id: "p2", path: "", name: "two" };
 const OWN_TAB = "tab-own";
+/** A tab of PROJECT whose process runs in its sbx sandbox. */
+const SANDBOX_TAB = "tab-sbx";
 
 /** The caller's own tab is a shell; "tab-2" an agent, with a session and a sandbox. */
 function tab(projectId: string, tabId: string): TerminalDescriptor {
@@ -94,10 +96,11 @@ function terminalsOf(projectId: string): ControlTerminals {
       calls.written.push([tabId, data]);
     },
     events: () => [1, 2, 3].map((at) => ({ at, tabId: "tab-2", kind: "hook" as const, event: "stop" as const })),
-    createTab: (agentId) => {
-      calls.created.push(agentId);
+    createTab: (agentId, sandboxOnly) => {
+      calls.created.push(sandboxOnly ? `${agentId} (sandbox only)` : agentId);
       return tab(projectId, "tab-new");
     },
+    sandboxed: (tabId) => tabId === SANDBOX_TAB,
     createCommandTab: (command: ProjectCommand) => {
       calls.commands.push(command.command);
       // Refused for a shell operator, as createCommandTab does.
@@ -546,6 +549,50 @@ describe("tet-ctl against the control server", () => {
       assert.match(run.stderr, /own project/, what);
     }
     assert.equal((await tetCtl(["tabs-output", OWN_TAB, "--project", PROJECT.id])).status, EXIT_CODES.ok, "its own, named");
+  });
+
+  it("refuses a sandboxed tab every verb that acts on this machine", async () => {
+    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
+    const refused = [
+      ["tabs-run-command", "build"],
+      ["projects-add", tempDir],
+      ["projects-remove", OTHER.id],
+      ["tabs-start", "tab-2"],
+      ["tabs-restart", "tab-2"],
+      ["tabs-send", "tab-2", "x"],
+      ["settings-set-theme", "dark-modern"],
+      ["settings-set-prompt", "commitMessage", "x"],
+      ["restart-app", "--confirm"]
+    ];
+    for (const args of refused) {
+      const run = await tetCtl(args, fromSandbox);
+      assert.equal(run.status, EXIT_CODES.unauthorized, args[0]);
+      assert.match(run.stderr, /inside a sandbox/, args[0]);
+    }
+    const shell = await tetCtl(["tabs-create", "--agent", "shell"], fromSandbox);
+    assert.equal(shell.status, EXIT_CODES.unauthorized, "a shell tab runs on this machine");
+    assert.deepEqual(
+      [calls.commands, calls.added, calls.removed, calls.started, calls.restarted, calls.written, calls.shutdown, calls.created],
+      [[], [], [], [], [], [], [], []]
+    );
+    assert.equal(settings.darkTheme, "dark-modern");
+    assert.equal(settings.prompts.commitMessage, "");
+  });
+
+  it("answers a sandboxed tab for its own project only", async () => {
+    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
+    for (const args of [["editor-state"], ["tabs-list"], ["tabs-close", "tab-2"], ["repo-state"], ["explorer-list"]]) {
+      const run = await tetCtl([...args, "--project", OTHER.id], fromSandbox);
+      assert.equal(run.status, EXIT_CODES.unauthorized, args[0]);
+      assert.match(run.stderr, /own project/, args[0]);
+      assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
+    }
+    assert.deepEqual((await tetCtl(["projects-list"], fromSandbox)).result, [PROJECT]);
+    assert.deepEqual((await tetCtl(["tabs-create", "--agent", "claude"], fromSandbox)).result, tab(PROJECT.id, "tab-new"));
+    assert.deepEqual(calls.created, ["claude (sandbox only)"]);
+    assert.equal((await tetCtl(["version"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["notices-list"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["hook", "stop"], fromSandbox)).status, EXIT_CODES.ok);
   });
 
   it("answers the latest events, as many as asked for", async () => {

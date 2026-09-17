@@ -16,7 +16,7 @@ type Phase =
   | { kind: "not-installed" }
   | { kind: "signing-in" }
   | { kind: "initializing-policy" }
-  | { kind: "ready" }
+  | { kind: "ready"; governed: boolean }
   | { kind: "blocked"; governed: boolean; blockers: SbxBlocker[] }
   | { kind: "failed"; message: string };
 
@@ -103,7 +103,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     const config = await window.tet.sbx.getConfig(project.id);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
-    setPhase({ kind: "ready" });
+    setPhase({ kind: "ready", governed: status.governed });
   };
 
   useEffect(() => {
@@ -198,6 +198,16 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             </p>
           </span>
         </label>
+      )}
+      {phase.kind === "ready" && tab === "general" && (
+        <div className="sbx-governance">
+          <strong>Organization governance</strong>
+          <p className="dialog-detail">
+            {phase.governed
+              ? "Active: your organization manages SBX's policy, so only it can change what sandboxes may reach."
+              : "Not active: SBX's policy is managed on this machine."}
+          </p>
+        </div>
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <div className="sbx-settings-pane">

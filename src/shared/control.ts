@@ -54,6 +54,13 @@ export interface ControlVerb {
   /** Only from a tab of the project it targets: the verb reads a terminal, and one project's
    *  agent has no business in another project's. */
   ownProjectOnly?: true;
+  /**
+   * What a caller running in an sbx sandbox may do; absent means refused, so a new verb is closed
+   * to it until decided. `ownProject` answers only for the caller's own project. The sandbox is the
+   * organization's policy: a verb that starts a process on this machine, or reads outside the
+   * project it mounts, would walk around it.
+   */
+  sandbox?: "any" | "ownProject";
   /** Stdin goes in as `args.payload` — an agent's hook payload. */
   stdin?: true;
   /**
@@ -107,15 +114,16 @@ export interface ControlEvent {
  *  anything else not listed as `unknown_verb`. */
 export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   { verb: "help", usage: "help", summary: "Print this list.", positionals: [] },
-  { verb: "version", usage: "version", summary: "TET's version.", positionals: [] },
-  { verb: "list-themes", usage: "list-themes", summary: "The color themes (id, label and kind).", positionals: [] },
+  { verb: "version", usage: "version", summary: "TET's version.", positionals: [], sandbox: "any" },
+  { verb: "list-themes", usage: "list-themes", summary: "The color themes (id, label and kind).", positionals: [], sandbox: "any" },
   {
     verb: "list-agents",
     usage: "list-agents",
     summary: "The supported agents and whether each is installed.",
-    positionals: []
+    positionals: [],
+    sandbox: "any"
   },
-  { verb: "settings-get", usage: "settings-get", summary: "All of TET's settings.", positionals: [] },
+  { verb: "settings-get", usage: "settings-get", summary: "All of TET's settings.", positionals: [], sandbox: "any" },
   {
     verb: "settings-set-theme",
     usage: "settings-set-theme <theme-id>",
@@ -136,12 +144,13 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary: "Set the text of a background question; no text puts TET's own back. Applies to the next press.",
     positionals: ["id", "text"]
   },
-  { verb: "projects-list", usage: "projects-list", summary: "The open projects (id, name, path).", positionals: [] },
+  { verb: "projects-list", usage: "projects-list", summary: "The open projects (id, name, path).", positionals: [], sandbox: "ownProject" },
   {
     verb: "repo-state",
     usage: "repo-state [--project <id>]",
     summary: "What the git pane shows for a project: branch, upstream, changed files, stashes.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownProject"
   },
   { verb: "projects-add", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
   {
@@ -154,7 +163,8 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "tabs-list",
     usage: "tabs-list [--project <id>]",
     summary: "A project's terminal tabs and their state, with the session each tab's hooks named and its sandbox.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-start",
@@ -173,7 +183,8 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: `tabs-wait <tab-id> [--session] [--busy] [--idle] [--status <${TERMINAL_STATUSES.join("|")}>] [--timeout <seconds>] [--project <id>]`,
     summary:
       "Wait until a tab has a session (--session), is working a turn (--busy), is not (--idle) or has a status; every condition given must hold. Exits 4 after the timeout (30 s).",
-    positionals: ["tabId"]
+    positionals: ["tabId"],
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-send",
@@ -188,51 +199,59 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary:
       "The last n KB a tab printed (16, at most 256), escape sequences taken out and a line redrawn after a carriage return kept as last shown; an agent's TUI redraws its screen in place, so its text comes in pieces. Only a tab of the caller's own project.",
     positionals: ["tabId"],
-    ownProjectOnly: true
+    ownProjectOnly: true,
+    sandbox: "ownProject"
   },
   {
     verb: "events-tail",
     usage: "events-tail [--tail <count>] [--project <id>]",
     summary: "The latest hook reports, session claims and closed tabs, with when each arrived.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownProject"
   },
   {
     verb: "editor-open",
     usage: "editor-open <path> [--keep] [--project <id>]",
     summary:
       "Open a repository-relative file in the project's preview tab, which the next file replaces, and bring it to the front; --keep gives it a tab of its own.",
-    positionals: ["path"]
+    positionals: ["path"],
+    sandbox: "ownProject"
   },
   {
     verb: "editor-state",
     usage: "editor-state [--project <id>]",
     summary:
       "What the project's active editor tab shows: the file, its text, whether it is edited, read-only or a preview.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownProject"
   },
   {
     verb: "editor-list",
     usage: "editor-list [--project <id>]",
     summary: "The project's open editor tabs: file, preview, edited, read-only, and which one is active.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownProject"
   },
   {
     verb: "explorer-list",
     usage: "explorer-list [--project <id>]",
     summary: "What the files view lists for a project, with tet.json's folders and excludes applied.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownProject"
   },
   {
     verb: "notices-list",
     usage: "notices-list",
     summary: "The latest notices the window showed, oldest first.",
-    positionals: []
+    positionals: [],
+    sandbox: "any"
   },
   {
     verb: "tabs-create",
     usage: "tabs-create --agent <claude|opencode|codex|pi|shell> [--project <id>]",
     summary: "Open a new terminal tab for that agent.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-run-command",
@@ -244,13 +263,15 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "tabs-close",
     usage: "tabs-close <tab-id> [--project <id>]",
     summary: "Close a tab and end its session.",
-    positionals: ["tabId"]
+    positionals: ["tabId"],
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-rename",
     usage: "tabs-rename <tab-id> <title> [--project <id>]",
     summary: "Rename a tab.",
-    positionals: ["tabId", "title"]
+    positionals: ["tabId", "title"],
+    sandbox: "ownProject"
   },
   {
     verb: "restart-app",
@@ -262,7 +283,8 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "notify",
     usage: "notify <title> [body]",
     summary: "Show a desktop notification from TET's own process — the one with a desktop session, so a sandboxed agent gets a real toast too.",
-    positionals: ["title", "body"]
+    positionals: ["title", "body"],
+    sandbox: "any"
   },
   {
     verb: "hook",
@@ -270,7 +292,8 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary: `TET's own plumbing: an agent's hook reports a turn (${HOOK_EVENTS.join("|")}). Not for you to call.`,
     positionals: ["event"],
     stdin: true,
-    stdout: true
+    stdout: true,
+    sandbox: "any"
   }
 ];
 
