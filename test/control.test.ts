@@ -250,15 +250,26 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("answers help by itself, with every verb", async () => {
-    const run = await tetCtl(["help"], { [CONTROL_ENV.port]: undefined });
+    const run = await tetCtl(["help"], { [CONTROL_ENV.port]: undefined, [CONTROL_ENV.host]: undefined });
     assert.equal(run.status, EXIT_CODES.ok);
     assert.match(run.stdout, /settings-set-theme <theme-id>/);
     assert.match(run.stdout, /restart-app --confirm/);
     // Printed by group (GROUPS in tet-ctl.ts), which leaves out a verb it does not name.
     for (const entry of CONTROL_VERBS) {
       const lines = run.stdout.split("\n").filter((line) => line === `  ${entry.usage}`);
-      assert.equal(lines.length, 1, entry.verb);
+      assert.equal(lines.length, entry.unlisted ? 0 : 1, entry.verb);
     }
+  });
+
+  it("leaves the verbs a sandbox is refused out of help, and says what is missing", async () => {
+    // TET_CONTROL_HOST is an sbx session's alone (sbx.ts), so the CLI needs nothing else to know.
+    const run = await tetCtl(["help"], { [CONTROL_ENV.port]: undefined, [CONTROL_ENV.host]: "host.docker.internal" });
+    assert.equal(run.status, EXIT_CODES.ok);
+    for (const entry of CONTROL_VERBS) {
+      const lines = run.stdout.split("\n").filter((line) => line === `  ${entry.usage}`);
+      assert.equal(lines.length, entry.sandbox !== undefined && !entry.unlisted ? 1 : 0, entry.verb);
+    }
+    assert.match(run.stdout, /runs in an sbx sandbox/);
   });
 
   it("says where it is when not inside a tet terminal", async () => {

@@ -12,26 +12,28 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
 /** What a skill file would say at the top: when this is the right tool at all. TET_SYSTEM_PROMPT
  *  spends its one line sending an agent here, so the answer to "when do I run this" belongs in the
  *  same output as the verbs: nothing to install into an agent's own configuration, and all four
- *  read it the same way. */
-const WHEN_TO_USE = [
-  "This terminal is one tab of one project in TET; other tabs run other agents, shells and saved",
-  "commands, and the user watches them all. tet-ctl answers what the filesystem and git cannot:",
-  "what TET shows, what the other tabs are doing, and what the user has in front of them — reach",
-  "for it when the user asks about TET itself, means something they ran or saw in another tab",
-  "(\"the error in the shell\", \"what did codex say\"), wants something put in front of them rather",
-  "than in your answer, or when another agent or a saved command should do the job.",
-  "",
-  "Leave it alone for files and git: read the repository and run git yourself."
-];
+ *  read it the same way. What that prompt already said is not repeated here. */
+function whenToUse(sandboxed: boolean): string[] {
+  return [
+    "This terminal is one tab of one project in TET; other tabs run other agents, shells and saved",
+    "commands, and the user watches them all. Reach for tet-ctl when the user asks about TET itself,",
+    "means something they ran or saw in another tab (\"the error in the shell\", \"what did codex",
+    "say\"), wants something put in front of them rather than in your answer, or when another agent",
+    // A sandboxed tab is not offered tabs-run-command, so it is not sent looking for one.
+    sandboxed ? "should do the job." : "or a saved command should do the job.",
+    "",
+    "Leave it alone for files and git: read the repository and run git yourself."
+  ];
+}
 
 /** The verbs in the order help prints them, under the question each group answers; every verb is
- *  in exactly one group (control.test.ts). Grouping is what the list gives an agent that the verb
- *  names alone do not, so it replaces the walkthrough that used to name them a second time. */
+ *  in exactly one group but the unlisted ones (control.test.ts). Grouping is what the list gives an
+ *  agent that the verb names alone do not, so it replaces the walkthrough that used to name them a
+ *  second time. */
 const GROUPS: ReadonlyArray<{ heading: string; verbs: readonly string[] }> = [
   {
     heading: "TET itself",
     verbs: [
-      "help",
       "version",
       "settings-get",
       "list-themes",
@@ -65,32 +67,56 @@ const GROUPS: ReadonlyArray<{ heading: string; verbs: readonly string[] }> = [
   {
     heading: "In front of the user",
     verbs: ["editor-open", "editor-state", "editor-list", "explorer-list", "notices-list", "notify"]
-  },
-  { heading: "TET's own plumbing", verbs: ["hook"] }
+  }
 ];
+
+/** Set on sbx sessions alone (sbx.ts hands it in as the host to reach), so the CLI knows where it
+ *  runs without asking: a sandboxed agent is listed only the verbs the server answers it, instead
+ *  of meeting the refusal one verb at a time. */
+function inSandbox(): boolean {
+  return Boolean(process.env[CONTROL_ENV.host]);
+}
+
+/** The rules the verb list does not carry, each side told only its own: a sandbox is no concern of
+ *  a tab on the host, which cannot end up in one. */
+function limits(sandboxed: boolean): string[] {
+  const own = "Without --project, a verb acts on the project of the tab it is run from.";
+  return sandboxed
+    ? [
+        own,
+        "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",
+        "restarting TET, starting or typing into a tab — is refused there and is not listed above.",
+        "What is listed answers for this project's tabs only (exit 2, the reason on stderr)."
+      ]
+    : [
+        `${own} restartRequired in an`,
+        "answer means the change waits for a restart — tell the user, never restart for them.",
+        "A terminal of another project is refused, exit 2 with the reason on stderr (tabs-output,",
+        "tabs-send)."
+      ];
+}
 
 /** Each verb's summary on its own indented line: padding every usage to the longest one (tabs-wait)
  *  cost an agent reading this some 140 spaces a line. */
 function usage(): string {
-  const listed = (verb: string): ControlVerb | undefined => CONTROL_VERBS.find((entry) => entry.verb === verb);
+  const sandboxed = inSandbox();
+  // `sandbox` absent is refused there (ControlVerb.sandbox), which is what leaves a verb out.
+  const listed = (verb: string): ControlVerb | undefined =>
+    CONTROL_VERBS.find((entry) => entry.verb === verb && (!sandboxed || entry.sandbox !== undefined));
+  const groups = GROUPS.map((group) => ({
+    heading: group.heading,
+    lines: group.verbs.flatMap((verb) => {
+      const entry = listed(verb);
+      return entry ? [`  ${entry.usage}`, `      ${entry.summary}`] : [];
+    })
+  })).filter((group) => group.lines.length > 0);
   return [
     "tet-ctl — control the TET app this terminal runs in",
     "",
-    ...WHEN_TO_USE,
-    ...GROUPS.flatMap((group) => [
-      "",
-      group.heading,
-      ...group.verbs.flatMap((verb) => {
-        const entry = listed(verb);
-        return entry ? [`  ${entry.usage}`, `      ${entry.summary}`] : [];
-      })
-    ]),
+    ...whenToUse(sandboxed),
+    ...groups.flatMap((group) => ["", group.heading, ...group.lines]),
     "",
-    "Without --project, a verb acts on the project of the tab it is run from. restartRequired in an",
-    "answer means the change waits for a restart — tell the user, never restart for them.",
-    "Refused whatever the list says (exit 2, the reason on stderr): a terminal of another project",
-    "(tabs-output, tabs-send), and from a tab running in an sbx sandbox everything that acts on this",
-    "machine — the other tabs included."
+    ...limits(sandboxed)
   ].join("\n");
 }
 

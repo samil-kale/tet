@@ -49,6 +49,9 @@ export interface ControlVerb {
   /** Only from a tab of the project it targets: the verb reads a terminal, and one project's
    *  agent has no business in another project's. */
   ownProjectOnly?: true;
+  /** Left out of `tet-ctl help` (GROUPS in tet-ctl.ts names the rest): whoever reads that output is
+   *  already running `help`, and `hook` is plumbing an agent's own hook command calls. */
+  unlisted?: true;
   /**
    * What a caller running in an sbx sandbox may do; absent means refused, so a new verb is closed
    * to it until decided. `ownProject` answers only for the caller's own project. The sandbox is the
@@ -108,7 +111,8 @@ export interface ControlEvent {
 /** Every verb with its `tet-ctl help` line. The CLI answers `help` itself; the server refuses
  *  anything else not listed as `unknown_verb`. */
 export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
-  { verb: "help", usage: "help", summary: "Print this list.", positionals: [] },
+  // The CLI answers it and never asks the server, sandbox included.
+  { verb: "help", usage: "help", summary: "Print this list.", positionals: [], sandbox: "any", unlisted: true },
   { verb: "version", usage: "version", summary: "TET's version.", positionals: [], sandbox: "any" },
   { verb: "list-themes", usage: "list-themes", summary: "The color themes (id, label and kind).", positionals: [], sandbox: "any" },
   {
@@ -190,7 +194,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "tabs-output",
     usage: "tabs-output <tab-id> [--kb <n>]",
     summary:
-      "The last n KB a tab printed (16, at most 256), escape sequences taken out and a line redrawn after a carriage return kept as last shown; an agent's TUI redraws in place, so its text comes in pieces.",
+      "The last n KB a tab printed (16, at most 256), escape sequences out and a redrawn line kept as last shown; an agent's TUI redraws in place, so its text comes in pieces.",
     positionals: ["tabId"],
     ownProjectOnly: true,
     sandbox: "ownProject"
@@ -274,7 +278,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "notify",
     usage: "notify <title> [body]",
-    summary: "Show a desktop notification from TET's own process, so a sandboxed agent gets a real toast too.",
+    summary: "Show a desktop notification from TET's own process — the one with a desktop session.",
     positionals: ["title", "body"],
     sandbox: "any"
   },
@@ -283,6 +287,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "hook <event>",
     summary: `An agent's hook reports a turn (${HOOK_EVENTS.join("|")}). Not for you to call.`,
     positionals: ["event"],
+    unlisted: true,
     stdin: true,
     stdout: true,
     sandbox: "any"
