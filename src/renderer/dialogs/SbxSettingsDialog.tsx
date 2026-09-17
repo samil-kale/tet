@@ -32,6 +32,31 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
 ];
 
 /**
+ * Why a tab cannot be chosen, or `undefined`. Nothing but the switch applies while sandboxing is
+ * off; knowledge from this machine is meaningless where no agent is installed; under an
+ * organization's governance a local host rule is inactive (sbx.ts's readSandboxHosts). A tab is
+ * disabled rather than dropped, so the dialog keeps its shape and says what is missing.
+ */
+function tabBlocked(
+  id: SbxSettingsTab,
+  { enabled, locked, organization }: { enabled: boolean; locked: boolean; organization?: string }
+): string | undefined {
+  if (id === "general") {
+    return undefined;
+  }
+  if (!enabled) {
+    return "Enable SBX sandboxing for this project first";
+  }
+  if (id === "knowledge" && locked) {
+    return "No agent is installed on this machine to bring anything from";
+  }
+  if (id === "hosts" && organization) {
+    return `Deactivated by governance: only ${organization} can allow hosts for sandboxes`;
+  }
+  return undefined;
+}
+
+/**
  * The one dialog for sbx setup and configuration. On mount it checks: installed, signed in
  * (signing in if needed), machine-wide network policy set to "balanced" if needed (sbx.ts's
  * initSbxPolicy), then loads the saved config; each step shows in the `busy` bar. Installs
@@ -126,11 +151,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
   const organization = phase.kind === "ready" ? phase.organization : undefined;
-  // Knowledge from this machine is meaningless where no agent is installed; under an
-  // organization's governance a local host rule is inactive (sbx.ts's readSandboxHosts).
   const tabs = useMemo(
-    () => TABS.filter((entry) => !(locked && entry.id === "knowledge") && !(organization && entry.id === "hosts")),
-    [locked, organization]
+    () => TABS.map((entry) => ({ ...entry, disabled: tabBlocked(entry.id, { enabled, locked, organization }) })),
+    [enabled, locked, organization]
   );
 
   return (

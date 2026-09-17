@@ -5,6 +5,8 @@ import { useCoversWindow } from "./window-covered";
 export interface DialogTab<T extends string> {
   id: T;
   label: string;
+  /** Given, the tab cannot be chosen and says why on hover. */
+  disabled?: string;
 }
 
 /**
@@ -59,8 +61,15 @@ export function DialogFrame<T extends string>({ header, busy, className, onSubmi
             <button
               key={entry.id}
               type="button"
-              className={header.active === entry.id ? "dialog-tab active" : "dialog-tab"}
-              onClick={() => header.onSelect(entry.id)}
+              // The context menu's disabled entry, not the attribute: chromium swallows a
+              // disabled control's tooltip, and the reason is the point.
+              className={`dialog-tab${header.active === entry.id ? " active" : ""}${entry.disabled ? " disabled" : ""}`}
+              title={entry.disabled}
+              onClick={() => {
+                if (!entry.disabled) {
+                  header.onSelect(entry.id);
+                }
+              }}
             >
               {entry.label}
             </button>

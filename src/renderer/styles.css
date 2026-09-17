@@ -1444,6 +1444,11 @@ textarea:focus {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
+.dialog-tab.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .dialog-tabs-close {
   flex: none;
   align-self: center;
