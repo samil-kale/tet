@@ -77,18 +77,24 @@ describe("resolveCommand", () => {
     assert.deepEqual(resolveCommand("C:\\tools\\run.exe", ["-v"]), { command: "C:\\tools\\run.exe", args: ["-v"] });
     assert.deepEqual(resolveCommand("C:\\tools\\run.cmd", ["-v"]), {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", '"C:\\tools\\run.cmd ^^^"-v^^^""'],
+      args: ["/d", "/s", "/c", '"C:\\tools\\run.cmd ^"-v^""'],
       windowsVerbatimArguments: true
     });
   });
 
   it("hands every character to a shim literally, through cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, () => {
-    // An npm shim's shape, in a folder whose name cmd.exe would otherwise split and group.
+    // A global npm shim's shape (cmd-shim), in a folder whose name cmd.exe would otherwise split and
+    // group; node by its path, where cmd-shim looks beside the shim or on PATH.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet shim (x)-"));
     const script = path.join(dir, "argv.js");
     fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
     const shim = path.join(dir, "echo-args.cmd");
-    fs.writeFileSync(shim, `@ECHO off\r\nSETLOCAL\r\n"${process.execPath}" "${script}" %*\r\n`);
+    fs.writeFileSync(
+      shim,
+      "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n" +
+        `SET "_prog=${process.execPath}"\r\n` +
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\argv.js" %*\r\n'
+    );
     const args = [
       // A quote cmd.exe sees as closing, then an operator: the shim's `%*` parses the line again.
       // First, since an argument with an odd count of quotes (`a\"b`) would hide what follows.
@@ -113,6 +119,35 @@ describe("resolveCommand", () => {
       process.env.PATH = originalPath;
     }
     assert.deepEqual(fs.readdirSync(dir).sort(), ["argv.js", "echo-args.cmd"], "nothing redirected into a file");
+  });
+
+  it("hands a batch file reading its own arguments each one once escaped", { skip: process.platform !== "win32" && "win32 only" }, () => {
+    // Maven's `mvn.cmd` shape: `%~1` compared in an `if`, where a second escape's carets are a
+    // syntax error ("[tet] mvn exited with code 255").
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet batch (x)-"));
+    try {
+      const script = path.join(dir, "argv.js");
+      fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
+      const batch = path.join(dir, "mvn.cmd");
+      fs.writeFileSync(
+        batch,
+        '@ECHO off\r\nIF "%~1" == "-f" (SET "kind=file") ELSE (SET "kind=other")\r\n' +
+          `"${process.execPath}" "${script}" %kind% %*\r\n`
+      );
+      for (const [args, kind] of [[["process-classes", "exec:java", "a b"], "other"], [["-f", "pom.xml"], "file"]] as const) {
+        const resolved = resolveCommand(batch, [...args]);
+        const run = spawnSync(resolved.command, resolved.args, {
+          encoding: "utf8",
+          windowsHide: true,
+          windowsVerbatimArguments: resolved.windowsVerbatimArguments,
+          cwd: dir
+        });
+        assert.equal(run.status, 0, `${run.stdout} ${run.stderr}`);
+        assert.deepEqual(JSON.parse(run.stdout), [kind, ...args]);
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("finds a native executable named by its path without an extension", { skip: process.platform !== "win32" && "win32 only" }, () => {

@@ -77,14 +77,28 @@ export interface ResolvedCommand {
 /** Every character cmd.exe gives a meaning, `^`-escaped — cross-spawn's `lib/util/escape.js`. */
 const CMD_META_CHARS = /([()\][%!^"`<>&|;, *?])/g;
 
+/** The line of an npm, pnpm or yarn cmd-shim that runs the package: a script by its path beside the
+ *  shim (`"%dp0%\…"`, `"%~dp0\…"`), then `%*`. Recognized by content, since a global shim
+ *  (`%APPDATA%\npm`) lies outside cross-spawn's `node_modules\.bin`. */
+const CMD_SHIM_LINE = /"%(?:dp0%|~dp0)[^"\r\n]*"[ \t]*%\*[ \t]*$/im;
+
+function isCmdShim(file: string): boolean {
+  try {
+    return CMD_SHIM_LINE.test(fs.readFileSync(file, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
 /** One argument for a program behind cmd.exe: quoted by the C runtime's rules (qntm.org/cmd), then
  *  `^`-escaped, so `&`, `>` or `%VAR%` reach it literally (measured through an npm shim, via
- *  child_process and node-pty). A batch file parses its `%*` a second time, so there it is escaped
- *  twice, as cross-spawn does: once, `a"&b` ends the quote cmd.exe sees and `&b` runs as a command. */
-function escapeCmdArgument(arg: string, batch: boolean): string {
+ *  child_process and node-pty). A shim parses its `%*` a second time, so there it is escaped twice:
+ *  once, `a"&b` ends the quote cmd.exe sees and `&b` runs as a command. Only there — a batch file
+ *  reading `%~1` itself keeps the second carets (Maven's `if "%~1" == "-f"`: a syntax error). */
+function escapeCmdArgument(arg: string, shim: boolean): string {
   const quoted = `"${arg.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"').replace(/(?=(\\+?)?)\1$/, "$1$1")}"`;
   const escaped = quoted.replace(CMD_META_CHARS, "^$1");
-  return batch ? escaped.replace(CMD_META_CHARS, "^$1") : escaped;
+  return shim ? escaped.replace(CMD_META_CHARS, "^$1") : escaped;
 }
 
 /** Where a command line goes, for every spawn: on win32 a native executable directly, a shim or an
@@ -97,8 +111,9 @@ export function resolveCommand(executable: string, args: string[]): ResolvedComm
     }
     // Shim or unresolved: cmd.exe, not `shell: true`, which joins args unescaped. The whole line is
     // escaped as cross-spawn does it; `/s` strips only the outer quotes.
-    const batch = resolveWin32Executable(executable, WIN32_BATCH_EXTENSIONS) !== undefined;
-    const line = [executable.replace(CMD_META_CHARS, "^$1"), ...args.map((arg) => escapeCmdArgument(arg, batch))].join(" ");
+    const batch = resolveWin32Executable(executable, WIN32_BATCH_EXTENSIONS);
+    const shim = batch !== undefined && isCmdShim(batch);
+    const line = [executable.replace(CMD_META_CHARS, "^$1"), ...args.map((arg) => escapeCmdArgument(arg, shim))].join(" ");
     return { command: "cmd.exe", args: ["/d", "/s", "/c", `"${line}"`], windowsVerbatimArguments: true };
   }
   return { command: executable, args };
