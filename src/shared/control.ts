@@ -46,11 +46,6 @@ export interface ControlVerb {
   summary: string;
   /** Argument names for the positionals, in order; flags keep their own name (CONTROL_FLAGS). */
   positionals: string[];
-  /**
-   * Only in a run with its own `--user-data-dir` (tests): the verb types into another tab's
-   * terminal, which would otherwise let one agent drive another.
-   */
-  ownProfileOnly?: true;
   /** Only from a tab of the project it targets: the verb reads a terminal, and one project's
    *  agent has no business in another project's. */
   ownProjectOnly?: true;
@@ -127,15 +122,13 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "settings-set-theme",
     usage: "settings-set-theme <theme-id>",
-    summary:
-      "Set the theme for its kind (light or dark, see list-themes). Shown at once while TET is drawn in that kind; restartRequired says it waits for a restart — tell the user, do not restart for them.",
+    summary: "Set the theme for its kind (light or dark, see list-themes). Shown at once while TET is drawn in that kind.",
     positionals: ["theme"]
   },
   {
     verb: "settings-set-color-scheme",
     usage: `settings-set-color-scheme <${COLOR_SCHEMES.join("|")}>`,
-    summary:
-      "Set light or dark, system following the OS. restartRequired says it waits for a restart — tell the user, do not restart for them.",
+    summary: "Set light or dark, system following the OS.",
     positionals: ["scheme"]
   },
   {
@@ -182,22 +175,22 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "tabs-wait",
     usage: `tabs-wait <tab-id> [--session] [--busy] [--idle] [--status <${TERMINAL_STATUSES.join("|")}>] [--timeout <seconds>] [--project <id>]`,
     summary:
-      "Wait until a tab has a session (--session), is working a turn (--busy), is not (--idle) or has a status; every condition given must hold. Exits 4 after the timeout (30 s).",
+      "Wait until every condition given holds: a session (--session), working a turn (--busy), not working one (--idle), a status. Exits 4 after the timeout (30 s).",
     positionals: ["tabId"],
     sandbox: "ownProject"
   },
   {
     verb: "tabs-send",
     usage: "tabs-send <tab-id> <text> [--enter] [--project <id>]",
-    summary: "Type text into a tab, then Enter with --enter. Only in a run with its own --user-data-dir.",
+    summary: "Type text into a tab, then Enter with --enter, as if the user had typed it there.",
     positionals: ["tabId", "text"],
-    ownProfileOnly: true
+    ownProjectOnly: true
   },
   {
     verb: "tabs-output",
     usage: "tabs-output <tab-id> [--kb <n>]",
     summary:
-      "The last n KB a tab printed (16, at most 256), escape sequences taken out and a line redrawn after a carriage return kept as last shown; an agent's TUI redraws its screen in place, so its text comes in pieces. Only a tab of the caller's own project.",
+      "The last n KB a tab printed (16, at most 256), escape sequences taken out and a line redrawn after a carriage return kept as last shown; an agent's TUI redraws in place, so its text comes in pieces.",
     positionals: ["tabId"],
     ownProjectOnly: true,
     sandbox: "ownProject"
@@ -213,15 +206,14 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "editor-open",
     usage: "editor-open <path> [--keep] [--project <id>]",
     summary:
-      "Open a repository-relative file in the project's preview tab, which the next file replaces, and bring it to the front; --keep gives it a tab of its own.",
+      "Open a repository-relative file in the project's preview tab and bring it to the front; the next file replaces it, --keep gives it a tab of its own.",
     positionals: ["path"],
     sandbox: "ownProject"
   },
   {
     verb: "editor-state",
     usage: "editor-state [--project <id>]",
-    summary:
-      "What the project's active editor tab shows: the file, its text, whether it is edited, read-only or a preview.",
+    summary: "What the project's active editor tab shows: the file, its text, whether it is edited, read-only or a preview.",
     positionals: [],
     sandbox: "ownProject"
   },
@@ -282,14 +274,14 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "notify",
     usage: "notify <title> [body]",
-    summary: "Show a desktop notification from TET's own process — the one with a desktop session, so a sandboxed agent gets a real toast too.",
+    summary: "Show a desktop notification from TET's own process, so a sandboxed agent gets a real toast too.",
     positionals: ["title", "body"],
     sandbox: "any"
   },
   {
     verb: "hook",
     usage: "hook <event>",
-    summary: `TET's own plumbing: an agent's hook reports a turn (${HOOK_EVENTS.join("|")}). Not for you to call.`,
+    summary: `An agent's hook reports a turn (${HOOK_EVENTS.join("|")}). Not for you to call.`,
     positionals: ["event"],
     stdin: true,
     stdout: true,

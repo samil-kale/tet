@@ -54,8 +54,6 @@ export interface ControlDeps {
     notices(): NoticeReport[];
     output(projectId: string, tabId: string): string | undefined;
   };
-  /** `--user-data-dir` given — see ControlVerb.ownProfileOnly. */
-  ownProfile: boolean;
   /** Opens a file in the project's preview tab, or a kept tab, and brings it to the front. */
   openEditor(projectId: string, path: string, keep: boolean): void;
   /** The active editor tab's text, asked of the window live — the one thing not kept as a report
@@ -624,11 +622,6 @@ export async function startControlServer(
         : undefined;
     if (!handler) {
       return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
-    }
-    if (!deps.ownProfile && CONTROL_VERBS.some((entry) => entry.verb === request.verb && entry.ownProfileOnly)) {
-      return {
-        response: reject("unauthorized", `${request.verb} only answers in a TET started with a profile of its own (--user-data-dir)`)
-      };
     }
     const entry = CONTROL_VERBS.find((candidate) => candidate.verb === request.verb);
     // Looked up, not carried by the token: the session manager knows which tabs run in a sandbox.

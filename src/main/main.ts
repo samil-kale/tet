@@ -121,8 +121,6 @@ function queueOutput(projectId: string, tabId: string, data: string): void {
  */
 const USER_DATA_ARG = "--user-data-dir=";
 const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
-/** Only such a run answers ControlVerb.ownProfileOnly verbs. */
-const ownProfile = Boolean(userDataArg);
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
 }
@@ -470,7 +468,6 @@ async function startControl(): Promise<void> {
         readCommands,
         shutdown,
         records,
-        ownProfile,
         openEditor: (projectId, filePath, keep) => send("editor:open", { projectId, path: filePath, keep }),
         editorContent,
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),

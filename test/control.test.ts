@@ -8,7 +8,7 @@ import { TET_SYSTEM_PROMPT } from "../src/main/agents/system-prompt";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
 import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
 import { tabControlToken } from "../src/main/control/control-token";
-import { CONTROL_ENV, EXIT_CODES } from "../src/shared/control";
+import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
 import { EMPTY_REPOSITORY_STATE } from "../src/shared/types";
 import type { AppSettings, Project, ProjectCommand, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl as runCli } from "./helpers";
@@ -126,10 +126,9 @@ function terminalsOf(projectId: string): ControlTerminals {
   };
 }
 
-function deps(ownProfile = true): ControlDeps {
+function deps(): ControlDeps {
   const projects = [PROJECT, OTHER];
   return {
-    ownProfile,
     records: {
       editor: (id) => (id === PROJECT.id ? ACTIVE_EDITOR : undefined),
       editors: (id) => (id === PROJECT.id ? EDITOR_LISTING : []),
@@ -255,6 +254,11 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.match(run.stdout, /settings-set-theme <theme-id>/);
     assert.match(run.stdout, /restart-app --confirm/);
+    // Printed by group (GROUPS in tet-ctl.ts), which leaves out a verb it does not name.
+    for (const entry of CONTROL_VERBS) {
+      const lines = run.stdout.split("\n").filter((line) => line === `  ${entry.usage}`);
+      assert.equal(lines.length, 1, entry.verb);
+    }
   });
 
   it("says where it is when not inside a tet terminal", async () => {
@@ -530,6 +534,21 @@ describe("tet-ctl against the control server", () => {
     ]);
   });
 
+  it("types into no tab of another project, nor from outside a project", async () => {
+    const other = await tetCtl(["tabs-send", OWN_TAB, "x", "--project", OTHER.id]);
+    const outside = await tetCtl(["tabs-send", "tab-2", "x", "--project", PROJECT.id], {
+      [CONTROL_ENV.projectId]: undefined
+    });
+    for (const [what, run] of [
+      ["another project", other],
+      ["no project of its own", outside]
+    ] as const) {
+      assert.equal(run.status, EXIT_CODES.unauthorized, what);
+      assert.match(run.stderr, /own project/, what);
+    }
+    assert.deepEqual(calls.written, []);
+  });
+
   it("answers an agent or shell tab's output as text, its lines as finally shown", async () => {
     assert.deepEqual((await tetCtl(["tabs-output", "tab-2"])).result, { output: "bold line\nnext" });
     assert.deepEqual((await tetCtl(["tabs-output", "tab-2", "--kb", "1"])).result, { output: "bold line\nnext" });
@@ -629,22 +648,6 @@ describe("tet-ctl against the control server", () => {
   it("lists the files view's files and the notices shown", async () => {
     assert.deepEqual(((await tetCtl(["explorer-list"])).result as { files: string[] }).files, ["p1.txt"]);
     assert.deepEqual((await tetCtl(["notices-list"])).result, [{ severity: "error", message: "Could not delete", at: 1 }]);
-  });
-
-  it("refuses to type into a terminal in a run without a profile of its own, but reads one", async () => {
-    const ordinaryPort = await findControlPort(path.join(tempDir, "ordinary"));
-    const ordinary = await startControlServer(deps(false), TOKEN, ordinaryPort);
-    try {
-      const sent = await tetCtl(["tabs-send", "tab-2", "x"], { [CONTROL_ENV.port]: String(ordinaryPort) });
-      assert.equal(sent.status, EXIT_CODES.unauthorized);
-      assert.match(sent.stderr, /profile of its own/);
-      for (const args of [["tabs-output", "tab-2"], ["tabs-output", OWN_TAB], ["tabs-list"]]) {
-        assert.equal((await tetCtl(args, { [CONTROL_ENV.port]: String(ordinaryPort) })).status, EXIT_CODES.ok, args[0]);
-      }
-      assert.deepEqual(calls.written, []);
-    } finally {
-      await ordinary.close();
-    }
   });
 
   it("refuses too many arguments", async () => {

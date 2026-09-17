@@ -16,37 +16,81 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
 const WHEN_TO_USE = [
   "This terminal is one tab of one project in TET; other tabs run other agents, shells and saved",
   "commands, and the user watches them all. tet-ctl answers what the filesystem and git cannot:",
-  "what TET shows, what the other tabs are doing, and what the user has in front of them.",
+  "what TET shows, what the other tabs are doing, and what the user has in front of them — reach",
+  "for it when the user asks about TET itself, means something they ran or saw in another tab",
+  "(\"the error in the shell\", \"what did codex say\"), wants something put in front of them rather",
+  "than in your answer, or when another agent or a saved command should do the job.",
   "",
-  "Reach for it when",
-  "  the user asks about TET itself — its theme, settings, projects or tabs:",
-  "    settings-get, list-themes, list-agents, projects-list, tabs-list.",
-  "  the user means something they ran or saw in another tab (\"the error in the shell\", \"what did",
-  "    codex say\"): tabs-list for the id, then tabs-output; events-tail for which tab last",
-  "    finished a turn.",
-  "  something belongs in front of the user rather than in your answer: editor-open puts a file in",
-  "    the project's editor tab, notify raises a desktop notification when a long job is done.",
-  "  another agent or a saved command should do the job: tabs-create or tabs-run-command, then",
-  "    tabs-wait --idle and tabs-output for what it answered.",
-  "",
-  "Leave it alone for",
-  "  files and git — read the repository and run git yourself.",
-  "  hook, which is how an agent's own hooks report a turn.",
-  "  restarting TET: your own session dies with it, so ask the user."
+  "Leave it alone for files and git: read the repository and run git yourself."
+];
+
+/** The verbs in the order help prints them, under the question each group answers; every verb is
+ *  in exactly one group (control.test.ts). Grouping is what the list gives an agent that the verb
+ *  names alone do not, so it replaces the walkthrough that used to name them a second time. */
+const GROUPS: ReadonlyArray<{ heading: string; verbs: readonly string[] }> = [
+  {
+    heading: "TET itself",
+    verbs: [
+      "help",
+      "version",
+      "settings-get",
+      "list-themes",
+      "list-agents",
+      "settings-set-theme",
+      "settings-set-color-scheme",
+      "settings-set-prompt",
+      "projects-list",
+      "projects-add",
+      "projects-remove",
+      "repo-state",
+      "restart-app"
+    ]
+  },
+  {
+    heading: "The other tabs",
+    verbs: [
+      "tabs-list",
+      "tabs-output",
+      "events-tail",
+      "tabs-wait",
+      "tabs-send",
+      "tabs-create",
+      "tabs-run-command",
+      "tabs-start",
+      "tabs-restart",
+      "tabs-rename",
+      "tabs-close"
+    ]
+  },
+  {
+    heading: "In front of the user",
+    verbs: ["editor-open", "editor-state", "editor-list", "explorer-list", "notices-list", "notify"]
+  },
+  { heading: "TET's own plumbing", verbs: ["hook"] }
 ];
 
 /** Each verb's summary on its own indented line: padding every usage to the longest one (tabs-wait)
  *  cost an agent reading this some 140 spaces a line. */
 function usage(): string {
+  const listed = (verb: string): ControlVerb | undefined => CONTROL_VERBS.find((entry) => entry.verb === verb);
   return [
     "tet-ctl — control the TET app this terminal runs in",
     "",
     ...WHEN_TO_USE,
+    ...GROUPS.flatMap((group) => [
+      "",
+      group.heading,
+      ...group.verbs.flatMap((verb) => {
+        const entry = listed(verb);
+        return entry ? [`  ${entry.usage}`, `      ${entry.summary}`] : [];
+      })
+    ]),
     "",
-    "Verbs",
-    ...CONTROL_VERBS.flatMap((entry) => [`  ${entry.usage}`, `      ${entry.summary}`]),
-    "",
-    "Without --project, a verb acts on the project of the tab it is run from."
+    "Without --project, a verb acts on the project of the tab it is run from. restartRequired in an",
+    "answer means the change waits for a restart — tell the user, never restart for them.",
+    "Refused whatever the list says (exit 2, the reason on stderr): a terminal of another project",
+    "(tabs-output, tabs-send), and from a tab running in an sbx sandbox everything that acts on this",
+    "machine — the other tabs included."
   ].join("\n");
 }
 

@@ -122,13 +122,16 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     return (read.result as { output: string } | undefined)?.output ?? "";
   }
 
+  /** Typed as a tab of the project does: the verb answers only there. */
   async function send(tabId: string, text: string): Promise<void> {
-    const sent = await ctl("tabs-send", tabId, text, "--project", currentProject().id);
+    assert.ok(app, "tet started");
+    const sent = await tetCtl(["tabs-send", tabId, text], app.asTab(currentProject().id, tabId));
     assert.equal(sent.status, 0, sent.stderr);
   }
 
   async function pressEnter(tabId: string): Promise<void> {
-    const sent = await ctl("tabs-send", tabId, "--enter", "--project", currentProject().id);
+    assert.ok(app, "tet started");
+    const sent = await tetCtl(["tabs-send", tabId, "--enter"], app.asTab(currentProject().id, tabId));
     assert.equal(sent.status, 0, sent.stderr);
   }
 
