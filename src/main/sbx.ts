@@ -749,6 +749,30 @@ function portKey(port: SbxPort): string {
   return `${port.host}:${port.container}`;
 }
 
+/**
+ * What the sandbox has published, the truth `portDelta` is taken against (as readSandboxHosts is
+ * for hosts): a port sbx refused at the last Save is missing here and is tried again, and one
+ * published by hand is left alone. Measured, 2026-09-17, sbx 0.42.1: a *stopped* sandbox answers
+ * "No published ports" though its ports survive the stop and return with it, so only ask a running
+ * one. `--json` is an array of `{host_ip, host_port, sandbox_port, protocol}`.
+ */
+async function readSandboxPorts(name: string): Promise<SbxPort[]> {
+  return parsePublishedPorts((await runSbx(["ports", name, "--json"])).stdout);
+}
+
+/** Unreadable reads as none published: every configured port is then tried, and re-publishing one
+ *  the sandbox has only answers "already published". */
+export function parsePublishedPorts(stdout: string): SbxPort[] {
+  try {
+    const listed = JSON.parse(stdout) as { host_port?: number; sandbox_port?: number }[];
+    return listed
+      .filter((entry) => typeof entry?.host_port === "number" && typeof entry.sandbox_port === "number")
+      .map((entry) => ({ host: String(entry.host_port), container: String(entry.sandbox_port) }));
+  } catch {
+    return [];
+  }
+}
+
 /** See applyPortChanges. */
 function portDelta(previous: SbxPort[], current: SbxPort[]): { removed: SbxPort[]; added: SbxPort[] } {
   const previousKeys = new Set(previous.map(portKey));
@@ -760,20 +784,26 @@ function portDelta(previous: SbxPort[], current: SbxPort[]): { removed: SbxPort[
 }
 
 /**
- * Publishes/unpublishes only the ports changed since the last save. A published port survives a
- * stop (verified, 2026-09-08), so this runs at Save, not per spawn; `sbx run -p` covers a new
- * sandbox (prepareSbxRun). Re-publishing errors ("already published", verified), so only the delta
- * is sent. The caller has started the sandbox (`sbx ports` refuses a stopped one). Returns what
- * sbx refused, with its last line (sbx's `ERROR: …`), for the Save to report.
+ * Publishes/unpublishes only the ports the sandbox does not already have as asked (readSandboxPorts).
+ * A published port survives a stop (verified, 2026-09-08), so this runs at Save and at a sandbox's
+ * creation (prepareSbxRun), not per spawn. Re-publishing errors ("already published", verified), so
+ * only the delta is sent. Returns what sbx refused, with its last line (sbx's `ERROR: …`), for the
+ * Save to report. Measured, 2026-09-17, sbx 0.42.1: publishing starts a stopped sandbox; a host port
+ * another process holds on 127.0.0.1 answers 500, one another sandbox holds 409; `--unpublish` of a
+ * port never published exits 0.
  */
-async function applyPortChanges(name: string, delta: { removed: SbxPort[]; added: SbxPort[] }): Promise<string[]> {
+async function applyPortChanges(
+  name: string,
+  delta: { removed: SbxPort[]; added: SbxPort[] },
+  onData?: OnData
+): Promise<string[]> {
   const changes = [
     ...delta.removed.map((port) => ["--unpublish", portKey(port)]),
     ...delta.added.map((port) => ["--publish", portKey(port)])
   ];
   const failures: string[] = [];
   for (const [flag, key] of changes) {
-    const result = await runSbx(["ports", name, flag, key]);
+    const result = await runSbx(["ports", name, flag, key], { onData });
     if (!result.ok) {
       const said = result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "");
       failures.push(`could not ${flag.slice(2)} port ${key}${said ? ` (${said})` : ""}`);
@@ -867,6 +897,11 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   }
   if (created) {
     await allowHosts(name, config.hosts, onData);
+    // Not `sbx run -p`: the sandbox always exists by here, and `run --name` drops `-p` on an
+    // existing one with a warning, even for a free port (measured, 2026-09-17, sbx 0.42.1). Only a
+    // sandbox this call created: after that its published ports are the truth (readSandboxPorts).
+    // Best-effort like the hosts — sbx's refusal is in the tab's output.
+    await applyPortChanges(name, { removed: [], added: config.ports }, onData);
   }
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged (verified, 2026-09-08: "sandbox 'x'
@@ -877,7 +912,6 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
     agentId,
     "--name",
     name,
-    ...config.ports.flatMap((port) => ["-p", portKey(port)]),
     ...env.flatMap((entry) => ["-e", entry])
   ];
   if (control) {
@@ -896,9 +930,9 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
  * The dialog's Save: writes tet.json, then removes every sandbox if sandboxing is off. If on, a
  * sandbox with another workspace is removed too (see ensureSandboxExists; rebuilt at its next tab),
  * and otherwise brought in line: grants narrowed (revokeMounts), ports applied (applyPortChanges),
- * hosts both ways (revokeStaleHosts, allowHosts) — no edit forces a rebuild. The hosts' "previous"
- * is the sandbox's own rules (the truth, readLiveSbxConfig), so a hand-set rule deleted as a row
- * goes too. Mounts and ports need it running, so it is started once, only when either has work; a
+ * hosts both ways (revokeStaleHosts, allowHosts) — no edit forces a rebuild. The "previous" of both
+ * hosts and ports is the sandbox's own (the truth, readLiveSbxConfig and readSandboxPorts), so a
+ * hand-set rule deleted as a row goes too, and a port it never published is tried again. Mounts and ports need it running, so it is started once, only when either has work; a
  * failed start is skipped. Returns the agents whose sandboxes were removed, for the caller to say
  * so: a running session of theirs just lost its sandbox; and the port changes sbx refused, which
  * tet.json holds all the same.
@@ -928,10 +962,13 @@ export async function saveSbxConfig(
       continue;
     }
     const stale = staleMounts(grantedMounts(agentId, previous), grantedMounts(agentId, config));
-    const ports = portDelta(previous.ports, config.ports);
-    if ((stale.length > 0 || ports.removed.length > 0 || ports.added.length > 0) && (await ensureRunning(name))) {
+    // Ports whenever any are configured or were, since what the sandbox published is only readable
+    // while it runs: the rows may match tet.json and still be unpublished (a refusal at the last
+    // Save, or ports written before the sandbox existed).
+    const ports = config.ports.length > 0 || previous.ports.length > 0;
+    if ((stale.length > 0 || ports) && (await ensureRunning(name))) {
       await revokeMounts(name, stale);
-      const failures = await applyPortChanges(name, ports);
+      const failures = await applyPortChanges(name, portDelta(await readSandboxPorts(name), config.ports));
       portFailures.push(...failures.map((failure) => `The ${getAgent(agentId).displayName} sandbox ${failure}.`));
     }
     await revokeStaleHosts(name, liveHosts.get(name) ?? [], config.hosts);

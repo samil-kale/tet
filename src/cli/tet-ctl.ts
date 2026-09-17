@@ -9,12 +9,41 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
  * stderr on failure, and an exit code to branch on.
  */
 
+/** What a skill file would say at the top: when this is the right tool at all. TET_SYSTEM_PROMPT
+ *  spends its one line sending an agent here, so the answer to "when do I run this" belongs in the
+ *  same output as the verbs: nothing to install into an agent's own configuration, and all four
+ *  read it the same way. */
+const WHEN_TO_USE = [
+  "This terminal is one tab of one project in TET; other tabs run other agents, shells and saved",
+  "commands, and the user watches them all. tet-ctl answers what the filesystem and git cannot:",
+  "what TET shows, what the other tabs are doing, and what the user has in front of them.",
+  "",
+  "Reach for it when",
+  "  the user asks about TET itself — its theme, settings, projects or tabs:",
+  "    settings-get, list-themes, list-agents, projects-list, tabs-list.",
+  "  the user means something they ran or saw in another tab (\"the error in the shell\", \"what did",
+  "    codex say\"): tabs-list for the id, then tabs-output; events-tail for which tab last",
+  "    finished a turn.",
+  "  something belongs in front of the user rather than in your answer: editor-open puts a file in",
+  "    the project's editor tab, notify raises a desktop notification when a long job is done.",
+  "  another agent or a saved command should do the job: tabs-create or tabs-run-command, then",
+  "    tabs-wait --idle and tabs-output for what it answered.",
+  "",
+  "Leave it alone for",
+  "  files and git — read the repository and run git yourself.",
+  "  hook, which is how an agent's own hooks report a turn.",
+  "  restarting TET: your own session dies with it, so ask the user."
+];
+
 /** Each verb's summary on its own indented line: padding every usage to the longest one (tabs-wait)
  *  cost an agent reading this some 140 spaces a line. */
 function usage(): string {
   return [
     "tet-ctl — control the TET app this terminal runs in",
     "",
+    ...WHEN_TO_USE,
+    "",
+    "Verbs",
     ...CONTROL_VERBS.flatMap((entry) => [`  ${entry.usage}`, `      ${entry.summary}`]),
     "",
     "Without --project, a verb acts on the project of the tab it is run from."

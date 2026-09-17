@@ -18,7 +18,8 @@ import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/termin
 import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/shared/script-text";
 import { ProjectStore } from "../src/main/projects";
-import { contractHome, fixedMountSpecs, pathMountSpecs, sandboxName } from "../src/main/sbx";
+import { readSbxConfig, writeSbxConfig } from "../src/main/git/commands";
+import { contractHome, fixedMountSpecs, parsePublishedPorts, pathMountSpecs, sandboxName, saveSbxConfig } from "../src/main/sbx";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
@@ -27,7 +28,8 @@ import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
 import { THEMES } from "../src/shared/themes";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { ControlRequest } from "../src/shared/control";
-import { DEFAULT_KEYBINDING_PRESET_ID } from "../src/shared/types";
+import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG } from "../src/shared/types";
+import type { SbxPort, SbxProjectConfig } from "../src/shared/types";
 import { eventually } from "./helpers";
 
 /** The small measured pieces, each one edit away from silently wrong. */
@@ -183,6 +185,27 @@ describe("resolveCommand", () => {
     await eventually("the program behind the shim exited", () => !alive(pid), 10_000);
   });
 
+  it("takes a name's first folder on PATH, its extension second", { skip: process.platform !== "win32" && "win32 only" }, () => {
+    // A shim put in front of an installed program: cmd.exe resolves per folder, every PATHEXT
+    // extension before the next folder, so the earlier .cmd runs and not the later .exe.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-path-"));
+    const [first, second] = [path.join(dir, "first"), path.join(dir, "second")];
+    fs.mkdirSync(first);
+    fs.mkdirSync(second);
+    fs.writeFileSync(path.join(first, "tool.cmd"), "@ECHO off\r\n");
+    fs.writeFileSync(path.join(second, "tool.exe"), "");
+    const originalPath = process.env.PATH;
+    process.env.PATH = [first, second].join(path.delimiter);
+    try {
+      assert.equal(resolveCommand("tool", []).command, "cmd.exe", "the .cmd in the first folder");
+      process.env.PATH = [second, first].join(path.delimiter);
+      assert.equal(resolveCommand("tool", []).command, path.join(second, "tool.exe"), "the .exe where its folder comes first");
+    } finally {
+      process.env.PATH = originalPath;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("changes nothing elsewhere", { skip: process.platform === "win32" && "not win32" }, () => {
     assert.deepEqual(resolveCommand("npm", ["-v"]), { command: "npm", args: ["-v"] });
   });
@@ -263,6 +286,147 @@ describe("sbx sandbox naming and mounts", () => {
   it("mounts tet's own dir live — agentDir read-write, nothing else", () => {
     const agentDir = path.join(os.tmpdir(), "agents", "claude", "p");
     assert.deepEqual(fixedMountSpecs({ agentDir }), [agentDir]);
+  });
+});
+
+describe("a sandbox's published ports", () => {
+  // `sbx ports <name> --json`, sbx 0.42.1 (2026-09-17), after publishing 38111:8080 and 38112:9090.
+  const published = JSON.stringify([
+    { host_ip: "127.0.0.1", host_port: 38111, sandbox_port: 8080, protocol: "tcp4" },
+    { host_ip: "127.0.0.1", host_port: 38112, sandbox_port: 9090, protocol: "tcp4" }
+  ]);
+
+  it("reads the ports as the dialog spells them", () => {
+    assert.deepEqual(parsePublishedPorts(published), [
+      { host: "38111", container: "8080" },
+      { host: "38112", container: "9090" }
+    ]);
+  });
+
+  it("reads none where the sandbox has none, or says something else entirely", () => {
+    // An empty list is `[]` (verified live); a stopped sandbox answers "No published ports" as text.
+    assert.deepEqual(parsePublishedPorts("[]"), []);
+    assert.deepEqual(parsePublishedPorts("No published ports\n"), []);
+    assert.deepEqual(parsePublishedPorts(""), []);
+    assert.deepEqual(parsePublishedPorts(JSON.stringify([{ host_ip: "127.0.0.1", protocol: "tcp4" }])), []);
+  });
+});
+
+/**
+ * The dialog's Save against a stand-in `sbx`, the one seam where the whole run is visible: what it
+ * publishes is the delta against what the sandbox *has* (`sbx ports --json`), never against
+ * tet.json's previous rows — those may list a port sbx refused at the last Save.
+ */
+describe("saving an sbx config", () => {
+  const projectId = "a project with one sandbox";
+  const name = sandboxName(projectId, "claude");
+  // `sbx ports --publish` of a port another sandbox holds, sbx 0.42.1 (2026-09-17).
+  const refusal = "ERROR: publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published\n";
+
+  const port = (number: number): SbxPort => ({ host: String(number), container: String(number) });
+  /** One entry of `sbx ports --json` (see "a sandbox's published ports"). */
+  const listed = (number: number) => ({ host_ip: "127.0.0.1", host_port: number, sandbox_port: number, protocol: "tcp4" });
+  const config = (ports: SbxPort[]): SbxProjectConfig => ({ ...EMPTY_SBX_CONFIG, enabled: true, ports });
+
+  /**
+   * A stand-in `sbx` first on PATH (a `.cmd` on win32, an `sh` script elsewhere): it appends every
+   * invocation to a log, one line each, and answers the subcommands Save runs. It lists one
+   * sandbox, this project's Claude one, so the other three agents are skipped; `policy ls` answers
+   * no rules, so hosts add nothing to the log.
+   */
+  function fakeSbx(answers: { published: object[]; refuse?: string }): { dir: string; projectPath: string } {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
+    const projectPath = path.join(dir, "repo");
+    fs.mkdirSync(projectPath);
+    const answerFile = path.join(dir, "answers.json");
+    fs.writeFileSync(
+      answerFile,
+      JSON.stringify({ ...answers, refusal, name, workspaces: [projectPath], log: path.join(dir, "calls.log") })
+    );
+    const script = path.join(dir, "sbx.js");
+    fs.writeFileSync(
+      script,
+      `const fs = require("node:fs");
+const answers = JSON.parse(fs.readFileSync(${JSON.stringify(answerFile)}, "utf8"));
+const args = process.argv.slice(2);
+fs.appendFileSync(answers.log, args.join(" ") + "\\n");
+if (args[0] === "ls") {
+  process.stdout.write(JSON.stringify({ sandboxes: [{ name: answers.name, workspaces: answers.workspaces }] }));
+} else if (args[0] === "policy") {
+  process.stdout.write(JSON.stringify({ rules: [] }));
+} else if (args[0] === "ports" && args[2] === "--json") {
+  process.stdout.write(JSON.stringify(answers.published));
+} else if (args[2] === "--publish" && args[3] === answers.refuse) {
+  process.stderr.write(answers.refusal);
+  process.exit(1);
+}
+`
+    );
+    if (process.platform === "win32") {
+      fs.writeFileSync(path.join(dir, "sbx.cmd"), `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
+    } else {
+      fs.writeFileSync(path.join(dir, "sbx"), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
+    }
+    return { dir, projectPath };
+  }
+
+  /**
+   * PATH with the stand-in first and every real `sbx` taken out: on win32 `resolveCommand` prefers a
+   * native executable found anywhere on PATH to a `.cmd` in the first folder, so prepending alone
+   * would still run the machine's own sbx.
+   */
+  function pathWith(dir: string): string {
+    const holdsSbx = (entry: string): boolean =>
+      entry !== "" && [".exe", ".com", ".cmd", ".bat", ""].some((extension) => fs.existsSync(path.join(entry, `sbx${extension}`)));
+    return [dir, ...(process.env.PATH ?? "").split(path.delimiter).filter((entry) => !holdsSbx(entry))].join(path.delimiter);
+  }
+
+  /** Saves `now` over a tet.json holding `before`, against a sandbox that has `has` published. */
+  async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
+    const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
+    await writeSbxConfig(projectPath, config(setup.before.map(port)));
+    const originalPath = process.env.PATH;
+    process.env.PATH = pathWith(dir);
+    try {
+      const result = await saveSbxConfig(projectPath, projectId, config(setup.now.map(port)));
+      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
+      return { result, projectPath, calls };
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  }
+
+  it("publishes a port tet.json already listed, because the sandbox never published it", async () => {
+    const { result, calls } = await save({ has: [], before: [3000], now: [3000] });
+    assert.deepEqual(calls, [
+      "ls --json",
+      "policy ls --type network --include-inactive --json",
+      `exec -i ${name} true`,
+      `ports ${name} --json`,
+      `ports ${name} --publish 3000:3000`
+    ]);
+    assert.deepEqual(result, { removed: [], portFailures: [] });
+  });
+
+  it("unpublishes what the sandbox has and tet.json dropped, and leaves a port in both alone", async () => {
+    const { calls } = await save({ has: [4000, 5000], before: [4000, 5000], now: [5000, 3000] });
+    assert.deepEqual(
+      calls.filter((call) => call.includes("publish")),
+      [`ports ${name} --unpublish 4000:4000`, `ports ${name} --publish 3000:3000`]
+    );
+  });
+
+  it("reports a refused publish under the agent's name, keeping the port in tet.json", async () => {
+    const { result, projectPath } = await save({ has: [], before: [3000], now: [3000], refuse: "3000:3000" });
+    assert.deepEqual(result.portFailures, [
+      "The Claude sandbox could not publish port 3000:3000 (publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published)."
+    ]);
+    assert.deepEqual((await readSbxConfig(projectPath)).ports, [port(3000)]);
+  });
+
+  it("does not start the sandbox where no port is configured and none was", async () => {
+    const { calls } = await save({ has: [], before: [], now: [] });
+    assert.deepEqual(calls, ["ls --json", "policy ls --type network --include-inactive --json"]);
   });
 });
 

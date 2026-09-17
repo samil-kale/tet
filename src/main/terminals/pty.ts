@@ -37,29 +37,27 @@ export function pathKey(env: Record<string, string | undefined>): string {
 const WIN32_NATIVE_EXTENSIONS = [".exe", ".com"];
 const WIN32_BATCH_EXTENSIONS = [".cmd", ".bat"];
 
-/** node-pty's CreateProcessW applies no PATHEXT and cannot launch .cmd/.bat/.ps1 shims. The native
- *  executable's path, or undefined where only a shim (or nothing) resolves and cmd.exe is needed. */
-function resolveWin32NativeExecutable(executable: string): string | undefined {
-  return resolveWin32Executable(executable, WIN32_NATIVE_EXTENSIONS);
-}
-
-/** The path `executable` names with one of `extensions`, searched in its folder or else on PATH. */
-function resolveWin32Executable(executable: string, extensions: string[]): string | undefined {
+/**
+ * What `executable` names, searched in its folder or else along PATH, and whether it is a batch
+ * file: node-pty's CreateProcessW applies no PATHEXT and cannot launch a .cmd/.bat/.ps1 shim, so
+ * only a native one is spawned directly. Every extension is tried per folder before the next
+ * folder, as cmd.exe resolves a name — a `.cmd` earlier on PATH beats an `.exe` later, and a shim
+ * put in front of a program is what runs. Undefined where nothing (or only a .ps1) resolves.
+ */
+function resolveWin32Executable(executable: string): { path: string; batch: boolean } | undefined {
   const ext = path.extname(executable).toLowerCase();
-  if (extensions.includes(ext)) {
-    return executable;
-  }
   if (ext) {
-    return undefined;
+    const known = [...WIN32_NATIVE_EXTENSIONS, ...WIN32_BATCH_EXTENSIONS].includes(ext);
+    return known ? { path: executable, batch: WIN32_BATCH_EXTENSIONS.includes(ext) } : undefined;
   }
 
   const dir = path.dirname(executable);
   const searchDirs = dir !== "." ? [dir] : (process.env.PATH ?? "").split(path.delimiter);
   for (const searchDir of searchDirs) {
-    for (const extension of extensions) {
+    for (const extension of [...WIN32_NATIVE_EXTENSIONS, ...WIN32_BATCH_EXTENSIONS]) {
       const candidate = path.join(searchDir, path.basename(executable) + extension);
       if (fs.existsSync(candidate)) {
-        return candidate;
+        return { path: candidate, batch: WIN32_BATCH_EXTENSIONS.includes(extension) };
       }
     }
   }
@@ -105,14 +103,13 @@ function escapeCmdArgument(arg: string, shim: boolean): string {
  *  unresolved name through cmd.exe; elsewhere unchanged. */
 export function resolveCommand(executable: string, args: string[]): ResolvedCommand {
   if (process.platform === "win32") {
-    const native = resolveWin32NativeExecutable(executable);
-    if (native) {
-      return { command: native, args };
+    const resolved = resolveWin32Executable(executable);
+    if (resolved && !resolved.batch) {
+      return { command: resolved.path, args };
     }
     // Shim or unresolved: cmd.exe, not `shell: true`, which joins args unescaped. The whole line is
     // escaped as cross-spawn does it; `/s` strips only the outer quotes.
-    const batch = resolveWin32Executable(executable, WIN32_BATCH_EXTENSIONS);
-    const shim = batch !== undefined && isCmdShim(batch);
+    const shim = resolved !== undefined && isCmdShim(resolved.path);
     const line = [executable.replace(CMD_META_CHARS, "^$1"), ...args.map((arg) => escapeCmdArgument(arg, shim))].join(" ");
     return { command: "cmd.exe", args: ["/d", "/s", "/c", `"${line}"`], windowsVerbatimArguments: true };
   }
