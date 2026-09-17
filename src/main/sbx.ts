@@ -190,6 +190,9 @@ export async function checkSbxReady(projectPath: string, projectId: string): Pro
   if (!status.installed) {
     return { notReady: "SBX is not installed (or no longer on PATH)" };
   }
+  if (status.failure) {
+    return { notReady: `SBX failed: ${status.failure}` };
+  }
   if (!status.loggedIn || !sandboxes) {
     return { notReady: "SBX is not signed in to Docker" };
   }
@@ -268,7 +271,10 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
  *
  * `sbx ls` is the sign-in probe: side-effect-free, exits 1 with "Not authenticated to Docker" when
  * signed out, and `prepareSbxRun` needs its listing. Not `sbx policy ls`, which also exits 1 signed
- * in without a policy. Any failure reads as signed out — a needless login costs one glance.
+ * in without a policy. Only that text reads as signed out: after `sbx logout` and `login`, sandboxd
+ * can hang on a sandbox's orphaned containerd shim, and every command then exits 1 with
+ * "ERROR: ensure daemon: …" — `sbx daemon restart` does not help, only ending the shim (measured,
+ * 0.42.1, Windows). That error is reported as sbx's own.
  *
  * A governed account's `sbx policy ls` opens with "Governance: Managed by <org>", SOURCE "org"
  * (measured, 0.42.1; ungoverned: "local" or "kit", no such line). Governance only words a blocker;
@@ -279,15 +285,21 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   if (refreshPath) {
     await augmentAgentPath();
   }
-  const [installed, sandboxes, policy] = await Promise.all([isSbxInstalled(), listSandboxes(), runSbx(["policy", "ls"])]);
+  const [installed, list, policy] = await Promise.all([isSbxInstalled(), runSbx(["ls", "--json"]), runSbx(["policy", "ls"])]);
   status.installed = installed;
   if (!status.installed) {
     return { status };
   }
-  status.loggedIn = sandboxes !== undefined;
-  if (!status.loggedIn) {
+  const sandboxes = parseSandboxes(list);
+  if (!sandboxes) {
+    if (!/not authenticated/i.test(list.stderr)) {
+      // The last line is sbx's `ERROR: …`; progress lines ("Starting sandboxd daemon...") precede it.
+      const said = list.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "");
+      status.failure = said || "sbx ls failed";
+    }
     return { status };
   }
+  status.loggedIn = true;
   status.policyInitialized = policy.ok;
   status.governed = policy.ok && /managed by/i.test(policy.stdout);
   return { status, sandboxes };
@@ -475,7 +487,10 @@ const sandboxSetups = new Map<string, Promise<boolean>>();
 
 /** Undefined when `sbx ls` fails, as it does signed out (probeSbx). One process for all sandboxes. */
 async function listSandboxes(): Promise<SandboxList | undefined> {
-  const result = await runSbx(["ls", "--json"]);
+  return parseSandboxes(await runSbx(["ls", "--json"]));
+}
+
+function parseSandboxes(result: RunResult): SandboxList | undefined {
   if (!result.ok) {
     return undefined;
   }

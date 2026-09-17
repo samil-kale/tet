@@ -75,6 +75,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       setPhase({ kind: "not-installed" });
       return;
     }
+    if (status.failure) {
+      setPhase({ kind: "failed", message: `SBX failed: ${status.failure}` });
+      return;
+    }
     if (!status.loggedIn) {
       setPhase({ kind: "signing-in" });
       if (!(await window.tet.sbx.login())) {

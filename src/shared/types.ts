@@ -132,6 +132,9 @@ export interface SbxBlocker {
 export interface SbxStatus {
   installed: boolean;
   loggedIn: boolean;
+  /** sbx's own error when it failed for a reason other than being signed out (a hung daemon),
+   *  with `loggedIn` false; signing in would not help. */
+  failure?: string;
   policyInitialized: boolean;
   /** An organization manages the account's policies; local rules do not apply. */
   governed: boolean;
