@@ -84,7 +84,6 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   status: "value",
   tail: "value",
   kb: "value",
-  lines: "value",
   timeout: "value",
   keep: "switch"
 };
@@ -184,18 +183,10 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     ownProfileOnly: true
   },
   {
-    verb: "tabs-agent-output",
-    usage: "tabs-agent-output <tab-id> [--kb <n>]",
+    verb: "tabs-output",
+    usage: "tabs-output <tab-id> [--kb <n>]",
     summary:
-      "What an agent tab printed lately, escape sequences taken out: its TUI's redraws, the last n KB (4, at most 64). Only a tab of the caller's own project.",
-    positionals: ["tabId"],
-    ownProjectOnly: true
-  },
-  {
-    verb: "tabs-shell-output",
-    usage: "tabs-shell-output <tab-id> [--lines <n>]",
-    summary:
-      "The last n lines a shell tab printed (100, back as far as its last MB), escape sequences and redraws taken out. Only a tab of the caller's own project.",
+      "The last n KB a tab printed (16, at most 256), escape sequences taken out and a line redrawn after a carriage return kept as last shown; an agent's TUI redraws its screen in place, so its text comes in pieces. Only a tab of the caller's own project.",
     positionals: ["tabId"],
     ownProjectOnly: true
   },

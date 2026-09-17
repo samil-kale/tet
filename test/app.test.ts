@@ -133,7 +133,7 @@ ${stderr.slice(uncaught)}`);
     const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TerminalDescriptor;
     // Read as a tab of that project does: the verb answers only there.
     const lines = async (): Promise<string> =>
-      ((await tetCtl(["tabs-shell-output", probe.tabId], asTab(project.id, probe.tabId))).result as
+      ((await tetCtl(["tabs-output", probe.tabId], asTab(project.id, probe.tabId))).result as
         | { output: string }
         | undefined)?.output ?? "";
     await eventually("the command's line", async () => /tet-context-probe/.test(await lines()), STARTUP_MS);
@@ -144,7 +144,7 @@ ${stderr.slice(uncaught)}`);
     fs.writeFileSync(path.join(repo, "tet.json"), JSON.stringify({ commands: [{ command: "tet-ctl tabs-list", name: "list" }] }));
     const list = (await ctl("tabs-run-command", "list", "--project", project.id)).result as TerminalDescriptor;
     const lines = async (): Promise<string> =>
-      ((await tetCtl(["tabs-shell-output", list.tabId], asTab(project.id, list.tabId))).result as
+      ((await tetCtl(["tabs-output", list.tabId], asTab(project.id, list.tabId))).result as
         | { output: string }
         | undefined)?.output ?? "";
     // Its own id in the listing: the server took the tab's token for the ids the tab reported.

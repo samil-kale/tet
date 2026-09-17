@@ -527,23 +527,17 @@ describe("tet-ctl against the control server", () => {
     ]);
   });
 
-  it("answers an agent tab's output as text, and refuses a shell tab", async () => {
-    assert.deepEqual((await tetCtl(["tabs-agent-output", "tab-2"])).result, { output: "bold line\nnext" });
-    assert.deepEqual((await tetCtl(["tabs-agent-output", "tab-2", "--kb", "1"])).result, { output: "bold line\nnext" });
-    assert.equal((await tetCtl(["tabs-agent-output", "tab-2", "--kb", "x"])).status, EXIT_CODES.usage);
-    assert.equal((await tetCtl(["tabs-agent-output", OWN_TAB])).status, EXIT_CODES.usage);
-  });
-
-  it("answers a shell tab's last lines as finally shown, and refuses an agent tab", async () => {
-    assert.deepEqual((await tetCtl(["tabs-shell-output", OWN_TAB])).result, { output: "one\ntwo\nthree" }, "redraws collapsed");
-    assert.deepEqual((await tetCtl(["tabs-shell-output", OWN_TAB, "--lines", "2"])).result, { output: "two\nthree" });
-    assert.equal((await tetCtl(["tabs-shell-output", OWN_TAB, "--lines", "0"])).status, EXIT_CODES.usage);
-    assert.equal((await tetCtl(["tabs-shell-output", "tab-2"])).status, EXIT_CODES.usage);
+  it("answers an agent or shell tab's output as text, its lines as finally shown", async () => {
+    assert.deepEqual((await tetCtl(["tabs-output", "tab-2"])).result, { output: "bold line\nnext" });
+    assert.deepEqual((await tetCtl(["tabs-output", "tab-2", "--kb", "1"])).result, { output: "bold line\nnext" });
+    assert.deepEqual((await tetCtl(["tabs-output", OWN_TAB])).result, { output: "one\ntwo\nthree" }, "redraws collapsed");
+    assert.equal((await tetCtl(["tabs-output", "tab-2", "--kb", "x"])).status, EXIT_CODES.usage);
+    assert.equal((await tetCtl(["tabs-output", "tab-2", "--kb", "0"])).status, EXIT_CODES.usage);
   });
 
   it("reads no tab of another project, nor from outside a project", async () => {
-    const other = await tetCtl(["tabs-shell-output", OWN_TAB, "--project", OTHER.id]);
-    const outside = await tetCtl(["tabs-agent-output", "tab-2", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
+    const other = await tetCtl(["tabs-output", OWN_TAB, "--project", OTHER.id]);
+    const outside = await tetCtl(["tabs-output", "tab-2", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
     for (const [what, run] of [
       ["another project", other],
       ["no project of its own", outside]
@@ -551,7 +545,7 @@ describe("tet-ctl against the control server", () => {
       assert.equal(run.status, EXIT_CODES.unauthorized, what);
       assert.match(run.stderr, /own project/, what);
     }
-    assert.equal((await tetCtl(["tabs-shell-output", OWN_TAB, "--project", PROJECT.id])).status, EXIT_CODES.ok, "its own, named");
+    assert.equal((await tetCtl(["tabs-output", OWN_TAB, "--project", PROJECT.id])).status, EXIT_CODES.ok, "its own, named");
   });
 
   it("answers the latest events, as many as asked for", async () => {
@@ -584,7 +578,7 @@ describe("tet-ctl against the control server", () => {
       const sent = await tetCtl(["tabs-send", "tab-2", "x"], { [CONTROL_ENV.port]: String(ordinaryPort) });
       assert.equal(sent.status, EXIT_CODES.unauthorized);
       assert.match(sent.stderr, /profile of its own/);
-      for (const args of [["tabs-agent-output", "tab-2"], ["tabs-shell-output", OWN_TAB], ["tabs-list"]]) {
+      for (const args of [["tabs-output", "tab-2"], ["tabs-output", OWN_TAB], ["tabs-list"]]) {
         assert.equal((await tetCtl(args, { [CONTROL_ENV.port]: String(ordinaryPort) })).status, EXIT_CODES.ok, args[0]);
       }
       assert.deepEqual(calls.written, []);

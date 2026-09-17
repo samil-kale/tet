@@ -153,10 +153,10 @@ describe("the tet-ctl launcher", () => {
 describe("a tab's recorded output", () => {
   it("keeps the latest output of open tabs only", () => {
     const records = new ControlRecords();
-    records.addOutput("p1", "tab-1", "shell", "one");
-    records.addOutput("p1", "tab-1", "shell", "two");
-    records.addOutput("p1", "tab-2", "claude", "gone");
-    records.addOutput("p2", "tab-3", "shell", "other project");
+    records.addOutput("p1", "tab-1", "one");
+    records.addOutput("p1", "tab-1", "two");
+    records.addOutput("p1", "tab-2", "gone");
+    records.addOutput("p2", "tab-3", "other project");
     records.keepOutputs("p1", new Set(["tab-1"]));
     assert.equal(records.output("p1", "tab-1"), "onetwo");
     assert.equal(records.output("p1", "tab-2"), undefined, "a closed tab's output goes with it");
@@ -165,21 +165,15 @@ describe("a tab's recorded output", () => {
     assert.equal(records.output("p2", "tab-3"), undefined, "a removed project's output goes with it");
   });
 
-  it("holds a megabyte of a shell and whole lines only, a few screens of an agent", () => {
+  it("holds the latest 256 KB of a tab", () => {
     const records = new ControlRecords();
     // A progress bar redrawn for hours, never a newline: bounded all the same.
     for (let i = 0; i < 400; i++) {
-      records.addOutput("p", "shell", "shell", "\rDownloading 42%".padEnd(16 * 1024, " "));
-      records.addOutput("p", "agent", "claude", "\x1b[H".padEnd(16 * 1024, "x"));
+      records.addOutput("p", "shell", "\rDownloading 42%".padEnd(16 * 1024, " "));
+      records.addOutput("p", "agent", "\x1b[H".padEnd(16 * 1024, "x"));
     }
-    assert.equal(records.output("p", "shell")?.length, 1024 * 1024);
-    assert.equal(records.output("p", "agent")?.length, 64 * 1024);
-
-    const line = "a line\n".repeat(1024);
-    for (let i = 0; i < 300; i++) {
-      records.addOutput("p", "lines", "shell", line);
-    }
-    assert.match(records.output("p", "lines") ?? "", /^a line\n/, "no line cut at the start");
+    assert.equal(records.output("p", "shell")?.length, 256 * 1024);
+    assert.equal(records.output("p", "agent")?.length, 256 * 1024);
   });
 });
 

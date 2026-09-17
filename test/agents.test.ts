@@ -70,7 +70,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   const AGENT_REPO = path.join(os.tmpdir(), "tet-agents-test");
 
   /**
-   * The question a CLI asks in a folder it has not been trusted with, as `tabs-agent-output` shows
+   * The question a CLI asks in a folder it has not been trusted with, as `tabs-output` shows
    * it (spaces may be gone), and the keys answering "trust". Measured 2026-09-16, win32: Claude
    * Code 2.1.273 preselects "No, exit", Codex 0.154.0 "1. Yes, continue"; opencode and pi ask nothing.
    */
@@ -118,7 +118,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   /** Read as a tab of the project does: the verb answers only there. */
   async function outputOf(tabId: string): Promise<string> {
     assert.ok(app, "tet started");
-    const read = await tetCtl(["tabs-agent-output", tabId, "--kb", "64"], app.asTab(currentProject().id, tabId));
+    const read = await tetCtl(["tabs-output", tabId, "--kb", "64"], app.asTab(currentProject().id, tabId));
     return (read.result as { output: string } | undefined)?.output ?? "";
   }
 

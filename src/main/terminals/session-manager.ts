@@ -110,7 +110,7 @@ interface AgentRuntime {
 
 export interface SessionManagerCallbacks {
   onTabs: (projectId: string, tabs: TerminalDescriptor[]) => void;
-  onOutput: (projectId: string, tabId: string, agentId: AgentId, data: string) => void;
+  onOutput: (projectId: string, tabId: string, data: string) => void;
   onStatus: (projectId: string, tabId: string, status: TerminalStatus) => void;
   /** Whether anything in this project is still starting — drives the tab strip's bar. */
   onStartupProgress: (projectId: string, show: boolean) => void;
@@ -851,7 +851,7 @@ export class ProjectSessionManager {
    */
   private reportOutput(tab: TabState, data: string): void {
     if (this.tabs.includes(tab)) {
-      this.callbacks.onOutput(this.project.id, tab.tabId, tab.agentId, data);
+      this.callbacks.onOutput(this.project.id, tab.tabId, data);
     }
   }
 

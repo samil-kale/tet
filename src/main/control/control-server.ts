@@ -174,20 +174,16 @@ function plainText(data: string): string {
 }
 
 /**
- * A shell's lines as finally shown: each keeps what follows its last bare `\r`, so a progress bar's
- * redraws leave one line. Over the whole output at once, a redraw split across chunks included;
- * the `\r` of a `\r\n` not yet complete is no redraw. The open line after a last newline is empty
- * then, not a line.
+ * A tab's output with its lines as finally shown: each keeps what follows its last bare `\r`, so a
+ * progress bar's redraws leave one line. Over the whole output at once, a redraw split across
+ * chunks included; the `\r` of a `\r\n` not yet complete is no redraw.
  */
-function shellLines(data: string): string[] {
-  const lines = plainText(data)
+function shownText(data: string): string {
+  return plainText(data)
     .replace(/\r$/, "")
     .split("\n")
-    .map((line) => line.slice(line.lastIndexOf("\r") + 1));
-  if (lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-  return lines;
+    .map((line) => line.slice(line.lastIndexOf("\r") + 1))
+    .join("\n");
 }
 
 /** `tabs-wait` default timeout and poll interval. */
@@ -195,9 +191,8 @@ const WAIT_TIMEOUT_S = 30;
 const WAIT_POLL_MS = 100;
 /** `events-tail` default. */
 const EVENTS_TAIL = 50;
-/** `tabs-agent-output` and `tabs-shell-output` defaults. */
-const AGENT_OUTPUT_KB = 4;
-const SHELL_OUTPUT_LINES = 100;
+/** `tabs-output` default. */
+const OUTPUT_KB = 16;
 
 /**
  * What a hook prints back into its agent. `{}` rather than nothing: Codex parses its Stop hook's
@@ -441,22 +436,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { sent: tabId } };
     },
 
-    "tabs-agent-output": (args, caller) => {
-      const { tabId, found, tab } = knownTab(args, caller);
-      if (tab.agentId === "shell") {
-        throw new ControlError("bad_args", `${tabId} is a shell tab (see tabs-shell-output)`);
-      }
-      const output = plainText(deps.records.output(found.id, tabId) ?? "");
-      return { result: { output: output.slice(-count(args, "kb", AGENT_OUTPUT_KB) * 1024) } };
-    },
-
-    "tabs-shell-output": (args, caller) => {
-      const { tabId, found, tab } = knownTab(args, caller);
-      if (tab.agentId !== "shell") {
-        throw new ControlError("bad_args", `${tabId} is an agent tab (see tabs-agent-output)`);
-      }
-      const lines = shellLines(deps.records.output(found.id, tabId) ?? "");
-      return { result: { output: lines.slice(-count(args, "lines", SHELL_OUTPUT_LINES)).join("\n") } };
+    "tabs-output": (args, caller) => {
+      const { tabId, found } = knownTab(args, caller);
+      const output = shownText(deps.records.output(found.id, tabId) ?? "");
+      return { result: { output: output.slice(-count(args, "kb", OUTPUT_KB) * 1024) } };
     },
 
     "events-tail": (args, caller) => ({

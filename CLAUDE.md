@@ -165,8 +165,7 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 - A caller's project and tab ids count only with the token made for them
   (`src/main/control/control-token.ts`): a terminal gets its tab's token, never the run's.
 - `tabs-send` answers only in a run with a profile of its own (`ownProfileOnly`);
-  `tabs-agent-output`/`tabs-shell-output` only for a tab of the caller's own project
-  (`ownProjectOnly`).
+  `tabs-output` only for a tab of the caller's own project (`ownProjectOnly`).
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.

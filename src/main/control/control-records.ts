@@ -1,30 +1,17 @@
-import type { AgentId, EditorListing, EditorReport, NoticeReport } from "../../shared/types";
+import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types";
 
 const MAX_NOTICES = 50;
-/** A few screens of a TUI's redraws. */
-const MAX_AGENT_OUTPUT_CHARS = 64 * 1024;
-/** Thousands of a shell's lines — as far back as `tabs-shell-output` reaches. */
-const MAX_SHELL_OUTPUT_CHARS = 1024 * 1024;
+/** As far back as `tabs-output` reaches: a long build or test log. */
+const MAX_OUTPUT_CHARS = 256 * 1024;
 
 /** What a tab printed, raw: cleaned only when read, so a redraw spanning chunks still collapses. */
 interface TabOutput {
   text: string;
-  shell: boolean;
 }
 
-function capOf(output: TabOutput): number {
-  return output.shell ? MAX_SHELL_OUTPUT_CHARS : MAX_AGENT_OUTPUT_CHARS;
-}
-
-/** The latest of a tab's output within its cap. A shell's first line cut by the cap is dropped,
- *  since it would read as a whole one; a TUI's redraws have no lines to keep whole. */
+/** The latest of a tab's output within the cap. */
 function capped(output: TabOutput): string {
-  const max = capOf(output);
-  if (output.text.length <= max) {
-    return output.text;
-  }
-  const text = output.text.slice(-max);
-  return output.shell ? text.slice(text.indexOf("\n") + 1) : text;
+  return output.text.slice(-MAX_OUTPUT_CHARS);
 }
 
 /**
@@ -77,13 +64,13 @@ export class ControlRecords {
     return [...this.shownNotices];
   }
 
-  addOutput(projectId: string, tabId: string, agentId: AgentId, data: string): void {
+  addOutput(projectId: string, tabId: string, data: string): void {
     const tabs = this.outputs.get(projectId) ?? new Map<string, TabOutput>();
-    const output = tabs.get(tabId) ?? { text: "", shell: agentId === "shell" };
+    const output = tabs.get(tabId) ?? { text: "" };
     output.text += data;
-    // Trimmed at twice the cap, to the cap when read: trimming every chunk would copy up to a
-    // megabyte per chunk.
-    if (output.text.length > 2 * capOf(output)) {
+    // Trimmed at twice the cap, to the cap when read: trimming every chunk would copy the whole
+    // cap per chunk.
+    if (output.text.length > 2 * MAX_OUTPUT_CHARS) {
       output.text = capped(output);
     }
     tabs.set(tabId, output);

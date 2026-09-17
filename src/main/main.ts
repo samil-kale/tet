@@ -219,8 +219,8 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, {
     awaitedToastTab(projectId);
     records.keepOutputs(projectId, new Set(tabs.map((tab) => tab.tabId)));
   },
-  onOutput: (projectId, tabId, agentId, data) => {
-    records.addOutput(projectId, tabId, agentId, data);
+  onOutput: (projectId, tabId, data) => {
+    records.addOutput(projectId, tabId, data);
     queueOutput(projectId, tabId, data);
   },
   onStatus: (projectId, tabId, status: TerminalStatus) => send("terminal:status", { projectId, tabId, status }),
