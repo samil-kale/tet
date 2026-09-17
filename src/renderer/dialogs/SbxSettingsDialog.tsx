@@ -51,7 +51,7 @@ function tabBlocked(
     return "No agent is installed on this machine to bring anything from";
   }
   if (id === "hosts" && organization) {
-    return `Deactivated by governance: only ${organization} can allow hosts for sandboxes`;
+    return "Disabled by governance";
   }
   return undefined;
 }
@@ -233,18 +233,11 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           </span>
         </label>
       )}
-      {phase.kind === "ready" && tab === "general" && (
+      {phase.kind === "ready" && tab === "general" && phase.organization && (
         <div className="sbx-governance">
-          <strong>Organization governance</strong>
+          <strong>Organization governance is active</strong>
           <p className="dialog-detail">
-            {phase.organization ? (
-              <>
-                Active: SBX's policy is managed by <strong>{phase.organization}</strong>, so only it can allow hosts
-                for sandboxes.
-              </>
-            ) : (
-              "Not active: SBX's policy is managed on this machine."
-            )}
+            SBX's policy is managed by <strong>{phase.organization}</strong>.
           </p>
         </div>
       )}
