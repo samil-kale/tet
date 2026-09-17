@@ -32,17 +32,41 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
   conflicted: "C"
 };
 
-/** Untracked files go to the trash. */
+/** The files go to the trash; where the trash fails, a second question offers to delete them. */
 export async function confirmDiscard(projectId: string, paths: string[], act: FileAct): Promise<void> {
   const what = paths.length === 1 ? paths[0] : `${paths.length} files`;
   const answer = await confirm({
     title: "Discard changes",
     message: `Are you sure you want to discard all changes to ${what}?`,
-    detail: "Files git does not track go to the trash and can be restored from there.",
+    detail: "The changed files go to the trash and can be restored from there.",
     confirmLabel: "Discard changes"
   });
   if (answer.confirmed) {
-    act(() => window.tet.repository.discard(projectId, paths));
+    act(async () => {
+      const result = await window.tet.repository.discard(projectId, paths, false);
+      if (!result.trashFailed) {
+        return result;
+      }
+      void confirmDiscardPermanently(projectId, paths, result.error, act);
+      return { ok: true };
+    });
+  }
+}
+
+async function confirmDiscardPermanently(
+  projectId: string,
+  paths: string[],
+  reason: string | undefined,
+  act: FileAct
+): Promise<void> {
+  const answer = await confirm({
+    title: "Discard changes permanently",
+    message: "The files could not be moved to the trash. Discard the changes permanently?",
+    detail: reason,
+    confirmLabel: "Discard permanently"
+  });
+  if (answer.confirmed) {
+    act(() => window.tet.repository.discard(projectId, paths, true));
   }
 }
 

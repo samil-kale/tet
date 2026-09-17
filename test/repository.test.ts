@@ -1,0 +1,249 @@
+import * as assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { after, before, describe, it } from "node:test";
+import { shell, utilityProcess } from "electron";
+import * as gitModule from "../src/main/git/git";
+import type { GitRequest, GitResponse } from "../src/main/git/git-host";
+import { Repository } from "../src/main/git/repository";
+
+/**
+ * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
+ * switches to, the question it hands back. electron's two pieces are faked: `utilityProcess` runs
+ * git.ts in this process as git-host.ts would, `shell.trashItem` moves a file into a folder or fails.
+ */
+
+// Without the machine's config: a signing key or a hook there would turn a commit into a question.
+const identity = {
+  GIT_AUTHOR_NAME: "tet test",
+  GIT_AUTHOR_EMAIL: "test@tet.invalid",
+  GIT_COMMITTER_NAME: "tet test",
+  GIT_COMMITTER_EMAIL: "test@tet.invalid",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: path.join(os.tmpdir(), "tet-repository-noglobal")
+};
+Object.assign(process.env, identity);
+fs.writeFileSync(identity.GIT_CONFIG_GLOBAL, "");
+
+const api = gitModule as unknown as Record<string, (...args: unknown[]) => unknown>;
+Object.assign(utilityProcess, {
+  fork: () => {
+    let listener: (message: GitResponse) => void = () => undefined;
+    return {
+      on: (event: string, handler: (message: GitResponse) => void) => {
+        if (event === "message") {
+          listener = handler;
+        }
+      },
+      postMessage: ({ id, method, args }: GitRequest) => {
+        void (async () => {
+          try {
+            listener({ id, value: await api[method](...args) });
+          } catch (error) {
+            listener({ id, error: error instanceof Error ? error.message : String(error) });
+          }
+        })();
+      },
+      kill: () => undefined
+    };
+  }
+});
+
+const trash = fs.mkdtempSync(path.join(os.tmpdir(), "tet-trash-"));
+/** Which paths the trash refuses. */
+let trashRefuses: (absolute: string) => boolean = () => false;
+let trashed = 0;
+Object.assign(shell, {
+  trashItem: async (absolute: string) => {
+    if (trashRefuses(absolute)) {
+      throw new Error("The trash is not available");
+    }
+    fs.renameSync(absolute, path.join(trash, `${++trashed}-${path.basename(absolute)}`));
+  }
+});
+
+/** What the trash holds, oldest first. */
+const trashContents = (): string[] =>
+  fs
+    .readdirSync(trash)
+    .sort((a, b) => parseInt(a) - parseInt(b))
+    .map((name) => fs.readFileSync(path.join(trash, name), "utf8"));
+
+function git(cwd: string, ...args: string[]): string {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+const opened: Repository[] = [];
+
+/** A started Repository on `dir`, disposed after the file. */
+async function open(dir: string): Promise<Repository> {
+  const repository = new Repository(
+    { id: path.basename(dir), path: dir, name: path.basename(dir) },
+    () => undefined,
+    () => undefined,
+    () => undefined,
+    () => undefined,
+    () => undefined
+  );
+  opened.push(repository);
+  await repository.start();
+  return repository;
+}
+
+after(() => opened.forEach((repository) => repository.dispose()));
+
+/** A repository on main with one commit of a.txt. */
+function init(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  git(dir, "init", "-q", "--initial-branch=main");
+  fs.writeFileSync(path.join(dir, "a.txt"), "committed\n");
+  git(dir, "add", "a.txt");
+  git(dir, "commit", "-q", "-m", "base");
+  return dir;
+}
+
+describe("a discard, through the trash as in GitHub Desktop", () => {
+  let dir: string;
+  let repository: Repository;
+  const edit = async (): Promise<void> => {
+    fs.writeFileSync(path.join(dir, "a.txt"), "edited\n");
+    fs.writeFileSync(path.join(dir, "new.txt"), "new\n");
+    await repository.refresh();
+  };
+
+  before(async () => {
+    dir = init("tet-repository-discard-");
+    repository = await open(dir);
+  });
+
+  it("puts an edited file in the trash as well as an untracked one, and resets to HEAD", async () => {
+    await edit();
+    assert.deepEqual(await repository.discard(["a.txt", "new.txt"], false), { ok: true });
+    assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "committed\n");
+    assert.equal(fs.existsSync(path.join(dir, "new.txt")), false);
+    assert.deepEqual(trashContents(), ["edited\n", "new\n"]);
+    assert.deepEqual(repository.getState().changes, []);
+  });
+
+  it("resets nothing where the trash fails, and deletes when asked again", async () => {
+    await edit();
+    trashRefuses = () => true;
+    try {
+      const refused = await repository.discard(["a.txt", "new.txt"], false);
+      assert.deepEqual(refused, { ok: false, error: "The trash is not available", trashFailed: true });
+      assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "edited\n");
+      assert.equal(fs.existsSync(path.join(dir, "new.txt")), true);
+
+      assert.deepEqual(await repository.discard(["a.txt", "new.txt"], true), { ok: true });
+      assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "committed\n");
+      assert.equal(fs.existsSync(path.join(dir, "new.txt")), false);
+      assert.deepEqual(repository.getState().changes, []);
+    } finally {
+      trashRefuses = () => false;
+    }
+  });
+
+  it("still resets what went to the trash before the trash failed", async () => {
+    await edit();
+    trashRefuses = (absolute) => path.basename(absolute) === "new.txt";
+    try {
+      const refused = await repository.discard(["a.txt", "new.txt"], false);
+      assert.deepEqual(refused, { ok: false, error: "The trash is not available", trashFailed: true });
+      // Asked no further: a.txt is in the trash and back to HEAD, not missing.
+      assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "committed\n");
+      assert.equal(fs.existsSync(path.join(dir, "new.txt")), true);
+      assert.deepEqual(repository.getState().changes, [{ path: "new.txt", status: "untracked" }]);
+    } finally {
+      trashRefuses = () => false;
+    }
+    assert.deepEqual(await repository.discard(["new.txt"], false), { ok: true });
+  });
+
+  it("puts an untracked repository inside it in the trash, whole", async () => {
+    const outer = init("tet-repository-nested-");
+    const nested = path.join(outer, "nested");
+    fs.mkdirSync(nested);
+    git(nested, "init", "-q");
+    fs.writeFileSync(path.join(nested, "n.txt"), "n\n");
+    const holder = await open(outer);
+    // A directory, not its files, even with --untracked-files=all.
+    assert.deepEqual(holder.getState().changes, [{ path: "nested/", status: "untracked" }]);
+    assert.deepEqual(await holder.discard(["nested/"], false), { ok: true });
+    assert.equal(fs.existsSync(nested), false);
+    assert.ok(fs.readdirSync(trash).some((name) => name.endsWith("-nested")));
+    assert.deepEqual(holder.getState().changes, []);
+  });
+});
+
+describe("a repository with a remote, as GitHub Desktop drives it", () => {
+  let dir: string;
+  let bare: string;
+  let other: string;
+  let repository: Repository;
+
+  before(async () => {
+    bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-bare-"));
+    git(bare, "init", "-q", "--bare", "--initial-branch=main");
+    dir = init("tet-repository-remote-");
+    fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
+    git(dir, "add", "b.txt");
+    git(dir, "commit", "-q", "-m", "second");
+    git(dir, "remote", "add", "origin", bare);
+    git(dir, "push", "-q", "--set-upstream", "origin", "main");
+    git(dir, "remote", "set-head", "origin", "main");
+    other = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-other-"));
+    git(other, "clone", "-q", bare, ".");
+    repository = await open(dir);
+  });
+
+  it("hands a rebase over pushed commits back to be asked, and runs it once confirmed", async () => {
+    git(dir, "branch", "older", "HEAD~1");
+    await repository.refresh();
+    const head = git(dir, "rev-parse", "HEAD");
+    assert.deepEqual(await repository.rebase("older", false), { ok: false, rewritesPushed: true });
+    assert.equal(git(dir, "rev-parse", "HEAD"), head, "nothing was rebased");
+    assert.deepEqual(await repository.rebase("older", true), { ok: true });
+    git(dir, "branch", "-D", "older");
+  });
+
+  it("moves a branch only behind its upstream on a fetch", async () => {
+    git(dir, "branch", "--track", "behind", "origin/main");
+    fs.writeFileSync(path.join(other, "c.txt"), "c\n");
+    git(other, "add", "c.txt");
+    git(other, "commit", "-q", "-m", "third");
+    git(other, "push", "-q");
+    await repository.refresh();
+    assert.deepEqual(await repository.fetch(), { ok: true });
+    assert.equal(git(dir, "rev-parse", "behind"), git(dir, "rev-parse", "origin/main"));
+    assert.equal(repository.getState().branchTrack.behind, undefined, "level with its upstream");
+    git(dir, "branch", "-D", "behind");
+  });
+
+  it("switches to the default branch before deleting the checked-out one, and deletes its upstream", async () => {
+    git(dir, "switch", "-q", "--create", "feature");
+    git(dir, "push", "-q", "--set-upstream", "origin", "feature");
+    await repository.refresh();
+    assert.deepEqual(repository.getState().defaultBranch, { name: "main" });
+    assert.deepEqual(await repository.deleteBranch("feature", true), { ok: true });
+    const state = repository.getState();
+    assert.equal(state.head, "main");
+    assert.deepEqual(state.localBranches, ["main"]);
+    assert.equal(git(bare, "branch", "--list", "feature"), "", "gone from the remote too");
+  });
+
+  it("refuses to delete the checked-out branch with no default branch to switch to", async () => {
+    git(dir, "remote", "set-head", "origin", "--delete");
+    git(dir, "branch", "-m", "main", "trunk");
+    git(dir, "switch", "-q", "--create", "lonely");
+    await repository.refresh();
+    assert.equal(repository.getState().defaultBranch, undefined);
+    const refused = await repository.deleteBranch("lonely", false);
+    assert.equal(refused.ok, false);
+    assert.match(refused.error ?? "", /no default branch/);
+    assert.ok(repository.getState().localBranches.includes("lonely"));
+  });
+});

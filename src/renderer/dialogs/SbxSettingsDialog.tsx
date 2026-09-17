@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import type { Project, SbxBlocker } from "../../shared/types";
-import { SbxSettingsFields, fromConfig, toConfig, type FieldsState } from "./SbxSettingsFields";
+import { SbxSettingsFields, canSave, fromConfig, toConfig, type FieldsState } from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
@@ -153,7 +153,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             </button>
           )}
           {phase.kind === "ready" && (
-            <button type="button" className="button" disabled={saving} onClick={() => void save()}>
+            <button
+              type="button"
+              className="button"
+              disabled={saving || !canSave(state)}
+              title={canSave(state) ? undefined : "A port on the Ports tab is not a whole number from 1 to 65535"}
+              onClick={() => void save()}
+            >
               Save
             </button>
           )}

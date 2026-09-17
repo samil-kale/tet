@@ -158,15 +158,18 @@ async function readRefs(
   localBranches: string[];
   remotes: RemoteInfo[];
   tags: string[];
-  defaultBranch?: string;
+  defaultBranch?: CheckoutTarget;
   branchTrack: Record<string, { ahead: number; behind: number }>;
+  branchUpstreams: Record<string, { remote: string; branch: string }>;
   headCommit?: string;
 }> {
   // Full ref names, not %(refname:short): that shortens "refs/remotes/origin/HEAD" to "origin", like
   // a branch of that name. %(symref) is set only on "<remote>/HEAD", naming the default branch.
+  // %(upstream:remotename) and %(upstream:remoteref) name an upstream unambiguously, where
+  // "team/fork/x" could be split at either slash.
   const result = await git(cwd, [
     "for-each-ref",
-    "--format=%(refname)%00%(symref)%00%(objectname)%00%(HEAD)%00%(upstream)%00%(upstream:trackshort)",
+    "--format=%(refname)%00%(symref)%00%(objectname)%00%(HEAD)%00%(upstream)%00%(upstream:trackshort)%00%(upstream:remotename)%00%(upstream:remoteref)",
     "refs/heads",
     "refs/remotes",
     "refs/tags"
@@ -180,18 +183,35 @@ async function readRefs(
   // Per remote: refs come sorted, and "backup/HEAD" would otherwise beat "origin/HEAD".
   const defaultBranches = new Map<string, string>();
   const diverged: { name: string; head: string; upstream: string }[] = [];
+  const branchUpstreams: Record<string, { remote: string; branch: string }> = {};
+  /** The local branches tracking each full upstream ref, for the default branch. */
+  const trackers = new Map<string, string[]>();
   let headCommit: string | undefined;
 
   for (const line of result.stdout.split("\n")) {
-    const [refname, symref = "", objectname = "", isHead = "", upstream = "", trackshort = ""] = line
-      .trim()
-      .split("\0");
+    const [
+      refname,
+      symref = "",
+      objectname = "",
+      isHead = "",
+      upstream = "",
+      trackshort = "",
+      upstreamRemote = "",
+      upstreamRef = ""
+    ] = line.trim().split("\0");
     if (!refname) {
       continue;
     }
     if (refname.startsWith("refs/heads/")) {
       const name = refname.slice("refs/heads/".length);
       localBranches.push(name);
+      // "." is a local upstream: nothing on a remote to push to or delete.
+      if (upstreamRemote && upstreamRemote !== "." && upstreamRef.startsWith("refs/heads/")) {
+        branchUpstreams[name] = { remote: upstreamRemote, branch: upstreamRef.slice("refs/heads/".length) };
+      }
+      if (upstream) {
+        trackers.set(upstream, [...(trackers.get(upstream) ?? []), name]);
+      }
       if (isHead === "*") {
         headCommit = objectname;
       }
@@ -245,11 +265,37 @@ async function readRefs(
   return {
     localBranches,
     tags,
-    defaultBranch: defaultBranches.get("origin") ?? defaultBranches.values().next().value,
+    defaultBranch: findDefaultBranch(defaultBranches, localBranches, trackers, remotes),
     branchTrack,
+    branchUpstreams,
     headCommit,
     remotes: [...remotes].map(([name, branches]) => ({ name, branches }))
   };
+}
+
+/**
+ * GitHub Desktop's `findDefaultBranch`, for the remote's HEAD branch: the local branch tracking it
+ * (the one of the same name if several do), else the local branch of that name, else the remote
+ * branch itself. `origin`'s HEAD first, else any remote's. Without a remote HEAD `Repository` falls
+ * back to `init.defaultBranch`.
+ */
+function findDefaultBranch(
+  defaultBranches: Map<string, string>,
+  localBranches: string[],
+  trackers: Map<string, string[]>,
+  remotes: Map<string, string[]>
+): CheckoutTarget | undefined {
+  const remote = defaultBranches.has("origin") ? "origin" : defaultBranches.keys().next().value;
+  if (remote === undefined) {
+    return undefined;
+  }
+  const name = defaultBranches.get(remote)!;
+  const tracking = trackers.get(`refs/remotes/${remote}/${name}`) ?? [];
+  const local = tracking.includes(name) ? name : (tracking[0] ?? (localBranches.includes(name) ? name : undefined));
+  if (local !== undefined) {
+    return { name: local };
+  }
+  return remotes.get(remote)?.includes(name) ? { name, remote } : undefined;
 }
 
 const CONFLICT_CODES = new Set(["DD", "AU", "UD", "UA", "DU", "AA", "UU"]);
@@ -322,6 +368,14 @@ function readChanges(entries: string[]): FileChange[] {
       const origPath = entries[++i];
       changes.push({ path: filePath, status, origPath });
       continue;
+    }
+    if (status === "untracked") {
+      // After `git rm --cached` a path is deleted in the index and untracked too; one row, the
+      // untracked one, as in GitHub Desktop. Untracked entries come last, so the deleted one is in.
+      const tracked = changes.findIndex((change) => change.path === filePath);
+      if (tracked !== -1) {
+        changes.splice(tracked, 1);
+      }
     }
     changes.push({ path: filePath, status });
   }
@@ -422,12 +476,8 @@ const NETWORK_ENV: NodeJS.ProcessEnv = {
  */
 const AUTH_FAILURES = [/could not read (?:Username|Password)/i, /Authentication failed/i];
 
-/** `core.sshCommand` per working directory, read once rather than a process per network command. */
-const sshCommands = new Map<string, Promise<string>>();
-
-/** Drops both caches for a working directory whose project closed; this process outlives them. */
+/** Drops the track-count cache for a working directory whose project closed; this process outlives it. */
 export function forget(cwd: string): void {
-  sshCommands.delete(cwd);
   for (const key of trackCounts.keys()) {
     if (key.startsWith(`${cwd}\0`)) {
       trackCounts.delete(key);
@@ -440,20 +490,18 @@ export function forget(cwd: string): void {
  * never hangs: four unanswered keepalives 15 s apart end it, the minute http gets too. Only where
  * the user chose no ssh of their own: `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so
  * setting it blindly breaks a plink or `ssh -i work_key` setup; a non-OpenSSH program lacks the flag.
+ * `core.sshCommand` is read per network command, not cached: the global config changes unwatched,
+ * and a stale "none" would override the user's ssh. Off the refresh path, beside a remote round trip.
  */
 async function networkEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
   if (process.env.GIT_SSH || process.env.GIT_SSH_COMMAND) {
     return NETWORK_ENV;
   }
-  let configured = sshCommands.get(cwd);
-  if (!configured) {
-    configured = git(cwd, ["config", "--get", "core.sshCommand"]).then(
-      (result) => (result.code === 0 ? result.stdout.trim() : ""),
-      () => ""
-    );
-    sshCommands.set(cwd, configured);
-  }
-  return (await configured)
+  const configured = await git(cwd, ["config", "--get", "core.sshCommand"]).then(
+    (result) => (result.code === 0 ? result.stdout.trim() : ""),
+    () => ""
+  );
+  return configured
     ? NETWORK_ENV
     : { ...NETWORK_ENV, GIT_SSH_COMMAND: "ssh -oBatchMode=yes -oServerAliveInterval=15 -oServerAliveCountMax=4" };
 }
@@ -477,14 +525,57 @@ export function fetch(cwd: string, timeoutMs?: number): Promise<GitActionResult>
   return runNetwork(cwd, ["fetch", "--prune"], undefined, timeoutMs);
 }
 
-/** Plain `git pull`, so the user's configured merge or rebase applies. */
-export function pull(cwd: string): Promise<GitActionResult> {
-  return runNetwork(cwd, ["pull"]);
+/** `git pull`, so the user's configured merge or rebase applies — plus `--ff` where `pull.ff` is
+ *  unset, as GitHub Desktop does: without it git refuses to pull into a diverged branch until told
+ *  how to reconcile. */
+export async function pull(cwd: string): Promise<GitActionResult> {
+  const pullFF = await git(cwd, ["config", "--get", "pull.ff"]);
+  return runNetwork(cwd, pullFF.code === 0 ? ["pull"] : ["pull", "--ff"]);
 }
 
-/** Pushes the current branch; without an upstream it also sets tracking ("publish branch"). */
-export function push(cwd: string, remote: string, branch: string, setUpstream: boolean): Promise<GitActionResult> {
-  return runNetwork(cwd, setUpstream ? ["push", "--set-upstream", remote, branch] : ["push"]);
+/** Asks the remote for its HEAD branch again after a pull, as GitHub Desktop does: a clone's
+ *  `<remote>/HEAD` never follows a changed default, and a remote added by hand has none. A failure
+ *  only leaves the old one. */
+export async function updateRemoteHead(cwd: string, remote: string): Promise<void> {
+  await runNetwork(cwd, ["remote", "set-head", "--auto", remote]);
+}
+
+/**
+ * Moves every local branch that is only behind its upstream up to it, after a fetch or pull, as
+ * GitHub Desktop does: "Update from" merges the local default branch, which would otherwise lag.
+ * `fetch .` refuses anything but a fast-forward. A branch checked out in any worktree is left out,
+ * since git refuses the whole fetch for one of them.
+ */
+export async function fastForwardBranches(cwd: string): Promise<void> {
+  const refs = await git(cwd, [
+    "for-each-ref",
+    "--format=%(refname)%00%(upstream)%00%(upstream:trackshort)%00%(worktreepath)",
+    "refs/heads"
+  ]);
+  const refspecs = refs.stdout
+    .split("\n")
+    .map((line) => line.trim().split("\0"))
+    .filter(([refname, upstream, trackshort, worktree]) => refname && upstream && trackshort === "<" && !worktree)
+    .map(([refname, upstream]) => `${upstream}:${refname}`);
+  if (refs.code === 0 && refspecs.length > 0) {
+    await git(cwd, ["fetch", "--no-write-fetch-head", ".", ...refspecs], { GIT_REFLOG_ACTION: "pull" });
+  }
+}
+
+/** Pushes the current branch to its upstream by name, as GitHub Desktop does, whatever `push.default`
+ *  says; without an upstream it also sets tracking ("publish branch"). */
+export function push(
+  cwd: string,
+  remote: string,
+  branch: string,
+  upstreamBranch: string | undefined
+): Promise<GitActionResult> {
+  return runNetwork(
+    cwd,
+    upstreamBranch === undefined
+      ? ["push", "--set-upstream", "--", remote, branch]
+      : ["push", "--", remote, `${branch}:${upstreamBranch}`]
+  );
 }
 
 /** Clones into `directory`, which git creates with its parents, refusing a non-empty one. The cwd
@@ -556,6 +647,12 @@ export async function readRemoteUrls(cwd: string): Promise<Record<string, string
   return urls;
 }
 
+/** `init.defaultBranch`, else "main": GitHub Desktop's default branch where no remote names one. */
+export async function readDefaultBranchName(cwd: string): Promise<string> {
+  const result = await git(cwd, ["config", "--get", "init.defaultBranch"]);
+  return (result.code === 0 && result.stdout.trim()) || "main";
+}
+
 export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<GitActionResult> {
   return run(cwd, ["remote", "set-url", remote, url]);
 }
@@ -566,8 +663,16 @@ export function createBranch(cwd: string, name: string, startPoint: string): Pro
   return run(cwd, ["switch", "--create", name, "--no-track", startPoint]);
 }
 
-export function renameBranch(cwd: string, from: string, to: string): Promise<GitActionResult> {
-  return run(cwd, ["branch", "--move", from, to]);
+/** A rename changing only case fails where refs are files on a case-insensitive filesystem: the old
+ *  one "already exists". GitHub Desktop then forces it, unless a branch of exactly that name exists. */
+export async function renameBranch(cwd: string, from: string, to: string): Promise<GitActionResult> {
+  const moved = await run(cwd, ["branch", "--move", from, to]);
+  if (moved.ok || from === to || from.toLowerCase() !== to.toLowerCase()) {
+    return moved;
+  }
+  const names = await git(cwd, ["for-each-ref", "--format=%(refname)", "refs/heads"]);
+  const taken = names.stdout.split("\n").some((line) => line.trim() === `refs/heads/${to}`);
+  return names.code !== 0 || taken ? moved : run(cwd, ["branch", "-M", from, to]);
 }
 
 /** `--force`, like GitHub Desktop; the confirmation states the risk. */
@@ -575,8 +680,14 @@ export function deleteBranch(cwd: string, name: string): Promise<GitActionResult
   return run(cwd, ["branch", "--delete", "--force", name]);
 }
 
-export function deleteRemoteBranch(cwd: string, remote: string, name: string): Promise<GitActionResult> {
-  return runNetwork(cwd, ["push", remote, "--delete", name]);
+/** A branch already gone from the remote only loses its remote-tracking ref, as in GitHub Desktop.
+ *  git's message is read as text, which NETWORK_ENV keeps English. */
+export async function deleteRemoteBranch(cwd: string, remote: string, name: string): Promise<GitActionResult> {
+  const deleted = await runNetwork(cwd, ["push", remote, "--delete", name]);
+  if (deleted.ok || !/remote ref does not exist/.test(deleted.error ?? "")) {
+    return deleted;
+  }
+  return run(cwd, ["update-ref", "-d", `refs/remotes/${remote}/${name}`]);
 }
 
 export function merge(cwd: string, ref: string): Promise<GitActionResult> {
@@ -587,14 +698,20 @@ export function rebase(cwd: string, ref: string): Promise<GitActionResult> {
   return run(cwd, ["rebase", ref]);
 }
 
+/** Whether rebasing HEAD onto `ref` rewrites commits its upstream already has, by GitHub Desktop's
+ *  measure: the upstream holds commits `ref` lacks. False without an upstream. */
+export async function rebaseRewritesPushed(cwd: string, ref: string): Promise<boolean> {
+  const result = await git(cwd, ["rev-list", "--count", `${ref}..HEAD@{upstream}`]);
+  return result.code === 0 && Number(result.stdout.trim()) > 0;
+}
+
 export function abortOperation(cwd: string, operation: GitOperation): Promise<GitActionResult> {
   return run(cwd, [operation, "--abort"]);
 }
 
-/** Annotated with a message, lightweight without. */
+/** Always annotated, with an empty message too, as in GitHub Desktop. */
 export function createTag(cwd: string, name: string, target: string, message: string): Promise<GitActionResult> {
-  const args = message ? ["tag", "--annotate", "--message", message] : ["tag"];
-  return run(cwd, [...args, name, target]);
+  return run(cwd, ["tag", "--annotate", "--message", message, name, target]);
 }
 
 export function pushTag(cwd: string, remote: string, name: string): Promise<GitActionResult> {
@@ -709,16 +826,23 @@ export function stashPush(cwd: string, message: string): Promise<GitActionResult
   return run(cwd, ["stash", "push", "--include-untracked", ...(message ? ["--message", message] : [])]);
 }
 
-export function stashApply(cwd: string, ref: string): Promise<GitActionResult> {
-  return run(cwd, ["stash", "apply", ref]);
+/** A stash command on the entry with this commit, its ref looked up now, as GitHub Desktop does: a
+ *  stash made in a terminal since the last refresh renumbers the refs the list shows. */
+async function runOnStash(cwd: string, command: string, sha: string): Promise<GitActionResult> {
+  const stash = (await readStashes(cwd)).find((entry) => entry.sha === sha);
+  return stash ? run(cwd, ["stash", command, stash.ref]) : { ok: false, error: "The stash no longer exists" };
 }
 
-export function stashPop(cwd: string, ref: string): Promise<GitActionResult> {
-  return run(cwd, ["stash", "pop", ref]);
+export function stashApply(cwd: string, sha: string): Promise<GitActionResult> {
+  return runOnStash(cwd, "apply", sha);
 }
 
-export function stashDrop(cwd: string, ref: string): Promise<GitActionResult> {
-  return run(cwd, ["stash", "drop", ref]);
+export function stashPop(cwd: string, sha: string): Promise<GitActionResult> {
+  return runOnStash(cwd, "pop", sha);
+}
+
+export function stashDrop(cwd: string, sha: string): Promise<GitActionResult> {
+  return runOnStash(cwd, "drop", sha);
 }
 
 export async function checkout(cwd: string, target: CheckoutTarget, localBranches: string[]): Promise<GitActionResult> {
@@ -732,8 +856,8 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
 }
 
 async function readStashes(cwd: string): Promise<StashEntry[]> {
-  // %gd is the ref the other commands take ("stash@{0}"), %gs the message.
-  const result = await git(cwd, ["stash", "list", "--format=%gd%x00%gs"]);
+  // %gd is the ref the stash commands take ("stash@{0}"), %H the stash's commit, %gs the message.
+  const result = await git(cwd, ["stash", "list", "--format=%gd%x00%H%x00%gs"]);
   if (result.code !== 0) {
     return [];
   }
@@ -741,15 +865,35 @@ async function readStashes(cwd: string): Promise<StashEntry[]> {
     .split("\n")
     .filter((line) => line.includes("\0"))
     .map((line) => {
-      const [ref, message] = line.split("\0");
-      return { ref, message };
+      const [ref, sha, message] = line.split("\0");
+      return { ref, sha, message };
     });
 }
 
+/**
+ * Which of these paths HEAD has, for a discard: a conflict may be one side's addition, and a file
+ * untracked by `git rm --cached` has HEAD's version to restore — the status tells neither. At
+ * discard time only, never on the refresh path. `ls-tree` takes paths literally, never as globs.
+ */
+export async function readHeadPaths(cwd: string, paths: string[]): Promise<string[]> {
+  const listed = await git(cwd, [LITERAL_PATHSPECS, "ls-tree", "-z", "--name-only", "HEAD", "--", ...paths]);
+  if (listed.code === 0) {
+    return listed.stdout.split("\0").filter((entry) => entry !== "");
+  }
+  // An unborn branch has nothing in HEAD. Asked only after the failure, so a repository with
+  // commits pays one process.
+  const born = await git(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+  if (born.code !== 0) {
+    return [];
+  }
+  throw new Error(listed.stderr.trim() || `git ls-tree exited with ${listed.code}`);
+}
+
 export interface DiscardTargets {
-  /** Paths in HEAD — index and worktree are restored from it. */
+  /** Paths in HEAD — index and worktree are restored from it, a conflict's stages included. */
   restore: string[];
-  /** Paths not in HEAD, already trashed; this drops a staged addition's index entry. */
+  /** Paths not in HEAD, already trashed; this drops a staged addition's index entry, or a conflict's
+   *  stages — `restore` refuses an unmerged path HEAD lacks. */
   drop: string[];
 }
 

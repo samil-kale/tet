@@ -19,8 +19,8 @@ interface RpcRequest {
 /** One call at a time, across every project — two at once hit the cold-start race above. */
 let queue: Promise<unknown> = Promise.resolve();
 
-function callAppServer(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
-  const call = queue.then(() => callAppServerNow(executable, cwd, request, home));
+function callAppServer(executable: string, cwd: string, request: RpcRequest): Promise<unknown> {
+  const call = queue.then(() => callAppServerNow(executable, cwd, request));
   queue = call.catch(() => undefined);
   return call;
 }
@@ -29,14 +29,13 @@ function callAppServer(executable: string, cwd: string, request: RpcRequest, hom
  * Starts an app-server, runs `initialize`, sends one request and returns its result; rejects on a
  * JSON-RPC error, spawn failure or timeout. Always kills the process.
  */
-async function callAppServerNow(executable: string, cwd: string, request: RpcRequest, home?: string): Promise<unknown> {
+async function callAppServerNow(executable: string, cwd: string, request: RpcRequest): Promise<unknown> {
   const resolved = resolveCommand(executable, ["app-server", "--stdio"]);
   const child = spawn(resolved.command, resolved.args, {
     cwd,
     windowsHide: true,
     windowsVerbatimArguments: resolved.windowsVerbatimArguments,
-    stdio: ["pipe", "pipe", "pipe"],
-    env: home === undefined ? process.env : { ...process.env, CODEX_HOME: home }
+    stdio: ["pipe", "pipe", "pipe"]
   });
 
   return new Promise((resolve, reject) => {
@@ -113,13 +112,8 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
   });
 }
 
-/**
- * `home`: the sandbox's mounted directory holding its rollouts and name index, used as `CODEX_HOME`.
- * Measured: a foreign CODEX_HOME needs no sign-in or config for `initialize` and `thread/*`, but
- * must exist, or it exits 1.
- */
-export async function renameThread(executable: string, cwd: string, threadId: string, name: string, home?: string): Promise<void> {
-  await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } }, home);
+export async function renameThread(executable: string, cwd: string, threadId: string, name: string): Promise<void> {
+  await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } });
 }
 
 /**
@@ -127,9 +121,9 @@ export async function renameThread(executable: string, cwd: string, threadId: st
  * (codex-cli 0.154.0): an unknown id answers `-32600 no rollout found for thread id <id>`; matched
  * on the message, since -32600 is the generic "invalid request".
  */
-export async function deleteThread(executable: string, cwd: string, threadId: string, home?: string): Promise<void> {
+export async function deleteThread(executable: string, cwd: string, threadId: string): Promise<void> {
   try {
-    await callAppServer(executable, cwd, { method: "thread/delete", params: { threadId } }, home);
+    await callAppServer(executable, cwd, { method: "thread/delete", params: { threadId } });
   } catch (error) {
     if (!String(error).includes("no rollout found")) {
       throw error;

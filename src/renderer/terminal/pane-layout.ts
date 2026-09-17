@@ -155,9 +155,11 @@ export function normalizeLayout(
       tabPane[tabId] = paneId;
     }
   }
+  // Before the new tabs settle: a restored focus can name a pane the preset lacks (`loadLayout`).
+  const focusedPane = panes.includes(layout.focusedPane) ? layout.focusedPane : panes[0];
   // A new tab settles in the focused pane — written now, so it does not follow the focus later.
   for (const tab of tabs) {
-    tabPane[tab.tabId] ??= layout.focusedPane;
+    tabPane[tab.tabId] ??= focusedPane;
   }
   // The previous list by the previous assignment: a closed tab's is dropped above.
   const listOf = (source: LayoutTab[], assignment: Record<string, PaneId>, paneId: PaneId): LayoutTab[] =>
@@ -170,7 +172,6 @@ export function normalizeLayout(
       layout.activeTab[paneId]
     );
   }
-  const focusedPane = panes.includes(layout.focusedPane) ? layout.focusedPane : panes[0];
   // A closing saved command's tab records its pane under its command line.
   let commandPane = layout.commandPane;
   for (const tab of previousTabs) {
@@ -605,7 +606,14 @@ export function loadLayout(projectId: string): ProjectLayout {
         }
       }
     }
-    return { preset, focusedPane, tabPane: restored, activeTab: {}, commandPane: places };
+    return {
+      preset,
+      // Read before any tab list normalizes it (`paneOf`).
+      focusedPane: PRESET_PANES[preset].includes(focusedPane) ? focusedPane : PRESET_PANES[preset][0],
+      tabPane: restored,
+      activeTab: {},
+      commandPane: places
+    };
   } catch {
     return fallback;
   }

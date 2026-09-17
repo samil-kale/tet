@@ -240,6 +240,15 @@ export const Pane = memo(function Pane({
 
   const closeTabMenu = useCallback(() => setTabMenu(null), []);
 
+  // The menu's tab closed or moved away under it (`tet-ctl`, another pane): its close entries,
+  // counted from that tab's index, would close the whole pane. Not drawn until the effect closes it.
+  const tabMenuOpen = tabMenu !== null && tabs.some((tab) => tab.tabId === tabMenu.tabId);
+  useEffect(() => {
+    if (tabMenu && !tabMenuOpen) {
+      setTabMenu(null);
+    }
+  }, [tabMenu, tabMenuOpen]);
+
   const askRename = useCallback(
     async (tab: TerminalDescriptor) => {
       const answer = await prompt({
@@ -546,7 +555,7 @@ export const Pane = memo(function Pane({
         {tabs.length === 0 && <div className="placeholder">No sessions open.</div>}
       </div>
 
-      {tabMenu && (
+      {tabMenu && tabMenuOpen && (
         <ContextMenu x={tabMenu.x} y={tabMenu.y} entries={tabMenuEntries(tabMenu.tabId)} onClose={closeTabMenu} />
       )}
       {plusMenu && (

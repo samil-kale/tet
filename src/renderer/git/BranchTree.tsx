@@ -54,6 +54,10 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
   const repository = window.tet.repository;
   /** The remote commands use, picked as the main process does. */
   const remote = state.remotes[0]?.name;
+  /** What "Update from" merges, prefixed by its remote where it is a remote branch. */
+  const defaultRef = state.defaultBranch
+    ? `${state.defaultBranch.remote ? `${state.defaultBranch.remote}/` : ""}${state.defaultBranch.name}`
+    : undefined;
 
   const checkout = (target: CheckoutTarget): void =>
     branch.run(`Switching to ${target.name}...`, () => repository.checkout(projectId, target));
@@ -78,19 +82,55 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     }
   };
 
-  /** `git branch -D`: unmerged work goes too, as the question says. The remote copy is a checkbox
-   *  where one exists. */
+  /** `git branch -D`: unmerged work goes too, as the question says. The checked-out branch gives way
+   *  to the default branch first. Its upstream is a checkbox where it has one. */
   const askDeleteBranch = async (name: string): Promise<void> => {
-    const onRemote = remote !== undefined && state.remotes[0].branches.includes(name);
+    const upstream = state.branchUpstreams[name];
+    const lost = "Commits that exist only on this branch are lost.";
     const answer = await confirm({
       title: "Delete branch",
       message: `Are you sure you want to delete ${name}?`,
-      detail: "Commits that exist only on this branch are lost.",
+      detail: isCurrent(name) && defaultRef ? `Switches to ${defaultRef} first. ${lost}` : lost,
       confirmLabel: "Delete branch",
-      checkboxLabel: onRemote ? `Also delete ${remote}/${name} on the remote` : undefined
+      checkboxLabel: upstream ? `Also delete ${upstream.remote}/${upstream.branch} on the remote` : undefined
     });
     if (answer.confirmed) {
       branch.run(`Deleting ${name}...`, () => repository.deleteBranch(projectId, name, answer.checked));
+    }
+  };
+
+  const askDeleteRemoteBranch = async (from: string, name: string): Promise<void> => {
+    const answer = await confirm({
+      title: "Delete remote branch",
+      message: `Are you sure you want to delete ${name} on ${from}?`,
+      detail: "Commits that exist only on this branch are lost.",
+      confirmLabel: "Delete branch"
+    });
+    if (answer.confirmed) {
+      branch.run(`Deleting ${from}/${name}...`, () => repository.deleteRemoteBranch(projectId, from, name));
+    }
+  };
+
+  /** Asks first only when the main process answers `rewritesPushed`, as GitHub Desktop warns. */
+  const rebaseOnto = (ref: string, confirmed = false): void =>
+    branch.run(`Rebasing onto ${ref}...`, async () => {
+      const result = await repository.rebase(projectId, ref, confirmed);
+      if (!result.rewritesPushed) {
+        return result;
+      }
+      void askRebasePushed(ref);
+      return { ok: true };
+    });
+
+  const askRebasePushed = async (ref: string): Promise<void> => {
+    const answer = await confirm({
+      title: "Rebase",
+      message: `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream}.`,
+      detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
+      confirmLabel: "Rebase"
+    });
+    if (answer.confirmed) {
+      rebaseOnto(ref, true);
     }
   };
 
@@ -98,7 +138,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     const answer = await prompt({
       title: "Create tag",
       label: "Name",
-      detail: `The tag points at ${target}. A message makes it an annotated tag.`,
+      detail: `The tag points at ${target}.`,
       value: "",
       confirmLabel: "Create tag",
       extras: [{ label: "Message", placeholder: "Optional" }]
@@ -130,7 +170,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
       confirmLabel: "Drop stash"
     });
     if (answer.confirmed) {
-      branch.run(`Dropping ${stash.ref}...`, () => repository.stash(projectId, "drop", stash.ref));
+      branch.run(`Dropping ${stash.ref}...`, () => repository.stash(projectId, "drop", stash.sha));
     }
   };
 
@@ -149,31 +189,30 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     const ref = from ? `${from}/${name}` : name;
     const current = from === undefined && isCurrent(name);
     const onHead = current || state.detached;
-    // The remote's default branch: auto-fetch keeps it current, a local copy may silently lag.
-    const updateRef = state.defaultBranch
-      ? `${remote ? `${remote}/` : ""}${state.defaultBranch}`
-      : undefined;
+    // The checked-out branch gives way to the default branch, unless it is that branch.
+    const deletable = !current || (defaultRef !== undefined && defaultRef !== name);
 
     return [
       ...abortEntries(),
       { label: "Check out", run: current ? undefined : () => checkout({ name, remote: from }) },
       { label: `Create branch from ${ref}...`, run: () => void askCreateBranch(ref) },
       ...(from
-        ? []
+        ? [{ label: "Delete...", run: () => void askDeleteRemoteBranch(from, name) }]
         : [
             { label: "Rename...", run: () => void askRenameBranch(name) },
-            { label: "Delete...", run: current ? undefined : () => void askDeleteBranch(name) }
+            { label: "Delete...", run: deletable ? () => void askDeleteBranch(name) : undefined }
           ]),
       SEPARATOR,
-      // On HEAD's row: bring the default branch in instead.
+      // On HEAD's row: bring the default branch in instead; every fetch moves a local default branch
+      // up to its upstream.
       ...(onHead
         ? [
             {
-              label: `Update from ${updateRef ?? "the default branch"}`,
+              label: `Update from ${defaultRef ?? "the default branch"}`,
               // Nothing to bring in while standing on the default branch.
               run:
-                updateRef && !state.detached && state.head !== state.defaultBranch
-                  ? () => branch.run(`Merging ${updateRef}...`, () => repository.merge(projectId, updateRef))
+                defaultRef && !state.detached && state.head !== defaultRef
+                  ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(projectId, defaultRef))
                   : undefined
             }
           ]
@@ -184,7 +223,7 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
             },
             {
               label: `Rebase ${state.head} onto ${ref}`,
-              run: () => branch.run(`Rebasing onto ${ref}...`, () => repository.rebase(projectId, ref))
+              run: () => rebaseOnto(ref)
             }
           ]),
       SEPARATOR,
@@ -206,17 +245,16 @@ export const BranchTree = memo(function BranchTree({ projectId, state, branch }:
     { label: "Copy tag name", run: () => void navigator.clipboard.writeText(name) }
   ];
 
-  /** A stash ref is a position that a drop renumbers: these act on the last refresh's report, and
-   *  each refreshes after. */
+  /** Each acts on the stash's commit, not its ref, which a drop renumbers. */
   const stashEntries = (stash: StashEntry): ContextMenuEntry[] => [
     ...abortEntries(),
     {
       label: "Apply",
-      run: () => branch.run(`Applying ${stash.ref}...`, () => repository.stash(projectId, "apply", stash.ref))
+      run: () => branch.run(`Applying ${stash.ref}...`, () => repository.stash(projectId, "apply", stash.sha))
     },
     {
       label: "Pop",
-      run: () => branch.run(`Popping ${stash.ref}...`, () => repository.stash(projectId, "pop", stash.ref))
+      run: () => branch.run(`Popping ${stash.ref}...`, () => repository.stash(projectId, "pop", stash.sha))
     },
     { label: "Drop...", run: () => void askDropStash(stash) }
   ];

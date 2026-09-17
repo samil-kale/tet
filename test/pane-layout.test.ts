@@ -95,6 +95,14 @@ describe("normalizeLayout", () => {
     assert.deepEqual(next.tabPane, { later: "b" }, "a pane the preset does not have is dropped");
     assert.equal(next.focusedPane, "a");
   });
+
+  it("settles a new tab in a pane the preset has, when the focused one is not", () => {
+    const layout: ProjectLayout = { ...defaultLayout(), preset: "single", focusedPane: "c" };
+    const next = normalizeLayout(layout, [tab("t1")], NONE);
+    assert.deepEqual(next.tabPane, { t1: "a" });
+    assert.deepEqual(next.activeTab, { a: "t1" });
+    assert.equal(next.focusedPane, "a");
+  });
 });
 
 describe("moveTab", () => {
@@ -535,6 +543,8 @@ describe("what is persisted", () => {
       JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { s: "z", t: "b" } })
     );
     assert.deepEqual(loadLayout("q").tabPane, { t: "b" }, "an unknown pane is dropped, the rest kept");
+    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "single", focusedPane: "c", tabPane: {} }));
+    assert.equal(loadLayout("q").focusedPane, "a", "a focused pane the preset does not have");
   });
 });
 

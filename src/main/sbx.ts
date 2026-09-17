@@ -763,15 +763,23 @@ function portDelta(previous: SbxPort[], current: SbxPort[]): { removed: SbxPort[
  * Publishes/unpublishes only the ports changed since the last save. A published port survives a
  * stop (verified, 2026-09-08), so this runs at Save, not per spawn; `sbx run -p` covers a new
  * sandbox (prepareSbxRun). Re-publishing errors ("already published", verified), so only the delta
- * is sent. The caller has started the sandbox (`sbx ports` refuses a stopped one).
+ * is sent. The caller has started the sandbox (`sbx ports` refuses a stopped one). Returns what
+ * sbx refused, with its last line (sbx's `ERROR: …`), for the Save to report.
  */
-async function applyPortChanges(name: string, delta: { removed: SbxPort[]; added: SbxPort[] }): Promise<void> {
-  for (const port of delta.removed) {
-    await runSbx(["ports", name, "--unpublish", portKey(port)]);
+async function applyPortChanges(name: string, delta: { removed: SbxPort[]; added: SbxPort[] }): Promise<string[]> {
+  const changes = [
+    ...delta.removed.map((port) => ["--unpublish", portKey(port)]),
+    ...delta.added.map((port) => ["--publish", portKey(port)])
+  ];
+  const failures: string[] = [];
+  for (const [flag, key] of changes) {
+    const result = await runSbx(["ports", name, flag, key]);
+    if (!result.ok) {
+      const said = result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "");
+      failures.push(`could not ${flag.slice(2)} port ${key}${said ? ` (${said})` : ""}`);
+    }
   }
-  for (const port of delta.added) {
-    await runSbx(["ports", name, "--publish", portKey(port)]);
-  }
+  return failures;
 }
 
 /** A `SandboxSessionMount` with an absolute host side, for `sessionMountSpecs`. */
@@ -892,15 +900,21 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
  * is the sandbox's own rules (the truth, readLiveSbxConfig), so a hand-set rule deleted as a row
  * goes too. Mounts and ports need it running, so it is started once, only when either has work; a
  * failed start is skipped. Returns the agents whose sandboxes were removed, for the caller to say
- * so: a running session of theirs just lost its sandbox.
+ * so: a running session of theirs just lost its sandbox; and the port changes sbx refused, which
+ * tet.json holds all the same.
  */
-export async function saveSbxConfig(projectPath: string, projectId: string, request: SbxProjectConfig): Promise<SbxAgentId[]> {
+export async function saveSbxConfig(
+  projectPath: string,
+  projectId: string,
+  request: SbxProjectConfig
+): Promise<{ removed: SbxAgentId[]; portFailures: string[] }> {
   const previous = await readSbxConfig(projectPath);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   await writeSbxConfig(projectPath, config);
   const sandboxes = (await listSandboxes()) ?? new Map();
   const liveHosts = await readSandboxHosts();
   const removed: SbxAgentId[] = [];
+  const portFailures: string[] = [];
   for (const agentId of SBX_AGENT_IDS) {
     const name = sandboxName(projectId, agentId);
     const existing = sandboxes.get(name);
@@ -917,10 +931,11 @@ export async function saveSbxConfig(projectPath: string, projectId: string, requ
     const ports = portDelta(previous.ports, config.ports);
     if ((stale.length > 0 || ports.removed.length > 0 || ports.added.length > 0) && (await ensureRunning(name))) {
       await revokeMounts(name, stale);
-      await applyPortChanges(name, ports);
+      const failures = await applyPortChanges(name, ports);
+      portFailures.push(...failures.map((failure) => `The ${getAgent(agentId).displayName} sandbox ${failure}.`));
     }
     await revokeStaleHosts(name, liveHosts.get(name) ?? [], config.hosts);
     await allowHosts(name, config.hosts);
   }
-  return removed;
+  return { removed, portFailures };
 }

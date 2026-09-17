@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { AgentInfo } from "../../shared/types";
-import { attachTerminal, hasTerminal } from "./terminal-views";
+import { attachTerminal, fitTerminal, hasTerminal } from "./terminal-views";
 
 interface TerminalHostProps {
   projectId: string;
@@ -32,7 +32,14 @@ export function TerminalHost({ projectId, tabId, agent, active, visible }: Termi
 
   useEffect(() => {
     if (container.current && agent && ((active && visible) || hasTerminal(projectId, tabId))) {
+      const created = !hasTerminal(projectId, tabId);
       attachTerminal(projectId, tabId, agent, container.current);
+      // Pane's fit may have come first, with no view to fit (agents listed or the tab pushed late),
+      // and nothing reruns it. The first fit starts the process; in the same commit, Pane's own
+      // follows and reports nothing new (`fitTerminal`).
+      if (created && active && visible) {
+        fitTerminal(projectId, tabId);
+      }
     }
   }, [projectId, tabId, agent, active, visible]);
 

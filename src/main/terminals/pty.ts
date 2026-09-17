@@ -35,12 +35,18 @@ export function pathKey(env: Record<string, string | undefined>): string {
 }
 
 const WIN32_NATIVE_EXTENSIONS = [".exe", ".com"];
+const WIN32_BATCH_EXTENSIONS = [".cmd", ".bat"];
 
 /** node-pty's CreateProcessW applies no PATHEXT and cannot launch .cmd/.bat/.ps1 shims. The native
  *  executable's path, or undefined where only a shim (or nothing) resolves and cmd.exe is needed. */
 function resolveWin32NativeExecutable(executable: string): string | undefined {
+  return resolveWin32Executable(executable, WIN32_NATIVE_EXTENSIONS);
+}
+
+/** The path `executable` names with one of `extensions`, searched in its folder or else on PATH. */
+function resolveWin32Executable(executable: string, extensions: string[]): string | undefined {
   const ext = path.extname(executable).toLowerCase();
-  if (WIN32_NATIVE_EXTENSIONS.includes(ext)) {
+  if (extensions.includes(ext)) {
     return executable;
   }
   if (ext) {
@@ -50,8 +56,8 @@ function resolveWin32NativeExecutable(executable: string): string | undefined {
   const dir = path.dirname(executable);
   const searchDirs = dir !== "." ? [dir] : (process.env.PATH ?? "").split(path.delimiter);
   for (const searchDir of searchDirs) {
-    for (const nativeExt of WIN32_NATIVE_EXTENSIONS) {
-      const candidate = path.join(searchDir, executable + nativeExt);
+    for (const extension of extensions) {
+      const candidate = path.join(searchDir, path.basename(executable) + extension);
       if (fs.existsSync(candidate)) {
         return candidate;
       }
@@ -73,10 +79,12 @@ const CMD_META_CHARS = /([()\][%!^"`<>&|;, *?])/g;
 
 /** One argument for a program behind cmd.exe: quoted by the C runtime's rules (qntm.org/cmd), then
  *  `^`-escaped, so `&`, `>` or `%VAR%` reach it literally (measured through an npm shim, via
- *  child_process and node-pty). */
-function escapeCmdArgument(arg: string): string {
+ *  child_process and node-pty). A batch file parses its `%*` a second time, so there it is escaped
+ *  twice, as cross-spawn does: once, `a"&b` ends the quote cmd.exe sees and `&b` runs as a command. */
+function escapeCmdArgument(arg: string, batch: boolean): string {
   const quoted = `"${arg.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"').replace(/(?=(\\+?)?)\1$/, "$1$1")}"`;
-  return quoted.replace(CMD_META_CHARS, "^$1");
+  const escaped = quoted.replace(CMD_META_CHARS, "^$1");
+  return batch ? escaped.replace(CMD_META_CHARS, "^$1") : escaped;
 }
 
 /** Where a command line goes, for every spawn: on win32 a native executable directly, a shim or an
@@ -89,7 +97,8 @@ export function resolveCommand(executable: string, args: string[]): ResolvedComm
     }
     // Shim or unresolved: cmd.exe, not `shell: true`, which joins args unescaped. The whole line is
     // escaped as cross-spawn does it; `/s` strips only the outer quotes.
-    const line = [executable.replace(CMD_META_CHARS, "^$1"), ...args.map(escapeCmdArgument)].join(" ");
+    const batch = resolveWin32Executable(executable, WIN32_BATCH_EXTENSIONS) !== undefined;
+    const line = [executable.replace(CMD_META_CHARS, "^$1"), ...args.map((arg) => escapeCmdArgument(arg, batch))].join(" ");
     return { command: "cmd.exe", args: ["/d", "/s", "/c", `"${line}"`], windowsVerbatimArguments: true };
   }
   return { command: executable, args };

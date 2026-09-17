@@ -70,8 +70,10 @@ const api: TETApi = {
     renameBranch: (projectId, from, to) => ipcRenderer.invoke("repo:rename-branch", projectId, from, to),
     deleteBranch: (projectId, name, onRemote) =>
       ipcRenderer.invoke("repo:delete-branch", projectId, name, onRemote),
+    deleteRemoteBranch: (projectId, remote, name) =>
+      ipcRenderer.invoke("repo:delete-remote-branch", projectId, remote, name),
     merge: (projectId, ref) => ipcRenderer.invoke("repo:merge", projectId, ref),
-    rebase: (projectId, ref) => ipcRenderer.invoke("repo:rebase", projectId, ref),
+    rebase: (projectId, ref, confirmed) => ipcRenderer.invoke("repo:rebase", projectId, ref, confirmed),
     abort: (projectId) => ipcRenderer.invoke("repo:abort", projectId),
     createTag: (projectId, name, target, message) =>
       ipcRenderer.invoke("repo:create-tag", projectId, name, target, message),
@@ -82,8 +84,8 @@ const api: TETApi = {
     commitPaths: (projectId, message, paths) => ipcRenderer.invoke("repo:commit-paths", projectId, message, paths),
     suggestCommitMessage: (projectId, paths) => ipcRenderer.invoke("repo:suggest-commit-message", projectId, paths),
     stashPush: (projectId, message) => ipcRenderer.invoke("repo:stash-push", projectId, message),
-    stash: (projectId, command, ref) => ipcRenderer.invoke("repo:stash", projectId, command, ref),
-    discard: (projectId, paths) => ipcRenderer.invoke("repo:discard", projectId, paths),
+    stash: (projectId, command, sha) => ipcRenderer.invoke("repo:stash", projectId, command, sha),
+    discard: (projectId, paths, permanently) => ipcRenderer.invoke("repo:discard", projectId, paths, permanently),
     ignore: (projectId, filePath, scope) => ipcRenderer.invoke("repo:ignore", projectId, filePath, scope),
     createFile: (projectId, filePath) => ipcRenderer.invoke("repo:create-file", projectId, filePath),
     createDirectory: (projectId, dirPath) => ipcRenderer.invoke("repo:create-directory", projectId, dirPath),

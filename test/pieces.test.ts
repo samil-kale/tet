@@ -77,7 +77,7 @@ describe("resolveCommand", () => {
     assert.deepEqual(resolveCommand("C:\\tools\\run.exe", ["-v"]), { command: "C:\\tools\\run.exe", args: ["-v"] });
     assert.deepEqual(resolveCommand("C:\\tools\\run.cmd", ["-v"]), {
       command: "cmd.exe",
-      args: ["/d", "/s", "/c", '"C:\\tools\\run.cmd ^"-v^""'],
+      args: ["/d", "/s", "/c", '"C:\\tools\\run.cmd ^^^"-v^^^""'],
       windowsVerbatimArguments: true
     });
   });
@@ -89,15 +89,40 @@ describe("resolveCommand", () => {
     fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
     const shim = path.join(dir, "echo-args.cmd");
     fs.writeFileSync(shim, `@ECHO off\r\nSETLOCAL\r\n"${process.execPath}" "${script}" %*\r\n`);
-    const args = ["plain", "", "a b", "a&b", "a>b", "a|b", "%PATH%", "a^b", 'say "hi"', "(x)", "!x!", "C:\\dir\\", "a\\\"b", "x;y,z", "ä€"];
-    const resolved = resolveCommand(shim, args);
-    const run = spawnSync(resolved.command, resolved.args, {
-      encoding: "utf8",
-      windowsHide: true,
-      windowsVerbatimArguments: resolved.windowsVerbatimArguments
-    });
-    assert.deepEqual(JSON.parse(run.stdout), args, run.stderr);
+    const args = [
+      // A quote cmd.exe sees as closing, then an operator: the shim's `%*` parses the line again.
+      // First, since an argument with an odd count of quotes (`a\"b`) would hide what follows.
+      'a"&echo INJECTED&"b', 'a">out.txt"', '{"k": 1}', "%VAR%",
+      "plain", "", "a b", "a&b", "a>b", "a|b", "%PATH%", "a^b", 'say "hi"', "(x)", "!x!", "C:\\dir\\", "a\\\"b", "x;y,z", "ä€"
+    ];
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
+    try {
+      // The shim by its path, and by a bare name found on PATH.
+      for (const program of [shim, "echo-args"]) {
+        const resolved = resolveCommand(program, args);
+        const run = spawnSync(resolved.command, resolved.args, {
+          encoding: "utf8",
+          windowsHide: true,
+          windowsVerbatimArguments: resolved.windowsVerbatimArguments,
+          cwd: dir
+        });
+        assert.deepEqual(JSON.parse(run.stdout), args, `${program}: ${run.stdout} ${run.stderr}`);
+      }
+    } finally {
+      process.env.PATH = originalPath;
+    }
     assert.deepEqual(fs.readdirSync(dir).sort(), ["argv.js", "echo-args.cmd"], "nothing redirected into a file");
+  });
+
+  it("finds a native executable named by its path without an extension", { skip: process.platform !== "win32" && "win32 only" }, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-native-"));
+    try {
+      fs.writeFileSync(path.join(dir, "build.exe"), "");
+      assert.deepEqual(resolveCommand(path.join(dir, "build"), ["-v"]), { command: path.join(dir, "build.exe"), args: ["-v"] });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("kills the program behind a shim along with its cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, async () => {

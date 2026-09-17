@@ -613,6 +613,19 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["editor-list", "--project", OTHER.id])).result, []);
   });
 
+  it("opens a file under the path the editor tabs match, and refuses one outside the repository", async () => {
+    // PROJECT's root is "", resolved like the working directory.
+    for (const typed of ["./src/a.ts", "src\\a.ts", "src/../src/a.ts", path.resolve("src", "a.ts")]) {
+      assert.deepEqual((await tetCtl(["editor-open", typed])).result, { opened: "src/a.ts", keep: false }, typed);
+    }
+    for (const typed of ["../a.ts", path.resolve("..", "a.ts"), "."]) {
+      const run = await tetCtl(["editor-open", typed]);
+      assert.equal(run.status, EXIT_CODES.usage, typed);
+      assert.match(run.stderr, /not inside the repository/, typed);
+    }
+    assert.equal(calls.editorsOpened.length, 4);
+  });
+
   it("lists the files view's files and the notices shown", async () => {
     assert.deepEqual(((await tetCtl(["explorer-list"])).result as { files: string[] }).files, ["p1.txt"]);
     assert.deepEqual((await tetCtl(["notices-list"])).result, [{ severity: "error", message: "Could not delete", at: 1 }]);

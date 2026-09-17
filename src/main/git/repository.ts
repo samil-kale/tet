@@ -30,7 +30,8 @@ const REFRESH_DEBOUNCE_MS = 250;
  *  with instrumented process creation: the git start is the cost, three per refresh, and that is
  *  main-process time a keystroke on its way to a terminal waits for. */
 const REFRESH_MIN_INTERVAL_MS = 2000;
-/** GitHub Desktop's auto-fetch interval. */
+/** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
+ *  from" merges what the last fetch brought, whatever the host. */
 const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
 /** How long the periodic fetch may hold back a click (runAction waits for it). Well past the minute
  *  git and ssh give a silent connection (git.ts's NETWORK_ENV): this catches a credential helper
@@ -101,6 +102,9 @@ export class Repository {
   /** Each remote's url, read on open and after `.git/config` changes — not on every refresh, which
    *  pays per git process for a url that almost never changes. */
   private remoteUrls: Record<string, string> = {};
+  /** `init.defaultBranch`, or "main": the default branch where no remote names one (GitHub Desktop's
+   *  fallback). Read with the urls, on open and after `.git/config` changes. */
+  private defaultBranchName = "main";
   private remoteUrlsStale = false;
   /** Checked once on open; if false, nothing is read or watched. */
   private isGit = false;
@@ -141,9 +145,10 @@ export class Repository {
   async start(): Promise<void> {
     // All three at once: each is a git start (the measured cost); in sequence they visibly delay
     // the pane.
-    const [isGit, urls, read] = await Promise.all([
+    const [isGit, urls, defaultBranchName, read] = await Promise.all([
       git.isRepository(this.project.path).catch(() => false),
       git.readRemoteUrls(this.project.path).catch(() => ({})),
+      git.readDefaultBranchName(this.project.path).catch(() => "main"),
       this.read()
     ]);
     this.isGit = isGit;
@@ -152,6 +157,7 @@ export class Repository {
       return;
     }
     this.remoteUrls = urls;
+    this.defaultBranchName = defaultBranchName;
     // The first read ran without the remote names; only a name holding a "/" changes it.
     this.emit(Object.keys(urls).some((name) => name.includes("/")) ? await this.read() : read);
     // Closed during the first read: a watcher started now would never be closed.
@@ -164,7 +170,10 @@ export class Repository {
 
   private async loadRemoteUrls(): Promise<void> {
     this.remoteUrlsStale = false;
-    this.remoteUrls = await git.readRemoteUrls(this.project.path).catch(() => ({}));
+    [this.remoteUrls, this.defaultBranchName] = await Promise.all([
+      git.readRemoteUrls(this.project.path).catch(() => ({})),
+      git.readDefaultBranchName(this.project.path).catch(() => "main")
+    ]);
   }
 
   /** The periodic fetch. Silent on failure, or an offline machine gets a notice every ten minutes.
@@ -175,6 +184,7 @@ export class Repository {
     }
     this.autoFetching = git
       .fetch(this.project.path, AUTO_FETCH_TIMEOUT_MS)
+      .then(() => git.fastForwardBranches(this.project.path))
       .catch(() => undefined)
       .then(() => this.refresh())
       .then(
@@ -242,7 +252,10 @@ export class Repository {
         branches: read.remotes.find((remote) => remote.name === name)?.branches ?? [],
         url: this.remoteUrls[name]
       }));
-    const next: RepositoryState = { ...read, remotes };
+    const defaultBranch =
+      read.defaultBranch ??
+      (read.localBranches.includes(this.defaultBranchName) ? { name: this.defaultBranchName } : undefined);
+    const next: RepositoryState = { ...read, remotes, defaultBranch };
     this.reportError(next);
     // Only on an actual change: the watcher fires for edits leaving the state identical, and every
     // emit re-renders the views. Labeled "emit", not "git": this runs after git has finished.
@@ -297,24 +310,39 @@ export class Repository {
   }
 
   fetch(): Promise<GitActionResult> {
-    return this.runAction(() => git.fetch(this.project.path));
+    return this.runAction(async () => {
+      const fetched = await git.fetch(this.project.path);
+      await git.fastForwardBranches(this.project.path);
+      return fetched;
+    });
   }
 
+  /** Then, as GitHub Desktop does, the remote's HEAD is asked for again and the other branches only
+   *  behind their upstreams are moved up. */
   pull(): Promise<GitActionResult> {
-    return this.runAction(() => git.pull(this.project.path));
+    return this.runAction(async () => {
+      const pulled = await git.pull(this.project.path);
+      const remote = this.state.branchUpstreams[this.state.head]?.remote ?? this.remote;
+      if (pulled.ok && remote) {
+        await git.updateRemoteHead(this.project.path, remote);
+      }
+      await git.fastForwardBranches(this.project.path);
+      return pulled;
+    });
   }
 
-  /** Pushes the current branch to `remote`, publishing it when it has no upstream. */
+  /** Pushes the current branch to its upstream, or publishes it to `remote` when it has none. */
   push(): Promise<GitActionResult> {
     return this.runAction(() => {
-      const remote = this.remote;
+      const upstream = this.state.branchUpstreams[this.state.head];
+      const remote = upstream?.remote ?? this.remote;
       if (!remote) {
         return Promise.resolve({ ok: false, error: "This repository has no remote to push to" });
       }
       if (this.state.detached) {
         return Promise.resolve({ ok: false, error: "HEAD is detached — check out a branch to push it" });
       }
-      return git.push(this.project.path, remote, this.state.head, this.state.upstream === undefined);
+      return git.push(this.project.path, remote, this.state.head, upstream?.branch);
     });
   }
 
@@ -340,25 +368,49 @@ export class Repository {
     return this.runAction(() => git.renameBranch(this.project.path, from, to));
   }
 
-  /** Locally and, if asked, on the remote. Local first: it can't fail for reasons off the machine. */
+  /** Locally and, if asked, its upstream on the remote. Local first: it can't fail for reasons off the
+   *  machine. The checked-out branch gives way to the default branch first, as in GitHub Desktop. */
   deleteBranch(name: string, onRemote: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
+      const upstream = this.state.branchUpstreams[name];
+      if (!this.state.detached && name === this.state.head) {
+        const fallback = this.state.defaultBranch;
+        if (!fallback || (fallback.remote === undefined && fallback.name === name)) {
+          return { ok: false, error: `There is no default branch to switch to before deleting ${name}` };
+        }
+        const switched = await git.checkout(this.project.path, fallback, this.state.localBranches);
+        if (!switched.ok) {
+          return switched;
+        }
+      }
       const local = await git.deleteBranch(this.project.path, name);
       if (!local.ok || !onRemote) {
         return local;
       }
-      return this.remote
-        ? git.deleteRemoteBranch(this.project.path, this.remote, name)
-        : { ok: false, error: "This repository has no remote to delete the branch from" };
+      return upstream
+        ? git.deleteRemoteBranch(this.project.path, upstream.remote, upstream.branch)
+        : { ok: false, error: `${name} has no upstream to delete on a remote` };
     });
+  }
+
+  /** A remote branch alone, from its row under the remote. */
+  deleteRemoteBranch(remote: string, name: string): Promise<GitActionResult> {
+    return this.runAction(() => git.deleteRemoteBranch(this.project.path, remote, name));
   }
 
   merge(ref: string): Promise<GitActionResult> {
     return this.runAction(() => git.merge(this.project.path, ref));
   }
 
-  rebase(ref: string): Promise<GitActionResult> {
-    return this.runAction(() => git.rebase(this.project.path, ref));
+  /** Unless `confirmed`, refused with `rewritesPushed` where it would rewrite commits the upstream
+   *  has: the caller asks, since pushing them afterwards takes a force push. */
+  rebase(ref: string, confirmed: boolean): Promise<GitActionResult> {
+    return this.runAction(async () => {
+      if (!confirmed && (await git.rebaseRewritesPushed(this.project.path, ref))) {
+        return { ok: false, rewritesPushed: true };
+      }
+      return git.rebase(this.project.path, ref);
+    });
   }
 
   abort(): Promise<GitActionResult> {
@@ -430,41 +482,61 @@ export class Repository {
     return expanded;
   }
 
-  /** The ref is a *position* (a drop renumbers the rest), so only ever the last refresh's. */
-  stash(command: StashCommand, ref: string): Promise<GitActionResult> {
+  /** By the stash's commit, which a stash made meanwhile doesn't move. */
+  stash(command: StashCommand, sha: string): Promise<GitActionResult> {
     const commands = { apply: git.stashApply, pop: git.stashPop, drop: git.stashDrop };
-    return this.runAction(() => commands[command](this.project.path, ref));
+    return this.runAction(() => commands[command](this.project.path, sha));
   }
 
-  /** Throws away changes to these files; what HEAD lacks goes to the trash. */
-  discard(paths: string[]): Promise<GitActionResult> {
+  /** Throws away changes to these files, each file on disk going to the trash first, as in GitHub
+   *  Desktop, so an edit can be had back. A merge stays in progress: a conflict is only reset to HEAD.
+   *  When the trash fails, what went to it before is still reset and the rest is left
+   *  (`trashFailed`); `permanently` then deletes instead. */
+  discard(paths: string[], permanently: boolean): Promise<GitActionResult> {
     // Through runAction: `git restore` takes the index lock, and failing on it during a fetch or
-    // checkout would leave the untracked files already trashed.
+    // checkout would leave the files already trashed.
     return this.runAction(async () => {
       const targets: DiscardTargets = { restore: [], drop: [] };
-      for (const filePath of paths) {
-        const change = this.state.changes.find((candidate) => candidate.path === filePath);
-        if (!change) {
-          continue;
+      const changes = paths.flatMap((filePath) => this.state.changes.find((change) => change.path === filePath) ?? []);
+      const unsure = changes.filter((change) => change.status === "untracked" || change.status === "conflicted");
+      const inHead = new Set(
+        unsure.length > 0 ? await git.readHeadPaths(this.project.path, unsure.map((change) => change.path)) : []
+      );
+      for (const change of changes) {
+        const filePath = change.path;
+        // An untracked file HEAD has was untracked by `git rm --cached`: HEAD's version comes back.
+        const notInHead =
+          (change.status === "untracked" ||
+            change.status === "added" ||
+            change.status === "renamed" ||
+            change.status === "conflicted") &&
+          !inHead.has(filePath);
+        // Staged, then deleted on disk, still reads "added": nothing to trash. A tracked directory is
+        // a submodule, which git restores and the trash must not take; an untracked one (a
+        // repository inside this one) goes whole.
+        const absolute = path.join(this.project.path, filePath);
+        const stat = change.status === "deleted" ? undefined : await fs.promises.lstat(absolute).catch(() => undefined);
+        if (stat && (change.status === "untracked" || !stat.isDirectory())) {
+          try {
+            await shell.trashItem(absolute);
+          } catch (error) {
+            if (!permanently) {
+              // Reset what the trash already took, or it would be missing until asked again.
+              const reset = await git.discard(this.project.path, targets);
+              const message = error instanceof Error ? error.message : String(error);
+              return reset.ok ? { ok: false, error: message, trashFailed: true } : reset;
+            }
+            // What HEAD has is written over by the restore; the rest would stay behind untracked.
+            if (notInHead) {
+              await fs.promises.rm(absolute, { recursive: true, force: true });
+            }
+          }
         }
-        // Only a rename's old path is in HEAD; the new one is trashed like an untracked file.
+        // Only a rename's old path is in HEAD; the new one goes like an untracked file.
         if (change.status === "renamed" && change.origPath) {
           targets.restore.push(change.origPath);
         }
-        if (change.status === "untracked" || change.status === "added" || change.status === "renamed") {
-          targets.drop.push(filePath);
-          // Staged, then deleted on disk, still reads "added"; nothing to trash.
-          const absolute = path.join(this.project.path, filePath);
-          if (fs.existsSync(absolute)) {
-            try {
-              await shell.trashItem(absolute);
-            } catch (error) {
-              return { ok: false, error: error instanceof Error ? error.message : String(error) };
-            }
-          }
-          continue;
-        }
-        targets.restore.push(filePath);
+        (notInHead ? targets.drop : targets.restore).push(filePath);
       }
 
       return git.discard(this.project.path, targets);

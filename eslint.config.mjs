@@ -51,7 +51,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["**/esbuild.js", "scripts/*.js"],
+    files: ["**/esbuild.js", "scripts/*.js", "test/electron-stub.js"],
     languageOptions: {
       sourceType: "commonjs",
       globals: {

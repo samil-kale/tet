@@ -300,8 +300,9 @@ export const codexSessionProvider: SessionProvider = {
   /**
    * The sandbox's `~/.codex/sessions` plus `session_index.jsonl`, where names live outside the
    * rollout. Measured: the codex template has no volume under `~/.codex`, sbx creates a missing
-   * target of either kind, and `auth.json` stays unmounted. The root is shaped like a `CODEX_HOME`,
-   * so rename and delete run against it (`deleteThread`).
+   * target of either kind, and `auth.json` stays unmounted. Rename and delete edit the mounted
+   * files (removeInHome, renameInHome): a host app-server needs Codex on the host and leaves a
+   * whole Codex home of its own in the root.
    */
   sandbox: {
     mounts: [
@@ -309,10 +310,8 @@ export const codexSessionProvider: SessionProvider = {
       { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
     ],
     list: (_executable, root, cwd) => listIn(root, cwd),
-    // The root as cwd too: the sandbox's cwd is a container path, and spawning there fails with
-    // ENOENT. Threads are addressed by id under CODEX_HOME anyway.
-    remove: (executable, root, _cwd, sessionId) => deleteThread(executable, root, sessionId, root),
-    rename: (executable, root, _cwd, sessionId, title) => renameIn(executable, root, sessionId, title, root)
+    remove: (_executable, root, _cwd, sessionId) => removeInHome(root, sessionId),
+    rename: (_executable, root, _cwd, sessionId, title) => renameInHome(root, sessionId, title)
   },
 
   /**
@@ -412,10 +411,48 @@ async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
 }
 
 /** Only the app-server RPC writes a thread's name — no CLI command, no rollout entry. */
-async function renameIn(executable: string, cwd: string, sessionId: string, title: string, home?: string): Promise<void> {
+async function renameIn(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
   const trimmed = title.trim();
   if (!trimmed) {
     throw new Error("title must be non-empty");
   }
-  await renameThread(executable, cwd, sessionId, trimmed, home);
+  await renameThread(executable, cwd, sessionId, trimmed);
+}
+
+/**
+ * `thread/delete` on the files alone: the rollout goes; an unknown id resolves
+ * (SessionProvider.remove). Codex inside the sandbox (0.149.1) then hides the thread from its lists
+ * and resume picker, and `codex resume <id or name>` answers "No saved session found", though its
+ * own db keeps a row.
+ *
+ * The host's `thread/delete` (0.154.0) also drops the id's index lines; this leaves them. Measured
+ * harmless: Codex inside behaves the same with or without them, and listIn names only rollouts it
+ * finds. Rewriting the index is not: while Codex inside appends to it through the Windows mount
+ * (sbx 0.42.1), the replacing rename failed with EPERM for 1 in 8, about one appended line was
+ * lost per rewrite, and some appends landed as NUL runs.
+ */
+async function removeInHome(home: string, sessionId: string): Promise<void> {
+  const files = await listRolloutFiles(home);
+  const metas = await mapLimited(files, READ_CONCURRENCY, readSessionMeta);
+  for (const [i, filePath] of files.entries()) {
+    if (metas[i]?.sessionId === sessionId) {
+      await fs.promises.rm(filePath, { force: true });
+      metaCache.delete(filePath);
+      tailCache.delete(filePath);
+    }
+  }
+}
+
+/**
+ * `thread/name/set` on the files alone (measured against host 0.154.0 and 0.149.1 in the sandbox):
+ * one appended index line, `updated_at` with seven fractional digits on both. Codex inside the
+ * sandbox reads names from its own db only, so it keeps showing the old name.
+ */
+async function renameInHome(home: string, sessionId: string, title: string): Promise<void> {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new Error("title must be non-empty");
+  }
+  const entry = { id: sessionId, thread_name: trimmed, updated_at: new Date().toISOString().replace("Z", "0000Z") };
+  await fs.promises.appendFile(sessionIndexFile(home), JSON.stringify(entry) + "\n");
 }

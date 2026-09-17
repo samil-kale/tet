@@ -92,8 +92,9 @@ export const opencodeSessionProvider: SessionProvider = {
     return ["--session", sessionId];
   },
 
-  /** `opencode session delete` where the record says the session is. The record goes regardless:
-   *  a removed sandbox took its session with it.
+  /** `opencode session delete` where the record says the session is. The record goes with the
+   *  session, or once the session or its sandbox is gone: a removed sandbox took its session with
+   *  it. Any other failure keeps it, so a retry still looks where the session is.
    *
    *  An unknown session resolves (SessionProvider.remove). Measured (1.18.4): an unknown id exits 1
    *  with `Session not found: <id>`, in a sandbox too; a gone sandbox gets sbx's
@@ -106,10 +107,9 @@ export const opencodeSessionProvider: SessionProvider = {
       if (!/Session not found|sandbox '[^']*' not found/.test(String(error))) {
         throw error;
       }
-    } finally {
-      if (dir) {
-        fs.rmSync(path.join(dir, `${sessionId}.json`), { force: true });
-      }
+    }
+    if (dir) {
+      fs.rmSync(path.join(dir, `${sessionId}.json`), { force: true });
     }
   },
 

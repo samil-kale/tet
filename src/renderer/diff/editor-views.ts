@@ -47,8 +47,10 @@ interface EditorView {
   /** Bumped by every save that reached disk: an older re-read must not restore the replaced text
    *  and mtime as clean. */
   saves: number;
-  /** HEAD and status as App last reported them. */
+  /** HEAD and status as App last reported them, once acted on. */
   version: string | undefined;
+  /** A report that came while the open's read was in flight, applied when it lands. */
+  pendingVersion: string | undefined;
   snapshot: EditorSnapshot;
 }
 
@@ -190,6 +192,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
       readSeq: 0,
       saves: 0,
       version: undefined,
+      pendingVersion: undefined,
       snapshot: CLOSED
     };
     views.set(tabId, view);
@@ -198,6 +201,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
   // Now, or the editor shows the previous file under the new path until the read lands.
   clearModels(view);
   view.version = undefined;
+  view.pendingVersion = undefined;
   publish(view, { path, file: null, loading: true, building: false, saving: false, dirty: false, preview });
   const current = view;
   void window.tet.repository.readFile(projectId, path).then((file) => {
@@ -212,25 +216,39 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
     if (text) {
       void showText(current, seq, file);
     }
+    const pending = current.pendingVersion;
+    current.pendingVersion = undefined;
+    if (pending !== undefined) {
+      setEditorVersion(tabId, pending);
+    }
   });
 }
 
 /**
  * Folds outside changes into the open file on a HEAD or status change. The edited side only while
  * clean, in place so undo and cursor survive; HEAD's side always, since a commit or checkout moves
- * what the marks are against. The first report after an open is the baseline.
+ * what the marks are against. The first report after an open is the baseline. A file that failed to
+ * read is read again, so a tab opened before its file existed recovers.
  */
 export function setEditorVersion(tabId: string, version: string): void {
   const view = views.get(tabId);
   if (!view) {
     return;
   }
-  const previous = view.version;
-  view.version = version;
   const { path, file, loading } = view.snapshot;
-  if (previous === undefined || previous === version || !file || file.error || loading) {
+  if (view.version === undefined) {
+    view.version = version;
     return;
   }
+  if (!file || loading) {
+    // Not recorded as seen: the read in flight may predate the change.
+    view.pendingVersion = version;
+    return;
+  }
+  if (view.version === version) {
+    return;
+  }
+  view.version = version;
   const seq = view.readSeq;
   const saves = view.saves;
   void window.tet.repository.readFile(view.projectId, path).then((result) => {
@@ -247,7 +265,7 @@ export function setEditorVersion(tabId: string, version: string): void {
       // Same text again would make the worker recompute an identical diff, on every refresh.
       view.models.original.setValue(original);
     }
-    if (view.snapshot.dirty || view.saves !== saves || result.mtimeMs === held.mtimeMs) {
+    if (view.snapshot.dirty || view.saves !== saves || (result.mtimeMs === held.mtimeMs && !held.error)) {
       // The edited side stays; HEAD's is carried in anyway, or binary, image and original are
       // decided off a stale HEAD.
       publish(view, { file: { ...held, head: result.head } });

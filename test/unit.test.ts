@@ -10,12 +10,13 @@ import { tabControlToken } from "../src/main/control/control-token";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { relativeInside } from "../src/main/path-inside";
 import { SettingsStore } from "../src/main/settings";
+import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
-import { CLI } from "./helpers";
+import { CLI, eventually } from "./helpers";
 
 /** Pieces around the control channel needing no app and no server. */
 
@@ -62,6 +63,69 @@ describe("a turn's toast", () => {
       }
     } finally {
       await manager.dispose();
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
+    }
+  });
+});
+
+describe("a tab's reported session", () => {
+  it("is ordered by when the reports were made: a late hook of the session left behind does not take it back", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bind-"));
+    // An empty PATH: Claude's version check fails, so nothing is set up, listed or spawned.
+    const originalPath = process.env.PATH;
+    process.env.PATH = path.join(root, "empty");
+    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, new SettingsStore(root), {
+      onTabs: () => undefined,
+      onOutput: () => undefined,
+      onStatus: () => undefined,
+      onStartupProgress: () => undefined,
+      onNotice: () => undefined
+    });
+    try {
+      const { tabId } = manager.createTab("claude");
+      const reported = () => manager.inspect().find((tab) => tab.tabId === tabId)?.reportedSessionId;
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at);
+      // `/clear`: the new session starts, while the old one's stop hook is still on its way.
+      manager.hookEvent(tabId, "session-start", '{"session_id":"s2"}', at + 2000);
+      manager.hookEvent(tabId, "stop", '{"session_id":"s1"}', at + 1000);
+      assert.equal(reported(), "s2");
+    } finally {
+      await manager.dispose();
+      process.env.PATH = originalPath;
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
+    }
+  });
+});
+
+describe("a tab of a missing agent", () => {
+  it("starts once switching sandboxing on makes its agent startable", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-missing-"));
+    const project = path.join(root, "repo");
+    fs.mkdirSync(project);
+    // An empty PATH: pi is missing here, and so is sbx, so the start ends in sbx's notice.
+    const originalPath = process.env.PATH;
+    process.env.PATH = path.join(root, "empty");
+    const statuses: string[] = [];
+    const notices: string[] = [];
+    const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), {
+      onTabs: () => undefined,
+      onOutput: () => undefined,
+      onStatus: (_projectId, _tabId, status) => statuses.push(status),
+      onStartupProgress: () => undefined,
+      onNotice: (_severity, message) => notices.push(message)
+    });
+    try {
+      const { tabId } = manager.createTab("pi");
+      manager.handleResize(tabId, 80, 24);
+      await eventually("the tab shows missing", () => statuses.at(-1) === "missing", 10_000);
+      fs.writeFileSync(path.join(project, "tet.json"), JSON.stringify({ sbx: { enabled: true } }));
+      await manager.sbxConfigChanged();
+      await eventually(() => `a start after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
+      assert.ok(notices.some((notice) => /only runs in repo's SBX sandbox/.test(notice)), notices.join("\n"));
+    } finally {
+      await manager.dispose();
+      process.env.PATH = originalPath;
       fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
     }
   });
@@ -278,5 +342,28 @@ describe("a path inside a root", () => {
     assert.equal(relativeInside(root, root), undefined);
     assert.equal(relativeInside(root, path.dirname(root)), undefined);
     assert.equal(relativeInside(root, path.join(path.dirname(root), "other", "a.ts")), undefined);
+  });
+});
+
+describe("what a ctrl-click hands the OS", () => {
+  it("opens web and mail links only", () => {
+    for (const url of ["https://example.com/a?b=c", "http://localhost:3000", "mailto:someone@example.com"]) {
+      assert.equal(isOpenableUrl(url), true, url);
+    }
+    for (const url of ["file:///C:/Windows/System32/calc.exe", "ms-msdt://x", "vscode://file/a", "javascript://%0aalert(1)", "not a url"]) {
+      assert.equal(isOpenableUrl(url), false, url);
+    }
+  });
+
+  it("counts a program by its extension on Windows, and by its executable bit elsewhere", () => {
+    for (const name of ["setup.EXE", "run.bat", "run.cmd", "a.ps1", "a.vbs", "a.js", "a.msi", "a.lnk"]) {
+      assert.equal(isExecutableFile(path.join("dir", name), 0o644, "win32"), true, name);
+    }
+    assert.equal(isExecutableFile("notes.txt", 0o755, "win32"), false, "Windows has no executable bit");
+    assert.equal(isExecutableFile("build", 0o755, "linux"), true);
+    assert.equal(isExecutableFile("build.sh", 0o644, "linux"), true);
+    assert.equal(isExecutableFile("app.desktop", 0o644, "linux"), true);
+    assert.equal(isExecutableFile("run.command", 0o644, "darwin"), true);
+    assert.equal(isExecutableFile("notes.txt", 0o644, "darwin"), false);
   });
 });

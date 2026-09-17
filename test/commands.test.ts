@@ -60,6 +60,13 @@ describe("readCommands", () => {
     await assert.rejects(writeCommands(root, [{ command: "x" }]), /not valid JSON/);
     assert.equal(fs.readFileSync(file(), "utf8"), "{ not json", "untouched");
   });
+
+  it("writes over an empty file as if there were none", async () => {
+    put(" \r\n");
+    assert.deepEqual(await readCommands(root), []);
+    await writeCommands(root, [{ command: "x" }]);
+    assert.deepEqual(stored(), { commands: ["x"] });
+  });
 });
 
 describe("writeCommands", () => {

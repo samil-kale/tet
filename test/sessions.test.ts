@@ -414,6 +414,26 @@ describe("opencode's session records", () => {
     assert.equal((await opencodeSessionProvider.list("opencode", cwd))[0].title, "Renamed");
     await assert.rejects(opencodeSessionProvider.rename("opencode", cwd, "ses_a", "  "), /non-empty/);
   });
+
+  it("drops a record only once its session is gone, keeping it when the delete failed", async () => {
+    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null } });
+    fs.mkdirSync(cwd);
+    /** A stand-in opencode that fails `session delete` with `message`. */
+    const fakeOpencode = (message: string): string => {
+      if (process.platform === "win32") {
+        const file = path.join(path.dirname(dir), "opencode.cmd");
+        fs.writeFileSync(file, `@echo ${message} 1>&2\r\n@exit /b 1\r\n`);
+        return file;
+      }
+      const file = path.join(path.dirname(dir), "opencode");
+      fs.writeFileSync(file, `#!/bin/sh\necho '${message}' >&2\nexit 1\n`, { mode: 0o755 });
+      return file;
+    };
+    await assert.rejects(opencodeSessionProvider.remove(fakeOpencode("database is locked"), cwd, "ses_a"), /database is locked/);
+    assert.ok(fs.existsSync(path.join(dir, "ses_a.json")), "a failed delete keeps where the session is");
+    await opencodeSessionProvider.remove(fakeOpencode("Session not found: ses_a"), cwd, "ses_a");
+    assert.ok(!fs.existsSync(path.join(dir, "ses_a.json")));
+  });
 });
 
 /**
@@ -447,25 +467,42 @@ describe("sessions written inside a sandbox", () => {
     assert.deepEqual(await sandbox.list("claude", dir, cwd), []);
   });
 
-  it("lists Codex's sandboxed rollouts against the mounted home", async () => {
+  it("lists, renames and deletes Codex's sandboxed rollouts on the mounted files", async () => {
     const dir = root("tet-sbx-codex-");
     const day = path.join(dir, "sessions", "2026", "03", "04");
     fs.mkdirSync(day, { recursive: true });
-    fs.writeFileSync(
-      path.join(day, "rollout-one.jsonl"),
-      [
-        { type: "session_meta", timestamp: AT, payload: { session_id: "s1", cwd, source: "cli" } },
-        { type: "event_msg", payload: { type: "user_message", message: "In the sandbox" } }
-      ]
-        .map(line)
-        .join("")
-    );
-    fs.writeFileSync(path.join(dir, "session_index.jsonl"), line({ id: "s1", thread_name: "Named" }));
+    for (const [id, at] of [["s1", AT], ["s2", LATER]]) {
+      fs.writeFileSync(
+        path.join(day, `rollout-${id}.jsonl`),
+        [
+          { type: "session_meta", timestamp: at, payload: { session_id: id, cwd, source: "cli" } },
+          { type: "event_msg", payload: { type: "user_message", message: "In the sandbox" } }
+        ]
+          .map(line)
+          .join("")
+      );
+    }
+    const index = path.join(dir, "session_index.jsonl");
+    fs.writeFileSync(index, line({ id: "s1", thread_name: "Named" }));
     const sandbox = codexSessionProvider.sandbox;
     assert.ok(sandbox);
-    const [session] = await sandbox.list("codex", dir, cwd);
-    assert.equal(session.id, "s1");
-    assert.equal(session.title, "Named", "the name index beside the rollouts is mounted too");
+    const titles = async (): Promise<string[][]> => (await sandbox.list("codex", dir, cwd)).map((s) => [s.id, s.title]);
+    assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "In the sandbox"]], "the name index beside the rollouts is mounted too");
+
+    await sandbox.rename("codex", dir, cwd, "s2", "  Renamed  ");
+    assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "Renamed"]]);
+    const appended = JSON.parse(fs.readFileSync(index, "utf8").trim().split("\n").at(-1) ?? "") as Record<string, unknown>;
+    assert.deepEqual(Object.keys(appended), ["id", "thread_name", "updated_at"]);
+    assert.match(String(appended.updated_at), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{7}Z$/, "Codex's seven fractional digits");
+    await assert.rejects(sandbox.rename("codex", dir, cwd, "s2", "  "), /non-empty/);
+
+    const indexBefore = fs.readFileSync(index, "utf8");
+    await sandbox.remove("codex", dir, cwd, "s1");
+    assert.deepEqual(fs.readdirSync(day), ["rollout-s2.jsonl"]);
+    assert.equal(fs.readFileSync(index, "utf8"), indexBefore, "the index is left as it is");
+    assert.deepEqual(await titles(), [["s2", "Renamed"]], "a name without its rollout lists nothing");
+    // A session that is already gone resolves — see SessionProvider.remove.
+    await sandbox.remove("codex", dir, cwd, "s1");
   });
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {

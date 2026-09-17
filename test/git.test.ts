@@ -10,19 +10,27 @@ import {
   commitPaths,
   createBranch,
   createTag,
+  deleteRemoteBranch,
   discard,
   ensureAskpass,
+  fastForwardBranches,
+  fetch,
   ignorePath,
   isRepository,
   listIgnored,
   merge,
+  pull,
   push,
   readCommitContext,
   readHeadBlob,
+  readHeadPaths,
   readState,
+  rebaseRewritesPushed,
+  renameBranch,
   resolveRoot,
   stashDrop,
-  stashPush
+  stashPush,
+  updateRemoteHead
 } from "../src/main/git/git";
 
 /**
@@ -82,6 +90,8 @@ describe("a repository, from init on", () => {
     write("a.txt", "one\ntwo\nthree\n");
     assert.deepEqual((await readState(cwd)).changes, [{ path: "a.txt", status: "untracked" }]);
     assert.deepEqual(await head("a.txt"), { content: "", binary: false, missing: true });
+    // Unborn: nothing is in HEAD, and asking is no error.
+    assert.deepEqual(await readHeadPaths(cwd, ["a.txt"]), []);
   });
 
   it("hands a staged file to the commit message before there is a HEAD", async () => {
@@ -151,6 +161,8 @@ describe("a repository, from init on", () => {
 
   it("lists tags and branches, and switches to a created branch", async () => {
     assert.deepEqual(await createTag(cwd, "v1", "HEAD", ""), { ok: true });
+    // Without a message too, as in GitHub Desktop.
+    assert.equal(run("cat-file", "-t", "refs/tags/v1"), "tag");
     assert.deepEqual(await createBranch(cwd, "feature", "main"), { ok: true });
     const state = await readState(cwd);
     assert.equal(state.head, "feature");
@@ -158,16 +170,32 @@ describe("a repository, from init on", () => {
     assert.deepEqual(state.tags, ["v1"]);
   });
 
-  it("stashes the changes and lists the stash by the ref the commands take", async () => {
+  it("stashes the changes and lists the stash by its ref and commit", async () => {
     write("b.txt", "changed\n");
     assert.deepEqual(await stashPush(cwd, "wip"), { ok: true });
     const state = await readState(cwd);
     assert.deepEqual(state.changes, []);
     assert.equal(state.stashes.length, 1);
     assert.equal(state.stashes[0].ref, "stash@{0}");
+    assert.equal(state.stashes[0].sha, run("rev-parse", "stash@{0}"));
     assert.match(state.stashes[0].message, /wip/);
-    assert.deepEqual(await stashDrop(cwd, "stash@{0}"), { ok: true });
+    assert.deepEqual(await stashDrop(cwd, state.stashes[0].sha), { ok: true });
     assert.deepEqual((await readState(cwd)).stashes, []);
+  });
+
+  it("drops the stash it was shown, though a newer one renumbered it", async () => {
+    write("b.txt", "first\n");
+    assert.deepEqual(await stashPush(cwd, "first"), { ok: true });
+    const [shown] = (await readState(cwd)).stashes;
+    // A terminal stashes meanwhile: "first" is stash@{1} now.
+    write("b.txt", "second\n");
+    run("stash", "push", "-q", "-m", "second");
+    assert.deepEqual(await stashDrop(cwd, shown.sha), { ok: true });
+    const left = (await readState(cwd)).stashes;
+    assert.equal(left.length, 1);
+    assert.match(left[0].message, /second/);
+    assert.deepEqual(await stashDrop(cwd, shown.sha), { ok: false, error: "The stash no longer exists" });
+    run("stash", "drop", "-q");
   });
 
   it("reports a merge stopped on a conflict, and aborts it", async () => {
@@ -192,13 +220,14 @@ describe("a repository, from init on", () => {
     const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-"));
     assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
     run("remote", "add", "origin", bare);
-    assert.deepEqual(await push(cwd, "origin", "main", true), { ok: true });
+    assert.deepEqual(await push(cwd, "origin", "main", undefined), { ok: true });
     run("remote", "set-head", "origin", "main");
     let state = await readState(cwd);
     assert.equal(state.upstream, "origin/main");
+    assert.deepEqual(state.branchUpstreams, { main: { remote: "origin", branch: "main" } });
     assert.deepEqual([state.ahead, state.behind], [0, 0]);
     assert.deepEqual(state.remotes, [{ name: "origin", branches: ["main"] }]);
-    assert.equal(state.defaultBranch, "main");
+    assert.deepEqual(state.defaultBranch, { name: "main" });
     write("c.txt", "new\n");
     assert.deepEqual(await commitAll(cwd, "ahead"), { ok: true });
     state = await readState(cwd);
@@ -302,6 +331,106 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
     assert.deepEqual(await commitPaths(cwd, "route", ["[id]/page.txt"], []), { ok: true });
     assert.deepEqual(await changed(), ["modified b.txt", "modified i/page.txt", "untracked other.txt"]);
   });
+
+  it("shows a file untracked by `rm --cached` as one untracked row, not a deletion beside it", async () => {
+    run("rm", "-q", "--cached", "renamed.txt");
+    write("renamed.txt", "edited\n");
+    // git reports both, "D  renamed.txt" and "?? renamed.txt"; GitHub Desktop shows the second.
+    assert.deepEqual(await changed(), [
+      "modified b.txt",
+      "modified i/page.txt",
+      "untracked other.txt",
+      "untracked renamed.txt"
+    ]);
+  });
+
+  it("discards that file back to HEAD's version, once the edited one is trashed", async () => {
+    // Only HEAD knows it is more than an untracked file.
+    assert.deepEqual(await readHeadPaths(cwd, ["renamed.txt", "other.txt"]), ["renamed.txt"]);
+    // What Repository.discard does for it: the edits go to the trash first.
+    const trash = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-trash-"));
+    fs.renameSync(path.join(cwd, "renamed.txt"), path.join(trash, "renamed.txt"));
+    assert.deepEqual(await discard(cwd, { restore: ["renamed.txt"], drop: [] }), { ok: true });
+    assert.equal(fs.readFileSync(path.join(cwd, "renamed.txt"), "utf8"), "a changed\n");
+    assert.equal(fs.readFileSync(path.join(trash, "renamed.txt"), "utf8"), "edited\n");
+    assert.deepEqual(await changed(), ["modified b.txt", "modified i/page.txt", "untracked other.txt"]);
+  });
+});
+
+describe("a merge stopped on conflicts, discarded file by file", () => {
+  const changed = async (): Promise<string[]> =>
+    (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
+
+  before(async () => {
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-conflicts-"));
+    run("init", "-q");
+    run("symbolic-ref", "HEAD", "refs/heads/main");
+    write("gone.txt", "gone\n");
+    write("m.txt", "m\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "base");
+    run("switch", "-q", "-c", "feature");
+    write("both.txt", "feature\n");
+    write("gone.txt", "gone on feature\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "feature");
+    run("switch", "-q", "main");
+    write("both.txt", "main\n");
+    run("rm", "-q", "gone.txt");
+    run("add", "--all");
+    run("commit", "-q", "--message", "main");
+    assert.equal((await merge(cwd, "feature")).ok, false);
+    write("m.txt", "m edited\n");
+  });
+
+  it("can't tell from the status which conflicts HEAD has, so asks HEAD", async () => {
+    // Added on both sides (AA), and deleted by us (DU).
+    assert.deepEqual(await changed(), ["conflicted both.txt", "conflicted gone.txt", "modified m.txt"]);
+    assert.deepEqual(await readHeadPaths(cwd, ["both.txt", "gone.txt"]), ["both.txt"]);
+  });
+
+  it("is refused whole when a conflict HEAD lacks is restored from HEAD", async () => {
+    const refused = await discard(cwd, { restore: ["both.txt", "gone.txt", "m.txt"], drop: [] });
+    assert.equal(refused.ok, false);
+    assert.match(refused.error ?? "", /gone\.txt' is unmerged/);
+    assert.equal(fs.readFileSync(path.join(cwd, "m.txt"), "utf8"), "m edited\n");
+  });
+
+  it("resets each conflict to HEAD, trashes the one HEAD lacks, and leaves the merge in progress", async () => {
+    // What Repository.discard does: the conflict HEAD lacks goes to the trash first.
+    const trash = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-trash-"));
+    fs.renameSync(path.join(cwd, "gone.txt"), path.join(trash, "gone.txt"));
+    assert.deepEqual(await discard(cwd, { restore: ["both.txt", "m.txt"], drop: ["gone.txt"] }), { ok: true });
+    assert.deepEqual(await changed(), []);
+    assert.equal(fs.readFileSync(path.join(cwd, "both.txt"), "utf8"), "main\n");
+    assert.equal(fs.readFileSync(path.join(cwd, "m.txt"), "utf8"), "m\n");
+    assert.equal(fs.existsSync(path.join(cwd, "gone.txt")), false);
+    assert.equal(fs.readFileSync(path.join(trash, "gone.txt"), "utf8"), "gone on feature\n");
+    assert.equal((await readState(cwd)).operation, "merge");
+  });
+});
+
+describe("a network command's ssh", () => {
+  it("follows a core.sshCommand set after an earlier network command", async (t) => {
+    const inherited = { GIT_SSH: process.env.GIT_SSH, GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND };
+    delete process.env.GIT_SSH;
+    delete process.env.GIT_SSH_COMMAND;
+    t.after(() => Object.assign(process.env, inherited));
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-ssh-"));
+    assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-ssh-"));
+    run("init", "-q");
+    run("remote", "add", "origin", bare);
+    // Without core.sshCommand, over no ssh at all.
+    assert.deepEqual(await fetch(cwd), { ok: true });
+    // Set later, the way a user does in a terminal: the ssh must be theirs, not tet's.
+    const marker = path.join(cwd, "ssh-ran").replace(/\\/g, "/");
+    const node = process.execPath.replace(/\\/g, "/");
+    run("config", "core.sshCommand", `'${node}' -e "require('fs').writeFileSync(process.argv[1], '')" '${marker}'`);
+    run("remote", "set-url", "origin", "ssh://tet.invalid/repo.git");
+    assert.equal((await fetch(cwd)).ok, false);
+    assert.ok(fs.existsSync(marker), "core.sshCommand ran");
+  });
 });
 
 describe("remotes the tree has to read carefully", () => {
@@ -328,12 +457,126 @@ describe("remotes the tree has to read carefully", () => {
     write("a.txt", "a\n");
     assert.deepEqual(await commitAll(cwd, "base"), { ok: true });
     run("remote", "add", "team/fork", bare);
-    assert.deepEqual(await push(cwd, "team/fork", "main", true), { ok: true });
+    assert.deepEqual(await push(cwd, "team/fork", "main", undefined), { ok: true });
     run("remote", "set-head", "team/fork", "main");
     const state = await readState(cwd, ["team/fork"]);
     assert.deepEqual(state.remotes, [{ name: "team/fork", branches: ["main"] }]);
-    assert.equal(state.defaultBranch, "main");
+    assert.deepEqual(state.defaultBranch, { name: "main" });
     assert.equal(state.upstream, "team/fork/main");
+    assert.deepEqual(state.branchUpstreams, { main: { remote: "team/fork", branch: "main" } });
+  });
+});
+
+describe("a remote shared with another clone, as GitHub Desktop handles it", () => {
+  let bare: string;
+  let other: string;
+
+  /** A commit in the other clone, pushed. */
+  const pushFromOther = (name: string): void => {
+    fs.writeFileSync(path.join(other, name), `${name}\n`);
+    for (const args of [["add", name], ["commit", "-q", "-m", name], ["push", "-q"]]) {
+      const result = spawnSync("git", args, { cwd: other, encoding: "utf8" });
+      assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
+    }
+  };
+
+  before(() => {
+    bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-shared-"));
+    assert.equal(spawnSync("git", ["init", "-q", "--bare", "--initial-branch=main", bare]).status, 0);
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-shared-"));
+    run("clone", "-q", bare, ".");
+    run("symbolic-ref", "HEAD", "refs/heads/main");
+    write("a.txt", "a\n");
+    run("add", "a.txt");
+    run("commit", "-q", "-m", "base");
+    run("push", "-q", "--set-upstream", "origin", "main");
+    other = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-other-"));
+    assert.equal(spawnSync("git", ["clone", "-q", bare, other]).status, 0);
+  });
+
+  it("finds the remote's HEAD branch again after it was set by hand", async () => {
+    assert.equal((await readState(cwd, ["origin"])).defaultBranch, undefined, "a clone of an empty remote has no origin/HEAD");
+    await updateRemoteHead(cwd, "origin");
+    assert.deepEqual((await readState(cwd, ["origin"])).defaultBranch, { name: "main" });
+  });
+
+  it("names the local branch tracking the default branch, whatever it is called", async () => {
+    run("branch", "-q", "--track", "trunk", "origin/main");
+    run("branch", "-q", "-m", "main", "work");
+    const state = await readState(cwd, ["origin"]);
+    // Both track origin/main and neither is called main: the first one.
+    assert.deepEqual(state.defaultBranch, { name: "trunk" });
+    run("branch", "-q", "-m", "work", "main");
+    assert.deepEqual((await readState(cwd, ["origin"])).defaultBranch, { name: "main" }, "the one of that name wins");
+    run("branch", "-q", "-D", "trunk");
+  });
+
+  it("pulls into a diverged branch as a merge while pull.ff is unset", async () => {
+    pushFromOther("theirs.txt");
+    write("ours.txt", "ours\n");
+    assert.deepEqual(await commitAll(cwd, "ours"), { ok: true });
+    assert.deepEqual(await pull(cwd), { ok: true });
+    const state = await readState(cwd, ["origin"]);
+    assert.deepEqual([state.ahead, state.behind], [2, 0]);
+    assert.ok(fs.existsSync(path.join(cwd, "theirs.txt")));
+  });
+
+  it("pushes to an upstream of another name, whatever push.default says", async () => {
+    run("switch", "-q", "--create", "local-name");
+    run("push", "-q", "origin", "local-name:remote-name");
+    run("branch", "-q", "--set-upstream-to=origin/remote-name");
+    run("config", "push.default", "simple");
+    write("d.txt", "d\n");
+    assert.deepEqual(await commitAll(cwd, "d"), { ok: true });
+    const upstream = (await readState(cwd, ["origin"])).branchUpstreams["local-name"];
+    assert.deepEqual(upstream, { remote: "origin", branch: "remote-name" });
+    assert.deepEqual(await push(cwd, upstream.remote, "local-name", upstream.branch), { ok: true });
+    assert.equal(run("rev-parse", "origin/remote-name"), run("rev-parse", "HEAD"));
+    run("switch", "-q", "main");
+  });
+
+  it("moves branches only behind their upstream after a fetch, and leaves the checked-out one", async () => {
+    run("push", "-q", "origin", "main");
+    run("branch", "-q", "--track", "behind", "origin/main");
+    run("switch", "-q", "--create", "diverged", "--track", "origin/main");
+    write("e.txt", "e\n");
+    assert.deepEqual(await commitAll(cwd, "e"), { ok: true });
+    run("switch", "-q", "main");
+    const before = run("rev-parse", "main");
+    assert.equal(spawnSync("git", ["pull", "-q"], { cwd: other }).status, 0);
+    pushFromOther("f.txt");
+    assert.deepEqual(await fetch(cwd), { ok: true });
+    const divergedBefore = run("rev-parse", "diverged");
+    await fastForwardBranches(cwd);
+    assert.equal(run("rev-parse", "behind"), run("rev-parse", "origin/main"));
+    assert.equal(run("rev-parse", "diverged"), divergedBefore, "a diverged branch is not moved");
+    assert.equal(run("rev-parse", "main"), before, "the checked-out branch is not moved");
+    run("branch", "-q", "-D", "behind", "diverged");
+  });
+
+  it("warns before rebasing commits the upstream has, and not onto what it already has", async () => {
+    run("merge", "-q", "--no-edit", "origin/main");
+    run("push", "-q", "origin", "main");
+    run("switch", "-q", "--create", "older", "HEAD~2");
+    run("switch", "-q", "main");
+    assert.equal(await rebaseRewritesPushed(cwd, "older"), true);
+    assert.equal(await rebaseRewritesPushed(cwd, "origin/main"), false);
+    run("branch", "-q", "-D", "older");
+  });
+
+  it("renames a branch by case alone, and never over a branch of exactly that name", async () => {
+    run("branch", "-q", "casing");
+    assert.deepEqual(await renameBranch(cwd, "casing", "Casing"), { ok: true });
+    assert.equal(run("for-each-ref", "--format=%(refname)", "refs/heads/Casing"), "refs/heads/Casing");
+    run("branch", "-q", "-D", "Casing");
+  });
+
+  it("forgets a remote branch someone else already deleted", async () => {
+    run("push", "-q", "origin", "main:gone");
+    run("fetch", "-q");
+    assert.equal(spawnSync("git", ["push", "-q", "origin", "--delete", "gone"], { cwd: other }).status, 0);
+    assert.deepEqual(await deleteRemoteBranch(cwd, "origin", "gone"), { ok: true });
+    assert.deepEqual((await readState(cwd, ["origin"])).remotes[0]?.branches.includes("gone"), false);
   });
 });
 

@@ -106,10 +106,11 @@ const testConfig = {
   platform: "node",
   target: "node22",
   format: "cjs",
-  // Neither electron (it reads a file beside itself) nor node-pty (native) can be bundled;
-  // esbuild finds its own binary relative to its package, and pieces.test.ts compiles pi's
-  // generated extension with it.
-  external: ["electron", "node-pty", "esbuild"]
+  // node-pty (native) cannot be bundled; esbuild finds its own binary relative to its package, and
+  // pieces.test.ts compiles pi's generated extension with it. electron is a stub: node's runner has
+  // none (helpers.ts finds the binary through its own require).
+  alias: { electron: "./test/electron-stub.js" },
+  external: ["node-pty", "esbuild"]
 };
 
 function copyStaticAssets() {

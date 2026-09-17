@@ -50,6 +50,7 @@ import { countActivity, markStartup, reportRendererSlow, reportRendererTask } fr
 import { git } from "./git/git-client";
 import { relativeInside } from "./path-inside";
 import { addProject, removeProject, type ProjectStore } from "./projects";
+import { isExecutableFile, isOpenableUrl } from "./shell-open";
 import type { Repository, RepositoryManager } from "./git/repository";
 import { anyAgentInstalled, checkRequirements } from "./requirements";
 import { augmentAgentPath } from "./terminals/agent-path";
@@ -175,19 +176,22 @@ export function registerIpc({
     const project = store.get(projectId);
     return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
-  // Writes tet.json; notices for the sandboxes saveSbxConfig removed.
+  // Writes tet.json; notices for the sandboxes saveSbxConfig removed, an error for ports sbx refused.
   ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxProjectConfig): Promise<GitActionResult> => {
     const project = store.get(projectId);
     if (!project) {
       return { ok: false, error: MISSING_REPOSITORY.error };
     }
     try {
-      const removed = await saveSbxConfig(project.path, project.id, request);
+      const { removed, portFailures } = await saveSbxConfig(project.path, project.id, request);
       for (const agentId of removed) {
         const message = request.enabled
           ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
           : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
         send("app:notice", { severity: "info", message });
+      }
+      if (portFailures.length > 0) {
+        return { ok: false, error: `Saved, but not applied: ${portFailures.join(" ")}` };
       }
       return { ok: true };
     } catch (error) {
@@ -371,8 +375,11 @@ export function registerIpc({
   onRepository("repo:delete-branch", (repository, name: string, onRemote: boolean) =>
     repository.deleteBranch(name, onRemote)
   );
+  onRepository("repo:delete-remote-branch", (repository, remote: string, name: string) =>
+    repository.deleteRemoteBranch(remote, name)
+  );
   onRepository("repo:merge", (repository, ref: string) => repository.merge(ref));
-  onRepository("repo:rebase", (repository, ref: string) => repository.rebase(ref));
+  onRepository("repo:rebase", (repository, ref: string, confirmed: boolean) => repository.rebase(ref, confirmed));
   onRepository("repo:abort", (repository) => repository.abort());
   onRepository("repo:create-tag", (repository, name: string, target: string, message: string) =>
     repository.createTag(name, target, message)
@@ -421,9 +428,9 @@ export function registerIpc({
     }
   });
   onRepository("repo:stash-push", (repository, message: string) => repository.stashPush(message));
-  onRepository("repo:stash", (repository, command: StashCommand, ref: string) => repository.stash(command, ref));
-  onRepository("repo:discard", async (repository, paths: string[]) =>
-    paths.length > 0 ? repository.discard(paths) : { ok: true }
+  onRepository("repo:stash", (repository, command: StashCommand, sha: string) => repository.stash(command, sha));
+  onRepository("repo:discard", async (repository, paths: string[], permanently: boolean) =>
+    paths.length > 0 ? repository.discard(paths, permanently) : { ok: true }
   );
   onRepository("repo:ignore", (repository, filePath: string, scope: "file" | "extension") =>
     repository.ignore(filePath, scope)
@@ -573,6 +580,10 @@ export function registerIpc({
   ipcMain.handle("agents:list", () => listAgents());
 
   ipcMain.handle("shell:open-url", async (_event, url: string): Promise<void> => {
+    if (!isOpenableUrl(url)) {
+      send("app:notice", { severity: "error", message: `Only http, https and mailto links are opened: ${url}` });
+      return;
+    }
     try {
       await shell.openExternal(url);
     } catch (error) {
@@ -582,7 +593,7 @@ export function registerIpc({
 
   /**
    * A ctrl-clicked terminal path: inside the repository, its relative path for the editor tab;
-   * otherwise opened by the OS here.
+   * otherwise opened by the OS here, or shown in the file manager if opening would run it.
    */
   ipcMain.handle("shell:open-file", async (_event, projectId: string, rawPath: string): Promise<string | null> => {
     const repository = repositories.get(projectId);
@@ -595,11 +606,8 @@ export function registerIpc({
         : rawPath;
     const root = repository.project.path;
     const resolved = path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
-    const isFile = await fs.promises
-      .stat(resolved)
-      .then((stat) => stat.isFile())
-      .catch(() => false);
-    if (!isFile) {
+    const stat = await fs.promises.stat(resolved).catch(() => null);
+    if (!stat?.isFile()) {
       send("app:notice", { severity: "error", message: `Could not find file: ${rawPath}` });
       return null;
     }
@@ -607,6 +615,10 @@ export function registerIpc({
     const relative = relativeInside(root, resolved);
     if (relative !== undefined) {
       return relative.replace(/\\/g, "/");
+    }
+    if (isExecutableFile(resolved, stat.mode)) {
+      shell.showItemInFolder(resolved);
+      return null;
     }
     const error = await shell.openPath(resolved);
     if (error) {

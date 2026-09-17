@@ -99,7 +99,9 @@ type Change = [JSONPath, unknown];
  * every other key as the user wrote them; throws on a broken file rather than have it written over.
  */
 async function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
-  const text = await readText(root);
+  // An empty file holds nothing to keep: written like a missing one.
+  const existing = await readText(root);
+  const text = existing?.trim() === "" ? null : existing;
   const content = text === null ? {} : parse(text);
   if (content === UNREADABLE) {
     throw new Error(`${PROJECT_FILE} is not valid JSON`);

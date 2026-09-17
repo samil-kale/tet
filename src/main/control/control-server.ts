@@ -1,6 +1,7 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import * as net from "node:net";
+import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
 import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
@@ -20,6 +21,7 @@ import type {
   TerminalDescriptor
 } from "../../shared/types";
 import { TET_SYSTEM_PROMPT } from "../agents/system-prompt";
+import { relativeInside } from "../path-inside";
 import { tabControlToken } from "./control-token";
 
 /**
@@ -457,7 +459,13 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "editor-open": (args, caller) => {
       const found = project(args, caller);
-      const filePath = text(args, "path", "path");
+      const typed = text(args, "path", "path");
+      // In git's shape, as the editor tabs match it: root-relative, forward slashes.
+      const relative = relativeInside(found.path, path.resolve(found.path, typed));
+      if (relative === undefined) {
+        throw new ControlError("bad_args", `not inside the repository: ${typed}`);
+      }
+      const filePath = relative.replace(/\\/g, "/");
       const keep = args.keep === true;
       deps.openEditor(found.id, filePath, keep);
       return { result: { opened: filePath, keep } };

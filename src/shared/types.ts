@@ -241,6 +241,8 @@ export type StashCommand = "apply" | "pop" | "drop";
 export interface StashEntry {
   /** e.g. "stash@{0}". Not stable: dropping one renumbers the rest. */
   ref: string;
+  /** The stash's commit, which the commands take: it stays put while the refs renumber. */
+  sha: string;
   /** git's line, e.g. "WIP on main: 1a2b3c the last commit's subject". */
   message: string;
 }
@@ -274,9 +276,14 @@ export interface RepositoryState {
   /** Ahead/behind of non-current branches, only where `%(upstream:trackshort)` says they differ —
    *  each count costs a `rev-list`. The current branch's are `ahead`/`behind`. */
   branchTrack: Record<string, { ahead: number; behind: number }>;
+  /** Each local branch's upstream on a remote, e.g. `{ remote: "origin", branch: "main" }` — what a
+   *  push goes to and "Also delete on the remote" deletes. Absent without one. */
+  branchUpstreams: Record<string, { remote: string; branch: string }>;
   remotes: RemoteInfo[];
-  /** The first remote's HEAD branch, e.g. "main". */
-  defaultBranch?: string;
+  /** What "Update from" merges and a deleted current branch gives way to, found as GitHub Desktop
+   *  finds it: the local branch tracking the remote's HEAD branch, else the local branch of that
+   *  name, else the remote branch. */
+  defaultBranch?: CheckoutTarget;
   /** In `for-each-ref` order. */
   tags: string[];
   stashes: StashEntry[];
@@ -294,6 +301,7 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   behind: 0,
   localBranches: [],
   branchTrack: {},
+  branchUpstreams: {},
   remotes: [],
   tags: [],
   stashes: [],
@@ -411,6 +419,10 @@ export interface GitActionResult {
   error?: string;
   /** git wanted credentials; set only by network commands, acted on only by the clone. */
   authRequired?: boolean;
+  /** A discard could not move a file to the trash; nothing was reset. Asked again, it deletes. */
+  trashFailed?: boolean;
+  /** A rebase was not started: it rewrites commits already on the upstream. Asked again, it runs. */
+  rewritesPushed?: boolean;
 }
 
 /** A local branch, or a remote-tracking one like "origin/development". */

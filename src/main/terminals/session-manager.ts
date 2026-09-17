@@ -55,6 +55,8 @@ interface TabState extends TerminalDescriptor {
   /** The session this tab's hooks named (AgentDefinition.sessionIdOf), claimed as `sessionId`
    *  once listed. */
   reportedSessionId?: string;
+  /** When the latest report naming a session was made (ControlRequest.at) — see bindReportedSession. */
+  sessionReportAt?: number;
   /** When Enter last went into this tab while it had named no session — see reportBeforeQuit. */
   submittedAt?: number;
   /** Mirrors AgentSessionInfo.provisionalTitle. */
@@ -548,6 +550,20 @@ export class ProjectSessionManager {
       return;
     }
     await Promise.all(brought);
+    if (this.disposed) {
+      return;
+    }
+    // A tab opened while its agent was missing spawned nothing (`markInstalled`), and neither a fit
+    // nor Restart starts a `missing` one: its session goes, and the start runs as on a first fit.
+    const startable = new Set(candidates.filter((runtime) => this.canStart(runtime)).map((runtime) => runtime.agent.id));
+    for (const tab of this.tabs.filter((candidate) => candidate.status === "missing" && startable.has(candidate.agentId))) {
+      this.sessions.delete(tab.tabId);
+      tab.status = "ready";
+      this.callbacks.onStatus(this.project.id, tab.tabId, "ready");
+      if (this.lastSizes.has(tab.tabId)) {
+        this.startTab(tab);
+      }
+    }
     // Only when something became startable; otherwise a tab the user closed stays closed.
     this.openFirstAgentTab();
   }
@@ -1159,15 +1175,15 @@ export class ProjectSessionManager {
     const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
     const sessionId = bound ? getAgent(bound.agentId).sessionIdOf?.(payload) : undefined;
     this.record({ tabId, kind: "hook", event, reportedAt, sessionId });
+    // When the hook *fired*, not arrived: two hooks of a turn race (~100 ms each out of a sandbox,
+    // events ms apart), and arrival order leaves a tab finished and working. One tab, one clock.
+    const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
     if (bound && sessionId) {
-      this.bindReportedSession(bound, sessionId);
+      this.bindReportedSession(bound, sessionId, at);
     }
     if (!tab) {
       return {};
     }
-    // When the hook *fired*, not arrived: two hooks of a turn race (~100 ms each out of a sandbox,
-    // events ms apart), and arrival order leaves a tab finished and working. One tab, one clock.
-    const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
     // A stale report gets no mark and no toast, which would contradict the marks — "Finished" over
     // a tab working again (turn-order.ts).
     const fresh = reportApplies(tab.signalAt, at);
@@ -1218,10 +1234,16 @@ export class ProjectSessionManager {
 
   /**
    * Records the session a report names, for a tab with none or one that moved on (`/clear`, `/new`,
-   * `/resume`; measured for Claude Code's `/clear`). Whatever the report's age. Reconcile claims it
-   * once listed; the session left behind becomes its own tab next start.
+   * `/resume`; measured for Claude Code's `/clear`). Whatever the turn marks' age (`signalAt`), but
+   * ordered against the reports naming sessions (turn-order.ts): a late hook of the session left
+   * behind would take it back. Reconcile claims it once listed; the session left behind becomes its
+   * own tab next start.
    */
-  private bindReportedSession(tab: TabState, reported: string): void {
+  private bindReportedSession(tab: TabState, reported: string, at: number): void {
+    if (!reportApplies(tab.sessionReportAt, at)) {
+      return;
+    }
+    tab.sessionReportAt = at;
     if (reported === tab.reportedSessionId) {
       return;
     }

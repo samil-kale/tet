@@ -121,14 +121,19 @@ export interface TETApi {
     /** Creates the branch off `startPoint` and switches to it. */
     createBranch(projectId: string, name: string, startPoint: string): Promise<GitActionResult>;
     renameBranch(projectId: string, from: string, to: string): Promise<GitActionResult>;
-    /** The caller confirms first. */
+    /** The caller confirms first. The checked-out branch gives way to the default branch; `onRemote`
+     *  deletes its upstream. */
     deleteBranch(projectId: string, name: string, onRemote: boolean): Promise<GitActionResult>;
+    /** A branch on a remote alone. The caller confirms first. */
+    deleteRemoteBranch(projectId: string, remote: string, name: string): Promise<GitActionResult>;
     /** Into the current branch. A conflict is reported and left in the tree. */
     merge(projectId: string, ref: string): Promise<GitActionResult>;
-    rebase(projectId: string, ref: string): Promise<GitActionResult>;
+    /** Unless `confirmed`, answers `rewritesPushed` instead where commits on the upstream would be
+     *  rewritten; the caller asks and calls again. */
+    rebase(projectId: string, ref: string, confirmed: boolean): Promise<GitActionResult>;
     /** Aborts `RepositoryState.operation`. */
     abort(projectId: string): Promise<GitActionResult>;
-    /** Annotated with a message, lightweight without. */
+    /** Always annotated, as in GitHub Desktop. */
     createTag(projectId: string, name: string, target: string, message: string): Promise<GitActionResult>;
     pushTag(projectId: string, name: string): Promise<GitActionResult>;
     deleteTag(projectId: string, name: string, onRemote: boolean): Promise<GitActionResult>;
@@ -142,10 +147,11 @@ export interface TETApi {
     suggestCommitMessage(projectId: string, paths?: string[]): Promise<string>;
     /** Everything the changes list shows, untracked included. */
     stashPush(projectId: string, message: string): Promise<GitActionResult>;
-    /** The ref is a position — only ever a freshly read one. */
-    stash(projectId: string, command: StashCommand, ref: string): Promise<GitActionResult>;
-    /** The caller confirms first. */
-    discard(projectId: string, paths: string[]): Promise<GitActionResult>;
+    /** By `StashEntry.sha`, looked up when it runs. */
+    stash(projectId: string, command: StashCommand, sha: string): Promise<GitActionResult>;
+    /** The caller confirms first. Files go to the trash; where that fails the answer is `trashFailed`,
+     *  and `permanently` deletes them instead. */
+    discard(projectId: string, paths: string[], permanently: boolean): Promise<GitActionResult>;
     /** Appends the file, or its extension, to .gitignore. */
     ignore(projectId: string, path: string, scope: "file" | "extension"): Promise<GitActionResult>;
     /** With parent directories — the Explorer's "New File...". */

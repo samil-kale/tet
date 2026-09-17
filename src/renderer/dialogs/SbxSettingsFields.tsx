@@ -44,11 +44,29 @@ export function fromConfig(config: SbxProjectConfig): FieldsState {
   };
 }
 
-/** The inverse, for Save: ids dropped, as are half-empty port rows and empty host rows. */
+/** What `sbx ports --publish` and `sbx run -p` take: a whole number from 1 to 65535. */
+function isPort(value: string): boolean {
+  const trimmed = value.trim();
+  return /^\d{1,5}$/.test(trimmed) && Number(trimmed) >= 1 && Number(trimmed) <= 65535;
+}
+
+/** A port row Save refuses: anything but two ports or two empty sides (dropped). */
+function isBadPortRow({ host, container }: SbxPort): boolean {
+  return !(host.trim() === "" && container.trim() === "") && !(isPort(host) && isPort(container));
+}
+
+/** Save waits for every port row to be two ports or empty; the rows mark which is not. */
+export function canSave(state: FieldsState): boolean {
+  return !state.ports.some(isBadPortRow);
+}
+
+/** The inverse, for Save: ids dropped, as are empty port and host rows. */
 export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> {
   return {
     knowledge: state.knowledge,
-    ports: state.ports.filter((port) => port.host.trim() && port.container.trim()).map(({ host, container }) => ({ host, container })),
+    ports: state.ports
+      .map(({ host, container }) => ({ host: host.trim(), container: container.trim() }))
+      .filter((port) => port.host && port.container),
     paths: state.paths.map(({ path, access }) => ({ path, access })),
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean)
   };
@@ -157,6 +175,12 @@ export function SbxSettingsFields({ state, setState, section, governed }: SbxSet
                   value={port.container}
                   onChange={(event) => setPort({ container: event.target.value })}
                 />
+                {isBadPortRow(port) && (
+                  // The Allowed paths mark, for a row Save refuses.
+                  <span className="sbx-path-denied" title="Both ports must be whole numbers from 1 to 65535">
+                    <ExclamationIcon />
+                  </span>
+                )}
                 <button
                   className="icon-button"
                   title="Remove port"
