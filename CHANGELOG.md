@@ -3,6 +3,18 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.11 (2026-09-17)
+
+- **Sandbox ports are actually published.** Ports from the sandbox settings are compared against
+  what the sandbox itself has published, so one that sbx refused earlier, or that was configured
+  before the sandbox existed, is tried again at the next Save — and a newly created sandbox gets
+  its ports right away.
+- **Windows runs the program that comes first on PATH.** A command is resolved the way cmd.exe
+  resolves it, folder by folder, so a `.cmd` shim placed in front of a program wins over an `.exe`
+  further down PATH.
+- **`tet-ctl help` reads better.** Its verbs are grouped by the question they answer, and a tab
+  running in a sandbox is listed only what it may actually run there.
+
 ## 0.8.10 (2026-09-17)
 
 - **Batch files run again on Windows.** Saved commands that start a `.cmd` file reading its own
