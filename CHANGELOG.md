@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.8.10 (2026-09-17)
+
+- **Batch files run again on Windows.** Saved commands that start a `.cmd` file reading its own
+  arguments, such as Maven's `mvn`, no longer fail with exit code 255.
+
 ## 0.8.9 (2026-09-17)
 
 - **Several editor tabs.** Files open in a preview tab that the next file replaces, as in VS Code;
