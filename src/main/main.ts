@@ -647,7 +647,7 @@ if (!app.requestSingleInstanceLock()) {
     // (ensureSandboxLauncher).
     configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
-    registerIpc({ store, settings, accounts, repositories, sessions, records, send, openProject, openWorkspace, applyTheme });
+    registerIpc({ dataRoot, store, settings, accounts, repositories, sessions, records, send, openProject, openWorkspace, applyTheme });
     timeStartup("window", createWindow);
     // The git process inherits its environment at the fork, so it waits for PATH; started up front
     // while the renderer loads.

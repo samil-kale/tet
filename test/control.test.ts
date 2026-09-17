@@ -49,6 +49,8 @@ interface Calls {
   restarted: string[];
   written: [string, string][];
   editorsOpened: [string, string, boolean][];
+  /** One entry per `inspect`, the call `tabs-wait` polls. */
+  inspected: string[];
 }
 
 /** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
@@ -72,10 +74,13 @@ let calls: Calls;
 function terminalsOf(projectId: string): ControlTerminals {
   return {
     snapshot: () => [tab(projectId, OWN_TAB), tab(projectId, "tab-2")],
-    inspect: () => [
-      tab(projectId, OWN_TAB),
-      { ...tab(projectId, "tab-2"), sessionId: tab2Session, reportedSessionId: "reported-2", sandbox: "tet-claude-abc" }
-    ],
+    inspect: () => {
+      calls.inspected.push(projectId);
+      return [
+        tab(projectId, OWN_TAB),
+        { ...tab(projectId, "tab-2"), sessionId: tab2Session, reportedSessionId: "reported-2", sandbox: "tet-claude-abc" }
+      ];
+    },
     // The caller's own tab is running: nothing to start or restart there.
     start: (tabId) => {
       calls.started.push(tabId);
@@ -215,7 +220,8 @@ describe("tet-ctl against the control server", () => {
       started: [],
       restarted: [],
       written: [],
-      editorsOpened: []
+      editorsOpened: [],
+      inspected: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -490,6 +496,20 @@ describe("tet-ctl against the control server", () => {
     assert.match(run.stderr, /tab-2 is still not bound to a session/);
   });
 
+  it("stops waiting once the CLI is gone", async () => {
+    const body = JSON.stringify({ token: TOKEN, verb: "tabs-wait", args: { tabId: "tab-2", session: true, timeout: 3600, project: PROJECT.id }, caller: {} });
+    const req = http.request({ host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } });
+    req.on("error", () => undefined);
+    req.end(body);
+    await eventually("the wait polling", () => calls.inspected.length > 2, 5000);
+    // What Ctrl+C on the CLI leaves the server: a closed connection.
+    req.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const polled = calls.inspected.length;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(calls.inspected.length, polled, "no polling for a caller that is gone");
+  });
+
   it("refuses to wait for nothing", async () => {
     assert.equal((await tetCtl(["tabs-wait", "tab-2"])).status, EXIT_CODES.usage);
   });
@@ -664,6 +684,16 @@ describe("tet-ctl against the control server", () => {
       calls.notified,
       [["Claude: Finished", "Finished in one", { projectId: PROJECT.id, tabId: OWN_TAB }]],
       "about the tab that reported, which a click on it brings to the front"
+    );
+  });
+
+  it("reports for the caller's own project, whatever --project names", async () => {
+    const run = await tetCtl(["hook", "stop", "--project", OTHER.id], {}, "{}");
+    assert.equal(run.status, EXIT_CODES.ok);
+    assert.deepEqual(
+      calls.notified,
+      [["Claude: Finished", "Finished in one", { projectId: PROJECT.id, tabId: OWN_TAB }]],
+      "a tab speaks for itself, never for a tab of another project"
     );
   });
 

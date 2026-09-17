@@ -97,6 +97,9 @@ function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
     child.on("error", () => finish({ ok: false, stdout, stderr }));
     child.on("exit", (code) => finish({ ok: code === 0, stdout, stderr }));
     if (options.stdin !== undefined) {
+      // A command gone before reading it fails the write (EPIPE, measured on Linux); unhandled, that
+      // stream error raises Electron's modal crash dialog. The exit reports the failure.
+      child.stdin?.on("error", () => undefined);
       child.stdin?.end(options.stdin);
     }
   });

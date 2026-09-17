@@ -4,7 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { AgentInfo } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
-import type { WrappedUrlResolver } from "./links/link-provider";
+import { endLinkHover, type WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isLinux, isMac, isModifierHeld } from "../platform";
 import { reportSlow } from "../slow-report";
@@ -587,6 +587,7 @@ export function disposeTerminal(projectId: string, tabId: string): void {
 function dropView(key: string, view: TerminalView): void {
   views.delete(key);
   releaseWebgl(view);
+  endLinkHover(view.term);
   view.term.dispose();
 }
 

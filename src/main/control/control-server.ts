@@ -143,7 +143,9 @@ type Handler = (
   args: Record<string, unknown>,
   caller: ControlRequest["caller"],
   /** See ControlRequest.at. */
-  at: number | undefined
+  at: number | undefined,
+  /** Aborted once the CLI is gone (Ctrl+C) before its answer: nothing waits for it any more. */
+  gone: AbortSignal
 ) => Promise<Answer> | Answer;
 
 function text(args: Record<string, unknown>, name: string, what: string): string {
@@ -388,7 +390,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { restarted: tabId } };
     },
 
-    "tabs-wait": async (args, caller) => {
+    "tabs-wait": async (args, caller, _at, gone) => {
       const { tabs, tabId } = knownTab(args, caller);
       const status = args.status;
       const conditions: [string, (tab: InspectedTab) => boolean][] = [];
@@ -411,7 +413,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", "nothing to wait for: pass --session, --busy, --idle or --status <status>");
       }
       const deadline = Date.now() + count(args, "timeout", WAIT_TIMEOUT_S) * 1000;
-      for (;;) {
+      while (!gone.aborted) {
         const tab = tabs.inspect().find((candidate) => candidate.tabId === tabId);
         if (!tab) {
           throw new ControlError("not_found", `tab ${tabId} was closed while waiting`);
@@ -425,6 +427,8 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         }
         await new Promise((resolve) => setTimeout(resolve, WAIT_POLL_MS));
       }
+      // Answered to no one.
+      throw new ControlError("timeout", `stopped waiting for tab ${tabId}: the caller is gone`);
     },
 
     "tabs-send": (args, caller) => {
@@ -559,7 +563,9 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", "a hook reports for the tab it runs in, and this is not one");
       }
       const payload = typeof args.payload === "string" ? args.payload : "";
-      const where = project(args, caller);
+      // The caller's own, never `--project`: the token vouches for its tab in its project only, and
+      // tab ids like `new-1` repeat across projects.
+      const where = project({}, caller);
       const outcome = terminals(where).hookEvent(caller.tabId, event as HookEvent, payload, at);
       if (outcome.toast) {
         deps.notify(outcome.toast.title, outcome.toast.body, { projectId: where.id, tabId: caller.tabId });
@@ -589,7 +595,10 @@ export async function startControlServer(
 ): Promise<{ close: () => Promise<void> }> {
   const handlers = verbs(deps);
 
-  const handle = async (request: ControlRequest): Promise<{ response: ControlResponse; after?: () => void }> => {
+  const handle = async (
+    request: ControlRequest,
+    gone: AbortSignal
+  ): Promise<{ response: ControlResponse; after?: () => void }> => {
     const caller: ControlRequest["caller"] = {
       projectId: typeof request.caller?.projectId === "string" ? request.caller.projectId : undefined,
       tabId: typeof request.caller?.tabId === "string" ? request.caller.tabId : undefined
@@ -625,7 +634,7 @@ export async function startControlServer(
       }
     }
     try {
-      const answer = await handler(request.args ?? {}, caller, request.at);
+      const answer = await handler(request.args ?? {}, caller, request.at, gone);
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {
       if (error instanceof ControlError) {
@@ -667,7 +676,14 @@ export async function startControlServer(
         respond(res, reject("bad_args", "not a JSON request"));
         return;
       }
-      void handle(request).then(({ response, after }) => respond(res, response, after));
+      // A response closed before it ended is a caller gone mid-answer (Ctrl+C on a waiting CLI).
+      const gone = new AbortController();
+      res.once("close", () => {
+        if (!res.writableEnded) {
+          gone.abort();
+        }
+      });
+      void handle(request, gone.signal).then(({ response, after }) => respond(res, response, after));
     });
     req.on("error", () => undefined);
     // A response write failing after hand-over (CLI gone, reset, or this process exiting) is

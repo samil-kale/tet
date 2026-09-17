@@ -98,6 +98,8 @@ interface AgentRuntime {
   prepareFailed: boolean;
   /** One setup at a time: two tabs opened at once must not write it twice. */
   preparing?: Promise<boolean>;
+  /** A rerun was asked for while `preparing` ran, which read the theme before it changed. */
+  prepareAgain?: boolean;
   stopWatching?: () => void;
   reconciling?: Promise<void>;
   reconcileTimer?: ReturnType<typeof setTimeout>;
@@ -477,8 +479,12 @@ export class ProjectSessionManager {
       return;
     }
     // Runs again for an agent startable later (sbxConfigChanged): skip sessions already on screen,
-    // reported but unclaimed, or still being deleted (as in doReconcile).
-    const known = new Set([...this.tabs.flatMap((tab) => [tab.sessionId, tab.reportedSessionId]), ...this.deletingSessionIds]);
+    // reported but unclaimed, or still being deleted (as in doReconcile). A tab's id too: a restored
+    // tab keeps its session's id after moving on to another (`/clear`), and ids must stay unique.
+    const known = new Set([
+      ...this.tabs.flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]),
+      ...this.deletingSessionIds
+    ]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
     for (const info of fresh) {
       this.tabs.push({
@@ -547,16 +553,26 @@ export class ProjectSessionManager {
   themeChanged(): void {
     const { id } = currentTheme(this.settings);
     for (const runtime of this.runtimes.values()) {
-      if (runtime.preparation && runtime.preparedTheme !== id) {
+      // A setup underway counts too: it read the theme before the change.
+      if ((runtime.preparation || runtime.preparing) && runtime.preparedTheme !== id) {
         void this.prepare(runtime, true);
       }
     }
   }
 
-  /** The agent's setup, one at a time, once unless `again`. False: failed, never start the agent. */
+  /** The agent's setup, one at a time, once unless `again`. False: failed, never start the agent.
+   *  `again` during a setup reruns it once that one is done. */
   private prepare(runtime: AgentRuntime, again = false): Promise<boolean> {
-    runtime.preparing ??= this.doPrepare(runtime, again).finally(() => {
+    if (runtime.preparing) {
+      runtime.prepareAgain ||= again;
+      return runtime.preparing;
+    }
+    runtime.preparing = this.doPrepare(runtime, again).finally(() => {
       runtime.preparing = undefined;
+      if (runtime.prepareAgain) {
+        runtime.prepareAgain = false;
+        void this.prepare(runtime, true);
+      }
     });
     return runtime.preparing;
   }

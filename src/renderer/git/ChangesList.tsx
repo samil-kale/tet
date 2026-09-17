@@ -152,8 +152,11 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
 
   /** Acts on the selection, except where only one file makes sense (a diff, the file manager). */
   const menuEntries = (change: FileChange): ContextMenuEntry[] => {
-    // A right-click outside the selection has already replaced it.
-    const paths = selected.includes(change.path) ? selected : [change.path];
+    // A right-click outside the selection has already replaced it. Only what the filter shows: a
+    // selected file it hides would be committed or discarded unseen.
+    const paths = selected.includes(change.path)
+      ? selected.filter((path) => visible.some((entry) => entry.path === path))
+      : [change.path];
     const one = paths.length === 1;
     const extension = /\.[^./]+$/.exec(change.path)?.[0];
     const discard = (targets: string[]) => () => void confirmDiscard(project.id, targets, act);

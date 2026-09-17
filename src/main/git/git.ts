@@ -511,32 +511,27 @@ const ASKPASS_SCRIPT = [
   ""
 ].join("\n");
 
-let askpassPath: Promise<string> | undefined;
-
-/** Written once per process into its own directory: a fixed name under a shared /tmp may belong to
- *  another user, failing the rename. */
-function ensureAskpass(): Promise<string> {
-  askpassPath ??= (async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "tet-askpass-"));
-    const file = path.join(dir, "askpass.sh");
-    await writeFileAtomic(file, ASKPASS_SCRIPT, { encoding: "utf8", mode: 0o755 });
-    return file;
-  })().catch((error: unknown) => {
-    askpassPath = undefined;
-    throw error;
-  });
-  return askpassPath;
+/** Written into `dir` (tet's data folder) on every call — a clone is rare. Not the temp directory:
+ *  git executes the script itself, which a `noexec` /tmp refuses (measured), and a long-running
+ *  tet would find it cleaned away. */
+export async function ensureAskpass(dir: string): Promise<string> {
+  await fs.mkdir(dir, { recursive: true });
+  const file = path.join(dir, "askpass.sh");
+  await writeFileAtomic(file, ASKPASS_SCRIPT, { encoding: "utf8", mode: 0o755 });
+  return file;
 }
 
 /** A clone with a provider account's token. `credential.helper=` empties the helper list for this
- *  command: a stale login on the machine would otherwise answer first and 403. */
+ *  command: a stale login on the machine would otherwise answer first and 403. `askpassDir` is
+ *  where the answering script goes (ensureAskpass). */
 export async function cloneWithToken(
   url: string,
   directory: string,
   user: string,
-  token: string
+  token: string,
+  askpassDir: string
 ): Promise<GitActionResult> {
-  const askpass = await ensureAskpass();
+  const askpass = await ensureAskpass(askpassDir);
   return runNetwork(os.homedir(), ["-c", "credential.helper=", "clone", "--", url, directory], {
     GIT_ASKPASS: askpass,
     TET_ASKPASS_USER: user,

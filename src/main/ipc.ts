@@ -56,6 +56,8 @@ import type { SettingsStore } from "./settings";
 
 /** The singletons main.ts builds, for the renderer-facing IPC surface. */
 export interface IpcDeps {
+  /** TET's data folder (data-root.ts). */
+  dataRoot: string;
   store: ProjectStore;
   settings: SettingsStore;
   accounts: AccountStore;
@@ -114,6 +116,7 @@ export function sweepTempFiles(): void {
 }
 
 export function registerIpc({
+  dataRoot,
   store,
   settings,
   accounts,
@@ -277,7 +280,9 @@ export function registerIpc({
     const account = accountId !== undefined ? accounts.get(accountId) : undefined;
     const token = accountId !== undefined ? accounts.token(accountId) : undefined;
     const action =
-      account && token !== undefined ? git.cloneWithToken(url, target, account.user, token) : git.clone(url, target);
+      account && token !== undefined
+        ? git.cloneWithToken(url, target, account.user, token, path.join(dataRoot, "askpass"))
+        : git.clone(url, target);
     return addRepository(action, target, "Clone");
   });
 

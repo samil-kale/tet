@@ -54,7 +54,9 @@ const DEFS: ShortcutDef[] = [
  */
 export function matchesShortcut(event: KeyboardEvent, id: ShortcutId): boolean {
   const def = DEFS.find((entry) => entry.id === id);
-  if (def === undefined || !isModifierHeld(event) || event.shiftKey !== def.shift) {
+  // No shortcut takes Alt, and on Windows AltGr arrives as Ctrl+Alt: AltGr+Shift+Comma types "Ç"
+  // on US International, which `code` alone would read as "previous tab" (measured).
+  if (def === undefined || !isModifierHeld(event) || event.altKey || event.shiftKey !== def.shift) {
     return false;
   }
   if (DEFS.some((entry) => entry.shift === event.shiftKey && entry.code === event.code)) {

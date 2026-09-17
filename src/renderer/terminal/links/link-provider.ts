@@ -194,6 +194,18 @@ function continuationRows(terminal: Terminal, fromRow: number): { row: number; o
   return rows;
 }
 
+/** Per terminal, the `leave` of the link under the pointer — see endLinkHover. */
+const hovered = new WeakMap<Terminal, () => void>();
+
+/**
+ * Ends the hover of a terminal about to be disposed: xterm's dispose calls no link's `leave`, so a
+ * tab closed under the pointer (`tet-ctl tabs-close`) kept its window key listeners, and with them
+ * the disposed terminal (measured).
+ */
+export function endLinkHover(terminal: Terminal): void {
+  hovered.get(terminal)?.();
+}
+
 function buildLink(
   terminal: Terminal,
   range: ILink["range"],
@@ -247,6 +259,21 @@ function buildLink(
     }
   };
 
+  const leave = (): void => {
+    if (hovered.get(terminal) === leave) {
+      hovered.delete(terminal);
+    }
+    if (onKeyDown) {
+      window.removeEventListener("keydown", onKeyDown);
+    }
+    if (onKeyUp) {
+      window.removeEventListener("keyup", onKeyUp);
+    }
+    onKeyDown = undefined;
+    onKeyUp = undefined;
+    clearUnderline();
+  };
+
   const link: ILink = {
     range,
     text,
@@ -287,18 +314,9 @@ function buildLink(
       };
       window.addEventListener("keydown", onKeyDown);
       window.addEventListener("keyup", onKeyUp);
+      hovered.set(terminal, leave);
     },
-    leave() {
-      if (onKeyDown) {
-        window.removeEventListener("keydown", onKeyDown);
-      }
-      if (onKeyUp) {
-        window.removeEventListener("keyup", onKeyUp);
-      }
-      onKeyDown = undefined;
-      onKeyUp = undefined;
-      clearUnderline();
-    }
+    leave
   };
   return link;
 }

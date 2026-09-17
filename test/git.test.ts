@@ -11,6 +11,7 @@ import {
   createBranch,
   createTag,
   discard,
+  ensureAskpass,
   ignorePath,
   isRepository,
   listIgnored,
@@ -333,5 +334,22 @@ describe("remotes the tree has to read carefully", () => {
     assert.deepEqual(state.remotes, [{ name: "team/fork", branches: ["main"] }]);
     assert.equal(state.defaultBranch, "main");
     assert.equal(state.upstream, "team/fork/main");
+  });
+});
+
+describe("a clone with an account's token", () => {
+  it("answers git's questions from a script in the folder it is given", async () => {
+    const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-askpass-test-")), "askpass");
+    const askpass = await ensureAskpass(dir);
+    assert.equal(path.dirname(askpass), dir);
+    // git asks the script for what no helper answers, the way a clone over https does.
+    const fill = spawnSync("git", ["-c", "credential.helper=", "credential", "fill"], {
+      input: "protocol=https\nhost=example.invalid\n\n",
+      encoding: "utf8",
+      env: { ...process.env, GIT_ASKPASS: askpass, GIT_TERMINAL_PROMPT: "0", TET_ASKPASS_USER: "user", TET_ASKPASS_TOKEN: "token" }
+    });
+    assert.equal(fill.status, 0, fill.stderr);
+    assert.match(fill.stdout, /^username=user$/m);
+    assert.match(fill.stdout, /^password=token$/m);
   });
 });
