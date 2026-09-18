@@ -86,6 +86,17 @@ describe("Codex's hook trust", () => {
 });
 
 describe("resolveCommand", () => {
+  /** Runs `program` as tet spawns it: resolved, no shell. */
+  const runResolved = (program: string, args: string[], cwd: string) => {
+    const resolved = resolveCommand(program, args);
+    return spawnSync(resolved.command, resolved.args, {
+      encoding: "utf8",
+      windowsHide: true,
+      windowsVerbatimArguments: resolved.windowsVerbatimArguments,
+      cwd
+    });
+  };
+
   it("spawns a native executable directly and routes a shim through cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, () => {
     assert.deepEqual(resolveCommand("C:\\tools\\run.exe", ["-v"]), { command: "C:\\tools\\run.exe", args: ["-v"] });
     assert.deepEqual(resolveCommand("C:\\tools\\run.cmd", ["-v"]), {
@@ -119,13 +130,7 @@ describe("resolveCommand", () => {
     try {
       // The shim by its path, and by a bare name found on PATH.
       for (const program of [shim, "echo-args"]) {
-        const resolved = resolveCommand(program, args);
-        const run = spawnSync(resolved.command, resolved.args, {
-          encoding: "utf8",
-          windowsHide: true,
-          windowsVerbatimArguments: resolved.windowsVerbatimArguments,
-          cwd: dir
-        });
+        const run = runResolved(program, args, dir);
         assert.deepEqual(JSON.parse(run.stdout), args, `${program}: ${run.stdout} ${run.stderr}`);
       }
     } finally {
@@ -148,13 +153,7 @@ describe("resolveCommand", () => {
           `"${process.execPath}" "${script}" %kind% %*\r\n`
       );
       for (const [args, kind] of [[["process-classes", "exec:java", "a b"], "other"], [["-f", "pom.xml"], "file"]] as const) {
-        const resolved = resolveCommand(batch, [...args]);
-        const run = spawnSync(resolved.command, resolved.args, {
-          encoding: "utf8",
-          windowsHide: true,
-          windowsVerbatimArguments: resolved.windowsVerbatimArguments,
-          cwd: dir
-        });
+        const run = runResolved(batch, [...args], dir);
         assert.equal(run.status, 0, `${run.stdout} ${run.stderr}`);
         assert.deepEqual(JSON.parse(run.stdout), [kind, ...args]);
       }
@@ -351,10 +350,7 @@ describe("saving an sbx config", () => {
     secrets?: object[];
     secretsFail?: boolean;
     allowedHosts?: string[];
-  }): {
-    dir: string;
-    projectPath: string;
-  } {
+  }): { dir: string; projectPath: string } {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
     const projectPath = path.join(dir, "repo");
     fs.mkdirSync(projectPath);
@@ -404,29 +400,26 @@ if (args[0] === "ls") {
   }
 
   /**
-   * PATH with the stand-in first and every real `sbx` taken out: on win32 `resolveCommand` prefers a
-   * native executable found anywhere on PATH to a `.cmd` in the first folder, so prepending alone
-   * would still run the machine's own sbx.
+   * Runs `action` with the stand-in first on PATH, which is enough on win32 too (resolveCommand's
+   * "takes a name's first folder on PATH"); answers its result and every `sbx` call it made.
    */
-  function pathWith(dir: string): string {
-    const holdsSbx = (entry: string): boolean =>
-      entry !== "" && [".exe", ".com", ".cmd", ".bat", ""].some((extension) => fs.existsSync(path.join(entry, `sbx${extension}`)));
-    return [dir, ...(process.env.PATH ?? "").split(path.delimiter).filter((entry) => !holdsSbx(entry))].join(path.delimiter);
+  async function withSbx<T>(dir: string, action: () => Promise<T>): Promise<{ result: T; calls: string[] }> {
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
+    try {
+      const result = await action();
+      return { result, calls: fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/) };
+    } finally {
+      process.env.PATH = originalPath;
+    }
   }
 
   /** Saves `now` over a tet.json holding `before`, against a sandbox that has `has` published. */
   async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
     const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxConfig(projectPath, config(setup.before.map(port)));
-    const originalPath = process.env.PATH;
-    process.env.PATH = pathWith(dir);
-    try {
-      const result = await saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), new Map(), new Set());
-      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
-      return { result, projectPath, calls };
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    const saved = await withSbx(dir, () => saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), new Map(), new Set()));
+    return { ...saved, projectPath };
   }
 
   it("publishes a port tet.json already listed, because the sandbox never published it", async () => {
@@ -494,63 +487,45 @@ if (args[0] === "ls") {
       ["REHOSTED", "v-rehosted"],
       ["ADDED", "v-added"]
     ]);
-    const originalPath = process.env.PATH;
-    process.env.PATH = pathWith(dir);
-    try {
-      const result = await saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, values, new Set(["CHANGED"]));
-      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
-      const placeholder = (env: string) => secretPlaceholder(projectId, env);
-      // The two listings run together, in either order.
-      assert.deepEqual(calls.slice(1, 3).sort(), ["policy ls --type network --include-inactive --json", "secret ls --json"]);
-      assert.deepEqual(calls.slice(3), [
-        `secret rm --sandbox ${name} --placeholder ${placeholder("CHANGED")} -f`,
-        `secret rm --sandbox ${name} --placeholder ${placeholder("REHOSTED")} -f`,
-        `secret rm --sandbox ${name} --placeholder ${placeholder("DROPPED")} -f`,
-        `secret set-custom --sandbox ${name} --placeholder ${placeholder("CHANGED")} --host changed.example.com`,
-        "stdin v-changed",
-        `secret set-custom --sandbox ${name} --placeholder ${placeholder("REHOSTED")} --host new.example.com`,
-        "stdin v-rehosted",
-        `secret set-custom --sandbox ${name} --placeholder ${placeholder("ADDED")} --host a.example.com --host *.b.example.com`,
-        "stdin v-added"
-      ]);
-      assert.deepEqual(result.secretFailures, []);
-      assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts, a row without a value too");
-      assert.ok(!fs.readFileSync(path.join(projectPath, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    const { result, calls } = await withSbx(dir, () =>
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, values, new Set(["CHANGED"]))
+    );
+    const placeholder = (env: string) => secretPlaceholder(projectId, env);
+    // The two listings run together, in either order.
+    assert.deepEqual(calls.slice(1, 3).sort(), ["policy ls --type network --include-inactive --json", "secret ls --json"]);
+    assert.deepEqual(calls.slice(3), [
+      `secret rm --sandbox ${name} --placeholder ${placeholder("CHANGED")} -f`,
+      `secret rm --sandbox ${name} --placeholder ${placeholder("REHOSTED")} -f`,
+      `secret rm --sandbox ${name} --placeholder ${placeholder("DROPPED")} -f`,
+      `secret set-custom --sandbox ${name} --placeholder ${placeholder("CHANGED")} --host changed.example.com`,
+      "stdin v-changed",
+      `secret set-custom --sandbox ${name} --placeholder ${placeholder("REHOSTED")} --host new.example.com`,
+      "stdin v-rehosted",
+      `secret set-custom --sandbox ${name} --placeholder ${placeholder("ADDED")} --host a.example.com --host *.b.example.com`,
+      "stdin v-added"
+    ]);
+    assert.deepEqual(result.secretFailures, []);
+    assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts, a row without a value too");
+    assert.ok(!fs.readFileSync(path.join(projectPath, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
   });
 
   it("asks the policy about a secret host, but not about a wildcard it cannot answer", async () => {
     const { dir } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
-    const originalPath = process.env.PATH;
-    process.env.PATH = pathWith(dir);
-    try {
-      const allowed = await Promise.all(["open.example.com", "closed.example.com", "*.example.com"].map(readHostAllowed));
-      assert.deepEqual(allowed, [true, false, true]);
-      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
-      assert.deepEqual(calls.sort(), [
-        "policy check network --json closed.example.com",
-        "policy check network --json open.example.com"
-      ]);
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    const { result, calls } = await withSbx(dir, () =>
+      Promise.all(["open.example.com", "closed.example.com", "*.example.com"].map(readHostAllowed))
+    );
+    assert.deepEqual(result, [true, false, true]);
+    assert.deepEqual(calls.sort(), ["policy check network --json closed.example.com", "policy check network --json open.example.com"]);
   });
 
   it("changes no secret, and says so, where sbx does not list them", async () => {
     const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
-    const originalPath = process.env.PATH;
-    process.env.PATH = pathWith(dir);
-    try {
-      const config = { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "TOKEN", hosts: ["api.example.com"] }] };
-      const result = await saveSbxConfig(projectPath, projectId, config, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]));
-      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
-      assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
-      assert.deepEqual(result.secretFailures, ["The Claude sandbox could not list its secrets, so none were changed."]);
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
+    const { result, calls } = await withSbx(dir, () =>
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]))
+    );
+    assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
+    assert.deepEqual(result.secretFailures, ["The Claude sandbox could not list its secrets, so none were changed."]);
   });
 });
 
@@ -817,8 +792,8 @@ describe("which of two turn reports counts", () => {
 });
 
 describe("TET's system prompt", () => {
-  // It goes through cmd.exe, `sbx run` and a TOML basic string as measured — only as the plain
-  // line it was measured as (system-prompt.ts).
+  // It crosses cmd.exe, `sbx run` and a TOML basic string, measured only as a plain line
+  // (system-prompt.ts).
   it("stays one line of letters, digits and plain punctuation", () => {
     assert.match(TET_SYSTEM_PROMPT, /^[A-Za-z0-9 .,;:'-]+$/);
   });

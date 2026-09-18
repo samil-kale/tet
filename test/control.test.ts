@@ -207,14 +207,26 @@ function deps(): ControlDeps {
   };
 }
 
-/** The CLI as run from the caller's own tab of PROJECT; `env` overrides that. The token is the one
- *  a tab with the resulting ids is started with, unless `env` names one. */
+/**
+ * The CLI as run from the caller's own tab of PROJECT; `env` overrides that. The token is the one a
+ * tab with the resulting ids is started with, unless `env` names one.
+ */
 function tetCtl(args: string[], env: Record<string, string | undefined> = {}, input = ""): Promise<Run> {
   const ids = { [CONTROL_ENV.projectId]: PROJECT.id, [CONTROL_ENV.tabId]: OWN_TAB, ...env };
   const projectId = ids[CONTROL_ENV.projectId];
   const tabId = ids[CONTROL_ENV.tabId];
   const token = projectId === undefined && tabId === undefined ? TOKEN : tabControlToken(TOKEN, projectId ?? "", tabId ?? "");
   return runCli(args, { [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: token, ...ids }, input);
+}
+
+function assertRefused(run: Run, stderr: RegExp, what: string): void {
+  assert.equal(run.status, EXIT_CODES.unauthorized, what);
+  assert.match(run.stderr, stderr, what);
+}
+
+/** How often `help` lists `usage` as a line of its own. */
+function helpLines(stdout: string, usage: string): number {
+  return stdout.split("\n").filter((line) => line === `  ${usage}`).length;
 }
 
 describe("tet-ctl against the control server", () => {
@@ -273,8 +285,7 @@ describe("tet-ctl against the control server", () => {
     assert.match(run.stdout, /restart-app --confirm/);
     // Printed by group (GROUPS in tet-ctl.ts), which leaves out a verb it does not name.
     for (const entry of CONTROL_VERBS) {
-      const lines = run.stdout.split("\n").filter((line) => line === `  ${entry.usage}`);
-      assert.equal(lines.length, entry.unlisted ? 0 : 1, entry.verb);
+      assert.equal(helpLines(run.stdout, entry.usage), entry.unlisted ? 0 : 1, entry.verb);
     }
   });
 
@@ -283,8 +294,7 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["help"], { [CONTROL_ENV.port]: undefined, [CONTROL_ENV.host]: "host.docker.internal" });
     assert.equal(run.status, EXIT_CODES.ok);
     for (const entry of CONTROL_VERBS) {
-      const lines = run.stdout.split("\n").filter((line) => line === `  ${entry.usage}`);
-      assert.equal(lines.length, entry.sandbox !== undefined && !entry.unlisted ? 1 : 0, entry.verb);
+      assert.equal(helpLines(run.stdout, entry.usage), entry.sandbox !== undefined && !entry.unlisted ? 1 : 0, entry.verb);
     }
     assert.match(run.stdout, /runs in an sbx sandbox/);
   });
@@ -303,13 +313,9 @@ describe("tet-ctl against the control server", () => {
 
   it("takes a caller's ids only with the token made for them", async () => {
     const ownToken = tabControlToken(TOKEN, PROJECT.id, OWN_TAB);
-    for (const [what, run] of [
-      ["another project named", await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: ownToken, [CONTROL_ENV.projectId]: OTHER.id })],
-      ["the run's token with a tab's ids", await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: TOKEN })]
-    ] as const) {
-      assert.equal(run.status, EXIT_CODES.unauthorized, what);
-      assert.match(run.stderr, /not a terminal of this TET/, what);
-    }
+    const otherProject = await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: ownToken, [CONTROL_ENV.projectId]: OTHER.id });
+    assertRefused(otherProject, /not a terminal of this TET/, "another project named");
+    assertRefused(await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: TOKEN }), /not a terminal of this TET/, "the run's token with a tab's ids");
     // A hook ends quietly whatever the answer: seen only in what reached the terminals.
     await tetCtl(["hook", "stop"], { [CONTROL_ENV.token]: ownToken, [CONTROL_ENV.tabId]: "tab-2" });
     assert.deepEqual(calls.hooks, [], "no report for a tab the caller is not");
@@ -563,17 +569,9 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("types into no tab of another project, nor from outside a project", async () => {
-    const other = await tetCtl(["tabs-send", OWN_TAB, "x", "--project", OTHER.id]);
-    const outside = await tetCtl(["tabs-send", "tab-2", "x", "--project", PROJECT.id], {
-      [CONTROL_ENV.projectId]: undefined
-    });
-    for (const [what, run] of [
-      ["another project", other],
-      ["no project of its own", outside]
-    ] as const) {
-      assert.equal(run.status, EXIT_CODES.unauthorized, what);
-      assert.match(run.stderr, /own project/, what);
-    }
+    assertRefused(await tetCtl(["tabs-send", OWN_TAB, "x", "--project", OTHER.id]), /own project/, "another project");
+    const outside = await tetCtl(["tabs-send", "tab-2", "x", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
+    assertRefused(outside, /own project/, "no project of its own");
     assert.deepEqual(calls.written, []);
   });
 
@@ -586,15 +584,9 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("reads no tab of another project, nor from outside a project", async () => {
-    const other = await tetCtl(["tabs-output", OWN_TAB, "--project", OTHER.id]);
+    assertRefused(await tetCtl(["tabs-output", OWN_TAB, "--project", OTHER.id]), /own project/, "another project");
     const outside = await tetCtl(["tabs-output", "tab-2", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
-    for (const [what, run] of [
-      ["another project", other],
-      ["no project of its own", outside]
-    ] as const) {
-      assert.equal(run.status, EXIT_CODES.unauthorized, what);
-      assert.match(run.stderr, /own project/, what);
-    }
+    assertRefused(outside, /own project/, "no project of its own");
     assert.equal((await tetCtl(["tabs-output", OWN_TAB, "--project", PROJECT.id])).status, EXIT_CODES.ok, "its own, named");
   });
 
@@ -614,9 +606,7 @@ describe("tet-ctl against the control server", () => {
       ["restart-app", "--confirm"]
     ];
     for (const args of refused) {
-      const run = await tetCtl(args, fromSandbox);
-      assert.equal(run.status, EXIT_CODES.unauthorized, args[0]);
-      assert.match(run.stderr, /inside a sandbox/, args[0]);
+      assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
     }
     const shell = await tetCtl(["tabs-create", "--agent", "shell"], fromSandbox);
     assert.equal(shell.status, EXIT_CODES.unauthorized, "a shell tab runs on this machine");
@@ -631,9 +621,7 @@ describe("tet-ctl against the control server", () => {
   it("answers a sandboxed tab for its own project only", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     for (const args of [["editor-state"], ["tabs-list"], ["tabs-close", "tab-2"], ["repo-state"], ["explorer-list"]]) {
-      const run = await tetCtl([...args, "--project", OTHER.id], fromSandbox);
-      assert.equal(run.status, EXIT_CODES.unauthorized, args[0]);
-      assert.match(run.stderr, /own project/, args[0]);
+      assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own project/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
     assert.deepEqual((await tetCtl(["projects-list"], fromSandbox)).result, [PROJECT]);

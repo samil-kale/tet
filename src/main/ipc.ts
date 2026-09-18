@@ -288,7 +288,6 @@ export function registerIpc({
     }
   );
 
-
   ipcMain.handle("projects:open-path", (_event, directory: string): Promise<AddRepositoryResult> =>
     addProject(projectDeps, directory)
   );

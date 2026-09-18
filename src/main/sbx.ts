@@ -75,6 +75,12 @@ function sbxError(result: RunResult): string {
   return result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "") ?? "";
 }
 
+/** `what` failed, with sbx's reason when it gave one. */
+function sbxFailure(what: string, result: RunResult): string {
+  const said = sbxError(result);
+  return said ? `${what} (${said})` : what;
+}
+
 /** Every `sbx` invocation: a plain spawn through `resolveCommand`, no shell, from the temp
  *  directory so the working directory never reads as a workspace. */
 function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
@@ -863,8 +869,7 @@ async function applyPortChanges(
   for (const [flag, key] of changes) {
     const result = await runSbx(["ports", name, flag, key], { onData });
     if (!result.ok) {
-      const said = sbxError(result);
-      failures.push(`could not ${flag.slice(2)} port ${key}${said ? ` (${said})` : ""}`);
+      failures.push(sbxFailure(`could not ${flag.slice(2)} port ${key}`, result));
     }
   }
   return failures;
@@ -962,8 +967,7 @@ async function applySecrets(
       onData
     });
     if (!result.ok) {
-      const said = sbxError(result);
-      failures.push(`could not set secret ${secret.env}${said ? ` (${said})` : ""}`);
+      failures.push(sbxFailure(`could not set secret ${secret.env}`, result));
     }
   }
   return failures;
@@ -1080,13 +1084,7 @@ export async function prepareSbxRun(
   // sbx run refuses them on an existing one even when unchanged (verified, 2026-09-08: "sandbox 'x'
   // already exists and can't be given new workspaces"). The agent positional is only verified by
   // sbx; `--name` finds the sandbox. The plain agent id even for a kit (AgentDefinition.sandboxKit).
-  const args = [
-    "run",
-    agentId,
-    "--name",
-    name,
-    ...env.flatMap((entry) => ["-e", entry])
-  ];
+  const args = ["run", agentId, "--name", name, ...env.flatMap((entry) => ["-e", entry])];
   if (control) {
     // The tab id too: a hook reports for the tab it runs in (ProjectSessionManager.hookEvent).
     const passThrough = [CONTROL_ENV.port, CONTROL_ENV.token, CONTROL_ENV.projectId, CONTROL_ENV.tabId];
@@ -1105,11 +1103,12 @@ export async function prepareSbxRun(
  * and otherwise brought in line: grants narrowed (revokeMounts), ports applied (applyPortChanges),
  * hosts both ways (revokeStaleHosts, allowHosts) — no edit forces a rebuild. The "previous" of both
  * hosts and ports is the sandbox's own (the truth, readLiveSbxConfig and readSandboxPorts), so a
- * hand-set rule deleted as a row goes too, and a port it never published is tried again. Mounts and ports need it running, so it is started once, only when either has work; a
- * failed start is skipped. Secrets likewise against the sandbox's own (applySecrets), listed only
- * when any are configured or were. Returns the agents whose sandboxes were removed, for the caller
- * to say so: a running session of theirs just lost its sandbox; and the port and secret changes sbx
- * refused, which tet.json holds all the same.
+ * hand-set rule deleted as a row goes too, and a port it never published is tried again. Mounts and
+ * ports need it running, so it is started once, only when either has work; a failed start is
+ * skipped. Secrets likewise against the sandbox's own (applySecrets), listed only when any are
+ * configured or were. Returns the agents whose sandboxes were removed, for the caller to say so: a
+ * running session of theirs just lost its sandbox; and the port and secret changes sbx refused,
+ * which tet.json holds all the same.
  */
 export async function saveSbxConfig(
   projectPath: string,
@@ -1144,6 +1143,7 @@ export async function saveSbxConfig(
       }
       continue;
     }
+    const inSandbox = (failure: string): string => `The ${getAgent(agentId).displayName} sandbox ${failure}.`;
     const stale = staleMounts(grantedMounts(agentId, previous), grantedMounts(agentId, config));
     // Ports whenever any are configured or were, since what the sandbox published is only readable
     // while it runs: the rows may match tet.json and still be unpublished (a refusal at the last
@@ -1151,8 +1151,7 @@ export async function saveSbxConfig(
     const ports = config.ports.length > 0 || previous.ports.length > 0;
     if ((stale.length > 0 || ports) && (await ensureRunning(name))) {
       await revokeMounts(name, stale);
-      const failures = await applyPortChanges(name, portDelta(await readSandboxPorts(name), config.ports));
-      portFailures.push(...failures.map((failure) => `The ${getAgent(agentId).displayName} sandbox ${failure}.`));
+      portFailures.push(...(await applyPortChanges(name, portDelta(await readSandboxPorts(name), config.ports))).map(inSandbox));
     }
     await revokeStaleHosts(name, liveHosts.get(name) ?? [], config.hosts);
     await allowHosts(name, config.hosts);
@@ -1160,7 +1159,7 @@ export async function saveSbxConfig(
       const failures = liveSecrets
         ? await applySecrets(name, projectId, config.secrets, secretValues, liveSecrets.get(name) ?? [], changedSecrets)
         : ["could not list its secrets, so none were changed"];
-      secretFailures.push(...failures.map((failure) => `The ${getAgent(agentId).displayName} sandbox ${failure}.`));
+      secretFailures.push(...failures.map(inSandbox));
     }
   }
   return { removed, portFailures, secretFailures };

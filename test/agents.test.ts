@@ -100,9 +100,13 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     return output.replace(/[^a-z0-9]/gi, "").includes("tetctl");
   }
 
-  function ctl(...args: string[]) {
+  function started(): TestApp {
     assert.ok(app, "tet started");
-    return app.ctl(...args);
+    return app;
+  }
+
+  function ctl(...args: string[]) {
+    return started().ctl(...args);
   }
 
   function currentProject(): Project {
@@ -115,23 +119,13 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     return tabs?.find((entry) => entry.tabId === tabId);
   }
 
-  /** Read as a tab of the project does: the verb answers only there. */
-  async function outputOf(tabId: string): Promise<string> {
-    assert.ok(app, "tet started");
-    const read = await tetCtl(["tabs-output", tabId, "--kb", "64"], app.asTab(currentProject().id, tabId));
-    return (read.result as { output: string } | undefined)?.output ?? "";
+  function outputOf(tabId: string): Promise<string> {
+    return started().output(currentProject().id, tabId);
   }
 
-  /** Typed as a tab of the project does: the verb answers only there. */
+  /** Typed as that tab: `tabs-send` answers only within its project. `--enter` presses Enter. */
   async function send(tabId: string, text: string): Promise<void> {
-    assert.ok(app, "tet started");
-    const sent = await tetCtl(["tabs-send", tabId, text], app.asTab(currentProject().id, tabId));
-    assert.equal(sent.status, 0, sent.stderr);
-  }
-
-  async function pressEnter(tabId: string): Promise<void> {
-    assert.ok(app, "tet started");
-    const sent = await tetCtl(["tabs-send", tabId, "--enter"], app.asTab(currentProject().id, tabId));
+    const sent = await tetCtl(["tabs-send", tabId, text], started().asTab(currentProject().id, tabId));
     assert.equal(sent.status, 0, sent.stderr);
   }
 
@@ -171,8 +165,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     const stderr = app?.stderr() ?? "";
     const uncaught = stderr.indexOf(UNCAUGHT_MARKER);
     if (uncaught >= 0) {
-      assert.fail(`tet reported an uncaught exception:
-${stderr.slice(uncaught)}`);
+      assert.fail(`tet reported an uncaught exception:\n${stderr.slice(uncaught)}`);
     }
   });
 
@@ -240,7 +233,7 @@ ${stderr.slice(uncaught)}`);
         await send(tabId, PROMPT);
         // Apart from the text: typed in one write, a TUI may take the Enter as part of a paste.
         await sleep(500);
-        await pressEnter(tabId);
+        await send(tabId, "--enter");
         let last: ListedTab | undefined;
         let events: ControlEvent[] = [];
         let output = "";

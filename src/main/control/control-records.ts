@@ -4,16 +4,6 @@ const MAX_NOTICES = 50;
 /** As far back as `tabs-output` reaches: a long build or test log. */
 const MAX_OUTPUT_CHARS = 256 * 1024;
 
-/** What a tab printed, raw: cleaned only when read, so a redraw spanning chunks still collapses. */
-interface TabOutput {
-  text: string;
-}
-
-/** The latest of a tab's output within the cap. */
-function capped(output: TabOutput): string {
-  return output.text.slice(-MAX_OUTPUT_CHARS);
-}
-
 /**
  * Control-verb data no main-process store holds: what the window reports (editor tabs, shown
  * notices) and each open tab's latest output.
@@ -25,8 +15,9 @@ export class ControlRecords {
    *  under it then, and the next activation replaces it. */
   private readonly activeEditors = new Map<string, string>();
   private readonly shownNotices: NoticeReport[] = [];
-  /** Per project, per tab. */
-  private readonly outputs = new Map<string, Map<string, TabOutput>>();
+  /** Per project, per tab, what it printed, raw: cleaned only when read, so a redraw spanning
+   *  chunks still collapses. */
+  private readonly outputs = new Map<string, Map<string, string>>();
 
   /** null once the tab is closed. */
   setEditor(projectId: string, tabId: string, report: EditorReport | null): void {
@@ -65,15 +56,11 @@ export class ControlRecords {
   }
 
   addOutput(projectId: string, tabId: string, data: string): void {
-    const tabs = this.outputs.get(projectId) ?? new Map<string, TabOutput>();
-    const output = tabs.get(tabId) ?? { text: "" };
-    output.text += data;
+    const tabs = this.outputs.get(projectId) ?? new Map<string, string>();
+    const text = (tabs.get(tabId) ?? "") + data;
     // Trimmed at twice the cap, to the cap when read: trimming every chunk would copy the whole
     // cap per chunk.
-    if (output.text.length > 2 * MAX_OUTPUT_CHARS) {
-      output.text = capped(output);
-    }
-    tabs.set(tabId, output);
+    tabs.set(tabId, text.length > 2 * MAX_OUTPUT_CHARS ? text.slice(-MAX_OUTPUT_CHARS) : text);
     this.outputs.set(projectId, tabs);
   }
 
@@ -99,7 +86,6 @@ export class ControlRecords {
 
   /** Raw, escape sequences included; undefined before any output. */
   output(projectId: string, tabId: string): string | undefined {
-    const output = this.outputs.get(projectId)?.get(tabId);
-    return output && capped(output);
+    return this.outputs.get(projectId)?.get(tabId)?.slice(-MAX_OUTPUT_CHARS);
   }
 }

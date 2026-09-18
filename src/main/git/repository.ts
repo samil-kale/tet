@@ -551,11 +551,7 @@ export class Repository {
         const filePath = change.path;
         // An untracked file HEAD has was untracked by `git rm --cached`: HEAD's version comes back.
         const notInHead =
-          (change.status === "untracked" ||
-            change.status === "added" ||
-            change.status === "renamed" ||
-            change.status === "conflicted") &&
-          !inHead.has(filePath);
+          ["untracked", "added", "renamed", "conflicted"].includes(change.status) && !inHead.has(filePath);
         // Staged, then deleted on disk, still reads "added": nothing to trash. A tracked directory is
         // a submodule, which git restores and the trash must not take; an untracked one (a
         // repository inside this one) goes whole.

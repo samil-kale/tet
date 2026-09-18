@@ -1,10 +1,15 @@
 import * as assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import * as fs from "node:fs";
 import { createRequire } from "node:module";
+import * as os from "node:os";
 import * as path from "node:path";
+import { utilityProcess } from "electron";
 import { findControlPort } from "../src/main/control/control-server";
 import { tabControlToken } from "../src/main/control/control-token";
+import * as gitModule from "../src/main/git/git";
+import type { GitRequest, GitResponse } from "../src/main/git/git-host";
 import { CONTROL_ENV } from "../src/shared/control";
 
 /** The built CLI — the tests run what ships, not the source. */
@@ -74,6 +79,8 @@ export interface TestApp {
   ctl(...args: string[]): Promise<Run>;
   /** The environment a tab of `projectId` is started with: its ids and the token made for them. */
   asTab(projectId: string, tabId: string): Record<string, string | undefined>;
+  /** The tab's latest output, read as that tab: `tabs-output` answers only within its project. */
+  output(projectId: string, tabId: string): Promise<string>;
   /** The pid of the instance answering right now, if any. */
   alive(): Promise<number | undefined>;
 }
@@ -104,16 +111,21 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   let stderr = "";
   child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
   const ctl = (...ctlArgs: string[]): Promise<Run> => tetCtl(ctlArgs, env);
+  const asTab = (projectId: string, tabId: string): Record<string, string | undefined> => ({
+    ...env,
+    [CONTROL_ENV.token]: tabControlToken(token, projectId, tabId),
+    [CONTROL_ENV.projectId]: projectId,
+    [CONTROL_ENV.tabId]: tabId
+  });
   const app: TestApp = {
     child,
     stderr: () => stderr,
     ctl,
-    asTab: (projectId, tabId) => ({
-      ...env,
-      [CONTROL_ENV.token]: tabControlToken(token, projectId, tabId),
-      [CONTROL_ENV.projectId]: projectId,
-      [CONTROL_ENV.tabId]: tabId
-    }),
+    asTab,
+    output: async (projectId, tabId) => {
+      const read = await tetCtl(["tabs-output", tabId, "--kb", "64"], asTab(projectId, tabId));
+      return (read.result as { output: string } | undefined)?.output ?? "";
+    },
     alive: async () => {
       const run = await ctl("version");
       return run.status === 0 ? (run.result as { pid: number }).pid : undefined;
@@ -142,4 +154,55 @@ export function killApp(target: number): void {
       // Already gone.
     }
   }
+}
+
+/**
+ * git without the machine's config: a signing key or a hook there would turn a commit into a
+ * question. `name` gives each file an empty global config of its own.
+ */
+export function isolateGitConfig(name: string): void {
+  const identity = {
+    GIT_AUTHOR_NAME: "tet test",
+    GIT_AUTHOR_EMAIL: "test@tet.invalid",
+    GIT_COMMITTER_NAME: "tet test",
+    GIT_COMMITTER_EMAIL: "test@tet.invalid",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: path.join(os.tmpdir(), name)
+  };
+  Object.assign(process.env, identity);
+  fs.writeFileSync(identity.GIT_CONFIG_GLOBAL, "");
+}
+
+/** Runs git in `cwd`, failing the test on a non-zero exit; answers stdout, trimmed. */
+export function git(cwd: string, ...args: string[]): string {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+/** The electron stub's `utilityProcess` running git.ts in this process, as git-host.ts would. */
+export function forkGitInProcess(): void {
+  const api = gitModule as unknown as Record<string, (...args: unknown[]) => unknown>;
+  Object.assign(utilityProcess, {
+    fork: () => {
+      let listener: (message: GitResponse) => void = () => undefined;
+      return {
+        on: (event: string, handler: (message: GitResponse) => void) => {
+          if (event === "message") {
+            listener = handler;
+          }
+        },
+        postMessage: ({ id, method, args }: GitRequest) => {
+          void (async () => {
+            try {
+              listener({ id, value: await api[method](...args) });
+            } catch (error) {
+              listener({ id, error: error instanceof Error ? error.message : String(error) });
+            }
+          })();
+        },
+        kill: () => undefined
+      };
+    }
+  });
 }

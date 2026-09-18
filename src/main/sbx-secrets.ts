@@ -101,7 +101,6 @@ export class SbxSecretStore {
       }
     } catch {
       // No file yet, or unreadable — no secrets.
-      this.secrets = {};
     }
   }
 

@@ -279,7 +279,7 @@ export function setEditorVersion(tabId: string, version: string): void {
       const model = view.models.modified;
       // monaco strips a BOM only when building a buffer: pushed as an edit it becomes text, and the
       // save writes it twice. A BOM that came or went on disk needs a new buffer.
-      const bom = result.content.startsWith("﻿");
+      const bom = result.content.startsWith("\uFEFF");
       const modelBom = model.getValueLength(undefined, true) !== model.getValueLength();
       // Monaco reports the change synchronously, before the new version is saved: read as an edit,
       // it would keep a preview tab.

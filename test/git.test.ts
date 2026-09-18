@@ -32,37 +32,26 @@ import {
   stashPush,
   updateRemoteHead
 } from "../src/main/git/git";
+import { git, isolateGitConfig } from "./helpers";
 
 /**
  * git.ts against the real git, in a repository built up step by step. It imports nothing from
  * electron, so it runs in this process.
  */
 
-// Without the machine's config: a signing key or a hook there would turn a commit into a question.
-const identity = {
-  GIT_AUTHOR_NAME: "tet test",
-  GIT_AUTHOR_EMAIL: "test@tet.invalid",
-  GIT_COMMITTER_NAME: "tet test",
-  GIT_COMMITTER_EMAIL: "test@tet.invalid",
-  GIT_CONFIG_NOSYSTEM: "1",
-  GIT_CONFIG_GLOBAL: path.join(os.tmpdir(), "tet-git-noglobal")
-};
-Object.assign(process.env, identity);
-fs.writeFileSync(identity.GIT_CONFIG_GLOBAL, "");
+isolateGitConfig("tet-git-noglobal");
 
 let cwd: string;
 
-function run(...args: string[]): string {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
-  assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
-  return result.stdout.trim();
-}
+const run = (...args: string[]): string => git(cwd, ...args);
 
 const write = (name: string, content: string): void => fs.writeFileSync(path.join(cwd, name), content);
 
 /** The editor tab's read cap; `readHeadBlob` takes it per call. */
 const MAX_BYTES = 4 * 1024 * 1024;
 const head = (name: string, origPath?: string) => readHeadBlob(cwd, name, { origPath, maxBytes: MAX_BYTES });
+const changed = async (): Promise<string[]> =>
+  (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
 
 describe("a repository, from init on", () => {
   before(() => {
@@ -274,9 +263,6 @@ describe("a repository, from init on", () => {
 });
 
 describe("a selection of the changes, as the list's menu hands it over", () => {
-  const changed = async (): Promise<string[]> =>
-    (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
-
   before(() => {
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-selection-"));
     run("init", "-q");
@@ -358,9 +344,6 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
 });
 
 describe("a merge stopped on conflicts, discarded file by file", () => {
-  const changed = async (): Promise<string[]> =>
-    (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
-
   before(async () => {
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-conflicts-"));
     run("init", "-q");
@@ -415,9 +398,10 @@ describe("a network command's ssh", () => {
     const inherited = { GIT_SSH: process.env.GIT_SSH, GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND };
     delete process.env.GIT_SSH;
     delete process.env.GIT_SSH_COMMAND;
-    t.after(() => Object.assign(process.env, inherited));
+    // Not Object.assign: process.env would take an unset one as the string "undefined".
+    t.after(() => Object.entries(inherited).forEach(([key, value]) => value !== undefined && (process.env[key] = value)));
     const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-ssh-"));
-    assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
+    git(bare, "init", "-q", "--bare");
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-ssh-"));
     run("init", "-q");
     run("remote", "add", "origin", bare);
@@ -474,15 +458,14 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
   /** A commit in the other clone, pushed. */
   const pushFromOther = (name: string): void => {
     fs.writeFileSync(path.join(other, name), `${name}\n`);
-    for (const args of [["add", name], ["commit", "-q", "-m", name], ["push", "-q"]]) {
-      const result = spawnSync("git", args, { cwd: other, encoding: "utf8" });
-      assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
-    }
+    git(other, "add", name);
+    git(other, "commit", "-q", "-m", name);
+    git(other, "push", "-q");
   };
 
   before(() => {
     bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-shared-"));
-    assert.equal(spawnSync("git", ["init", "-q", "--bare", "--initial-branch=main", bare]).status, 0);
+    git(bare, "init", "-q", "--bare", "--initial-branch=main");
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-shared-"));
     run("clone", "-q", bare, ".");
     run("symbolic-ref", "HEAD", "refs/heads/main");
@@ -543,7 +526,7 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
     assert.deepEqual(await commitAll(cwd, "e"), { ok: true });
     run("switch", "-q", "main");
     const before = run("rev-parse", "main");
-    assert.equal(spawnSync("git", ["pull", "-q"], { cwd: other }).status, 0);
+    git(other, "pull", "-q");
     pushFromOther("f.txt");
     assert.deepEqual(await fetch(cwd), { ok: true });
     const divergedBefore = run("rev-parse", "diverged");
@@ -574,9 +557,9 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
   it("forgets a remote branch someone else already deleted", async () => {
     run("push", "-q", "origin", "main:gone");
     run("fetch", "-q");
-    assert.equal(spawnSync("git", ["push", "-q", "origin", "--delete", "gone"], { cwd: other }).status, 0);
+    git(other, "push", "-q", "origin", "--delete", "gone");
     assert.deepEqual(await deleteRemoteBranch(cwd, "origin", "gone"), { ok: true });
-    assert.deepEqual((await readState(cwd, ["origin"])).remotes[0]?.branches.includes("gone"), false);
+    assert.equal((await readState(cwd, ["origin"])).remotes[0]?.branches.includes("gone"), false);
   });
 });
 

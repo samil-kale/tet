@@ -13,7 +13,7 @@ import { SbxSecretStore } from "../src/main/sbx-secrets";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
-import { ProjectSessionManager } from "../src/main/terminals/session-manager";
+import { ProjectSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
@@ -69,54 +69,60 @@ describe("a turn's toast", () => {
   });
 });
 
+/**
+ * Runs `use` on project "p" in a folder of its own with PATH empty: no agent's version check
+ * passes and sbx is missing, so nothing is set up, listed or spawned. Everything goes after.
+ */
+async function withEmptyPath(
+  callbacks: Partial<SessionManagerCallbacks>,
+  use: (manager: ProjectSessionManager, project: string) => Promise<void> | void
+): Promise<void> {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-empty-path-"));
+  const project = path.join(root, "repo");
+  fs.mkdirSync(project);
+  const originalPath = process.env.PATH;
+  process.env.PATH = path.join(root, "empty");
+  const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), new SbxSecretStore(root), {
+    onTabs: () => undefined,
+    onOutput: () => undefined,
+    onStatus: () => undefined,
+    onStartupProgress: () => undefined,
+    onNotice: () => undefined,
+    ...callbacks
+  });
+  try {
+    await use(manager, project);
+  } finally {
+    await manager.dispose();
+    process.env.PATH = originalPath;
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
+  }
+}
+
 describe("a tab's reported session", () => {
   it("is ordered by when the reports were made: a late hook of the session left behind does not take it back", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bind-"));
-    // An empty PATH: Claude's version check fails, so nothing is set up, listed or spawned.
-    const originalPath = process.env.PATH;
-    process.env.PATH = path.join(root, "empty");
-    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, new SettingsStore(root), new SbxSecretStore(root), {
-      onTabs: () => undefined,
-      onOutput: () => undefined,
-      onStatus: () => undefined,
-      onStartupProgress: () => undefined,
-      onNotice: () => undefined
-    });
-    try {
+    await withEmptyPath({}, (manager) => {
       const { tabId } = manager.createTab("claude");
-      const reported = () => manager.inspect().find((tab) => tab.tabId === tabId)?.reportedSessionId;
       const at = Date.now();
       manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at);
       // `/clear`: the new session starts, while the old one's stop hook is still on its way.
       manager.hookEvent(tabId, "session-start", '{"session_id":"s2"}', at + 2000);
       manager.hookEvent(tabId, "stop", '{"session_id":"s1"}', at + 1000);
-      assert.equal(reported(), "s2");
-    } finally {
-      await manager.dispose();
-      process.env.PATH = originalPath;
-      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
-    }
+      assert.equal(manager.inspect().find((tab) => tab.tabId === tabId)?.reportedSessionId, "s2");
+    });
   });
 });
 
 describe("a tab of a missing agent", () => {
   it("starts once switching sandboxing on makes its agent startable", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-missing-"));
-    const project = path.join(root, "repo");
-    fs.mkdirSync(project);
-    // An empty PATH: pi is missing here, and so is sbx, so the start ends in sbx's notice.
-    const originalPath = process.env.PATH;
-    process.env.PATH = path.join(root, "empty");
     const statuses: string[] = [];
     const notices: string[] = [];
-    const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), new SbxSecretStore(root), {
-      onTabs: () => undefined,
-      onOutput: () => undefined,
+    const callbacks: Partial<SessionManagerCallbacks> = {
       onStatus: (_projectId, _tabId, status) => statuses.push(status),
-      onStartupProgress: () => undefined,
       onNotice: (_severity, message) => notices.push(message)
-    });
-    try {
+    };
+    // The start ends in sbx's notice, sbx being missing too.
+    await withEmptyPath(callbacks, async (manager, project) => {
       const { tabId } = manager.createTab("pi");
       manager.handleResize(tabId, 80, 24);
       await eventually("the tab shows missing", () => statuses.at(-1) === "missing", 10_000);
@@ -124,11 +130,7 @@ describe("a tab of a missing agent", () => {
       await manager.sbxConfigChanged();
       await eventually(() => `a start after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
       assert.ok(notices.some((notice) => /only runs in repo's SBX sandbox/.test(notice)), notices.join("\n"));
-    } finally {
-      await manager.dispose();
-      process.env.PATH = originalPath;
-      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
-    }
+    });
   });
 });
 

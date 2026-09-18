@@ -49,6 +49,8 @@ type MenuTarget =
 
 type BranchMenu = MenuTarget & { x: number; y: number };
 
+const COMMITS_LOST = "Commits that exist only on this branch are lost.";
+
 /** A worktree by its branch, which is its name; by its folder's while detached. */
 function worktreeName(worktree: WorktreeInfo): string {
   return worktree.branch ?? worktree.path.split(/[\\/]/).filter(Boolean).pop() ?? worktree.path;
@@ -151,11 +153,10 @@ export const BranchTree = memo(function BranchTree({
    *  to the default branch first. Its upstream is a checkbox where it has one. */
   const askDeleteBranch = async (name: string): Promise<void> => {
     const upstream = state.branchUpstreams[name];
-    const lost = "Commits that exist only on this branch are lost.";
     const answer = await confirm({
       title: "Delete branch",
       message: `Are you sure you want to delete ${name}?`,
-      detail: isCurrent(name) && defaultRef ? `Switches to ${defaultRef} first. ${lost}` : lost,
+      detail: isCurrent(name) && defaultRef ? `Switches to ${defaultRef} first. ${COMMITS_LOST}` : COMMITS_LOST,
       confirmLabel: "Delete branch",
       checkboxLabel: upstream ? `Also delete ${upstream.remote}/${upstream.branch} on the remote` : undefined
     });
@@ -168,7 +169,7 @@ export const BranchTree = memo(function BranchTree({
     const answer = await confirm({
       title: "Delete remote branch",
       message: `Are you sure you want to delete ${name} on ${from}?`,
-      detail: "Commits that exist only on this branch are lost.",
+      detail: COMMITS_LOST,
       confirmLabel: "Delete branch"
     });
     if (answer.confirmed) {
@@ -248,6 +249,16 @@ export const BranchTree = memo(function BranchTree({
     return [{ label, run: () => branch.run(`${label}...`, () => repository.abort(projectId)) }, SEPARATOR];
   };
 
+  /** Brings the default branch into HEAD; every fetch moves a local default branch up to its
+   *  upstream. Nothing to bring in while standing on the default branch. */
+  const updateFromDefault = (): ContextMenuEntry => ({
+    label: `Update from ${defaultRef ?? "the default branch"}`,
+    run:
+      defaultRef && !state.detached && state.head !== defaultRef
+        ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(projectId, defaultRef))
+        : undefined
+  });
+
   const branchEntries = (menu: Extract<BranchMenu, { kind: "branch" }>): ContextMenuEntry[] => {
     const { name, remote: from } = menu;
     // Prefixed by its remote everywhere but the checkout, which creates the tracking branch.
@@ -269,19 +280,9 @@ export const BranchTree = memo(function BranchTree({
             { label: "Delete...", run: deletable ? () => void askDeleteBranch(name) : undefined }
           ]),
       SEPARATOR,
-      // On HEAD's row: bring the default branch in instead; every fetch moves a local default branch
-      // up to its upstream.
+      // On HEAD's row: bring the default branch in instead.
       ...(onHead
-        ? [
-            {
-              label: `Update from ${defaultRef ?? "the default branch"}`,
-              // Nothing to bring in while standing on the default branch.
-              run:
-                defaultRef && !state.detached && state.head !== defaultRef
-                  ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(projectId, defaultRef))
-                  : undefined
-            }
-          ]
+        ? [updateFromDefault()]
         : [
             {
               label: `Merge ${ref} into ${state.head}`,
@@ -344,13 +345,7 @@ export const BranchTree = memo(function BranchTree({
       ...abortEntries(),
       { label: "Open", run: worktree.current ? undefined : () => onOpenWorktree(worktree.path) },
       worktree.current
-        ? {
-            label: `Update from ${defaultRef ?? "the default branch"}`,
-            run:
-              defaultRef && !state.detached && state.head !== defaultRef
-                ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(projectId, defaultRef))
-                : undefined
-          }
+        ? updateFromDefault()
         : {
             label: merged ? `Merge ${merged} into ${state.head}` : "Merge (no branch checked out)",
             run:

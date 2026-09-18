@@ -425,16 +425,12 @@ export async function readWorktrees(cwd: string): Promise<WorktreeInfo[]> {
     () => gitDir
   );
   const bases = await readBaseBranches(commonDir);
-  const branchOf = async (adminDir: string): Promise<string | undefined> => {
-    const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
-    return /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
-  };
-  // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
-  const onDisk = (folder: string): Promise<string> => fs.realpath(folder).catch(() => folder);
   const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
-    const branch = await branchOf(adminDir);
+    const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
+    const branch = /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
     return {
-      path: await onDisk(worktreePath),
+      // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
+      path: await fs.realpath(worktreePath).catch(() => worktreePath),
       branch,
       base: main || branch === undefined ? undefined : bases.get(branch),
       main,

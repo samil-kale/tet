@@ -282,18 +282,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
   };
 
   /** A tab id checked to exist, with its project and terminals. */
-  const knownTab = (
-    args: Record<string, unknown>,
-    caller: ControlRequest["caller"]
-  ): { tabs: ControlTerminals; tabId: string; found: Project; tab: TerminalDescriptor } => {
+  const knownTab = (args: Record<string, unknown>, caller: ControlRequest["caller"]): { tabs: ControlTerminals; tabId: string; found: Project } => {
     const found = project(args, caller);
     const tabId = text(args, "tabId", "tab id");
     const tabs = terminals(found);
-    const tab = tabs.snapshot().find((entry) => entry.tabId === tabId);
-    if (!tab) {
+    if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
       throw new ControlError("not_found", `unknown tab: ${tabId} (see tabs-list)`);
     }
-    return { tabs, tabId, found, tab };
+    return { tabs, tabId, found };
   };
 
   return {
@@ -652,23 +648,20 @@ export async function startControlServer(
     if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
       return { response: reject("unauthorized", "not a terminal of this TET") };
     }
-    const handler =
-      request.verb !== HELP_VERB && CONTROL_VERBS.some((entry) => entry.verb === request.verb)
-        ? handlers[request.verb]
-        : undefined;
-    if (!handler) {
+    const entry = request.verb === HELP_VERB ? undefined : CONTROL_VERBS.find((candidate) => candidate.verb === request.verb);
+    const handler = entry && handlers[entry.verb];
+    if (!entry || !handler) {
       return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
     }
-    const entry = CONTROL_VERBS.find((candidate) => candidate.verb === request.verb);
     // Looked up, not carried by the token: the session manager knows which tabs run in a sandbox.
     const sandboxed =
       caller.projectId !== undefined &&
       caller.tabId !== undefined &&
       deps.sessions.get(caller.projectId)?.sandboxed(caller.tabId) === true;
-    if (sandboxed && !entry?.sandbox) {
+    if (sandboxed && !entry.sandbox) {
       return { response: reject("unauthorized", `${request.verb} does not answer from inside a sandbox`) };
     }
-    if (entry?.ownProjectOnly || (sandboxed && entry?.sandbox === "ownProject")) {
+    if (entry.ownProjectOnly || (sandboxed && entry.sandbox === "ownProject")) {
       const own = caller.projectId;
       const asked = request.args?.project;
       if (!own || (typeof asked === "string" && asked !== "" && asked !== own)) {

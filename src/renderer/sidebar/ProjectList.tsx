@@ -199,9 +199,9 @@ export const ProjectList = memo(function ProjectList({
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
    *  pane, where its target is on screen — but for a worktree's own row, which is that tree. */
   const menuEntries = (project: Project): ContextMenuEntry[] => {
-    const remote = heads[project.id]?.remote;
+    const { head, detached, upstream, base, baseAt, defaultBranch, remote } = heads[project.id] ?? {};
     const web = remote?.url ? webUrl(remote.url) : null;
-    const { head, detached, upstream, base, baseAt, defaultBranch } = heads[project.id] ?? {};
+    const run = runIn(project.id);
     // Named by its branch, which is its name; by its folder while detached.
     const name = head && !detached ? head : project.name;
     // Run where the base is checked out, which is a project of its own when it is anywhere. The
@@ -223,11 +223,8 @@ export const ProjectList = memo(function ProjectList({
                 : undefined
           },
           SEPARATOR,
-          { label: "Rename worktree...", run: () => void askRenameWorktree(ref, name, runIn(project.id), canClose) },
-          {
-            label: "Delete worktree...",
-            run: () => void askDeleteWorktree(ref, name, upstream, runIn(project.id), canClose)
-          }
+          { label: "Rename worktree...", run: () => void askRenameWorktree(ref, name, run, canClose) },
+          { label: "Delete worktree...", run: () => void askDeleteWorktree(ref, name, upstream, run, canClose) }
         ]
       : [];
     return [
@@ -246,9 +243,7 @@ export const ProjectList = memo(function ProjectList({
       SEPARATOR,
       {
         label: "New worktree...",
-        run: defaultBranch
-          ? () => void askNewWorktree(project.id, runIn(project.id), defaultBranch)
-          : undefined
+        run: defaultBranch ? () => void askNewWorktree(project.id, run, defaultBranch) : undefined
       },
       ...worktree,
       SEPARATOR,

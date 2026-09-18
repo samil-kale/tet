@@ -36,6 +36,7 @@ export function pathKey(env: Record<string, string | undefined>): string {
 
 const WIN32_NATIVE_EXTENSIONS = [".exe", ".com"];
 const WIN32_BATCH_EXTENSIONS = [".cmd", ".bat"];
+const WIN32_EXTENSIONS = [...WIN32_NATIVE_EXTENSIONS, ...WIN32_BATCH_EXTENSIONS];
 
 /**
  * What `executable` names, searched in its folder or else along PATH, and whether it is a batch
@@ -47,14 +48,13 @@ const WIN32_BATCH_EXTENSIONS = [".cmd", ".bat"];
 function resolveWin32Executable(executable: string): { path: string; batch: boolean } | undefined {
   const ext = path.extname(executable).toLowerCase();
   if (ext) {
-    const known = [...WIN32_NATIVE_EXTENSIONS, ...WIN32_BATCH_EXTENSIONS].includes(ext);
-    return known ? { path: executable, batch: WIN32_BATCH_EXTENSIONS.includes(ext) } : undefined;
+    return WIN32_EXTENSIONS.includes(ext) ? { path: executable, batch: WIN32_BATCH_EXTENSIONS.includes(ext) } : undefined;
   }
 
   const dir = path.dirname(executable);
   const searchDirs = dir !== "." ? [dir] : (process.env.PATH ?? "").split(path.delimiter);
   for (const searchDir of searchDirs) {
-    for (const extension of [...WIN32_NATIVE_EXTENSIONS, ...WIN32_BATCH_EXTENSIONS]) {
+    for (const extension of WIN32_EXTENSIONS) {
       const candidate = path.join(searchDir, path.basename(executable) + extension);
       if (fs.existsSync(candidate)) {
         return { path: candidate, batch: WIN32_BATCH_EXTENSIONS.includes(extension) };

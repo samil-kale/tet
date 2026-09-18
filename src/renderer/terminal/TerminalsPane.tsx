@@ -123,10 +123,7 @@ export const TerminalsPane = memo(function TerminalsPane({
 
   useEffect(() => setRevealHandler(project.id, (path) => onOpenDiff(project.id, path)), [project.id, onOpenDiff]);
 
-  const onCloseEditorsHere = useCallback(
-    (tabIds: string[]) => onCloseEditors(project.id, tabIds),
-    [onCloseEditors, project.id]
-  );
+  const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(project.id, tabIds), [onCloseEditors, project.id]);
 
   // Disposed only for a tab gone for good, not one moved to another pane.
   useEffect(() => {

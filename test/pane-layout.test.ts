@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   SNAP_TRANSITIONS,
   activateTab,
+  activeEditorTab,
   collapseClosed,
   collapseEmptied,
   collapseEmpty,
@@ -11,7 +12,6 @@ import {
   moveTab,
   normalizeLayout,
   placeCommandTab,
-  activeEditorTab,
   serializeLayout,
   snapTab,
   snapZoneAt,

@@ -331,10 +331,7 @@ export const Pane = memo(function Pane({
         : [];
     const closeEntries: ContextMenuEntry[] = [
       closeAction("Close", [tabId]),
-      closeAction(
-        "Close Others",
-        ids.filter((id) => id !== tabId)
-      ),
+      closeAction("Close Others", ids.filter((id) => id !== tabId)),
       closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
       closeAction("Close All", ids)
     ];

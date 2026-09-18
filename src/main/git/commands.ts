@@ -360,9 +360,10 @@ function toSbxSecrets(value: unknown): SbxSecret[] {
       continue;
     }
     const { env, hosts } = entry as { env?: unknown; hosts?: unknown };
+    const name = typeof env === "string" ? env.trim() : "";
     const trimmedHosts = toSbxHosts(hosts);
-    if (typeof env === "string" && env.trim() && trimmedHosts.length > 0 && !secrets.some((secret) => secret.env === env.trim())) {
-      secrets.push({ env: env.trim(), hosts: trimmedHosts });
+    if (name && trimmedHosts.length > 0 && !secrets.some((secret) => secret.env === name)) {
+      secrets.push({ env: name, hosts: trimmedHosts });
     }
   }
   return secrets;

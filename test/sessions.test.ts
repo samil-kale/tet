@@ -420,13 +420,9 @@ describe("opencode's session records", () => {
     fs.mkdirSync(cwd);
     /** A stand-in opencode that fails `session delete` with `message`. */
     const fakeOpencode = (message: string): string => {
-      if (process.platform === "win32") {
-        const file = path.join(path.dirname(dir), "opencode.cmd");
-        fs.writeFileSync(file, `@echo ${message} 1>&2\r\n@exit /b 1\r\n`);
-        return file;
-      }
-      const file = path.join(path.dirname(dir), "opencode");
-      fs.writeFileSync(file, `#!/bin/sh\necho '${message}' >&2\nexit 1\n`, { mode: 0o755 });
+      const win32 = process.platform === "win32";
+      const file = path.join(path.dirname(dir), win32 ? "opencode.cmd" : "opencode");
+      fs.writeFileSync(file, win32 ? `@echo ${message} 1>&2\r\n@exit /b 1\r\n` : `#!/bin/sh\necho '${message}' >&2\nexit 1\n`, { mode: 0o755 });
       return file;
     };
     await assert.rejects(opencodeSessionProvider.remove(fakeOpencode("database is locked"), cwd, "ses_a"), /database is locked/);

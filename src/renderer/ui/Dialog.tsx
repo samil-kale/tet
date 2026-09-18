@@ -442,9 +442,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
               <button
                 key={choice.value}
                 type="button"
-                className={["dialog-color", choice.value ? "" : "none", choice.value === color ? "selected" : ""]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={`dialog-color${choice.value ? "" : " none"}${choice.value === color ? " selected" : ""}`}
                 title={choice.title}
                 style={choice.color ? { background: choice.color } : undefined}
                 onClick={() => setColor(choice.value)}

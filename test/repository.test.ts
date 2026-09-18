@@ -4,12 +4,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { shell, utilityProcess } from "electron";
-import * as gitModule from "../src/main/git/git";
-import type { GitRequest, GitResponse } from "../src/main/git/git-host";
+import { shell } from "electron";
 import { Repository } from "../src/main/git/repository";
 import { readMainWorktree } from "../src/main/git/linked-git-dir";
 import { worktreeBase } from "../src/shared/types";
+import { forkGitInProcess, git, isolateGitConfig } from "./helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
@@ -17,41 +16,8 @@ import { worktreeBase } from "../src/shared/types";
  * git.ts in this process as git-host.ts would, `shell.trashItem` moves a file into a folder or fails.
  */
 
-// Without the machine's config: a signing key or a hook there would turn a commit into a question.
-const identity = {
-  GIT_AUTHOR_NAME: "tet test",
-  GIT_AUTHOR_EMAIL: "test@tet.invalid",
-  GIT_COMMITTER_NAME: "tet test",
-  GIT_COMMITTER_EMAIL: "test@tet.invalid",
-  GIT_CONFIG_NOSYSTEM: "1",
-  GIT_CONFIG_GLOBAL: path.join(os.tmpdir(), "tet-repository-noglobal")
-};
-Object.assign(process.env, identity);
-fs.writeFileSync(identity.GIT_CONFIG_GLOBAL, "");
-
-const api = gitModule as unknown as Record<string, (...args: unknown[]) => unknown>;
-Object.assign(utilityProcess, {
-  fork: () => {
-    let listener: (message: GitResponse) => void = () => undefined;
-    return {
-      on: (event: string, handler: (message: GitResponse) => void) => {
-        if (event === "message") {
-          listener = handler;
-        }
-      },
-      postMessage: ({ id, method, args }: GitRequest) => {
-        void (async () => {
-          try {
-            listener({ id, value: await api[method](...args) });
-          } catch (error) {
-            listener({ id, error: error instanceof Error ? error.message : String(error) });
-          }
-        })();
-      },
-      kill: () => undefined
-    };
-  }
-});
+isolateGitConfig("tet-repository-noglobal");
+forkGitInProcess();
 
 const trash = fs.mkdtempSync(path.join(os.tmpdir(), "tet-trash-"));
 /** Which paths the trash refuses. */
@@ -72,12 +38,6 @@ const trashContents = (): string[] =>
     .readdirSync(trash)
     .sort((a, b) => parseInt(a) - parseInt(b))
     .map((name) => fs.readFileSync(path.join(trash, name), "utf8"));
-
-function git(cwd: string, ...args: string[]): string {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
-  assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
-  return result.stdout.trim();
-}
 
 const opened: Repository[] = [];
 
@@ -344,10 +304,7 @@ describe("worktrees, each with a branch of its own", () => {
   it("forgets a worktree whose folder is gone", async () => {
     fs.rmSync(at("renamed"), { recursive: true, force: true });
     assert.deepEqual(await repository.pruneWorktrees(), { ok: true });
-    assert.deepEqual(
-      repository.getState().worktrees.map((worktree) => worktree.branch),
-      ["main"]
-    );
+    assert.deepEqual(repository.getState().worktrees.map((worktree) => worktree.branch), ["main"]);
   });
 });
 

@@ -9,10 +9,9 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
  * stderr on failure, and an exit code to branch on.
  */
 
-/** What a skill file would say at the top: when this is the right tool at all. TET_SYSTEM_PROMPT
- *  spends its one line sending an agent here, so the answer to "when do I run this" belongs in the
- *  same output as the verbs: nothing to install into an agent's own configuration, and all four
- *  read it the same way. What that prompt already said is not repeated here. */
+/** When tet-ctl is the right tool at all. TET_SYSTEM_PROMPT's one line sends an agent here, so this
+ *  sits beside the verbs: nothing installed into an agent's configuration, and all four read it
+ *  alike. It does not repeat that prompt. */
 function whenToUse(sandboxed: boolean): string[] {
   return [
     "This terminal is one tab of one project in TET; other tabs run other agents, shells and saved",
@@ -27,9 +26,7 @@ function whenToUse(sandboxed: boolean): string[] {
 }
 
 /** The verbs in the order help prints them, under the question each group answers; every verb is
- *  in exactly one group but the unlisted ones (control.test.ts). Grouping is what the list gives an
- *  agent that the verb names alone do not, so it replaces the walkthrough that used to name them a
- *  second time. */
+ *  in exactly one group but the unlisted ones (control.test.ts). */
 const GROUPS: ReadonlyArray<{ heading: string; verbs: readonly string[] }> = [
   {
     heading: "TET itself",
@@ -98,8 +95,8 @@ function limits(sandboxed: boolean): string[] {
       ];
 }
 
-/** Each verb's summary on its own indented line: padding every usage to the longest one (tabs-wait)
- *  cost an agent reading this some 140 spaces a line. */
+/** Each verb's summary on its own indented line: padding every usage to the longest (tabs-wait)
+ *  would cost an agent some 140 spaces a line. */
 function usage(): string {
   const sandboxed = inSandbox();
   // `sandbox` absent is refused there (ControlVerb.sandbox), which is what leaves a verb out.
@@ -213,7 +210,7 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
 
 /**
  * A hook's wait on a stalled app: the agent's turn waits on its hook, which must not hold it for
- * good. Given up on, it answers nothing, and that prompt goes without the context text.
+ * good. Given up on, it answers nothing.
  */
 const HOOK_IDLE_MS = 10_000;
 

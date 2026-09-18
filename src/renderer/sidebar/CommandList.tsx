@@ -18,16 +18,20 @@ const EXTRA_FIELDS = [
 
 const COMMAND_DETAIL = "Saved to tet.json in the project. The command is started without a shell.";
 
+function capitalized(color: CommandColor): string {
+  return color[0].toUpperCase() + color.slice(1);
+}
+
 /** The terminal's own color for a name, so the rows recolor with the theme. */
 function colorVariable(color: CommandColor): string {
-  return `var(--vscode-terminal-ansiBright${color[0].toUpperCase()}${color.slice(1)})`;
+  return `var(--vscode-terminal-ansiBright${capitalized(color)})`;
 }
 
 /** The swatches the dialog offers, the bright six in the theme's own colors. */
 const COLOR_CHOICES = COMMAND_COLORS.map((color) => ({
   value: color,
   color: colorVariable(color),
-  title: color[0].toUpperCase() + color.slice(1)
+  title: capitalized(color)
 }));
 
 const COLOR_FIELD = { label: "Color (optional)", choices: COLOR_CHOICES };

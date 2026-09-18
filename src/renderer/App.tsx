@@ -893,10 +893,7 @@ export function App() {
     [branchActions, activeProjectId, runActiveBranchAction]
   );
   /** The project list's bar: a command it started, in any project. */
-  const projectListBusy = useMemo(
-    () => [...branchActions.values()].includes("projects"),
-    [branchActions]
-  );
+  const projectListBusy = useMemo(() => [...branchActions.values()].includes("projects"), [branchActions]);
   /** The project list's commands, told apart so they show in its own bar. */
   const runProjectListAction = useCallback(
     (projectId: string, label: string, action: () => Promise<GitActionResult>) =>

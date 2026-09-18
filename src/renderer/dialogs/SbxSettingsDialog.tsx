@@ -255,11 +255,11 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           </span>
         </label>
       )}
-      {phase.kind === "ready" && tab === "general" && phase.organization && (
+      {tab === "general" && organization && (
         <div className="sbx-governance">
           <strong>Organization governance is active</strong>
           <p className="dialog-detail">
-            SBX's policy is managed by <strong>{phase.organization}</strong>.
+            SBX's policy is managed by <strong>{organization}</strong>.
           </p>
         </div>
       )}

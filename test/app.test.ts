@@ -29,14 +29,13 @@ let app: TestApp | undefined;
 /** The instance answering right now — a different process after restart-app. */
 let pid: number | undefined;
 
-async function ctl(...args: string[]) {
+function started(): TestApp {
   assert.ok(app, "tet started");
-  return app.ctl(...args);
+  return app;
 }
 
-function asTab(projectId: string, tabId: string): Record<string, string | undefined> {
-  assert.ok(app, "tet started");
-  return app.asTab(projectId, tabId);
+async function ctl(...args: string[]) {
+  return started().ctl(...args);
 }
 
 describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
@@ -112,7 +111,7 @@ ${stderr.slice(uncaught)}`);
     // A second tab takes the front: the renderer clears a finished mark on the tab in front.
     const inFront = await open();
     const hook = (event: string): Promise<{ status: number; stdout: string }> =>
-      tetCtl(["hook", event], asTab(project.id, tab), "{}");
+      tetCtl(["hook", event], started().asTab(project.id, tab), "{}");
     const state = async (): Promise<TerminalDescriptor | undefined> =>
       ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).find((entry) => entry.tabId === tab);
 
@@ -138,11 +137,7 @@ ${stderr.slice(uncaught)}`);
       JSON.stringify({ commands: [{ command: "node -e \"console.log('tet-context-probe')\"", name: "probe" }] })
     );
     const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TerminalDescriptor;
-    // Read as a tab of that project does: the verb answers only there.
-    const lines = async (): Promise<string> =>
-      ((await tetCtl(["tabs-output", probe.tabId], asTab(project.id, probe.tabId))).result as
-        | { output: string }
-        | undefined)?.output ?? "";
+    const lines = (): Promise<string> => started().output(project.id, probe.tabId);
     await eventually("the command's line", async () => /tet-context-probe/.test(await lines()), STARTUP_MS);
   });
 
@@ -150,10 +145,7 @@ ${stderr.slice(uncaught)}`);
     const [project] = (await ctl("projects-list")).result as Project[];
     fs.writeFileSync(path.join(repo, "tet.json"), JSON.stringify({ commands: [{ command: "tet-ctl tabs-list", name: "list" }] }));
     const list = (await ctl("tabs-run-command", "list", "--project", project.id)).result as TerminalDescriptor;
-    const lines = async (): Promise<string> =>
-      ((await tetCtl(["tabs-output", list.tabId], asTab(project.id, list.tabId))).result as
-        | { output: string }
-        | undefined)?.output ?? "";
+    const lines = (): Promise<string> => started().output(project.id, list.tabId);
     // Its own id in the listing: the server took the tab's token for the ids the tab reported.
     await eventually("the tab's own listing", async () => (await lines()).includes(list.tabId), STARTUP_MS);
     assert.doesNotMatch(await lines(), /not a terminal of this TET/);

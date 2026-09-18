@@ -75,8 +75,8 @@ function isEmptySecretRow(row: SecretRow): boolean {
   return row.env.trim() === "" && row.hosts.trim() === "" && row.value === "";
 }
 
-/** A secret row Save refuses — an empty one is dropped. It needs an environment variable name,
- *  once, and hosts without scheme or port, which `sbx secret set-custom` rejects (measured). */
+/** A secret row Save refuses (an empty one is dropped): it needs a variable name of its own and
+ *  hosts, none of them bad (isBadHost). */
 function isBadSecretRow(row: SecretRow, rows: SecretRow[]): boolean {
   if (isEmptySecretRow(row)) {
     return false;
