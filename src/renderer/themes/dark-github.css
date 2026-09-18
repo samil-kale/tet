@@ -53,6 +53,17 @@
   --vscode-checkbox-border: #30363d;
   --vscode-checkbox-foreground: #e6edf3;
 
+  /* radio.* unset: activeForeground the registry's; activeBackground the registry's: focusBorder
+     at 0.4 alpha; activeBorder the registry's; inactiveForeground none in the registry: the
+     foreground; inactiveBackground none in the registry: none; inactiveHoverBackground the
+     registry's. */
+  --vscode-radio-activeForeground: #ffffff;
+  --vscode-radio-activeBackground: #1f6feb66;
+  --vscode-radio-activeBorder: #007acc;
+  --vscode-radio-inactiveForeground: #e6edf3;
+  --vscode-radio-inactiveBackground: #00000000;
+  --vscode-radio-inactiveHoverBackground: #5a5d5e80;
+
   --vscode-button-background: #238636;
   --vscode-button-foreground: #ffffff;
   /* Unset; the registry's is contrastBorder, set only in high contrast. */

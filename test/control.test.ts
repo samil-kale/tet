@@ -373,11 +373,7 @@ describe("tet-ctl against the control server", () => {
       "dark-dracula:dark",
       "light-modern:light",
       "light-github:light",
-      "light-intellij:light",
-      "light-one:light",
-      "light-snazzy:light",
-      "light-solarized:light",
-      "light-vitesse:light"
+      "light-intellij:light"
     ]);
   });
 

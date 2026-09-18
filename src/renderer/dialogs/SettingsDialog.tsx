@@ -16,6 +16,7 @@ import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { notify } from "../ui/Notices";
+import { RadioGroup } from "../ui/RadioGroup";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 import { withEdits } from "./settings-edits";
@@ -195,19 +196,11 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       {tab === "appearance" && (
         <>
           <p className="dialog-detail">Color scheme</p>
-          <div className="settings-color-schemes">
-            {COLOR_SCHEMES.map((option) => (
-              <label key={option} className="dialog-checkbox">
-                <input
-                  type="radio"
-                  name="color-scheme"
-                  checked={scheme === option}
-                  onChange={() => applyColorScheme(option)}
-                />
-                <span>{COLOR_SCHEME_LABELS[option]}</span>
-              </label>
-            ))}
-          </div>
+          <RadioGroup
+            value={scheme}
+            onChange={(option) => applyColorScheme(option as ColorScheme)}
+            options={COLOR_SCHEMES.map((option) => ({ value: option, label: COLOR_SCHEME_LABELS[option] }))}
+          />
           <label className="dialog-field">
             <span>{chosenKind === "dark" ? "Dark theme" : "Light theme"}</span>
             <Dropdown

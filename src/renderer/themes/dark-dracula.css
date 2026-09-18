@@ -55,15 +55,29 @@
   --vscode-checkbox-border: #191a21;
   --vscode-checkbox-foreground: #f8f8f2;
 
+  /* radio.* unset: activeForeground the registry's; activeBackground the registry's: focusBorder
+     at 0.4 alpha; activeBorder is its inputOption.activeBorder; inactiveForeground none in the
+     registry: the foreground; inactiveBackground none in the registry: none;
+     inactiveHoverBackground the registry's. */
+  --vscode-radio-activeForeground: #ffffff;
+  --vscode-radio-activeBackground: #6272a466;
+  --vscode-radio-activeBorder: #bd93f9;
+  --vscode-radio-inactiveForeground: #f8f8f2;
+  --vscode-radio-inactiveBackground: #00000000;
+  --vscode-radio-inactiveHoverBackground: #5a5d5e80;
+
   --vscode-button-background: #44475a;
   --vscode-button-foreground: #f8f8f2;
   /* Unset; the registry's is contrastBorder, set only in high contrast. */
   --vscode-button-border: #00000000;
   /* Unset; the registry's: the button background lightened by 0.2. */
   --vscode-button-hoverBackground: #52556c;
-  --vscode-button-secondaryBackground: #282a36;
+  /* Not the theme's #282a36, which is the dialog's ground (the terminal's) and leaves the button
+     unseen: its secondaryHoverBackground, and for the hover that lightened by 0.2, as the registry
+     lightens a hover. */
+  --vscode-button-secondaryBackground: #343746;
   --vscode-button-secondaryForeground: #f8f8f2;
-  --vscode-button-secondaryHoverBackground: #343746;
+  --vscode-button-secondaryHoverBackground: #3e4254;
 
   /* The theme's is #21222c, which draws the dialogs darker than the editor behind them; the
      theme's dropdown and menu background. */

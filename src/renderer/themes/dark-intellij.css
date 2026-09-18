@@ -59,6 +59,17 @@
   --vscode-checkbox-border: #4f5156;
   --vscode-checkbox-foreground: #dfe1e5;
 
+  /* radio.* unset: activeForeground is its inputOption.activeForeground; activeBackground is its
+     inputOption.activeBackground; activeBorder is its inputOption.activeBorder;
+     inactiveForeground none in the registry: the foreground; inactiveBackground none in the
+     registry: none; inactiveHoverBackground the registry's. */
+  --vscode-radio-activeForeground: #cdd0d5;
+  --vscode-radio-activeBackground: #36538f;
+  --vscode-radio-activeBorder: #36538f;
+  --vscode-radio-inactiveForeground: #cccccc;
+  --vscode-radio-inactiveBackground: #00000000;
+  --vscode-radio-inactiveHoverBackground: #5a5d5e80;
+
   --vscode-button-background: #3574f0;
   --vscode-button-foreground: #ffffff;
   --vscode-button-border: #4f5156;

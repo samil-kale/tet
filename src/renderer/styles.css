@@ -103,6 +103,51 @@ textarea:focus,
   text-decoration: underline;
 }
 
+/* RadioGroup: VS Code's radio widget (base/browser/ui/radio/radio.css), at the fields' height and
+   a button's padding. A border between two options is drawn once: an inactive one leaves off its
+   right, the one after the active its left. */
+.radio-group {
+  display: flex;
+  align-self: flex-start;
+}
+
+.radio-option {
+  height: 29px;
+  padding: 0 11px;
+  color: var(--vscode-radio-inactiveForeground);
+  background: var(--vscode-radio-inactiveBackground);
+  /* Not radio.inactiveBorder: the fields' border, so the group reads as one of them. */
+  border: 1px solid var(--vscode-input-border);
+}
+
+.radio-option:first-child {
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+}
+
+.radio-option:last-child {
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+}
+
+.radio-option:not(.active):not(:last-child) {
+  border-right: none;
+}
+
+.radio-option.previous-active {
+  border-left: none;
+}
+
+.radio-option:hover:not(.active) {
+  background: var(--vscode-radio-inactiveHoverBackground);
+}
+
+.radio-option.active {
+  color: var(--vscode-radio-activeForeground);
+  background: var(--vscode-radio-activeBackground);
+  border-color: var(--vscode-radio-activeBorder);
+}
+
 /* Anchors `.select-arrow` over the dropdown's right edge. */
 .select-field {
   position: relative;
@@ -1429,8 +1474,9 @@ textarea:focus,
   max-width: calc(100vw - 32px);
   padding: 16px;
   font-size: 13px;
-  /* The panes' ground (.sidebar, .side-pane), not the editor widget's. */
-  background: var(--vscode-sideBar-background);
+  /* The terminal's ground, a step off the header's tab-strip color as the terminal is off the
+     tab strip; not the editor widget's. */
+  background: var(--vscode-terminal-background);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: 5px;
   box-shadow: 0 4px 12px var(--vscode-widget-shadow);
@@ -1500,7 +1546,8 @@ textarea:focus,
   height: 35px;
   margin: -16px -16px 0;
   padding: 0 6px 0 12px;
-  background: var(--vscode-panel-background);
+  /* The tab strip's (.dialog-tabs), so both shapes of header read alike. */
+  background: var(--vscode-tab-inactiveBackground);
   border-bottom: 1px solid var(--vscode-panel-border);
   border-radius: 5px 5px 0 0;
 }
@@ -1670,7 +1717,7 @@ textarea:focus,
 }
 
 /* Drawn by tet, as VS Code's checkbox widget: Chrome's own box takes only light or dark, never a
-   theme's colors. A radio is the same box, round. */
+   theme's colors. */
 .dialog-checkbox input {
   appearance: none;
   display: grid;
@@ -1689,10 +1736,6 @@ textarea:focus,
   cursor: pointer;
 }
 
-.dialog-checkbox input[type="radio"] {
-  border-radius: 50%;
-}
-
 /* Not the fields' focus border on a click: only the keyboard's, as a button's. */
 .dialog-checkbox input:focus {
   border-color: var(--vscode-checkbox-border);
@@ -1703,7 +1746,7 @@ textarea:focus,
 }
 
 /* Lucide's `check`, as a mask so it takes the theme's color. */
-.dialog-checkbox input[type="checkbox"]:checked::before {
+.dialog-checkbox input:checked::before {
   content: "";
   width: 12px;
   height: 12px;
@@ -1712,16 +1755,6 @@ textarea:focus,
     center / contain no-repeat;
 }
 
-/* The dot is a circle drawn in a mask over the whole inside, so it is centred by the SVG, not by
-   layout: a 6px box rounds apart from the border under display scaling and sits off centre. */
-.dialog-checkbox input[type="radio"]:checked::before {
-  content: "";
-  width: 14px;
-  height: 14px;
-  background: var(--vscode-checkbox-foreground);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='3'/%3E%3C/svg%3E")
-    center / contain no-repeat;
-}
 
 /* Fixed: switching tabs must not resize the dialog under the pointer. Taller than the switches
    need, for the Prompts tab's text box. */
@@ -1733,12 +1766,6 @@ textarea:focus,
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-}
-
-/* The Appearance tab's light / dark radios. */
-.settings-color-schemes {
-  display: flex;
-  gap: 16px;
 }
 
 .settings-prompt-header {

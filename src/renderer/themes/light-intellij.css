@@ -58,6 +58,17 @@
   --vscode-checkbox-border: #cecece;
   --vscode-checkbox-foreground: #616161;
 
+  /* radio.* unset: activeForeground the registry's; activeBackground the registry's: focusBorder
+     at 0.2 alpha; activeBorder the registry's; inactiveForeground none in the registry: the
+     foreground; inactiveBackground none in the registry: none; inactiveHoverBackground the
+     registry's. */
+  --vscode-radio-activeForeground: #000000;
+  --vscode-radio-activeBackground: #aeb3c233;
+  --vscode-radio-activeBorder: #007acc;
+  --vscode-radio-inactiveForeground: #616161;
+  --vscode-radio-inactiveBackground: #00000000;
+  --vscode-radio-inactiveHoverBackground: #b8b8b850;
+
   /* Unset; the registry's: hover the background darkened by 0.2, the secondary button the list
      hover and the foreground. */
   --vscode-button-background: #007acc;
