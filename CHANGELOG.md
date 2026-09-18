@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.9.2 (2026-09-19)
+
+- **Dracula theme.** Dracula joins the dark themes, in the window, the terminals and the editor.
+- **Checkboxes and radio buttons in the theme's colors.** They are drawn like VS Code's instead
+  of the system's, and the color scheme is picked with VS Code's radio buttons.
+- **The commit dialog no longer keeps a message history.** The list of recent and pinned commit
+  messages under the message field is gone.
+
 ## 0.9.1 (2026-09-18)
 
 - **Worktrees say when git is too old.** Creating and renaming a worktree needs git 2.48 or
