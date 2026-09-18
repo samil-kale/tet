@@ -1441,6 +1441,7 @@ textarea:focus {
   padding: 0 14px;
   font-size: 13px;
   color: var(--vscode-tab-inactiveForeground);
+  border-right: 1px solid var(--vscode-tab-border);
 }
 
 .dialog-tab.active {
