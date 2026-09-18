@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.9.1 (2026-09-18)
+
+- **Worktrees say when git is too old.** Creating and renaming a worktree needs git 2.48 or
+  newer; with an older git, both menu entries say so instead of failing halfway.
+- **Sandboxed agents open only files of their repository.** A file an agent in the sandbox asks
+  the editor to open is refused when it is missing or leads, through a link, outside the
+  repository.
+
 ## 0.9.0 (2026-09-18)
 
 - **Worktrees.** A worktree is added from the branch tree at the default branch, together with
