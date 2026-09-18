@@ -93,7 +93,7 @@ your repository, so parallel tasks stay separate without extra clones.
 
 ## First-class SBX support ([Docker Sandboxes](https://docs.docker.com/ai/sandboxes/))
 
-For when you're paranoid — or the company you work for is...
+For when you're paranoid or the company you work for is...
 Enable SBX for a project, and Claude Code, Codex, OpenCode and Pi each run in a persistent, isolated
 microVM for that repository.
 The agent does not even have to be installed on the host: `sbx` alone is enough.
