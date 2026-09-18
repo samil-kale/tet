@@ -50,10 +50,6 @@
   --vscode-input-border: #191a21;
   --vscode-input-placeholderForeground: #6272a4;
 
-  --vscode-dropdown-background: #343746;
-  --vscode-dropdown-foreground: #f8f8f2;
-  --vscode-dropdown-border: #191a21;
-
   --vscode-button-background: #44475a;
   --vscode-button-foreground: #f8f8f2;
   /* Unset; the registry's is contrastBorder, set only in high contrast. */
@@ -64,7 +60,9 @@
   --vscode-button-secondaryForeground: #f8f8f2;
   --vscode-button-secondaryHoverBackground: #343746;
 
-  --vscode-editorWidget-background: #21222c;
+  /* The theme's is #21222c, which draws the dialogs darker than the editor behind them; the
+     theme's dropdown and menu background. */
+  --vscode-editorWidget-background: #343746;
   /* Unset; the theme's border. */
   --vscode-editorWidget-border: #191a21;
   /* Unset; the registry's. */

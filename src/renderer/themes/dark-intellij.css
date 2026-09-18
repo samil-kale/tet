@@ -54,10 +54,6 @@
   /* Unset; the registry's: the foreground at half its alpha. */
   --vscode-input-placeholderForeground: #cccccc80;
 
-  --vscode-dropdown-background: #393b40;
-  --vscode-dropdown-foreground: #dfe1e5;
-  --vscode-dropdown-border: #4f5156;
-
   --vscode-button-background: #3574f0;
   --vscode-button-foreground: #ffffff;
   --vscode-button-border: #4f5156;

@@ -46,7 +46,7 @@ button:focus-visible {
   outline-offset: -1px;
 }
 
-/* One box for fields and dropdowns: neither sets font, border or padding on its own. */
+/* One box for fields and dropdowns: a dropdown looks like a field but for its chevron. */
 input,
 textarea,
 .dropdown-trigger {
@@ -54,30 +54,33 @@ textarea,
   border-radius: 2px;
   outline: none;
   padding: 3px 6px;
-}
-
-input,
-textarea {
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border);
+}
+
+/* One height for every single-line field and dropdown, wherever it stands: a `.button`'s. */
+input[type="text"],
+input[type="password"],
+.dropdown-trigger {
+  height: 29px;
 }
 
 input::placeholder {
   color: var(--vscode-input-placeholderForeground);
 }
 
+/* A dropdown also while its list is open, and on a click's focus, not only the keyboard's. */
 input:focus,
-textarea:focus {
+textarea:focus,
+.dropdown-trigger:focus,
+.dropdown-trigger.open {
   border-color: var(--vscode-focusBorder);
 }
 
 /* Styled like a `<select>`: a native select's open list is drawn by Chrome, ignoring every color
    and :hover rule here (measured), so its highlighted row cannot be themed. */
 .dropdown-trigger {
-  color: var(--vscode-dropdown-foreground);
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border);
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -103,7 +106,7 @@ textarea:focus {
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  color: var(--vscode-dropdown-foreground);
+  color: var(--vscode-input-foreground);
 }
 
 /* Scrollbars: no arrows, no track, a translucent slider. A pane wanting none hides them itself. */
@@ -1365,9 +1368,11 @@ textarea:focus {
   color: var(--vscode-descriptionForeground);
 }
 
+/* The fields' height (input, .dropdown-trigger), so a button beside one reads level. */
 .button {
   display: inline-flex;
   align-items: center;
+  height: 29px;
   gap: 6px;
   padding: 5px 11px;
   border: 1px solid var(--vscode-button-border);
@@ -1410,7 +1415,8 @@ textarea:focus {
   max-width: calc(100vw - 32px);
   padding: 16px;
   font-size: 13px;
-  background: var(--vscode-editorWidget-background);
+  /* The panes' ground (.sidebar, .side-pane), not the editor widget's. */
+  background: var(--vscode-sideBar-background);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: 5px;
   box-shadow: 0 4px 12px var(--vscode-widget-shadow);
@@ -1523,7 +1529,7 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 26px;
+  height: 29px;
 }
 
 .sbx-port-row,
@@ -1542,35 +1548,31 @@ textarea:focus {
   margin-left: auto;
 }
 
-/* The path row's 26px (below), so the two kinds of row read level. */
 .sbx-port-input {
   width: 70px;
-  height: 26px;
   font-variant-numeric: tabular-nums;
 }
 
-/* Fills the row like .sbx-path-value; the 26px are the port and path rows'. */
+/* Fills the row like .sbx-path-value. */
 .sbx-host-input {
   flex: 1;
   min-width: 0;
-  height: 26px;
 }
 
-/* A secret's name and value, either side of its hosts (.sbx-host-input); the rows' 26px. */
+/* A secret's name and value, either side of its hosts (.sbx-host-input). */
 .sbx-secret-input {
   width: 140px;
-  height: 26px;
 }
 
 .sbx-arrow {
   color: var(--vscode-descriptionForeground);
 }
 
-/* Plain text, pinned to the row's 26px; a long path is cut, and whole in the title. */
+/* Plain text, pinned to the row's 29px; a long path is cut, and whole in the title. */
 .sbx-path-value {
   flex: 1;
   min-width: 0;
-  line-height: 26px;
+  line-height: 29px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1583,12 +1585,6 @@ textarea:focus {
   display: flex;
   flex: none;
   color: var(--vscode-errorForeground);
-}
-
-/* The dropdown button is shorter than an input; pinned to 26px so every row reads level. */
-.sbx-path-row .dropdown-trigger,
-.sbx-knowledge-row .dropdown-trigger {
-  height: 26px;
 }
 
 .sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail,
@@ -1749,11 +1745,6 @@ textarea:focus {
 
 .dialog-field span {
   color: var(--vscode-descriptionForeground);
-}
-
-/* Taller than a list's filter field, and only taller: the text keeps its 6px. */
-.dialog-field input {
-  padding: 5px 6px;
 }
 
 /* A prompt's color swatches, in the 24px of every action button. The colors themselves come from

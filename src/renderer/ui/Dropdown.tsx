@@ -36,7 +36,7 @@ export function Dropdown({ value, options, onChange }: DropdownProps) {
     <div className="select-field">
       <button
         type="button"
-        className="dropdown-trigger"
+        className={menu ? "dropdown-trigger open" : "dropdown-trigger"}
         onMouseDown={(event) => {
           event.stopPropagation();
           if (menu) {

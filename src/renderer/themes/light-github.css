@@ -50,10 +50,6 @@
   --vscode-input-border: #d0d7de;
   --vscode-input-placeholderForeground: #6e7781;
 
-  --vscode-dropdown-background: #ffffff;
-  --vscode-dropdown-foreground: #1f2328;
-  --vscode-dropdown-border: #d0d7de;
-
   --vscode-button-background: #1f883d;
   --vscode-button-foreground: #ffffff;
   /* Unset; the registry's is contrastBorder, set only in high contrast. */

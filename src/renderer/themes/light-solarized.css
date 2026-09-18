@@ -1,0 +1,163 @@
+/*
+ * "Light Solarized": Solarized Light. UI colors come from VS Code's own
+ * extensions/theme-solarized-light/themes/solarized-light-color-theme.json; token colors from the
+ * theme file as shiki ships it (@shikijs/themes/solarized-light). See dark-modern.css for the
+ * layer. A color the extension's theme leaves unset takes VS Code's registry fallback — what VS
+ * Code draws with this theme — or, for a border, the theme's own border color; each is marked
+ * below.
+ */
+:root[data-theme="light-solarized"] {
+  color-scheme: light;
+
+  /* Unset; the registry's. */
+  --vscode-foreground: #616161;
+  --vscode-descriptionForeground: #717171;
+  --vscode-errorForeground: #a1260d;
+  --vscode-textLink-foreground: #006ab1;
+  --vscode-focusBorder: #b49471;
+  /* Unset; the registry's is focusBorder. */
+  --vscode-sash-hoverBorder: #b49471;
+
+  --vscode-editor-background: #fdf6e3;
+  --vscode-editor-foreground: #657b83;
+  --vscode-terminal-background: #fdf6e3;
+  /* Unset; the registry's. */
+  --vscode-terminal-foreground: #333333;
+
+  --vscode-sideBar-background: #eee8d5;
+  /* Unset; the registry's is sideBar.foreground, unset too: the foreground. */
+  --vscode-sideBarSectionHeader-foreground: #616161;
+  --vscode-titleBar-activeBackground: #eee8d5;
+  /* Unset; the registry's. */
+  --vscode-titleBar-activeForeground: #333333;
+
+  /* Unset; the registry's is editor.background. */
+  --vscode-panel-background: #fdf6e3;
+  --vscode-panel-border: #ddd6c1;
+
+  --vscode-tab-activeBackground: #fdf6e3;
+  /* Unset; the registry's. */
+  --vscode-tab-activeForeground: #333333;
+  --vscode-tab-inactiveBackground: #d3cbb7;
+  --vscode-tab-inactiveForeground: #586e75;
+  --vscode-tab-border: #ddd6c1;
+
+  /* tet's own, the same as Dark Modern's — see the note there. */
+  --vscode-toolbar-hoverBackground: #5a5d5e50;
+
+  --vscode-list-activeSelectionBackground: #dfca88;
+  --vscode-list-activeSelectionForeground: #6c6c6c;
+  --vscode-list-hoverBackground: #dfca8844;
+
+  --vscode-input-background: #ddd6c1;
+  --vscode-input-foreground: #586e75;
+  /* Unset; the theme's border. */
+  --vscode-input-border: #ddd6c1;
+  --vscode-input-placeholderForeground: #586e75aa;
+
+  --vscode-button-background: #ac9d57;
+  /* Unset; the registry's. */
+  --vscode-button-foreground: #ffffff;
+  /* Unset; the registry's is contrastBorder, set only in high contrast. */
+  --vscode-button-border: #00000000;
+  /* Unset; the registry's: the button background darkened by 0.2. */
+  --vscode-button-hoverBackground: #8b7e45;
+  /* Unset; the registry's is the list hover. */
+  --vscode-button-secondaryBackground: #dfca8844;
+  /* Unset; the registry's is the foreground. */
+  --vscode-button-secondaryForeground: #616161;
+  /* Unset. Not the registry's lighten(0.2), which lightens the button into the dialog behind
+     it: the secondary background darkened by 0.1. */
+  --vscode-button-secondaryHoverBackground: #d7bd6c44;
+
+  --vscode-editorWidget-background: #eee8d5;
+  /* Unset; the theme's border. */
+  --vscode-editorWidget-border: #ddd6c1;
+  /* Unset; the registry's. */
+  --vscode-widget-shadow: #00000029;
+
+  /* Unset; the registry's is the dropdown. */
+  --vscode-menu-background: #eee8d5;
+  --vscode-menu-foreground: #616161;
+  /* Unset; the theme's border. */
+  --vscode-menu-border: #ddd6c1;
+  /* Unset; the registry's is the list selection. */
+  --vscode-menu-selectionBackground: #dfca88;
+  --vscode-menu-selectionForeground: #6c6c6c;
+  /* Unset; the registry's: the foreground at 0.2 alpha. */
+  --vscode-menu-separatorBackground: #61616133;
+
+  --vscode-progressBar-background: #b58900;
+
+  /* Unset; the registry's is the editor widget. */
+  --vscode-notifications-background: #eee8d5;
+  --vscode-notifications-foreground: #616161;
+  /* Unset; the theme's border. */
+  --vscode-notifications-border: #ddd6c1;
+  /* Unset; the registry's. */
+  --vscode-notificationsErrorIcon-foreground: #e51400;
+  --vscode-notificationsWarningIcon-foreground: #bf8803;
+  --vscode-notificationsInfoIcon-foreground: #0063d3;
+
+  /* Unset; the registry's. */
+  --vscode-scrollbarSlider-background: #64646466;
+  --vscode-scrollbarSlider-hoverBackground: #646464b3;
+  --vscode-scrollbarSlider-activeBackground: #00000099;
+
+  /* Unset; the git extension's. */
+  --vscode-gitDecoration-modifiedResourceForeground: #895503;
+  --vscode-gitDecoration-deletedResourceForeground: #ad0707;
+  --vscode-gitDecoration-untrackedResourceForeground: #007100;
+  --vscode-gitDecoration-addedResourceForeground: #587c0c;
+  --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
+
+  /* Unset; the registry's. */
+  --vscode-diffEditor-insertedLineBackground: #9bb95533;
+  --vscode-diffEditor-removedLineBackground: #ff000033;
+  --vscode-diffEditor-insertedTextBackground: #9ccc2c40;
+  --vscode-diffEditor-removedTextBackground: #ff000033;
+  /* Unset; the inserted text color at twice its alpha. */
+  --vscode-diffEditorOverview-insertedForeground: #9ccc2c80;
+  /* Unset; the removed text color at twice its alpha. */
+  --vscode-diffEditorOverview-removedForeground: #ff000066;
+  /* Unset; the registry's. */
+  --vscode-editorLineNumber-foreground: #237893;
+  --vscode-editorLineNumber-activeForeground: #567983;
+  --vscode-editorCursor-foreground: #657b83;
+  --vscode-editor-selectionBackground: #eee8d5;
+  /* Unset; the registry's: the selection at half its alpha. */
+  --vscode-editor-inactiveSelectionBackground: #eee8d580;
+  /* The theme's lineHighlightBackground, as the border tet draws it with. */
+  --vscode-editor-lineHighlightBorder: #eee8d5;
+  /* Unset; the registry's. */
+  --vscode-editor-findMatchBackground: #a8ac94;
+  --vscode-editor-findMatchHighlightBackground: #ea5c0055;
+  /* Unset; the theme's editorIndentGuide.background. */
+  --vscode-editorIndentGuide-background1: #586e7580;
+  /* Unset; the theme's editorIndentGuide.activeBackground. */
+  --vscode-editorIndentGuide-activeBackground1: #081e2580;
+
+  /* Unset; the registry's is the terminal foreground. */
+  --vscode-terminalCursor-foreground: #333333;
+  /* Unset; the registry's is the editor selection. */
+  --vscode-terminal-selectionBackground: #eee8d5;
+  /* Unset; the registry's: the selection at half its alpha. */
+  --vscode-terminal-inactiveSelectionBackground: #eee8d580;
+
+  --vscode-terminal-ansiBlack: #073642;
+  --vscode-terminal-ansiRed: #dc322f;
+  --vscode-terminal-ansiGreen: #859900;
+  --vscode-terminal-ansiYellow: #b58900;
+  --vscode-terminal-ansiBlue: #268bd2;
+  --vscode-terminal-ansiMagenta: #d33682;
+  --vscode-terminal-ansiCyan: #2aa198;
+  --vscode-terminal-ansiWhite: #eee8d5;
+  --vscode-terminal-ansiBrightBlack: #002b36;
+  --vscode-terminal-ansiBrightRed: #cb4b16;
+  --vscode-terminal-ansiBrightGreen: #586e75;
+  --vscode-terminal-ansiBrightYellow: #657b83;
+  --vscode-terminal-ansiBrightBlue: #839496;
+  --vscode-terminal-ansiBrightMagenta: #6c71c4;
+  --vscode-terminal-ansiBrightCyan: #93a1a1;
+  --vscode-terminal-ansiBrightWhite: #fdf6e3;
+}

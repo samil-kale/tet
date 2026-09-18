@@ -25,6 +25,13 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
   "github-light-default": () => import("@shikijs/themes/github-light-default"),
   dracula: () => import("@shikijs/themes/dracula"),
+  "laserwave": () => import("@shikijs/themes/laserwave"),
+  "monokai": () => import("@shikijs/themes/monokai"),
+  "night-owl": () => import("@shikijs/themes/night-owl"),
+  "one-light": () => import("@shikijs/themes/one-light"),
+  "snazzy-light": () => import("@shikijs/themes/snazzy-light"),
+  "solarized-light": () => import("@shikijs/themes/solarized-light"),
+  "vitesse-light": () => import("@shikijs/themes/vitesse-light"),
   // A JSON import is typed literally, and one color here is an array ThemeRegistration rejects.
   "dark-slate": () => import("../themes/dark-slate.json") as unknown as Promise<{ default: ThemeRegistration }>,
   "dark-intellij": () => import("../themes/dark-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>,

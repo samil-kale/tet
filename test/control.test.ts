@@ -371,9 +371,16 @@ describe("tet-ctl against the control server", () => {
       "dark-github:dark",
       "dark-intellij:dark",
       "dark-dracula:dark",
+      "dark-laserwave:dark",
+      "dark-monokai:dark",
+      "dark-night-owl:dark",
       "light-modern:light",
       "light-github:light",
-      "light-intellij:light"
+      "light-intellij:light",
+      "light-one:light",
+      "light-snazzy:light",
+      "light-solarized:light",
+      "light-vitesse:light"
     ]);
   });
 

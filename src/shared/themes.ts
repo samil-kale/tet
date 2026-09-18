@@ -16,7 +16,14 @@ export interface ThemeDefinition {
     | "dark-slate"
     | "dark-intellij"
     | "dracula"
-    | "light-intellij";
+    | "laserwave"
+    | "monokai"
+    | "night-owl"
+    | "light-intellij"
+    | "one-light"
+    | "snazzy-light"
+    | "solarized-light"
+    | "vitesse-light";
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
   /** BrowserWindow paint and Windows title-bar overlay, set before the CSS exists — kept in step
@@ -81,6 +88,36 @@ export const THEMES: ThemeDefinition[] = [
     terminalForeground: "#f8f8f2"
   },
   {
+    id: "dark-laserwave",
+    label: "LaserWave",
+    shikiTheme: "laserwave",
+    kind: "dark",
+    windowBackground: "#27212e",
+    titleBarSymbolColor: "#cccccc",
+    terminalBackground: "#27212e",
+    terminalForeground: "#cccccc"
+  },
+  {
+    id: "dark-monokai",
+    label: "Monokai",
+    shikiTheme: "monokai",
+    kind: "dark",
+    windowBackground: "#1e1f1c",
+    titleBarSymbolColor: "#cccccc",
+    terminalBackground: "#272822",
+    terminalForeground: "#cccccc"
+  },
+  {
+    id: "dark-night-owl",
+    label: "Night Owl",
+    shikiTheme: "night-owl",
+    kind: "dark",
+    windowBackground: "#011627",
+    titleBarSymbolColor: "#eeefff",
+    terminalBackground: "#011627",
+    terminalForeground: "#cccccc"
+  },
+  {
     id: "light-modern",
     label: "Modern",
     shikiTheme: "light-plus",
@@ -109,6 +146,46 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#e7ebed",
     terminalBackground: "#ffffff",
     terminalForeground: "#000000"
+  },
+  {
+    id: "light-one",
+    label: "One",
+    shikiTheme: "one-light",
+    kind: "light",
+    windowBackground: "#eaeaeb",
+    titleBarSymbolColor: "#424243",
+    terminalBackground: "#fafafa",
+    terminalForeground: "#333333"
+  },
+  {
+    id: "light-snazzy",
+    label: "Snazzy",
+    shikiTheme: "snazzy-light",
+    kind: "light",
+    windowBackground: "#f3f4f5",
+    titleBarSymbolColor: "#333333",
+    terminalBackground: "#fafbfc",
+    terminalForeground: "#333333"
+  },
+  {
+    id: "light-solarized",
+    label: "Solarized",
+    shikiTheme: "solarized-light",
+    kind: "light",
+    windowBackground: "#eee8d5",
+    titleBarSymbolColor: "#333333",
+    terminalBackground: "#fdf6e3",
+    terminalForeground: "#333333"
+  },
+  {
+    id: "light-vitesse",
+    label: "Vitesse",
+    shikiTheme: "vitesse-light",
+    kind: "light",
+    windowBackground: "#ffffff",
+    titleBarSymbolColor: "#4e4f47",
+    terminalBackground: "#ffffff",
+    terminalForeground: "#393a34"
   }
 ];
 
