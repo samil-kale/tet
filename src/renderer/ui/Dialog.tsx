@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DialogFrame } from "./DialogFrame";
-import { CloseIcon, PinIcon, SparkleIcon, SpinnerIcon } from "./icons";
+import { SparkleIcon, SpinnerIcon } from "./icons";
 import { notify } from "./Notices";
 
 export interface ConfirmOptions {
@@ -19,25 +19,6 @@ export interface ConfirmAnswer {
   confirmed: boolean;
   /** Whether the checkbox was ticked; always false when the question had none. */
   checked: boolean;
-}
-
-export interface PromptHistoryLists {
-  /** Pin order is display order. */
-  pinned: string[];
-  /** Newest first. */
-  recent: string[];
-}
-
-/**
- * Past answers for a prompt's field, per project (`commit-history.ts`), shown under it once clicked
- * in. The callbacks persist at once
- * and return the updated lists, so housekeeping survives a Cancel.
- */
-export interface PromptHistory extends PromptHistoryLists {
-  /** Pin limit; the pin buttons disable there rather than ask. */
-  maxPinned: number;
-  onDelete: (text: string) => PromptHistoryLists;
-  onTogglePin: (text: string) => PromptHistoryLists;
 }
 
 export interface PromptOptions {
@@ -67,8 +48,6 @@ export interface PromptOptions {
   wide?: boolean;
   /** A yes/no under the fields, e.g. the push after a commit. See ConfirmOptions. */
   checkboxLabel?: string;
-  /** Past answers under the field. See PromptHistory. */
-  history?: PromptHistory;
   /** An async way to fill the answer's field, shown as a wand beside it. */
   suggestion?: {
     title: string;
@@ -214,65 +193,6 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
   );
 }
 
-/**
- * Asked first by `Dialogs`' Escape handler while a history dropdown is open, so one press closes
- * the dropdown and the next cancels. A claim, not a second listener: listener registration order
- * is no ordering to rely on.
- */
-let claimEscape: (() => boolean) | null = null;
-
-function HistoryDropdown({
-  history,
-  lists,
-  onPick,
-  onLists
-}: {
-  history: PromptHistory;
-  lists: PromptHistoryLists;
-  onPick: (text: string) => void;
-  onLists: (next: PromptHistoryLists) => void;
-}) {
-  const atCap = lists.pinned.length >= history.maxPinned;
-  const row = (text: string, pinned: boolean) => (
-    // The row is the pick; its buttons stop the click. `type="button"`, or they submit the form.
-    <div key={(pinned ? "p:" : "r:") + text} className="dialog-history-row" title={text} onClick={() => onPick(text)}>
-      <span className="dialog-history-text">{text}</span>
-      <button
-        type="button"
-        className={pinned ? "icon-button pinned" : "icon-button"}
-        title={pinned ? "Unpin" : atCap ? "Unpin a message first" : "Pin"}
-        disabled={!pinned && atCap}
-        onClick={(event) => {
-          event.stopPropagation();
-          onLists(history.onTogglePin(text));
-        }}
-      >
-        <PinIcon />
-      </button>
-      <button
-        type="button"
-        className="icon-button"
-        title="Delete"
-        onClick={(event) => {
-          event.stopPropagation();
-          onLists(history.onDelete(text));
-        }}
-      >
-        <CloseIcon />
-      </button>
-    </div>
-  );
-  return (
-    // Preventing mousedown keeps focus in the field; a mousedown elsewhere blurs it, closing the
-    // dropdown.
-    <div className="dialog-history" onMouseDown={(event) => event.preventDefault()}>
-      {lists.pinned.map((text) => row(text, true))}
-      {lists.pinned.length > 0 && lists.recent.length > 0 && <div className="dialog-history-separator" />}
-      {lists.recent.map((text) => row(text, false))}
-    </div>
-  );
-}
-
 function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }> }) {
   const [value, setValue] = useState(dialog.value);
   const [extras, setExtras] = useState<string[]>(() => (dialog.extras ?? []).map((field) => field.value ?? ""));
@@ -280,39 +200,11 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const [checked, setChecked] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const field = useRef<HTMLInputElement>(null);
-  // Seeded once: the options are frozen in `pending`, so the callbacks hand the lists back.
-  const [lists, setLists] = useState<PromptHistoryLists>(() => ({
-    pinned: dialog.history?.pinned ?? [],
-    recent: dialog.history?.recent ?? []
-  }));
-  const [open, setOpen] = useState(false);
-  const openRef = useRef(false);
-  // False during the mount effect's own focus, so the dropdown waits for the user's click.
-  const interactive = useRef(false);
 
-  // Focus and select the first field once on mount; per render would swallow keystrokes. The flag
-  // is set after, since `focus()` fires its event synchronously.
+  // Focus and select the first field once on mount; per render would swallow keystrokes.
   useEffect(() => {
     field.current?.focus();
     field.current?.select();
-    interactive.current = true;
-  }, []);
-
-  useEffect(() => {
-    openRef.current = open;
-  }, [open]);
-
-  useEffect(() => {
-    claimEscape = () => {
-      if (!openRef.current) {
-        return false;
-      }
-      setOpen(false);
-      return true;
-    };
-    return () => {
-      claimEscape = null;
-    };
   }, []);
 
   const suggest = async (): Promise<void> => {
@@ -320,7 +212,6 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       return;
     }
     setSuggesting(true);
-    setOpen(false);
     try {
       const suggested = (await dialog.suggestion.run()).trim();
       if (suggested.length > 0) {
@@ -351,49 +242,15 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       />
     </label>
   ));
-  const hasEntries = lists.pinned.length + lists.recent.length > 0;
   const input = (
     <input
       type="text"
       value={value}
       maxLength={dialog.maxLength}
       disabled={suggesting}
-      // The dropdown shows only while the field is empty.
-      onChange={(event) => {
-        setValue(event.target.value);
-        setOpen(event.target.value.length === 0 && hasEntries);
-      }}
-      // Mousedown, not click: it reopens after an Escape left the field focused, and the wrapping
-      // label forwards clicks on the rows as synthetic *clicks*, which must not reopen after a pick.
-      onMouseDown={dialog.history && (() => value.length === 0 && hasEntries && setOpen(true))}
-      onFocus={dialog.history && (() => interactive.current && value.length === 0 && hasEntries && setOpen(true))}
-      onBlur={dialog.history && (() => setOpen(false))}
+      onChange={(event) => setValue(event.target.value)}
       ref={field}
     />
-  );
-  // The dropdown's anchor wraps the field alone; the suggest button sits one level up.
-  const anchored = dialog.history ? (
-    <div className="dialog-history-anchor">
-      {input}
-      {open && hasEntries && (
-        <HistoryDropdown
-          history={dialog.history}
-          lists={lists}
-          onPick={(text) => {
-            setValue(text);
-            setOpen(false);
-          }}
-          onLists={(next) => {
-            setLists(next);
-            if (next.pinned.length + next.recent.length === 0) {
-              setOpen(false);
-            }
-          }}
-        />
-      )}
-    </div>
-  ) : (
-    input
   );
   fields.splice(
     dialog.valueIndex ?? 0,
@@ -404,7 +261,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
         // Paired like a path field and its Browse button; the spinner replaces the wand while
         // suggesting.
         <div className="dialog-field-row">
-          {anchored}
+          {input}
           <button
             type="button"
             className="button secondary dialog-suggest"
@@ -417,7 +274,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
           </button>
         </div>
       ) : (
-        anchored
+        input
       )}
     </label>
   );
@@ -477,10 +334,6 @@ export function Dialogs() {
         // `stopPropagation` does not stop listeners on the same node.
         event.preventDefault();
         event.stopPropagation();
-        // An open history dropdown takes the press first.
-        if (claimEscape?.()) {
-          return;
-        }
         if (dialog.kind === "confirm") {
           dialog.answer({ confirmed: false, checked: false });
         } else {

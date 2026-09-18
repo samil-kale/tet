@@ -16,9 +16,6 @@ export interface ThemeDefinition {
     | "dark-slate"
     | "dark-intellij"
     | "dracula"
-    | "laserwave"
-    | "monokai"
-    | "night-owl"
     | "light-intellij"
     | "one-light"
     | "snazzy-light"
@@ -86,36 +83,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#f8f8f2",
     terminalBackground: "#282a36",
     terminalForeground: "#f8f8f2"
-  },
-  {
-    id: "dark-laserwave",
-    label: "LaserWave",
-    shikiTheme: "laserwave",
-    kind: "dark",
-    windowBackground: "#27212e",
-    titleBarSymbolColor: "#cccccc",
-    terminalBackground: "#27212e",
-    terminalForeground: "#cccccc"
-  },
-  {
-    id: "dark-monokai",
-    label: "Monokai",
-    shikiTheme: "monokai",
-    kind: "dark",
-    windowBackground: "#1e1f1c",
-    titleBarSymbolColor: "#cccccc",
-    terminalBackground: "#272822",
-    terminalForeground: "#cccccc"
-  },
-  {
-    id: "dark-night-owl",
-    label: "Night Owl",
-    shikiTheme: "night-owl",
-    kind: "dark",
-    windowBackground: "#011627",
-    titleBarSymbolColor: "#eeefff",
-    terminalBackground: "#011627",
-    terminalForeground: "#cccccc"
   },
   {
     id: "light-modern",

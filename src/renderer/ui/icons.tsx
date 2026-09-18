@@ -140,29 +140,6 @@ export function CloseIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `pin`, vendored the same way, `SMALLER` like the x. Tall, so the long-side cap:
- *  measured 16 by 22 (stroke included), extent 20.23 becomes 23.91, centered at (12, 12). CSS
- *  draws the pinned state: `fill: currentColor` on `.pinned` beats the `fill="none"` attribute. */
-export function PinIcon(props: IconProps) {
-  return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.23 / SMALLER, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.23 / SMALLER, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 17v5" />
-      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
-    </svg>
-  );
-}
-
 /** Lucide's `shield`, vendored the same way — a project sandboxed by sbx. Tall, so the long-side
  *  cap: measured 18 by 22 (stroke included), extent 20.23, centered at (12, 12). Full size: it
  *  stands beside the session marks in the project row. */

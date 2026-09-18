@@ -89,6 +89,20 @@ textarea:focus,
   padding-right: 26px;
 }
 
+/* ActionLink: an action in the theme's link colour, underlined on hover as VS Code's links. Sized
+   to its text, never stretched by a column. */
+.action-link {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.action-link:hover {
+  text-decoration: underline;
+}
+
 /* Anchors `.select-arrow` over the dropdown's right edge. */
 .select-field {
   position: relative;
@@ -1630,18 +1644,6 @@ textarea:focus,
   gap: 12px;
 }
 
-.sbx-add-row {
-  align-self: flex-start;
-  margin-top: 4px;
-  color: var(--vscode-textLink-foreground);
-  font-size: 12px;
-  padding: 0;
-}
-
-.sbx-add-row:hover {
-  text-decoration: underline;
-}
-
 .dialog-body {
   display: flex;
   flex-direction: column;
@@ -1669,12 +1671,13 @@ textarea:focus,
 
 .dialog-checkbox input {
   accent-color: var(--vscode-focusBorder);
-  /* Chrome's own box, stated so the offset is arithmetic. The 10 is not the box: centring the
-     real 13 sits high, the line box holding descender space. Measured in the running app;
-     re-check if the font changes. */
-  width: 13px;
-  height: 13px;
-  margin-top: calc((1lh - 10px) / 2);
+  /* Stated so the offset is arithmetic. The 13 is not the box: centring the real 16 sits high,
+     the line box holding descender space, 3px by measurement at Chrome's own 13. Re-check if the
+     font changes. */
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: calc((1lh - 13px) / 2);
 }
 
 /* Fixed: switching tabs must not resize the dialog under the pointer. Taller than the switches
@@ -1775,66 +1778,6 @@ textarea:focus,
 .dialog-color.selected {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 1px;
-}
-
-/* The prompt's history dropdown, inside the dialog's DOM: the overlay is its own stacking
-   context (z-index 30), so anything beside it paints behind. */
-.dialog-history-anchor {
-  position: relative;
-  display: flex;
-}
-
-.dialog-history-anchor input {
-  flex: 1;
-  min-width: 0;
-}
-
-.dialog-history {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  z-index: 1;
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 4px 0;
-  background: var(--vscode-editorWidget-background);
-  border: 1px solid var(--vscode-editorWidget-border);
-  border-radius: 5px;
-  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
-}
-
-.dialog-history-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 4px 0 8px;
-  cursor: pointer;
-}
-
-/* A row, so the list hover; its pin and x are `.icon-button`s with the toolbar one. */
-.dialog-history-row:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.dialog-history-text {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dialog-history-separator {
-  height: 0;
-  margin: 4px 0;
-  border-bottom: 1px solid var(--vscode-menu-separatorBackground);
-}
-
-/* Filled means pinned; the class beats the svg's own fill="none" attribute. */
-.dialog-history-row .icon-button.pinned svg {
-  fill: currentColor;
 }
 
 .button:disabled {
@@ -2046,12 +1989,6 @@ textarea:focus,
 }
 
 .dialog-field-row input {
-  flex: 1;
-  min-width: 0;
-}
-
-/* The anchor takes the input's place in the row, so the list stops where the field does. */
-.dialog-field-row .dialog-history-anchor {
   flex: 1;
   min-width: 0;
 }

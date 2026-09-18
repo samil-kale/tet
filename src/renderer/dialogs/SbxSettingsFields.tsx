@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
 import { CircleAlertIcon, CloseIcon } from "../ui/icons";
+import { ActionLink } from "../ui/ActionLink";
 import { Dropdown } from "../ui/Dropdown";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
@@ -342,13 +343,11 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
             );
           })}
         </div>
-        <button
-          type="button"
-          className="sbx-add-row"
+        <ActionLink
           onClick={() => update("ports", (ports) => [...ports, withId({ host: "", container: "" })])}
         >
           + Add port
-        </button>
+        </ActionLink>
       </div>
     );
   }
@@ -384,16 +383,14 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
           ))}
         </div>
         <div className="sbx-add-paths">
-          <button
-            type="button"
-            className="sbx-add-row"
+          <ActionLink
             onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox"))}
           >
             + Add folder
-          </button>
-          <button type="button" className="sbx-add-row" onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>
+          </ActionLink>
+          <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>
             + Add file
-          </button>
+          </ActionLink>
         </div>
       </div>
     );
@@ -454,13 +451,11 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
             );
           })}
         </div>
-        <button
-          type="button"
-          className="sbx-add-row"
+        <ActionLink
           onClick={() => update("secrets", (secrets) => [...secrets, withId({ env: "", hosts: "", value: "" })])}
         >
           + Add secret
-        </button>
+        </ActionLink>
       </div>
     );
   }
@@ -493,9 +488,9 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
           </div>
         ))}
       </div>
-      <button type="button" className="sbx-add-row" onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>
+      <ActionLink onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>
         + Add host
-      </button>
+      </ActionLink>
     </div>
   );
 }

@@ -3,13 +3,6 @@ import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryStat
 import { absolutePath, revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
-import {
-  MAX_PINNED,
-  deleteCommitMessage,
-  loadCommitHistory,
-  recordCommitMessage,
-  toggleCommitPin
-} from "./commit-history";
 
 /** Runs a file action; the owner shows it running on its own bar. */
 export type FileAct = (action: () => Promise<GitActionResult>) => void;
@@ -90,7 +83,7 @@ export async function askCommit(
         : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
     value: "",
     confirmLabel: "Commit",
-    // The saved commands' width: 420px shows too little of the suggest row and history list.
+    // The saved commands' width: 420px shows too little of the suggest row.
     wide: true,
     suggestion: {
       title: "Suggest a commit message",
@@ -101,17 +94,9 @@ export async function askCommit(
       ? state.upstream === undefined
         ? `Also push ${state.head} to ${remote} and track it`
         : `Also push to ${state.upstream}`
-      : undefined,
-    history: {
-      ...loadCommitHistory(project.id),
-      maxPinned: MAX_PINNED,
-      onDelete: (text) => deleteCommitMessage(project.id, text),
-      onTogglePin: (text) => toggleCommitPin(project.id, text)
-    }
+      : undefined
   });
   if (answer) {
-    // On submit, not success: a failed commit's message is worth having again.
-    recordCommitMessage(project.id, answer.value);
     act(async () => {
       const committed = await (paths
         ? window.tet.repository.commitPaths(project.id, answer.value, paths)
