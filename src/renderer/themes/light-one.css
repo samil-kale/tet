@@ -56,6 +56,11 @@
   /* Unset; the registry's: the foreground at half its alpha. */
   --vscode-input-placeholderForeground: #61616180;
 
+  /* Unset; the registry's is the dropdown's: the theme's, the foreground the registry's. */
+  --vscode-checkbox-background: #ffffff;
+  --vscode-checkbox-border: #dbdbdc;
+  --vscode-checkbox-foreground: #616161;
+
   --vscode-button-background: #5871ef;
   --vscode-button-foreground: #ffffff;
   /* Unset; the registry's is contrastBorder, set only in high contrast. */

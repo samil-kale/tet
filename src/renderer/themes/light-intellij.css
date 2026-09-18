@@ -53,6 +53,11 @@
   --vscode-input-border: #ebecf0;
   --vscode-input-placeholderForeground: #61616180;
 
+  /* Unset; the registry's is the dropdown's, unset too: the registry's. */
+  --vscode-checkbox-background: #ffffff;
+  --vscode-checkbox-border: #cecece;
+  --vscode-checkbox-foreground: #616161;
+
   /* Unset; the registry's: hover the background darkened by 0.2, the secondary button the list
      hover and the foreground. */
   --vscode-button-background: #007acc;

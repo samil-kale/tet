@@ -50,6 +50,11 @@
   --vscode-input-border: #191a21;
   --vscode-input-placeholderForeground: #6272a4;
 
+  /* Unset; the registry's is the dropdown's. */
+  --vscode-checkbox-background: #343746;
+  --vscode-checkbox-border: #191a21;
+  --vscode-checkbox-foreground: #f8f8f2;
+
   --vscode-button-background: #44475a;
   --vscode-button-foreground: #f8f8f2;
   /* Unset; the registry's is contrastBorder, set only in high contrast. */

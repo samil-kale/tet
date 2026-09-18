@@ -1669,8 +1669,12 @@ textarea:focus,
   cursor: pointer;
 }
 
+/* Drawn by tet, as VS Code's checkbox widget: Chrome's own box takes only light or dark, never a
+   theme's colors. A radio is the same box, round. */
 .dialog-checkbox input {
-  accent-color: var(--vscode-focusBorder);
+  appearance: none;
+  display: grid;
+  place-content: center;
   /* Stated so the offset is arithmetic. The 13 is not the box: centring the real 16 sits high,
      the line box holding descender space, 3px by measurement at Chrome's own 13. Re-check if the
      font changes. */
@@ -1678,6 +1682,45 @@ textarea:focus,
   height: 16px;
   flex: none;
   margin-top: calc((1lh - 13px) / 2);
+  padding: 0;
+  background: var(--vscode-checkbox-background);
+  border: 1px solid var(--vscode-checkbox-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.dialog-checkbox input[type="radio"] {
+  border-radius: 50%;
+}
+
+/* Not the fields' focus border on a click: only the keyboard's, as a button's. */
+.dialog-checkbox input:focus {
+  border-color: var(--vscode-checkbox-border);
+}
+
+.dialog-checkbox input:focus-visible {
+  border-color: var(--vscode-focusBorder);
+}
+
+/* Lucide's `check`, as a mask so it takes the theme's color. */
+.dialog-checkbox input[type="checkbox"]:checked::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  background: var(--vscode-checkbox-foreground);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+/* The dot is a circle drawn in a mask over the whole inside, so it is centred by the SVG, not by
+   layout: a 6px box rounds apart from the border under display scaling and sits off centre. */
+.dialog-checkbox input[type="radio"]:checked::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: var(--vscode-checkbox-foreground);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='3'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 
 /* Fixed: switching tabs must not resize the dialog under the pointer. Taller than the switches
