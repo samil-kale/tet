@@ -75,9 +75,23 @@ straight into an agent session.
 
 ---
 
+## Worktrees for parallel work
+
+Yes, yes... of course it supports worktrees. Why wouldn't it?
+Create a Git worktree from TET when you want an agent to work on a separate branch without
+disturbing your current files. The worktree opens as its own project, with its own agent and shell
+tabs, while remaining grouped under the main repository in the sidebar.
+
+TET treats the worktree and its branch as one: create, rename and delete them together, then merge
+the branch back into the branch it started from. Worktrees live under `~/.tet/worktrees`, outside
+your repository, so parallel tasks stay separate without extra clones.
+
+---
+
 ## First-class SBX support ([Docker Sandboxes](https://docs.docker.com/ai/sandboxes/))
 
-Enable SBX for a project and Claude Code, Codex, OpenCode and
+For when you're paranoid — or the company you work for is — enable SBX for a project and Claude
+Code, Codex, OpenCode and
 Pi each run in a persistent, isolated microVM for that repository. 
 The agent does not even have to be installed on the host: `sbx` alone is enough.
 
