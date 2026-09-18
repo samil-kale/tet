@@ -10,6 +10,7 @@ import * as gitModule from "../src/main/git/git";
 import type { GitRequest, GitResponse } from "../src/main/git/git-host";
 import { RepositoryManager } from "../src/main/git/repository";
 import { deleteWorktree, ProjectStore, renameWorktree, type ProjectDeps } from "../src/main/projects";
+import { SbxSecretStore } from "../src/main/sbx-secrets";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import type { Project } from "../src/shared/types";
 
@@ -113,6 +114,7 @@ async function open(folders: string[], onClose: (project: Project) => void = () 
       open: () => undefined
     } as unknown as SessionManagerRegistry,
     records: { forgetProject: () => undefined } as unknown as ControlRecords,
+    sbxSecrets: new SbxSecretStore(dataRoot),
     openProject: (project) => void repositories.open(project),
     dataRoot,
     projectsChanged: (change) => changes.push(change)
@@ -193,5 +195,25 @@ describe("a worktree renamed to the folder it already has", () => {
     assert.deepEqual(result, { ok: true });
     assert.ok(fs.readdirSync(path.dirname(repo.at("lower"))).includes("Lower"));
     assert.equal(git(repo.at("Lower"), "branch", "--show-current"), "Lower");
+  });
+
+  it("carries its secret values over to the project reopened under a new id, and a delete drops them", async () => {
+    const repo = repositoryWithWorktrees(["old-name"]);
+    const { deps, store } = await open([repo.main, repo.at("old-name")]);
+    // By name: the store keeps a folder in on-disk spelling (projects.ts's onDisk).
+    const named = (name: string) => store.list().find((project) => path.basename(project.path) === name);
+    const before = named("old-name");
+    assert.ok(before);
+    // Stored as the store keeps them, so no OS encryption is needed here.
+    deps.sbxSecrets.restore(before.id, { GITLAB_TOKEN: "encrypted-value" });
+    assert.deepEqual(await renameWorktree(deps, { path: repo.at("old-name"), mainPath: repo.main }, "new-name"), { ok: true });
+    const after = named("new-name");
+    assert.ok(after && after.id !== before.id, "reopened as a new project");
+    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), { GITLAB_TOKEN: "encrypted-value" });
+    assert.deepEqual(deps.sbxSecrets.encrypted(before.id), {}, "the old id keeps nothing");
+    assert.deepEqual(await deleteWorktree(deps, { path: repo.at("new-name"), mainPath: repo.main }, { force: true, onRemote: false }), {
+      ok: true
+    });
+    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), {}, "a deleted worktree's values go");
   });
 });

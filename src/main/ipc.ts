@@ -42,6 +42,7 @@ import {
   runSbxLogin,
   saveSbxConfig
 } from "./sbx";
+import type { SbxSecretStore } from "./sbx-secrets";
 import { PROVIDERS } from "./providers";
 import type { AccountStore } from "./providers/accounts";
 import type { ControlRecords } from "./control/control-records";
@@ -65,6 +66,7 @@ export interface IpcDeps {
   store: ProjectStore;
   settings: SettingsStore;
   accounts: AccountStore;
+  sbxSecrets: SbxSecretStore;
   repositories: RepositoryManager;
   sessions: SessionManagerRegistry;
   /** The window's reports for the control verbs. */
@@ -124,6 +126,7 @@ export function registerIpc({
   store,
   settings,
   accounts,
+  sbxSecrets,
   repositories,
   sessions,
   records,
@@ -177,28 +180,42 @@ export function registerIpc({
     const project = store.get(projectId);
     return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
-  // Writes tet.json; notices for the sandboxes saveSbxConfig removed, an error for ports sbx refused.
-  ipcMain.handle("sbx:save-config", async (_event, projectId: string, request: SbxProjectConfig): Promise<GitActionResult> => {
-    const project = store.get(projectId);
-    if (!project) {
-      return { ok: false, error: MISSING_REPOSITORY.error };
-    }
-    try {
-      const { removed, portFailures } = await saveSbxConfig(project.path, project.id, request);
-      for (const agentId of removed) {
-        const message = request.enabled
-          ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
-          : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
-        send("app:notice", { severity: "info", message });
+  // The Secrets rows holding a value on this machine; never the values.
+  ipcMain.handle("sbx:stored-secrets", (_event, projectId: string): string[] => sbxSecrets.stored(projectId));
+  // Stores the typed secret values first, so a machine without a keyring changes nothing; then
+  // writes tet.json. Notices for the sandboxes saveSbxConfig removed, an error for what sbx refused.
+  ipcMain.handle(
+    "sbx:save-config",
+    async (_event, projectId: string, request: SbxProjectConfig, secretValues: Record<string, string>): Promise<GitActionResult> => {
+      const project = store.get(projectId);
+      if (!project) {
+        return { ok: false, error: MISSING_REPOSITORY.error };
       }
-      if (portFailures.length > 0) {
-        return { ok: false, error: `Saved, but not applied: ${portFailures.join(" ")}` };
+      try {
+        sbxSecrets.update(project.id, secretValues, request.secrets.map((secret) => secret.env));
+        const { removed, portFailures, secretFailures } = await saveSbxConfig(
+          project.path,
+          project.id,
+          request,
+          sbxSecrets.values(project.id),
+          new Set(Object.keys(secretValues))
+        );
+        for (const agentId of removed) {
+          const message = request.enabled
+            ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
+            : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
+          send("app:notice", { severity: "info", message });
+        }
+        const failures = [...portFailures, ...secretFailures];
+        if (failures.length > 0) {
+          return { ok: false, error: `Saved, but not applied: ${failures.join(" ")}` };
+        }
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
       }
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
-  });
+  );
 
   ipcMain.on("app:long-task", (_event, ms: number, context: string) => {
     if (typeof ms === "number" && Number.isFinite(ms)) {
@@ -262,6 +279,7 @@ export function registerIpc({
     repositories,
     sessions,
     records,
+    sbxSecrets,
     openProject,
     dataRoot,
     projectsChanged: (change: { added?: string; removed?: string }) =>

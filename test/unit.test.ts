@@ -9,6 +9,7 @@ import { ControlRecords } from "../src/main/control/control-records";
 import { tabControlToken } from "../src/main/control/control-token";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { relativeInside } from "../src/main/path-inside";
+import { SbxSecretStore } from "../src/main/sbx-secrets";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
@@ -28,7 +29,7 @@ describe("a turn's toast", () => {
     const settings = new SettingsStore(root);
     settings.save({ ...settings.get(), notifications: { finished: true, needsYou: true, idleReminder: true } });
     let pushed: TerminalDescriptor[] = [];
-    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, settings, {
+    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, settings, new SbxSecretStore(root), {
       onTabs: (_projectId, tabs) => (pushed = tabs),
       onOutput: () => undefined,
       onStatus: () => undefined,
@@ -74,7 +75,7 @@ describe("a tab's reported session", () => {
     // An empty PATH: Claude's version check fails, so nothing is set up, listed or spawned.
     const originalPath = process.env.PATH;
     process.env.PATH = path.join(root, "empty");
-    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, new SettingsStore(root), {
+    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, new SettingsStore(root), new SbxSecretStore(root), {
       onTabs: () => undefined,
       onOutput: () => undefined,
       onStatus: () => undefined,
@@ -108,7 +109,7 @@ describe("a tab of a missing agent", () => {
     process.env.PATH = path.join(root, "empty");
     const statuses: string[] = [];
     const notices: string[] = [];
-    const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), {
+    const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), new SbxSecretStore(root), {
       onTabs: () => undefined,
       onOutput: () => undefined,
       onStatus: (_projectId, _tabId, status) => statuses.push(status),

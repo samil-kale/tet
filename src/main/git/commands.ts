@@ -14,7 +14,8 @@ import type {
   SbxPath,
   SbxKnowledgeConfig,
   SbxPort,
-  SbxProjectConfig
+  SbxProjectConfig,
+  SbxSecret
 } from "../../shared/types";
 
 /** A project's saved commands and Explorer view, in its own root so it travels with the repository.
@@ -347,6 +348,26 @@ function toSbxHosts(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean);
 }
 
+/** A row needs an env name and a host; hosts trimmed as toSbxHosts, a repeated env name dropped —
+ *  sbx refuses a second secret for one (measured, 0.42.1). */
+function toSbxSecrets(value: unknown): SbxSecret[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const secrets: SbxSecret[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const { env, hosts } = entry as { env?: unknown; hosts?: unknown };
+    const trimmedHosts = toSbxHosts(hosts);
+    if (typeof env === "string" && env.trim() && trimmedHosts.length > 0 && !secrets.some((secret) => secret.env === env.trim())) {
+      secrets.push({ env: env.trim(), hosts: trimmedHosts });
+    }
+  }
+  return secrets;
+}
+
 /** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path
  *  means nothing on another OS, so readSbxConfig reads and writeSbxConfig replaces only this
  *  platform's rows. A `~/…` row carries no `os` and applies everywhere. */
@@ -390,9 +411,10 @@ function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
   return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
 }
 
-/** The sbx settings: ports, allowed paths (a folder or a single file), hosts, and which of the
- *  agent's skills, plugins and instructions to mount. Never holds a token: each sandboxed agent
- *  signs in with its own `/login` inside the sandbox. */
+/** The sbx settings: ports, allowed paths (a folder or a single file), hosts, which of the agent's
+ *  skills, plugins and instructions to mount, and the secrets' names and hosts. Never holds a token:
+ *  each sandboxed agent signs in with its own `/login` inside the sandbox, and a secret's value
+ *  stays on this machine (sbx-secrets.ts). */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)
@@ -403,7 +425,8 @@ export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
     knowledge: toSbxKnowledge(sbx.knowledge),
     ports: toSbxPorts(sbx.ports),
     paths,
-    hosts: toSbxHosts(sbx.hosts)
+    hosts: toSbxHosts(sbx.hosts),
+    secrets: toSbxSecrets(sbx.secrets)
   };
 }
 
@@ -420,7 +443,8 @@ export function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<
           knowledge: config.knowledge,
           ports: config.ports,
           paths: [...others, ...mine],
-          hosts: config.hosts
+          hosts: config.hosts,
+          secrets: config.secrets
         }
       ]
     ];

@@ -19,6 +19,7 @@ import type {
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import { readSbxConfig } from "../git/commands";
 import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
+import type { SbxSecretStore } from "../sbx-secrets";
 import type { SettingsStore } from "../settings";
 import { agentDirFor } from "./agent-data";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -262,6 +263,7 @@ export class ProjectSessionManager {
     private readonly project: Project,
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
+    private readonly secrets: SbxSecretStore,
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
@@ -831,7 +833,7 @@ export class ProjectSessionManager {
     const paths = this.pathsFor(runtime);
     const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
-    const { args, missing } = await prepareSbxRun({
+    const { args, missing, missingSecrets } = await prepareSbxRun({
       agentId: tab.agentId,
       projectId: this.project.id,
       projectPath: this.project.path,
@@ -846,12 +848,19 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
+      secretValues: this.secrets.values(this.project.id),
       onData: (data) => this.reportOutput(tab, data)
     });
     if (missing.length > 0) {
       this.callbacks.onNotice(
         "warning",
         `${agent.displayName} in ${this.project.name} starts without ${missing.length === 1 ? "an allowed path that does not exist" : "allowed paths that do not exist"} on this machine: ${missing.join(", ")}`
+      );
+    }
+    if (missingSecrets.length > 0) {
+      this.callbacks.onNotice(
+        "warning",
+        `${agent.displayName} in ${this.project.name} starts without ${missingSecrets.length === 1 ? "a secret that has no value" : "secrets that have no value"} on this machine: ${missingSecrets.join(", ")}. Enter ${missingSecrets.length === 1 ? "it" : "them"} in the project's SBX Settings.`
       );
     }
     return args;
@@ -1449,6 +1458,7 @@ export class SessionManagerRegistry {
   constructor(
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
+    private readonly secrets: SbxSecretStore,
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
@@ -1457,7 +1467,7 @@ export class SessionManagerRegistry {
     if (existing) {
       return existing;
     }
-    const manager = new ProjectSessionManager(project, this.storageRoot, this.settings, this.callbacks);
+    const manager = new ProjectSessionManager(project, this.storageRoot, this.settings, this.secrets, this.callbacks);
     manager.setInFront(project.id === this.inFront.projectId ? this.inFront.tabIds : []);
     this.managers.set(project.id, manager);
     manager.bootstrap().catch((error: unknown) => {

@@ -257,7 +257,8 @@ describe("readSbxConfig", () => {
       knowledge: { skills: false, plugins: false, instructions: false },
       ports: [],
       paths: [],
-      hosts: []
+      hosts: [],
+      secrets: []
     });
   });
 
@@ -280,7 +281,8 @@ describe("readSbxConfig", () => {
         // A single file is a row like any other: sbx mounts files and folders alike.
         { path: "~/.npmrc", access: "ro" as const }
       ],
-      hosts: ["gitlab.example.com", "*.s3.example.net:443"]
+      hosts: ["gitlab.example.com", "*.s3.example.net:443"],
+      secrets: [{ env: "GITLAB_TOKEN", hosts: ["gitlab.example.com", "*.gitlab.example.com"] }]
     };
     await writeSbxConfig(root, config);
     assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
@@ -317,6 +319,12 @@ describe("readSbxConfig", () => {
             { path: "/elsewhere", access: "ro", os: process.platform === "win32" ? "linux" : "win32" }
           ],
           hosts: ["ok.example.com", 42, "", "  spaced.example.com  "],
+          secrets: [
+            { env: " API_KEY ", hosts: [" api.example.com "], value: "should-not-be-read" },
+            { env: "API_KEY", hosts: ["twice.example.com"] },
+            { env: "NO_HOST", hosts: [] },
+            { hosts: ["no-env.example.com"] }
+          ],
           tokens: { claude: "sk-ant-should-not-be-read" }
         }
       })
@@ -326,7 +334,8 @@ describe("readSbxConfig", () => {
       knowledge: { skills: false, plugins: false, instructions: "ro" },
       ports: [{ host: "3000", container: "3000" }],
       paths: [{ path: "~/data", access: "rw" }],
-      hosts: ["ok.example.com", "spaced.example.com"]
+      hosts: ["ok.example.com", "spaced.example.com"],
+      secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }]
     });
   });
 });
