@@ -54,6 +54,15 @@ export interface PromptOptions {
   extras?: { label: string; placeholder?: string; value?: string }[];
   /** Where the answer's field sits among the extras, first by default. */
   valueIndex?: number;
+  /** A color picked from swatches under the fields, e.g. a command row's. A "no color" swatch is
+   *  always offered first: like the extras, it may be left empty. */
+  colors?: {
+    label: string;
+    /** Each choice's answer and the color it is drawn in — an ANSI name and its
+     *  `--vscode-terminal-ansi*` variable, so the swatches follow the theme. */
+    choices: { value: string; color: string; title: string }[];
+    value?: string;
+  };
   /** The wider dialog (`.dialog.wide`), for fields holding lines rather than words. */
   wide?: boolean;
   /** A yes/no under the fields, e.g. the push after a commit. See ConfirmOptions. */
@@ -71,6 +80,8 @@ export interface PromptAnswer {
   value: string;
   /** The extra fields' values in declared order, "" where blank. */
   extras: string[];
+  /** The picked color's value; "" for none, and for a question that offered no colors. */
+  color: string;
   /** Whether the checkbox was ticked; always false when the question had none. */
   checked: boolean;
 }
@@ -265,6 +276,7 @@ function HistoryDropdown({
 function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }> }) {
   const [value, setValue] = useState(dialog.value);
   const [extras, setExtras] = useState<string[]>(() => (dialog.extras ?? []).map((field) => field.value ?? ""));
+  const [color, setColor] = useState(dialog.colors?.value ?? "");
   const [checked, setChecked] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const field = useRef<HTMLInputElement>(null);
@@ -416,10 +428,31 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       confirmLabel={dialog.confirmLabel}
       disabled={suggesting || value.trim().length === 0}
       wide={dialog.wide}
-      onSubmit={() => dialog.answer({ value: value.trim(), extras: extras.map((entry) => entry.trim()), checked })}
+      onSubmit={() => dialog.answer({ value: value.trim(), extras: extras.map((entry) => entry.trim()), color, checked })}
       onCancel={() => dialog.answer(null)}
     >
       {fields}
+      {dialog.colors && (
+        // A div, not the fields' label: a label wrapping buttons would forward its clicks to the
+        // first swatch.
+        <div className="dialog-field">
+          <span>{dialog.colors.label}</span>
+          <div className="dialog-colors">
+            {[{ value: "", color: "", title: "No color" }, ...dialog.colors.choices].map((choice) => (
+              <button
+                key={choice.value}
+                type="button"
+                className={["dialog-color", choice.value ? "" : "none", choice.value === color ? "selected" : ""]
+                  .filter(Boolean)
+                  .join(" ")}
+                title={choice.title}
+                style={choice.color ? { background: choice.color } : undefined}
+                onClick={() => setColor(choice.value)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
       {dialog.checkboxLabel && (
         <label className="dialog-checkbox">
           <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />

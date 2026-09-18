@@ -1735,6 +1735,36 @@ textarea:focus {
   padding: 5px 6px;
 }
 
+/* A prompt's color swatches, in the 24px of every action button. The colors themselves come from
+   the choices, as theme variables, so the row repaints with the theme. */
+.dialog-colors {
+  display: flex;
+  gap: 6px;
+}
+
+.dialog-color {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 2px;
+}
+
+/* "No color": a strike, since an empty box reads as one more color. */
+.dialog-color.none {
+  background: linear-gradient(
+    to bottom right,
+    transparent calc(50% - 1px),
+    var(--vscode-descriptionForeground) calc(50% - 1px),
+    var(--vscode-descriptionForeground) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
+
+.dialog-color.selected {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
 /* The prompt's history dropdown, inside the dialog's DOM: the overlay is its own stacking
    context (z-index 30), so anything beside it paints behind. */
 .dialog-history-anchor {

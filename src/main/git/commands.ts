@@ -3,7 +3,9 @@ import * as path from "node:path";
 // The ESM build: esbuild can't follow the UMD build's `require("./impl/format")`.
 import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
 import writeFileAtomic from "write-file-atomic";
+import { COMMAND_COLORS } from "../../shared/types";
 import type {
+  CommandColor,
   ExplorerRoot,
   ExplorerSettings,
   ExplorerSortOrder,
@@ -26,7 +28,7 @@ export const PROJECT_FILE = "tet.json";
  *  written. */
 type StoredCommand =
   | string
-  | { command?: unknown; name?: unknown; cwd?: unknown; env?: unknown; shell?: unknown };
+  | { command?: unknown; name?: unknown; color?: unknown; cwd?: unknown; env?: unknown; shell?: unknown };
 
 interface ProjectFile {
   commands?: StoredCommand[];
@@ -141,6 +143,10 @@ function toCommand(entry: StoredCommand): ProjectCommand | undefined {
   if (typeof entry.name === "string" && entry.name.trim()) {
     command.name = entry.name;
   }
+  const color = COMMAND_COLORS.find((candidate): candidate is CommandColor => candidate === entry.color);
+  if (color) {
+    command.color = color;
+  }
   if (typeof entry.cwd === "string" && entry.cwd.trim()) {
     command.cwd = entry.cwd;
   }
@@ -168,7 +174,9 @@ export function writeCommands(root: string, commands: ProjectCommand[]): Promise
   return patch(root, () => [
     [
       ["commands"],
-      commands.map((command) => (command.name || command.cwd || command.env || command.shell ? command : command.command))
+      commands.map((command) =>
+        command.name || command.color || command.cwd || command.env || command.shell ? command : command.command
+      )
     ]
   ]);
 }

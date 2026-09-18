@@ -54,6 +54,25 @@ describe("readCommands", () => {
     ]);
   });
 
+  it("keeps a known color by name and drops anything else", async () => {
+    put(
+      JSON.stringify({
+        commands: [
+          { command: "a", color: "magenta" },
+          { command: "b", color: "#ff0000" },
+          { command: "c", color: "white" },
+          { command: "d", color: true }
+        ]
+      })
+    );
+    assert.deepEqual(await readCommands(root), [
+      { command: "a", color: "magenta" },
+      { command: "b" },
+      { command: "c" },
+      { command: "d" }
+    ]);
+  });
+
   it("reads a broken file as no commands, and refuses to write over it", async () => {
     put("{ not json");
     assert.deepEqual(await readCommands(root), []);
@@ -72,11 +91,16 @@ describe("readCommands", () => {
 describe("writeCommands", () => {
   it("collapses to the short form and keeps every other key", async () => {
     put(JSON.stringify({ folders: [{ path: "src" }], other: true }));
-    await writeCommands(root, [{ command: "a" }, { command: "b", cwd: "web" }, { command: "c", name: "see" }]);
+    await writeCommands(root, [
+      { command: "a" },
+      { command: "b", cwd: "web" },
+      { command: "c", name: "see" },
+      { command: "d", color: "cyan" }
+    ]);
     assert.deepEqual(stored(), {
       folders: [{ path: "src" }],
       other: true,
-      commands: ["a", { command: "b", cwd: "web" }, { command: "c", name: "see" }]
+      commands: ["a", { command: "b", cwd: "web" }, { command: "c", name: "see" }, { command: "d", color: "cyan" }]
     });
   });
 });

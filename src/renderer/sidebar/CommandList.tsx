@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
-import type { ProjectCommand } from "../../shared/types";
+import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
 import { ContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
@@ -18,6 +18,20 @@ const EXTRA_FIELDS = [
 
 const COMMAND_DETAIL = "Saved to tet.json in the project. The command is started without a shell.";
 
+/** The terminal's own color for a name, so the rows recolor with the theme. */
+function colorVariable(color: CommandColor): string {
+  return `var(--vscode-terminal-ansiBright${color[0].toUpperCase()}${color.slice(1)})`;
+}
+
+/** The swatches the dialog offers, the bright six in the theme's own colors. */
+const COLOR_CHOICES = COMMAND_COLORS.map((color) => ({
+  value: color,
+  color: colorVariable(color),
+  title: color[0].toUpperCase() + color.slice(1)
+}));
+
+const COLOR_FIELD = { label: "Color (optional)", choices: COLOR_CHOICES };
+
 /** The dialog's answer as an entry with only what was filled in, so a bare command stays a plain
  *  string in tet.json. `shell` carries over from the edited command: editing must not change how
  *  it starts. */
@@ -26,6 +40,10 @@ function toCommand(answer: PromptAnswer, edited?: ProjectCommand): ProjectComman
   const command: ProjectCommand = { command: answer.value };
   if (name) {
     command.name = name;
+  }
+  const color = COMMAND_COLORS.find((candidate) => candidate === answer.color);
+  if (color) {
+    command.color = color;
   }
   if (cwd) {
     command.cwd = cwd;
@@ -141,6 +159,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       confirmLabel: "Save",
       extras: EXTRA_FIELDS,
       valueIndex: 1,
+      colors: COLOR_FIELD,
       wide: true
     });
     if (answer === null) {
@@ -174,6 +193,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
         { ...EXTRA_FIELDS[2], value: formatEnv(command.env) }
       ],
       valueIndex: 1,
+      colors: { ...COLOR_FIELD, value: command.color },
       wide: true
     });
     if (answer === null) {
@@ -249,7 +269,12 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
           >
             {/* Its name if any; the line is in the tooltip. */}
             <span className="command-main">
-              <span className="command-label">{command.name ?? command.command}</span>
+              <span
+                className="command-label"
+                style={command.color ? { color: colorVariable(command.color) } : undefined}
+              >
+                {command.name ?? command.command}
+              </span>
               {/* `env` on unnamed rows only: it changes what the command does, the folder does not. */}
               {!command.name && formatEnv(command.env) && (
                 <span className="command-extra">({formatEnv(command.env)})</span>
