@@ -82,7 +82,7 @@ export const GitPane = memo(function GitPane({
             </button>
           </span>
           {/* This section's bar — everything `branch.run` covers. */}
-          {branch.busy && <ProgressBar />}
+          {branch.startedHere && <ProgressBar />}
         </div>
         <BranchTree
           projectId={project.id}

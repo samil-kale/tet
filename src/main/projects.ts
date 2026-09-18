@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
+import { worktreeBase } from "../shared/types";
 import type { AddRepositoryResult, GitActionResult, Project, WorktreeRef } from "../shared/types";
 import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
@@ -38,14 +39,15 @@ export async function addProject({ store, openProject }: ProjectDeps, directory:
   return { project };
 }
 
-/** Resolves once the project's sessions have ended — a worktree's folder is removed only then. */
+/** Resolves once the project's sessions and git commands have ended — a worktree's folder is
+ *  removed or moved only then. */
 export function removeProject({ store, repositories, sessions, records }: ProjectDeps, projectId: string): Promise<void> {
   // The project leaves the window at once; its sessions still end by themselves
   // (TerminalSession.stop). Its records go once they have: a stopping tab still prints.
-  const closed = sessions.close(projectId).finally(() => records.forgetProject(projectId));
-  repositories.close(projectId);
+  const sessionsEnded = sessions.close(projectId).finally(() => records.forgetProject(projectId));
+  const gitEnded = repositories.close(projectId);
   store.remove(projectId);
-  return closed;
+  return Promise.all([sessionsEnded, gitEnded]).then(() => undefined);
 }
 
 /**
@@ -58,44 +60,62 @@ function worktreeFolderName(name: string): string {
 }
 
 /**
- * A worktree command runs in the main worktree: through its repository's action slot while it is
- * open, which refreshes its branches after; else git directly.
+ * A folder in on-disk spelling, as `readWorktrees` and `readMainWorktree` give it: a project's path
+ * is stored so, or string comparisons with theirs miss — a Windows 8.3 name, macOS's `/var`, a
+ * junction or a symlink (measured with a junction). As written while the folder does not exist.
  */
-function runInMain(
-  { store, repositories }: ProjectDeps,
-  mainPath: string,
-  command: (repository: Repository) => Promise<GitActionResult>,
-  direct: () => Promise<GitActionResult>
-): Promise<GitActionResult> {
-  const main = store.list().find((project) => project.path === mainPath);
-  const repository = main && repositories.get(main.id);
-  return repository ? command(repository) : direct();
+function onDisk(folder: string): string {
+  try {
+    return fs.realpathSync.native(folder);
+  } catch {
+    return path.resolve(folder);
+  }
+}
+
+/**
+ * The repository a worktree command runs through: an open project of the same repository — its
+ * main worktree first, else another of its worktrees — so the command takes that project's action
+ * slot (Repository.runAction) and refreshes it after. Not `except`, the worktree being moved or
+ * deleted: its project closes first. Undefined when none is open.
+ */
+function repositoryFor(deps: ProjectDeps, mainPath: string, except?: string): Repository | undefined {
+  const excluded = except === undefined ? undefined : onDisk(except);
+  const candidates = deps.store
+    .list()
+    .filter((project) => (project.mainPath ?? project.path) === mainPath && onDisk(project.path) !== excluded)
+    .sort((a, b) => Number(b.path === mainPath) - Number(a.path === mainPath));
+  return candidates.map((project) => deps.repositories.get(project.id)).find((repository) => repository !== undefined);
+}
+
+/** When `repositoryFor` finds none. */
+function noRepository(mainPath: string, action: string): GitActionResult {
+  return { ok: false, error: `Open ${path.basename(mainPath)} to ${action} this worktree` };
 }
 
 /**
  * Creates a worktree of the project's repository with a new branch of its own, and opens it as a
  * project under its main worktree's row. Worktree and branch share the name: the folder is the
- * branch's. The branch always starts at the main worktree's HEAD, asked from any of its worktrees.
+ * branch's. The branch starts at the default branch (`worktreeBase`), as most worktree tools
+ * start it; refs are shared, so the project it was asked in knows it, and runs it.
  */
 export async function addWorktree(deps: ProjectDeps, projectId: string, branch: string): Promise<AddRepositoryResult> {
   const project = deps.store.get(projectId);
-  if (!project) {
+  const repository = deps.repositories.get(projectId);
+  if (!project || !repository) {
     return { error: "Project not found" };
+  }
+  const base = worktreeBase(repository.getState());
+  if (!base) {
+    return { error: "There is no branch to start a worktree at" };
   }
   const mainPath = project.mainPath ?? project.path;
   // `~/.tet/worktrees/<repository>/<branch>`.
   const target = path.join(deps.dataRoot, "worktrees", path.basename(mainPath), worktreeFolderName(branch));
-  const name = branch.trim();
-  const result = await runInMain(
-    deps,
-    mainPath,
-    (repository) => repository.addWorktree(target, name),
-    () => git.worktreeAdd(mainPath, target, name)
-  );
+  const result = await repository.addWorktree(target, branch.trim(), base);
   if (!result.ok) {
     return { error: result.error || "Creating the worktree failed" };
   }
-  const added = deps.store.add(target);
+  const added = deps.store.add(onDisk(target));
   deps.openProject(added);
   deps.projectsChanged({ added: added.id });
   return { project: added };
@@ -114,7 +134,8 @@ async function withWorktreeClosed(
   command: () => Promise<GitActionResult>,
   reopenAt: (result: GitActionResult) => string | undefined
 ): Promise<GitActionResult> {
-  const project = deps.store.list().find((entry) => entry.path === worktreePath);
+  const folder = onDisk(worktreePath);
+  const project = deps.store.list().find((entry) => onDisk(entry.path) === folder);
   if (project) {
     await removeProject(deps, project.id);
     void removeProjectSandboxes(project.id);
@@ -122,7 +143,7 @@ async function withWorktreeClosed(
   const result = await command();
   if (project) {
     const target = reopenAt(result);
-    const reopened = target === undefined ? undefined : deps.store.add(target);
+    const reopened = target === undefined ? undefined : deps.store.add(onDisk(target));
     if (reopened) {
       deps.openProject(reopened);
     }
@@ -133,8 +154,9 @@ async function withWorktreeClosed(
 
 /** The branch a worktree has checked out, off the disk; none while detached or unknown. */
 async function worktreeBranch(worktree: WorktreeRef): Promise<string | undefined> {
+  const folder = onDisk(worktree.path);
   const worktrees = await git.readWorktrees(worktree.mainPath).catch(() => []);
-  return worktrees.find((entry) => entry.path === worktree.path)?.branch;
+  return worktrees.find((entry) => entry.path === folder)?.branch;
 }
 
 /**
@@ -149,33 +171,33 @@ export async function deleteWorktree(
   { force, onRemote }: { force: boolean; onRemote: boolean }
 ): Promise<GitActionResult> {
   const { path: worktreePath, mainPath } = worktree;
+  const repository = repositoryFor(deps, mainPath, worktreePath);
+  if (!repository) {
+    return noRepository(mainPath, "delete");
+  }
   const branch = await worktreeBranch(worktree);
   const gone = !fs.existsSync(worktreePath);
-  if (!gone && !force && (await git.hasChanges(worktreePath))) {
+  const uncommitted = async (): Promise<boolean> => !gone && !force && (await git.hasChanges(worktreePath));
+  if (await uncommitted()) {
     return { ok: false, uncommitted: true };
   }
   const result = await withWorktreeClosed(
     deps,
     worktreePath,
-    () =>
-      runInMain(
-        deps,
-        mainPath,
-        (repository) => (gone ? repository.pruneWorktrees() : repository.removeWorktree(worktreePath, force)),
-        () => (gone ? git.worktreePrune(mainPath) : git.worktreeRemove(mainPath, worktreePath, force))
-      ),
+    // Asked again with its terminals gone: one may have written meanwhile, and git would refuse
+    // without the question being put.
+    async () =>
+      (await uncommitted())
+        ? { ok: false, uncommitted: true }
+        : gone
+          ? repository.pruneWorktrees()
+          : repository.removeWorktree(worktreePath, force),
     (outcome) => (outcome.ok ? undefined : worktreePath)
   );
   if (!result.ok || branch === undefined) {
     return result;
   }
-  // Without the main project open, the local branch alone: its upstream is read off that state.
-  return runInMain(
-    deps,
-    mainPath,
-    (repository) => repository.deleteBranch(branch, onRemote),
-    () => git.deleteBranch(mainPath, branch)
-  );
+  return repository.deleteBranch(branch, onRemote);
 }
 
 /**
@@ -185,36 +207,42 @@ export async function deleteWorktree(
  */
 export async function renameWorktree(deps: ProjectDeps, worktree: WorktreeRef, branch: string): Promise<GitActionResult> {
   const { path: worktreePath, mainPath } = worktree;
+  const repository = repositoryFor(deps, mainPath, worktreePath);
+  if (!repository) {
+    return noRepository(mainPath, "rename");
+  }
   const from = await worktreeBranch(worktree);
   const to = branch.trim();
-  const renameBranch = (oldName: string, newName: string): Promise<GitActionResult> =>
-    runInMain(
-      deps,
-      mainPath,
-      (repository) => repository.renameBranch(oldName, newName),
-      () => git.renameBranch(mainPath, oldName, newName)
-    );
   if (from !== undefined) {
-    const renamed = await renameBranch(from, to);
+    const renamed = await repository.renameBranch(from, to);
     if (!renamed.ok) {
       return renamed;
     }
   }
-  const target = path.join(path.dirname(worktreePath), worktreeFolderName(to));
+  const folder = onDisk(worktreePath);
+  const target = path.join(path.dirname(folder), worktreeFolderName(to));
+  // The same folder, e.g. `feature/x` renamed to `feature-x`: nothing to move, nothing to close.
+  if (target === folder) {
+    return { ok: true };
+  }
+  // By case alone git cannot move a folder onto itself (measured: "Invalid argument"), so through a
+  // name of its own first.
+  const byCaseAlone = target.toLowerCase() === folder.toLowerCase();
   const moved = await withWorktreeClosed(
     deps,
-    worktreePath,
-    () =>
-      runInMain(
-        deps,
-        mainPath,
-        (repository) => repository.moveWorktree(worktreePath, target),
-        () => git.worktreeMove(mainPath, worktreePath, target)
-      ),
-    (outcome) => (outcome.ok ? target : worktreePath)
+    folder,
+    async () => {
+      if (!byCaseAlone) {
+        return repository.moveWorktree(folder, target);
+      }
+      const between = `${target}.tet-rename`;
+      const first = await repository.moveWorktree(folder, between);
+      return first.ok ? repository.moveWorktree(between, target) : first;
+    },
+    (outcome) => (outcome.ok ? target : folder)
   );
   if (!moved.ok && from !== undefined) {
-    await renameBranch(to, from);
+    await repository.renameBranch(to, from);
   }
   return moved;
 }

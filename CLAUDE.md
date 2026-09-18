@@ -83,8 +83,10 @@ others.
 - A linked worktree is a project of its own, indented under its main worktree's row
   (`Project.mainPath`, read off the disk, never stored), and listed in the branch tree's WORKTREES
   (`RepositoryState.worktrees`, read off the disk too). A worktree and its branch are one: made
-  together at the main worktree's HEAD, named, renamed and deleted together, its branch listed
-  under WORKTREES only and never switched. tet creates them in `~/.tet/worktrees` with relative
+  together at the default branch, named, renamed and deleted together, its branch listed under
+  WORKTREES only and never switched. git keeps no branch's origin, so tet records it as
+  `branch.<name>.base` in the repository's config (`git.ts`'s `worktreeAdd`), shown in the project
+  row and merged back into. tet creates them in `~/.tet/worktrees` with relative
   links, and a sandbox mounts the main `.git` (`projects.ts`, `sbx.ts`).
 
 **Scope.** Everything the git pane does fits in a context menu, an icon button or a question. Of

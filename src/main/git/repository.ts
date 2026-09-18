@@ -97,6 +97,10 @@ export class Repository {
   private refreshPending = false;
   private lastRefreshAt = 0;
   private actionRunning = false;
+  /** The action underway (runAction), for `dispose` to wait on. */
+  private action: Promise<GitActionResult> | undefined;
+  /** `start`'s reads, for `dispose` to wait on. */
+  private starting: Promise<void> | undefined;
   private autoFetchTimer: ReturnType<typeof setInterval> | undefined;
   /** The periodic fetch underway; an action waits for it rather than being refused. */
   private autoFetching: Promise<void> | undefined;
@@ -143,7 +147,12 @@ export class Repository {
     return this.state;
   }
 
-  async start(): Promise<void> {
+  start(): Promise<void> {
+    this.starting = this.startReading();
+    return this.starting;
+  }
+
+  private async startReading(): Promise<void> {
     // All three at once: each is a git start (the measured cost); in sequence they visibly delay
     // the pane.
     const [isGit, urls, defaultBranchName, read] = await Promise.all([
@@ -298,7 +307,8 @@ export class Repository {
     this.actionRunning = true;
     try {
       // A rejection is the git process gone; reported like any failure.
-      const result = await action().catch((error: Error) => ({ ok: false, error: error.message }));
+      this.action = action().catch((error: Error) => ({ ok: false, error: error.message }));
+      const result = await this.action;
       await this.refresh();
       return result;
     } finally {
@@ -365,9 +375,9 @@ export class Repository {
     return this.runAction(() => git.createBranch(this.project.path, name, startPoint));
   }
 
-  /** A new branch at this worktree's HEAD, checked out at `target`. */
-  addWorktree(target: string, branch: string): Promise<GitActionResult> {
-    return this.runAction(() => git.worktreeAdd(this.project.path, target, branch));
+  /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). */
+  addWorktree(target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
+    return this.runAction(() => git.worktreeAdd(this.project.path, target, branch, base));
   }
 
   removeWorktree(target: string, force: boolean): Promise<GitActionResult> {
@@ -954,7 +964,12 @@ export class Repository {
     }, delay);
   }
 
-  dispose(): void {
+  /**
+   * Resolves once the git commands this repository started have ended: a running one's working
+   * directory is the folder, which Windows then keeps from being moved or removed ("Permission
+   * denied", measured) — and a worktree's is, right after its project closes (projects.ts).
+   */
+  dispose(): Promise<void> {
     // Read by a refresh whose git call may outlive this.
     this.disposed = true;
     clearTimeout(this.debounceTimer);
@@ -966,6 +981,7 @@ export class Repository {
     this.closeWatchers();
     // The git process caches per-directory answers; on quit it is stopped right after this.
     void git.forget(this.project.path).catch(() => undefined);
+    return Promise.allSettled([this.starting, this.inflight, this.action, this.autoFetching]).then(() => undefined);
   }
 }
 
@@ -1002,9 +1018,11 @@ export class RepositoryManager {
     return this.repositories.get(projectId);
   }
 
-  close(projectId: string): void {
-    this.repositories.get(projectId)?.dispose();
+  /** Resolves once its git commands have ended (Repository.dispose); it is gone at once. */
+  close(projectId: string): Promise<void> {
+    const closing = this.repositories.get(projectId)?.dispose();
     this.repositories.delete(projectId);
+    return closing ?? Promise.resolve();
   }
 
   disposeAll(): void {

@@ -1,4 +1,5 @@
 import { memo, useMemo, useState } from "react";
+import { worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
@@ -23,6 +24,9 @@ import { askDeleteWorktree, askNewWorktree, askRenameWorktree } from "./worktree
 export interface BranchActions {
   /** A command runs in this project; no second one is offered. */
   busy: boolean;
+  /** That command was started here, so this pane's bar shows it; one started from the project
+   *  list shows in that list's bar instead. */
+  startedHere: boolean;
   run: (label: string, action: () => Promise<GitActionResult>) => void;
 }
 
@@ -85,8 +89,6 @@ export const BranchTree = memo(function BranchTree({
   );
   /** A linked worktree keeps its branch: nothing here switches it (projects.ts couples the two). */
   const inWorktree = linkedWorktrees.some((worktree) => worktree.current);
-  /** Where a new worktree's branch starts, whichever worktree asks. */
-  const mainHead = state.worktrees.find((worktree) => worktree.main)?.branch ?? "HEAD";
 
   const isCurrent = (name: string): boolean => !state.detached && name === state.head;
 
@@ -102,6 +104,10 @@ export const BranchTree = memo(function BranchTree({
   const defaultRef = state.defaultBranch
     ? `${state.defaultBranch.remote ? `${state.defaultBranch.remote}/` : ""}${state.defaultBranch.name}`
     : undefined;
+  /** Where a new worktree starts (worktreeBase), prefixed as `defaultRef`. */
+  const worktreeStart = worktreeBase(state);
+  const newWorktreeBase =
+    worktreeStart && (worktreeStart.remote ? `${worktreeStart.remote}/${worktreeStart.name}` : worktreeStart.name);
 
   /** Where the local branch a checkout would switch to is checked out in another worktree. */
   const worktreeOf = (target: CheckoutTarget): string | undefined =>
@@ -356,7 +362,10 @@ export const BranchTree = memo(function BranchTree({
                 : undefined
           },
       SEPARATOR,
-      { label: "New worktree...", run: () => void askNewWorktree(projectId, branch.run, mainHead) },
+      {
+        label: "New worktree...",
+        run: newWorktreeBase ? () => void askNewWorktree(projectId, branch.run, newWorktreeBase) : undefined
+      },
       {
         label: "Rename worktree...",
         run: linked ? () => void askRenameWorktree(linked, name, branch.run, canClose) : undefined
@@ -442,6 +451,30 @@ export const BranchTree = memo(function BranchTree({
         </div>
 
         <div className="tree-section">
+          <button className="tree-header" onClick={() => toggle("worktrees")}>
+            <ChevronIcon expanded={!isCollapsed("worktrees")} scale={TREE_CHEVRON} />
+            <span>WORKTREES</span>
+            <span className="count-badge">({linkedWorktrees.length})</span>
+          </button>
+          {!isCollapsed("worktrees") &&
+            worktrees.map((worktree) => (
+              <button
+                key={worktree.path}
+                className={`tree-item${worktree.current ? " current" : ""}`}
+                title={`${worktree.path}${worktree.current ? "" : "\nDouble-click to open"}`}
+                onDoubleClick={() => !worktree.current && onOpenWorktree(worktree.path)}
+                onContextMenu={(event) => openMenu(event, { kind: "worktree", worktree })}
+              >
+                <WorktreeIcon className="tree-icon" />
+                <span className="tree-label">{worktreeName(worktree)}</span>
+                {(worktree.branch === undefined || worktree.base) && (
+                  <span className="tree-extra">{worktree.branch === undefined ? "detached" : worktree.base}</span>
+                )}
+              </button>
+            ))}
+        </div>
+
+        <div className="tree-section">
           <button className="tree-header" onClick={() => toggle("remotes")}>
             <ChevronIcon expanded={!isCollapsed("remotes")} scale={TREE_CHEVRON} />
             <span>REMOTES</span>
@@ -513,28 +546,6 @@ export const BranchTree = memo(function BranchTree({
               >
                 <StashIcon className="tree-icon" />
                 <span className="tree-label">{stash.message}</span>
-              </button>
-            ))}
-        </div>
-
-        <div className="tree-section">
-          <button className="tree-header" onClick={() => toggle("worktrees")}>
-            <ChevronIcon expanded={!isCollapsed("worktrees")} scale={TREE_CHEVRON} />
-            <span>WORKTREES</span>
-            <span className="count-badge">({linkedWorktrees.length})</span>
-          </button>
-          {!isCollapsed("worktrees") &&
-            worktrees.map((worktree) => (
-              <button
-                key={worktree.path}
-                className={`tree-item${worktree.current ? " current" : ""}`}
-                title={`${worktree.path}${worktree.current ? "" : "\nDouble-click to open"}`}
-                onDoubleClick={() => !worktree.current && onOpenWorktree(worktree.path)}
-                onContextMenu={(event) => openMenu(event, { kind: "worktree", worktree })}
-              >
-                <WorktreeIcon className="tree-icon" />
-                <span className="tree-label">{worktreeName(worktree)}</span>
-                {worktree.branch === undefined && <span className="tree-extra">detached</span>}
               </button>
             ))}
         </div>

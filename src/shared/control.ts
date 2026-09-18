@@ -161,7 +161,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "worktree-add",
     usage: "worktree-add <branch> [--project <id>]",
     summary:
-      "Create a git worktree of the project under ~/.tet/worktrees with a new branch <branch> at the main worktree's HEAD, and open it as a project.",
+      "Create a git worktree of the project under ~/.tet/worktrees with a new branch <branch> at the default branch, and open it as a project.",
     positionals: ["branch"]
   },
   {

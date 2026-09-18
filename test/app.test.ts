@@ -21,6 +21,8 @@ const TOKEN = "app-test-token";
 const STARTUP_MS = 60_000;
 
 let userData: string;
+/** What `userData` links to. */
+let profileDir: string;
 let repo: string;
 let app: TestApp | undefined;
 /** The instance answering right now — a different process after restart-app. */
@@ -38,7 +40,11 @@ function asTab(projectId: string, tabId: string): Record<string, string | undefi
 
 describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
   before(async () => {
-    userData = fs.mkdtempSync(path.join(os.tmpdir(), "tet-app-"));
+    // Through a link, as macOS's /var or a Windows 8.3 %TEMP% reach a folder: a path tet makes under
+    // the profile still has to match the on-disk spelling git and the project list use.
+    profileDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-app-"));
+    userData = `${profileDir}-link`;
+    fs.symlinkSync(profileDir, userData, "junction");
     repo = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repo-"));
     spawnSync("git", ["init", "-q"], { cwd: repo });
     app = await startApp(userData, TOKEN, STARTUP_MS);
@@ -50,7 +56,7 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
       killApp(pid);
     }
     await eventually("tet gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
-    for (const dir of [userData, repo]) {
+    for (const dir of [userData, profileDir, repo]) {
       // A pty's conhost can hold a file a moment longer than the app; in the temp dir that's fine.
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
     }
@@ -252,7 +258,7 @@ ${stderr.slice(uncaught)}`);
     assert.equal(added.status, 0, added.stderr);
     const worktree = added.result as Project;
     // The branch names the folder, a "/" in it no subfolder.
-    assert.equal(worktree.path, path.join(userData, "worktrees", path.basename(main.path), "from-ctl"));
+    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "worktrees", path.basename(main.path), "from-ctl"));
     assert.equal(worktree.mainPath, main.path);
     await eventually(
       "the new branch read",

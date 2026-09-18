@@ -424,18 +424,23 @@ export async function readWorktrees(cwd: string): Promise<WorktreeInfo[]> {
     (pointer) => path.resolve(gitDir, pointer.trim()),
     () => gitDir
   );
+  const bases = await readBaseBranches(commonDir);
   const branchOf = async (adminDir: string): Promise<string | undefined> => {
     const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
     return /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
   };
   // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
   const onDisk = (folder: string): Promise<string> => fs.realpath(folder).catch(() => folder);
-  const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => ({
-    path: await onDisk(worktreePath),
-    branch: await branchOf(adminDir),
-    main,
-    current: adminDir === gitDir
-  });
+  const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
+    const branch = await branchOf(adminDir);
+    return {
+      path: await onDisk(worktreePath),
+      branch,
+      base: main || branch === undefined ? undefined : bases.get(branch),
+      main,
+      current: adminDir === gitDir
+    };
+  };
   const linkedRoot = path.join(commonDir, "worktrees");
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
   const linked = await Promise.all(
@@ -451,6 +456,33 @@ export async function readWorktrees(cwd: string): Promise<WorktreeInfo[]> {
       .filter((entry): entry is WorktreeInfo => entry !== undefined)
       .sort((a, b) => path.basename(a.path).localeCompare(path.basename(b.path)))
   ];
+}
+
+/**
+ * Every `branch.<name>.base` (worktreeAdd) in the repository's config file, read as text rather than
+ * by a git process on the refresh path. Only the file tet writes the key into: an included config
+ * could hold it too, but tet never puts it there. Branch names are case-sensitive, keys are not.
+ */
+async function readBaseBranches(commonDir: string): Promise<Map<string, string>> {
+  const bases = new Map<string, string>();
+  const config = await fs.readFile(path.join(commonDir, "config"), "utf8").catch(() => "");
+  let branch: string | undefined;
+  for (const line of config.split(/\r?\n/)) {
+    const section = /^\s*\[\s*branch\s+"((?:[^"\\]|\\.)*)"\s*\]/i.exec(line);
+    if (section) {
+      branch = section[1].replace(/\\(.)/g, "$1");
+      continue;
+    }
+    if (/^\s*\[/.test(line)) {
+      branch = undefined;
+      continue;
+    }
+    const entry = branch === undefined ? null : /^\s*base\s*=\s*(.*?)\s*$/i.exec(line);
+    if (branch !== undefined && entry) {
+      bases.set(branch, entry[1].replace(/^"(.*)"$/, "$1"));
+    }
+  }
+  return bases;
 }
 
 /** Whether `git worktree remove` would refuse the worktree without `--force`: a change or an
@@ -905,14 +937,23 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
 }
 
 /**
- * A worktree always with a new branch of its own at `cwd`'s HEAD: tet couples the two, so deleting
- * or renaming one does the other. `--relative-paths` (git 2.48) links the two `.git`s relatively, so the
- * link holds in an sbx sandbox, where the paths differ from the host's on Windows (measured, git
- * 2.53 in the kits: status, commit and branch work with the main `.git` mounted). It sets
+ * A worktree always with a new branch of its own at `base`, the default branch: tet couples the
+ * two, so deleting or renaming one does the other. `--no-track`, as `createBranch`: the first push
+ * publishes it. `--relative-paths` (git 2.48) links the two `.git`s relatively, so the link holds
+ * in an sbx sandbox, where the paths differ from the host's on Windows (measured, git 2.53 in the
+ * kits: status, commit and branch work with the main `.git` mounted). It sets
  * `extensions.relativeWorktrees` in the main repository's config.
+ *
+ * git keeps no branch's origin, so the base is recorded as `branch.<name>.base`, as superset does:
+ * `branch -m` carries the key along and `branch -D` drops it. A failed write loses only that.
  */
-export function worktreeAdd(cwd: string, target: string, branch: string): Promise<GitActionResult> {
-  return run(cwd, ["worktree", "add", "--relative-paths", "-b", branch, "--", target]);
+export async function worktreeAdd(cwd: string, target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
+  const startPoint = base.remote ? `${base.remote}/${base.name}` : base.name;
+  const added = await run(cwd, ["worktree", "add", "--relative-paths", "--no-track", "-b", branch, "--", target, startPoint]);
+  if (added.ok) {
+    await git(cwd, ["config", `branch.${branch}.base`, base.name]).catch(() => undefined);
+  }
+  return added;
 }
 
 /** Without `force` git refuses a worktree with changes or untracked files; a locked one either way. */
@@ -920,8 +961,10 @@ export function worktreeRemove(cwd: string, target: string, force: boolean): Pro
   return run(cwd, ["worktree", "remove", ...(force ? ["--force"] : []), "--", target]);
 }
 
+/** `--relative-paths` again: without it the move writes both links absolute, even in a repository
+ *  set to relative ones (measured, git 2.55), and a sandbox loses the worktree (worktreeAdd). */
 export function worktreeMove(cwd: string, from: string, to: string): Promise<GitActionResult> {
-  return run(cwd, ["worktree", "move", "--", from, to]);
+  return run(cwd, ["worktree", "move", "--relative-paths", "--", from, to]);
 }
 
 /** Forgets worktrees whose folder is gone; until then git keeps their branches checked out. */

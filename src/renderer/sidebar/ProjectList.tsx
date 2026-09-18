@@ -1,12 +1,13 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import type { GitActionResult, Project, RemoteInfo } from "../../shared/types";
 import { canDiscardProjectEdits } from "../diff/editor-views";
-import { askDeleteWorktree, askNewWorktree, askRenameWorktree } from "../git/worktree-questions";
+import { askDeleteWorktree, askNewWorktree, askRenameWorktree, mergeIntoBase } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { notify } from "../ui/Notices";
+import { ProgressBar } from "../ui/ProgressBar";
 import { ChangesIcon, CloseIcon, CommentIcon, PlusIcon, QuestionIcon, ShieldIcon, SpinnerIcon } from "../ui/icons";
 
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
@@ -46,6 +47,12 @@ export interface ProjectHead {
   detached?: boolean;
   /** `head`'s upstream, e.g. "origin/main". */
   upstream?: string;
+  /** For a worktree tet made, the branch it was made from (`WorktreeInfo.base`), and the folder
+   *  where that branch is checked out, if anywhere. */
+  base?: string;
+  baseAt?: string;
+  /** Where a new worktree starts, e.g. "origin/main". */
+  defaultBranch?: string;
   remote?: RemoteInfo;
   dirty?: boolean;
 }
@@ -77,8 +84,10 @@ interface ProjectListProps {
   onShowChanges: (projectId: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
-  /** `App.runBranchAction`: a worktree command shows in that project's bar and fails as a notice. */
+  /** `App.runBranchAction`: a worktree command shows in this list's bar and fails as a notice. */
   onGitAction: (projectId: string, label: string, action: () => Promise<GitActionResult>) => void;
+  /** A command started here runs, in any project. */
+  gitBusy: boolean;
 }
 
 /**
@@ -139,7 +148,8 @@ export const ProjectList = memo(function ProjectList({
   onShowWaiting,
   onShowChanges,
   onSbxSettings,
-  onGitAction
+  onGitAction,
+  gitBusy
 }: ProjectListProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
   const rows = useMemo(() => groupWorktrees(projects), [projects]);
@@ -192,13 +202,26 @@ export const ProjectList = memo(function ProjectList({
   const menuEntries = (project: Project): ContextMenuEntry[] => {
     const remote = heads[project.id]?.remote;
     const web = remote?.url ? webUrl(remote.url) : null;
-    const { head, detached, upstream } = heads[project.id] ?? {};
+    const { head, detached, upstream, base, baseAt, defaultBranch } = heads[project.id] ?? {};
     const mainPath = project.mainPath;
     const own = mainPath === undefined ? undefined : worktreeOf({ ...project, mainPath });
     // Named by its branch, which is its name; by its folder while detached.
     const name = head && !detached ? head : project.name;
+    // Run where the base is checked out, which is a project of its own when it is anywhere.
+    const baseProject = baseAt === undefined ? undefined : projects.find((entry) => entry.path === baseAt);
     const worktree: ContextMenuEntry[] = own
       ? [
+          {
+            label: base ? `Merge into ${base}` : "Merge into its base",
+            run:
+              base && baseProject && !detached
+                ? () =>
+                    mergeIntoBase(name, base, baseProject.id, (label, action) =>
+                      onGitAction(baseProject.id, label, action)
+                    )
+                : undefined
+          },
+          SEPARATOR,
           { label: "Rename worktree...", run: () => void askRenameWorktree(own.ref, name, own.run, own.canClose) },
           {
             label: "Delete worktree...",
@@ -222,13 +245,9 @@ export const ProjectList = memo(function ProjectList({
       SEPARATOR,
       {
         label: "New worktree...",
-        run: () =>
-          void askNewWorktree(
-            project.id,
-            (label, action) => onGitAction(project.id, label, action),
-            // Where it starts: the main worktree's HEAD, whichever row asks.
-            heads[projects.find((entry) => entry.path === (mainPath ?? project.path))?.id ?? project.id]?.head ?? "HEAD"
-          )
+        run: defaultBranch
+          ? () => void askNewWorktree(project.id, (label, action) => onGitAction(project.id, label, action), defaultBranch)
+          : undefined
       },
       ...worktree,
       SEPARATOR,
@@ -247,6 +266,7 @@ export const ProjectList = memo(function ProjectList({
         <button className="icon-button" title="Add repository" onClick={onAdd}>
           <PlusIcon />
         </button>
+        {gitBusy && <ProgressBar />}
       </div>
       <div className="project-list" {...listProps}>
         {rows.map((project, index) => (
@@ -263,8 +283,11 @@ export const ProjectList = memo(function ProjectList({
           >
             <span className="project-main">
               <span className="project-label">{project.name}</span>
-              {/* HEAD, as context rather than name. */}
-              {heads[project.id]?.head && <span className="project-extra">({heads[project.id].head})</span>}
+              {/* HEAD, as context rather than name; for a worktree, whose branch is its name, the
+                  branch it was made from. */}
+              {(heads[project.id]?.base ?? heads[project.id]?.head) && (
+                <span className="project-extra">({heads[project.id].base ?? heads[project.id].head})</span>
+              )}
             </span>
             {/* All three session states can hold at once, each a button to a session. No ranking as
                 on a tab: a row has no single icon to replace. */}

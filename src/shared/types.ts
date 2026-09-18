@@ -313,6 +313,9 @@ export interface WorktreeInfo {
   path: string;
   /** Its checked-out branch; absent while detached. */
   branch?: string;
+  /** The branch a linked worktree's branch was made from, as tet records it (`branch.<name>.base`
+   *  in the repository's config, git.ts's worktreeAdd); absent for one made elsewhere. */
+  base?: string;
   /** The one holding the repository's `.git`, which is never renamed or deleted. */
   main: boolean;
   /** The worktree this state was read in. */
@@ -512,6 +515,19 @@ export interface TerminalDescriptor {
 }
 
 /** As every spinner shows it: never while waiting on a question, whatever `busy` says. */
+/**
+ * Where a new worktree's branch starts: the default branch, else — a repository with no remote HEAD
+ * and no local branch named as `init.defaultBranch` has none — what the main worktree has checked
+ * out. Undefined only while that is detached or unborn.
+ */
+export function worktreeBase(state: RepositoryState): CheckoutTarget | undefined {
+  if (state.defaultBranch) {
+    return state.defaultBranch;
+  }
+  const main = state.worktrees.find((worktree) => worktree.main)?.branch;
+  return main === undefined ? undefined : { name: main };
+}
+
 export function isWorking(tab: TerminalDescriptor): boolean {
   return tab.busy === true && tab.waitingAt === undefined;
 }

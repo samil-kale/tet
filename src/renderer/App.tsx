@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { EMPTY_REPOSITORY_STATE, isWorking } from "../shared/types";
+import { EMPTY_REPOSITORY_STATE, isWorking, worktreeBase } from "../shared/types";
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
@@ -11,6 +11,7 @@ import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
 import type { ProjectHead, ProjectMarks } from "./sidebar/ProjectList";
+import { activeAfterChange } from "./sidebar/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import {
   MIN_CONTENT_WIDTH,
@@ -54,6 +55,8 @@ function diffVersion(state: RepositoryState | undefined, filePath: string, write
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
 const NO_IDS: string[] = [];
+/** Which view started a branch command: its bar shows it. */
+type BranchActionSource = "git" | "projects";
 const DEFAULT_LAYOUT = defaultLayout();
 
 let renderStartedAt = 0;
@@ -117,10 +120,11 @@ export function App() {
     stripTabs,
     starting
   );
-  /** Projects with a branch command in flight — per project: a fetch ending in A must not free B. */
-  const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
+  /** Projects with a branch command in flight — per project: a fetch ending in A must not free B —
+   *  and the view it was started from, whose bar shows it. */
+  const [branchActions, setBranchActions] = useState<ReadonlyMap<string, BranchActionSource>>(() => new Map());
   /** Read synchronously: a second double-click can land before a re-render. */
-  const branchActionsRef = useRef(new Set<string>());
+  const branchActionsRef = useRef(new Map<string, BranchActionSource>());
   // Pane defaults and limits; both side-pane views share the two below ("git-panels" predates the
   // files view).
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
@@ -329,13 +333,11 @@ export function App() {
   useEffect(
     () =>
       window.tet.projects.onChanged(({ projects: list, added, removed }) => {
+        const before = projectsRef.current;
         setProjects(list);
+        setActiveProjectId((current) => activeAfterChange(current, before, list, added, removed));
         if (removed !== undefined) {
-          setActiveProjectId((current) => (current === removed ? (list[0]?.id ?? null) : current));
           forgetProject(removed);
-        }
-        if (added !== undefined) {
-          setActiveProjectId(added);
         }
       }),
     [forgetProject]
@@ -367,12 +369,17 @@ export function App() {
    * question first.
    */
   const runBranchAction = useCallback(
-    async (projectId: string, label: string, action: () => Promise<GitActionResult>) => {
+    async (
+      projectId: string,
+      label: string,
+      action: () => Promise<GitActionResult>,
+      source: BranchActionSource = "git"
+    ) => {
       if (branchActionsRef.current.has(projectId)) {
         return;
       }
-      branchActionsRef.current.add(projectId);
-      setBranchActions(new Set(branchActionsRef.current));
+      branchActionsRef.current.set(projectId, source);
+      setBranchActions(new Map(branchActionsRef.current));
       try {
         const result = await action();
         if (!result.ok) {
@@ -380,7 +387,7 @@ export function App() {
         }
       } finally {
         branchActionsRef.current.delete(projectId);
-        setBranchActions(new Set(branchActionsRef.current));
+        setBranchActions(new Map(branchActionsRef.current));
       }
     },
     []
@@ -502,16 +509,23 @@ export function App() {
       const previous = headsRef.current[projectId];
       const remote = state.remotes[0];
       const dirty = state.changes.length > 0;
+      const base = state.worktrees.find((worktree) => worktree.current)?.base;
+      const baseAt = base === undefined ? undefined : state.worktrees.find((worktree) => worktree.branch === base)?.path;
+      const target = worktreeBase(state);
+      const defaultBranch = target && (target.remote ? `${target.remote}/${target.name}` : target.name);
       next[projectId] =
         previous &&
         previous.head === state.head &&
         previous.detached === state.detached &&
         previous.upstream === state.upstream &&
+        previous.base === base &&
+        previous.baseAt === baseAt &&
+        previous.defaultBranch === defaultBranch &&
         previous.remote?.name === remote?.name &&
         previous.remote?.url === remote?.url &&
         previous.dirty === dirty
           ? previous
-          : { head: state.head, detached: state.detached, upstream: state.upstream, remote, dirty };
+          : { head: state.head, detached: state.detached, upstream: state.upstream, base, baseAt, defaultBranch, remote, dirty };
       changed ||= next[projectId] !== previous;
     }
     if (!changed) {
@@ -871,8 +885,23 @@ export function App() {
   );
   /** The git pane's actions, for the project on screen. */
   const activeBranch = useMemo<BranchActions>(
-    () => ({ busy: activeProjectId !== null && branchActions.has(activeProjectId), run: runActiveBranchAction }),
+    () => ({
+      busy: activeProjectId !== null && branchActions.has(activeProjectId),
+      startedHere: activeProjectId !== null && branchActions.get(activeProjectId) === "git",
+      run: runActiveBranchAction
+    }),
     [branchActions, activeProjectId, runActiveBranchAction]
+  );
+  /** The project list's bar: a command it started, in any project. */
+  const projectListBusy = useMemo(
+    () => [...branchActions.values()].includes("projects"),
+    [branchActions]
+  );
+  /** The project list's commands, told apart so they show in its own bar. */
+  const runProjectListAction = useCallback(
+    (projectId: string, label: string, action: () => Promise<GitActionResult>) =>
+      void runBranchAction(projectId, label, action, "projects"),
+    [runBranchAction]
   );
 
   return (
@@ -901,7 +930,8 @@ export function App() {
             onShowFinished={showFinished}
             onShowWaiting={showWaiting}
             onSbxSettings={openSbxSettings}
-            onGitAction={runBranchAction}
+            onGitAction={runProjectListAction}
+            gitBusy={projectListBusy}
           />
           <Sash
             orientation="horizontal"

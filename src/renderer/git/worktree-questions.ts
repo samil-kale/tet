@@ -14,15 +14,12 @@ type Run = (label: string, action: () => Promise<GitActionResult>) => void;
 /** Always, for a worktree that is no project and so has no editor tabs. */
 const NOTHING_UNSAVED = (): Promise<boolean> => Promise.resolve(true);
 
-/**
- * Names the new branch, which names the worktree. It starts at what the main worktree has checked
- * out, `mainHead`, whichever of its worktrees asks.
- */
-export async function askNewWorktree(projectId: string, run: Run, mainHead: string): Promise<void> {
+/** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
+export async function askNewWorktree(projectId: string, run: Run, base: string): Promise<void> {
   const answer = await prompt({
     title: "New worktree",
-    label: "Branch",
-    detail: `A new branch starting at ${mainHead}, checked out in its own folder under ~/.tet/worktrees and opened as a project.`,
+    label: "Name",
+    detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/worktrees and opened as a project.`,
     value: "",
     confirmLabel: "Create worktree"
   });
@@ -35,6 +32,14 @@ export async function askNewWorktree(projectId: string, run: Run, mainHead: stri
   });
 }
 
+/**
+ * The worktree's branch into the branch it was made from, where that is checked out: `base` is
+ * recorded at creation (git.ts's worktreeAdd), `run` runs in the project holding it.
+ */
+export function mergeIntoBase(branch: string, base: string, baseProjectId: string, run: Run): void {
+  run(`Merging ${branch} into ${base}...`, () => window.tet.repository.merge(baseProjectId, branch));
+}
+
 /** Its terminals end first, which unsaved editor edits get a say in, as on a close. */
 export async function askRenameWorktree(
   worktree: WorktreeRef,
@@ -44,8 +49,8 @@ export async function askRenameWorktree(
 ): Promise<void> {
   const answer = await prompt({
     title: "Rename worktree",
-    label: "Branch",
-    detail: "Renames the branch and its folder. Its terminals are closed first, and agent sessions started there can no longer be resumed.",
+    label: "Name",
+    detail: "Renames the worktree and its folder. Its terminals are closed first, and agent sessions started there can no longer be resumed.",
     value: branch,
     confirmLabel: "Rename"
   });
@@ -69,7 +74,7 @@ export async function askDeleteWorktree(
   const answer = await confirm({
     title: "Delete worktree",
     message: `Are you sure you want to delete ${branch}?`,
-    detail: "Its folder and its branch are deleted, and its terminals closed. Commits that exist only on this branch are lost.",
+    detail: "The worktree and its folder are deleted, and its terminals closed. Commits that exist only in this worktree are lost.",
     confirmLabel: "Delete worktree",
     checkboxLabel: upstream ? `Also delete ${upstream} on the remote` : undefined
   });

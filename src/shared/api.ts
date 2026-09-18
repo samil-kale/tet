@@ -94,7 +94,7 @@ export interface TETApi {
     create(directory: string, name: string): Promise<AddRepositoryResult>;
     remove(projectId: string): Promise<void>;
     /** A worktree of the project's repository under `~/.tet/worktrees` with a new branch of its own,
-     *  `branch` at the main worktree's HEAD, opened as a project. Worktree and branch are one:
+     *  `branch` at the default branch (`worktreeBase`), opened as a project. Worktree and branch are one:
      *  deleting or renaming either does both. Announced as `onChanged`. */
     addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
     /** Unless `force`, answers `uncommitted` for a worktree with changes, closing nothing; else closes
