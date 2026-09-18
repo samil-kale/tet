@@ -1577,8 +1577,9 @@ textarea:focus {
   font-family: var(--vscode-editor-font-family);
 }
 
-/* A path sbx's policy would refuse: the error mark's colour, as .session-mark-error. */
-.sbx-path-denied {
+/* A row Save or sbx's policy refuses: the error mark's colour, as .session-mark-error. Scoped to
+   `.dialog-field` to outrank `.dialog-field span`, which would grey it. */
+.dialog-field .sbx-path-denied {
   display: flex;
   flex: none;
   color: var(--vscode-errorForeground);

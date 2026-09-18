@@ -432,7 +432,8 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                   className="sbx-secret-input"
                   type="password"
                   autoComplete="off"
-                  placeholder={stored ? "Unchanged" : "Value"}
+                  // A stored value as a set password shows, never the value itself (the title says so).
+                  placeholder={stored ? "••••••••" : "Value"}
                   title={
                     stored
                       ? "Stored on this machine; typing replaces it. The sandbox never sees it."
