@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
+import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
 import type {
   CheckoutTarget,
   ChangeStatus,
@@ -477,8 +477,11 @@ async function readBaseBranches(commonDir: string): Promise<Map<string, string>>
       branch = undefined;
       continue;
     }
-    const entry = branch === undefined ? null : /^\s*base\s*=\s*(.*?)\s*$/i.exec(line);
-    if (branch !== undefined && entry) {
+    if (branch === undefined) {
+      continue;
+    }
+    const entry = /^\s*base\s*=\s*(.*?)\s*$/i.exec(line);
+    if (entry) {
       bases.set(branch, entry[1].replace(/^"(.*)"$/, "$1"));
     }
   }
@@ -948,8 +951,7 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
  * `branch -m` carries the key along and `branch -D` drops it. A failed write loses only that.
  */
 export async function worktreeAdd(cwd: string, target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
-  const startPoint = base.remote ? `${base.remote}/${base.name}` : base.name;
-  const added = await run(cwd, ["worktree", "add", "--relative-paths", "--no-track", "-b", branch, "--", target, startPoint]);
+  const added = await run(cwd, ["worktree", "add", "--relative-paths", "--no-track", "-b", branch, "--", target, refName(base)]);
   if (added.ok) {
     await git(cwd, ["config", `branch.${branch}.base`, base.name]).catch(() => undefined);
   }

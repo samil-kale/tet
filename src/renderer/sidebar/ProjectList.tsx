@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import type { GitActionResult, Project, RemoteInfo } from "../../shared/types";
 import { canDiscardProjectEdits } from "../diff/editor-views";
-import { askDeleteWorktree, askNewWorktree, askRenameWorktree, mergeIntoBase } from "../git/worktree-questions";
+import { askDeleteWorktree, askNewWorktree, askRenameWorktree } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
@@ -190,12 +190,11 @@ export const ProjectList = memo(function ProjectList({
     }
   };
 
-  /** A worktree row's own reference, with its unsaved edits' say before its terminals close. */
-  const worktreeOf = (project: Project & { mainPath: string }) => ({
-    ref: { path: project.path, mainPath: project.mainPath },
-    run: (label: string, action: () => Promise<GitActionResult>) => onGitAction(project.id, label, action),
-    canClose: () => canDiscardProjectEdits(project.id)
-  });
+  /** How a command runs in a project: its progress bar, a failure as a notice. */
+  const runIn =
+    (projectId: string) =>
+    (label: string, action: () => Promise<GitActionResult>): void =>
+      onGitAction(projectId, label, action);
 
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
    *  pane, where its target is on screen — but for a worktree's own row, which is that tree. */
@@ -203,29 +202,31 @@ export const ProjectList = memo(function ProjectList({
     const remote = heads[project.id]?.remote;
     const web = remote?.url ? webUrl(remote.url) : null;
     const { head, detached, upstream, base, baseAt, defaultBranch } = heads[project.id] ?? {};
-    const mainPath = project.mainPath;
-    const own = mainPath === undefined ? undefined : worktreeOf({ ...project, mainPath });
     // Named by its branch, which is its name; by its folder while detached.
     const name = head && !detached ? head : project.name;
-    // Run where the base is checked out, which is a project of its own when it is anywhere.
+    // Run where the base is checked out, which is a project of its own when it is anywhere. The
+    // base is recorded at creation (git.ts's worktreeAdd).
     const baseProject = baseAt === undefined ? undefined : projects.find((entry) => entry.path === baseAt);
-    const worktree: ContextMenuEntry[] = own
+    const ref = project.mainPath === undefined ? undefined : { path: project.path, mainPath: project.mainPath };
+    // Its unsaved edits have a say before its terminals close.
+    const canClose = () => canDiscardProjectEdits(project.id);
+    const worktree: ContextMenuEntry[] = ref
       ? [
           {
             label: base ? `Merge into ${base}` : "Merge into its base",
             run:
               base && baseProject && !detached
                 ? () =>
-                    mergeIntoBase(name, base, baseProject.id, (label, action) =>
-                      onGitAction(baseProject.id, label, action)
+                    runIn(baseProject.id)(`Merging ${name} into ${base}...`, () =>
+                      window.tet.repository.merge(baseProject.id, name)
                     )
                 : undefined
           },
           SEPARATOR,
-          { label: "Rename worktree...", run: () => void askRenameWorktree(own.ref, name, own.run, own.canClose) },
+          { label: "Rename worktree...", run: () => void askRenameWorktree(ref, name, runIn(project.id), canClose) },
           {
             label: "Delete worktree...",
-            run: () => void askDeleteWorktree(own.ref, name, upstream, own.run, own.canClose)
+            run: () => void askDeleteWorktree(ref, name, upstream, runIn(project.id), canClose)
           }
         ]
       : [];
@@ -246,7 +247,7 @@ export const ProjectList = memo(function ProjectList({
       {
         label: "New worktree...",
         run: defaultBranch
-          ? () => void askNewWorktree(project.id, (label, action) => onGitAction(project.id, label, action), defaultBranch)
+          ? () => void askNewWorktree(project.id, runIn(project.id), defaultBranch)
           : undefined
       },
       ...worktree,
@@ -269,56 +270,57 @@ export const ProjectList = memo(function ProjectList({
         {gitBusy && <ProgressBar />}
       </div>
       <div className="project-list" {...listProps}>
-        {rows.map((project, index) => (
-          <div
-            key={project.id}
-            className={itemClass(project, index)}
-            onClick={() => onSelect(project.id)}
-            title={project.path}
-            {...rowProps(index)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setMenu({ x: event.clientX, y: event.clientY, project });
-            }}
-          >
-            <span className="project-main">
-              <span className="project-label">{project.name}</span>
-              {/* HEAD, as context rather than name; for a worktree, whose branch is its name, the
-                  branch it was made from. */}
-              {(heads[project.id]?.base ?? heads[project.id]?.head) && (
-                <span className="project-extra">({heads[project.id].base ?? heads[project.id].head})</span>
-              )}
-            </span>
-            {/* All three session states can hold at once, each a button to a session. No ranking as
-                on a tab: a row has no single icon to replace. */}
-            {(marks[project.id]?.waiting.length ?? 0) > 0 &&
-              rowButton(
-                "Open the session waiting for an answer",
-                () => onShowWaiting(project.id),
-                <QuestionIcon className="session-mark" />
-              )}
-            {marks[project.id]?.busy &&
-              rowButton(
-                "Open the session that is working",
-                () => onShowBusy(project.id),
-                <SpinnerIcon className="session-mark spinning" />
-              )}
-            {/* Going to the session clears the mark. */}
-            {(marks[project.id]?.finished.length ?? 0) > 0 &&
-              rowButton(
-                "Open the session that finished",
-                () => onShowFinished(project.id),
-                <CommentIcon className="session-mark" />
-              )}
-            {/* From the status every refresh loads — no extra git call. */}
-            {heads[project.id]?.dirty &&
-              rowButton("Uncommitted changes", () => onShowChanges(project.id), <ChangesIcon />)}
-            {/* The switch is on, not that a tab got a sandbox: when sbx is unavailable a tab stays in
-                error rather than running on the host (resolveSbxRun). */}
-            {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
-            {rowButton("Close repository", () => onClose(project.id), <CloseIcon />)}
-          </div>
-        ))}
+        {rows.map((project, index) => {
+          const extra = heads[project.id]?.base ?? heads[project.id]?.head;
+          return (
+            <div
+              key={project.id}
+              className={itemClass(project, index)}
+              onClick={() => onSelect(project.id)}
+              title={project.path}
+              {...rowProps(index)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setMenu({ x: event.clientX, y: event.clientY, project });
+              }}
+            >
+              <span className="project-main">
+                <span className="project-label">{project.name}</span>
+                {/* HEAD, as context rather than name; for a worktree, whose branch is its name, the
+                    branch it was made from. */}
+                {extra && <span className="project-extra">({extra})</span>}
+              </span>
+              {/* All three session states can hold at once, each a button to a session. No ranking as
+                  on a tab: a row has no single icon to replace. */}
+              {(marks[project.id]?.waiting.length ?? 0) > 0 &&
+                rowButton(
+                  "Open the session waiting for an answer",
+                  () => onShowWaiting(project.id),
+                  <QuestionIcon className="session-mark" />
+                )}
+              {marks[project.id]?.busy &&
+                rowButton(
+                  "Open the session that is working",
+                  () => onShowBusy(project.id),
+                  <SpinnerIcon className="session-mark spinning" />
+                )}
+              {/* Going to the session clears the mark. */}
+              {(marks[project.id]?.finished.length ?? 0) > 0 &&
+                rowButton(
+                  "Open the session that finished",
+                  () => onShowFinished(project.id),
+                  <CommentIcon className="session-mark" />
+                )}
+              {/* From the status every refresh loads — no extra git call. */}
+              {heads[project.id]?.dirty &&
+                rowButton("Uncommitted changes", () => onShowChanges(project.id), <ChangesIcon />)}
+              {/* The switch is on, not that a tab got a sandbox: when sbx is unavailable a tab stays in
+                  error rather than running on the host (resolveSbxRun). */}
+              {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
+              {rowButton("Close repository", () => onClose(project.id), <CloseIcon />)}
+            </div>
+          );
+        })}
       </div>
 
       {menu && (

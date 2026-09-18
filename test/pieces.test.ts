@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import { safeStorage } from "electron";
 import * as esbuild from "esbuild";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { hookSessionId } from "../src/main/agents/hook-payload";
@@ -29,6 +30,7 @@ import {
   secretPlaceholder
 } from "../src/main/sbx";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
+import { SbxSecretStore } from "../src/main/sbx-secrets";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
@@ -342,7 +344,10 @@ describe("saving an sbx config", () => {
    * sandbox, this project's Claude one, so the other three agents are skipped; `policy ls` answers
    * no rules, so hosts add nothing to the log.
    */
-  function fakeSbx(answers: { published: object[]; refuse?: string; secrets?: object[] }): { dir: string; projectPath: string } {
+  function fakeSbx(answers: { published: object[]; refuse?: string; secrets?: object[]; secretsFail?: boolean }): {
+    dir: string;
+    projectPath: string;
+  } {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
     const projectPath = path.join(dir, "repo");
     fs.mkdirSync(projectPath);
@@ -365,6 +370,10 @@ if (args[0] === "ls") {
 } else if (args[0] === "ports" && args[2] === "--json") {
   process.stdout.write(JSON.stringify(answers.published));
 } else if (args[0] === "secret" && args[1] === "ls") {
+  if (answers.secretsFail) {
+    process.stderr.write("ERROR: secrets engine unavailable\\n");
+    process.exit(1);
+  }
   process.stdout.write(JSON.stringify({ secrets: [], custom_secrets: answers.secrets ?? [] }));
 } else if (args[0] === "secret" && args[1] === "set-custom") {
   fs.appendFileSync(answers.log, "stdin " + fs.readFileSync(0, "utf8") + "\\n");
@@ -479,8 +488,9 @@ if (args[0] === "ls") {
       const result = await saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, values, new Set(["CHANGED"]));
       const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
       const placeholder = (env: string) => secretPlaceholder(projectId, env);
-      assert.deepEqual(calls.slice(2), [
-        "secret ls --json",
+      // The two listings run together, in either order.
+      assert.deepEqual(calls.slice(1, 3).sort(), ["policy ls --type network --include-inactive --json", "secret ls --json"]);
+      assert.deepEqual(calls.slice(3), [
         `secret rm --sandbox ${name} --placeholder ${placeholder("CHANGED")} -f`,
         `secret rm --sandbox ${name} --placeholder ${placeholder("REHOSTED")} -f`,
         `secret rm --sandbox ${name} --placeholder ${placeholder("DROPPED")} -f`,
@@ -497,6 +507,41 @@ if (args[0] === "ls") {
     } finally {
       process.env.PATH = originalPath;
     }
+  });
+
+  it("changes no secret, and says so, where sbx does not list them", async () => {
+    const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
+    const originalPath = process.env.PATH;
+    process.env.PATH = pathWith(dir);
+    try {
+      const config = { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "TOKEN", hosts: ["api.example.com"] }] };
+      const result = await saveSbxConfig(projectPath, projectId, config, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]));
+      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
+      assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
+      assert.deepEqual(result.secretFailures, ["The Claude sandbox could not list its secrets, so none were changed."]);
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+});
+
+describe("the sbx secrets kept on this machine", () => {
+  it("count as stored only where they can still be decrypted", () => {
+    // "sealed:" stands in for the OS's encryption; anything else was sealed under another keychain.
+    Object.assign(safeStorage, {
+      decryptString: (buffer: Buffer) => {
+        const text = buffer.toString();
+        if (!text.startsWith("sealed:")) {
+          throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+        }
+        return text.slice("sealed:".length);
+      }
+    });
+    const store = new SbxSecretStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
+    const base64 = (text: string) => Buffer.from(text).toString("base64");
+    store.restore("p", { READABLE: base64("sealed:value"), LOST: base64("under another keychain") });
+    assert.deepEqual(store.stored("p"), ["READABLE"]);
+    assert.deepEqual([...store.values("p")], [["READABLE", "value"]]);
   });
 });
 

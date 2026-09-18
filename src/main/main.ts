@@ -18,7 +18,7 @@ import type { ToastTarget } from "./control/control-server";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
-import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject } from "./projects";
+import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, type ProjectDeps } from "./projects";
 import { configureSandboxes } from "./sbx";
 import { SbxSecretStore } from "./sbx-secrets";
 import { resolveDataRoot } from "./data-root";
@@ -233,6 +233,18 @@ function openProject(project: Project): void {
   sessions.open(project);
 }
 
+/** For opening and closing projects, shared by the window (ipc.ts) and the control channel. */
+const projectDeps: ProjectDeps = {
+  store,
+  repositories,
+  sessions,
+  records,
+  sbxSecrets,
+  openProject,
+  dataRoot,
+  projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change })
+};
+
 let workspaceOpen = false;
 
 /** Opens the stored projects once the requirements check passes. Idempotent: the check reruns. */
@@ -443,9 +455,6 @@ async function startControl(): Promise<void> {
   if (!controlChannel) {
     return;
   }
-  const projectsChanged = (change: { added?: string; removed?: string }): void =>
-    send("projects:changed", { projects: store.list(), ...change });
-  const projectDeps = { store, repositories, sessions, records, sbxSecrets, openProject, dataRoot, projectsChanged };
   try {
     controlServer = await startControlServer(
       {
@@ -477,7 +486,7 @@ async function startControl(): Promise<void> {
         openEditor: (projectId, filePath, keep) => send("editor:open", { projectId, path: filePath, keep }),
         editorContent,
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
-        projectsChanged,
+        projectsChanged: projectDeps.projectsChanged,
         notify: showDesktopNotification,
         applyTheme
       },
@@ -650,7 +659,21 @@ if (!app.requestSingleInstanceLock()) {
     // (ensureSandboxLauncher).
     configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
-    registerIpc({ dataRoot, store, settings, accounts, sbxSecrets, repositories, sessions, records, send, openProject, openWorkspace, applyTheme });
+    registerIpc({
+      dataRoot,
+      store,
+      settings,
+      accounts,
+      sbxSecrets,
+      repositories,
+      sessions,
+      records,
+      projectDeps,
+      send,
+      openProject,
+      openWorkspace,
+      applyTheme
+    });
     timeStartup("window", createWindow);
     // The git process inherits its environment at the fork, so it waits for PATH; started up front
     // while the renderer loads.

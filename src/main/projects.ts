@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
@@ -116,8 +116,11 @@ export async function addWorktree(deps: ProjectDeps, projectId: string, branch: 
     return { error: "There is no branch to start a worktree at" };
   }
   const mainPath = project.mainPath ?? project.path;
-  // `~/.tet/worktrees/<repository>/<branch>`.
-  const target = path.join(deps.dataRoot, "worktrees", path.basename(mainPath), worktreeFolderName(branch));
+  // `~/.tet/worktrees/<repository>-<hash>/<branch>`: the hash of its path keeps two repositories of
+  // one name apart, which would otherwise share their worktrees' folder.
+  const hash = createHash("sha1").update(mainPath).digest("hex").slice(0, 8);
+  const repositoryFolder = `${path.basename(mainPath)}-${hash}`;
+  const target = path.join(deps.dataRoot, "worktrees", repositoryFolder, worktreeFolderName(branch));
   const result = await repository.addWorktree(target, branch.trim(), base);
   if (!result.ok) {
     return { error: result.error || "Creating the worktree failed" };
@@ -191,23 +194,26 @@ export async function deleteWorktree(
   if (await uncommitted()) {
     return { ok: false, uncommitted: true };
   }
-  const result = await withWorktreeClosed(
-    deps,
-    worktreePath,
-    // Asked again with its terminals gone: one may have written meanwhile, and git would refuse
-    // without the question being put.
-    async () =>
-      (await uncommitted())
-        ? { ok: false, uncommitted: true }
-        : gone
-          ? repository.pruneWorktrees()
-          : repository.removeWorktree(worktreePath, force),
-    (outcome) => (outcome.ok ? undefined : worktreePath)
-  );
-  if (!result.ok || branch === undefined) {
-    return result;
-  }
-  return repository.deleteBranch(branch, onRemote);
+  // One hold of the repository: a command running elsewhere refuses this before the project closes.
+  return repository.exclusive(async () => {
+    const result = await withWorktreeClosed(
+      deps,
+      worktreePath,
+      // Asked again with its terminals gone: one may have written meanwhile, and git would refuse
+      // without the question being put.
+      async () =>
+        (await uncommitted())
+          ? { ok: false, uncommitted: true }
+          : gone
+            ? repository.pruneWorktrees()
+            : repository.removeWorktree(worktreePath, force),
+      (outcome) => (outcome.ok ? undefined : worktreePath)
+    );
+    if (!result.ok || branch === undefined) {
+      return result;
+    }
+    return repository.deleteBranch(branch, onRemote);
+  });
 }
 
 /**
@@ -223,38 +229,42 @@ export async function renameWorktree(deps: ProjectDeps, worktree: WorktreeRef, b
   }
   const from = await worktreeBranch(worktree);
   const to = branch.trim();
-  if (from !== undefined) {
-    const renamed = await repository.renameBranch(from, to);
-    if (!renamed.ok) {
-      return renamed;
-    }
-  }
-  const folder = onDisk(worktreePath);
-  const target = path.join(path.dirname(folder), worktreeFolderName(to));
-  // The same folder, e.g. `feature/x` renamed to `feature-x`: nothing to move, nothing to close.
-  if (target === folder) {
-    return { ok: true };
-  }
-  // By case alone git cannot move a folder onto itself (measured: "Invalid argument"), so through a
-  // name of its own first.
-  const byCaseAlone = target.toLowerCase() === folder.toLowerCase();
-  const moved = await withWorktreeClosed(
-    deps,
-    folder,
-    async () => {
-      if (!byCaseAlone) {
-        return repository.moveWorktree(folder, target);
+  // One hold of the repository, as deleteWorktree's: nothing can take it between the branch's
+  // rename and the folder's, or the rename back.
+  return repository.exclusive(async () => {
+    if (from !== undefined) {
+      const renamed = await repository.renameBranch(from, to);
+      if (!renamed.ok) {
+        return renamed;
       }
-      const between = `${target}.tet-rename`;
-      const first = await repository.moveWorktree(folder, between);
-      return first.ok ? repository.moveWorktree(between, target) : first;
-    },
-    (outcome) => (outcome.ok ? target : folder)
-  );
-  if (!moved.ok && from !== undefined) {
-    await repository.renameBranch(to, from);
-  }
-  return moved;
+    }
+    const folder = onDisk(worktreePath);
+    const target = path.join(path.dirname(folder), worktreeFolderName(to));
+    // The same folder, e.g. `feature/x` renamed to `feature-x`: nothing to move, nothing to close.
+    if (target === folder) {
+      return { ok: true };
+    }
+    // By case alone git cannot move a folder onto itself (measured: "Invalid argument"), so through
+    // a name of its own first.
+    const byCaseAlone = target.toLowerCase() === folder.toLowerCase();
+    const moved = await withWorktreeClosed(
+      deps,
+      folder,
+      async () => {
+        if (!byCaseAlone) {
+          return repository.moveWorktree(folder, target);
+        }
+        const between = `${target}.tet-rename`;
+        const first = await repository.moveWorktree(folder, between);
+        return first.ok ? repository.moveWorktree(between, target) : first;
+      },
+      (outcome) => (outcome.ok ? target : folder)
+    );
+    if (!moved.ok && from !== undefined) {
+      await repository.renameBranch(to, from);
+    }
+    return moved;
+  });
 }
 
 /** The open repositories, persisted so the window comes back with the same project tabs. */

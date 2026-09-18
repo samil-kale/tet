@@ -69,6 +69,12 @@ interface RunResult {
   stderr: string;
 }
 
+/** What sbx said on failing: its last line, `ERROR: …` without the prefix — progress lines
+ *  ("Starting sandboxd daemon...") precede it. Empty when it said nothing. */
+function sbxError(result: RunResult): string {
+  return result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "") ?? "";
+}
+
 /** Every `sbx` invocation: a plain spawn through `resolveCommand`, no shell, from the temp
  *  directory so the working directory never reads as a workspace. */
 function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
@@ -320,9 +326,7 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   const sandboxes = parseSandboxes(list);
   if (!sandboxes) {
     if (!/not authenticated/i.test(list.stderr)) {
-      // The last line is sbx's `ERROR: …`; progress lines ("Starting sandboxd daemon...") precede it.
-      const said = list.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "");
-      status.failure = said || "sbx ls failed";
+      status.failure = sbxError(list) || "sbx ls failed";
     }
     return { status };
   }
@@ -844,7 +848,7 @@ async function applyPortChanges(
   for (const [flag, key] of changes) {
     const result = await runSbx(["ports", name, flag, key], { onData });
     if (!result.ok) {
-      const said = result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "");
+      const said = sbxError(result);
       failures.push(`could not ${flag.slice(2)} port ${key}${said ? ` (${said})` : ""}`);
     }
   }
@@ -874,24 +878,29 @@ interface LiveSecret {
  * Each sandbox's custom secrets — the truth applySecrets works against, as readSandboxHosts is for
  * hosts — from one `sbx secret ls --json` (`custom_secrets`: `{scope, targets, env, placeholder,
  * secret}`, scope the sandbox's name or "global"; measured, 0.42.1). Never the value: sbx lists
- * only its first characters.
+ * only its first characters. Undefined when sbx does not answer: read as none, every secret set
+ * would fail as "already exists", and a changed one would never arrive.
  */
-async function readSandboxSecrets(): Promise<Map<string, LiveSecret[]>> {
-  const secrets = new Map<string, LiveSecret[]>();
+async function readSandboxSecrets(): Promise<Map<string, LiveSecret[]> | undefined> {
+  const result = await runSbx(["secret", "ls", "--json"]);
+  if (!result.ok) {
+    return undefined;
+  }
   try {
-    const parsed = JSON.parse((await runSbx(["secret", "ls", "--json"])).stdout) as {
+    const parsed = JSON.parse(result.stdout) as {
       custom_secrets?: { scope?: string; targets?: string[]; placeholder?: string }[];
     };
+    const secrets = new Map<string, LiveSecret[]>();
     for (const secret of parsed.custom_secrets ?? []) {
       if (secret.scope && secret.placeholder) {
         const live = { placeholder: secret.placeholder, hosts: secret.targets ?? [] };
         secrets.set(secret.scope, [...(secrets.get(secret.scope) ?? []), live]);
       }
     }
+    return secrets;
   } catch {
-    // Unreadable reads as none: every secret is then set again.
+    return undefined;
   }
-  return secrets;
 }
 
 /**
@@ -938,7 +947,7 @@ async function applySecrets(
       onData
     });
     if (!result.ok) {
-      const said = result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "");
+      const said = sbxError(result);
       failures.push(`could not set secret ${secret.env}${said ? ` (${said})` : ""}`);
     }
   }
@@ -1050,7 +1059,7 @@ export async function prepareSbxRun(
     // Best-effort like the hosts — sbx's refusal is in the tab's output.
     await applyPortChanges(name, { removed: [], added: config.ports }, onData);
     // The sandbox's secrets went with any earlier one of its name; after that they are the truth.
-    await applySecrets(name, request.projectId, secrets, secretValues, [], new Set(), onData);
+    await applySecrets(name, request.projectId, config.secrets, secretValues, [], new Set(), onData);
   }
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged (verified, 2026-09-08: "sandbox 'x'
@@ -1098,9 +1107,13 @@ export async function saveSbxConfig(
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   await writeSbxConfig(projectPath, config);
   const sandboxes = (await listSandboxes()) ?? new Map();
-  const liveHosts = await readSandboxHosts();
   const secrets = config.secrets.length > 0 || previous.secrets.length > 0;
-  const liveSecrets = secrets ? await readSandboxSecrets() : new Map<string, LiveSecret[]>();
+  // Both answer for every sandbox at once, so they are asked together, and only when the project
+  // has one: each is an sbx process (~0.45 s).
+  const any = SBX_AGENT_IDS.some((agentId) => sandboxes.has(sandboxName(projectId, agentId)));
+  const [liveHosts, liveSecrets] = any
+    ? await Promise.all([readSandboxHosts(), secrets ? readSandboxSecrets() : new Map<string, LiveSecret[]>()])
+    : [new Map<string, string[]>(), new Map<string, LiveSecret[]>()];
   const removed: SbxAgentId[] = [];
   const portFailures: string[] = [];
   const secretFailures: string[] = [];
@@ -1129,8 +1142,9 @@ export async function saveSbxConfig(
     await revokeStaleHosts(name, liveHosts.get(name) ?? [], config.hosts);
     await allowHosts(name, config.hosts);
     if (secrets) {
-      const live = liveSecrets.get(name) ?? [];
-      const failures = await applySecrets(name, projectId, config.secrets, secretValues, live, changedSecrets);
+      const failures = liveSecrets
+        ? await applySecrets(name, projectId, config.secrets, secretValues, liveSecrets.get(name) ?? [], changedSecrets)
+        : ["could not list its secrets, so none were changed"];
       secretFailures.push(...failures.map((failure) => `The ${getAgent(agentId).displayName} sandbox ${failure}.`));
     }
   }

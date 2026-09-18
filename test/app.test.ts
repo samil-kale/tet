@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -257,8 +258,10 @@ ${stderr.slice(uncaught)}`);
     const added = await ctl("worktree-add", "from/ctl", "--project", main.id);
     assert.equal(added.status, 0, added.stderr);
     const worktree = added.result as Project;
-    // The branch names the folder, a "/" in it no subfolder.
-    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "worktrees", path.basename(main.path), "from-ctl"));
+    // The branch names the folder, a "/" in it no subfolder; the repository's folder carries a hash
+    // of its path.
+    const repositoryFolder = `${path.basename(main.path)}-${createHash("sha1").update(main.path).digest("hex").slice(0, 8)}`;
+    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "worktrees", repositoryFolder, "from-ctl"));
     assert.equal(worktree.mainPath, main.path);
     await eventually(
       "the new branch read",

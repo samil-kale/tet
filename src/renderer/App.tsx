@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { EMPTY_REPOSITORY_STATE, isWorking, worktreeBase } from "../shared/types";
+import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
@@ -512,7 +512,7 @@ export function App() {
       const base = state.worktrees.find((worktree) => worktree.current)?.base;
       const baseAt = base === undefined ? undefined : state.worktrees.find((worktree) => worktree.branch === base)?.path;
       const target = worktreeBase(state);
-      const defaultBranch = target && (target.remote ? `${target.remote}/${target.name}` : target.name);
+      const defaultBranch = target && refName(target);
       next[projectId] =
         previous &&
         previous.head === state.head &&

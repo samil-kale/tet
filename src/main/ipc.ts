@@ -51,7 +51,15 @@ import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererSlow, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
 import { relativeInside } from "./path-inside";
-import { addProject, addWorktree, removeProject, deleteWorktree, renameWorktree, type ProjectStore } from "./projects";
+import {
+  addProject,
+  addWorktree,
+  removeProject,
+  deleteWorktree,
+  renameWorktree,
+  type ProjectDeps,
+  type ProjectStore
+} from "./projects";
 import { isExecutableFile, isOpenableUrl } from "./shell-open";
 import type { Repository, RepositoryManager } from "./git/repository";
 import { anyAgentInstalled, checkRequirements } from "./requirements";
@@ -71,6 +79,8 @@ export interface IpcDeps {
   sessions: SessionManagerRegistry;
   /** The window's reports for the control verbs. */
   records: ControlRecords;
+  /** Shared with the control channel (main.ts). */
+  projectDeps: ProjectDeps;
   /** Posts to the window, or nowhere while none is open. */
   send: (channel: string, payload: unknown) => void;
   /** Shared with the bootstrap's restore. */
@@ -130,6 +140,7 @@ export function registerIpc({
   repositories,
   sessions,
   records,
+  projectDeps,
   send,
   openProject,
   openWorkspace,
@@ -274,17 +285,6 @@ export function registerIpc({
     }
   );
 
-  const projectDeps = {
-    store,
-    repositories,
-    sessions,
-    records,
-    sbxSecrets,
-    openProject,
-    dataRoot,
-    projectsChanged: (change: { added?: string; removed?: string }) =>
-      send("projects:changed", { projects: store.list(), ...change })
-  };
 
   ipcMain.handle("projects:open-path", (_event, directory: string): Promise<AddRepositoryResult> =>
     addProject(projectDeps, directory)

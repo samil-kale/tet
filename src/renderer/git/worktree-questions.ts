@@ -11,9 +11,6 @@ import { confirm, prompt } from "../ui/Dialog";
  */
 type Run = (label: string, action: () => Promise<GitActionResult>) => void;
 
-/** Always, for a worktree that is no project and so has no editor tabs. */
-const NOTHING_UNSAVED = (): Promise<boolean> => Promise.resolve(true);
-
 /** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
 export async function askNewWorktree(projectId: string, run: Run, base: string): Promise<void> {
   const answer = await prompt({
@@ -32,20 +29,12 @@ export async function askNewWorktree(projectId: string, run: Run, base: string):
   });
 }
 
-/**
- * The worktree's branch into the branch it was made from, where that is checked out: `base` is
- * recorded at creation (git.ts's worktreeAdd), `run` runs in the project holding it.
- */
-export function mergeIntoBase(branch: string, base: string, baseProjectId: string, run: Run): void {
-  run(`Merging ${branch} into ${base}...`, () => window.tet.repository.merge(baseProjectId, branch));
-}
-
 /** Its terminals end first, which unsaved editor edits get a say in, as on a close. */
 export async function askRenameWorktree(
   worktree: WorktreeRef,
   branch: string,
   run: Run,
-  canClose: () => Promise<boolean> = NOTHING_UNSAVED
+  canClose: () => Promise<boolean>
 ): Promise<void> {
   const answer = await prompt({
     title: "Rename worktree",
@@ -69,7 +58,7 @@ export async function askDeleteWorktree(
   branch: string,
   upstream: string | undefined,
   run: Run,
-  canClose: () => Promise<boolean> = NOTHING_UNSAVED
+  canClose: () => Promise<boolean>
 ): Promise<void> {
   const answer = await confirm({
     title: "Delete worktree",

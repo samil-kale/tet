@@ -22,9 +22,10 @@ export class SbxSecretStore {
     this.load();
   }
 
-  /** The env names holding a value for the project. */
+  /** The env names holding a value for the project that can still be decrypted — the ones a spawn
+   *  applies, so the dialog asks again for the others. */
   stored(projectId: string): string[] {
-    return Object.keys(this.secrets[projectId] ?? {});
+    return [...this.values(projectId).keys()];
   }
 
   /**
@@ -68,16 +69,18 @@ export class SbxSecretStore {
   }
 
   restore(projectId: string, encrypted: Record<string, string>): void {
-    this.setProject(projectId, { ...encrypted });
+    this.setProject(projectId, encrypted);
   }
 
+  /** Written only on a change: every SBX Save passes through `update`. */
   private setProject(projectId: string, project: Record<string, string>): void {
+    if (JSON.stringify(project) === JSON.stringify(this.secrets[projectId] ?? {})) {
+      return;
+    }
     if (Object.keys(project).length > 0) {
       this.secrets[projectId] = project;
-    } else if (this.secrets[projectId]) {
-      delete this.secrets[projectId];
     } else {
-      return;
+      delete this.secrets[projectId];
     }
     this.save();
   }

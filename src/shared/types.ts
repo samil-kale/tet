@@ -527,7 +527,6 @@ export interface TerminalDescriptor {
   command?: string;
 }
 
-/** As every spinner shows it: never while waiting on a question, whatever `busy` says. */
 /**
  * Where a new worktree's branch starts: the default branch, else — a repository with no remote HEAD
  * and no local branch named as `init.defaultBranch` has none — what the main worktree has checked
@@ -541,6 +540,12 @@ export function worktreeBase(state: RepositoryState): CheckoutTarget | undefined
   return main === undefined ? undefined : { name: main };
 }
 
+/** The ref git and the UI name a target by: `remote/name` for a remote branch. */
+export function refName(target: CheckoutTarget): string {
+  return target.remote ? `${target.remote}/${target.name}` : target.name;
+}
+
+/** As every spinner shows it: never while waiting on a question, whatever `busy` says. */
 export function isWorking(tab: TerminalDescriptor): boolean {
   return tab.busy === true && tab.waitingAt === undefined;
 }

@@ -9,10 +9,11 @@ import type { ControlRecords } from "../src/main/control/control-records";
 import * as gitModule from "../src/main/git/git";
 import type { GitRequest, GitResponse } from "../src/main/git/git-host";
 import { RepositoryManager } from "../src/main/git/repository";
-import { deleteWorktree, ProjectStore, renameWorktree, type ProjectDeps } from "../src/main/projects";
+import { addWorktree, deleteWorktree, ProjectStore, renameWorktree, type ProjectDeps } from "../src/main/projects";
 import { SbxSecretStore } from "../src/main/sbx-secrets";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import type { Project } from "../src/shared/types";
+import { eventually } from "./helpers";
 
 /**
  * projects.ts's worktree actions against the real git and real Repositories, the project's
@@ -156,6 +157,62 @@ describe("a worktree deleted with its main project closed", () => {
     assert.ok(remoteHas(repo.bare, "alone"));
     assert.equal(store.list().length, 1, "its project still open");
     assert.deepEqual(changes, []);
+  });
+});
+
+describe("worktrees of two repositories with one folder name", () => {
+  it("are kept apart under ~/.tet/worktrees", async () => {
+    const repositoryNamedApp = (): string => {
+      const folder = path.join(real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-same-"))), "app");
+      fs.mkdirSync(folder);
+      git(folder, "init", "-q", "--initial-branch=main");
+      git(folder, "commit", "-q", "--allow-empty", "-m", "base");
+      return folder;
+    };
+    const first = repositoryNamedApp();
+    const second = repositoryNamedApp();
+    const { deps, store, repositories } = await open([first, second]);
+    const idOf = (folder: string) => store.list().find((project) => project.path === folder)!.id;
+    // The first read, which knows the branch a worktree starts at.
+    await eventually("both repositories read", () =>
+      [first, second].every((folder) => repositories.get(idOf(folder))?.getState().defaultBranch !== undefined)
+    );
+    const added = [await addWorktree(deps, idOf(first), "feature"), await addWorktree(deps, idOf(second), "feature")];
+    assert.deepEqual(
+      added.map((result) => result.error),
+      [undefined, undefined]
+    );
+    const [a, b] = added.map((result) => result.project!.path);
+    assert.notEqual(path.dirname(a), path.dirname(b));
+    assert.deepEqual([path.basename(a), path.basename(b)], ["feature", "feature"], "each named by its branch");
+  });
+});
+
+describe("a worktree command while another runs in its repository", () => {
+  it("is refused up front, its project still open, and runs once the other is done", async () => {
+    const repo = repositoryWithWorktrees(["held"]);
+    const closed: string[] = [];
+    const { deps, store, repositories, changes } = await open([repo.main, repo.at("held")], (project) => closed.push(project.path));
+    const main = repositories.get(store.list().find((project) => project.path === repo.main)!.id)!;
+    // As a push running in the main project.
+    let release: () => void = () => undefined;
+    const other = main.exclusive(() => new Promise((resolve) => (release = () => resolve({ ok: true }))));
+    const worktree = { path: repo.at("held"), mainPath: repo.main };
+    for (const result of [
+      await deleteWorktree(deps, worktree, { force: true, onRemote: false }),
+      await renameWorktree(deps, worktree, "renamed")
+    ]) {
+      assert.equal(result.ok, false);
+      assert.match(result.error ?? "", /already running/);
+    }
+    assert.deepEqual(closed, [], "no terminal closed for a command that could not run");
+    assert.deepEqual(changes, []);
+    assert.ok(fs.existsSync(repo.at("held")));
+    assert.equal(git(repo.at("held"), "branch", "--show-current"), "held", "the branch not renamed either");
+    release();
+    assert.deepEqual(await other, { ok: true });
+    assert.deepEqual(await deleteWorktree(deps, worktree, { force: true, onRemote: false }), { ok: true });
+    assert.ok(!fs.existsSync(repo.at("held")));
   });
 });
 

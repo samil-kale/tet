@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
@@ -97,6 +98,8 @@ export class Repository {
   private refreshPending = false;
   private lastRefreshAt = 0;
   private actionRunning = false;
+  /** Set within `exclusive`'s steps, whose own calls to this repository's commands run in its hold. */
+  private readonly holding = new AsyncLocalStorage<true>();
   /** The action underway (runAction), for `dispose` to wait on. */
   private action: Promise<GitActionResult> | undefined;
   /** `start`'s reads, for `dispose` to wait on. */
@@ -297,6 +300,10 @@ export class Repository {
   /** One command at a time, refreshing after: two race for the index lock. Another arriving
    *  meanwhile is refused. */
   private async runAction(action: () => Promise<GitActionResult>): Promise<GitActionResult> {
+    if (this.holding.getStore()) {
+      // Within `exclusive`: its hold is this command's, and it refreshes once all have run.
+      return action().catch((error: Error) => ({ ok: false, error: error.message }));
+    }
     // The periodic fetch holds the lock too; a click waits for it rather than fails.
     while (this.autoFetching) {
       await this.autoFetching;
@@ -314,6 +321,16 @@ export class Repository {
     } finally {
       this.actionRunning = false;
     }
+  }
+
+  /**
+   * Several commands, and what happens between them, in one hold of the slot: refused up front when
+   * another command runs, never halfway. projects.ts's worktree delete and rename close a project
+   * midway, which must not be for nothing. This repository's commands called from `steps` run in
+   * the hold; a call from anywhere else meanwhile is refused as usual.
+   */
+  exclusive(steps: () => Promise<GitActionResult>): Promise<GitActionResult> {
+    return this.runAction(() => this.holding.run(true, steps));
   }
 
   checkout(target: CheckoutTarget): Promise<GitActionResult> {

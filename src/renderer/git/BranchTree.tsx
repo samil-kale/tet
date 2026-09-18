@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from "react";
-import { worktreeBase } from "../../shared/types";
+import { refName, worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
@@ -101,13 +101,10 @@ export const BranchTree = memo(function BranchTree({
   /** The remote commands use, picked as the main process does. */
   const remote = state.remotes[0]?.name;
   /** What "Update from" merges, prefixed by its remote where it is a remote branch. */
-  const defaultRef = state.defaultBranch
-    ? `${state.defaultBranch.remote ? `${state.defaultBranch.remote}/` : ""}${state.defaultBranch.name}`
-    : undefined;
+  const defaultRef = state.defaultBranch && refName(state.defaultBranch);
   /** Where a new worktree starts (worktreeBase), prefixed as `defaultRef`. */
   const worktreeStart = worktreeBase(state);
-  const newWorktreeBase =
-    worktreeStart && (worktreeStart.remote ? `${worktreeStart.remote}/${worktreeStart.name}` : worktreeStart.name);
+  const newWorktreeBase = worktreeStart && refName(worktreeStart);
 
   /** Where the local branch a checkout would switch to is checked out in another worktree. */
   const worktreeOf = (target: CheckoutTarget): string | undefined =>
