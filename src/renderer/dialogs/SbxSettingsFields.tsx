@@ -25,6 +25,9 @@ export interface FieldsState {
   ports: Row<SbxPort>[];
   paths: Row<SbxPath>[];
   hosts: Row<{ host: string }>[];
+  /** `hosts` as typed, comma-separated; `value` only what was typed since opening — a stored one
+   *  never reaches the renderer. */
+  secrets: Row<{ env: string; hosts: string; value: string }>[];
 }
 
 let nextRowId = 0;
@@ -40,7 +43,8 @@ export function fromConfig(config: SbxProjectConfig): FieldsState {
     knowledge: config.knowledge,
     ports: config.ports.map(withId),
     paths: config.paths.map(withId),
-    hosts: config.hosts.map((host) => withId({ host }))
+    hosts: config.hosts.map((host) => withId({ host })),
+    secrets: config.secrets.map((secret) => withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "" }))
   };
 }
 
@@ -55,12 +59,48 @@ function isBadPortRow({ host, container }: SbxPort): boolean {
   return !(host.trim() === "" && container.trim() === "") && !(isPort(host) && isPort(container));
 }
 
-/** Save waits for every port row to be two ports or empty; the rows mark which is not. */
-export function canSave(state: FieldsState): boolean {
-  return !state.ports.some(isBadPortRow);
+type SecretRow = FieldsState["secrets"][number];
+
+function secretHosts(row: SecretRow): string[] {
+  return row.hosts
+    .split(",")
+    .map((host) => host.trim())
+    .filter(Boolean);
 }
 
-/** The inverse, for Save: ids dropped, as are empty port and host rows. */
+function isEmptySecretRow(row: SecretRow): boolean {
+  return row.env.trim() === "" && row.hosts.trim() === "" && row.value === "";
+}
+
+/** A secret row Save refuses — an empty one is dropped. It needs an environment variable name,
+ *  once, and hosts without scheme or port, which `sbx secret set-custom` rejects (measured). */
+function isBadSecretRow(row: SecretRow, rows: SecretRow[]): boolean {
+  if (isEmptySecretRow(row)) {
+    return false;
+  }
+  const env = row.env.trim();
+  const hosts = secretHosts(row);
+  return (
+    !/^[A-Za-z_][A-Za-z0-9_]*$/.test(env) ||
+    rows.some((other) => other.id !== row.id && other.env.trim() === env) ||
+    hosts.length === 0 ||
+    hosts.some((host) => /[/:]/.test(host))
+  );
+}
+
+/** Why Save waits, or `undefined`: every port row two ports or empty, every secret row complete or
+ *  empty. The rows mark which is not. */
+export function saveBlocked(state: FieldsState): string | undefined {
+  if (state.ports.some(isBadPortRow)) {
+    return "A port on the Ports tab is not a whole number from 1 to 65535";
+  }
+  if (state.secrets.some((row) => isBadSecretRow(row, state.secrets))) {
+    return "A secret on the Secrets tab needs a variable name of its own and hosts without scheme or port";
+  }
+  return undefined;
+}
+
+/** The inverse, for Save: ids dropped, as are empty port, host and secret rows. */
 export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> {
   return {
     knowledge: state.knowledge,
@@ -68,8 +108,16 @@ export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> 
       .map(({ host, container }) => ({ host: host.trim(), container: container.trim() }))
       .filter((port) => port.host && port.container),
     paths: state.paths.map(({ path, access }) => ({ path, access })),
-    hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean)
+    hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
+    secrets: state.secrets
+      .filter((row) => !isEmptySecretRow(row))
+      .map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) }))
   };
+}
+
+/** The secret values typed since opening, by env name, for Save to store on this machine. */
+export function toSecretValues(state: FieldsState): Record<string, string> {
+  return Object.fromEntries(state.secrets.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value]));
 }
 
 interface SbxSettingsFieldsProps {
@@ -79,11 +127,13 @@ interface SbxSettingsFieldsProps {
   section: keyof FieldsState;
   /** An organization manages sbx's policy; only words the Allowed paths marks. */
   governed: boolean;
+  /** The env names holding a value on this machine (`sbx:stored-secrets`). */
+  storedSecrets: readonly string[];
 }
 
 /** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
  *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section, governed }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({ state, setState, section, governed, storedSecrets }: SbxSettingsFieldsProps) {
   /** Row ids of Allowed paths sbx's policy would refuse to mount (sbx.ts's readMountsAllowed). */
   const [denied, setDenied] = useState<ReadonlySet<string>>(() => new Set());
   // Only a changed path or access asks again; an answer overtaken by an edit is dropped.
@@ -252,6 +302,76 @@ export function SbxSettingsFields({ state, setState, section, governed }: SbxSet
             + Add file
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (section === "secrets") {
+    return (
+      <div className="dialog-field">
+        <span className="dialog-field-label">Secrets</span>
+        <div className="sbx-rows">
+          {state.secrets.length === 0 && <p className="dialog-detail">No secrets yet</p>}
+          {state.secrets.map((row) => {
+            const setSecret = (change: Partial<typeof row>): void =>
+              update("secrets", (secrets) => secrets.map((entry) => (entry.id === row.id ? { ...entry, ...change } : entry)));
+            const stored = storedSecrets.includes(row.env.trim());
+            return (
+              // The path row's box, as the host rows.
+              <div key={row.id} className="sbx-path-row">
+                <input
+                  className="sbx-secret-input"
+                  type="text"
+                  placeholder="GITLAB_TOKEN"
+                  title="The environment variable the sandbox sees, holding a placeholder instead of the value"
+                  value={row.env}
+                  onChange={(event) => setSecret({ env: event.target.value })}
+                />
+                <input
+                  className="sbx-host-input"
+                  type="text"
+                  placeholder="gitlab.example.com"
+                  title="Where sbx puts the value in place of the placeholder, in request headers only: exact host or *.example.com, comma-separated, no scheme or port"
+                  value={row.hosts}
+                  onChange={(event) => setSecret({ hosts: event.target.value })}
+                />
+                <input
+                  className="sbx-secret-input"
+                  type="password"
+                  autoComplete="off"
+                  placeholder={stored ? "Unchanged" : "Value"}
+                  title={
+                    stored
+                      ? "Stored on this machine; typing replaces it. The sandbox never sees it."
+                      : "Stored on this machine, never in tet.json. The sandbox never sees it."
+                  }
+                  value={row.value}
+                  onChange={(event) => setSecret({ value: event.target.value })}
+                />
+                {isBadSecretRow(row, state.secrets) && (
+                  // The Allowed paths mark, for a row Save refuses.
+                  <span className="sbx-path-denied" title="Needs a variable name of its own and hosts without scheme or port">
+                    <ExclamationIcon />
+                  </span>
+                )}
+                <button
+                  className="icon-button"
+                  title="Remove secret"
+                  onClick={() => update("secrets", (secrets) => secrets.filter((entry) => entry.id !== row.id))}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          className="sbx-add-row"
+          onClick={() => update("secrets", (secrets) => [...secrets, withId({ env: "", hosts: "", value: "" })])}
+        >
+          + Add secret
+        </button>
       </div>
     );
   }

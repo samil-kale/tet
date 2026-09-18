@@ -19,7 +19,15 @@ import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/shared/script-text";
 import { ProjectStore } from "../src/main/projects";
 import { readSbxConfig, writeSbxConfig } from "../src/main/git/commands";
-import { contractHome, fixedMountSpecs, parsePublishedPorts, pathMountSpecs, sandboxName, saveSbxConfig } from "../src/main/sbx";
+import {
+  contractHome,
+  fixedMountSpecs,
+  parsePublishedPorts,
+  pathMountSpecs,
+  sandboxName,
+  saveSbxConfig,
+  secretPlaceholder
+} from "../src/main/sbx";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { SettingsStore } from "../src/main/settings";
@@ -334,7 +342,7 @@ describe("saving an sbx config", () => {
    * sandbox, this project's Claude one, so the other three agents are skipped; `policy ls` answers
    * no rules, so hosts add nothing to the log.
    */
-  function fakeSbx(answers: { published: object[]; refuse?: string }): { dir: string; projectPath: string } {
+  function fakeSbx(answers: { published: object[]; refuse?: string; secrets?: object[] }): { dir: string; projectPath: string } {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
     const projectPath = path.join(dir, "repo");
     fs.mkdirSync(projectPath);
@@ -356,6 +364,10 @@ if (args[0] === "ls") {
   process.stdout.write(JSON.stringify({ rules: [] }));
 } else if (args[0] === "ports" && args[2] === "--json") {
   process.stdout.write(JSON.stringify(answers.published));
+} else if (args[0] === "secret" && args[1] === "ls") {
+  process.stdout.write(JSON.stringify({ secrets: [], custom_secrets: answers.secrets ?? [] }));
+} else if (args[0] === "secret" && args[1] === "set-custom") {
+  fs.appendFileSync(answers.log, "stdin " + fs.readFileSync(0, "utf8") + "\\n");
 } else if (args[2] === "--publish" && args[3] === answers.refuse) {
   process.stderr.write(answers.refusal);
   process.exit(1);
@@ -388,7 +400,7 @@ if (args[0] === "ls") {
     const originalPath = process.env.PATH;
     process.env.PATH = pathWith(dir);
     try {
-      const result = await saveSbxConfig(projectPath, projectId, config(setup.now.map(port)));
+      const result = await saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), new Map(), new Set());
       const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
       return { result, projectPath, calls };
     } finally {
@@ -405,7 +417,7 @@ if (args[0] === "ls") {
       `ports ${name} --json`,
       `ports ${name} --publish 3000:3000`
     ]);
-    assert.deepEqual(result, { removed: [], portFailures: [] });
+    assert.deepEqual(result, { removed: [], portFailures: [], secretFailures: [] });
   });
 
   it("unpublishes what the sandbox has and tet.json dropped, and leaves a port in both alone", async () => {
@@ -427,6 +439,64 @@ if (args[0] === "ls") {
   it("does not start the sandbox where no port is configured and none was", async () => {
     const { calls } = await save({ has: [], before: [], now: [] });
     assert.deepEqual(calls, ["ls --json", "policy ls --type network --include-inactive --json"]);
+  });
+
+  it("brings the sandbox's secrets in line, values through stdin, leaving one set by hand alone", async () => {
+    const live = (env: string, hosts: string[]) => ({ scope: name, targets: hosts, env: "", placeholder: secretPlaceholder(projectId, env) });
+    const { dir, projectPath } = fakeSbx({
+      published: [],
+      secrets: [
+        live("KEPT", ["kept.example.com"]),
+        live("CHANGED", ["changed.example.com"]),
+        live("REHOSTED", ["old.example.com"]),
+        live("DROPPED", ["dropped.example.com"]),
+        { scope: name, targets: ["hand.example.com"], env: "HAND", placeholder: "sbx-cs-byhand" }
+      ]
+    });
+    const before = [
+      { env: "KEPT", hosts: ["kept.example.com"] },
+      { env: "CHANGED", hosts: ["changed.example.com"] },
+      { env: "REHOSTED", hosts: ["old.example.com"] },
+      { env: "DROPPED", hosts: ["dropped.example.com"] }
+    ];
+    await writeSbxConfig(projectPath, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: before });
+    const now = [
+      { env: "KEPT", hosts: ["kept.example.com"] },
+      { env: "CHANGED", hosts: ["changed.example.com"] },
+      { env: "REHOSTED", hosts: ["new.example.com"] },
+      { env: "ADDED", hosts: ["a.example.com", "*.b.example.com"] },
+      { env: "NO_VALUE", hosts: ["none.example.com"] }
+    ];
+    const values = new Map([
+      ["KEPT", "v-kept"],
+      ["CHANGED", "v-changed"],
+      ["REHOSTED", "v-rehosted"],
+      ["ADDED", "v-added"]
+    ]);
+    const originalPath = process.env.PATH;
+    process.env.PATH = pathWith(dir);
+    try {
+      const result = await saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, values, new Set(["CHANGED"]));
+      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
+      const placeholder = (env: string) => secretPlaceholder(projectId, env);
+      assert.deepEqual(calls.slice(2), [
+        "secret ls --json",
+        `secret rm --sandbox ${name} --placeholder ${placeholder("CHANGED")} -f`,
+        `secret rm --sandbox ${name} --placeholder ${placeholder("REHOSTED")} -f`,
+        `secret rm --sandbox ${name} --placeholder ${placeholder("DROPPED")} -f`,
+        `secret set-custom --sandbox ${name} --placeholder ${placeholder("CHANGED")} --host changed.example.com`,
+        "stdin v-changed",
+        `secret set-custom --sandbox ${name} --placeholder ${placeholder("REHOSTED")} --host new.example.com`,
+        "stdin v-rehosted",
+        `secret set-custom --sandbox ${name} --placeholder ${placeholder("ADDED")} --host a.example.com --host *.b.example.com`,
+        "stdin v-added"
+      ]);
+      assert.deepEqual(result.secretFailures, []);
+      assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts, a row without a value too");
+      assert.ok(!fs.readFileSync(path.join(projectPath, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 });
 

@@ -106,6 +106,17 @@ export interface SbxKnowledgeConfig {
   instructions: SbxAccess | false;
 }
 
+/**
+ * A "Secrets" row: an sbx custom secret. The sandbox sees `env` set to a placeholder, and sbx's
+ * proxy swaps it for the value in requests to `hosts` (sbx.ts's applySecrets). Never the value,
+ * which stays on this machine (sbx-secrets.ts).
+ */
+export interface SbxSecret {
+  env: string;
+  /** Exact host, IP or wildcard (`*.example.com`) — sbx refuses a scheme or port (measured, 0.42.1). */
+  hosts: string[];
+}
+
 /** Per project, for every sandboxed tab whatever its agent. No authentication: each agent signs in
  *  inside the sandbox, pi excepted (a credential from sbx's own store, see sbx.ts). */
 export interface SbxProjectConfig {
@@ -117,6 +128,7 @@ export interface SbxProjectConfig {
    *  Unvalidated: sbx accepts anything (measured, 0.42.1 — `https://example.com` matches nothing).
    *  The sandbox, not tet.json, is the truth here (sbx.ts's readLiveSbxConfig). */
   hosts: string[];
+  secrets: SbxSecret[];
 }
 
 /** A rule sbx's policy must allow before tet can sandbox a project (sbx.ts's readSbxBlockers). */
@@ -149,7 +161,8 @@ export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
   knowledge: { skills: false, plugins: false, instructions: false },
   ports: [],
   paths: [],
-  hosts: []
+  hosts: [],
+  secrets: []
 };
 
 /** The Prompts tab's picker. */

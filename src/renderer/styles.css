@@ -1542,6 +1542,12 @@ textarea:focus {
   height: 26px;
 }
 
+/* A secret's name and value, either side of its hosts (.sbx-host-input); the rows' 26px. */
+.sbx-secret-input {
+  width: 140px;
+  height: 26px;
+}
+
 .sbx-arrow {
   color: var(--vscode-descriptionForeground);
 }

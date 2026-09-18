@@ -6,6 +6,7 @@ import type { AddRepositoryResult, Project } from "../shared/types";
 import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import type { RepositoryManager } from "./git/repository";
+import type { SbxSecretStore } from "./sbx-secrets";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 
 /** What opening and closing a project takes — the same singletons ipc.ts holds. */
@@ -14,6 +15,7 @@ export interface ProjectDeps {
   repositories: RepositoryManager;
   sessions: SessionManagerRegistry;
   records: ControlRecords;
+  sbxSecrets: SbxSecretStore;
   openProject: (project: Project) => void;
 }
 
@@ -32,12 +34,14 @@ export async function addProject({ store, openProject }: ProjectDeps, directory:
   return { project };
 }
 
-export function removeProject({ store, repositories, sessions, records }: ProjectDeps, projectId: string): void {
+export function removeProject({ store, repositories, sessions, records, sbxSecrets }: ProjectDeps, projectId: string): void {
   // Not awaited: the project leaves the window either way; its sessions still end by themselves
   // (TerminalSession.stop). Its records go once they have: a stopping tab still prints.
   void sessions.close(projectId).finally(() => records.forgetProject(projectId));
   repositories.close(projectId);
   store.remove(projectId);
+  // Reopened, the folder is a new project with new sandboxes (sbx.ts's sandboxName).
+  sbxSecrets.forgetProject(projectId);
 }
 
 /** The open repositories, persisted so the window comes back with the same project tabs. */

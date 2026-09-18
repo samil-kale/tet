@@ -20,6 +20,7 @@ import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, ProjectStore, removeProject } from "./projects";
 import { configureSandboxes } from "./sbx";
+import { SbxSecretStore } from "./sbx-secrets";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv } from "./terminals/pty";
@@ -195,6 +196,7 @@ installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
+const sbxSecrets = new SbxSecretStore(dataRoot);
 /** What control verbs answer beyond the stores. */
 const records = new ControlRecords();
 const repositories = new RepositoryManager(
@@ -211,7 +213,7 @@ const repositories = new RepositoryManager(
   (projectId) => send("repo:files-changed", { projectId }),
   (projectId, path) => send("repo:file-changed", { projectId, path })
 );
-const sessions = new SessionManagerRegistry(dataRoot, settings, {
+const sessions = new SessionManagerRegistry(dataRoot, settings, sbxSecrets, {
   onTabs: (projectId, tabs) => {
     send("terminal:tabs", { projectId, tabs });
     awaitedToastTab(projectId);
@@ -441,7 +443,7 @@ async function startControl(): Promise<void> {
   if (!controlChannel) {
     return;
   }
-  const projectDeps = { store, repositories, sessions, records, openProject };
+  const projectDeps = { store, repositories, sessions, records, sbxSecrets, openProject };
   try {
     controlServer = await startControlServer(
       {
@@ -644,7 +646,7 @@ if (!app.requestSingleInstanceLock()) {
     // (ensureSandboxLauncher).
     configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
-    registerIpc({ dataRoot, store, settings, accounts, repositories, sessions, records, send, openProject, openWorkspace, applyTheme });
+    registerIpc({ dataRoot, store, settings, accounts, sbxSecrets, repositories, sessions, records, send, openProject, openWorkspace, applyTheme });
     timeStartup("window", createWindow);
     // The git process inherits its environment at the fork, so it waits for PATH; started up front
     // while the renderer loads.

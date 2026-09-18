@@ -6,7 +6,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
-import type { SbxAgentId, SbxBlocker, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStatus } from "../shared/types";
+import type {
+  SbxAgentId,
+  SbxBlocker,
+  SbxKnowledgeConfig,
+  SbxPath,
+  SbxPort,
+  SbxProjectConfig,
+  SbxSecret,
+  SbxStatus
+} from "../shared/types";
 import { getAgent } from "./agents";
 import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
@@ -568,7 +577,7 @@ export async function readLiveSbxConfig(projectPath: string, projectId: string):
   return { ...config, hosts: [...new Set(existing.flatMap((name) => live.get(name) ?? []))] };
 }
 
-function sameWorkspaceSet(a: string[], b: string[]): boolean {
+function sameSet(a: string[], b: string[]): boolean {
   const sorted = (list: string[]) => [...list].sort();
   const [left, right] = [sorted(a), sorted(b)];
   return left.length === right.length && left.every((value, index) => value === right[index]);
@@ -617,14 +626,14 @@ function ensureSandboxExists(
   onData?: OnData
 ): Promise<boolean> {
   const listed = sandboxes.get(name);
-  if (listed !== undefined && sameWorkspaceSet(listed, [projectPath])) {
+  if (listed !== undefined && sameSet(listed, [projectPath])) {
     return Promise.resolve(false);
   }
   const setup = (sandboxSetups.get(name) ?? Promise.resolve())
     .catch(() => undefined)
     .then(async () => {
       const existing = ((await listSandboxes()) ?? sandboxes).get(name);
-      if (existing !== undefined && sameWorkspaceSet(existing, [projectPath])) {
+      if (existing !== undefined && sameSet(existing, [projectPath])) {
         return false;
       }
       if (existing !== undefined) {
@@ -812,6 +821,100 @@ async function applyPortChanges(
   return failures;
 }
 
+/**
+ * The placeholder a project's secret goes by in its sandboxes: fixed by tet (`--placeholder`), not
+ * sbx's random one, so it outlives a changed value and a rebuild, and `sbx run -e` can name it
+ * without asking sbx. The prefix tells tet's secrets from ones set in the sandbox's scope by hand.
+ */
+export function secretPlaceholder(projectId: string, env: string): string {
+  return `${secretPrefix(projectId)}${env}`;
+}
+
+function secretPrefix(projectId: string): string {
+  return `tet-${crypto.createHash("sha1").update(projectId).digest("hex").slice(0, 12)}-`;
+}
+
+/** A custom secret as `sbx secret ls --json` lists it. */
+interface LiveSecret {
+  placeholder: string;
+  hosts: string[];
+}
+
+/**
+ * Each sandbox's custom secrets — the truth applySecrets works against, as readSandboxHosts is for
+ * hosts — from one `sbx secret ls --json` (`custom_secrets`: `{scope, targets, env, placeholder,
+ * secret}`, scope the sandbox's name or "global"; measured, 0.42.1). Never the value: sbx lists
+ * only its first characters.
+ */
+async function readSandboxSecrets(): Promise<Map<string, LiveSecret[]>> {
+  const secrets = new Map<string, LiveSecret[]>();
+  try {
+    const parsed = JSON.parse((await runSbx(["secret", "ls", "--json"])).stdout) as {
+      custom_secrets?: { scope?: string; targets?: string[]; placeholder?: string }[];
+    };
+    for (const secret of parsed.custom_secrets ?? []) {
+      if (secret.scope && secret.placeholder) {
+        const live = { placeholder: secret.placeholder, hosts: secret.targets ?? [] };
+        secrets.set(secret.scope, [...(secrets.get(secret.scope) ?? []), live]);
+      }
+    }
+  } catch {
+    // Unreadable reads as none: every secret is then set again.
+  }
+  return secrets;
+}
+
+/**
+ * Brings a sandbox's custom secrets in line with the rows that have a value here. Scoped to the
+ * sandbox (`--sandbox`), as its hosts are. Measured, 2026-09-18, sbx 0.42.1:
+ * - the proxy swaps the placeholder for the value in any request header to a listed host, Basic
+ *   auth's base64 included (so git over HTTPS works), never in the URL or body, never for another
+ *   host; the swap reaches a *running* sandbox at once.
+ * - sbx sets `--env` in the sandbox only at `sbx create`, so tet leaves it out and passes the
+ *   placeholder itself with `sbx run -e` (prepareSbxRun), which reaches an existing sandbox too.
+ * - `sbx rm` removes the sandbox's secrets with it, and sbx never gives a value back: a new sandbox
+ *   is seeded from this machine's store (sbx-secrets.ts).
+ * - no update: a second secret for one placeholder or env fails ("already exists", exit 1), so a
+ *   changed one is removed and set again. `rm` without `-f` asks, cancels on closed stdin, exits 0.
+ * - the value goes through stdin: `--value` would show in the process list.
+ * `changed` holds the env names whose value was just replaced. Returns what sbx refused.
+ */
+async function applySecrets(
+  name: string,
+  projectId: string,
+  secrets: SbxSecret[],
+  values: ReadonlyMap<string, string>,
+  live: LiveSecret[],
+  changed: ReadonlySet<string>,
+  onData?: OnData
+): Promise<string[]> {
+  const wanted = secrets.filter((secret) => values.has(secret.env));
+  const ours = live.filter((secret) => secret.placeholder.startsWith(secretPrefix(projectId)));
+  const kept = wanted.filter(
+    (secret) =>
+      !changed.has(secret.env) &&
+      ours.some((old) => old.placeholder === secretPlaceholder(projectId, secret.env) && sameSet(old.hosts, secret.hosts))
+  );
+  const keptPlaceholders = kept.map((secret) => secretPlaceholder(projectId, secret.env));
+  for (const old of ours.filter((secret) => !keptPlaceholders.includes(secret.placeholder))) {
+    await runSbx(["secret", "rm", "--sandbox", name, "--placeholder", old.placeholder, "-f"], { onData });
+  }
+  const failures: string[] = [];
+  for (const secret of wanted.filter((entry) => !kept.includes(entry))) {
+    const placeholder = secretPlaceholder(projectId, secret.env);
+    const hosts = secret.hosts.flatMap((host) => ["--host", host]);
+    const result = await runSbx(["secret", "set-custom", "--sandbox", name, "--placeholder", placeholder, ...hosts], {
+      stdin: values.get(secret.env),
+      onData
+    });
+    if (!result.ok) {
+      const said = result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "");
+      failures.push(`could not set secret ${secret.env}${said ? ` (${said})` : ""}`);
+    }
+  }
+  return failures;
+}
+
 /** A `SandboxSessionMount` with an absolute host side, for `sessionMountSpecs`. */
 export interface SbxSessionMount {
   host: string;
@@ -836,6 +939,8 @@ export interface SbxRunRequest {
   agentArgs: string[];
   /** `AgentDefinition.sandboxEnv` — "KEY=VALUE" entries for `sbx run -e`. */
   env?: string[];
+  /** This machine's values of `config.secrets`, by env name (SbxSecretStore.values). */
+  secretValues: ReadonlyMap<string, string>;
   /** Where this agent's sessions land on the host; created if missing, rw, re-applied per spawn. */
   sessionMounts?: SbxSessionMount[];
   /** Setup output, forwarded live to the tab (see `RunOptions.onData`). */
@@ -871,14 +976,22 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
 
 /**
  * Readies a tab's sandbox and returns the `sbx run` arguments: tet's mounts, knowledge and Allowed
- * paths (`missing` for the caller to report), ports, and with a control channel its env and the
- * `tet-ctl` launcher. Creates the sandbox itself (ensureSandboxExists), since the launcher must be
- * written before `sbx run` starts the agent. Rejects when creating fails or a folder of tet's own
- * cannot be mounted; the rest is best-effort.
+ * paths (`missing` for the caller to report), ports, secrets (`missingSecrets`, those without a
+ * value on this machine), and with a control channel its env and the `tet-ctl` launcher. Creates the
+ * sandbox itself (ensureSandboxExists), since the launcher must be written before `sbx run` starts
+ * the agent. Rejects when creating fails or a folder of tet's own cannot be mounted; the rest is
+ * best-effort.
  */
-export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: string[]; missing: string[] }> {
-  const { agentId, config, onData } = request;
-  const env = request.env ?? [];
+export async function prepareSbxRun(
+  request: SbxRunRequest
+): Promise<{ args: string[]; missing: string[]; missingSecrets: string[] }> {
+  const { agentId, config, onData, secretValues } = request;
+  const secrets = config.secrets.filter((secret) => secretValues.has(secret.env));
+  const missingSecrets = config.secrets.filter((secret) => !secretValues.has(secret.env)).map((secret) => secret.env);
+  const env = [
+    ...(request.env ?? []),
+    ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(request.projectId, secret.env)}`)
+  ];
   const name = sandboxName(request.projectId, agentId);
   const created = await ensureSandboxExists(agentId, request.projectPath, name, request.sandboxes, onData);
   // The user's grants are best-effort: their failure must not keep the agent from starting. A row
@@ -902,6 +1015,8 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
     // sandbox this call created: after that its published ports are the truth (readSandboxPorts).
     // Best-effort like the hosts — sbx's refusal is in the tab's output.
     await applyPortChanges(name, { removed: [], added: config.ports }, onData);
+    // The sandbox's secrets went with any earlier one of its name; after that they are the truth.
+    await applySecrets(name, request.projectId, secrets, secretValues, [], new Set(), onData);
   }
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged (verified, 2026-09-08: "sandbox 'x'
@@ -923,7 +1038,7 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   }
   args.push("--", ...request.agentArgs);
   await suppressSbxFirstRunWizard();
-  return { args, missing };
+  return { args, missing, missingSecrets };
 }
 
 /**
@@ -933,29 +1048,35 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
  * hosts both ways (revokeStaleHosts, allowHosts) — no edit forces a rebuild. The "previous" of both
  * hosts and ports is the sandbox's own (the truth, readLiveSbxConfig and readSandboxPorts), so a
  * hand-set rule deleted as a row goes too, and a port it never published is tried again. Mounts and ports need it running, so it is started once, only when either has work; a
- * failed start is skipped. Returns the agents whose sandboxes were removed, for the caller to say
- * so: a running session of theirs just lost its sandbox; and the port changes sbx refused, which
- * tet.json holds all the same.
+ * failed start is skipped. Secrets likewise against the sandbox's own (applySecrets), listed only
+ * when any are configured or were. Returns the agents whose sandboxes were removed, for the caller
+ * to say so: a running session of theirs just lost its sandbox; and the port and secret changes sbx
+ * refused, which tet.json holds all the same.
  */
 export async function saveSbxConfig(
   projectPath: string,
   projectId: string,
-  request: SbxProjectConfig
-): Promise<{ removed: SbxAgentId[]; portFailures: string[] }> {
+  request: SbxProjectConfig,
+  secretValues: ReadonlyMap<string, string>,
+  changedSecrets: ReadonlySet<string>
+): Promise<{ removed: SbxAgentId[]; portFailures: string[]; secretFailures: string[] }> {
   const previous = await readSbxConfig(projectPath);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   await writeSbxConfig(projectPath, config);
   const sandboxes = (await listSandboxes()) ?? new Map();
   const liveHosts = await readSandboxHosts();
+  const secrets = config.secrets.length > 0 || previous.secrets.length > 0;
+  const liveSecrets = secrets ? await readSandboxSecrets() : new Map<string, LiveSecret[]>();
   const removed: SbxAgentId[] = [];
   const portFailures: string[] = [];
+  const secretFailures: string[] = [];
   for (const agentId of SBX_AGENT_IDS) {
     const name = sandboxName(projectId, agentId);
     const existing = sandboxes.get(name);
     if (existing === undefined) {
       continue;
     }
-    if (!config.enabled || !sameWorkspaceSet(existing, [projectPath])) {
+    if (!config.enabled || !sameSet(existing, [projectPath])) {
       if (await removeSandbox(name)) {
         removed.push(agentId);
       }
@@ -973,6 +1094,11 @@ export async function saveSbxConfig(
     }
     await revokeStaleHosts(name, liveHosts.get(name) ?? [], config.hosts);
     await allowHosts(name, config.hosts);
+    if (secrets) {
+      const live = liveSecrets.get(name) ?? [];
+      const failures = await applySecrets(name, projectId, config.secrets, secretValues, live, changedSecrets);
+      secretFailures.push(...failures.map((failure) => `The ${getAgent(agentId).displayName} sandbox ${failure}.`));
+    }
   }
-  return { removed, portFailures };
+  return { removed, portFailures, secretFailures };
 }

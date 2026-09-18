@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import type { Project, SbxBlocker } from "../../shared/types";
-import { SbxSettingsFields, canSave, fromConfig, toConfig, type FieldsState } from "./SbxSettingsFields";
+import { SbxSettingsFields, fromConfig, saveBlocked, toConfig, toSecretValues, type FieldsState } from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
@@ -28,7 +28,8 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "knowledge", label: "Knowledge" },
   { id: "ports", label: "Ports" },
   { id: "paths", label: "Paths" },
-  { id: "hosts", label: "Hosts" }
+  { id: "hosts", label: "Hosts" },
+  { id: "secrets", label: "Secrets" }
 ];
 
 /**
@@ -79,6 +80,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  stored. */
   const [locked, setLocked] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
+  const [storedSecrets, setStoredSecrets] = useState<readonly string[]>([]);
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
@@ -125,9 +127,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       return;
     }
     // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
-    const config = await window.tet.sbx.getConfig(project.id);
+    const [config, stored] = await Promise.all([window.tet.sbx.getConfig(project.id), window.tet.sbx.storedSecrets(project.id)]);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
+    setStoredSecrets(stored);
     setPhase({ kind: "ready", organization: status.organization });
   };
 
@@ -136,10 +139,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     // Once; "Check again" reruns it.
   }, []);
 
-  /** Writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
+  /** Stores typed secret values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
   const save = async (): Promise<void> => {
     setSaving(true);
-    const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) });
+    const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toSecretValues(state));
     setSaving(false);
     if (!result.ok) {
       notify("error", result.error ?? "Could not save the SBX configuration");
@@ -150,6 +153,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   };
 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
+  const blocked = saveBlocked(state);
   const organization = phase.kind === "ready" ? phase.organization : undefined;
   const tabs = useMemo(
     () => TABS.map((entry) => ({ ...entry, disabled: tabBlocked(entry.id, { enabled, locked, organization }) })),
@@ -179,8 +183,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             <button
               type="button"
               className="button"
-              disabled={saving || !canSave(state)}
-              title={canSave(state) ? undefined : "A port on the Ports tab is not a whole number from 1 to 65535"}
+              disabled={saving || blocked !== undefined}
+              title={blocked}
               onClick={() => void save()}
             >
               Save
@@ -243,7 +247,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <div className="sbx-settings-pane">
-          <SbxSettingsFields section={tab} state={state} setState={setState} governed={organization !== undefined} />
+          <SbxSettingsFields
+            section={tab}
+            state={state}
+            setState={setState}
+            governed={organization !== undefined}
+            storedSecrets={storedSecrets}
+          />
         </div>
       )}
     </DialogFrame>
