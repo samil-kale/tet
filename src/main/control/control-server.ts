@@ -1,4 +1,5 @@
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
 import * as http from "node:http";
 import * as net from "node:net";
 import * as path from "node:path";
@@ -45,6 +46,8 @@ export interface ControlDeps {
   };
   sessions: {
     get(projectId: string): ControlTerminals | undefined;
+    /** Whether this tab's process runs, or ran, in the project's sandbox — closed or not. */
+    sandboxed(projectId: string, tabId: string): boolean;
   };
   repositories: {
     get(projectId: string): { getState(): RepositoryState; listExplorer(): Promise<ExplorerListing> } | undefined;
@@ -121,8 +124,6 @@ export interface ControlTerminals {
   events(): ControlEvent[];
   /** `sandboxOnly`: opened from a sandbox, so it never runs on this machine. */
   createTab(agentId: AgentId, sandboxOnly: boolean): TerminalDescriptor;
-  /** Whether this tab's process runs, or ran, in the project's sandbox. */
-  sandboxed(tabId: string): boolean;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   renameTab(tabId: string, title: string): Promise<void>;
@@ -149,6 +150,23 @@ interface Answer {
 
 /** The request's caller, and whether its tab runs in a sandbox (ControlVerb.sandbox). */
 type Caller = ControlRequest["caller"] & { sandboxed: boolean };
+
+/**
+ * Refuses a sandboxed caller a file that is missing or resolves, links followed, outside the
+ * repository: a link committed or made in the mounted repository would otherwise hand it a file of
+ * this machine through the editor. Missing too, since the editor still holds what it last read.
+ */
+async function assertSandboxReadable(caller: Caller, root: string, relative: string): Promise<void> {
+  if (!caller.sandboxed) {
+    return;
+  }
+  const resolved = await Promise.all([root, path.join(root, relative)].map((entry) => fs.promises.realpath(path.resolve(entry)))).catch(
+    () => undefined
+  );
+  if (!resolved || relativeInside(resolved[0], resolved[1]) === undefined) {
+    throw new ControlError("unauthorized", `${relative} is missing or leads outside the repository`);
+  }
+}
 
 type Handler = (
   args: Record<string, unknown>,
@@ -487,7 +505,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       result: terminals(project(args, caller)).events().slice(-count(args, "tail", EVENTS_TAIL))
     }),
 
-    "editor-open": (args, caller) => {
+    "editor-open": async (args, caller) => {
       const found = project(args, caller);
       const typed = text(args, "path", "path");
       // In git's shape, as the editor tabs match it: root-relative, forward slashes.
@@ -496,6 +514,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", `not inside the repository: ${typed}`);
       }
       const filePath = relative.replace(/\\/g, "/");
+      await assertSandboxReadable(caller, found.path, filePath);
       const keep = args.keep === true;
       deps.openEditor(found.id, filePath, keep);
       return { result: { opened: filePath, keep } };
@@ -504,6 +523,9 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "editor-state": async (args, caller) => {
       const found = project(args, caller);
       const report = deps.records.editor(found.id);
+      if (report) {
+        await assertSandboxReadable(caller, found.path, report.path);
+      }
       return { result: report ? { ...report, content: await deps.editorContent(found.id) } : null };
     },
 
@@ -657,7 +679,7 @@ export async function startControlServer(
     const sandboxed =
       caller.projectId !== undefined &&
       caller.tabId !== undefined &&
-      deps.sessions.get(caller.projectId)?.sandboxed(caller.tabId) === true;
+      deps.sessions.sandboxed(caller.projectId, caller.tabId);
     if (sandboxed && !entry.sandbox) {
       return { response: reject("unauthorized", `${request.verb} does not answer from inside a sandbox`) };
     }

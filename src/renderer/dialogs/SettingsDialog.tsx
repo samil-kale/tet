@@ -18,6 +18,7 @@ import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { notify } from "../ui/Notices";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
+import { withEdits } from "./settings-edits";
 
 interface SettingsDialogProps {
   /** Whose tet.json the Files tab's Explorer settings edit; null hides them. */
@@ -91,8 +92,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
-  /** settings.json as opened: Save writes only the keys that differ, over what is saved by then —
-   *  `tet-ctl` may have changed a setting meanwhile. */
+  /** settings.json as opened: Save writes only what differs, over what is saved by then
+   *  (withEdits). */
   const loadedSettings = useRef<AppSettings | null>(null);
   /** tet.json as opened: Save writes only the keys that differ. */
   const loadedExplorer = useRef<ExplorerSettings | null>(null);
@@ -155,14 +156,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const save = async (): Promise<void> => {
     setSaving(true);
     const loadedApp = loadedSettings.current;
-    if (settings && loadedApp) {
-      const changed = (Object.keys(settings) as (keyof AppSettings)[]).filter(
-        (key) => JSON.stringify(settings[key]) !== JSON.stringify(loadedApp[key])
-      );
-      if (changed.length > 0) {
-        const current = await window.tet.settings.get();
-        await window.tet.settings.save({ ...current, ...Object.fromEntries(changed.map((key) => [key, settings[key]])) });
-      }
+    if (settings && loadedApp && JSON.stringify(settings) !== JSON.stringify(loadedApp)) {
+      await window.tet.settings.save(withEdits(await window.tet.settings.get(), loadedApp, settings));
     }
     const loaded = loadedExplorer.current;
     if (activeProject && explorerSettings && loaded) {

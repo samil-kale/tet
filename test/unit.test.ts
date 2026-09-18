@@ -13,7 +13,7 @@ import { SbxSecretStore } from "../src/main/sbx-secrets";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
-import { ProjectSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
+import { ProjectSessionManager, SessionManagerRegistry, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
@@ -69,6 +69,14 @@ describe("a turn's toast", () => {
   });
 });
 
+const NO_CALLBACKS: SessionManagerCallbacks = {
+  onTabs: () => undefined,
+  onOutput: () => undefined,
+  onStatus: () => undefined,
+  onStartupProgress: () => undefined,
+  onNotice: () => undefined
+};
+
 /**
  * Runs `use` on project "p" in a folder of its own with PATH empty: no agent's version check
  * passes and sbx is missing, so nothing is set up, listed or spawned. Everything goes after.
@@ -83,11 +91,7 @@ async function withEmptyPath(
   const originalPath = process.env.PATH;
   process.env.PATH = path.join(root, "empty");
   const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), new SbxSecretStore(root), {
-    onTabs: () => undefined,
-    onOutput: () => undefined,
-    onStatus: () => undefined,
-    onStartupProgress: () => undefined,
-    onNotice: () => undefined,
+    ...NO_CALLBACKS,
     ...callbacks
   });
   try {
@@ -131,6 +135,30 @@ describe("a tab of a missing agent", () => {
       await eventually(() => `a start after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
       assert.ok(notices.some((notice) => /only runs in repo's SBX sandbox/.test(notice)), notices.join("\n"));
     });
+  });
+});
+
+describe("a sandboxed tab's control token", () => {
+  it("keeps the sandbox's limits after its tab and its project close", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sandboxed-"));
+    const originalPath = process.env.PATH;
+    process.env.PATH = path.join(root, "empty");
+    const sessions = new SessionManagerRegistry(root, new SettingsStore(root), new SbxSecretStore(root), NO_CALLBACKS);
+    try {
+      const manager = sessions.open({ id: "p", path: root, name: "repo" });
+      const { tabId } = manager.createTab("claude", true);
+      await manager.closeTabs([tabId]);
+      assert.ok(sessions.sandboxed("p", tabId), "its tab closed");
+      await sessions.close("p");
+      assert.ok(sessions.sandboxed("p", tabId), "its project closed");
+      // Reopened, a new tab never takes the closed one's id, and with it its token.
+      const reopened = sessions.open({ id: "p", path: root, name: "repo" });
+      assert.notEqual(reopened.createTab("claude").tabId, tabId);
+    } finally {
+      await sessions.disposeAll();
+      process.env.PATH = originalPath;
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
+    }
   });
 });
 

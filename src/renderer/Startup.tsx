@@ -26,7 +26,7 @@ export function Startup() {
     return null;
   }
   return requirements.met ? (
-    <App />
+    <App worktreesSupported={requirements.worktrees} />
   ) : (
     <RequirementsDialog requirements={requirements} checking={checking} onRecheck={() => void check()} />
   );

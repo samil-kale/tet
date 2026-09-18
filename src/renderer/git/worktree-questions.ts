@@ -1,4 +1,6 @@
+import { WORKTREES_NEED_GIT } from "../../shared/types";
 import type { GitActionResult, WorktreeRef } from "../../shared/types";
+import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 
 /**
@@ -10,6 +12,12 @@ import { confirm, prompt } from "../ui/Dialog";
  * deleted together.
  */
 type Run = (label: string, action: () => Promise<GitActionResult>) => void;
+
+/** "New worktree" or "Rename worktree" in a menu: disabled, saying why, where git is too old
+ *  (Requirements.worktrees). */
+export function worktreeEntry(label: string, supported: boolean, run: (() => void) | undefined): ContextMenuEntry {
+  return supported ? { label: `${label}...`, run } : { label: `${label} (${WORKTREES_NEED_GIT})` };
+}
 
 /** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
 export async function askNewWorktree(projectId: string, run: Run, base: string): Promise<void> {

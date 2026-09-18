@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import { worktreeBase } from "../shared/types";
+import { worktreeBase, worktreesSupported, WORKTREES_NEED_GIT } from "../shared/types";
 import type { AddRepositoryResult, GitActionResult, Project, WorktreeRef } from "../shared/types";
 import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
@@ -115,6 +115,10 @@ export async function addWorktree(deps: ProjectDeps, projectId: string, branch: 
   if (!base) {
     return { error: "There is no branch to start a worktree at" };
   }
+  // Asked here too, not only in the menus: `tet-ctl worktree-add` has none.
+  if (!worktreesSupported(await git.version())) {
+    return { error: `Creating a worktree ${WORKTREES_NEED_GIT}` };
+  }
   const mainPath = project.mainPath ?? project.path;
   // `~/.tet/worktrees/<repository>-<hash>/<branch>`: the hash of its path keeps two repositories of
   // one name apart, which would otherwise share their worktrees' folder.
@@ -226,6 +230,10 @@ export async function renameWorktree(deps: ProjectDeps, worktree: WorktreeRef, b
   const repository = repositoryFor(deps, mainPath, worktreePath);
   if (!repository) {
     return noRepository(mainPath, "rename");
+  }
+  // Before anything is renamed or closed: the move would fail only after the terminals had closed.
+  if (!worktreesSupported(await git.version())) {
+    return { ok: false, error: `Renaming a worktree ${WORKTREES_NEED_GIT}` };
   }
   const from = await worktreeBranch(worktree);
   const to = branch.trim();

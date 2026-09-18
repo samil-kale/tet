@@ -61,7 +61,8 @@ const DEFAULT_LAYOUT = defaultLayout();
 
 let renderStartedAt = 0;
 
-export function App() {
+/** `worktreesSupported`: git creates and renames them (Requirements.worktrees). */
+export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   renderStartedAt = performance.now();
   // App's render to commit: what a state change here costs across the tree (React's Profiler is
   // silent in production). A subtree re-rendering alone is not seen.
@@ -929,6 +930,7 @@ export function App() {
             onSbxSettings={openSbxSettings}
             onGitAction={runProjectListAction}
             gitBusy={projectListBusy}
+            worktreesSupported={worktreesSupported}
           />
           <Sash
             orientation="horizontal"
@@ -977,6 +979,7 @@ export function App() {
                 onOpenDiff={openActiveDiff}
                 onOpenWorktree={openWorktree}
                 canCloseWorktree={canCloseWorktree}
+                worktreesSupported={worktreesSupported}
               />
             </div>
             {sidePaneOpen && (

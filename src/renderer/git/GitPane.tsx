@@ -21,6 +21,7 @@ interface GitPaneProps {
   /** See BranchTree. */
   onOpenWorktree: (worktreePath: string) => void;
   canCloseWorktree: (worktreePath: string) => Promise<boolean>;
+  worktreesSupported: boolean;
 }
 
 /** The side pane's git view: branches over the changed files, nothing else. */
@@ -33,7 +34,8 @@ export const GitPane = memo(function GitPane({
   onTreeHeight,
   onOpenDiff,
   onOpenWorktree,
-  canCloseWorktree
+  canCloseWorktree,
+  worktreesSupported
 }: GitPaneProps) {
   const { acting, act } = useFileAct(project.id);
 
@@ -90,6 +92,7 @@ export const GitPane = memo(function GitPane({
           branch={branch}
           onOpenWorktree={onOpenWorktree}
           canCloseWorktree={canCloseWorktree}
+          worktreesSupported={worktreesSupported}
         />
       </div>
       <Sash

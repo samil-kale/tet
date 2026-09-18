@@ -197,7 +197,8 @@ export function registerIpc({
   // The Secrets rows holding a value on this machine; never the values.
   ipcMain.handle("sbx:stored-secrets", (_event, projectId: string): string[] => sbxSecrets.stored(projectId));
   // Stores the typed secret values first, so a machine without a keyring changes nothing; then
-  // writes tet.json. Notices for the sandboxes saveSbxConfig removed, an error for what sbx refused.
+  // writes tet.json, a failure putting the values back. Notices for the sandboxes saveSbxConfig
+  // removed, an error for what sbx refused.
   ipcMain.handle(
     "sbx:save-config",
     async (_event, projectId: string, request: SbxProjectConfig, secretValues: Record<string, string>): Promise<GitActionResult> => {
@@ -205,6 +206,7 @@ export function registerIpc({
       if (!project) {
         return { ok: false, error: MISSING_REPOSITORY.error };
       }
+      const stored = sbxSecrets.encrypted(project.id);
       try {
         sbxSecrets.update(project.id, secretValues, request.secrets.map((secret) => secret.env));
         const { removed, portFailures, secretFailures } = await saveSbxConfig(
@@ -226,6 +228,7 @@ export function registerIpc({
         }
         return { ok: true };
       } catch (error) {
+        sbxSecrets.restore(project.id, stored);
         return { ok: false, error: error instanceof Error ? error.message : String(error) };
       }
     }

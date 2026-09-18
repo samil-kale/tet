@@ -105,7 +105,6 @@ function terminalsOf(projectId: string): ControlTerminals {
       calls.created.push(sandboxOnly ? `${agentId} (sandbox only)` : agentId);
       return tab(projectId, "tab-new");
     },
-    sandboxed: (tabId) => tabId === SANDBOX_TAB,
     createCommandTab: (command: ProjectCommand) => {
       calls.commands.push(command.command);
       // Refused for a shell operator, as createCommandTab does.
@@ -160,7 +159,10 @@ function deps(): ControlDeps {
         settings = next;
       }
     },
-    sessions: { get: (id) => (projects.some((project) => project.id === id) ? terminalsOf(id) : undefined) },
+    sessions: {
+      get: (id) => (projects.some((project) => project.id === id) ? terminalsOf(id) : undefined),
+      sandboxed: (_projectId, tabId) => tabId === SANDBOX_TAB
+    },
     repositories: {
       get: (id) =>
         projects.some((project) => project.id === id)
@@ -620,7 +622,9 @@ describe("tet-ctl against the control server", () => {
 
   it("answers a sandboxed tab for its own project only", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    for (const args of [["editor-state"], ["tabs-list"], ["tabs-close", "tab-2"], ["repo-state"], ["explorer-list"]]) {
+    // editor-state: its own test below, since a sandbox reads only a file inside the repository.
+    assertRefused(await tetCtl(["editor-state", "--project", OTHER.id], fromSandbox), /own project/, "editor-state");
+    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["repo-state"], ["explorer-list"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own project/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
@@ -648,6 +652,30 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["editor-state", "--project", OTHER.id])).result, null, "no editor tab there");
     assert.deepEqual((await tetCtl(["editor-list"])).result, EDITOR_LISTING);
     assert.deepEqual((await tetCtl(["editor-list", "--project", OTHER.id])).result, []);
+  });
+
+  it("shows a sandboxed tab no file reached through a link out of the repository", async (t) => {
+    const root = fs.mkdtempSync(path.join(tempDir, "repo-"));
+    const outside = fs.mkdtempSync(path.join(tempDir, "outside-"));
+    fs.writeFileSync(path.join(root, "a.txt"), "inside");
+    fs.writeFileSync(path.join(outside, "secret.txt"), "host");
+    // A junction on win32, where a file symlink needs developer mode; ignored elsewhere.
+    fs.symlinkSync(outside, path.join(root, "leak"), "junction");
+    const original = { root: PROJECT.path, editor: ACTIVE_EDITOR.path };
+    PROJECT.path = root;
+    t.after(() => {
+      PROJECT.path = original.root;
+      ACTIVE_EDITOR.path = original.editor;
+    });
+    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
+    assert.equal((await tetCtl(["editor-state"], fromSandbox)).status, EXIT_CODES.ok, "a file inside");
+    assert.equal((await tetCtl(["editor-open", "a.txt"], fromSandbox)).status, EXIT_CODES.ok, "opened inside");
+    for (const editor of ["leak/secret.txt", "gone.txt"]) {
+      ACTIVE_EDITOR.path = editor;
+      assertRefused(await tetCtl(["editor-state"], fromSandbox), /missing or leads outside/, editor);
+      assertRefused(await tetCtl(["editor-open", editor], fromSandbox), /missing or leads outside/, `open ${editor}`);
+      assert.equal((await tetCtl(["editor-state"])).status, EXIT_CODES.ok, `${editor} on this machine`);
+    }
   });
 
   it("opens a file under the path the editor tabs match, and refuses one outside the repository", async () => {

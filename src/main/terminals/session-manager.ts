@@ -46,6 +46,8 @@ const MAX_RECORDED_EVENTS = 200;
 const CONTROL_START_SIZE = { cols: 120, rows: 30 };
 // Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
+// Across managers, so a project reopened in this run never reuses a closed tab's id — and token.
+let newTabCounter = 0;
 /**
  * A shell-only token, refused in a saved command (no shell runs it). Whole tokens only — `2>&1`
  * and `>>` match, an argument holding a `>` does not.
@@ -64,9 +66,6 @@ interface TabState extends TerminalDescriptor {
   provisionalTitle?: boolean;
   /** Mirrors AgentSessionInfo.sandbox. */
   sandbox?: string;
-  /** Spawned in the sandbox at least once. Never cleared: a process it left there still holds the
-   *  tab's control token after a restart on this machine. */
-  ranInSandbox?: true;
   /** Opened by `tet-ctl` from a sandbox: runs in the sandbox or not at all (resolveSbxRun), or the
    *  sandbox could switch sbx off in tet.json and open itself a tab on this machine. */
   sandboxOnly?: true;
@@ -244,7 +243,10 @@ export class ProjectSessionManager {
   private readonly reportWaiters = new Map<string, () => void>();
   /** See `events`. */
   private readonly recorded: ControlEvent[] = [];
-  private newTabCounter = 0;
+  /** Every tab that ran in the sandbox or was opened from it, kept past its close and the
+   *  manager's: a process it left there still holds the tab's control token, which stays valid for
+   *  the whole run (control-token.ts). */
+  readonly sandboxedTabs = new Set<string>();
   /** Closed; nothing still in flight may start anything back up. */
   private disposed = false;
   /** Said once per project — see resolveSbxRun's own-session-id fallback. */
@@ -645,12 +647,6 @@ export class ProjectSessionManager {
     return this.addTab(agentId, sandboxOnly ? { sandboxOnly } : {});
   }
 
-  /** What `tet-ctl` from this tab may do (ControlVerb.sandbox). */
-  sandboxed(tabId: string): boolean {
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
-    return tab?.ranInSandbox === true || tab?.sandboxOnly === true;
-  }
-
   /**
    * A tab whose process *is* a saved command, started directly without a shell (`resolveCommand`)
    * unless it asked for one.
@@ -686,9 +682,9 @@ export class ProjectSessionManager {
 
   private addTab(agentId: AgentId, extra: Partial<TabState>): TerminalDescriptor {
     const runtime = this.runtimeFor(agentId);
-    this.newTabCounter += 1;
+    newTabCounter += 1;
     const tab: TabState = {
-      tabId: `new-${this.newTabCounter}`,
+      tabId: `new-${newTabCounter}`,
       projectId: this.project.id,
       agentId,
       title: "",
@@ -696,6 +692,9 @@ export class ProjectSessionManager {
       ...extra
     };
     this.tabs.push(tab);
+    if (tab.sandboxOnly) {
+      this.sandboxedTabs.add(tab.tabId);
+    }
     this.postTabs();
     // Starting begins with the first fit.
     return toDescriptor(tab, false);
@@ -961,7 +960,7 @@ export class ProjectSessionManager {
 
     this.sessions.set(tabId, session);
     if (sbxArgs) {
-      tab.ranInSandbox = true;
+      this.sandboxedTabs.add(tabId);
     }
     session.markInstalled(this.canStart(runtime));
     return session;
@@ -1452,6 +1451,8 @@ export class ProjectSessionManager {
 /** The open projects' session managers. */
 export class SessionManagerRegistry {
   private readonly managers = new Map<string, ProjectSessionManager>();
+  /** A closed project's sandboxedTabs, as `[projectId, tabId]`. */
+  private readonly closedSandboxedTabs = new Set<string>();
   /** The renderer's last report, sent only on change — for a project opened after it. */
   private inFront: { projectId: string | null; tabIds: readonly string[] } = { projectId: null, tabIds: [] };
 
@@ -1480,6 +1481,12 @@ export class SessionManagerRegistry {
     return this.managers.get(projectId);
   }
 
+  /** What `tet-ctl` from this tab may do (ControlVerb.sandbox), for a closed tab or project too. */
+  sandboxed(projectId: string, tabId: string): boolean {
+    const own = this.managers.get(projectId)?.sandboxedTabs.has(tabId) === true;
+    return own || this.closedSandboxedTabs.has(JSON.stringify([projectId, tabId]));
+  }
+
   /** The tabs in front belong to one project at most. */
   setInFront(projectId: string | null, tabIds: readonly string[]): void {
     this.inFront = { projectId, tabIds };
@@ -1499,6 +1506,9 @@ export class SessionManagerRegistry {
     const manager = this.managers.get(projectId);
     // Dropped before the wait, so a project removed and reopened at once never has two.
     this.managers.delete(projectId);
+    for (const tabId of manager?.sandboxedTabs ?? []) {
+      this.closedSandboxedTabs.add(JSON.stringify([projectId, tabId]));
+    }
     await manager?.dispose();
   }
 

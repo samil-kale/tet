@@ -30,8 +30,10 @@ import {
   resolveRoot,
   stashDrop,
   stashPush,
-  updateRemoteHead
+  updateRemoteHead,
+  version
 } from "../src/main/git/git";
+import { worktreesSupported } from "../src/shared/types";
 import { git, isolateGitConfig } from "./helpers";
 
 /**
@@ -52,6 +54,22 @@ const MAX_BYTES = 4 * 1024 * 1024;
 const head = (name: string, origPath?: string) => readHeadBlob(cwd, name, { origPath, maxBytes: MAX_BYTES });
 const changed = async (): Promise<string[]> =>
   (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
+
+describe("git's version", () => {
+  it("reads as its number, and the worktrees tet makes need 2.48", async () => {
+    assert.match((await version()) ?? "", /^\d+\.\d+\.\d+/);
+    for (const [printed, supported] of [
+      ["2.47.3", false],
+      ["2.48.0", true],
+      ["2.55.0.windows.3", true],
+      ["3.0.0", true],
+      ["1.99.0", false]
+    ] as const) {
+      assert.equal(worktreesSupported(printed), supported, printed);
+    }
+    assert.equal(worktreesSupported(undefined), false, "no git");
+  });
+});
 
 describe("a repository, from init on", () => {
   before(() => {

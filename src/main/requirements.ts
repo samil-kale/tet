@@ -1,6 +1,7 @@
 import * as os from "node:os";
 import { AGENTS } from "./agents";
 import type { AgentDefinition } from "./agents/agent";
+import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
 import { isSbxInstalled } from "./sbx";
@@ -71,19 +72,21 @@ export async function checkRequirements(): Promise<Requirements> {
   const cwd = os.tmpdir();
 
   // In the git utility process (git-client.ts), so started alongside the agent checks.
-  const gitInstalled = SIMULATED_MISSING.includes(GIT.command) ? Promise.resolve(false) : git.isAvailable().catch(() => false);
+  const gitVersion = SIMULATED_MISSING.includes(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
 
   // A tick ahead of the agents: on win32 process creations hurt when sharing a tick (yieldToLoop).
   const sbxInstalled = SIMULATED_MISSING.includes(SBX.command) ? Promise.resolve(false) : isSbxInstalled();
   await yieldToLoop();
 
   const agents = await checkAgentRequirements(cwd);
-  const [installed, sbx] = await Promise.all([gitInstalled, sbxInstalled]);
+  const [version, sbx] = await Promise.all([gitVersion, sbxInstalled]);
+  const installed = version !== undefined;
   return {
     met: installed && (SHELL_SUFFICES || agents.some((agent) => agent.installed) || sbx),
     git: { ...GIT, installed },
     agents,
-    sbx: { ...SBX, installed: sbx }
+    sbx: { ...SBX, installed: sbx },
+    worktrees: worktreesSupported(version)
   };
 }
 

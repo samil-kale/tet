@@ -60,13 +60,14 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: n
   });
 }
 
-/** Whether the git CLI can be started. Runs in the temp directory, which exists everywhere. */
-export async function isAvailable(): Promise<boolean> {
+/** git's version as it prints it ("2.55.0.windows.3"); undefined when the CLI cannot be started.
+ *  Runs in the temp directory, which exists everywhere. */
+export async function version(): Promise<string | undefined> {
   try {
     const result = await git(os.tmpdir(), ["--version"]);
-    return result.code === 0;
+    return result.code === 0 ? result.stdout.trim().replace(/^git version /, "") : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 

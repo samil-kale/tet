@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import type { GitActionResult, Project, RemoteInfo } from "../../shared/types";
 import { canDiscardProjectEdits } from "../diff/editor-views";
-import { askDeleteWorktree, askNewWorktree, askRenameWorktree } from "../git/worktree-questions";
+import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
@@ -88,6 +88,8 @@ interface ProjectListProps {
   onGitAction: (projectId: string, label: string, action: () => Promise<GitActionResult>) => void;
   /** A command started here runs, in any project. */
   gitBusy: boolean;
+  /** git creates and renames worktrees (Requirements.worktrees); else both entries say why not. */
+  worktreesSupported: boolean;
 }
 
 /**
@@ -149,7 +151,8 @@ export const ProjectList = memo(function ProjectList({
   onShowChanges,
   onSbxSettings,
   onGitAction,
-  gitBusy
+  gitBusy,
+  worktreesSupported
 }: ProjectListProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
   const rows = useMemo(() => groupWorktrees(projects), [projects]);
@@ -223,7 +226,7 @@ export const ProjectList = memo(function ProjectList({
                 : undefined
           },
           SEPARATOR,
-          { label: "Rename worktree...", run: () => void askRenameWorktree(ref, name, run, canClose) },
+          worktreeEntry("Rename worktree", worktreesSupported, () => void askRenameWorktree(ref, name, run, canClose)),
           { label: "Delete worktree...", run: () => void askDeleteWorktree(ref, name, upstream, run, canClose) }
         ]
       : [];
@@ -241,10 +244,7 @@ export const ProjectList = memo(function ProjectList({
         run: remote ? () => void askRemoteUrl(project, remote) : undefined
       },
       SEPARATOR,
-      {
-        label: "New worktree...",
-        run: defaultBranch ? () => void askNewWorktree(project.id, run, defaultBranch) : undefined
-      },
+      worktreeEntry("New worktree", worktreesSupported, defaultBranch ? () => void askNewWorktree(project.id, run, defaultBranch) : undefined),
       ...worktree,
       SEPARATOR,
       { label: "SBX Settings", run: () => onSbxSettings(project.id) },

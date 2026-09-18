@@ -29,6 +29,8 @@ export interface Requirements {
   agents: Requirement[];
   /** Enough without any agent installed here. */
   sbx: Requirement;
+  /** git is new enough to create and rename worktrees (worktreesSupported). */
+  worktrees: boolean;
 }
 
 export interface Project {
@@ -525,6 +527,18 @@ export interface TerminalDescriptor {
   /** The saved command's line from `tet.json` — the split layout's `commandPane` key, so the next
    *  run lands where the last lay. The line, since `name` may be missing. */
   command?: string;
+}
+
+/** Why a worktree cannot be created or renamed with an older git (worktreesSupported). */
+export const WORKTREES_NEED_GIT = "needs git 2.48 or newer";
+
+/**
+ * Whether `git --version`'s answer has `worktree add` and `move` with `--relative-paths` (2.48),
+ * which tet's worktrees are made with (git.ts's worktreeAdd). Deleting one needs neither.
+ */
+export function worktreesSupported(version: string | undefined): boolean {
+  const [major = 0, minor = 0] = (version ?? "").split(".").map((part) => parseInt(part, 10) || 0);
+  return major > 2 || (major === 2 && minor >= 48);
 }
 
 /**

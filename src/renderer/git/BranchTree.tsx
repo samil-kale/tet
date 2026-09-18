@@ -17,7 +17,7 @@ import {
   TREE_CHEVRON,
   WorktreeIcon
 } from "../ui/icons";
-import { askDeleteWorktree, askNewWorktree, askRenameWorktree } from "./worktree-questions";
+import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "./worktree-questions";
 
 /** One git command at a time per project, labelled while it runs. The tree asks its questions
  *  itself, knowing which remote holds a branch and where HEAD is. */
@@ -38,6 +38,8 @@ interface BranchTreeProps {
   onOpenWorktree: (worktreePath: string) => void;
   /** Whether the unsaved editor edits of the worktree's project, if it is one, may go. */
   canCloseWorktree: (worktreePath: string) => Promise<boolean>;
+  /** git creates and renames worktrees (Requirements.worktrees); else both entries say why not. */
+  worktreesSupported: boolean;
 }
 
 /** The row the menu was opened on. */
@@ -50,6 +52,7 @@ type MenuTarget =
 type BranchMenu = MenuTarget & { x: number; y: number };
 
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
+const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the main project, or create a new worktree";
 
 /** A worktree by its branch, which is its name; by its folder's while detached. */
 function worktreeName(worktree: WorktreeInfo): string {
@@ -61,7 +64,8 @@ export const BranchTree = memo(function BranchTree({
   state,
   branch,
   onOpenWorktree,
-  canCloseWorktree
+  canCloseWorktree,
+  worktreesSupported
 }: BranchTreeProps) {
   const [filter, setFilter] = useState("");
   // Only local branches start open, as in GitHub Desktop; folds persist.
@@ -123,10 +127,19 @@ export const BranchTree = memo(function BranchTree({
       return;
     }
     if (inWorktree) {
-      notify("info", "A worktree keeps its own branch: check out in the main project, or create a new worktree");
+      notify("info", WORKTREE_KEEPS_BRANCH);
       return;
     }
     branch.run(`Switching to ${target.name}...`, () => repository.checkout(projectId, target));
+  };
+
+  /** Checking out a tag leaves HEAD detached, as in git; never in a worktree, as `checkout`. */
+  const checkoutTag = (name: string): void => {
+    if (inWorktree) {
+      notify("info", WORKTREE_KEEPS_BRANCH);
+      return;
+    }
+    branch.run(`Switching to ${name}...`, () => repository.checkoutTag(projectId, name));
   };
 
   const askCreateBranch = async (startPoint: string): Promise<void> => {
@@ -299,13 +312,9 @@ export const BranchTree = memo(function BranchTree({
     ];
   };
 
-  /** Checking out a tag leaves HEAD detached, as in git. */
   const tagEntries = (name: string): ContextMenuEntry[] => [
     ...abortEntries(),
-    {
-      label: "Check out",
-      run: inWorktree ? undefined : () => branch.run(`Switching to ${name}...`, () => repository.checkoutTag(projectId, name))
-    },
+    { label: "Check out", run: inWorktree ? undefined : () => checkoutTag(name) },
     {
       label: remote ? `Push to ${remote}` : "Push",
       run: remote ? () => branch.run(`Pushing ${name}...`, () => repository.pushTag(projectId, name)) : undefined
@@ -354,14 +363,12 @@ export const BranchTree = memo(function BranchTree({
                 : undefined
           },
       SEPARATOR,
-      {
-        label: "New worktree...",
-        run: newWorktreeBase ? () => void askNewWorktree(projectId, branch.run, newWorktreeBase) : undefined
-      },
-      {
-        label: "Rename worktree...",
-        run: linked ? () => void askRenameWorktree(linked, name, branch.run, canClose) : undefined
-      },
+      worktreeEntry(
+        "New worktree",
+        worktreesSupported,
+        newWorktreeBase ? () => void askNewWorktree(projectId, branch.run, newWorktreeBase) : undefined
+      ),
+      worktreeEntry("Rename worktree", worktreesSupported, linked ? () => void askRenameWorktree(linked, name, branch.run, canClose) : undefined),
       {
         label: "Delete worktree...",
         run: linked ? () => void askDeleteWorktree(linked, name, upstreamName, branch.run, canClose) : undefined
@@ -512,7 +519,7 @@ export const BranchTree = memo(function BranchTree({
                 key={tag}
                 className="tree-item"
                 title="Double-click to check out"
-                onDoubleClick={() => branch.run(`Switching to ${tag}...`, () => repository.checkoutTag(projectId, tag))}
+                onDoubleClick={() => checkoutTag(tag)}
                 onContextMenu={(event) => openMenu(event, { kind: "tag", name: tag })}
               >
                 <TagIcon className="tree-icon" />

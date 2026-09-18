@@ -38,6 +38,7 @@ import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
 import { THEMES } from "../src/shared/themes";
 import { CONTROL_ENV } from "../src/shared/control";
+import { withEdits } from "../src/renderer/dialogs/settings-edits";
 import type { ControlRequest } from "../src/shared/control";
 import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG } from "../src/shared/types";
 import type { SbxPort, SbxProjectConfig } from "../src/shared/types";
@@ -1074,5 +1075,18 @@ describe("an uncaught exception", () => {
       console.error = printed;
       process.off("uncaughtException", handler);
     }
+  });
+});
+
+describe("the settings dialog's Save", () => {
+  it("writes only what it changed, down to one prompt, over what tet-ctl saved meanwhile", () => {
+    const loaded = { colorScheme: "dark", prompts: { a: "", b: "" }, notifications: { finished: true } };
+    const edited = { ...loaded, prompts: { a: "mine", b: "" } };
+    const current = { colorScheme: "light", prompts: { a: "", b: "theirs" }, notifications: { finished: false } };
+    assert.deepEqual(withEdits(current, loaded, edited), {
+      colorScheme: "light",
+      prompts: { a: "mine", b: "theirs" },
+      notifications: { finished: false }
+    });
   });
 });
