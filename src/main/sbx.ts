@@ -10,6 +10,7 @@ import type { SbxAgentId, SbxBlocker, SbxKnowledgeConfig, SbxPath, SbxPort, SbxP
 import { getAgent } from "./agents";
 import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./git/commands";
+import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
 import { relativeInside } from "./path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance, type PathFlavor } from "./sbx-policy";
@@ -250,6 +251,10 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
   if (!mountable(projectPath, "rw")) {
     blockers.push({ what: "The project", allow: `${folderRule(projectPath)} (read and write)` });
   }
+  const repositoryGitDir = readLinkedGitDir(projectPath)?.commonDir;
+  if (repositoryGitDir !== undefined && !mountable(repositoryGitDir, "rw")) {
+    blockers.push({ what: "The worktree's repository", allow: `${folderRule(repositoryGitDir)} (read and write)` });
+  }
   if (storageRoot) {
     const root = storageRoot;
     const own = SBX_AGENT_IDS.every((agentId) => mountable(agentDirFor(root, agentId, projectId), "rw"));
@@ -458,6 +463,17 @@ export function fixedMountSpecs(paths: SandboxPaths): string[] {
 }
 
 /**
+ * A linked worktree's repository `.git`, rw: the worktree's own `.git` is a file pointing there, and
+ * without it git fails in the sandbox ("not a git repository"). tet creates worktrees with relative
+ * links (git.ts's worktreeAdd), which hold at the container paths; with the mount, status, commit and
+ * branch work there (measured, sbx 0.42.1, git 2.53 in the kits). Live, like fixedMountSpecs.
+ */
+function worktreeMountSpecs(projectPath: string): string[] {
+  const commonDir = readLinkedGitDir(projectPath)?.commonDir;
+  return commonDir === undefined ? [] : [pathMountSpecs({ path: commonDir, access: "rw" }).mount];
+}
+
+/**
  * Mounts (`HOST:TARGET[:ro]`) for the enabled knowledge kinds that exist here. A bind mount, not a
  * symlink: sbx cannot follow one out of its workspace. Folders and files both work (measured).
  */
@@ -577,6 +593,20 @@ function sameWorkspaceSet(a: string[], b: string[]): boolean {
 async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {
   launcherWritten.delete(name);
   return (await runSbx(["rm", name, "--force"], { onData })).ok;
+}
+
+/**
+ * A removed or renamed worktree's sandboxes: their one workspace is gone, and the project id they
+ * are named by (sandboxName) never comes back. Nothing when sbx cannot list them.
+ */
+export async function removeProjectSandboxes(projectId: string): Promise<void> {
+  const sandboxes = await listSandboxes();
+  for (const agentId of SBX_AGENT_IDS) {
+    const name = sandboxName(projectId, agentId);
+    if (sandboxes?.has(name)) {
+      await removeSandbox(name);
+    }
+  }
 }
 
 /**
@@ -888,7 +918,11 @@ export async function prepareSbxRun(request: SbxRunRequest): Promise<{ args: str
   // tab stops with sbx's reason in its output. Hosts are seeded only into a sandbox this call
   // created; after that its rules are the truth (allowHosts).
   const missing = config.paths.map((entry) => entry.path).filter((entry) => !statOf(normalizeHostPath(entry)));
-  const own = [...fixedMountSpecs(request.paths), ...(await sessionMountSpecs(request.sessionMounts ?? []))];
+  const own = [
+    ...fixedMountSpecs(request.paths),
+    ...worktreeMountSpecs(request.projectPath),
+    ...(await sessionMountSpecs(request.sessionMounts ?? []))
+  ];
   const granted = grantedMounts(agentId, config).map((spec) => spec.mount);
   const failed = await mountAll(name, [...own, ...granted], onData, created ? undefined : request.warm);
   const ownFailed = failed.filter((spec) => own.includes(spec));

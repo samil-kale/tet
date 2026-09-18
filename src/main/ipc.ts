@@ -30,7 +30,8 @@ import type {
   SbxProjectConfig,
   SbxStatus,
   StashCommand,
-  TerminalDescriptor
+  TerminalDescriptor,
+  WorktreeRef
 } from "../shared/types";
 import {
   cancelSbxSetup,
@@ -49,7 +50,7 @@ import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererSlow, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
 import { relativeInside } from "./path-inside";
-import { addProject, removeProject, type ProjectStore } from "./projects";
+import { addProject, addWorktree, removeProject, deleteWorktree, renameWorktree, type ProjectStore } from "./projects";
 import { isExecutableFile, isOpenableUrl } from "./shell-open";
 import type { Repository, RepositoryManager } from "./git/repository";
 import { anyAgentInstalled, checkRequirements } from "./requirements";
@@ -256,7 +257,16 @@ export function registerIpc({
     }
   );
 
-  const projectDeps = { store, repositories, sessions, records, openProject };
+  const projectDeps = {
+    store,
+    repositories,
+    sessions,
+    records,
+    openProject,
+    dataRoot,
+    projectsChanged: (change: { added?: string; removed?: string }) =>
+      send("projects:changed", { projects: store.list(), ...change })
+  };
 
   ipcMain.handle("projects:open-path", (_event, directory: string): Promise<AddRepositoryResult> =>
     addProject(projectDeps, directory)
@@ -340,7 +350,24 @@ export function registerIpc({
 
   ipcMain.handle("projects:reorder", (_event, projectIds: string[]): void => store.reorder(projectIds));
 
-  ipcMain.handle("projects:remove", (_event, projectId: string): void => removeProject(projectDeps, projectId));
+  ipcMain.handle("projects:remove", (_event, projectId: string): void => void removeProject(projectDeps, projectId));
+
+  // Each announces its outcome as `projects:changed`, as the control channel's verbs do.
+  ipcMain.handle(
+    "projects:worktree-add",
+    (_event, projectId: string, branch: string): Promise<AddRepositoryResult> =>
+      addWorktree(projectDeps, projectId, branch)
+  );
+  ipcMain.handle(
+    "projects:worktree-delete",
+    (_event, worktree: WorktreeRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult> =>
+      deleteWorktree(projectDeps, worktree, options)
+  );
+  ipcMain.handle(
+    "projects:worktree-rename",
+    (_event, worktree: WorktreeRef, branch: string): Promise<GitActionResult> =>
+      renameWorktree(projectDeps, worktree, branch)
+  );
 
   ipcMain.handle("repo:state", (_event, projectId: string): RepositoryState => {
     return repositories.get(projectId)?.getState() ?? MISSING_REPOSITORY;

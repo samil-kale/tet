@@ -80,12 +80,19 @@ others.
   through `Repository.runAction` (renderer: `BranchActions.run`).
 - Remote commands run with `NETWORK_ENV`. **TET writes nothing into the credential helper.**
 - tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
+- A linked worktree is a project of its own, indented under its main worktree's row
+  (`Project.mainPath`, read off the disk, never stored), and listed in the branch tree's WORKTREES
+  (`RepositoryState.worktrees`, read off the disk too). A worktree and its branch are one: made
+  together at the main worktree's HEAD, named, renamed and deleted together, its branch listed
+  under WORKTREES only and never switched. tet creates them in `~/.tet/worktrees` with relative
+  links, and a sandbox mounts the main `.git` (`projects.ts`, `sbx.ts`).
 
 **Scope.** Everything the git pane does fits in a context menu, an icon button or a question. Of
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, per-file
 diff, discard, `.gitignore`, fetch/pull/push, commit of all changes or the selection, stash of all,
-clone (GitHub/GitLab via `GitProvider`). Where Desktop differs from git's defaults, follow Desktop.
-The project row's entries are repository-wide and never touch the working tree.
+worktrees (add, rename, delete), clone (GitHub/GitLab via `GitProvider`). Where Desktop differs
+from git's defaults, follow Desktop. The project row's entries are repository-wide and never touch
+the working tree — a worktree's own row excepted, which is that tree.
 
 Don't add without being asked: staging or per-line staging, history or graph, cherry-pick, revert,
 squash, reorder, bisect, submodules, conflict resolution beyond aborting, side-by-side text diff,

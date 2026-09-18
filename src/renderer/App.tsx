@@ -271,6 +271,30 @@ export function App() {
     });
   }, []);
 
+  /** A branch's worktree from the git pane: its project, else the folder opened as one. */
+  const openWorktree = useCallback(
+    async (worktreePath: string) => {
+      const open = projectsRef.current.find((project) => project.path === worktreePath);
+      if (open) {
+        setActiveProjectId(open.id);
+        return;
+      }
+      const result = await window.tet.projects.open(worktreePath);
+      if (result.project) {
+        projectAdded(result.project);
+      } else {
+        notify("error", result.error ?? `Could not open ${worktreePath}`);
+      }
+    },
+    [projectAdded]
+  );
+
+  /** A worktree's own project, if it is one, before its terminals close. */
+  const canCloseWorktree = useCallback(async (worktreePath: string) => {
+    const project = projectsRef.current.find((entry) => entry.path === worktreePath);
+    return project ? canDiscardProjectEdits(project.id) : true;
+  }, []);
+
   /** Drops everything held for a project; the project list is the caller's. */
   const forgetProject = useCallback((projectId: string) => {
     setStates((current) => forget(current, projectId));
@@ -481,11 +505,13 @@ export function App() {
       next[projectId] =
         previous &&
         previous.head === state.head &&
+        previous.detached === state.detached &&
+        previous.upstream === state.upstream &&
         previous.remote?.name === remote?.name &&
         previous.remote?.url === remote?.url &&
         previous.dirty === dirty
           ? previous
-          : { head: state.head, remote, dirty };
+          : { head: state.head, detached: state.detached, upstream: state.upstream, remote, dirty };
       changed ||= next[projectId] !== previous;
     }
     if (!changed) {
@@ -875,6 +901,7 @@ export function App() {
             onShowFinished={showFinished}
             onShowWaiting={showWaiting}
             onSbxSettings={openSbxSettings}
+            onGitAction={runBranchAction}
           />
           <Sash
             orientation="horizontal"
@@ -921,6 +948,8 @@ export function App() {
                 treeHeight={branchTreeHeight}
                 onTreeHeight={setBranchTreeHeight}
                 onOpenDiff={openActiveDiff}
+                onOpenWorktree={openWorktree}
+                canCloseWorktree={canCloseWorktree}
               />
             </div>
             {sidePaneOpen && (

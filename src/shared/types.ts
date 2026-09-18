@@ -37,6 +37,9 @@ export interface Project {
   path: string;
   /** The directory's base name. */
   name: string;
+  /** For a linked worktree, its main worktree's path — read off the disk when the project is
+   *  loaded or added, never trusted from `projects.json`. The sidebar indents it there. */
+  mainPath?: string;
 }
 
 /** What every agent notifies the OS about. */
@@ -287,6 +290,9 @@ export interface RepositoryState {
   /** Each local branch's upstream on a remote, e.g. `{ remote: "origin", branch: "main" }` — what a
    *  push goes to and "Also delete on the remote" deletes. Absent without one. */
   branchUpstreams: Record<string, { remote: string; branch: string }>;
+  /** The repository's worktrees, main first (git.ts's readWorktrees). A branch checked out in
+   *  another one is shown there on a checkout, as in GitHub Desktop: git refuses it here. */
+  worktrees: WorktreeInfo[];
   remotes: RemoteInfo[];
   /** What "Update from" merges and a deleted current branch gives way to, found as GitHub Desktop
    *  finds it: the local branch tracking the remote's HEAD branch, else the local branch of that
@@ -301,6 +307,18 @@ export interface RepositoryState {
   error?: string;
 }
 
+/** One worktree of a repository, read off its git directory. */
+export interface WorktreeInfo {
+  /** In on-disk spelling, as a project's path. */
+  path: string;
+  /** Its checked-out branch; absent while detached. */
+  branch?: string;
+  /** The one holding the repository's `.git`, which is never renamed or deleted. */
+  main: boolean;
+  /** The worktree this state was read in. */
+  current: boolean;
+}
+
 /** Nothing read yet. Never mutated, only spread from. */
 export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   head: "",
@@ -310,6 +328,7 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   localBranches: [],
   branchTrack: {},
   branchUpstreams: {},
+  worktrees: [],
   remotes: [],
   tags: [],
   stashes: [],
@@ -431,6 +450,14 @@ export interface GitActionResult {
   trashFailed?: boolean;
   /** A rebase was not started: it rewrites commits already on the upstream. Asked again, it runs. */
   rewritesPushed?: boolean;
+  /** A worktree was not deleted, nor its terminals closed: it has changes. Forced, it goes. */
+  uncommitted?: boolean;
+}
+
+/** A worktree an action names: its folder, and the main worktree its git commands run in. */
+export interface WorktreeRef {
+  path: string;
+  mainPath: string;
 }
 
 /** A local branch, or a remote-tracking one like "origin/development". */

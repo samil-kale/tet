@@ -44,6 +44,8 @@ const GROUPS: ReadonlyArray<{ heading: string; verbs: readonly string[] }> = [
       "projects-list",
       "projects-add",
       "projects-remove",
+      "worktree-add",
+      "worktree-delete",
       "repo-state",
       "restart-app"
     ]

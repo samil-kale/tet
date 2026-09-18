@@ -27,7 +27,8 @@ import type {
   StashCommand,
   TerminalDescriptor,
   TerminalOutput,
-  TerminalStatus
+  TerminalStatus,
+  WorktreeRef
 } from "./types";
 
 export type Unsubscribe = () => void;
@@ -92,9 +93,19 @@ export interface TETApi {
     /** `git init` of `directory`/`name`, opened as a project. */
     create(directory: string, name: string): Promise<AddRepositoryResult>;
     remove(projectId: string): Promise<void>;
+    /** A worktree of the project's repository under `~/.tet/worktrees` with a new branch of its own,
+     *  `branch` at the main worktree's HEAD, opened as a project. Worktree and branch are one:
+     *  deleting or renaming either does both. Announced as `onChanged`. */
+    addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
+    /** Unless `force`, answers `uncommitted` for a worktree with changes, closing nothing; else closes
+     *  its project, if it is one, and deletes its folder, then its branch — with `onRemote` the
+     *  branch's upstream too. */
+    deleteWorktree(worktree: WorktreeRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult>;
+    /** Renames the worktree's branch and folder; its project, if it is one, opens again at the new path. */
+    renameWorktree(worktree: WorktreeRef, branch: string): Promise<GitActionResult>;
     /** The full dragged order of ids. */
     reorder(projectIds: string[]): Promise<void>;
-    /** The control channel opened or closed a project. */
+    /** The control channel or a worktree action opened or closed a project. */
     onChanged(listener: (payload: { projects: Project[]; added?: string; removed?: string }) => void): Unsubscribe;
   };
   providers: {

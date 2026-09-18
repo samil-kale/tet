@@ -1,5 +1,7 @@
-import { memo, useState, type ReactNode } from "react";
-import type { Project, RemoteInfo } from "../../shared/types";
+import { memo, useMemo, useState, type ReactNode } from "react";
+import type { GitActionResult, Project, RemoteInfo } from "../../shared/types";
+import { canDiscardProjectEdits } from "../diff/editor-views";
+import { askDeleteWorktree, askNewWorktree, askRenameWorktree } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
@@ -40,6 +42,10 @@ export interface ProjectMarks {
 /** A row's repository facts: HEAD, first remote, dirty. */
 export interface ProjectHead {
   head?: string;
+  /** `head` is a commit, not a branch. */
+  detached?: boolean;
+  /** `head`'s upstream, e.g. "origin/main". */
+  upstream?: string;
   remote?: RemoteInfo;
   dirty?: boolean;
 }
@@ -71,6 +77,21 @@ interface ProjectListProps {
   onShowChanges: (projectId: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
+  /** `App.runBranchAction`: a worktree command shows in that project's bar and fails as a notice. */
+  onGitAction: (projectId: string, label: string, action: () => Promise<GitActionResult>) => void;
+}
+
+/**
+ * The stored order with each worktree moved right under its main worktree's row, siblings in stored
+ * order. A worktree whose main worktree is not open stands on its own. A drag reorders this list,
+ * which is grouped again — a worktree cannot leave its group.
+ */
+function groupWorktrees(projects: Project[]): Project[] {
+  const mains = new Set(projects.map((project) => project.path));
+  const isNested = (project: Project): boolean => project.mainPath !== undefined && mains.has(project.mainPath);
+  return projects
+    .filter((project) => !isNested(project))
+    .flatMap((main) => [main, ...projects.filter((project) => isNested(project) && project.mainPath === main.path)]);
 }
 
 /** A remote's web page, or null. Takes both git spellings: "git@host:owner/repo.git" and a url
@@ -117,21 +138,26 @@ export const ProjectList = memo(function ProjectList({
   onShowFinished,
   onShowWaiting,
   onShowChanges,
-  onSbxSettings
+  onSbxSettings,
+  onGitAction
 }: ProjectListProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
+  const rows = useMemo(() => groupWorktrees(projects), [projects]);
 
   const { rowProps, listProps, rowClasses } = useDragReorder({
     dragType: DRAG_TYPE,
-    count: projects.length,
+    count: rows.length,
     // The id, not the position: it survives a list change mid-drag.
-    payloadOf: (index) => projects[index].id,
-    indexOf: (id) => projects.findIndex((project) => project.id === id),
-    onMove: (from, to) => onReorder(reorder(projects, from, to))
+    payloadOf: (index) => rows[index].id,
+    indexOf: (id) => rows.findIndex((project) => project.id === id),
+    onMove: (from, to) => onReorder(groupWorktrees(reorder(rows, from, to)))
   });
 
   const itemClass = (project: Project, index: number): string => {
     const classes = ["project-item", ...rowClasses(index)];
+    if (rows.some((main) => main.path === project.mainPath)) {
+      classes.push("worktree");
+    }
     if (project.id === activeProjectId) {
       classes.push("active");
     }
@@ -154,11 +180,32 @@ export const ProjectList = memo(function ProjectList({
     }
   };
 
+  /** A worktree row's own reference, with its unsaved edits' say before its terminals close. */
+  const worktreeOf = (project: Project & { mainPath: string }) => ({
+    ref: { path: project.path, mainPath: project.mainPath },
+    run: (label: string, action: () => Promise<GitActionResult>) => onGitAction(project.id, label, action),
+    canClose: () => canDiscardProjectEdits(project.id)
+  });
+
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
-   *  pane, where its target is on screen. */
+   *  pane, where its target is on screen — but for a worktree's own row, which is that tree. */
   const menuEntries = (project: Project): ContextMenuEntry[] => {
     const remote = heads[project.id]?.remote;
     const web = remote?.url ? webUrl(remote.url) : null;
+    const { head, detached, upstream } = heads[project.id] ?? {};
+    const mainPath = project.mainPath;
+    const own = mainPath === undefined ? undefined : worktreeOf({ ...project, mainPath });
+    // Named by its branch, which is its name; by its folder while detached.
+    const name = head && !detached ? head : project.name;
+    const worktree: ContextMenuEntry[] = own
+      ? [
+          { label: "Rename worktree...", run: () => void askRenameWorktree(own.ref, name, own.run, own.canClose) },
+          {
+            label: "Delete worktree...",
+            run: () => void askDeleteWorktree(own.ref, name, upstream, own.run, own.canClose)
+          }
+        ]
+      : [];
     return [
       { label: "Open in terminal", run: () => onOpenTerminal(project.id) },
       { label: revealLabel(), run: () => void window.tet.shell.openProject(project.id) },
@@ -172,6 +219,18 @@ export const ProjectList = memo(function ProjectList({
         label: "Change remote URL...",
         run: remote ? () => void askRemoteUrl(project, remote) : undefined
       },
+      SEPARATOR,
+      {
+        label: "New worktree...",
+        run: () =>
+          void askNewWorktree(
+            project.id,
+            (label, action) => onGitAction(project.id, label, action),
+            // Where it starts: the main worktree's HEAD, whichever row asks.
+            heads[projects.find((entry) => entry.path === (mainPath ?? project.path))?.id ?? project.id]?.head ?? "HEAD"
+          )
+      },
+      ...worktree,
       SEPARATOR,
       { label: "SBX Settings", run: () => onSbxSettings(project.id) },
       SEPARATOR,
@@ -190,7 +249,7 @@ export const ProjectList = memo(function ProjectList({
         </button>
       </div>
       <div className="project-list" {...listProps}>
-        {projects.map((project, index) => (
+        {rows.map((project, index) => (
           <div
             key={project.id}
             className={itemClass(project, index)}

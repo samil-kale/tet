@@ -13,7 +13,8 @@ import type {
   HeadBlob,
   RemoteInfo,
   RepositoryState,
-  StashEntry
+  StashEntry,
+  WorktreeInfo
 } from "../../shared/types";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
@@ -412,6 +413,53 @@ async function readOperation(cwd: string): Promise<GitOperation | undefined> {
   return (await exists("MERGE_HEAD")) ? "merge" : undefined;
 }
 
+/**
+ * The worktrees, read off the common git directory as git keeps them — no `git worktree list` per
+ * refresh: its `HEAD` for the main one, and per linked one under `worktrees/<id>` a `gitdir`
+ * naming the worktree's `.git` (relative since `--relative-paths`) and its own `HEAD`.
+ */
+export async function readWorktrees(cwd: string): Promise<WorktreeInfo[]> {
+  const gitDir = await resolveGitDir(cwd);
+  const commonDir = await fs.readFile(path.join(gitDir, "commondir"), "utf8").then(
+    (pointer) => path.resolve(gitDir, pointer.trim()),
+    () => gitDir
+  );
+  const branchOf = async (adminDir: string): Promise<string | undefined> => {
+    const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
+    return /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
+  };
+  // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
+  const onDisk = (folder: string): Promise<string> => fs.realpath(folder).catch(() => folder);
+  const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => ({
+    path: await onDisk(worktreePath),
+    branch: await branchOf(adminDir),
+    main,
+    current: adminDir === gitDir
+  });
+  const linkedRoot = path.join(commonDir, "worktrees");
+  const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
+  const linked = await Promise.all(
+    ids.map(async (id) => {
+      const adminDir = path.join(linkedRoot, id);
+      const pointer = await fs.readFile(path.join(adminDir, "gitdir"), "utf8").catch(() => undefined);
+      return pointer === undefined ? undefined : worktree(path.dirname(path.resolve(adminDir, pointer.trim())), adminDir, false);
+    })
+  );
+  return [
+    await worktree(path.dirname(commonDir), commonDir, true),
+    ...linked
+      .filter((entry): entry is WorktreeInfo => entry !== undefined)
+      .sort((a, b) => path.basename(a.path).localeCompare(path.basename(b.path)))
+  ];
+}
+
+/** Whether `git worktree remove` would refuse the worktree without `--force`: a change or an
+ *  untracked file. Asked before its terminals close, never on the refresh path. */
+export async function hasChanges(cwd: string): Promise<boolean> {
+  const result = await git(cwd, ["--no-optional-locks", "status", "--porcelain"]);
+  return result.code !== 0 || result.stdout.trim() !== "";
+}
+
 /** `remoteNames`: the remotes as last read, which `for-each-ref` can't tell apart from the branch
  *  part of a remote-tracking ref (`readRefs`). */
 export async function readState(cwd: string, remoteNames: string[] = []): Promise<RepositoryState> {
@@ -419,14 +467,15 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
     // No `isRepository` check: Repository asks once on open, and the check costs a quarter of every
     // refresh where starting git is slow. The stash list is the third process, earned by being a
     // list the user acts on; anything added here has to earn its process too. All three run at
-    // once, so no extra wall time.
-    const [status, refs, stashes, operation] = await Promise.all([
+    // once, so no extra wall time. Operation and worktrees are file reads.
+    const [status, refs, stashes, operation, worktrees] = await Promise.all([
       readStatus(cwd),
       readRefs(cwd, remoteNames),
       readStashes(cwd),
-      readOperation(cwd)
+      readOperation(cwd),
+      readWorktrees(cwd)
     ]);
-    return { ...status, ...refs, stashes, operation };
+    return { ...status, ...refs, stashes, operation, worktrees };
   } catch (error) {
     return { ...EMPTY_REPOSITORY_STATE, error: error instanceof Error ? error.message : String(error) };
   }
@@ -853,6 +902,31 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
   const tracked = await run(cwd, ["switch", "--track", `${target.remote}/${target.name}`]);
   // The local branch may have appeared since the last refresh.
   return tracked.ok ? tracked : run(cwd, ["switch", target.name]);
+}
+
+/**
+ * A worktree always with a new branch of its own at `cwd`'s HEAD: tet couples the two, so deleting
+ * or renaming one does the other. `--relative-paths` (git 2.48) links the two `.git`s relatively, so the
+ * link holds in an sbx sandbox, where the paths differ from the host's on Windows (measured, git
+ * 2.53 in the kits: status, commit and branch work with the main `.git` mounted). It sets
+ * `extensions.relativeWorktrees` in the main repository's config.
+ */
+export function worktreeAdd(cwd: string, target: string, branch: string): Promise<GitActionResult> {
+  return run(cwd, ["worktree", "add", "--relative-paths", "-b", branch, "--", target]);
+}
+
+/** Without `force` git refuses a worktree with changes or untracked files; a locked one either way. */
+export function worktreeRemove(cwd: string, target: string, force: boolean): Promise<GitActionResult> {
+  return run(cwd, ["worktree", "remove", ...(force ? ["--force"] : []), "--", target]);
+}
+
+export function worktreeMove(cwd: string, from: string, to: string): Promise<GitActionResult> {
+  return run(cwd, ["worktree", "move", "--", from, to]);
+}
+
+/** Forgets worktrees whose folder is gone; until then git keeps their branches checked out. */
+export function worktreePrune(cwd: string): Promise<GitActionResult> {
+  return run(cwd, ["worktree", "prune"]);
 }
 
 async function readStashes(cwd: string): Promise<StashEntry[]> {

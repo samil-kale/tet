@@ -47,6 +47,9 @@ const api: TETApi = {
     clone: (url, directory, name, accountId) => ipcRenderer.invoke("projects:clone", url, directory, name, accountId),
     create: (directory, name) => ipcRenderer.invoke("projects:create", directory, name),
     remove: (projectId) => ipcRenderer.invoke("projects:remove", projectId),
+    addWorktree: (projectId, branch) => ipcRenderer.invoke("projects:worktree-add", projectId, branch),
+    deleteWorktree: (worktree, options) => ipcRenderer.invoke("projects:worktree-delete", worktree, options),
+    renameWorktree: (worktree, branch) => ipcRenderer.invoke("projects:worktree-rename", worktree, branch),
     reorder: (projectIds) => ipcRenderer.invoke("projects:reorder", projectIds),
     onChanged: (listener) => subscribe("projects:changed", listener)
   },

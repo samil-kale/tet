@@ -19,6 +19,7 @@ import type {
 import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "./commands";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { git } from "./git-client";
+import { readLinkedGitDir } from "./linked-git-dir";
 import { watchedDirectoryGone } from "../watch-dir";
 import { relativeInside } from "../path-inside";
 import type { DiscardTargets } from "./git";
@@ -362,6 +363,23 @@ export class Repository {
 
   createBranch(name: string, startPoint: string): Promise<GitActionResult> {
     return this.runAction(() => git.createBranch(this.project.path, name, startPoint));
+  }
+
+  /** A new branch at this worktree's HEAD, checked out at `target`. */
+  addWorktree(target: string, branch: string): Promise<GitActionResult> {
+    return this.runAction(() => git.worktreeAdd(this.project.path, target, branch));
+  }
+
+  removeWorktree(target: string, force: boolean): Promise<GitActionResult> {
+    return this.runAction(() => git.worktreeRemove(this.project.path, target, force));
+  }
+
+  moveWorktree(from: string, to: string): Promise<GitActionResult> {
+    return this.runAction(() => git.worktreeMove(this.project.path, from, to));
+  }
+
+  pruneWorktrees(): Promise<GitActionResult> {
+    return this.runAction(() => git.worktreePrune(this.project.path));
   }
 
   renameBranch(from: string, to: string): Promise<GitActionResult> {
@@ -887,27 +905,15 @@ export class Repository {
   /**
    * A linked worktree's or a submodule's `.git` is a file naming the git directory elsewhere, where
    * a commit or checkout in a terminal writes HEAD, index and refs without an event under the root
-   * (measured). Read off the file, no git process: `gitdir`, and for a worktree the `commondir`
-   * holding it, whose events are named as the root's `.git/` ones.
+   * (measured). `gitdir`, and for a worktree the `commondir` holding it, whose events are named as
+   * the root's `.git/` ones.
    */
   private watchLinkedGitDir(): void {
-    let gitDir: string;
-    try {
-      const pointer = /^gitdir:\s*(.+?)\s*$/m.exec(fs.readFileSync(path.join(this.project.path, ".git"), "utf8"));
-      if (!pointer) {
-        return;
-      }
-      gitDir = path.resolve(this.project.path, pointer[1]);
-    } catch {
-      // A directory (the usual repository), or none.
+    const linked = readLinkedGitDir(this.project.path);
+    if (!linked) {
       return;
     }
-    let dir = gitDir;
-    try {
-      dir = path.resolve(gitDir, fs.readFileSync(path.join(gitDir, "commondir"), "utf8").trim());
-    } catch {
-      // A submodule: no common directory.
-    }
+    const dir = linked.commonDir ?? linked.gitDir;
     this.gitDirWatcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
       const name = filename === null ? undefined : `.git/${filename.toString().replace(/\\/g, "/")}`;
       if (name && isIgnoredEvent(name)) {

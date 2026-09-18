@@ -355,6 +355,11 @@ textarea:focus {
   cursor: pointer;
 }
 
+/* A worktree under its main worktree's row, indented as `.tree-item.nested`. */
+.project-item.worktree {
+  padding-left: 30px;
+}
+
 .project-item:hover {
   background: var(--vscode-list-hoverBackground);
 }
@@ -402,7 +407,8 @@ textarea:focus {
 
 /* A command's variables, a repository's branch. Declared together so the two cannot drift. */
 .command-extra,
-.project-extra {
+.project-extra,
+.tree-extra {
   flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -18,6 +18,9 @@ interface GitPaneProps {
   onTreeHeight: (size: number) => void;
   /** Opens in the project's preview tab. */
   onOpenDiff: (path: string) => void;
+  /** See BranchTree. */
+  onOpenWorktree: (worktreePath: string) => void;
+  canCloseWorktree: (worktreePath: string) => Promise<boolean>;
 }
 
 /** The side pane's git view: branches over the changed files, nothing else. */
@@ -28,7 +31,9 @@ export const GitPane = memo(function GitPane({
   branch,
   treeHeight,
   onTreeHeight,
-  onOpenDiff
+  onOpenDiff,
+  onOpenWorktree,
+  canCloseWorktree
 }: GitPaneProps) {
   const { acting, act } = useFileAct(project.id);
 
@@ -79,7 +84,13 @@ export const GitPane = memo(function GitPane({
           {/* This section's bar — everything `branch.run` covers. */}
           {branch.busy && <ProgressBar />}
         </div>
-        <BranchTree projectId={project.id} state={state} branch={branch} />
+        <BranchTree
+          projectId={project.id}
+          state={state}
+          branch={branch}
+          onOpenWorktree={onOpenWorktree}
+          canCloseWorktree={canCloseWorktree}
+        />
       </div>
       <Sash
         orientation="horizontal"

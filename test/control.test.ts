@@ -23,6 +23,8 @@ const TOKEN = "test-token";
 
 const PROJECT: Project = { id: "p1", path: "", name: "one" };
 const OTHER: Project = { id: "p2", path: "", name: "two" };
+/** A linked worktree of PROJECT's repository. */
+const WORKTREE: Project = { id: "p4", path: "/wt/four", name: "four", mainPath: "/repo/one" };
 const OWN_TAB = "tab-own";
 /** A tab of PROJECT whose process runs in its sbx sandbox. */
 const SANDBOX_TAB = "tab-sbx";
@@ -41,6 +43,9 @@ interface Calls {
   commands: string[];
   added: string[];
   removed: string[];
+  /** `[projectId, branch]` per worktree-add, `[path, force]` per worktree-delete. */
+  worktreesAdded: [string, string][];
+  worktreesDeleted: [string, boolean][];
   changed: { added?: string; removed?: string }[];
   shutdown: boolean[];
   notified: [string, string, ToastTarget | undefined][];
@@ -127,7 +132,7 @@ function terminalsOf(projectId: string): ControlTerminals {
 }
 
 function deps(): ControlDeps {
-  const projects = [PROJECT, OTHER];
+  const projects = [PROJECT, OTHER, WORKTREE];
   return {
     records: {
       editor: (id) => (id === PROJECT.id ? ACTIVE_EDITOR : undefined),
@@ -174,6 +179,16 @@ function deps(): ControlDeps {
     removeProject: (id) => {
       calls.removed.push(id);
     },
+    addWorktree: async (projectId, branch) => {
+      calls.worktreesAdded.push([projectId, branch]);
+      return branch === "taken"
+        ? { error: "fatal: a branch named 'taken' already exists" }
+        : { project: { id: "p5", path: `/wt/${branch}`, name: branch, mainPath: "/repo/one" } };
+    },
+    deleteWorktree: async (worktree, force) => {
+      calls.worktreesDeleted.push([worktree.path, force]);
+      return force ? { ok: true } : { ok: false, uncommitted: true };
+    },
     readCommands: async () => [{ command: "npm run build", name: "build" }, { command: "a && b" }],
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
@@ -214,6 +229,8 @@ describe("tet-ctl against the control server", () => {
       commands: [],
       added: [],
       removed: [],
+      worktreesAdded: [],
+      worktreesDeleted: [],
       changed: [],
       shutdown: [],
       notified: [],
@@ -587,6 +604,8 @@ describe("tet-ctl against the control server", () => {
       ["tabs-run-command", "build"],
       ["projects-add", tempDir],
       ["projects-remove", OTHER.id],
+      ["worktree-add", "x"],
+      ["worktree-delete", WORKTREE.id],
       ["tabs-start", "tab-2"],
       ["tabs-restart", "tab-2"],
       ["tabs-send", "tab-2", "x"],
@@ -683,6 +702,37 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["projects-remove", OTHER.id])).result, { removed: OTHER.id });
     assert.deepEqual(calls.removed, [OTHER.id]);
     assert.deepEqual(calls.changed, [{ removed: OTHER.id }]);
+  });
+
+  it("creates a worktree of the caller's project, named by its new branch", async () => {
+    const run = await tetCtl(["worktree-add", "feature/x"]);
+    assert.equal((run.result as Project).id, "p5");
+    assert.deepEqual(calls.worktreesAdded, [[PROJECT.id, "feature/x"]]);
+    assert.equal((await tetCtl(["worktree-add", "a", "b"])).status, EXIT_CODES.usage, "no start point to name");
+  });
+
+  it("passes on what git said when a worktree could not be created", async () => {
+    const run = await tetCtl(["worktree-add", "taken"]);
+    assert.equal(run.status, EXIT_CODES.usage);
+    assert.match(run.stderr, /already exists/);
+  });
+
+  it("deletes a worktree, forced only when asked", async () => {
+    const refused = await tetCtl(["worktree-delete", WORKTREE.id]);
+    assert.equal(refused.status, EXIT_CODES.usage);
+    assert.match(refused.stderr, /uncommitted changes/);
+    assert.deepEqual((await tetCtl(["worktree-delete", WORKTREE.id, "--force"])).result, { deleted: WORKTREE.id });
+    assert.deepEqual(calls.worktreesDeleted, [
+      [WORKTREE.path, false],
+      [WORKTREE.path, true]
+    ]);
+  });
+
+  it("deletes only a worktree, and never the caller's own", async () => {
+    assert.match((await tetCtl(["worktree-delete", OTHER.id])).stderr, /not a worktree/);
+    const own = await tetCtl(["worktree-delete", WORKTREE.id], { [CONTROL_ENV.projectId]: WORKTREE.id });
+    assert.match(own.stderr, /cannot delete itself/);
+    assert.deepEqual(calls.worktreesDeleted, []);
   });
 
   it("answers before removing the caller's own project", async () => {

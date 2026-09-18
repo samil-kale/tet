@@ -8,6 +8,7 @@ import { shell, utilityProcess } from "electron";
 import * as gitModule from "../src/main/git/git";
 import type { GitRequest, GitResponse } from "../src/main/git/git-host";
 import { Repository } from "../src/main/git/repository";
+import { readMainWorktree } from "../src/main/git/linked-git-dir";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
@@ -245,5 +246,81 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
     assert.equal(refused.ok, false);
     assert.match(refused.error ?? "", /no default branch/);
     assert.ok(repository.getState().localBranches.includes("lonely"));
+  });
+});
+
+describe("worktrees, each with a branch of its own", () => {
+  let dir: string;
+  let worktrees: string;
+  let repository: Repository;
+  const at = (name: string): string => path.join(worktrees, name);
+  const real = (folder: string): string => fs.realpathSync.native(folder);
+
+  before(async () => {
+    dir = init("tet-repository-wt-");
+    worktrees = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-wts-"));
+    repository = await open(dir);
+  });
+
+  it("makes a new branch at HEAD, linked relatively", async () => {
+    assert.deepEqual(await repository.addWorktree(at("fresh"), "fresh"), { ok: true });
+    assert.equal(git(at("fresh"), "branch", "--show-current"), "fresh");
+    assert.equal(git(at("fresh"), "rev-parse", "HEAD"), git(dir, "rev-parse", "HEAD"));
+    assert.match(fs.readFileSync(path.join(at("fresh"), ".git"), "utf8"), /^gitdir: \.\./);
+    assert.equal(readMainWorktree(at("fresh")), real(dir));
+    assert.equal(readMainWorktree(dir), undefined, "the main worktree is none");
+  });
+
+  it("never takes a branch that exists", async () => {
+    const refused = await repository.addWorktree(at("taken"), "fresh");
+    assert.equal(refused.ok, false);
+    assert.ok(!fs.existsSync(at("taken")));
+  });
+
+  it("lists the worktrees off the disk, main first, with their branches", async () => {
+    assert.deepEqual(await repository.addWorktree(at("second"), "second"), { ok: true });
+    const { worktrees: listed } = await repository.refresh();
+    assert.deepEqual(listed[0], { path: real(dir), branch: "main", main: true, current: true });
+    assert.deepEqual(listed.slice(1), [
+      { path: real(at("fresh")), branch: "fresh", main: false, current: false },
+      { path: real(at("second")), branch: "second", main: false, current: false }
+    ]);
+    git(at("fresh"), "switch", "-q", "--detach");
+    assert.equal((await repository.refresh()).worktrees[1]?.branch, undefined, "a detached one has none");
+    git(at("fresh"), "switch", "-q", "fresh");
+  });
+
+  it("is the current one when read in a linked worktree", async () => {
+    const linked = await open(at("second"));
+    const current = linked.getState().worktrees.filter((worktree) => worktree.current);
+    assert.deepEqual(current.map((worktree) => worktree.branch), ["second"]);
+    assert.equal(linked.getState().worktrees[0]?.path, real(dir), "main still first");
+    linked.dispose();
+  });
+
+  it("removes a worktree with changes only when forced", async () => {
+    fs.writeFileSync(path.join(at("second"), "new.txt"), "new\n");
+    const refused = await repository.removeWorktree(at("second"), false);
+    assert.equal(refused.ok, false);
+    assert.ok(fs.existsSync(at("second")));
+    assert.deepEqual(await repository.removeWorktree(at("second"), true), { ok: true });
+    assert.ok(!fs.existsSync(at("second")));
+    assert.ok(!repository.getState().worktrees.some((worktree) => worktree.branch === "second"));
+  });
+
+  it("renames a branch checked out in a worktree, which follows it, and moves the folder", async () => {
+    assert.deepEqual(await repository.renameBranch("fresh", "renamed"), { ok: true });
+    assert.equal(git(at("fresh"), "branch", "--show-current"), "renamed");
+    assert.deepEqual(await repository.moveWorktree(at("fresh"), at("renamed")), { ok: true });
+    assert.equal(git(at("renamed"), "branch", "--show-current"), "renamed");
+  });
+
+  it("forgets a worktree whose folder is gone", async () => {
+    fs.rmSync(at("renamed"), { recursive: true, force: true });
+    assert.deepEqual(await repository.pruneWorktrees(), { ok: true });
+    assert.deepEqual(
+      repository.getState().worktrees.map((worktree) => worktree.branch),
+      ["main"]
+    );
   });
 });

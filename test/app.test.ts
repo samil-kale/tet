@@ -245,6 +245,28 @@ ${stderr.slice(uncaught)}`);
     }
   });
 
+  it("creates a worktree in the profile, under its repository's row, and deletes it with its branch", async () => {
+    const projects = (await ctl("projects-list")).result as Project[];
+    const main = projects.find((project) => project.mainPath === undefined)!;
+    const added = await ctl("worktree-add", "from/ctl", "--project", main.id);
+    assert.equal(added.status, 0, added.stderr);
+    const worktree = added.result as Project;
+    // The branch names the folder, a "/" in it no subfolder.
+    assert.equal(worktree.path, path.join(userData, "worktrees", path.basename(main.path), "from-ctl"));
+    assert.equal(worktree.mainPath, main.path);
+    await eventually(
+      "the new branch read",
+      async () => ((await ctl("repo-state", "--project", worktree.id)).result as RepositoryState).head === "from/ctl",
+      STARTUP_MS
+    );
+    const deleted = await ctl("worktree-delete", worktree.id);
+    assert.equal(deleted.status, 0, deleted.stderr);
+    assert.ok(!fs.existsSync(worktree.path));
+    assert.ok(!((await ctl("projects-list")).result as Project[]).some((project) => project.id === worktree.id));
+    const branches = ((await ctl("repo-state", "--project", main.id)).result as RepositoryState).localBranches;
+    assert.ok(!branches.includes("from/ctl"), "its branch went with it");
+  });
+
   it("changes a kind's theme without a restart", async () => {
     // The window starts in "system", so dark may not be on screen; either way no restart is needed.
     const set = await ctl("settings-set-theme", "dark-slate");

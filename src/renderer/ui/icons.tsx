@@ -248,6 +248,30 @@ export function BranchIcon(props: IconProps) {
   );
 }
 
+/** Lucide's `folder-git-2`, on its native 24-unit grid — a worktree. From its path bounds, stroke
+ *  included: 22 by 21, extent 21.49 (the geometric mean), centered at (12, 12.5). */
+export function WorktreeIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(21.49, 12, 12.5, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(21.49, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18 19a5 5 0 0 1-5-5v8" />
+      <path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5" />
+      <circle cx="13" cy="12" r="2" />
+      <circle cx="20" cy="19" r="2" />
+    </svg>
+  );
+}
+
 /**
  * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. Measured: tips
  * at 2 and 30, a bbox of side 28 centred at (16, 16). A step past `LARGER`, since a diamond inks

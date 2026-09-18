@@ -18,7 +18,7 @@ import type { ToastTarget } from "./control/control-server";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
-import { addProject, ProjectStore, removeProject } from "./projects";
+import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject } from "./projects";
 import { configureSandboxes } from "./sbx";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
@@ -441,7 +441,9 @@ async function startControl(): Promise<void> {
   if (!controlChannel) {
     return;
   }
-  const projectDeps = { store, repositories, sessions, records, openProject };
+  const projectsChanged = (change: { added?: string; removed?: string }): void =>
+    send("projects:changed", { projects: store.list(), ...change });
+  const projectDeps = { store, repositories, sessions, records, openProject, dataRoot, projectsChanged };
   try {
     controlServer = await startControlServer(
       {
@@ -464,14 +466,16 @@ async function startControl(): Promise<void> {
           ),
         agentIds: AGENTS.map((agent) => agent.id),
         addProject: (directory) => addProject(projectDeps, directory),
-        removeProject: (projectId) => removeProject(projectDeps, projectId),
+        removeProject: (projectId) => void removeProject(projectDeps, projectId),
+        addWorktree: (projectId, branch) => addWorktree(projectDeps, projectId, branch),
+        deleteWorktree: (worktree, force) => deleteWorktree(projectDeps, worktree, { force, onRemote: false }),
         readCommands,
         shutdown,
         records,
         openEditor: (projectId, filePath, keep) => send("editor:open", { projectId, path: filePath, keep }),
         editorContent,
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
-        projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
+        projectsChanged,
         notify: showDesktopNotification,
         applyTheme
       },

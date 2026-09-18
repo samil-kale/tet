@@ -14,11 +14,13 @@ import type {
   EditorListing,
   EditorReport,
   ExplorerListing,
+  GitActionResult,
   NoticeReport,
   Project,
   ProjectCommand,
   RepositoryState,
-  TerminalDescriptor
+  TerminalDescriptor,
+  WorktreeRef
 } from "../../shared/types";
 import { TET_SYSTEM_PROMPT } from "../agents/system-prompt";
 import { relativeInside } from "../path-inside";
@@ -65,6 +67,9 @@ export interface ControlDeps {
   agentIds: readonly string[];
   addProject(directory: string): Promise<AddRepositoryResult>;
   removeProject(projectId: string): void;
+  /** projects.ts's, which announce their outcome themselves (projectsChanged). */
+  addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
+  deleteWorktree(worktree: WorktreeRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
@@ -374,6 +379,37 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       }
       remove();
       return { result: { removed: id } };
+    },
+
+    "worktree-add": async (args, caller) => {
+      const added = await deps.addWorktree(project(args, caller).id, text(args, "branch", "branch"));
+      if (!added.project) {
+        throw new ControlError("bad_args", added.error ?? "could not create the worktree");
+      }
+      return { result: added.project };
+    },
+
+    // Not the caller's own: it would end the caller's tab before the folder can go.
+    "worktree-delete": async (args, caller) => {
+      const id = text(args, "projectId", "project id");
+      const found = store.get(id);
+      if (!found) {
+        throw new ControlError("not_found", `unknown project: ${id}`);
+      }
+      if (!found.mainPath) {
+        throw new ControlError("bad_args", `project ${id} is not a worktree`);
+      }
+      if (id === caller.projectId) {
+        throw new ControlError("bad_args", "a worktree cannot delete itself: run this from another project's tab");
+      }
+      const deleted = await deps.deleteWorktree({ path: found.path, mainPath: found.mainPath }, args.force === true);
+      if (deleted.uncommitted) {
+        throw new ControlError("bad_args", `${found.name} has uncommitted changes: pass --force to delete them too`);
+      }
+      if (!deleted.ok) {
+        throw new ControlError("bad_args", deleted.error ?? "could not delete the worktree");
+      }
+      return { result: { deleted: id } };
     },
 
     "tabs-list": (args, caller) => ({ result: terminals(project(args, caller)).inspect() }),
