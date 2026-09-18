@@ -74,6 +74,9 @@ export interface TETApi {
     saveConfig(projectId: string, request: SbxProjectConfig, secretValues: Record<string, string>): Promise<GitActionResult>;
     /** Per entry, whether sbx's filesystem policy lets it be mounted with its access. */
     mountsAllowed(paths: SbxPath[]): Promise<boolean[]>;
+    /** Whether sbx's network policy lets a sandbox reach the host; true for a wildcard. One host
+     *  per call, so each answer can show as it comes. */
+    hostAllowed(host: string): Promise<boolean>;
   };
   /** One set for the whole app. */
   settings: {

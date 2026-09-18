@@ -37,6 +37,7 @@ import {
   cancelSbxSetup,
   initSbxPolicy,
   readLiveSbxConfig,
+  readHostAllowed,
   readMountsAllowed,
   readSbxStatus,
   runSbxLogin,
@@ -185,6 +186,8 @@ export function registerIpc({
 
   // The Allowed paths rows' marks; asked fresh, as the policy changes outside tet.
   ipcMain.handle("sbx:mounts-allowed", (_event, paths: SbxPath[]): Promise<boolean[]> => readMountsAllowed(paths));
+  // The Secrets rows' marks, likewise.
+  ipcMain.handle("sbx:host-allowed", (_event, host: string): Promise<boolean> => readHostAllowed(host));
 
   // Read fresh; the hosts from the sandboxes themselves (sbx.ts's readLiveSbxConfig).
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {

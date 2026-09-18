@@ -295,6 +295,21 @@ export async function readMountsAllowed(paths: SbxPath[]): Promise<boolean[]> {
 }
 
 /**
+ * For the dialog's Secrets: whether sbx's network policy lets a sandbox reach the host, asked as
+ * isNetworkAllowed does. Only marks a row, as readMountsAllowed. True for a wildcard, which cannot
+ * be asked: `policy check` takes it as a literal name (measured: `*.github.com` refused where
+ * `github.com` is allowed, 0.42.1).
+ *
+ * One host per call, so the dialog marks each as its answer comes. It asks them all at once: sbx
+ * queues them on its own lock, so a cap gains nothing — 6 took 1.8 s, 10 took 2.6 s, 20 took 5.4 s
+ * with answers unchanged, its "docker hub refresh lock held" warning on stderr only (measured,
+ * 2026-09-18, 0.42.1).
+ */
+export async function readHostAllowed(host: string): Promise<boolean> {
+  return host.includes("*") || (await isNetworkAllowed(host));
+}
+
+/**
  * Behind both. Three processes, always: `policy ls`'s exit code says initialized, its output
  * governed, and asking it and `ls` before the answers are read costs nothing but two processes on a
  * machine without sbx. They start together because an sbx invocation is ~0.45 s of CLI startup,

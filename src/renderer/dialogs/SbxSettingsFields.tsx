@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
 import { CloseIcon, ExclamationIcon } from "../ui/icons";
 import { Dropdown } from "../ui/Dropdown";
@@ -15,6 +15,9 @@ const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
   { kind: "plugins", label: "Plugins" },
   { kind: "instructions", label: "Instructions file (CLAUDE.md / AGENTS.md)" }
 ];
+
+/** How long typing in a secret's hosts pauses before they are checked against sbx's policy. */
+const HOST_CHECK_DELAY_MS = 500;
 
 /** A row as the fields hold it: the saved shape plus a local React key, never sent anywhere. */
 type Row<T> = T & { id: string };
@@ -84,8 +87,14 @@ function isBadSecretRow(row: SecretRow, rows: SecretRow[]): boolean {
     !/^[A-Za-z_][A-Za-z0-9_]*$/.test(env) ||
     rows.some((other) => other.id !== row.id && other.env.trim() === env) ||
     hosts.length === 0 ||
-    hosts.some((host) => /[/:]/.test(host))
+    hosts.some(isBadHost)
   );
+}
+
+/** A scheme or port, which `sbx secret set-custom` rejects (measured), or a leading "-", which sbx
+ *  would read as an option of its own. */
+function isBadHost(host: string): boolean {
+  return /^-|[/:]/.test(host);
 }
 
 /** Why Save waits, or `undefined`: every port row two ports or empty, every secret row complete or
@@ -120,40 +129,136 @@ export function toSecretValues(state: FieldsState): Record<string, string> {
   return Object.fromEntries(state.secrets.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value]));
 }
 
-interface SbxSettingsFieldsProps {
-  /** Owned by SbxSettingsDialog, which builds the save request. */
-  state: FieldsState;
-  setState: Dispatch<SetStateAction<FieldsState>>;
-  section: keyof FieldsState;
-  /** An organization manages sbx's policy; only words the Allowed paths marks. */
-  governed: boolean;
-  /** The env names holding a value on this machine (`sbx:stored-secrets`). */
-  storedSecrets: readonly string[];
+/** sbx's policy on the rows, for their marks (usePolicyAnswers). */
+export interface PolicyAnswers {
+  /** Row ids of Allowed paths sbx's policy would refuse to mount (sbx.ts's readMountsAllowed). */
+  deniedPaths: ReadonlySet<string>;
+  /** Per secret host answered so far, whether a sandbox may reach it (sbx.ts's readHostAllowed). */
+  hostsAllowed: ReadonlyMap<string, boolean>;
 }
 
-/** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
- *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section, governed, storedSecrets }: SbxSettingsFieldsProps) {
-  /** Row ids of Allowed paths sbx's policy would refuse to mount (sbx.ts's readMountsAllowed). */
-  const [denied, setDenied] = useState<ReadonlySet<string>>(() => new Set());
+/**
+ * Asks sbx's policy about the paths and the secrets' hosts as soon as the dialog has its rows
+ * (`ready`), whatever tab shows — so a path or host the policy no longer allows is marked from the
+ * start, its tab too — then again on a change. The two run side by side and are never waited on:
+ * a mark appears with its answer.
+ */
+export function usePolicyAnswers(state: FieldsState, ready: boolean): PolicyAnswers {
+  const [deniedPaths, setDeniedPaths] = useState<ReadonlySet<string>>(() => new Set());
   // Only a changed path or access asks again; an answer overtaken by an edit is dropped.
   const pathsKey = JSON.stringify(state.paths.map(({ id, path, access }) => [id, path, access]));
   useEffect(() => {
-    if (section !== "paths" || state.paths.length === 0) {
+    if (!ready || state.paths.length === 0) {
       return;
     }
     const rows = state.paths;
     let current = true;
     void window.tet.sbx.mountsAllowed(rows.map(({ path, access }) => ({ path, access }))).then((allowed) => {
       if (current) {
-        setDenied(new Set(rows.filter((_row, index) => !allowed[index]).map((row) => row.id)));
+        setDeniedPaths(new Set(rows.filter((_row, index) => !allowed[index]).map((row) => row.id)));
       }
     });
     return () => {
       current = false;
     };
-  }, [section, pathsKey]);
+  }, [ready, pathsKey]);
 
+  // Kept while the dialog is open: only a host not asked yet is. An answer holds for its host
+  // whatever was edited since, so none is dropped.
+  const [hostsAllowed, setHostsAllowed] = useState<ReadonlyMap<string, boolean>>(() => new Map());
+  /** Asked and not answered yet — not asked a second time meanwhile. */
+  const asking = useRef(new Set<string>());
+  // A host the row already refuses (isBadHost) is not asked: it is marked for that.
+  const unaskedHosts = [...new Set(state.secrets.flatMap(secretHosts))].filter((host) => !isBadHost(host) && !hostsAllowed.has(host));
+  const unaskedKey = JSON.stringify(unaskedHosts);
+  /** The saved hosts go at once; a typed one waits (HOST_CHECK_DELAY_MS). */
+  const opened = useRef(true);
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+    const delay = opened.current ? 0 : HOST_CHECK_DELAY_MS;
+    opened.current = false;
+    const hosts = unaskedHosts.filter((host) => !asking.current.has(host));
+    if (hosts.length === 0) {
+      return;
+    }
+    // Typed, unlike a picked path: asked once typing pauses, not per keystroke (~0.5 s an sbx call).
+    // Each on its own, all at once (sbx.ts's readHostAllowed), so the first refusal marks at once.
+    const timer = setTimeout(() => {
+      for (const host of hosts) {
+        asking.current.add(host);
+        void window.tet.sbx
+          .hostAllowed(host)
+          .then((allowed) => setHostsAllowed((known) => new Map(known).set(host, allowed)))
+          .finally(() => asking.current.delete(host));
+      }
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [ready, unaskedKey]);
+
+  return { deniedPaths, hostsAllowed };
+}
+
+/** Who refuses, in the marks. */
+function policyName(governed: boolean): string {
+  return governed ? "Your organization's SBX policy" : "SBX's policy";
+}
+
+/** A path row's mark, or `undefined`. */
+function pathMark(row: FieldsState["paths"][number], answers: PolicyAnswers, governed: boolean): string | undefined {
+  return answers.deniedPaths.has(row.id)
+    ? `${policyName(governed)} does not allow mounting this path${row.access === "rw" ? " with write access" : ""}`
+    : undefined;
+}
+
+/** A secret row's mark, or `undefined`. One mark: a row Save refuses before one the policy would
+ *  leave without effect. */
+function secretMark(row: SecretRow, rows: SecretRow[], answers: PolicyAnswers, governed: boolean): string | undefined {
+  if (isBadSecretRow(row, rows)) {
+    return "Needs a variable name of its own and hosts without scheme or port";
+  }
+  const unreachable = secretHosts(row).filter((host) => answers.hostsAllowed.get(host) === false);
+  return unreachable.length > 0 ? `${policyName(governed)} does not allow the sandbox to reach ${unreachable.join(", ")}` : undefined;
+}
+
+const BAD_PORT = "Both ports must be whole numbers from 1 to 65535";
+
+/** Each tab's mark: its first marked row's, repeated on the tab so it shows from any pane. */
+export function tabMarks(state: FieldsState, answers: PolicyAnswers, governed: boolean): Partial<Record<keyof FieldsState, string>> {
+  const first = (marks: (string | undefined)[]): string | undefined => marks.find((mark) => mark !== undefined);
+  return {
+    ports: state.ports.some(isBadPortRow) ? BAD_PORT : undefined,
+    paths: first(state.paths.map((row) => pathMark(row, answers, governed))),
+    secrets: first(state.secrets.map((row) => secretMark(row, state.secrets, answers, governed)))
+  };
+}
+
+/** A row's mark, in every tab right before the row's remove button; nothing without a reason. */
+function RowMark({ title }: { title: string | undefined }) {
+  return title === undefined ? null : (
+    <span className="sbx-path-denied" title={title}>
+      <ExclamationIcon />
+    </span>
+  );
+}
+
+interface SbxSettingsFieldsProps {
+  /** Owned by SbxSettingsDialog, which builds the save request. */
+  state: FieldsState;
+  setState: Dispatch<SetStateAction<FieldsState>>;
+  section: keyof FieldsState;
+  /** An organization manages sbx's policy; only words the paths' and secrets' marks. */
+  governed: boolean;
+  /** The env names holding a value on this machine (`sbx:stored-secrets`). */
+  storedSecrets: readonly string[];
+  /** Asked by the dialog from its opening (usePolicyAnswers), for the tabs' marks too. */
+  answers: PolicyAnswers;
+}
+
+/** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
+ *  shared across tabs. */
+export function SbxSettingsFields({ state, setState, section, governed, storedSecrets, answers }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -225,12 +330,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                   value={port.container}
                   onChange={(event) => setPort({ container: event.target.value })}
                 />
-                {isBadPortRow(port) && (
-                  // The Allowed paths mark, for a row Save refuses.
-                  <span className="sbx-path-denied" title="Both ports must be whole numbers from 1 to 65535">
-                    <ExclamationIcon />
-                  </span>
-                )}
+                <RowMark title={isBadPortRow(port) ? BAD_PORT : undefined} />
                 <button
                   className="icon-button"
                   title="Remove port"
@@ -265,14 +365,6 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
               <span className="sbx-path-value" title={row.path}>
                 {row.path}
               </span>
-              {denied.has(row.id) && (
-                <span
-                  className="sbx-path-denied"
-                  title={`${governed ? "Your organization's SBX policy" : "SBX's policy"} does not allow mounting this path${row.access === "rw" ? " with write access" : ""}`}
-                >
-                  <ExclamationIcon />
-                </span>
-              )}
               <Dropdown
                 value={row.access}
                 options={ACCESS_OPTIONS}
@@ -280,6 +372,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                   update("paths", (paths) => paths.map((entry) => (entry.id === row.id ? { ...entry, access: value as SbxAccess } : entry)))
                 }
               />
+              <RowMark title={pathMark(row, answers, governed)} />
               <button
                 className="icon-button"
                 title="Remove path"
@@ -348,12 +441,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                   value={row.value}
                   onChange={(event) => setSecret({ value: event.target.value })}
                 />
-                {isBadSecretRow(row, state.secrets) && (
-                  // The Allowed paths mark, for a row Save refuses.
-                  <span className="sbx-path-denied" title="Needs a variable name of its own and hosts without scheme or port">
-                    <ExclamationIcon />
-                  </span>
-                )}
+                <RowMark title={secretMark(row, state.secrets, answers, governed)} />
                 <button
                   className="icon-button"
                   title="Remove secret"

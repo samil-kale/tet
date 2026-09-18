@@ -1,4 +1,4 @@
-import { CloseIcon } from "./icons";
+import { CloseIcon, ExclamationIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
 import { useCoversWindow } from "./window-covered";
 
@@ -7,6 +7,8 @@ export interface DialogTab<T extends string> {
   label: string;
   /** Given, the tab cannot be chosen and says why on hover. */
   disabled?: string;
+  /** Given, something in the pane needs a look: an error mark beside the label, saying what. */
+  mark?: string;
 }
 
 /**
@@ -64,7 +66,7 @@ export function DialogFrame<T extends string>({ header, busy, className, onSubmi
               // The context menu's disabled entry, not the attribute: chromium swallows a
               // disabled control's tooltip, and the reason is the point.
               className={`dialog-tab${header.active === entry.id ? " active" : ""}${entry.disabled ? " disabled" : ""}`}
-              title={entry.disabled}
+              title={entry.disabled ?? entry.mark}
               onClick={() => {
                 if (!entry.disabled) {
                   header.onSelect(entry.id);
@@ -72,6 +74,11 @@ export function DialogFrame<T extends string>({ header, busy, className, onSubmi
               }}
             >
               {entry.label}
+              {entry.mark && (
+                <span className="dialog-tab-mark">
+                  <ExclamationIcon />
+                </span>
+              )}
             </button>
           ))}
           {header.onClose && (

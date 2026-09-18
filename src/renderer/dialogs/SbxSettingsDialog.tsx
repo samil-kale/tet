@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import type { Project, SbxBlocker } from "../../shared/types";
-import { SbxSettingsFields, fromConfig, saveBlocked, toConfig, toSecretValues, type FieldsState } from "./SbxSettingsFields";
+import {
+  SbxSettingsFields,
+  fromConfig,
+  saveBlocked,
+  tabMarks,
+  toConfig,
+  toSecretValues,
+  usePolicyAnswers,
+  type FieldsState
+} from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
@@ -155,9 +164,18 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
   const blocked = saveBlocked(state);
   const organization = phase.kind === "ready" ? phase.organization : undefined;
+  // Asked from the moment the rows are loaded, not when their tab is opened.
+  const answers = usePolicyAnswers(state, phase.kind === "ready");
+  const marks = tabMarks(state, answers, organization !== undefined);
   const tabs = useMemo(
-    () => TABS.map((entry) => ({ ...entry, disabled: tabBlocked(entry.id, { enabled, locked, organization }) })),
-    [enabled, locked, organization]
+    () =>
+      TABS.map((entry) => {
+        const disabled = tabBlocked(entry.id, { enabled, locked, organization });
+        // A tab that cannot be chosen says why, not what is inside.
+        const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
+        return { ...entry, disabled, mark };
+      }),
+    [enabled, locked, organization, marks.ports, marks.paths, marks.secrets]
   );
 
   return (
@@ -253,6 +271,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             setState={setState}
             governed={organization !== undefined}
             storedSecrets={storedSecrets}
+            answers={answers}
           />
         </div>
       )}

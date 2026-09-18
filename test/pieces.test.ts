@@ -25,6 +25,7 @@ import {
   fixedMountSpecs,
   parsePublishedPorts,
   pathMountSpecs,
+  readHostAllowed,
   sandboxName,
   saveSbxConfig,
   secretPlaceholder
@@ -344,7 +345,13 @@ describe("saving an sbx config", () => {
    * sandbox, this project's Claude one, so the other three agents are skipped; `policy ls` answers
    * no rules, so hosts add nothing to the log.
    */
-  function fakeSbx(answers: { published: object[]; refuse?: string; secrets?: object[]; secretsFail?: boolean }): {
+  function fakeSbx(answers: {
+    published: object[];
+    refuse?: string;
+    secrets?: object[];
+    secretsFail?: boolean;
+    allowedHosts?: string[];
+  }): {
     dir: string;
     projectPath: string;
   } {
@@ -365,6 +372,11 @@ const args = process.argv.slice(2);
 fs.appendFileSync(answers.log, args.join(" ") + "\\n");
 if (args[0] === "ls") {
   process.stdout.write(JSON.stringify({ sandboxes: [{ name: answers.name, workspaces: answers.workspaces }] }));
+} else if (args[0] === "policy" && args[1] === "check") {
+  // \`policy check network --json <host>\`: exit 1 with "allowed": false on a denial (sbx.ts).
+  const allowed = (answers.allowedHosts ?? []).includes(args[4]);
+  process.stdout.write(JSON.stringify({ allowed }));
+  process.exit(allowed ? 0 : 1);
 } else if (args[0] === "policy") {
   process.stdout.write(JSON.stringify({ rules: [] }));
 } else if (args[0] === "ports" && args[2] === "--json") {
@@ -504,6 +516,23 @@ if (args[0] === "ls") {
       assert.deepEqual(result.secretFailures, []);
       assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts, a row without a value too");
       assert.ok(!fs.readFileSync(path.join(projectPath, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  it("asks the policy about a secret host, but not about a wildcard it cannot answer", async () => {
+    const { dir } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
+    const originalPath = process.env.PATH;
+    process.env.PATH = pathWith(dir);
+    try {
+      const allowed = await Promise.all(["open.example.com", "closed.example.com", "*.example.com"].map(readHostAllowed));
+      assert.deepEqual(allowed, [true, false, true]);
+      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/);
+      assert.deepEqual(calls.sort(), [
+        "policy check network --json closed.example.com",
+        "policy check network --json open.example.com"
+      ]);
     } finally {
       process.env.PATH = originalPath;
     }

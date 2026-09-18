@@ -33,7 +33,8 @@ const api: TETApi = {
     getConfig: (projectId) => ipcRenderer.invoke("sbx:get-config", projectId),
     storedSecrets: (projectId) => ipcRenderer.invoke("sbx:stored-secrets", projectId),
     saveConfig: (projectId, request, secretValues) => ipcRenderer.invoke("sbx:save-config", projectId, request, secretValues),
-    mountsAllowed: (paths) => ipcRenderer.invoke("sbx:mounts-allowed", paths)
+    mountsAllowed: (paths) => ipcRenderer.invoke("sbx:mounts-allowed", paths),
+    hostAllowed: (host) => ipcRenderer.invoke("sbx:host-allowed", host)
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
