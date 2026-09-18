@@ -12,9 +12,9 @@ import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../diff/editor-views";
 import {
+  CircleAlertIcon,
   CloseIcon,
   CommentIcon,
-  ExclamationIcon,
   FilesIcon,
   GearIcon,
   GitIcon,
@@ -473,7 +473,7 @@ export const Pane = memo(function Pane({
               {isEditorTab(tab) ? (
                 <FilesIcon className="tab-icon" />
               ) : tab.status === "missing" || tab.status === "error" ? (
-                <ExclamationIcon className="tab-icon session-mark session-mark-error" />
+                <CircleAlertIcon className="tab-icon session-mark session-mark-error" />
               ) : waitingTabIds.includes(tab.tabId) ? (
                 <QuestionIcon className="tab-icon session-mark" />
               ) : isWorking(tab) ? (

@@ -549,15 +549,28 @@ export function QuestionIcon(props: IconProps) {
 }
 
 /**
- * A tab whose agent cannot start. Same mark slot and shape family as the question mark, not a
- * circled `SeverityIcon`. Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
+ * Lucide's `circle-alert`, on its native 24-unit grid — what cannot work as it stands: a tab whose
+ * agent cannot start, a sbx-settings row or tab. Measured: 22 by 22, extent 22, centered at (12, 12).
+ * Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
  */
-export function ExclamationIcon(props: IconProps) {
+export function CircleAlertIcon(props: IconProps) {
   return (
-    <Svg {...props} extent={9.95} cy={7.86}>
-      <path d="M8 3.2v6.3" />
-      <circle cx="8" cy="12.1" r="0.42" fill="currentColor" stroke="none" />
-    </Svg>
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(22, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(22, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" x2="12" y1="8" y2="12" />
+      <line x1="12" x2="12.01" y1="16" y2="16" />
+    </svg>
   );
 }
 

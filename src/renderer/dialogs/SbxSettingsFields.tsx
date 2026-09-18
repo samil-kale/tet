@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
-import { CloseIcon, ExclamationIcon } from "../ui/icons";
+import { CircleAlertIcon, CloseIcon } from "../ui/icons";
 import { Dropdown } from "../ui/Dropdown";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
@@ -238,7 +238,7 @@ export function tabMarks(state: FieldsState, answers: PolicyAnswers, governed: b
 function RowMark({ title }: { title: string | undefined }) {
   return title === undefined ? null : (
     <span className="sbx-path-denied" title={title}>
-      <ExclamationIcon />
+      <CircleAlertIcon />
     </span>
   );
 }

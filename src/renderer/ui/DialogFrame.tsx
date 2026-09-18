@@ -1,4 +1,4 @@
-import { CloseIcon, ExclamationIcon } from "./icons";
+import { CircleAlertIcon, CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
 import { useCoversWindow } from "./window-covered";
 
@@ -76,7 +76,7 @@ export function DialogFrame<T extends string>({ header, busy, className, onSubmi
               {entry.label}
               {entry.mark && (
                 <span className="dialog-tab-mark">
-                  <ExclamationIcon />
+                  <CircleAlertIcon />
                 </span>
               )}
             </button>

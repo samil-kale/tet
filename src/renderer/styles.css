@@ -1458,6 +1458,7 @@ textarea:focus {
 /* The rows' mark (.sbx-path-denied) repeated on their tab, so it shows from any pane. */
 .dialog-tab-mark {
   display: flex;
+  margin-top: 3px;
   margin-left: 4px;
   color: var(--vscode-errorForeground);
 }
