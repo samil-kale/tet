@@ -3,6 +3,22 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.9.0 (2026-09-18)
+
+- **Worktrees.** A worktree is added from the branch tree at the default branch, together with
+  its own branch, and opens as a project of its own, indented under its repository in the
+  sidebar. It is renamed and deleted together with its branch and remembers the branch it came
+  from, shown in its project row.
+- **Secrets for sandboxed agents.** The sandbox settings take secrets — a name, the hosts it is
+  for and its value — which sbx's proxy injects into requests to those hosts, so the agent never
+  sees the value. Values are kept encrypted on this machine, never in `tet.json`, shown masked
+  once stored, and a rebuilt sandbox gets them back.
+- **The sandbox settings say what the policy refuses.** Paths and secret hosts that sbx's policy
+  (or your organization's) would not allow are marked in red, on the row and on its tab; tabs that
+  can't be used are disabled with the reason instead of hidden.
+- **Colored saved commands.** A saved command can be given a color from the terminal's bright
+  palette.
+
 ## 0.8.11 (2026-09-17)
 
 - **Sandbox ports are actually published.** Ports from the sandbox settings are compared against
