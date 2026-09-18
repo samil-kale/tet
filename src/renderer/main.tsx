@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import "./themes/dark-dracula.css";
 import "./themes/dark-github.css";
 import "./themes/dark-intellij.css";
 import "./themes/dark-modern.css";

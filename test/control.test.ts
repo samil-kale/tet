@@ -370,6 +370,7 @@ describe("tet-ctl against the control server", () => {
       "dark-slate:dark",
       "dark-github:dark",
       "dark-intellij:dark",
+      "dark-dracula:dark",
       "light-modern:light",
       "light-github:light",
       "light-intellij:light"

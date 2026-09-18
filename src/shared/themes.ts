@@ -15,6 +15,7 @@ export interface ThemeDefinition {
     | "github-light-default"
     | "dark-slate"
     | "dark-intellij"
+    | "dracula"
     | "light-intellij";
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
@@ -68,6 +69,16 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#cccccc",
     terminalBackground: "#1e1f22",
     terminalForeground: "#bcbec3"
+  },
+  {
+    id: "dark-dracula",
+    label: "Dracula",
+    shikiTheme: "dracula",
+    kind: "dark",
+    windowBackground: "#21222c",
+    titleBarSymbolColor: "#f8f8f2",
+    terminalBackground: "#282a36",
+    terminalForeground: "#f8f8f2"
   },
   {
     id: "light-modern",
