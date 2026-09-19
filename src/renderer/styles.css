@@ -1594,7 +1594,7 @@ textarea:focus,
 .sbx-rows {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   margin-top: 5px;
   max-height: 245px;
   overflow-y: auto;
@@ -1604,7 +1604,7 @@ textarea:focus,
 .sbx-knowledge-rows {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   margin-top: 5px;
 }
 
@@ -1620,7 +1620,7 @@ textarea:focus,
 .sbx-path-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   background: var(--vscode-panel-background);
   border: 1px solid var(--vscode-panel-border);
   border-radius: 3px;
@@ -1630,12 +1630,6 @@ textarea:focus,
 /* The path field's flex: 1 pushes its remove button right; fixed-width port fields need this. */
 .sbx-port-row .icon-button {
   margin-left: auto;
-}
-
-/* The remove button sits closer to what it removes: half the row's gap taken back before it. The
-   port row's is pushed right instead (above). */
-.sbx-path-row > .icon-button:last-child {
-  margin-left: -4px;
 }
 
 .sbx-port-input {
