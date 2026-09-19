@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { app, clipboard, dialog, ipcMain, shell } from "electron";
+import { app, clipboard, dialog, ipcMain, net, shell } from "electron";
 import { AGENTS, findAskableAgent, getAgent, listAgents } from "./agents";
 import { effectivePrompt } from "../shared/prompts";
 import { EMPTY_REPOSITORY_STATE, EMPTY_SBX_CONFIG } from "../shared/types";
@@ -95,6 +95,10 @@ export interface IpcDeps {
 const MISSING_REPOSITORY: RepositoryState = { ...EMPTY_REPOSITORY_STATE, error: "Project not found" };
 
 const TEMP_FILE_NAME = /^tet-(\d+)-/;
+/** A Markdown preview's web image: the editor's cap for a repository file (`Repository.readFile`),
+ *  and a badge service that hangs is given up on. */
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const FETCH_IMAGE_TIMEOUT_MS = 15_000;
 /** A pasted file is read within its turn; a day is generous. */
 const TEMP_FILE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -638,6 +642,28 @@ export function registerIpc({
       await shell.openExternal(url);
     } catch (error) {
       send("app:notice", { severity: "error", message: `Could not open URL: ${url} (${String(error)})` });
+    }
+  });
+
+  /**
+   * A Markdown preview's web image as a data URL, fetched here so the page's CSP keeps it off the
+   * network; null for anything that isn't an https image within the cap. `net.fetch` for the
+   * machine's proxy and certificates, as `providers/provider.ts`.
+   */
+  ipcMain.handle("shell:fetch-image", async (_event, url: string): Promise<string | null> => {
+    try {
+      if (new URL(url).protocol !== "https:") {
+        return null;
+      }
+      const response = await net.fetch(url, { signal: AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS) });
+      const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
+      if (!response.ok || !type.startsWith("image/") || Number(response.headers.get("content-length")) > MAX_IMAGE_BYTES) {
+        return null;
+      }
+      const image = Buffer.from(await response.arrayBuffer());
+      return image.length <= MAX_IMAGE_BYTES ? `data:${type};base64,${image.toString("base64")}` : null;
+    } catch {
+      return null;
     }
   });
 

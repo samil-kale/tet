@@ -2,35 +2,21 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { Project } from "../../shared/types";
 import { sameList } from "../identity";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
-import { setOpenHandler } from "../diff/markdown-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
-import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "../ui/Sash";
+import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedShare } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome, type SideView } from "./Pane";
 import { isEditorTab, type PaneTab } from "./editor-tab";
 import { useAgents } from "../ui/use-agents";
 
 /**
- * A divider's position as a *share* of its room, not pixels: `renderGrid` multiplies it by
- * `.panes-grid`'s live measurement, so an undragged divider is an even split at any size. A drag,
- * in `Sash`'s pixels, is turned back into a fraction (`divider` below).
- *
- * Persisted per project (`layoutStorageKey`). Anything outside (0, 1) is ignored both ways: read,
- * since the user can edit it, and written, since a room too small for two panes has no share.
+ * A divider's position as a *share* of its room (`usePersistedShare`): `renderGrid` multiplies it
+ * by `.panes-grid`'s live measurement, so an undragged divider is an even split at any size. A
+ * drag, in `Sash`'s pixels, is turned back into a fraction (`divider` below). Persisted per
+ * project (`layoutStorageKey`).
  */
 function useDividerFraction(projectId: string, name: string, initial: number): [number, (fraction: number) => void] {
-  const [fraction, setFraction] = usePersistedNumber(layoutStorageKey(projectId, `divider.${name}`), (stored) =>
-    Number.isFinite(stored) && stored > 0 && stored < 1 ? stored : initial
-  );
-  const set = useCallback(
-    (next: number) => {
-      if (next > 0 && next < 1) {
-        setFraction(next);
-      }
-    },
-    [setFraction]
-  );
-  return [fraction, set];
+  return usePersistedShare(layoutStorageKey(projectId, `divider.${name}`), initial);
 }
 
 /** `pixels` within the same bounds `Sash` applies to a drag. */
@@ -76,10 +62,9 @@ interface TerminalsPaneProps {
   onToggleFiles: () => void;
   /** Bootstrap's session listing: project-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
-  /** Opens a path ctrl-clicked in a terminal in the project's preview tab. */
-  onOpenDiff: (projectId: string, path: string) => void;
-  /** Opens a Markdown file rendered, for its editor tab and the links of a preview. */
-  onOpenPreview: (projectId: string, path: string) => void;
+  /** Opens a path ctrl-clicked in a terminal, or linked from a Markdown preview, in the project's
+   *  preview tab. */
+  onOpenDiff: (projectId: string, path: string, keep?: boolean, markdownPreview?: boolean) => void;
   onCloseEditors: (projectId: string, tabIds: string[]) => void;
   layout: ProjectLayout;
   onActivateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
@@ -104,7 +89,6 @@ export const TerminalsPane = memo(function TerminalsPane({
   onToggleFiles,
   externalBusy,
   onOpenDiff,
-  onOpenPreview,
   onCloseEditors,
   layout,
   onActivateTab,
@@ -125,13 +109,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   const dragSource = useRef<PaneId | null>(null);
   const knownTabs = useRef<PaneTab[]>([]);
 
-  useEffect(() => setRevealHandler(project.id, (path) => onOpenDiff(project.id, path)), [project.id, onOpenDiff]);
   useEffect(
-    () =>
-      setOpenHandler(project.id, (path, preview) =>
-        preview ? onOpenPreview(project.id, path) : onOpenDiff(project.id, path)
-      ),
-    [project.id, onOpenDiff, onOpenPreview]
+    () => setRevealHandler(project.id, (path, markdownPreview) => onOpenDiff(project.id, path, false, markdownPreview)),
+    [project.id, onOpenDiff]
   );
 
   const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(project.id, tabIds), [onCloseEditors, project.id]);

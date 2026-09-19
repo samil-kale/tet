@@ -1,19 +1,22 @@
-import { memo, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ImageView } from "./ImageView";
-import { isMarkdown, openFile } from "./markdown-views";
+import { isMarkdown } from "./diff-highlight";
 import {
   attachEditor,
+  attachMarkdownPreview,
   editorKind,
   focusEditor,
   getEditorSnapshot,
   isReadOnly,
   saveEditorFile,
+  showMarkdownPreview,
   subscribeEditor,
   subscribeProjectEditors,
   type EditorSnapshot
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
 import { EyeIcon, SaveIcon } from "../ui/icons";
+import { MIN_PANE_WIDTH, Sash, usePaneShare } from "../ui/Sash";
 import { isMac, isModifierHeld } from "../platform";
 
 function useEditorStore<T>(tabId: string, select: (snapshot: EditorSnapshot) => T): T {
@@ -41,7 +44,6 @@ export function useEditorBusy(projectId: string, tabs: PaneTab[]): boolean {
 }
 
 interface EditorHostProps {
-  projectId: string;
   tabId: string;
   /** On screen in its pane; otherwise hidden but laid out. */
   active: boolean;
@@ -52,13 +54,16 @@ interface EditorHostProps {
 }
 
 /**
- * The editor tab: a bar naming the file, then the diff editor, the image view or a placeholder —
- * all drawn off the editor's snapshot. The editor lives outside React in `editor-views.ts` and is attached to a childless frame; on a pane move React
- * removes the frame with it inside, and the next host's attach takes it out again.
+ * The editor tab: a bar naming the file, then the diff editor — a Markdown file's preview beside
+ * it — the image view or a placeholder, all drawn off the editor's snapshot. The editor and the
+ * preview live outside React in `editor-views.ts`, each attached to a childless frame; on a pane
+ * move React removes a frame with it inside, and the next host's attach takes it out again.
  */
-export const EditorHost = memo(function EditorHost({ projectId, tabId, active, visible, focused }: EditorHostProps) {
-  const { path, file, building, saving, dirty } = useEditorStore(tabId, whole);
+export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
+  const { path, file, building, saving, dirty, markdownPreview } = useEditorStore(tabId, whole);
   const frame = useRef<HTMLDivElement>(null);
+  const split = useRef<HTMLDivElement>(null);
+  const previewFrame = useRef<HTMLDivElement>(null);
   const kind = editorKind(file);
 
   useEffect(() => {
@@ -67,6 +72,12 @@ export const EditorHost = memo(function EditorHost({ projectId, tabId, active, v
     }
   }, [tabId, path]);
 
+  useEffect(() => {
+    if (markdownPreview && previewFrame.current) {
+      attachMarkdownPreview(tabId, previewFrame.current);
+    }
+  }, [tabId, path, markdownPreview]);
+
   // As `Pane`'s terminal focus rule: the focused pane's active tab, once the file is in the editor.
   const ready = kind === "text" && !building;
   useEffect(() => {
@@ -74,6 +85,31 @@ export const EditorHost = memo(function EditorHost({ projectId, tabId, active, v
       focusEditor(tabId);
     }
   }, [visible, active, focused, ready, tabId, path]);
+
+  // One share for every tab's preview, as for the panes; half until dragged. Measured only while
+  // shown, the one time the share becomes pixels.
+  const [previewShare, setPreviewShare] = usePaneShare("markdown-preview", 1 / 2);
+  const [splitWidth, setSplitWidth] = useState(0);
+  useLayoutEffect(() => {
+    const element = split.current;
+    if (!markdownPreview || !element) {
+      return;
+    }
+    setSplitWidth(element.clientWidth);
+    const observer = new ResizeObserver(() => setSplitWidth(element.clientWidth));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [markdownPreview]);
+  const previewWidth = Math.round(splitWidth * previewShare);
+  const resizePreview = useCallback(
+    (width: number) => {
+      const total = split.current?.clientWidth;
+      if (total) {
+        setPreviewShare(width / total);
+      }
+    },
+    [setPreviewShare]
+  );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
     // Only keys nothing inside claimed arrive, so the editor's own Ctrl+S never saves twice.
@@ -98,9 +134,9 @@ export const EditorHost = memo(function EditorHost({ projectId, tabId, active, v
           </button>
           {isMarkdown(path) && (
             <button
-              className="icon-button"
-              title={`Open Preview (${isMac() ? "⌘" : "Ctrl"}+Shift+V)`}
-              onClick={() => openFile(projectId, path, true)}
+              className={`icon-button${markdownPreview ? " active" : ""}`}
+              title={`${markdownPreview ? "Hide" : "Show"} Preview (${isMac() ? "⌘" : "Ctrl"}+Shift+V)`}
+              onClick={() => showMarkdownPreview(tabId, !markdownPreview)}
             >
               <EyeIcon />
             </button>
@@ -115,7 +151,23 @@ export const EditorHost = memo(function EditorHost({ projectId, tabId, active, v
         {kind === "binary" && <div className="placeholder">Binary file.</div>}
         {kind === "tooLarge" && <div className="placeholder">File too large to edit.</div>}
         {/* Hidden, not unmounted, so the editor stays attached. */}
-        <div ref={frame} className={`editor-frame${ready ? "" : " hidden"}`} />
+        <div ref={split} className={`editor-split${ready ? "" : " hidden"}`}>
+          <div ref={frame} className="editor-frame" />
+          {markdownPreview && (
+            <>
+              <Sash
+                orientation="vertical"
+                size={previewWidth}
+                min={MIN_PANE_WIDTH}
+                minOther={MIN_PANE_WIDTH}
+                reverse
+                onResize={resizePreview}
+              />
+              {/* As the editor's frame: the preview lives in `editor-views.ts`. */}
+              <div ref={previewFrame} className="markdown-frame" style={{ width: previewWidth }} />
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

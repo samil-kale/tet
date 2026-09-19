@@ -154,6 +154,7 @@ const api: TETApi = {
   },
   shell: {
     openUrl: (url) => ipcRenderer.invoke("shell:open-url", url),
+    fetchImage: (url) => ipcRenderer.invoke("shell:fetch-image", url),
     openFile: (projectId, filePath) => ipcRenderer.invoke("shell:open-file", projectId, filePath),
     revealFile: (projectId, filePath) => ipcRenderer.invoke("shell:reveal-file", projectId, filePath),
     openFileExternally: (projectId, filePath) =>

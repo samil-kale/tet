@@ -28,8 +28,9 @@ interface TerminalView {
  */
 const views = new Map<string, TerminalView>();
 
-/** Per project, opens a ctrl-clicked file inside the repository in the preview tab. Set by the pane. */
-const revealHandlers = new Map<string, (path: string) => void>();
+/** Per project, opens a file inside the repository in the preview tab, a Markdown file with its
+ *  preview beside the editor if asked. Set by the pane. */
+const revealHandlers = new Map<string, (path: string, markdownPreview: boolean) => void>();
 
 function viewKey(projectId: string, tabId: string): string {
   return `${projectId} ${tabId}`;
@@ -92,7 +93,10 @@ window.tet.terminals.onOutput((batch) => {
   }
 });
 
-export function setRevealHandler(projectId: string, handler: (path: string) => void): () => void {
+export function setRevealHandler(
+  projectId: string,
+  handler: (path: string, markdownPreview: boolean) => void
+): () => void {
   revealHandlers.set(projectId, handler);
   return () => revealHandlers.delete(projectId);
 }
@@ -106,10 +110,12 @@ function openUrl(url: string): void {
   void window.tet.shell.openUrl(url);
 }
 
-function openFile(projectId: string, filePath: string): void {
+/** A ctrl-clicked path or a Markdown preview's link: main finds it, opens one outside the
+ *  repository itself, and says when there is none. */
+export function openFile(projectId: string, filePath: string, markdownPreview = false): void {
   void window.tet.shell.openFile(projectId, filePath).then((repoPath) => {
     if (repoPath) {
-      revealHandlers.get(projectId)?.(repoPath);
+      revealHandlers.get(projectId)?.(repoPath, markdownPreview);
     }
   });
 }

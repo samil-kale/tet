@@ -31,22 +31,33 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "light-intellij": () => import("../themes/light-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>
 };
 
-/** `highlightTheme()` with its editor surface patched from tet's --vscode-* values, for shiki and
+/** Shiki theme `name` with its editor surface patched from tet's --vscode-* values, for shiki and
  *  the monaco theme built on it (editor.ts). */
-async function loadTheme(): Promise<ThemeRegistration> {
-  const { default: registration } = await THEME_MODULES[theme]();
+async function loadTheme(name: ThemeDefinition["shikiTheme"]): Promise<ThemeRegistration> {
+  const { default: registration } = await THEME_MODULES[name]();
   return { ...registration, colors: { ...registration.colors, ...buildShikiColors() } };
+}
+
+const themeListeners = new Set<() => void>();
+
+/** Fires once a switched theme is loaded — for what shiki colored at render, the Markdown preview. */
+export function subscribeHighlightTheme(listener: () => void): () => void {
+  themeListeners.add(listener);
+  return () => themeListeners.delete(listener);
 }
 
 /**
  * Switches to theme `id` once its stylesheet is applied. Reloaded even under a known name: the
- * patched surface colors are read off the stylesheet at load.
+ * patched surface colors are read off the stylesheet at load. `highlightTheme()` names it only once
+ * loaded: a preview rendering meanwhile would ask shiki for a theme it doesn't have yet.
  */
 export async function switchHighlightTheme(id: string): Promise<void> {
-  theme = resolveTheme(id).shikiTheme;
+  const next = resolveTheme(id).shikiTheme;
   if (core) {
-    await (await core).loadTheme(loadTheme());
+    await (await core).loadTheme(loadTheme(next));
   }
+  theme = next;
+  themeListeners.forEach((listener) => listener());
 }
 
 /** What a repository plausibly holds, not all ~200 Shiki ships: the renderer is one file, no code
@@ -180,7 +191,7 @@ const grammars = new Map<string, Promise<void>>();
 /** The one shiki instance, shared with editor.ts; grammars load lazily. */
 export function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
-    themes: [loadTheme()],
+    themes: [loadTheme(theme)],
     langs: [],
     // Not oniguruma: its wasm would ride base64 in the single-file bundle. "forgiving" skips
     // patterns the JS engine cannot express.
@@ -203,8 +214,13 @@ export function languageForPath(filePath: string): string | undefined {
   return EXTENSIONS[name.slice(name.lastIndexOf(".") + 1)];
 }
 
+export function isMarkdown(filePath: string): boolean {
+  return languageForPath(filePath) === "markdown";
+}
+
 /** A Markdown fence's info string, a grammar's name ("typescript") or an extension ("ts"). */
 export function languageForFence(info: string): string | undefined {
   const name = info.trim().split(/\s/)[0].toLowerCase();
-  return name in GRAMMARS ? name : EXTENSIONS[name];
+  // Own keys only: `in` would take "constructor" for a grammar.
+  return Object.hasOwn(GRAMMARS, name) ? name : Object.hasOwn(EXTENSIONS, name) ? EXTENSIONS[name] : undefined;
 }

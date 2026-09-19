@@ -3,7 +3,7 @@ import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryStat
 import { absolutePath, revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
-import { isMarkdown } from "../diff/markdown-views";
+import { isMarkdown } from "../diff/diff-highlight";
 
 /** Runs a file action; the owner shows it running on its own bar. */
 export type FileAct = (action: () => Promise<GitActionResult>) => void;
@@ -13,10 +13,8 @@ interface ChangesListProps {
   /** The changes are the list; the rest feeds a commit from the menu. */
   state: RepositoryState;
   act: FileAct;
-  /** On a double-click. */
-  onOpenDiff: (path: string) => void;
-  /** A Markdown file, rendered. */
-  onOpenPreview: (path: string) => void;
+  /** On a double-click; a Markdown file with its preview from the menu. */
+  onOpenDiff: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
 }
 
 const STATUS_LETTER: Record<ChangeStatus, string> = {
@@ -110,7 +108,7 @@ export async function askCommit(
 }
 
 /** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */
-export function ChangesList({ project, state, act, onOpenDiff, onOpenPreview }: ChangesListProps) {
+export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
   /** Ctrl- and shift-click extend it, so one action can cover several files. */
@@ -177,7 +175,9 @@ export function ChangesList({ project, state, act, onOpenDiff, onOpenPreview }: 
 
     const entries: ContextMenuEntry[] = [
       { label: "Open diff", run: one ? () => onOpenDiff(change.path) : undefined },
-      ...(isMarkdown(change.path) ? [{ label: "Open Preview", run: one ? () => onOpenPreview(change.path) : undefined }] : []),
+      ...(isMarkdown(change.path)
+        ? [{ label: "Open Preview", run: one ? () => onOpenDiff(change.path, false, true) : undefined }]
+        : []),
       {
         label: "Open in external editor",
         run: one ? () => void window.tet.shell.openFileExternally(project.id, change.path) : undefined

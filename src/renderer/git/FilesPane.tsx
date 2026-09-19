@@ -13,10 +13,9 @@ interface FilesPaneProps {
   shown: boolean;
   /** The active editor tab's file — the tree reveals it. */
   openPath: string | null;
-  /** Opens in the project's preview tab, or kept (`editor-tab.ts`). */
-  onOpen: (path: string, keep?: boolean) => void;
-  /** Opens a Markdown file rendered. */
-  onOpenPreview: (path: string) => void;
+  /** Opens in the project's preview tab, or kept (`editor-tab.ts`); a Markdown file with its
+   *  preview if asked. */
+  onOpen: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
 }
 
 /** The listing is re-read on every show and usually lands in milliseconds; no flashing bar. */
@@ -40,7 +39,7 @@ function useDelayed(active: boolean, delayMs: number): boolean {
  * The side pane's files view, shown instead of the git view (VS Code's Explorer and Source Control,
  * one sidebar). The listing is read only while on screen.
  */
-export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpen, onOpenPreview }: FilesPaneProps) {
+export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpen }: FilesPaneProps) {
   const { acting, act } = useFileAct(project.id);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
   const explorerRef = useRef<ExplorerHandle>(null);
@@ -92,7 +91,6 @@ export const FilesPane = memo(function FilesPane({ project, state, shown, openPa
           shown={shown}
           selected={openPath}
           onOpen={onOpen}
-          onOpenPreview={onOpenPreview}
           act={act}
           onExplorerChanged={refreshExplorer}
         />

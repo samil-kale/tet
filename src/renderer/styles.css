@@ -1131,12 +1131,12 @@ textarea:focus,
    editors (for its accessible diff viewer), showing them through a hidden ancestor. */
 .editor-tab.hidden,
 .editor-tab.hidden *,
-.editor-frame.hidden,
-.editor-frame.hidden * {
+.editor-split.hidden,
+.editor-split.hidden * {
   visibility: hidden !important;
 }
 
-/* Below the bar: a placeholder or the image view in flow, the editor's frame over them. */
+/* Below the bar: a placeholder or the image view in flow, the editor's split over them. */
 .editor-body {
   position: relative;
   display: flex;
@@ -1146,10 +1146,25 @@ textarea:focus,
   min-height: 0;
 }
 
-/* What `attachEditor` moves monaco's element into; React renders nothing inside it. */
-.editor-frame {
+/* The editor, and a Markdown file's preview beside it. */
+.editor-split {
   position: absolute;
   inset: 0;
+  display: flex;
+}
+
+/* What `attachEditor` moves monaco's element into; React renders nothing inside it. */
+.editor-frame {
+  position: relative;
+  flex: 1;
+  min-width: var(--pane-min-width);
+}
+
+/* Where `attachMarkdownPreview` moves the preview's scroller; sized by the sash. */
+.markdown-frame {
+  position: relative;
+  flex: none;
+  min-width: var(--pane-min-width);
 }
 
 /* Where monaco mounts. No `overflow: hidden`: monaco clips its own content, so it would only cut
@@ -1353,155 +1368,12 @@ textarea:focus,
   cursor: pointer;
 }
 
-/* The Markdown preview: VS Code's (markdown-language-features' markdown.css over the webview's
-   defaults), sizes and colors alike — but the separators, fixed values per theme kind there, are
-   the panel border here. */
-.markdown-body {
-  flex: 1;
-  min-height: 0;
+/* The Markdown preview's scroller, in the page so the scrollbars above reach it; what it shows
+   sits in its shadow root (`markdown-preview.css`). */
+.markdown-preview {
+  position: absolute;
+  inset: 0;
   overflow: auto;
-  padding: 1em 26px 0;
-  font-size: 14px;
-  line-height: 22px;
-  word-wrap: break-word;
-  color: var(--vscode-editor-foreground);
-}
-
-.markdown-body.hidden {
-  display: none;
-}
-
-.markdown-body :is(h1, h2, h3, h4, h5, h6, p, ol, ul, pre) {
-  margin-top: 0;
-}
-
-.markdown-body :is(h1, h2, h3, h4, h5, h6) {
-  font-weight: 600;
-  margin-top: 24px;
-  margin-bottom: 16px;
-  line-height: 1.25;
-}
-
-.markdown-body h1 {
-  font-size: 2em;
-  margin-top: 0;
-}
-
-.markdown-body :is(h1, h2) {
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-.markdown-body h2 {
-  font-size: 1.5em;
-}
-
-.markdown-body h3 {
-  font-size: 1.25em;
-}
-
-.markdown-body h4 {
-  font-size: 1em;
-}
-
-.markdown-body h5 {
-  font-size: 0.875em;
-}
-
-.markdown-body h6 {
-  font-size: 0.85em;
-}
-
-.markdown-body p {
-  margin-bottom: 16px;
-}
-
-.markdown-body li p {
-  margin-bottom: 0.7em;
-}
-
-.markdown-body :is(ul, ol) {
-  margin-bottom: 0.7em;
-}
-
-.markdown-body :is(ul, ol) :is(ul, ol):first-child {
-  margin-bottom: 0;
-}
-
-.markdown-body :is(sub, sup) {
-  line-height: 0;
-}
-
-.markdown-body :is(img, video) {
-  max-width: 100%;
-  max-height: 100%;
-}
-
-.markdown-body :is(a, a code) {
-  color: var(--vscode-textLink-foreground);
-  text-decoration: none;
-}
-
-.markdown-body a:hover {
-  color: var(--vscode-textLink-activeForeground);
-  text-decoration: underline;
-}
-
-.markdown-body hr {
-  border: 0;
-  height: 1px;
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-.markdown-body table {
-  border-collapse: collapse;
-  margin-bottom: 0.7em;
-}
-
-.markdown-body th {
-  text-align: left;
-  border-bottom: 1px solid var(--vscode-panel-border);
-}
-
-.markdown-body :is(th, td) {
-  padding: 5px 10px;
-}
-
-.markdown-body tbody tr + tr > td {
-  border-top: 1px solid var(--vscode-panel-border);
-}
-
-.markdown-body blockquote {
-  margin: 0;
-  padding: 0 16px 0 10px;
-  border-left: 5px solid var(--vscode-textBlockQuote-border);
-  border-radius: 2px;
-  background: var(--vscode-textBlockQuote-background);
-}
-
-.markdown-body code {
-  font-family: var(--vscode-editor-font-family);
-  font-size: 1em;
-  line-height: 1.357em;
-  padding: 1px 3px;
-  border-radius: 4px;
-  color: var(--vscode-textPreformat-foreground);
-  background-color: var(--vscode-textPreformat-background);
-}
-
-.markdown-body pre {
-  padding: 16px;
-  border-radius: 3px;
-  overflow: auto;
-  background-color: var(--vscode-textCodeBlock-background);
-}
-
-.markdown-body pre code {
-  display: inline-block;
-  padding: 0;
-  tab-size: 4;
-  color: var(--vscode-editor-foreground);
-  background: none;
 }
 
 /* Sashes --------------------------------------------------------------------------------- */

@@ -1,32 +1,93 @@
 import DOMPurify from "dompurify";
-import { marked } from "marked";
+import MarkdownIt from "markdown-it";
 import { highlighter, highlightTheme, languageForFence, loadGrammar } from "./diff-highlight";
+import styles from "./markdown-preview.css" with { type: "text" };
 
 /**
- * A Markdown file as its preview tab shows it (VS Code's "Open Preview"): GitHub-flavoured, with
- * the raw HTML a README carries, sanitized — the page holds `window.tet`. `<style>` and `style`
- * would reach the whole window, not just the preview, and a `<form>` would navigate it away.
- * `srcset` goes too, so every image passes `resolveImage`: a `<picture>` falls back to its `<img>`.
+ * A Markdown file as its preview shows it (VS Code's "Open Preview to the Side"): VS Code's own
+ * engine and options, with the raw HTML a README carries, sanitized — the page holds `window.tet`.
+ * It lands in a shadow root, so the page's stylesheet and the file's classes never meet; `style`
+ * still goes, since `position: fixed` would lay an element over the whole window. `srcset` goes
+ * too, so every image passes `resolveImage`: a `<picture>` falls back to its `<img>`.
  */
-const SANITIZE = { FORBID_TAGS: ["style", "form"], FORBID_ATTR: ["style", "srcset"] };
+const SANITIZE = { FORBID_TAGS: ["style"], FORBID_ATTR: ["style", "srcset"] };
+
+/** Marks the source line a block starts at — VS Code's `data-line` — for the scroll sync. */
+const LINE_ATTRIBUTE = "data-tet-line";
+
+const markdown = new MarkdownIt({ html: true, linkify: true });
+// Every block token markdown-it maps to the source, nested ones included; raw HTML has no element
+// to carry it.
+markdown.core.ruler.push("tet_source_lines", (state) => {
+  for (const token of state.tokens) {
+    if (token.map && token.nesting !== -1 && token.type !== "inline") {
+      token.attrSet(LINE_ATTRIBUTE, String(token.map[0]));
+    }
+  }
+});
+
+let sheet: CSSStyleSheet | undefined;
+
+/** A preview's scroller, in the page for its scrollbars, and the element in its shadow root that
+ *  `renderMarkdown`'s content goes into. */
+export function createPreview(): { scroller: HTMLDivElement; body: HTMLDivElement } {
+  const scroller = document.createElement("div");
+  scroller.className = "markdown-preview";
+  if (!sheet) {
+    sheet = new CSSStyleSheet();
+    sheet.replaceSync(styles);
+  }
+  const root = scroller.attachShadow({ mode: "open" });
+  root.adoptedStyleSheets = [sheet];
+  const body = document.createElement("div");
+  body.className = "markdown-body";
+  root.append(body);
+  return { scroller, body };
+}
 
 /**
  * The preview of the Markdown file at `path`, in an inert document that has loaded nothing: code
- * blocks colored by shiki, repository images replaced by `loadImage`'s data URL. https images stay
- * as they are (the CSP's `img-src`); any other source is dropped, so `file:` never reaches the disk.
+ * blocks colored by shiki, images replaced by `loadImage`'s data URL — asked for a repository path
+ * or an https URL, which main fetches, so the page's CSP keeps it off the network. Any other image
+ * source is dropped: `file:` never reaches the disk.
  */
 export async function renderMarkdown(
   text: string,
   path: string,
-  loadImage: (path: string) => Promise<string | undefined>
+  loadImage: (source: string) => Promise<string | undefined>
 ): Promise<Document> {
-  const html = DOMPurify.sanitize(await marked.parse(text, { gfm: true }), SANITIZE);
+  const html = DOMPurify.sanitize(markdown.render(text), SANITIZE);
   const doc = new DOMParser().parseFromString(html, "text/html");
   await Promise.all([
     ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code)),
     ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage))
   ]);
   return doc;
+}
+
+/**
+ * Scrolls the preview to the editor's `line` (0-based, fractional): between the blocks marked
+ * around it, in proportion.
+ */
+export function scrollToLine(scroller: HTMLElement, body: HTMLElement, line: number): void {
+  const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+  let before: { line: number; top: number } | undefined;
+  let after: { line: number; top: number } | undefined;
+  for (const block of body.querySelectorAll(`[${LINE_ATTRIBUTE}]`)) {
+    const mark = { line: Number(block.getAttribute(LINE_ATTRIBUTE)), top: block.getBoundingClientRect().top - origin };
+    if (mark.line <= line) {
+      before = mark;
+    } else {
+      after = mark;
+      break;
+    }
+  }
+  if (!before) {
+    scroller.scrollTop = 0;
+    return;
+  }
+  const share = after ? (line - before.line) / (after.line - before.line) : 0;
+  scroller.scrollTop = before.top + share * ((after?.top ?? before.top) - before.top);
 }
 
 async function highlightBlock(code: Element): Promise<void> {
@@ -48,15 +109,15 @@ async function highlightBlock(code: Element): Promise<void> {
 async function resolveImage(
   img: HTMLImageElement,
   path: string,
-  loadImage: (path: string) => Promise<string | undefined>
+  loadImage: (source: string) => Promise<string | undefined>
 ): Promise<void> {
   const src = img.getAttribute("src") ?? "";
-  if (/^(https:|data:image\/)/i.test(src)) {
+  if (/^data:image\//i.test(src)) {
     return;
   }
   img.removeAttribute("src");
-  const target = resolveLink(path, src);
-  const url = target === undefined ? undefined : await loadImage(target);
+  const source = /^https:/i.test(src) ? src : resolveLink(path, src);
+  const url = source === undefined ? undefined : await loadImage(source);
   if (url) {
     img.setAttribute("src", url);
   }

@@ -16,10 +16,8 @@ interface GitPaneProps {
   /** Set by the sash between tree and changes; held by the app, like the width. */
   treeHeight: number;
   onTreeHeight: (size: number) => void;
-  /** Opens in the project's preview tab. */
-  onOpenDiff: (path: string) => void;
-  /** Opens a Markdown file rendered. */
-  onOpenPreview: (path: string) => void;
+  /** Opens in the project's preview tab, a Markdown file with its preview if asked. */
+  onOpenDiff: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
   /** See BranchTree. */
   onOpenWorktree: (worktreePath: string) => void;
   canCloseWorktree: (worktreePath: string) => Promise<boolean>;
@@ -35,7 +33,6 @@ export const GitPane = memo(function GitPane({
   treeHeight,
   onTreeHeight,
   onOpenDiff,
-  onOpenPreview,
   onOpenWorktree,
   canCloseWorktree,
   worktreesSupported
@@ -141,7 +138,7 @@ export const GitPane = memo(function GitPane({
           {/* This section's bar — everything `act` covers. */}
           {acting && <ProgressBar />}
         </div>
-        <ChangesList project={project} state={state} act={act} onOpenDiff={onOpenDiff} onOpenPreview={onOpenPreview} />
+        <ChangesList project={project} state={state} act={act} onOpenDiff={onOpenDiff} />
       </div>
     </div>
   );

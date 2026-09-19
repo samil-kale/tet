@@ -41,9 +41,9 @@ import {
   keepEditor,
   openEditorFile,
   previewEditorTab,
-  setEditorVersion
+  setEditorVersion,
+  showMarkdownPreview
 } from "./diff/editor-views";
-import { disposeMarkdown, disposeProjectMarkdown, openMarkdownFile, setMarkdownVersion } from "./diff/markdown-views";
 
 /** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
 const SIDE_PANE_SLIDE_MS = 180;
@@ -310,7 +310,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     setEditorTabs((current) => forget(current, projectId));
     setFileWrites((current) => forget(current, projectId));
     disposeProjectEditors(projectId);
-    disposeProjectMarkdown(projectId);
     forgetLayout(projectId);
     busyCursor.current = forget(busyCursor.current, projectId);
     // The xterms live outside React; this is where a project ends for good.
@@ -733,15 +732,16 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [activeProjectId, toggleSideView, setFilesShown, setSidePaneOpen]
   );
   /**
-   * Shows a file in an editor tab (the preview rule: `editor-tab.ts`). A path already open is
-   * brought to front, kept if asked; else the preview tab takes it, unless `keep`; else a new tab.
+   * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), a Markdown file with its
+   * preview beside the editor if `markdownPreview`. A path already open is brought to front, kept if
+   * asked; else the preview tab takes it, unless `keep`; else a new tab.
    * The editor is told before the tab draws, since the tab attaches what it made; the tab is
    * activated before it appears in `stripTabs`, as a new terminal tab is — both in one handler, so
    * the layout and the list agree on the first render.
    */
   const openDiff = useCallback(
-    (projectId: string, path: string, keep = false) => {
-      const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path && !tab.markdown);
+    (projectId: string, path: string, keep = false, markdownPreview = false) => {
+      const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path);
       const preview = keep ? undefined : previewEditorTab(projectId);
       let tabId: string;
       if (open) {
@@ -749,33 +749,20 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         if (keep) {
           keepEditor(tabId);
         }
+        if (markdownPreview) {
+          showMarkdownPreview(tabId, true);
+        }
       } else if (preview !== undefined) {
         tabId = preview;
-        openEditorFile(projectId, tabId, path, true);
+        openEditorFile(projectId, tabId, path, true, markdownPreview);
         setEditorTabs((current) => ({
           ...current,
           [projectId]: (current[projectId] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
         }));
       } else {
         tabId = nextEditorTabId();
-        openEditorFile(projectId, tabId, path, !keep);
+        openEditorFile(projectId, tabId, path, !keep, markdownPreview);
         setEditorTabs((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), { tabId, projectId, path }] }));
-      }
-      activateTab(projectId, tabId);
-    },
-    [activateTab]
-  );
-  /** Shows a Markdown file rendered, in a tab of its own per path: brought to front if open. */
-  const openPreview = useCallback(
-    (projectId: string, path: string) => {
-      const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path && tab.markdown);
-      const tabId = open?.tabId ?? nextEditorTabId();
-      if (!open) {
-        openMarkdownFile(projectId, tabId, path);
-        setEditorTabs((current) => ({
-          ...current,
-          [projectId]: [...(current[projectId] ?? []), { tabId, projectId, path, markdown: true }]
-        }));
       }
       activateTab(projectId, tabId);
     },
@@ -799,20 +786,12 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     []
   );
   const openActiveDiff = useCallback(
-    (path: string, keep?: boolean) => {
+    (path: string, keep?: boolean, markdownPreview?: boolean) => {
       if (activeProjectId) {
-        openDiff(activeProjectId, path, keep);
+        openDiff(activeProjectId, path, keep, markdownPreview);
       }
     },
     [activeProjectId, openDiff]
-  );
-  const openActivePreview = useCallback(
-    (path: string) => {
-      if (activeProjectId) {
-        openPreview(activeProjectId, path);
-      }
-    },
-    [activeProjectId, openPreview]
   );
   /** Disposes the editors; the layout collapses a pane left empty. */
   const closeEditors = useCallback((projectId: string, tabIds: string[]) => {
@@ -826,14 +805,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       });
       for (const tabId of tabIds) {
         disposeEditor(tabId);
-        disposeMarkdown(tabId);
       }
     });
   }, []);
   /**
-   * Each project's active editor tab (`activeEditorTab`), a Markdown preview never — the file the
-   * Explorer reveals and `tet-ctl editor-state` answers. Derived, not tracked: a tab is activated
-   * from many places (a click, next/previous, a drop, a snap). Identity-stable where unchanged.
+   * Each project's active editor tab (`activeEditorTab`) — the file the Explorer reveals and
+   * `tet-ctl editor-state` answers. Derived, not tracked: a tab is activated from many places (a
+   * click, next/previous, a drop, a snap). Identity-stable where unchanged.
    */
   const activeEditorsRef = useRef<Record<string, string>>({});
   const activeEditors = useMemo(() => {
@@ -841,7 +819,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     for (const [projectId, editors] of Object.entries(editorTabs)) {
       const tabId = activeEditorTab(
         layouts[projectId] ?? DEFAULT_LAYOUT,
-        editors.filter((tab) => !tab.markdown).map((tab) => tab.tabId),
+        editors.map((tab) => tab.tabId),
         activeEditorsRef.current[projectId]
       );
       if (tabId !== undefined) {
@@ -869,8 +847,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     const previous = watchedFiles.current;
     const next: Record<string, string[]> = {};
     for (const [projectId, editors] of Object.entries(editorTabs)) {
-      // A path shown in an editor and a preview is watched once.
-      next[projectId] = sameList(previous[projectId], [...new Set(editors.map((tab) => tab.path))].sort(), NO_IDS);
+      next[projectId] = sameList(previous[projectId], editors.map((tab) => tab.path).sort(), NO_IDS);
     }
     for (const [projectId, paths] of Object.entries(next)) {
       if (previous[projectId] !== paths) {
@@ -899,13 +876,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   // and recolours the whole diff, hundreds of ms for a long file.
   useEffect(() => {
     for (const [projectId, editors] of Object.entries(editorTabs)) {
-      for (const { tabId, path, markdown } of editors) {
-        const version = diffVersion(states[projectId], path, fileWrites[projectId]?.[path]);
-        if (markdown) {
-          setMarkdownVersion(tabId, version);
-        } else {
-          setEditorVersion(tabId, version);
-        }
+      for (const { tabId, path } of editors) {
+        setEditorVersion(tabId, diffVersion(states[projectId], path, fileWrites[projectId]?.[path]));
       }
     }
   }, [editorTabs, states, fileWrites]);
@@ -1001,7 +973,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     : null
                 }
                 onOpen={openActiveDiff}
-                onOpenPreview={openActivePreview}
               />
               <GitPane
                 project={activeProject}
@@ -1011,7 +982,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                 treeHeight={branchTreeHeight}
                 onTreeHeight={setBranchTreeHeight}
                 onOpenDiff={openActiveDiff}
-                onOpenPreview={openActivePreview}
                 onOpenWorktree={openWorktree}
                 canCloseWorktree={canCloseWorktree}
                 worktreesSupported={worktreesSupported}
@@ -1041,7 +1011,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
               onOpenDiff={openDiff}
-              onOpenPreview={openPreview}
               onCloseEditors={closeEditors}
               layout={layouts[project.id] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}

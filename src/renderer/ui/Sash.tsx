@@ -95,6 +95,32 @@ export function usePaneSize(key: string, initial: number, min: number): [number,
   );
 }
 
+/**
+ * A pane's *share* of its container, restored on the next start — `initial` until dragged. A share,
+ * not pixels, so it holds at any container size; the owner multiplies it by a live measurement and
+ * turns `Sash`'s pixels back into one. Anything outside (0, 1) is ignored both ways: read, since
+ * the user can edit it, and written, since a container too small for two panes has no share.
+ */
+export function usePersistedShare(storageKey: string, initial: number): [number, (share: number) => void] {
+  const [share, setShare] = usePersistedNumber(storageKey, (stored) =>
+    Number.isFinite(stored) && stored > 0 && stored < 1 ? stored : initial
+  );
+  const set = useCallback(
+    (next: number) => {
+      if (next > 0 && next < 1) {
+        setShare(next);
+      }
+    },
+    [setShare]
+  );
+  return [share, set];
+}
+
+/** `usePersistedShare` under a fixed layout key, like `usePaneSize`. */
+export function usePaneShare(key: string, initial: number): [number, (share: number) => void] {
+  return usePersistedShare(STORAGE_PREFIX + key, initial);
+}
+
 interface SashProps {
   /** A vertical sash is dragged left and right, a horizontal one up and down. */
   orientation: "vertical" | "horizontal";

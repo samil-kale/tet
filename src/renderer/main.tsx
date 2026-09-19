@@ -12,7 +12,6 @@ import "./styles.css";
 import { Startup } from "./Startup";
 import { rethemeTerminals, takeOutputStats } from "./terminal/terminal-views";
 import { switchEditorTheme } from "./diff/editor";
-import { rethemeMarkdown } from "./diff/markdown-views";
 
 /**
  * A file dropped outside a terminal would navigate the window to it, replacing the app. Files only:
@@ -71,7 +70,7 @@ window.tet.onTheme((themeId) => {
   }
   document.documentElement.dataset.theme = themeId;
   rethemeTerminals();
-  void switchEditorTheme(themeId).then(rethemeMarkdown);
+  void switchEditorTheme(themeId);
 });
 
 createRoot(container).render(<Startup />);

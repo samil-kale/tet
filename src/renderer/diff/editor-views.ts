@@ -2,16 +2,22 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import type { FileContent } from "../../shared/types";
 import { confirm } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
-import { languageForPath } from "./diff-highlight";
+import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
-import { isMarkdown, openFile } from "./markdown-views";
+import { createPreview, renderMarkdown, resolveLink, scrollToLine } from "./markdown";
+import { openFile } from "../terminal/terminal-views";
 
 /**
  * Each editor tab's editor, outside React like the xterms (`terminal-views.ts`): monaco's
- * element, the diff editor and the file, one set per tab (`editor-tab.ts`). The element follows a
- * tab moved between panes, so an edit survives the move, where React would rebuild the editor.
+ * element, the diff editor and the file, one set per tab (`editor-tab.ts`), and a Markdown file's
+ * preview beside it. The elements follow a tab moved between panes, so an edit survives the move,
+ * where React would rebuild the editor.
  */
+
+/** Typing re-renders the preview once it pauses: each render parses, sanitizes and colors the
+ *  whole file. */
+const PREVIEW_RENDER_DELAY_MS = 150;
 
 /** Replaced whole on every change — `useSyncExternalStore` compares identity. */
 export interface EditorSnapshot {
@@ -25,10 +31,26 @@ export interface EditorSnapshot {
   dirty: boolean;
   /** The tab the next file replaces — until kept, which the first edit does (VS Code). */
   preview: boolean;
+  /** The rendered file beside the editor, for a Markdown file (VS Code's "Open Preview to the
+   *  Side"). Off again for the next file. */
+  markdownPreview: boolean;
 }
 
 /** A placeholder, the image view, or the editor. */
 export type EditorKind = "loading" | "error" | "image" | "binary" | "tooLarge" | "text";
+
+/** A Markdown file's preview (`markdown.ts`), made the first time it is shown. */
+interface PreviewView {
+  /** Moved between containers like the editor's host, never rendered by React. */
+  scroller: HTMLDivElement;
+  /** In the scroller's shadow root; what a render replaces. */
+  body: HTMLDivElement;
+  /** The images the file shows, by repository path or URL, until the file or its version changes. */
+  images: Map<string, Promise<string | undefined>>;
+  timer: ReturnType<typeof setTimeout> | undefined;
+  /** Bumped by every render: one overtaken is dropped. */
+  renderSeq: number;
+}
 
 interface EditorView {
   projectId: string;
@@ -43,6 +65,7 @@ interface EditorView {
   savedVersionId: number;
   /** An outside change is being folded in: its content event is no edit. */
   reloading: boolean;
+  preview: PreviewView | null;
   /** Bumped by every open (and a re-read that builds the models): a read overtaken is dropped. */
   readSeq: number;
   /** Bumped by every save that reached disk: an older re-read must not restore the replaced text
@@ -61,8 +84,6 @@ const views = new Map<string, EditorView>();
 const tabListeners = new Map<string, Set<() => void>>();
 /** By project: a pane's progress bar is about every editor tab it holds. */
 const projectListeners = new Map<string, Set<() => void>>();
-/** Any editor's text changed, or became or stopped being there (`editedText`). */
-const textListeners = new Set<() => void>();
 
 /** A tab with no editor yet — one instance, so it compares equal. */
 const CLOSED: EditorSnapshot = {
@@ -72,8 +93,12 @@ const CLOSED: EditorSnapshot = {
   building: false,
   saving: false,
   dirty: false,
-  preview: false
+  preview: false,
+  markdownPreview: false
 };
+
+// Shiki's colors are fixed at render.
+subscribeHighlightTheme(() => views.forEach((view) => renderPreview(view, 0)));
 
 export function editorKind(file: FileContent | null): EditorKind {
   if (!file) {
@@ -115,21 +140,12 @@ export function subscribeProjectEditors(projectId: string, listener: () => void)
   return subscribe(projectListeners, projectId, listener);
 }
 
-/** Fires for `editedText` of any project and path. */
-export function subscribeEditedText(listener: () => void): () => void {
-  textListeners.add(listener);
-  return () => textListeners.delete(listener);
-}
-
-function emitText(): void {
-  textListeners.forEach((listener) => listener());
-}
-
-/** The edited side of `path` in the project's editor tab, unsaved edits included, once loaded. */
-export function editedText(projectId: string, path: string): string | undefined {
-  return projectViews(projectId)
-    .find((view) => view.snapshot.path === path && view.models)
-    ?.models?.modified.getValue();
+/** Shows or hides the Markdown preview beside the tab's editor; a file of another kind has none. */
+export function showMarkdownPreview(tabId: string, shown: boolean): void {
+  const view = views.get(tabId);
+  if (view && isMarkdown(view.snapshot.path) && view.snapshot.markdownPreview !== shown) {
+    publish(view, { markdownPreview: shown });
+  }
 }
 
 export function getEditorSnapshot(tabId: string): EditorSnapshot {
@@ -191,11 +207,17 @@ export function editorContent(tabId: string): string | undefined {
 }
 
 /**
- * Reads `path` afresh into the tab, making its editor on the first call. The caller has made sure
- * nothing unsaved is lost, and calls this before the tab is drawn, whose host attaches the element
- * made here.
+ * Reads `path` afresh into the tab, making its editor on the first call; a Markdown file with its
+ * preview if `markdownPreview`. The caller has made sure nothing unsaved is lost, and calls this
+ * before the tab is drawn, whose host attaches the element made here.
  */
-export function openEditorFile(projectId: string, tabId: string, path: string, preview: boolean): void {
+export function openEditorFile(
+  projectId: string,
+  tabId: string,
+  path: string,
+  preview: boolean,
+  markdownPreview: boolean
+): void {
   let view = views.get(tabId);
   if (!view) {
     const host = document.createElement("div");
@@ -209,6 +231,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
       models: null,
       savedVersionId: 0,
       reloading: false,
+      preview: null,
       readSeq: 0,
       saves: 0,
       version: undefined,
@@ -220,9 +243,19 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
   const seq = ++view.readSeq;
   // Now, or the editor shows the previous file under the new path until the read lands.
   clearModels(view);
+  clearPreview(view);
   view.version = undefined;
   view.pendingVersion = undefined;
-  publish(view, { path, file: null, loading: true, building: false, saving: false, dirty: false, preview });
+  publish(view, {
+    path,
+    file: null,
+    loading: true,
+    building: false,
+    saving: false,
+    dirty: false,
+    preview,
+    markdownPreview: markdownPreview && isMarkdown(path)
+  });
   const current = view;
   void window.tet.repository.readFile(projectId, path).then((file) => {
     if (views.get(tabId) !== current || current.readSeq !== seq) {
@@ -269,6 +302,8 @@ export function setEditorVersion(tabId: string, version: string): void {
     return;
   }
   view.version = version;
+  // A pull or checkout may have changed the images too.
+  view.preview?.images.clear();
   const seq = view.readSeq;
   const saves = view.saves;
   void window.tet.repository.readFile(view.projectId, path).then((result) => {
@@ -380,6 +415,19 @@ export function canDiscardProjectEdits(projectId: string): Promise<boolean> {
   return canDiscardEdits(projectViews(projectId).map((view) => view.tabId));
 }
 
+/** Moves the preview's scroller into the tab's frame beside the editor, and renders it. */
+export function attachMarkdownPreview(tabId: string, container: HTMLElement): void {
+  const view = views.get(tabId);
+  if (!view) {
+    return;
+  }
+  view.preview ??= makePreview(view);
+  if (view.preview.scroller.parentElement !== container) {
+    container.appendChild(view.preview.scroller);
+  }
+  renderPreview(view, 0);
+}
+
 /** Moves the element into the tab's host, new after a pane move; monaco remeasures (`automaticLayout`). */
 export function attachEditor(tabId: string, container: HTMLElement): void {
   const view = views.get(tabId);
@@ -400,8 +448,10 @@ export function disposeEditor(tabId: string): void {
   }
   views.delete(tabId);
   clearModels(view);
+  clearPreview(view);
   view.editor?.dispose();
   view.host.remove();
+  view.preview?.scroller.remove();
   emit(view);
   // Safe here, not in an unsubscribe: ids are never reused, so nobody subscribes to this one again.
   tabListeners.delete(tabId);
@@ -427,7 +477,6 @@ function clearModels(view: EditorView): void {
   view.models.original.dispose();
   view.models.modified.dispose();
   view.models = null;
-  emitText();
 }
 
 /** Hands a text file to the editor, building it first if needed. */
@@ -451,7 +500,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   };
   view.savedVersionId = models.modified.getAlternativeVersionId();
   models.modified.onDidChangeContent(() => {
-    emitText();
+    renderPreview(view, PREVIEW_RENDER_DELAY_MS);
     if (view.reloading) {
       return;
     }
@@ -464,8 +513,89 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   editor.updateOptions({ readOnly: isReadOnly(file) });
   editor.setModel(models);
   view.models = models;
-  emitText();
+  renderPreview(view, 0);
   publish(view, { building: false });
+}
+
+function makePreview(view: EditorView): PreviewView {
+  const { scroller, body } = createPreview();
+  // Every link is taken here. A path goes where a ctrl-clicked one in a terminal does, a Markdown
+  // file with its preview; a URL to main, which opens only web and mail links. Main keeps the
+  // window from following anything itself.
+  scroller.addEventListener("click", (event) => {
+    const link = event.composedPath().find((node) => node instanceof HTMLAnchorElement);
+    if (!link) {
+      return;
+    }
+    event.preventDefault();
+    const href = link.getAttribute("href") ?? "";
+    const target = resolveLink(view.snapshot.path, href);
+    if (target !== undefined) {
+      openFile(view.projectId, target, isMarkdown(target));
+    } else if (/^[a-z][a-z0-9+.-]*:/i.test(href)) {
+      void window.tet.shell.openUrl(href);
+    }
+  });
+  return { scroller, body, images: new Map(), timer: undefined, renderSeq: 0 };
+}
+
+/** Renders the edited text into the preview after `delay`, if it is shown. */
+function renderPreview(view: EditorView, delay: number): void {
+  const preview = view.preview;
+  if (!preview || !view.snapshot.markdownPreview) {
+    return;
+  }
+  clearTimeout(preview.timer);
+  preview.timer = setTimeout(() => {
+    const text = view.models?.modified.getValue();
+    if (text === undefined) {
+      return;
+    }
+    const seq = ++preview.renderSeq;
+    const loadImage = (source: string): Promise<string | undefined> => {
+      let image = preview.images.get(source);
+      if (!image) {
+        image = /^https:/i.test(source)
+          ? window.tet.shell.fetchImage(source).then((url) => url ?? undefined)
+          : window.tet.repository.readFile(view.projectId, source).then((file) => file.image);
+        preview.images.set(source, image);
+      }
+      return image;
+    };
+    renderMarkdown(text, view.snapshot.path, loadImage).then(
+      (doc) => {
+        if (views.get(view.tabId) === view && preview.renderSeq === seq) {
+          preview.body.replaceChildren(...doc.body.childNodes);
+          followEditor(view);
+        }
+      },
+      // The last render stays: a file that fails once fails on every keystroke, no notice for each.
+      (error: unknown) => console.warn("[tet] Markdown preview failed to render:", error)
+    );
+  }, delay);
+}
+
+/** The file changed under the preview: nothing of the last one shows or loads. */
+function clearPreview(view: EditorView): void {
+  if (view.preview) {
+    clearTimeout(view.preview.timer);
+    view.preview.renderSeq++;
+    view.preview.body.replaceChildren();
+    view.preview.images.clear();
+  }
+}
+
+/** Scrolls the preview to the editor's first visible line, the share of it scrolled past included. */
+function followEditor(view: EditorView): void {
+  const editor = view.editor?.getModifiedEditor();
+  const line = editor?.getVisibleRanges()[0]?.startLineNumber;
+  if (!view.preview || !view.snapshot.markdownPreview || !editor || line === undefined) {
+    return;
+  }
+  const top = editor.getTopForLineNumber(line);
+  const height = editor.getTopForLineNumber(line + 1) - top;
+  const share = height > 0 ? Math.min(1, Math.max(0, (editor.getScrollTop() - top) / height)) : 0;
+  scrollToLine(view.preview.scroller, view.preview.body, line - 1 + share);
 }
 
 /** Built once per tab, kept for every file after (the preview tab's change). */
@@ -483,14 +613,15 @@ function ensureEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDiffEdi
     view.editor = editor;
     // Bound through the resolved keybindings below.
     editor.addAction({ id: "tet.save", label: "Save", run: () => void saveEditorFile(view.tabId) });
-    // VS Code's "Markdown: Open Preview"; nothing for any other file.
+    // VS Code's "Markdown: Open Preview to the Side", as a toggle.
     editor.addAction({
       id: "tet.markdownPreview",
-      label: "Open Preview",
-      run: () => {
-        if (isMarkdown(view.snapshot.path)) {
-          openFile(view.projectId, view.snapshot.path, true);
-        }
+      label: "Toggle Preview",
+      run: () => showMarkdownPreview(view.tabId, !view.snapshot.markdownPreview)
+    });
+    editor.getModifiedEditor().onDidScrollChange((event) => {
+      if (event.scrollTopChanged) {
+        followEditor(view);
       }
     });
     // Monaco's find actions declare no context menu group.
@@ -515,8 +646,10 @@ function ensureEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDiffEdi
     const scope = `editorId == '${editor.getModifiedEditor().getId()}'`;
     for (const [combo, commandId] of Object.entries(resolveKeybindings(editorKeybindingPreset))) {
       const parsed = parseKeyCombo(monaco, combo);
+      // Elsewhere Ctrl+Shift+V pastes as plain text: VS Code binds its preview for Markdown alone.
+      const when = commandId === "tet.markdownPreview" ? `${scope} && editorLangId == 'markdown'` : scope;
       if (parsed !== undefined) {
-        editor.addCommand(parsed, () => editor.getModifiedEditor().getAction(commandId)?.run(), scope);
+        editor.addCommand(parsed, () => editor.getModifiedEditor().getAction(commandId)?.run(), when);
       }
     }
     return editor;

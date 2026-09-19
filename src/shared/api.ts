@@ -270,6 +270,8 @@ export interface TETApi {
   };
   shell: {
     openUrl(url: string): Promise<void>;
+    /** A Markdown preview's https image as a data URL; null when it is none or too large. */
+    fetchImage(url: string): Promise<string | null>;
     /** A path activated in a terminal: the repository-relative path for a file inside the
      *  repository, null when handed to the OS. */
     openFile(projectId: string, path: string): Promise<string | null>;

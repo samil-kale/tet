@@ -617,6 +617,11 @@ function createWindow(): void {
     }
   });
 
+  // Nothing in the page takes the window away from tet or opens another: a link or form in a
+  // Markdown preview, a stray drop. Links leave only through `shell:open-url`.
+  window.webContents.on("will-navigate", (event) => event.preventDefault());
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
   void window.loadFile(path.join(__dirname, "index.html"));
 }
 
