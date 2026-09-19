@@ -2047,6 +2047,8 @@ textarea:focus,
   gap: 12px;
   padding: 0 0 0 8px;
   font-size: 13px;
+  height: 29px;
+  border-radius: 2px;
 }
 
 .repository-item:hover {
