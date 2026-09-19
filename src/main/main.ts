@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Notification, shell } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
@@ -25,6 +25,7 @@ import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv } from "./terminals/pty";
 import { installUncaughtHandler, logError } from "./uncaught";
+import { isOpenableUrl } from "./shell-open";
 import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
@@ -618,9 +619,15 @@ function createWindow(): void {
   });
 
   // Nothing in the page takes the window away from tet or opens another: a link or form in a
-  // Markdown preview, a stray drop. Links leave only through `shell:open-url`.
+  // Markdown preview, a stray drop. A new window is what monaco's ctrl-clicked link asks for, so
+  // its web and mail links reach the browser as `shell:open-url`'s do; nothing else leaves.
   window.webContents.on("will-navigate", (event) => event.preventDefault());
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isOpenableUrl(url)) {
+      shell.openExternal(url).catch((error: unknown) => logError(`could not open ${url}: ${String(error)}`));
+    }
+    return { action: "deny" };
+  });
 
   void window.loadFile(path.join(__dirname, "index.html"));
 }

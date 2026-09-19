@@ -39,6 +39,8 @@ async function loadTheme(name: ThemeDefinition["shikiTheme"]): Promise<ThemeRegi
 }
 
 const themeListeners = new Set<() => void>();
+/** Bumped by every switch: one overtaken while its theme loads names nothing. */
+let themeSwitches = 0;
 
 /** Fires once a switched theme is loaded — for what shiki colored at render, the Markdown preview. */
 export function subscribeHighlightTheme(listener: () => void): () => void {
@@ -53,8 +55,12 @@ export function subscribeHighlightTheme(listener: () => void): () => void {
  */
 export async function switchHighlightTheme(id: string): Promise<void> {
   const next = resolveTheme(id).shikiTheme;
+  const switchSeq = ++themeSwitches;
   if (core) {
     await (await core).loadTheme(loadTheme(next));
+  }
+  if (switchSeq !== themeSwitches) {
+    return;
   }
   theme = next;
   themeListeners.forEach((listener) => listener());

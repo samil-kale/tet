@@ -7,10 +7,16 @@ import styles from "./markdown-preview.css" with { type: "text" };
  * A Markdown file as its preview shows it (VS Code's "Open Preview to the Side"): VS Code's own
  * engine and options, with the raw HTML a README carries, sanitized — the page holds `window.tet`.
  * It lands in a shadow root, so the page's stylesheet and the file's classes never meet; `style`
- * still goes, since `position: fixed` would lay an element over the whole window. `srcset` goes
- * too, so every image passes `resolveImage`: a `<picture>` falls back to its `<img>`.
+ * still goes, since `position: fixed` would lay an element over the whole window.
  */
-const SANITIZE = { FORBID_TAGS: ["style"], FORBID_ATTR: ["style", "srcset"] };
+const SANITIZE = { FORBID_TAGS: ["style"], FORBID_ATTR: ["style"] };
+
+/**
+ * What makes an element load something. The page's `img-src 'self'` would let a relative one reach
+ * the disk beside the app, so all go but a link's target and an image's source, which
+ * `resolveImage` vets: a `<picture>` falls back to its `<img>`, a `<video>` shows no poster.
+ */
+const LOADING_ATTRIBUTES = ["src", "srcset", "poster", "background", "href", "xlink:href", "data"];
 
 /** Marks the source line a block starts at — VS Code's `data-line` — for the scroll sync. */
 const LINE_ATTRIBUTE = "data-tet-line";
@@ -58,6 +64,14 @@ export async function renderMarkdown(
 ): Promise<Document> {
   const html = DOMPurify.sanitize(markdown.render(text), SANITIZE);
   const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const element of doc.body.querySelectorAll("*")) {
+    for (const name of LOADING_ATTRIBUTES) {
+      const kept = (name === "href" && element.localName === "a") || (name === "src" && element.localName === "img");
+      if (!kept) {
+        element.removeAttribute(name);
+      }
+    }
+  }
   await Promise.all([
     ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code)),
     ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage))
@@ -126,7 +140,8 @@ async function resolveImage(
 /**
  * A link or image source relative to the Markdown file at `from`, as a repository-relative path;
  * a leading "/" is the repository root, as on GitHub. Undefined for a URL, or a path leaving the
- * repository.
+ * repository. A backslash separates too: main joins the path with the platform's rules, where
+ * Windows reads `..\` as a step up.
  */
 export function resolveLink(from: string, href: string): string | undefined {
   const target = href.replace(/[?#].*$/, "");
@@ -139,8 +154,8 @@ export function resolveLink(from: string, href: string): string | undefined {
   } catch {
     return undefined;
   }
-  const segments = decoded.startsWith("/") ? [] : from.split("/").slice(0, -1);
-  for (const segment of decoded.split("/")) {
+  const segments = /^[\\/]/.test(decoded) ? [] : from.split("/").slice(0, -1);
+  for (const segment of decoded.split(/[\\/]/)) {
     if (segment === "..") {
       if (segments.length === 0) {
         return undefined;

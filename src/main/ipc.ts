@@ -657,11 +657,21 @@ export function registerIpc({
       }
       const response = await net.fetch(url, { signal: AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS) });
       const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
-      if (!response.ok || !type.startsWith("image/") || Number(response.headers.get("content-length")) > MAX_IMAGE_BYTES) {
+      if (!response.ok || !type.startsWith("image/") || !response.body) {
         return null;
       }
-      const image = Buffer.from(await response.arrayBuffer());
-      return image.length <= MAX_IMAGE_BYTES ? `data:${type};base64,${image.toString("base64")}` : null;
+      // Read in chunks against the cap: a response without a content-length would otherwise be
+      // held whole before it could be measured. Leaving the loop cancels the rest.
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      for await (const chunk of response.body) {
+        size += chunk.length;
+        if (size > MAX_IMAGE_BYTES) {
+          return null;
+        }
+        chunks.push(chunk);
+      }
+      return `data:${type};base64,${Buffer.concat(chunks).toString("base64")}`;
     } catch {
       return null;
     }

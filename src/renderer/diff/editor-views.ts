@@ -18,6 +18,9 @@ import { openFile } from "../terminal/terminal-views";
 /** Typing re-renders the preview once it pauses: each render parses, sanitizes and colors the
  *  whole file. */
 const PREVIEW_RENDER_DELAY_MS = 150;
+/** A render while typing shows only images already loaded; a new source, likely half typed
+ *  (`https://exa`), is asked for once typing has stopped this long. */
+const PREVIEW_IMAGE_DELAY_MS = 1000;
 
 /** Replaced whole on every change — `useSyncExternalStore` compares identity. */
 export interface EditorSnapshot {
@@ -45,7 +48,8 @@ interface PreviewView {
   scroller: HTMLDivElement;
   /** In the scroller's shadow root; what a render replaces. */
   body: HTMLDivElement;
-  /** The images the file shows, by repository path or URL, until the file or its version changes. */
+  /** The images the file shows, by repository path or URL, until the file or its version changes.
+   *  A source that loaded nothing is not kept: it may be there next time. */
   images: Map<string, Promise<string | undefined>>;
   timer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by every render: one overtaken is dropped. */
@@ -302,8 +306,9 @@ export function setEditorVersion(tabId: string, version: string): void {
     return;
   }
   view.version = version;
-  // A pull or checkout may have changed the images too.
+  // A pull or checkout may have changed the images too, and the text may not have.
   view.preview?.images.clear();
+  renderPreview(view, 0);
   const seq = view.readSeq;
   const saves = view.saves;
   void window.tet.repository.readFile(view.projectId, path).then((result) => {
@@ -539,12 +544,17 @@ function makePreview(view: EditorView): PreviewView {
   return { scroller, body, images: new Map(), timer: undefined, renderSeq: 0 };
 }
 
-/** Renders the edited text into the preview after `delay`, if it is shown. */
+/**
+ * Renders the edited text into the preview after `delay`, if it is shown. A render while typing
+ * (`delay` above 0) loads no new image; if it skipped one, a render that does follows once typing
+ * has stopped a while.
+ */
 function renderPreview(view: EditorView, delay: number): void {
   const preview = view.preview;
   if (!preview || !view.snapshot.markdownPreview) {
     return;
   }
+  const typing = delay > 0;
   clearTimeout(preview.timer);
   preview.timer = setTimeout(() => {
     const text = view.models?.modified.getValue();
@@ -552,12 +562,23 @@ function renderPreview(view: EditorView, delay: number): void {
       return;
     }
     const seq = ++preview.renderSeq;
+    let skipped = false;
     const loadImage = (source: string): Promise<string | undefined> => {
       let image = preview.images.get(source);
+      if (!image && typing) {
+        skipped = true;
+        return Promise.resolve(undefined);
+      }
       if (!image) {
-        image = /^https:/i.test(source)
+        const loading = /^https:/i.test(source)
           ? window.tet.shell.fetchImage(source).then((url) => url ?? undefined)
           : window.tet.repository.readFile(view.projectId, source).then((file) => file.image);
+        void loading.then((url) => {
+          if (url === undefined && preview.images.get(source) === loading) {
+            preview.images.delete(source);
+          }
+        });
+        image = loading;
         preview.images.set(source, image);
       }
       return image;
@@ -567,6 +588,9 @@ function renderPreview(view: EditorView, delay: number): void {
         if (views.get(view.tabId) === view && preview.renderSeq === seq) {
           preview.body.replaceChildren(...doc.body.childNodes);
           followEditor(view);
+          if (skipped) {
+            preview.timer = setTimeout(() => renderPreview(view, 0), PREVIEW_IMAGE_DELAY_MS);
+          }
         }
       },
       // The last render stays: a file that fails once fails on every keystroke, no notice for each.
