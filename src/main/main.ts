@@ -715,26 +715,36 @@ function shutdown(relaunch: boolean): void {
     return;
   }
   quitting = true;
+  // Each step logged: a quit on macOS has hung without saying where (install.test.ts).
+  console.error(`[tet] quit: ending sessions${relaunch ? " for a restart" : ""}`);
   void Promise.race([
-    sessions.disposeAll(),
-    new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))
-  ]).finally(async () => {
+    sessions.disposeAll().then(() => "sessions ended"),
+    new Promise((resolve) => setTimeout(() => resolve("sessions timed out"), QUIT_TEARDOWN_TIMEOUT_MS))
+  ]).then(
+    (outcome) => console.error(`[tet] quit: ${String(outcome)}`),
+    (error: unknown) => console.error("[tet] quit: ending sessions failed:", error)
+  ).finally(async () => {
     repositories.disposeAll();
     stopGitProcess();
+    console.error("[tet] quit: git stopped, closing the control channel");
     await controlServer?.close();
     if (relaunch) {
       app.relaunch();
     } else {
       installPendingUpdate();
     }
+    console.error("[tet] quit: done, quitting");
     app.quit();
   });
 }
 
 app.on("before-quit", (event) => {
+  console.error(`[tet] quit: before-quit${quitting ? ", letting it through" : ""}`);
   if (quitting) {
     return;
   }
   event.preventDefault();
   shutdown(false);
 });
+
+app.on("will-quit", () => console.error("[tet] quit: will-quit"));

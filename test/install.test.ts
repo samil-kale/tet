@@ -73,18 +73,49 @@ async function install(): Promise<void> {
   assert.equal(status, 0, `install script\n${output}`);
 }
 
+/** Both starts' stdout and stderr, for a failure's message. */
+function tetLog(): string {
+  try {
+    return fs.readFileSync(path.join(work, "tet.log"), "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/** `what`, followed by what tet wrote so far. */
+function withLog(what: string): () => string {
+  return () => `${what}\n--- tet's output ---\n${tetLog()}`;
+}
+
 /** Started directly: `open` on macOS would not pass this environment. */
 function startTet(): void {
   const args = [`--user-data-dir=${userData}`, "--allow-shell-only"];
   if (process.platform === "linux") {
     args.push("--no-sandbox");
   }
+  const log = fs.openSync(path.join(work, "tet.log"), "a");
   const child: ChildProcess = spawn(rootExecutable(installedRoot()), args, {
     env: { ...env, ELECTRON_RUN_AS_NODE: undefined },
     detached: true,
-    stdio: "ignore"
+    stdio: ["ignore", log, log]
   });
   child.unref();
+  fs.closeSync(log);
+}
+
+/**
+ * The update fetched and unpacked, which is when tet arms it for the quit. The folder alone is not
+ * enough: `stage` makes it before the download starts. The executable is looked for where
+ * auto-update.ts's `findRoot` looks, at the top or one folder down.
+ */
+function updateUnpacked(): boolean {
+  const staged = path.join(userData, "update", next);
+  if (!fs.existsSync(staged) || fs.readdirSync(path.join(userData, "update")).some((entry) => entry.endsWith(ASSET))) {
+    return false;
+  }
+  return [staged, ...fs.readdirSync(staged).map((entry) => path.join(staged, entry))].some((candidate) =>
+    fs.existsSync(rootExecutable(process.platform === "darwin" ? path.join(candidate, "TET.app") : candidate))
+  );
 }
 
 async function version(): Promise<{ version: string; pid: number } | undefined> {
@@ -244,23 +275,17 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
     }
     served = next;
     startTet();
-    await eventually("tet answering", async () => (await version())?.version === current, STARTUP_MS);
+    await eventually(withLog("tet answering"), async () => (await version())?.version === current, STARTUP_MS);
   });
 
   it("fetches the newer version, and installs it once tet has quit", async () => {
     const running = await version();
     assert.ok(running, "tet running");
-    // Unpacked, and the archive gone: the update is armed for the quit.
-    const staged = path.join(userData, "update", next);
-    await eventually(
-      "the update unpacked",
-      () => fs.existsSync(staged) && !fs.readdirSync(path.join(userData, "update")).some((entry) => entry.endsWith(ASSET)),
-      5 * 60_000
-    );
+    await eventually(withLog("the update unpacked"), updateUnpacked, 5 * 60_000);
     quit(running.pid);
-    await eventually("tet gone", () => !alive(running.pid), 60_000);
+    await eventually(withLog("tet gone"), () => !alive(running.pid), 60_000);
     const resultFile = path.join(userData, "update", "result.json");
-    await eventually("the update's result", () => fs.existsSync(resultFile), 5 * 60_000);
+    await eventually(withLog("the update's result"), () => fs.existsSync(resultFile), 5 * 60_000);
     const result = JSON.parse(fs.readFileSync(resultFile, "utf8")) as UpdateResult;
     assert.equal(result.ok, true, result.output);
     assert.equal(result.version, next);
@@ -268,7 +293,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
 
   it("starts the updated version, which reports the update", async () => {
     startTet();
-    await eventually("the new version answering", async () => (await version())?.version === next, STARTUP_MS);
+    await eventually(withLog("the new version answering"), async () => (await version())?.version === next, STARTUP_MS);
     await eventually("the result reported", () => !fs.existsSync(path.join(userData, "update", "result.json")), 30_000);
   });
 });

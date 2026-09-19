@@ -203,6 +203,7 @@ export function installPendingUpdate(): void {
   if (!pending) {
     return;
   }
+  console.error(`[tet] quit: starting the update to ${pending.version}`);
   try {
     const resources = process.platform === "darwin" ? path.join(pending.root, "Contents", "Resources") : path.join(pending.root, "resources");
     const script = path.join(resources, "app.asar.unpacked", "dist", "tet-update.js");
