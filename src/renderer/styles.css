@@ -1956,6 +1956,7 @@ textarea:focus,
   width: 220px;
   flex: none;
   overflow-y: auto;
+  padding-right: 12px;
   border-right: 1px solid var(--vscode-panel-border);
 }
 
@@ -1967,6 +1968,7 @@ textarea:focus,
   flex: none;
   padding: 5px 6px 5px 8px;
   cursor: pointer;
+  border-radius: 2px;
 }
 
 .account-item:hover {
@@ -2042,8 +2044,8 @@ textarea:focus,
 .repository-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px 0 8px;
+  gap: 12px;
+  padding: 0 0 0 8px;
   font-size: 13px;
 }
 
