@@ -721,3 +721,25 @@ export function SaveIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** Lucide's `eye`, vendored the same way — a Markdown preview. Wide, so the long-side cap:
+ *  measured 22 by 16 (stroke included), extent 20.23, centered at (12, 12). */
+export function EyeIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.23, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.23, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}

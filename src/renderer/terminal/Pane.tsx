@@ -10,11 +10,13 @@ import { prompt } from "../ui/Dialog";
 import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
+import { MarkdownHost } from "../diff/MarkdownHost";
 import { getEditorSnapshot, keepEditor } from "../diff/editor-views";
 import {
   CircleAlertIcon,
   CloseIcon,
   CommentIcon,
+  EyeIcon,
   FilesIcon,
   GearIcon,
   GitIcon,
@@ -268,10 +270,12 @@ export const Pane = memo(function Pane({
   const agentName = (agentId: AgentId): string =>
     agents.find((agent) => agent.id === agentId)?.displayName ?? agentId;
 
-  /** The session title; a session-less agent's name; the editor tab's file name. */
+  /** The session title; a session-less agent's name; the editor tab's file name, VS Code's
+   *  "Preview" before a Markdown preview's. */
   const tabLabel = (tab: PaneTab): string => {
     if (isEditorTab(tab)) {
-      return tab.path.split("/").at(-1) ?? tab.path;
+      const name = tab.path.split("/").at(-1) ?? tab.path;
+      return tab.markdown ? `Preview ${name}` : name;
     }
     if (tab.title) {
       return tab.title;
@@ -303,7 +307,7 @@ export const Pane = memo(function Pane({
   /**
    * Restart, the close actions, rename, and the moves to sibling panes. A close with nothing to
    * close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
-   * moves.
+   * moves; a Markdown preview, always kept, the last two.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
@@ -335,6 +339,9 @@ export const Pane = memo(function Pane({
       closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
       closeAction("Close All", ids)
     ];
+    if (tabs.some((tab) => tab.tabId === tabId && isEditorTab(tab) && tab.markdown)) {
+      return [...closeEntries, ...moveEntries];
+    }
     if (!terminal) {
       return [
         // VS Code's wording; a kept tab has nothing to keep.
@@ -468,7 +475,11 @@ export const Pane = memo(function Pane({
               {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
                   > finished ("Both ends of a turn" in CLAUDE.md). */}
               {isEditorTab(tab) ? (
-                <FilesIcon className="tab-icon" />
+                tab.markdown ? (
+                  <EyeIcon className="tab-icon" />
+                ) : (
+                  <FilesIcon className="tab-icon" />
+                )
               ) : tab.status === "missing" || tab.status === "error" ? (
                 <CircleAlertIcon className="tab-icon session-mark session-mark-error" />
               ) : waitingTabIds.includes(tab.tabId) ? (
@@ -530,9 +541,17 @@ export const Pane = memo(function Pane({
 
       <div className="terminal-stack" ref={stack}>
         {tabs.map((tab) =>
-          isEditorTab(tab) ? (
+          isEditorTab(tab) && tab.markdown ? (
+            <MarkdownHost
+              key={tab.tabId}
+              projectId={projectId}
+              tabId={tab.tabId}
+              active={tab.tabId === activeTabId}
+            />
+          ) : isEditorTab(tab) ? (
             <EditorHost
               key={tab.tabId}
+              projectId={projectId}
               tabId={tab.tabId}
               active={tab.tabId === activeTabId}
               visible={visible}

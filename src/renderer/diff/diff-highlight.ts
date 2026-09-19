@@ -202,3 +202,9 @@ export function languageForPath(filePath: string): string | undefined {
   const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
   return EXTENSIONS[name.slice(name.lastIndexOf(".") + 1)];
 }
+
+/** A Markdown fence's info string, a grammar's name ("typescript") or an extension ("ts"). */
+export function languageForFence(info: string): string | undefined {
+  const name = info.trim().split(/\s/)[0].toLowerCase();
+  return name in GRAMMARS ? name : EXTENSIONS[name];
+}

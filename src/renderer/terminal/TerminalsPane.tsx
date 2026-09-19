@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { Project } from "../../shared/types";
 import { sameList } from "../identity";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
+import { setOpenHandler } from "../diff/markdown-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash, usePersistedNumber } from "../ui/Sash";
@@ -77,6 +78,8 @@ interface TerminalsPaneProps {
   externalBusy: boolean;
   /** Opens a path ctrl-clicked in a terminal in the project's preview tab. */
   onOpenDiff: (projectId: string, path: string) => void;
+  /** Opens a Markdown file rendered, for its editor tab and the links of a preview. */
+  onOpenPreview: (projectId: string, path: string) => void;
   onCloseEditors: (projectId: string, tabIds: string[]) => void;
   layout: ProjectLayout;
   onActivateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
@@ -101,6 +104,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   onToggleFiles,
   externalBusy,
   onOpenDiff,
+  onOpenPreview,
   onCloseEditors,
   layout,
   onActivateTab,
@@ -122,6 +126,13 @@ export const TerminalsPane = memo(function TerminalsPane({
   const knownTabs = useRef<PaneTab[]>([]);
 
   useEffect(() => setRevealHandler(project.id, (path) => onOpenDiff(project.id, path)), [project.id, onOpenDiff]);
+  useEffect(
+    () =>
+      setOpenHandler(project.id, (path, preview) =>
+        preview ? onOpenPreview(project.id, path) : onOpenDiff(project.id, path)
+      ),
+    [project.id, onOpenDiff, onOpenPreview]
+  );
 
   const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(project.id, tabIds), [onCloseEditors, project.id]);
 

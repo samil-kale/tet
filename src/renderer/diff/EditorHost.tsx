@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { ImageView } from "./ImageView";
+import { isMarkdown, openFile } from "./markdown-views";
 import {
   attachEditor,
   editorKind,
@@ -12,7 +13,7 @@ import {
   type EditorSnapshot
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
-import { SaveIcon } from "../ui/icons";
+import { EyeIcon, SaveIcon } from "../ui/icons";
 import { isMac, isModifierHeld } from "../platform";
 
 function useEditorStore<T>(tabId: string, select: (snapshot: EditorSnapshot) => T): T {
@@ -40,6 +41,7 @@ export function useEditorBusy(projectId: string, tabs: PaneTab[]): boolean {
 }
 
 interface EditorHostProps {
+  projectId: string;
   tabId: string;
   /** On screen in its pane; otherwise hidden but laid out. */
   active: boolean;
@@ -54,7 +56,7 @@ interface EditorHostProps {
  * all drawn off the editor's snapshot. The editor lives outside React in `editor-views.ts` and is attached to a childless frame; on a pane move React
  * removes the frame with it inside, and the next host's attach takes it out again.
  */
-export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
+export const EditorHost = memo(function EditorHost({ projectId, tabId, active, visible, focused }: EditorHostProps) {
   const { path, file, building, saving, dirty } = useEditorStore(tabId, whole);
   const frame = useRef<HTMLDivElement>(null);
   const kind = editorKind(file);
@@ -94,6 +96,15 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
           >
             <SaveIcon />
           </button>
+          {isMarkdown(path) && (
+            <button
+              className="icon-button"
+              title={`Open Preview (${isMac() ? "⌘" : "Ctrl"}+Shift+V)`}
+              onClick={() => openFile(projectId, path, true)}
+            >
+              <EyeIcon />
+            </button>
+          )}
         </div>
         {dirty && <span className="editor-dirty">●</span>}
         <span className="editor-path">{path}</span>

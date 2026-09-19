@@ -5,7 +5,8 @@ import type { TerminalDescriptor } from "../../shared/types";
  * tab per project, replaced by the next file opened; it is kept (no longer replaced) by an edit,
  * "Keep Open" or an Explorer double-click, and the next file gets a new preview tab. Which tab is
  * the preview is the editor's own state (`editor-views.ts`), decided where an edit lands. A path
- * is open in at most one tab per project. Renderer-only: no pty, no session, never persisted
+ * is open in at most one tab per project, and in at most one Markdown preview (`markdown`), which
+ * is always kept — VS Code's "Open Preview", not a preview tab. Renderer-only: no pty, no session, never persisted
  * (`serializeLayout` writes only tabs with a session id).
  *
  * Ids count up, so the preview tab keeps its id, pane and place when its file changes. The prefix
@@ -24,6 +25,8 @@ export interface EditorTab {
   projectId: string;
   /** Repository-relative path of the file shown. */
   path: string;
+  /** The file rendered (`MarkdownHost`), not in an editor. */
+  markdown?: boolean;
 }
 
 /** What a tab strip holds: a project's terminals, then its editor tabs. */

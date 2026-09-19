@@ -5,6 +5,7 @@ import { notify } from "../ui/Notices";
 import { languageForPath } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
+import { isMarkdown, openFile } from "./markdown-views";
 
 /**
  * Each editor tab's editor, outside React like the xterms (`terminal-views.ts`): monaco's
@@ -60,6 +61,8 @@ const views = new Map<string, EditorView>();
 const tabListeners = new Map<string, Set<() => void>>();
 /** By project: a pane's progress bar is about every editor tab it holds. */
 const projectListeners = new Map<string, Set<() => void>>();
+/** Any editor's text changed, or became or stopped being there (`editedText`). */
+const textListeners = new Set<() => void>();
 
 /** A tab with no editor yet — one instance, so it compares equal. */
 const CLOSED: EditorSnapshot = {
@@ -110,6 +113,23 @@ export function subscribeEditor(tabId: string, listener: () => void): () => void
 /** Fires for any of the project's editor tabs. */
 export function subscribeProjectEditors(projectId: string, listener: () => void): () => void {
   return subscribe(projectListeners, projectId, listener);
+}
+
+/** Fires for `editedText` of any project and path. */
+export function subscribeEditedText(listener: () => void): () => void {
+  textListeners.add(listener);
+  return () => textListeners.delete(listener);
+}
+
+function emitText(): void {
+  textListeners.forEach((listener) => listener());
+}
+
+/** The edited side of `path` in the project's editor tab, unsaved edits included, once loaded. */
+export function editedText(projectId: string, path: string): string | undefined {
+  return projectViews(projectId)
+    .find((view) => view.snapshot.path === path && view.models)
+    ?.models?.modified.getValue();
 }
 
 export function getEditorSnapshot(tabId: string): EditorSnapshot {
@@ -407,6 +427,7 @@ function clearModels(view: EditorView): void {
   view.models.original.dispose();
   view.models.modified.dispose();
   view.models = null;
+  emitText();
 }
 
 /** Hands a text file to the editor, building it first if needed. */
@@ -430,6 +451,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   };
   view.savedVersionId = models.modified.getAlternativeVersionId();
   models.modified.onDidChangeContent(() => {
+    emitText();
     if (view.reloading) {
       return;
     }
@@ -442,6 +464,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   editor.updateOptions({ readOnly: isReadOnly(file) });
   editor.setModel(models);
   view.models = models;
+  emitText();
   publish(view, { building: false });
 }
 
@@ -460,6 +483,16 @@ function ensureEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDiffEdi
     view.editor = editor;
     // Bound through the resolved keybindings below.
     editor.addAction({ id: "tet.save", label: "Save", run: () => void saveEditorFile(view.tabId) });
+    // VS Code's "Markdown: Open Preview"; nothing for any other file.
+    editor.addAction({
+      id: "tet.markdownPreview",
+      label: "Open Preview",
+      run: () => {
+        if (isMarkdown(view.snapshot.path)) {
+          openFile(view.projectId, view.snapshot.path, true);
+        }
+      }
+    });
     // Monaco's find actions declare no context menu group.
     editor.addAction({
       id: "tet.find",

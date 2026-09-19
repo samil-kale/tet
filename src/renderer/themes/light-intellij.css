@@ -15,6 +15,13 @@
   --vscode-descriptionForeground: #717171;
   --vscode-errorForeground: #a1260d;
   --vscode-textLink-foreground: #006ab1;
+  /* Unset; the registry's. */
+  --vscode-textLink-activeForeground: #006ab1;
+  --vscode-textPreformat-foreground: #a31515;
+  --vscode-textPreformat-background: #0000001a;
+  --vscode-textBlockQuote-background: #f2f2f2;
+  --vscode-textBlockQuote-border: #007acc80;
+  --vscode-textCodeBlock-background: #dcdcdc66;
   --vscode-focusBorder: #aeb3c2;
   /* Unset; the registry's is focusBorder. */
   --vscode-sash-hoverBorder: #aeb3c2;

@@ -3,6 +3,7 @@ import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryStat
 import { absolutePath, revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
+import { isMarkdown } from "../diff/markdown-views";
 
 /** Runs a file action; the owner shows it running on its own bar. */
 export type FileAct = (action: () => Promise<GitActionResult>) => void;
@@ -14,6 +15,8 @@ interface ChangesListProps {
   act: FileAct;
   /** On a double-click. */
   onOpenDiff: (path: string) => void;
+  /** A Markdown file, rendered. */
+  onOpenPreview: (path: string) => void;
 }
 
 const STATUS_LETTER: Record<ChangeStatus, string> = {
@@ -107,7 +110,7 @@ export async function askCommit(
 }
 
 /** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */
-export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProps) {
+export function ChangesList({ project, state, act, onOpenDiff, onOpenPreview }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
   /** Ctrl- and shift-click extend it, so one action can cover several files. */
@@ -174,6 +177,7 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
 
     const entries: ContextMenuEntry[] = [
       { label: "Open diff", run: one ? () => onOpenDiff(change.path) : undefined },
+      ...(isMarkdown(change.path) ? [{ label: "Open Preview", run: one ? () => onOpenPreview(change.path) : undefined }] : []),
       {
         label: "Open in external editor",
         run: one ? () => void window.tet.shell.openFileExternally(project.id, change.path) : undefined

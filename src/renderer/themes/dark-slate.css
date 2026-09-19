@@ -13,6 +13,12 @@
   --vscode-descriptionForeground: #a8b0bd;
   --vscode-errorForeground: #db5761;
   --vscode-textLink-foreground: #58a6f0;
+  --vscode-textLink-activeForeground: #2f81f7;
+  --vscode-textPreformat-foreground: #7d8590;
+  --vscode-textPreformat-background: #6e768166;
+  --vscode-textBlockQuote-background: #010409;
+  --vscode-textBlockQuote-border: #30363d;
+  --vscode-textCodeBlock-background: #6e768166;
   --vscode-focusBorder: #58a6f0;
   --vscode-sash-hoverBorder: #58a6f0;
 

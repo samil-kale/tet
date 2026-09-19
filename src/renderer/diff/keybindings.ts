@@ -6,7 +6,8 @@ import { KEYBINDING_PRESETS } from "./keybinding-presets";
  * command that depends on a language provider, no format.
  */
 const DEFAULT_KEYBINDINGS: Record<string, string> = {
-  "ctrl+s": "tet.save"
+  "ctrl+s": "tet.save",
+  "ctrl+shift+v": "tet.markdownPreview"
 };
 
 /** Key names after the last `+`, VS Code's spelling. Not exhaustive. */

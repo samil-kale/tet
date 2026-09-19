@@ -6,6 +6,7 @@ import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { ChevronIcon, SearchIcon, TREE_CHEVRON } from "../ui/icons";
+import { isMarkdown } from "../diff/markdown-views";
 
 /** As VS Code resolves an icon theme: the name, then each extension from the longest (`a.spec.ts`
  *  is `spec.ts`, then `ts`). Tables from scripts/file-icons.js. */
@@ -329,6 +330,8 @@ interface ExplorerProps {
   selected: string | null;
   /** In the preview tab, or kept (`editor-tab.ts`). */
   onOpen: (path: string, keep?: boolean) => void;
+  /** A Markdown file, rendered. */
+  onOpenPreview: (path: string) => void;
   /** The owner shows it running on its own bar. */
   act: FileAct;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
@@ -349,7 +352,17 @@ export interface ExplorerHandle {
  * listing: `folders` make it multi-root (overlap allowed); `exclude`/`excludeGitIgnore` are already
  * applied; `sortOrder`/`compactFolders` are applied here.
  */
-export function Explorer({ project, files, shown: visible, selected, onOpen, act, onExplorerChanged, ref }: ExplorerProps) {
+export function Explorer({
+  project,
+  files,
+  shown: visible,
+  selected,
+  onOpen,
+  onOpenPreview,
+  act,
+  onExplorerChanged,
+  ref
+}: ExplorerProps) {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
@@ -514,6 +527,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
     const openEntries: ContextMenuEntry[] = isFile
       ? [
           { label: "Open", run: () => onOpen(node.path) },
+          ...(isMarkdown(node.path) ? [{ label: "Open Preview", run: () => onOpenPreview(node.path) }] : []),
           { label: "Open in external editor", run: () => void window.tet.shell.openFileExternally(project.id, node.path) },
           SEPARATOR
         ]
