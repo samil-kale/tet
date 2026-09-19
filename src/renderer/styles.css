@@ -46,7 +46,8 @@ button:focus-visible {
   outline-offset: -1px;
 }
 
-/* One box for fields and dropdowns: a dropdown looks like a field but for its chevron. */
+/* One box for fields and dropdowns: a dropdown looks like a field but for its chevron. The
+   background is VS Code's settings editor's dropdown, for the fields too. */
 input,
 textarea,
 .dropdown-trigger {
@@ -55,7 +56,7 @@ textarea,
   outline: none;
   padding: 3px 6px;
   color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
+  background: var(--vscode-settings-dropdownBackground);
   border: 1px solid var(--vscode-input-border);
 }
 
@@ -1722,8 +1723,8 @@ textarea:focus,
   cursor: pointer;
 }
 
-/* Drawn by tet, as VS Code's checkbox widget: Chrome's own box takes only light or dark, never a
-   theme's colors. */
+/* Drawn by tet, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
+   dark, never a theme's colors. */
 .dialog-checkbox input {
   appearance: none;
   display: grid;
@@ -1736,15 +1737,15 @@ textarea:focus,
   flex: none;
   margin-top: calc((1lh - 15px) / 2);
   padding: 0;
-  background: var(--vscode-checkbox-background);
-  border: 1px solid var(--vscode-checkbox-border);
+  background: var(--vscode-settings-checkboxBackground);
+  border: 1px solid var(--vscode-settings-checkboxBorder);
   border-radius: 3px;
   cursor: pointer;
 }
 
 /* Not the fields' focus border on a click: only the keyboard's, as a button's. */
 .dialog-checkbox input:focus {
-  border-color: var(--vscode-checkbox-border);
+  border-color: var(--vscode-settings-checkboxBorder);
 }
 
 .dialog-checkbox input:focus-visible {
@@ -1756,7 +1757,7 @@ textarea:focus,
   content: "";
   width: 14px;
   height: 14px;
-  background: var(--vscode-checkbox-foreground);
+  background: var(--vscode-settings-checkboxForeground);
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }

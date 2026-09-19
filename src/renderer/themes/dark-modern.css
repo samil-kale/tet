@@ -50,10 +50,11 @@
   --vscode-input-border: #3c3c3c;
   --vscode-input-placeholderForeground: #989898;
 
-  /* The foreground unset; the registry's is dropdown.foreground. */
-  --vscode-checkbox-background: #313131;
-  --vscode-checkbox-border: #3c3c3c;
-  --vscode-checkbox-foreground: #cccccc;
+  --vscode-settings-dropdownBackground: #313131;
+  /* Unset; the registry's are checkbox.*, its foreground unset too: dropdown.foreground. */
+  --vscode-settings-checkboxBackground: #313131;
+  --vscode-settings-checkboxBorder: #3c3c3c;
+  --vscode-settings-checkboxForeground: #cccccc;
 
   /* radio.* unset: activeForeground the registry's; activeBackground is its
      inputOption.activeBackground; activeBorder is its inputOption.activeBorder;
