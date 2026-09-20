@@ -5,24 +5,14 @@ changed for the user, not the commit list.
 
 ## 0.10.0 (2026-09-20)
 
-- **Search.** A SEARCH pane sits beside the Explorer and searches the project's files for a
-  text, matches inside the files included. The hits are grouped per file, each file folded away
-  until it is opened, and a match opens the file in the editor at its line.
-- **Markdown preview.** A `.md` file is read rendered, in a preview beside the editor that
-  follows the file as it is edited and scrolls in step with it, both ways, with images from the
-  repository and from https. A file comes back the way it was last left.
+- Search for repository was added. It now finds matches inside files. Results are
+  grouped per file.
+- **Markdown preview.** A `.md` file opens rendered beside the editor.
 - **The editor tab toggles between the diff and the plain file.** A changed file's tab switches
   between monaco's inline diff and the file as it stands.
-- **A question says what refused it, where it was asked.** A dialog that git or the filesystem
-  turned down stays up, holding what was typed, and shows the reason under the field to blame or
-  above the buttons — in git's own words, instead of a notice elsewhere on screen. While the
-  answer runs, the dialog shows its own progress bar.
-- **Replace is gone from the find widget.** The editor's widget finds only: its replace toggle
-  and the context menu's Find and Replace are gone, and Ctrl+H (Alt+Cmd+F on macOS) does nothing.
-- **pi 0.86.1.** The new version was measured through tet's terminals again: readiness, how it
-  quits and the gap before it does.
-- **Fixes.** Writing to a terminal whose process has already exited no longer reports an error,
-  and saving the settings writes only the keys the dialog touched.
+- **Fixes.** Writing to a terminal whose process has already exited no longer reports an error;
+  settings save only what actually changed; a Markdown preview's image follows redirects only
+  while they stay on https; and the git pane opens fewer git and sbx processes on refresh.
 
 ## 0.9.2 (2026-09-19)
 
@@ -75,21 +65,14 @@ changed for the user, not the commit list.
 
 ## 0.8.9 (2026-09-17)
 
-- **Several editor tabs.** Files open in a preview tab that the next file replaces, as in VS Code;
-  an edit, "Keep Open" or a double-click in the Explorer keeps it, and the next file gets a tab of
+- **Several editor tabs.** Files open in a preview tab that the next file replaces; an edit,
+  "Keep Open" or a double-click in the Explorer keeps it, and the next file gets a tab of
   its own.
 - **The git pane works like GitHub Desktop.** Fetch and pull move local branches that are only
   behind their upstream, pull no longer refuses a diverged branch, push goes to the branch's own
   upstream, and deleting the checked-out branch switches to the default branch first. Remote
   branches can be deleted from their row, rebasing commits already pushed asks first, and stash
   actions hit the right stash even after one was made in a terminal.
-- **Discard keeps a way back.** Every discarded file goes to the trash first; when the trash
-  fails, tet asks before deleting permanently. Conflicted files and files removed with
-  `git rm --cached` are discarded correctly.
-- **Safer ctrl-click.** Links in terminal output open only web and mail addresses, and an executable
-  file is shown in its folder instead of being run.
-- **Worktrees and submodules refresh.** A commit or checkout in a linked worktree or submodule
-  now updates the git pane, and changes to lockfiles like `yarn.lock` are no longer missed.
 - **Agents know about `tet-ctl`.** Every agent learns of `tet-ctl` through its system prompt, and
   `tabs-output` reads what any tab of the same project printed, agent or shell.
 - **Sandboxes stay in their project.** `tet-ctl` from a sandboxed tab sees only its own project
