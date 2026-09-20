@@ -378,8 +378,8 @@ interface FileSearchProps {
 
 /**
  * The SEARCH pane: VS Code's search box, its own query, over what that query finds in the files'
- * lines. Listed as VS Code's search view does — a row per file, open unless folded away, and under
- * it a row per match with the match marked; the summary is the pane's header. Rows of the
+ * lines. Listed as VS Code's search view does — a row per file, folded away until it is opened,
+ * and under it a row per match with the match marked; the summary is the pane's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
 export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }: FileSearchProps) {
@@ -388,22 +388,22 @@ export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }:
   const asked = search.text.trim() ? search : null;
   useEffect(() => runSearch(asked), [asked, runSearch]);
 
-  const [folded, setFolded] = useState<Record<string, boolean>>({});
-  // Every search lists its files open again, as VS Code's does; the previous one's folds are gone.
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  // Every search lists its files folded away again; the previous one's opened ones are gone.
   const [listed, setListed] = useState(result);
   if (listed !== result) {
     setListed(result);
-    setFolded({});
+    setOpened({});
   }
   const files = result?.files ?? [];
-  const allFolded = files.length > 0 && files.every((file) => folded[file.path]);
+  const allFolded = files.length > 0 && files.every((file) => !opened[file.path]);
   useEffect(() => onAllFolded(allFolded), [allFolded, onAllFolded]);
 
   useImperativeHandle(ref, () => ({
     // The text alone: the toggles are the field's own, as VS Code keeps them.
     clear: () => setSearch((current) => ({ ...current, text: "" })),
-    // VS Code's one button for both: every file folded away, or all of them listed open again.
-    toggleAll: () => setFolded(allFolded ? {} : Object.fromEntries(files.map((file) => [file.path, true])))
+    // VS Code's one button for both: every file listed open, or all of them folded away again.
+    toggleAll: () => setOpened(allFolded ? Object.fromEntries(files.map((file) => [file.path, true])) : {})
   }));
 
   return (
@@ -433,7 +433,7 @@ export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }:
       </div>
       <div className="tree">
         {files.map((file) => {
-          const open = !folded[file.path];
+          const open = opened[file.path] ?? false;
           const name = file.path.slice(file.path.lastIndexOf("/") + 1);
           const dir = parentOf(file.path);
           return (
@@ -442,7 +442,7 @@ export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }:
                 className="tree-item"
                 style={{ paddingLeft: INDENT_BASE }}
                 title={file.path}
-                onClick={() => setFolded((current) => ({ ...current, [file.path]: open }))}
+                onClick={() => setOpened((current) => ({ ...current, [file.path]: !open }))}
               >
                 <Twistie open={open} />
                 <FileMarkIcon name={name} />
