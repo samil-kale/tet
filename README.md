@@ -26,13 +26,21 @@
 
 ## Lightweight by design
 
-Use Claude Code, Codex, OpenCode or Pi, or all four together.
+### Use Claude Code, Codex, OpenCode or Pi, or all four together.
 
 TET deliberately does only a few things. Tasks that take one or two clicks belong in TET.
 For everything else, you have an agent or a shell. The agent does the work; Git is for navigation
 and control. TET gives you the real agent CLIs, with a few quality-of-life features around them.
 
 **TET never changes your agents' configuration**
+
+### Familiar, yet different
+
+Anyone who has worked with VS Code will feel at home right away. Rather than reinventing the
+wheel, I built on mature, proven concepts.
+
+TET draws heavily from VS Code and GitHub Desktop, bringing ideas from these already excellent
+applications together in a tool designed around working with agents.
 
 ---
 
