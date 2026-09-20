@@ -1682,7 +1682,7 @@ textarea:focus,
 
 /* Stable across tabs with different amounts of content, capped to the window. */
 .sbx-settings-dialog {
-  min-width: 560px;
+  min-width: 620px;
   min-height: 405px;
 }
 
@@ -1927,7 +1927,6 @@ textarea:focus,
 
 .add-repository-dialog {
   width: 720px;
-  /* Fixed, sized to the fullest (remote) tab: switching tabs must not resize the dialog. */
   height: 440px;
 }
 
@@ -1946,7 +1945,7 @@ textarea:focus,
 .account-list {
   display: flex;
   flex-direction: column;
-  width: 220px;
+  width: 200px;
   flex: none;
   overflow-y: auto;
   padding-right: 12px;

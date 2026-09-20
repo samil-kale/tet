@@ -399,7 +399,6 @@ function RemoteTab({ onClone }: RemoteTabProps) {
                 filtered.map((repo) => (
                   <div className="repository-item" key={repo.fullName}>
                     <span className="repository-name">{repo.fullName}</span>
-                    {repo.private && <span className="repository-private">Private</span>}
                     <button
                       type="button"
                       className="button secondary repository-clone"
