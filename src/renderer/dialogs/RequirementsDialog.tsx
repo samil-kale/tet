@@ -29,6 +29,7 @@ export function RequirementsDialog({ requirements, checking, onRecheck }: Requir
     <DialogFrame
       // No close button: nothing stands behind this yet.
       header={{ title: "TET cannot start" }}
+      className="requirements-dialog"
       buttons={
         <>
           <button type="button" className="button secondary" onClick={() => window.tet.startup.quit()}>

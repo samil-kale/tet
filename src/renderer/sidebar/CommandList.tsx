@@ -169,7 +169,6 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       extras: EXTRA_FIELDS,
       valueIndex: 1,
       colors: COLOR_FIELD,
-      wide: true,
       submit: async (answer) => {
         const command = toCommand(answer);
         const current = latest.current;
@@ -201,7 +200,6 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       ],
       valueIndex: 1,
       colors: { ...COLOR_FIELD, value: command.color },
-      wide: true,
       submit: async (answer) => {
         const current = latest.current;
         const index = indexOf(command);

@@ -47,8 +47,6 @@ export interface PromptOptions {
     choices: { value: string; color: string; title: string }[];
     value?: string;
   };
-  /** The wider dialog (`.dialog.wide`), for fields holding lines rather than words. */
-  wide?: boolean;
   /** A yes/no under the fields, e.g. the push after a commit. See ConfirmOptions. */
   checkboxLabel?: string;
   /** An async way to fill the answer's field, shown as a wand beside it. */
@@ -132,8 +130,6 @@ interface FrameProps {
   disabled?: boolean;
   /** `PromptOptions.submit` is underway: the header's bar, as everywhere else. */
   busy?: boolean;
-  /** See PromptOptions.wide. */
-  wide?: boolean;
   /** The confirm button takes the focus, for a dialog with no field. */
   focusSubmit?: boolean;
   onSubmit: () => void;
@@ -141,12 +137,11 @@ interface FrameProps {
   children: React.ReactNode;
 }
 
-function Frame({ title, confirmLabel, disabled, busy, wide, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
+function Frame({ title, confirmLabel, disabled, busy, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
   return (
     <DialogFrame
       header={{ title, onClose: onCancel }}
       busy={busy}
-      className={wide ? "wide" : undefined}
       // A form, so Enter answers from the field or the checkbox alike.
       onSubmit={() => {
         if (!disabled) {
@@ -316,7 +311,6 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       confirmLabel={dialog.confirmLabel}
       disabled={suggesting || running || value.trim().length === 0}
       busy={running}
-      wide={dialog.wide}
       onSubmit={() => void submit()}
       onCancel={() => dialog.answer(null)}
     >

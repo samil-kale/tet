@@ -182,7 +182,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     <DialogFrame
       header={{ tabs: TABS, active: tab, onSelect: setTab, onClose }}
       error={refused}
-      className="wide settings-dialog"
+      className="settings-dialog"
       buttons={
         <>
           <button type="button" className="button secondary" onClick={onClose}>

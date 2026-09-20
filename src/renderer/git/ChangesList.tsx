@@ -86,8 +86,6 @@ export async function askCommit(
         : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
     value: "",
     confirmLabel: "Commit",
-    // The saved commands' width: 420px shows too little of the suggest row.
-    wide: true,
     suggestion: {
       title: "Suggest a commit message",
       run: () => window.tet.repository.suggestCommitMessage(project.id, paths)

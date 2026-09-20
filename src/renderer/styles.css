@@ -1593,7 +1593,7 @@ textarea:focus,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 420px;
+  width: 500px;
   max-width: calc(100vw - 32px);
   padding: 16px;
   font-size: 13px;
@@ -1603,11 +1603,6 @@ textarea:focus,
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: 5px;
   box-shadow: 0 4px 12px var(--vscode-widget-shadow);
-}
-
-/* Prompts whose fields hold whole lines (commit, command), and the settings dialogs. */
-.dialog.wide {
-  width: 560px;
 }
 
 /* A card dialog's header (tab strip or title bar), drawn by `DialogFrame` as its first child and
@@ -1787,7 +1782,8 @@ textarea:focus,
   min-height: 405px;
 }
 
-.sbx-settings-dialog.wide {
+/* Only with the fields up (SbxSettingsDialog's "ready"); the checks before them are short. */
+.sbx-settings-dialog.ready {
   max-height: calc(100vh - 32px);
 }
 
@@ -1879,9 +1875,10 @@ textarea:focus,
 }
 
 
-/* Fixed: switching tabs must not resize the dialog under the pointer. Taller than the switches
-   need, for the Prompts tab's text box. */
+/* Wider than a question, for the rows of switches and the Prompts tab's text box. Fixed height:
+   switching tabs must not resize the dialog under the pointer. */
 .settings-dialog {
+  width: 560px;
   height: 420px;
 }
 
@@ -2002,6 +1999,11 @@ textarea:focus,
 }
 
 /* Startup requirements ------------------------------------------------------------------- */
+
+/* The settings dialog's width: prose about what is missing, not a question. */
+.requirements-dialog {
+  width: 560px;
+}
 
 .requirement-list {
   display: flex;

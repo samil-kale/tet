@@ -192,7 +192,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           ? { tabs, active: tab, onSelect: setTab, onClose: close }
           : { title: `SBX Settings - ${project.name}`, onClose: close }
       }
-      className={phase.kind === "ready" ? "wide sbx-settings-dialog" : "sbx-settings-dialog"}
+      className={phase.kind === "ready" ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
       error={refused}
       buttons={
