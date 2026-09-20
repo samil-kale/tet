@@ -17,7 +17,8 @@ import {
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
 import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
-import { MIN_PANE_WIDTH, Sash, usePaneShare } from "../ui/Sash";
+import { usePaneShare } from "../ui/layout-storage";
+import { MIN_PANE_WIDTH, Sash } from "../ui/Sash";
 import { isMac, isModifierHeld } from "../platform";
 
 function useEditorStore<T>(tabId: string, select: (snapshot: EditorSnapshot) => T): T {

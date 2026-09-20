@@ -6,7 +6,7 @@ import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu
 import { confirm, prompt } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
-import { useCollapsedSections } from "../ui/Sash";
+import { useCollapsedSections } from "../ui/layout-storage";
 import {
   ArrowDownIcon,
   ArrowUpIcon,

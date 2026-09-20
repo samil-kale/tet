@@ -14,14 +14,8 @@ import { ProjectList } from "./sidebar/ProjectList";
 import type { ProjectHead, ProjectMarks } from "./sidebar/ProjectList";
 import { activeAfterChange } from "./sidebar/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
-import {
-  MIN_CONTENT_WIDTH,
-  MIN_PANE_HEIGHT,
-  MIN_PANE_WIDTH,
-  Sash,
-  usePaneSize,
-  usePaneToggle
-} from "./ui/Sash";
+import { usePaneSize, usePaneToggle } from "./ui/layout-storage";
+import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
 import { TerminalsPane } from "./terminal/TerminalsPane";
 import type { SideView } from "./terminal/Pane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
