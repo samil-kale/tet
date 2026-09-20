@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.10.1 (2026-09-21)
+
+- **Dialogs say what they are doing.** Work started from a dialog's button is shown by the
+  progress bar in the dialog's own header instead of a spinner inside the button.
+- **Fixes.** Every dialog is the same width; saving the sandbox configuration no longer reports
+  itself, the closed dialog is the answer.
+
 ## 0.10.0 (2026-09-20)
 
 - Search for repository was added. It now finds matches inside files. Results are
