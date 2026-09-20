@@ -6,11 +6,13 @@ import type {
   ProviderId,
   RemoteRepository
 } from "../../shared/types";
+import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { CloseIcon, PlusIcon, SpinnerIcon } from "../ui/icons";
+import { CloseIcon, SpinnerIcon } from "../ui/icons";
 import { notify } from "../ui/Notices";
+import { RadioGroup } from "../ui/RadioGroup";
 import { useEscape } from "../ui/use-escape";
 
 /** Picked off an account's list, cloned from a url, added from disk, or created empty. Not in
@@ -26,6 +28,10 @@ const MODES: { id: Mode; label: string }[] = [
 
 const PROVIDER_LABEL: Record<ProviderId, string> = { github: "GitHub", gitlab: "GitLab" };
 const DEFAULT_HOST: Record<ProviderId, string> = { github: "github.com", gitlab: "gitlab.com" };
+const PROVIDER_OPTIONS = (Object.keys(PROVIDER_LABEL) as ProviderId[]).map((value) => ({
+  value,
+  label: PROVIDER_LABEL[value]
+}));
 
 /** The folder a url clones into, by git's rule: the last path segment without ".git". */
 function cloneFolder(url: string): string {
@@ -52,18 +58,7 @@ function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (p
   return (
     <div className="dialog-field">
       <span>Provider</span>
-      <div className="dialog-field-row">
-        {(Object.keys(PROVIDER_LABEL) as ProviderId[]).map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={provider === id ? "button" : "button secondary"}
-            onClick={() => onPick(id)}
-          >
-            {PROVIDER_LABEL[id]}
-          </button>
-        ))}
-      </div>
+      <RadioGroup value={provider} options={PROVIDER_OPTIONS} onChange={(value) => onPick(value as ProviderId)} />
     </div>
   );
 }
@@ -362,10 +357,9 @@ function RemoteTab({ onClone }: RemoteTabProps) {
             </button>
           </div>
         ))}
-        <button type="button" className="add-account" onClick={() => setAdding(true)}>
-          <PlusIcon />
-          <span>Add account...</span>
-        </button>
+        <div className="account-add">
+          <ActionLink onClick={() => setAdding(true)}>+ Add account...</ActionLink>
+        </div>
       </div>
       <div className="remote-main">
         {adding ? (

@@ -397,8 +397,7 @@ textarea:focus,
 .tree-header,
 .tree-item,
 .change-item,
-.repository-item,
-.add-account {
+.repository-item {
   height: var(--list-row-height);
   flex: none;
 }
@@ -1954,6 +1953,10 @@ textarea:focus,
   border-right: 1px solid var(--vscode-panel-border);
 }
 
+.account-add {
+  padding: 7px;
+}
+
 /* Two lines, so content-high. The 5px is what a 28px row leaves around its text. */
 .account-item {
   display: flex;
@@ -1997,20 +2000,6 @@ textarea:focus,
 .account-item.active .account-host {
   color: inherit;
   opacity: 0.8;
-}
-
-/* Shaped like a list row, not a dialog button, set off from the list. */
-.add-account {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 0 8px;
-  color: var(--vscode-descriptionForeground);
-}
-
-.add-account:hover {
-  background: var(--vscode-list-hoverBackground);
 }
 
 .remote-main {
