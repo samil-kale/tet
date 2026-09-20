@@ -1169,7 +1169,7 @@ export class ProjectSessionManager {
   }
 
   /**
-   * A tab's hook report — the only way turns reach tet ("Both ends of a turn" in CLAUDE.md).
+   * A tab's hook report — the only way turns reach tet ("Both ends of a turn" in AGENTS.md).
    * Addressed by tab (`TET_TAB_ID` in the hook's environment, passed into a sandbox by
    * prepareSbxRun), so no turn is reported for a session no tab has claimed.
    *

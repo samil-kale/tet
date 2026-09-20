@@ -696,7 +696,7 @@ textarea:focus,
   min-width: 0;
 }
 
-/* One project's split: 1–4 `.terminal-pane`s ("Split view" in CLAUDE.md). A row, since every
+/* One project's split: 1–4 `.terminal-pane`s ("Split view" in AGENTS.md). A row, since every
    preset's first divider is vertical; stacked panes nest in a column. Relative for
    `.snap-preview`; no stacking context. */
 .panes-grid {

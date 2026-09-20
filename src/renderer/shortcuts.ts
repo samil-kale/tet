@@ -3,7 +3,7 @@ import { isMac, isModifierHeld } from "./platform";
 /**
  * The window's shortcuts, all on combinations xterm's `Keyboard.ts` never turns into bytes
  * (verified against the installed `@xterm/xterm`). See "The keyboard belongs to the terminal" in
- * CLAUDE.md.
+ * AGENTS.md.
  *
  * Findings, for the next shortcut: `evaluateKeyboardEvent`'s ctrl branch requires `!shiftKey`, so
  * `Ctrl+<letter>` is a control byte (`Ctrl+G` is `\x07`) but `Ctrl+Shift+<letter>` sends nothing.

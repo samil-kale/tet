@@ -2,7 +2,7 @@ import type { TerminalDescriptor } from "../../shared/types";
 import { sameRecord } from "../identity";
 
 /**
- * A terminal split view: fixed presets, not a nestable tree (CLAUDE.md, "Split view"). At most
+ * A terminal split view: fixed presets, not a nestable tree (AGENTS.md, "Split view"). At most
  * four panes, so a letter identifies one; "a" is top left in every preset.
  */
 export type PaneId = "a" | "b" | "c" | "d";
@@ -49,7 +49,7 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
  */
 export type LayoutTab = Pick<TerminalDescriptor, "tabId" | "sessionId" | "command" | "updatedAt">;
 
-/** A project's split state — held in `App`, not in `TerminalsPane` (see CLAUDE.md). */
+/** A project's split state — held in `App`, not in `TerminalsPane` (see AGENTS.md). */
 export interface ProjectLayout {
   preset: SplitPreset;
   /** Where a new tab lands and what the tab shortcuts act on; keyboard focus follows it. */

@@ -38,7 +38,7 @@ export interface ProjectLayouts {
 
 /**
  * Each project's split state. Held in `App`: the shortcuts and marks/seen need what is on screen
- * across panes (CLAUDE.md, "Split view"). Reconciled against `tabs`, persisted once `starting`
+ * across panes (AGENTS.md, "Split view"). Reconciled against `tabs`, persisted once `starting`
  * first reports a project not starting.
  */
 export function useProjectLayouts(

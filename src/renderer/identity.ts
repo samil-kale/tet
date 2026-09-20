@@ -1,7 +1,7 @@
 /**
  * Same contents, same identity: `App`'s views are memoized on their props, so a list or record
  * rebuilt each render must return the previous instance when unchanged. See "The renderer" in
- * CLAUDE.md.
+ * AGENTS.md.
  */
 
 /** `previous` if it holds the same items, else `next`. */

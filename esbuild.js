@@ -29,7 +29,7 @@ const mainConfig = {
   external: ["electron", "node-pty", "esbuild"]
 };
 
-/** The git CLI wrapper, which runs in a utilityProcess of its own — see CLAUDE.md. */
+/** The git CLI wrapper, which runs in a utilityProcess of its own — see AGENTS.md. */
 /** @type {import('esbuild').BuildOptions} */
 const gitHostConfig = {
   ...common,

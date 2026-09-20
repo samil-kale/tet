@@ -116,7 +116,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /**
    * Split state lives here, not in `TerminalsPane`: shortcuts and marks/seen need what is on screen
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
-   * through `onActivateTab`. See "Split view" in CLAUDE.md.
+   * through `onActivateTab`. See "Split view" in AGENTS.md.
    */
   const { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout } = useProjectLayouts(
     stripTabs,

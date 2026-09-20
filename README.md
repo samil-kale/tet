@@ -160,7 +160,7 @@ npm start
 ## Contributing
 
 Issues and pull requests are welcome, except those from Hans. Hans can go to hell.
-[CLAUDE.md](CLAUDE.md) contains the notes used when working on the codebase. Before opening
+[AGENTS.md](AGENTS.md) contains the notes used when working on the codebase. Before opening
 a pull request, run `npm run typecheck`, `npm run lint` and `npm test`.
 App tests on Linux require a display such as `xvfb-run`.
 

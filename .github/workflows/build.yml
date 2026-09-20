@@ -103,7 +103,7 @@ jobs:
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # The notes are the version's section of CHANGELOG.md, written by hand before the tag
-        # (see "Releasing" in CLAUDE.md): everything between its "## <version>" heading and the
+        # (see "Releasing" in AGENTS.md): everything between its "## <version>" heading and the
         # next one. A version without a section gets empty notes, as before.
         run: |
           version="${GITHUB_REF_NAME#v}"
