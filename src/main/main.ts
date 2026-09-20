@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, Notification, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
@@ -14,7 +14,6 @@ import { readCommands } from "./git/commands";
 import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
-import type { ToastTarget } from "./control/control-server";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
@@ -25,6 +24,7 @@ import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv } from "./terminals/pty";
 import { installUncaughtHandler, logError } from "./uncaught";
+import { awaitedToastTab, showDesktopNotification, startNotifications } from "./notifications";
 import { isOpenableUrl } from "./shell-open";
 import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
@@ -269,52 +269,6 @@ function openWorkspace(): void {
 let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
-/** Like notices (Notices.tsx), an identical toast within this span is dropped, without extending
- *  it. The target tab is part of the identity: two untitled tabs of one agent read the same, and
- *  dropping the second would point its click at the first's tab. */
-const TOAST_REPEAT_MS = 8000;
-const recentToasts = new Map<string, number>();
-
-function repeatedToast(title: string, body: string, target?: ToastTarget): boolean {
-  const now = Date.now();
-  for (const [seen, at] of recentToasts) {
-    if (now - at >= TOAST_REPEAT_MS) {
-      recentToasts.delete(seen);
-    }
-  }
-  const key = `${title}\u0000${body}\u0000${target?.projectId ?? ""}\u0000${target?.tabId ?? ""}`;
-  if (recentToasts.has(key)) {
-    return true;
-  }
-  recentToasts.set(key, now);
-  return false;
-}
-
-/**
- * Clickable toasts, held so their click handlers are not garbage-collected — outside win32, where
- * clicks arrive through `Notification.handleActivation`. Not released on `close`: that can be the
- * move to the notification center, where a click still arrives (measured on win32). Capped.
- */
-const LIVE_TOASTS_MAX = 50;
-const liveToasts = new Set<Notification>();
-
-function holdToast(toast: Notification): void {
-  if (liveToasts.size >= LIVE_TOASTS_MAX) {
-    // Insertion order, so this is the one held longest.
-    const oldest = liveToasts.values().next().value;
-    if (oldest) {
-      liveToasts.delete(oldest);
-    }
-  }
-  liveToasts.add(toast);
-}
-
-/**
- * A clicked toast's tab not yet restored (the click started tet). Looked for on each `onTabs` of
- * its project; replaced by a later click.
- */
-let toastTargetAwaited: { projectId: string; tabId: string; sessionId?: string } | undefined;
-
 /**
  * Brings a toast's tab to the front, found by tab id or by session id — the tab id of a restored
  * tab (TerminalDescriptor). Returns whether it was found.
@@ -328,106 +282,6 @@ function showToastTarget(target: { projectId: string; tabId: string; sessionId?:
     send("terminal:show", { projectId: target.projectId, tabId: tab.tabId });
   }
   return tab !== undefined;
-}
-
-/** For a toast clicked before its tab was restored. */
-function awaitedToastTab(projectId: string): void {
-  if (toastTargetAwaited?.projectId === projectId && showToastTarget(toastTargetAwaited)) {
-    toastTargetAwaited = undefined;
-  }
-}
-
-/**
- * On win32 every toast click arrives here, whether tet runs or the click started it, carrying the
- * `launch` string from `windowsToastXml` — Electron's own toast has none, so no tab would be known.
- */
-if (process.platform === "win32") {
-  void app.whenReady().then(() => {
-    // Electron registers the COM activator only once its notification presenter exists, which the
-    // first Notification or this call creates — asked at once, or a click that started tet reaches
-    // no one. Installed only: the presenter also writes the Start menu entry ("Electron" in dev).
-    if (installed) {
-      Notification.isSupported();
-    }
-    Notification.handleActivation((details) => {
-      revealWindow();
-      const launch = new URLSearchParams(details.arguments);
-      const projectId = launch.get("project");
-      const tabId = launch.get("tab");
-      if (!projectId || !tabId) {
-        return;
-      }
-      const target = { projectId, tabId, sessionId: launch.get("session") || undefined };
-      toastTargetAwaited = showToastTarget(target) ? undefined : target;
-    });
-  });
-}
-
-function escapeXml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-/**
- * Electron's toast plus a `launch` string Windows hands back on a click. `type` and `tag` are
- * Electron's keys, so it still finds the Notification while tet runs; the session id outlives a
- * quit (showToastTarget).
- */
-function windowsToastXml(id: string, title: string, body: string, target?: ToastTarget): string {
-  const launch = new URLSearchParams({ type: "click", tag: id });
-  if (target) {
-    launch.set("project", target.projectId);
-    launch.set("tab", target.tabId);
-    const sessionId = sessions
-      .get(target.projectId)
-      ?.snapshot()
-      .find((tab) => tab.tabId === target.tabId)?.sessionId;
-    if (sessionId) {
-      launch.set("session", sessionId);
-    }
-  }
-  return (
-    `<toast launch="${escapeXml(launch.toString())}"><visual><binding template="ToastGeneric">` +
-    `<text>${escapeXml(title)}</text><text>${escapeXml(body)}</text>` +
-    `</binding></visual></toast>`
-  );
-}
-
-/**
- * The desktop toast behind the `hook` and `notify` verbs — this process holds the desktop session
- * (a sandboxed hook has none). No `icon`: Windows takes tet's (APP_USER_MODEL_ID).
- *
- * A click brings the window and the toast's tab to the front — on win32 via
- * `Notification.handleActivation` (also after tet quit), elsewhere via the toast's `click`.
- */
-function showDesktopNotification(title: string, body: string, target?: ToastTarget): void {
-  if (repeatedToast(title, body, target)) {
-    return;
-  }
-  attractAttention();
-  if (!Notification.isSupported()) {
-    return;
-  }
-  const id = crypto.randomUUID();
-  const toast = new Notification(
-    process.platform === "win32" ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body }
-  );
-  if (process.platform !== "win32") {
-    holdToast(toast);
-    toast.on("click", () => {
-      liveToasts.delete(toast);
-      revealWindow();
-      if (target) {
-        showToastTarget(target);
-      }
-    });
-  }
-  // The only trace of notifications being off in Windows' settings: "Settings prevent the
-  // notification from being delivered" (measured).
-  toast.on("failed", (_event, error) => {
-    liveToasts.delete(toast);
-    logError(`toast not delivered: ${error}`);
-  });
-  toast.show();
 }
 
 /**
@@ -452,6 +306,18 @@ function revealWindow(): void {
   }
   window.focus();
 }
+
+startNotifications({
+  installed,
+  revealWindow,
+  attractAttention,
+  showTab: showToastTarget,
+  sessionIdOf: (target) =>
+    sessions
+      .get(target.projectId)
+      ?.snapshot()
+      .find((tab) => tab.tabId === target.tabId)?.sessionId
+});
 
 /**
  * Started with the workspace, so an answering socket means every project is open — no half-open
