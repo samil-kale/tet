@@ -19,12 +19,20 @@ const DEFAULTS: AppSettings = {
   prompts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptSettings
 };
 
+/** Reading and editing the settings, all either transport does with them: `ControlDeps` takes
+ *  this rather than the store, so `settings-get` and `settings-set` answer for the same contract
+ *  the window's `settings:get`/`settings:patch` do. */
+export interface SettingsAccess {
+  get(): AppSettings;
+  patch(edits: SettingsEdits): void;
+}
+
 /**
  * The settings dialog's values in tet's data folder (data-root.ts). Written whole, read back
  * defensively: a key of the wrong type falls back to its default rather than reaching an agent as
  * `undefined`.
  */
-export class SettingsStore {
+export class SettingsStore implements SettingsAccess {
   private readonly file: string;
   private settings: AppSettings = DEFAULTS;
 

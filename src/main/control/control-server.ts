@@ -11,8 +11,6 @@ import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, isSbxAgent } from "../../
 import type {
   AddRepositoryResult,
   AgentId,
-  AppSettings,
-  SettingsEdits,
   EditorListing,
   EditorReport,
   ExplorerListing,
@@ -26,6 +24,8 @@ import type {
 } from "../../shared/types";
 import { TET_SYSTEM_PROMPT } from "../agents/system-prompt";
 import { relativeInside, repositoryRelative } from "../path-inside";
+import type { ProjectLookup } from "../projects";
+import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
 
 /**
@@ -37,14 +37,8 @@ export interface ControlDeps {
   version: string;
   /** Lets a test tell that restart-app replaced the process. */
   pid: number;
-  store: {
-    list(): Project[];
-    get(projectId: string): Project | undefined;
-  };
-  settings: {
-    get(): AppSettings;
-    patch(edits: SettingsEdits): void;
-  };
+  store: ProjectLookup;
+  settings: SettingsAccess;
   sessions: {
     get(projectId: string): ControlTerminals | undefined;
   };

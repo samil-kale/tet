@@ -275,8 +275,15 @@ export async function renameWorktree(deps: ProjectDeps, worktree: WorktreeRef, b
   });
 }
 
+/** Finding a project, all either transport needs to answer *about* one; the store's own edits
+ *  are the window's (`ipc/projects.ts`). Taken by `ControlDeps`. */
+export interface ProjectLookup {
+  list(): Project[];
+  get(projectId: string): Project | undefined;
+}
+
 /** The open repositories, persisted so the window comes back with the same project tabs. */
-export class ProjectStore {
+export class ProjectStore implements ProjectLookup {
   private readonly file: string;
   private projects: Project[] = [];
 
