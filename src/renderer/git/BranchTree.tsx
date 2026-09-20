@@ -4,6 +4,7 @@ import { refName, upstreamName, worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
+import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
 import { useCollapsedSections } from "../ui/Sash";
 import {
@@ -12,7 +13,6 @@ import {
   BranchIcon,
   ChevronIcon,
   RemoteIcon,
-  SearchIcon,
   StashIcon,
   TagIcon,
   TREE_CHEVRON,
@@ -428,15 +428,7 @@ export const BranchTree = memo(function BranchTree({
 
   return (
     <div className={`branch-tree${branch.busy ? " busy" : ""}`}>
-      <div className="filter-field">
-        <SearchIcon className="filter-icon" />
-        <input
-          type="text"
-          placeholder="Search branches..."
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
-      </div>
+      <FilterField placeholder="Search branches..." value={filter} onChange={setFilter} />
 
       <div className="tree">
         <TreeSection

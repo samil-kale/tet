@@ -10,6 +10,7 @@ import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
+import { Field, TextField } from "../ui/Field";
 import { CloseIcon, SpinnerIcon } from "../ui/icons";
 import { notify } from "../ui/Notices";
 import { RadioGroup } from "../ui/RadioGroup";
@@ -89,15 +90,14 @@ function PathField({ label, value, pickTitle, onChange, inputRef }: PathFieldPro
     }
   };
   return (
-    <label className="dialog-field">
-      <span>{label}</span>
+    <Field label={label}>
       <div className="dialog-field-row">
         <input type="text" value={value} onChange={(event) => onChange(event.target.value)} ref={inputRef} />
         <button type="button" className="button secondary" onClick={() => void browse()}>
           Browse...
         </button>
       </div>
-    </label>
+    </Field>
   );
 }
 
@@ -141,27 +141,22 @@ function AccountForm({ onAdded }: AccountFormProps) {
   return (
     <div className="account-form">
       <ProviderPicker provider={provider} onPick={pick} />
-      <label className="dialog-field">
-        <span>Host</span>
-        <input type="text" value={host} onChange={(event) => setHost(event.target.value)} />
-      </label>
-      <label className="dialog-field">
-        <span>Personal access token</span>
-        <input
-          type="password"
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
-          // Enter here means this form, not the dialog's.
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              if (canSubmit) {
-                void submit();
-              }
+      <TextField label="Host" value={host} onChange={setHost} />
+      <TextField
+        label="Personal access token"
+        type="password"
+        value={token}
+        onChange={setToken}
+        // Enter here means this form, not the dialog's.
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            if (canSubmit) {
+              void submit();
             }
-          }}
-        />
-      </label>
+          }
+        }}
+      />
       {/* Its own row: the dialog's Cancel closes the whole dialog. */}
       <div className="dialog-buttons">
         <button
@@ -488,10 +483,7 @@ function CloneAuth({
       ) : (
         <>
           <ProviderPicker provider={provider} onPick={onProvider} />
-          <label className="dialog-field">
-            <span>Personal access token</span>
-            <input type="password" value={token} onChange={(event) => onToken(event.target.value)} />
-          </label>
+          <TextField label="Personal access token" type="password" value={token} onChange={onToken} />
         </>
       )}
     </>
@@ -636,27 +628,21 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
       {mode === "remote" && <RemoteTab onClone={cloneFromRemote} />}
       {mode === "clone" && (
         <>
-          <label className="dialog-field">
-            <span>Repository URL</span>
-            <input
-              type="text"
-              value={url}
-              placeholder="https://github.com/owner/repository.git"
-              onChange={(event) => {
-                setUrl(event.target.value);
-                // Hand-edited: the remote tab's account must not carry over to a new host.
-                setAccountId(null);
-                setAuthAccounts(null);
-                setToken("");
-              }}
-              ref={firstField}
-            />
-          </label>
+          <TextField
+            label="Repository URL"
+            value={url}
+            placeholder="https://github.com/owner/repository.git"
+            onChange={(next) => {
+              setUrl(next);
+              // Hand-edited: the remote tab's account must not carry over to a new host.
+              setAccountId(null);
+              setAuthAccounts(null);
+              setToken("");
+            }}
+            ref={firstField}
+          />
           <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={setDirectory} />
-          <label className="dialog-field">
-            <span>Folder name</span>
-            <input type="text" value={folderName} onChange={(event) => setName(event.target.value)} />
-          </label>
+          <TextField label="Folder name" value={folderName} onChange={setName} />
           {authAccounts !== null && (
             <CloneAuth
               accounts={authAccounts}
@@ -690,10 +676,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
             onChange={setDirectory}
             inputRef={firstField}
           />
-          <label className="dialog-field">
-            <span>Folder name</span>
-            <input type="text" value={folderName} onChange={(event) => setName(event.target.value)} />
-          </label>
+          <TextField label="Folder name" value={folderName} onChange={setName} />
         </>
       )}
     </DialogFrame>

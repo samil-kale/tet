@@ -13,6 +13,7 @@ import {
   type FieldsState
 } from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
+import { Checkbox } from "../ui/Field";
 import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
 
@@ -238,22 +239,21 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         </>
       )}
       {phase.kind === "ready" && tab === "general" && (
-        <label className="dialog-checkbox">
-          <input
-            type="checkbox"
-            checked={enabled}
-            disabled={locked}
-            onChange={(event) => setEnabled(event.target.checked)}
-          />
-          <span>
-            <strong>Enable SBX sandboxing for this project</strong>
-            <p className="dialog-detail">
-              Claude, Codex, OpenCode and Pi tabs in {project.name} run in their own isolated Docker
-              sandbox instead of directly on this machine.
-              {locked && " No agent is installed on this machine, so this is the only way to run one here."}
-            </p>
-          </span>
-        </label>
+        <Checkbox
+          checked={enabled}
+          disabled={locked}
+          onChange={setEnabled}
+          label={
+            <>
+              <strong>Enable SBX sandboxing for this project</strong>
+              <p className="dialog-detail">
+                Claude, Codex, OpenCode and Pi tabs in {project.name} run in their own isolated Docker
+                sandbox instead of directly on this machine.
+                {locked && " No agent is installed on this machine, so this is the only way to run one here."}
+              </p>
+            </>
+          }
+        />
       )}
       {tab === "general" && organization && (
         <div className="sbx-governance">

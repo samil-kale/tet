@@ -3,6 +3,7 @@ import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig 
 import { CircleAlertIcon, CloseIcon } from "../ui/icons";
 import { ActionLink } from "../ui/ActionLink";
 import { Dropdown } from "../ui/Dropdown";
+import { Checkbox } from "../ui/Field";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
   { value: "ro", label: "Read" },
@@ -331,14 +332,11 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
             const access = state.knowledge[kind];
             return (
               <div key={kind} className="sbx-knowledge-row">
-                <label className="dialog-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={access !== false}
-                    onChange={(event) => setKnowledge(kind, event.target.checked ? "ro" : false)}
-                  />
-                  <span>{label}</span>
-                </label>
+                <Checkbox
+                  label={label}
+                  checked={access !== false}
+                  onChange={(next) => setKnowledge(kind, next ? "ro" : false)}
+                />
                 {access !== false && (
                   <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value)} />
                 )}

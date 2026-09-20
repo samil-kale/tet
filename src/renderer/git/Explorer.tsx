@@ -15,7 +15,8 @@ import { type FileAct } from "./ChangesList";
 import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
-import { CaseSensitiveIcon, ChevronIcon, type IconProps, RegexIcon, SearchIcon, TREE_CHEVRON, WholeWordIcon } from "../ui/icons";
+import { FilterField } from "../ui/FilterField";
+import { CaseSensitiveIcon, ChevronIcon, type IconProps, RegexIcon, TREE_CHEVRON, WholeWordIcon } from "../ui/icons";
 import { isMarkdown } from "../diff/diff-highlight";
 
 /** As VS Code resolves an icon theme: the name, then each extension from the longest (`a.spec.ts`
@@ -409,14 +410,7 @@ export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }:
   return (
     <div className="explorer-tree">
       <div className="filter-row">
-        <div className="filter-field">
-          <SearchIcon className="filter-icon" />
-          <input
-            type="text"
-            placeholder="Search"
-            value={search.text}
-            onChange={(event) => setSearch({ ...search, text: event.target.value })}
-          />
+        <FilterField placeholder="Search" value={search.text} onChange={(text) => setSearch({ ...search, text })}>
           <span className="filter-toggles">
             {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
               <button
@@ -429,7 +423,7 @@ export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }:
               </button>
             ))}
           </span>
-        </div>
+        </FilterField>
       </div>
       <div className="tree">
         {files.map((file) => {
@@ -757,15 +751,7 @@ export function Explorer({
 
   return (
     <div className="explorer-tree">
-      <div className="filter-field">
-        <SearchIcon className="filter-icon" />
-        <input
-          type="text"
-          placeholder="Filter files..."
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-        />
-      </div>
+      <FilterField placeholder="Filter files..." value={filter} onChange={setFilter} />
       <div
         className="tree"
         onContextMenu={(event) => {

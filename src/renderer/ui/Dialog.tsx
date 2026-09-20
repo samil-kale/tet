@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DialogFrame } from "./DialogFrame";
+import { Checkbox, Field, TextField } from "./Field";
 import { SparkleIcon, SpinnerIcon } from "./icons";
 import { notify } from "./Notices";
 
@@ -169,24 +170,6 @@ function Frame({ title, confirmLabel, disabled, wide, focusSubmit, onSubmit, onC
   );
 }
 
-/** The optional checkbox a confirm or a prompt carries, drawn the same in both. */
-function DialogCheckbox({
-  label,
-  checked,
-  onChange
-}: {
-  label: string | undefined;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return !label ? null : (
-    <label className="dialog-checkbox">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
-      <span>{label}</span>
-    </label>
-  );
-}
-
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
   const [checked, setChecked] = useState(false);
   return (
@@ -201,7 +184,7 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
     >
       <p className="dialog-message">{dialog.message}</p>
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
-      <DialogCheckbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />
+      {dialog.checkboxLabel && <Checkbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />}
     </Frame>
   );
 }
@@ -243,17 +226,13 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
 
   // Optional: only the answer's own field can hold the dialog back.
   const fields = (dialog.extras ?? []).map((entry, index) => (
-    <label key={entry.label} className="dialog-field">
-      <span>{entry.label}</span>
-      <input
-        type="text"
-        value={extras[index] ?? ""}
-        placeholder={entry.placeholder}
-        onChange={(event) =>
-          setExtras((current) => current.map((held, position) => (position === index ? event.target.value : held)))
-        }
-      />
-    </label>
+    <TextField
+      key={entry.label}
+      label={entry.label}
+      value={extras[index] ?? ""}
+      placeholder={entry.placeholder}
+      onChange={(next) => setExtras((current) => current.map((held, position) => (position === index ? next : held)))}
+    />
   ));
   const input = (
     <input
@@ -268,8 +247,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   fields.splice(
     dialog.valueIndex ?? 0,
     0,
-    <label key="value" className="dialog-field">
-      <span>{dialog.label}</span>
+    <Field key="value" label={dialog.label}>
       {dialog.suggestion ? (
         // Paired like a path field and its Browse button; the spinner replaces the wand while
         // suggesting.
@@ -289,7 +267,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       ) : (
         input
       )}
-    </label>
+    </Field>
   );
 
   return (
@@ -321,7 +299,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
           </div>
         </div>
       )}
-      <DialogCheckbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />
+      {dialog.checkboxLabel && <Checkbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />}
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
     </Frame>
   );

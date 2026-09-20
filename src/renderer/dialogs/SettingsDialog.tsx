@@ -15,6 +15,7 @@ import type {
 } from "../../shared/types";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
+import { Checkbox, Field } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { notify } from "../ui/Notices";
 import { RadioGroup } from "../ui/RadioGroup";
@@ -197,8 +198,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             onChange={applyColorScheme}
             options={COLOR_SCHEMES.map((option) => ({ value: option, label: COLOR_SCHEME_LABELS[option] }))}
           />
-          <label className="dialog-field">
-            <span>{chosenKind === "dark" ? "Dark theme" : "Light theme"}</span>
+          <Field label={chosenKind === "dark" ? "Dark theme" : "Light theme"}>
             <Dropdown
               value={resolveTheme(settings?.[themeKey(chosenKind)], chosenKind).id}
               onChange={(id) => applyTheme(chosenKind, id)}
@@ -207,7 +207,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 label: theme.label
               }))}
             />
-          </label>
+          </Field>
           {/* Live within one kind only: an agent gets light or dark when its tab starts
               (main.ts's applyTheme). */}
           {settings && chosenKind !== shownKind && (
@@ -220,14 +220,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <p className="dialog-detail">Desktop notifications for agent activity</p>
           {settings &&
             SWITCHES.map(({ key, label }) => (
-              <label key={key} className="dialog-checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.notifications[key]}
-                  onChange={(event) => flip(key, event.target.checked)}
-                />
-                <span>{label}</span>
-              </label>
+              <Checkbox
+                key={key}
+                label={label}
+                checked={settings.notifications[key]}
+                onChange={(next) => flip(key, next)}
+              />
             ))}
           {/* No restart caveat: hooks report every turn, and the toast reads the settings as they
               stand on arrival (session-manager's `toast`). */}
@@ -250,30 +248,23 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           </p>
           {activeProject && explorerSettings && (
             <>
-              <label className="dialog-checkbox">
-                <input
-                  type="checkbox"
-                  checked={explorerSettings.excludeGitIgnore}
-                  onChange={(event) => editExplorerSetting("excludeGitIgnore", event.target.checked)}
-                />
-                <span>Hide what git ignores too</span>
-              </label>
-              <label className="dialog-checkbox">
-                <input
-                  type="checkbox"
-                  checked={explorerSettings.compactFolders}
-                  onChange={(event) => editExplorerSetting("compactFolders", event.target.checked)}
-                />
-                <span>Compact folders that only contain another folder into one row</span>
-              </label>
-              <label className="dialog-field">
-                <span>Sort order</span>
+              <Checkbox
+                label="Hide what git ignores too"
+                checked={explorerSettings.excludeGitIgnore}
+                onChange={(next) => editExplorerSetting("excludeGitIgnore", next)}
+              />
+              <Checkbox
+                label="Compact folders that only contain another folder into one row"
+                checked={explorerSettings.compactFolders}
+                onChange={(next) => editExplorerSetting("compactFolders", next)}
+              />
+              <Field label="Sort order">
                 <Dropdown
                   value={explorerSettings.sortOrder}
                   onChange={(order) => editExplorerSetting("sortOrder", order)}
                   options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
                 />
-              </label>
+              </Field>
             </>
           )}
           <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
