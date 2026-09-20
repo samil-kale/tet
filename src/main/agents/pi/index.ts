@@ -30,7 +30,7 @@ export const piAgent: AgentDefinition = {
   executable: () => "pi",
   // On win32 a `pi.cmd` npm shim, routed through cmd.exe by resolveCommand.
   versionArgs: ["--version"],
-  verifiedVersion: "0.85.1",
+  verifiedVersion: "0.86.1",
   // Print mode: the prompt on stdin, the answer on stdout (~2.6 s measured). `--no-session` leaves
   // no transcript, so no cleanupAsk.
   askArgs: ["-p", "--no-session"],
@@ -95,10 +95,11 @@ export const piAgent: AgentDefinition = {
   sandboxKit: "docker.io/sbx/pi-kit:latest",
   // Measured startup: ~130 B handshake by 120 ms, a 1037 B chunk at ~680 ms, ~3 KB by 0.9 s. The
   // project-trust dialog (`defaultProjectTrust: "ask"`) holds output at 1458 B until answered, so
-  // 1000 clears the handshake either way without spinning until then.
+  // 1000 clears the handshake either way without spinning until then. Re-measured at 0.86.1 beside
+  // 0.85.1: the same shape, the handshake and everything before the first redraw well under 1000.
   createIsSessionReady: () => createByteThresholdCheck(1000),
   // One Ctrl+C clears the editor; two within 500 ms (pi's handleCtrlC) exit 0 in ~1.1 s, 700 ms
-  // apart do nothing. TET's 250 ms gap and 2 s grace fit.
+  // apart do nothing. TET's 250 ms gap and 2 s grace fit (0.86.1: exit 0 within 500 ms of the first).
   quitPresses: 2
   // Omitted on purpose, each measured: takesRightMouse (no mouse reporting), swapsBlueMagenta
   // (truecolor `38;2` only, no palette indices, no OSC 10/11), resolveUrlPrefix (a long url comes
