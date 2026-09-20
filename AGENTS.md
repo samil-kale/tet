@@ -36,16 +36,16 @@ project's terminals.
   A new agent is a new folder, one registry entry, and one case in `AgentIcon`
   (`src/renderer/ui/agent-icons.tsx`, the only agent-specific code outside `agents/`).
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer view (shaped like a `.code-workspace`) and `sbx`. Read defensively
-  (`src/main/tet-json.ts`): missing or malformed means nothing configured.
+  the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing or malformed
+  means nothing configured.
 
 ## Never assume the agents behave alike
 
-Claude Code, Codex, opencode and pi are four products in the same kind of tab. Every question put
-to all of them — readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize
-redraw — got different answers, found only by **measuring the real binary through this same
-pty**, never from docs, source or another agent. So anything about how a CLI is driven is an
-`AgentDefinition` field with a measured value per agent, and the measurement is commented there.
+Claude Code, Codex, opencode and pi are four products in the same kind of tab, alike in nothing:
+readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw. So
+anything about how a CLI is driven is an `AgentDefinition` field with a value per agent,
+**measured through this same pty** — never taken from docs, source or another agent — and
+commented there with the measurement.
 
 ## Never touch the user's agent configuration
 
@@ -83,13 +83,11 @@ others.
 - Remote commands run with `NETWORK_ENV`. **TET writes nothing into the credential helper.**
 - tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
 - A linked worktree is a project of its own, indented under its main worktree's row
-  (`Project.mainPath`, read off the disk, never stored), and listed in the branch tree's WORKTREES
-  (`RepositoryState.worktrees`, read off the disk too). A worktree and its branch are one: made
-  together at the default branch, named, renamed and deleted together, its branch listed under
-  WORKTREES only and never switched. git keeps no branch's origin, so tet records it as
-  `branch.<name>.base` in the repository's config (`git.ts`'s `worktreeAdd`), shown in the project
-  row and merged back into. tet creates them in `~/.tet/worktrees` with relative
-  links, and a sandbox mounts the main `.git` (`projects.ts`, `sbx.ts`).
+  (`Project.mainPath`) and listed in the branch tree's WORKTREES (`RepositoryState.worktrees`) —
+  both read off the disk, never stored. A worktree and its branch are one: made together at the
+  default branch, named, renamed and deleted together, and never switched. Its base is tet's own
+  `branch.<name>.base` (`git.ts`'s `worktreeAdd`); tet creates worktrees in `~/.tet/worktrees`
+  (`projects.ts`, `sbx.ts`).
 
 **Scope.** Everything the git pane does fits in a context menu, an icon button or a question. Of
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, per-file
@@ -107,49 +105,47 @@ or a per-line decision is for an agent.
 
 - **Layout**: projects in the left sidebar; the tab strip is one project's terminals plus its
   editor tabs — VS Code's preview rule, one preview tab per project (`editor-tab.ts`). Git and
-  files are not tabs but one side pane toggled from the strip. A split is up
-  to four panes in fixed presets, reached only by dragging a tab onto a snap zone — every rule in
-  `src/renderer/terminal/pane-layout.ts`.
+  files are not tabs but one side pane toggled from the strip.
+- **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
+  zone. Every rule is in `src/renderer/terminal/pane-layout.ts`, the state in `App`.
 - **Everything the user is told is a notice**: `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`). No view keeps a message of its own. A status (marks, progress bar) is not a
   notice. The one exception is what refused an answer that is still on screen — see below.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native dialogs. Ask only before something
   irreversible. Card dialogs are drawn in `DialogFrame`.
-- **A dialog on screen carries its own failure; prefer this to a notice.** What refused an
-  answer belongs where it was typed: under that field (`Field`'s `error`) where one is to
-  blame, else above the button row (`DialogFrame`'s `error`) where the fields are several or
-  across tabs. Words alone, no mark, and what was typed is held so it can be corrected — git's
-  own words for a name it will not take, never tet's guess at them. A notice is for a failure
-  with no dialog up to carry it, and is what a refusal falls back to when the dialog was closed
-  first. A `confirm` has no field, so it notifies.
+- **A dialog on screen carries its own failure; prefer this to a notice.** It belongs where the
+  answer was typed: under that field (`Field`'s `error`), else above the button row
+  (`DialogFrame`'s `error`) where the fields are several or across tabs. Words alone, no mark, and
+  what was typed is held so it can be corrected — git's own words for a name it will not take,
+  never tet's guess at them. A notice is for a failure with no dialog up to carry it; a `confirm`
+  has no field, so it notifies.
 - To get this, **a question runs its own answer** (`PromptOptions.submit`): the dialog stays up
-  while the action runs. So what runs it hands the failure back instead of notifying it
-  (`git/run-action.ts`'s `GitRun.ask` and `FileAsk`, and the main-process verbs answering a
-  `GitActionResult`); `notifying` turns one into the other. A new verb a dialog calls answers its
-  failure rather than sending `app:notice`.
+  while the action runs, so what runs it hands the failure back instead of notifying it
+  (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than sending
+  `app:notice`.
 - **Nothing is written until Save**; Cancel and Escape drop edits. A setting reaches an agent at
   its setup (`AgentPaths`), so it applies to projects opened afterwards.
-- **One `.progress-bar` per pane** (`ProgressBar.tsx`): a new slow reason feeds the existing bar.
-  A spinner in place of an icon is not a second bar.
+- **One progress indicator per pane** (`ProgressBar.tsx`): a new slow reason feeds the existing
+  bar. In a dialog that bar is `DialogFrame`'s `busy`, so a busy state held by a nested view is
+  lifted to the view owning the frame.
 - **The keyboard belongs to the terminal**: tet's key handler runs before xterm and takes nothing
   an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
   window shortcut closes a tab.
-- **Terminal output never goes through React state**; xterms and editors live outside React
-  (`terminal-views.ts`, `editor-views.ts`). The views under `App` are memoized: hand them stable
-  props (`useCallback`, `useMemo`, shared empty constants).
+- **The renderer**: terminal output never goes through React state — xterms and editors live
+  outside React (`terminal-views.ts`, `editor-views.ts`). The views under `App` are memoized: hand
+  them stable props (`useCallback`, `useMemo`, `identity.ts`).
 - **Anything that changes the box xterm measures refits the pty**: hide with `visibility`, frame
   with an overlay, resize only once dragging settles.
 
 ### Look
 
 - Colors only from `--vscode-*` variables under VS Code's own names (`src/renderer/themes/`),
-  except shiki's syntax colors. A theme is one stylesheet naming the complete variable list plus an
-  entry in `src/shared/themes.ts`; values come from VS Code's theme files, never eyeballed.
-- Shared sizes: 35px bars along an edge, 24px action buttons, 1px `--vscode-panel-border`,
-  `--icon-size`. Check the neighbouring view before inventing one.
-- Icons come from Lucide first; each declares the `extent` it was measured at (`icons.tsx`). The
-  Explorer's file icons are generated by `scripts/file-icons.js` — re-run, never edit.
+  except shiki's syntax colors. A theme is one stylesheet plus an entry in `src/shared/themes.ts`.
+- Shared sizes are stated once, in `styles.css`'s `.app`; check the neighbouring view before
+  inventing one.
+- Icons come from Lucide first (`icons.tsx`). The Explorer's file icons are generated by
+  `scripts/file-icons.js` — re-run, never edit.
 - Icons and marks are monochrome. The one accent is `--vscode-focusBorder`, 1px for anything that
   marks or points. Exceptions: git status letters, the error mark, the Explorer's file icons.
 - Row hover is `--vscode-list-hoverBackground`, action button hover
@@ -168,8 +164,6 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
   command, opencode's plugin and pi's extension by posting the same request.
 - The main process sets the state (`ProjectSessionManager.hookEvent`); the renderer decides what is
   shown and clears what was seen (`App.markedTabs`).
-- Reports are ordered by when they were made (`ControlRequest.at`), never by arrival.
-- A hook never fails its agent's turn: `tet-ctl hook` always exits 0.
 - A session is asked to quit (`quitPresses`) before it is killed — a hard kill skips a CLI's exit
   handlers.
 
@@ -182,11 +176,11 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 
 - `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
-- Agents learn of `tet-ctl` once per session: `TET_SYSTEM_PROMPT` (`src/main/agents/system-prompt.ts`),
-  appended to each agent's system prompt, never replacing the user's instructions (Codex: its
-  `SessionStart` hook's answer) — one plain line, since it crosses cmd.exe and `sbx run`.
+- Agents learn of `tet-ctl` once per session: `TET_SYSTEM_PROMPT`
+  (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt, never replacing the
+  user's instructions.
 - A caller's project and tab ids count only with the token made for them
-  (`src/main/control/control-token.ts`): a terminal gets its tab's token, never the run's.
+  (`control-token.ts`): a terminal gets its tab's token, never the run's.
 - `tabs-send` and `tabs-output` answer only for a tab of the caller's own project
   (`ownProjectOnly`). `tabs-send` never from inside a sandbox; `tabs-output` does, host tabs of
   that project included — by design.
@@ -237,16 +231,15 @@ When asked for a release, run it:
    handful of bullets, read off `git log <last tag>..HEAD`: a bold title of a few words, then one
    or two short sentences. **Written against the last release, not against the commits**: a
    feature born and refined since the tag is one bullet saying it is there, never the steps it
-   took — what the last section says is what the user has. Few bullets: only what a user would
-   notice, the smaller repairs gathered in a closing **Fixes** bullet. Out entirely: refactors,
-   docs, fixes to unreleased work, agent version bumps, keyboard and menu details. Commit it on
-   its own (`changelog for <version>`).
+   took. Few bullets: only what a user would notice, the smaller repairs gathered in a closing
+   **Fixes** bullet. Out entirely: refactors, docs, fixes to unreleased work, agent version bumps,
+   keyboard and menu details. Commit it on its own (`changelog for <version>`), before
+   `npm version`, which refuses a dirty tree.
    A section is its GitHub Release's notes, so a release edited by hand there is copied back into
    `CHANGELOG.md`: the published notes are the text, tet's file follows.
 2. `npm version patch` (or `minor` / `major`), then `git push && git push --tags`.
 
-`npm version` refuses a dirty tree, hence the changelog commit first. The tag push runs
-`.github/workflows/build.yml`, which publishes the GitHub Release only when every platform passed.
-tet ships as archives installed by `scripts/install.sh`/`install.ps1` — no installer, no npm
-package (reasons in `electron-builder.yml`). An update is put in place only after tet quits, never
-mid-session.
+The tag push runs `.github/workflows/build.yml`, which publishes the GitHub Release only when every
+platform passed. tet ships as archives installed by `scripts/install.sh`/`install.ps1` — no
+installer, no npm package (reasons in `electron-builder.yml`). An update is put in place only after
+tet quits, never mid-session.

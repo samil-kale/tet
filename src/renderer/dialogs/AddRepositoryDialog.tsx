@@ -102,14 +102,16 @@ function PathField({ label, value, pickTitle, onChange, inputRef }: PathFieldPro
 
 interface AccountFormProps {
   onAdded: (account: ProviderAccount) => void;
+  /** Held by the dialog: the header's progress bar is the only one. */
+  busy: boolean;
+  onBusy: (busy: boolean) => void;
 }
 
 /** Provider, host and token; the token is validated on entry and never shown again. */
-function AccountForm({ onAdded }: AccountFormProps) {
+function AccountForm({ onAdded, busy, onBusy }: AccountFormProps) {
   const [provider, setProvider] = useState<ProviderId>("github");
   const [host, setHost] = useState(DEFAULT_HOST.github);
   const [token, setToken] = useState("");
-  const [busy, setBusy] = useState(false);
   /** What the host refused, above this form's own buttons: the token is checked against the host,
    *  so neither field alone can be blamed. Cleared by the next edit of either. */
   const [refused, setRefused] = useState<string | undefined>(undefined);
@@ -127,7 +129,7 @@ function AccountForm({ onAdded }: AccountFormProps) {
   const canSubmit = host.trim() !== "" && token.trim() !== "" && !busy;
 
   const submit = async (): Promise<void> => {
-    setBusy(true);
+    onBusy(true);
     setRefused(undefined);
     try {
       const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
@@ -137,7 +139,7 @@ function AccountForm({ onAdded }: AccountFormProps) {
         setRefused(result.error ?? "The account could not be added");
       }
     } finally {
-      setBusy(false);
+      onBusy(false);
     }
   };
 
@@ -179,8 +181,7 @@ function AccountForm({ onAdded }: AccountFormProps) {
           disabled={!canSubmit}
           onClick={() => void submit()}
         >
-          {busy && <SpinnerIcon className="spinning" />}
-          <span>Add account</span>
+          Add account
         </button>
       </div>
     </div>
@@ -226,9 +227,12 @@ function inNamespace(fullName: string, namespace: string): boolean {
 interface RemoteTabProps {
   /** Opens the clone tab with url, name and account filled in. */
   onClone: (repo: RemoteRepository, accountId: string) => void;
+  /** See AccountFormProps. */
+  busy: boolean;
+  onBusy: (busy: boolean) => void;
 }
 
-function RemoteTab({ onClone }: RemoteTabProps) {
+function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
   /** null while loading. */
   const [accounts, setAccounts] = useState<ProviderAccount[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -377,7 +381,7 @@ function RemoteTab({ onClone }: RemoteTabProps) {
       </div>
       <div className="remote-main">
         {adding ? (
-          <AccountForm onAdded={accountAdded} />
+          <AccountForm onAdded={accountAdded} busy={busy} onBusy={onBusy} />
         ) : selectedId === null ? (
           <div className="placeholder">No account yet — add one to browse its repositories.</div>
         ) : (
@@ -635,6 +639,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
       header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose }}
       error={refused}
       className="add-repository-dialog"
+      busy={busy}
       onSubmit={() => {
         if (ready && !busy) {
           void submit();
@@ -647,14 +652,13 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
           </button>
           {mode !== "remote" && (
             <button type="submit" className="button" disabled={!ready || busy}>
-              {busy && <SpinnerIcon className="spinning" />}
-              <span>{MODES.find((entry) => entry.id === mode)?.label}</span>
+              {MODES.find((entry) => entry.id === mode)?.label}
             </button>
           )}
         </>
       }
     >
-      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} />}
+      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} busy={busy} onBusy={setBusy} />}
       {mode === "clone" && (
         <>
           <TextField

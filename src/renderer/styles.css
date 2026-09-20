@@ -2000,15 +2000,23 @@ textarea:focus,
 
 /* Startup requirements ------------------------------------------------------------------- */
 
-/* The settings dialog's width: prose about what is missing, not a question. */
 .requirements-dialog {
-  width: 560px;
+  width: 500px;
+}
+
+/* Room under the last line, so it does not sit against the buttons. */
+.requirements-dialog .dialog-body {
+  padding-bottom: 20px;
 }
 
 .requirement-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Indented under the line naming what the programs below it are for, and set off from
+     whatever follows the list. */
+  padding-left: 12px;
+  margin-bottom: 8px;
 }
 
 .requirement-item {
@@ -2017,6 +2025,7 @@ textarea:focus,
   gap: 8px;
 }
 
+/* SbxSettingsDialog's blockers: what on the left, the rule to allow on the right. */
 .requirement-name {
   min-width: 80px;
 }

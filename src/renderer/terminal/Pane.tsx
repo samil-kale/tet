@@ -468,7 +468,7 @@ export const Pane = memo(function Pane({
               title={tabTooltip(tab)}
             >
               {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
-                  > finished ("Both ends of a turn" in AGENTS.md). */}
+                  > finished ("Turns and session marks" in AGENTS.md). */}
               {isEditorTab(tab) ? (
                 <FilesIcon className="tab-icon" />
               ) : tab.status === "missing" || tab.status === "error" ? (
