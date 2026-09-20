@@ -1277,7 +1277,7 @@ export class ProjectSessionManager {
     const name = getAgent(tab.agentId).displayName;
     // The tab's title too, or two tabs of one agent would toast identically.
     const repository = path.basename(this.project.path);
-    const where = tab.title ? `${repository} — ${tab.title}` : repository;
+    const where = tab.title ? `${repository} - ${tab.title}` : repository;
     switch (kind) {
       case "finished":
         return { title: `${name}: Finished`, body: `Finished in ${where}` };

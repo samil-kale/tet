@@ -32,6 +32,19 @@ const SCROLL_ECHO_MS = 150;
  *  (`https://exa`), is asked for once typing has stopped this long. */
 const PREVIEW_IMAGE_DELAY_MS = 1000;
 
+/**
+ * Whether a Markdown file opens with its preview beside it: the last answer the user gave, for
+ * every tab and the next start. `localStorage` under `Sash.tsx`'s `tet.layout.` namespace, like the
+ * preview's width: where the preview shows describes the window, not a repository.
+ */
+const PREVIEW_DEFAULT_KEY = "tet.layout.markdown-preview";
+let previewByDefault = localStorage.getItem(PREVIEW_DEFAULT_KEY) === "true";
+
+function setPreviewDefault(shown: boolean): void {
+  previewByDefault = shown;
+  localStorage.setItem(PREVIEW_DEFAULT_KEY, String(shown));
+}
+
 /** Replaced whole on every change — `useSyncExternalStore` compares identity. */
 export interface EditorSnapshot {
   path: string;
@@ -47,7 +60,7 @@ export interface EditorSnapshot {
   /** The file against HEAD in the diff editor; off shows it in the plain one (`showDiff`). */
   diff: boolean;
   /** The rendered file beside the editor, for a Markdown file (VS Code's "Open Preview to the
-   *  Side"). Off again for the next file. */
+   *  Side"). As the user last left it, the next Markdown file included (`previewByDefault`). */
   markdownPreview: boolean;
 }
 
@@ -246,10 +259,17 @@ export function showDiff(tabId: string, shown: boolean): void {
   });
 }
 
-/** Shows or hides the Markdown preview beside the tab's editor; a file of another kind has none. */
+/**
+ * Shows or hides the Markdown preview beside the tab's editor; a file of another kind has none.
+ * The answer is the default every Markdown file opened afterwards takes.
+ */
 export function showMarkdownPreview(tabId: string, shown: boolean): void {
   const view = views.get(tabId);
-  if (view && isMarkdown(view.snapshot.path) && view.snapshot.markdownPreview !== shown) {
+  if (!view || !isMarkdown(view.snapshot.path)) {
+    return;
+  }
+  setPreviewDefault(shown);
+  if (view.snapshot.markdownPreview !== shown) {
     publish(view, { markdownPreview: shown });
   }
 }
@@ -348,6 +368,10 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
     };
     views.set(tabId, view);
   }
+  // "Open Preview" is the same answer as the toggle, whether or not the file was already open.
+  if (how.markdownPreview === true && isMarkdown(path)) {
+    setPreviewDefault(true);
+  }
   const seq = ++view.readSeq;
   // Now, or the editor shows the previous file under the new path until the read lands.
   clearModels(view);
@@ -364,7 +388,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
     dirty: false,
     preview,
     diff: how.diff === true,
-    markdownPreview: how.markdownPreview === true && isMarkdown(path)
+    markdownPreview: previewByDefault && isMarkdown(path)
   });
   applyMode(view);
   const current = view;
