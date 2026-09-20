@@ -35,7 +35,7 @@ export const codexAgent: AgentDefinition = {
   displayName: "Codex",
   executable: () => "codex",
   versionArgs: ["--version"],
-  verifiedVersion: "0.154.0",
+  verifiedVersion: "0.155.1",
   // `--ephemeral` writes no rollout, so no cleanupAsk.
   askArgs: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
   sessions: codexSessionProvider,

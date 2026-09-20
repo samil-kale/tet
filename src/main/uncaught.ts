@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { describeSource } from "./diag";
 import type { NoticeSeverity } from "../shared/types";
 
 /**
@@ -49,6 +50,7 @@ export function installUncaughtHandler(logFile: string, notify: (severity: Notic
     seen.set(summary, count);
     const stack = error instanceof Error ? (error.stack ?? summary) : summary;
     const report = `${UNCAUGHT_MARKER} (${origin}, #${count}) ${new Date().toISOString()}\n${stack}\n`;
+    console.error(describeSource());
     // Console too: tests driving the app read stderr.
     console.error(report);
     try {
