@@ -116,13 +116,18 @@ or a per-line decision is for an agent.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native dialogs. Ask only before something
   irreversible. Card dialogs are drawn in `DialogFrame`.
-- **A question runs its own answer** (`PromptOptions.submit`): the dialog stays up while the
-  action runs and shows what refused it under the field it was typed in — words alone, no mark —
-  holding the text so it can be corrected. git's own words for a name it will not take, never
-  tet's guess at them.
-  What runs it hands the failure back rather than notifying it (`GitRun.ask`, `FileAsk`, and
-  the main-process verbs answering a `GitActionResult`); `run`/`act` notify it, for an action
-  with nothing left on screen to carry it — a `confirm` has no field, so it notifies.
+- **A dialog on screen carries its own failure; prefer this to a notice.** What refused an
+  answer belongs where it was typed: under that field (`Field`'s `error`) where one is to
+  blame, else above the button row (`DialogFrame`'s `error`) where the fields are several or
+  across tabs. Words alone, no mark, and what was typed is held so it can be corrected — git's
+  own words for a name it will not take, never tet's guess at them. A notice is for a failure
+  with no dialog up to carry it, and is what a refusal falls back to when the dialog was closed
+  first. A `confirm` has no field, so it notifies.
+- To get this, **a question runs its own answer** (`PromptOptions.submit`): the dialog stays up
+  while the action runs. So what runs it hands the failure back instead of notifying it
+  (`GitRun.ask`, `FileAsk`, and the main-process verbs answering a `GitActionResult`);
+  `run`/`act` notify. A new verb a dialog calls answers its failure rather than sending
+  `app:notice`.
 - **Nothing is written until Save**; Cancel and Escape drop edits. A setting reaches an agent at
   its setup (`AgentPaths`), so it applies to projects opened afterwards.
 - **One `.progress-bar` per pane** (`ProgressBar.tsx`): a new slow reason feeds the existing bar.

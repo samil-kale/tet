@@ -3,6 +3,9 @@ import type { KeyboardEvent, ReactNode, Ref } from "react";
 interface FieldProps {
   label: string;
   children: ReactNode;
+  /** What refused this field's value, on its own line under the control: words alone, since the
+   *  colour and the place already say what it is. */
+  error?: string;
 }
 
 /**
@@ -10,11 +13,12 @@ interface FieldProps {
  * — a row holding a set of them (buttons, a radio group) writes its own `div.dialog-field`, which
  * no single label can point at.
  */
-export function Field({ label, children }: FieldProps) {
+export function Field({ label, children, error }: FieldProps) {
   return (
     <label className="dialog-field">
       <span>{label}</span>
       {children}
+      {error !== undefined && <p className="dialog-field-error">{error}</p>}
     </label>
   );
 }
@@ -32,6 +36,8 @@ interface TextFieldProps {
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
   /** The field a dialog opens focused. */
   ref?: Ref<HTMLInputElement>;
+  /** See `Field`. */
+  error?: string;
 }
 
 /** A `Field` holding the one-line input the dialogs' fields are built from. */
@@ -44,10 +50,11 @@ export function TextField({
   maxLength,
   disabled,
   onKeyDown,
-  ref
+  ref,
+  error
 }: TextFieldProps) {
   return (
-    <Field label={label}>
+    <Field label={label} error={error}>
       <input
         type={type}
         value={value}

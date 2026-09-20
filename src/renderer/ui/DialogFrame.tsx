@@ -33,6 +33,9 @@ interface DialogFrameProps<T extends string> {
   header: DialogHeader<T>;
   /** Draws the header's progress bar, the dialog's one indicator. */
   busy?: boolean;
+  /** What refused the dialog's Save, above the button row: for a card whose fields — several, or
+   *  across tabs — no one of them can be blamed. A field that can writes it itself (`Field`). */
+  error?: string;
   /** Variants on `.dialog`: `wide`, or the dialog's own class. */
   className?: string;
   /**
@@ -52,7 +55,15 @@ interface DialogFrameProps<T extends string> {
  * Escape is the caller's: a question listens on `window`, the others on `document` (`useEscape`),
  * RequirementsDialog on neither. While one is up, no tab is in front (`window-covered.ts`).
  */
-export function DialogFrame<T extends string>({ header, busy, className, onSubmit, buttons, children }: DialogFrameProps<T>) {
+export function DialogFrame<T extends string>({
+  header,
+  busy,
+  error,
+  className,
+  onSubmit,
+  buttons,
+  children
+}: DialogFrameProps<T>) {
   useCoversWindow();
   const cardClass = className ? `dialog ${className}` : "dialog";
   const content = (
@@ -100,6 +111,7 @@ export function DialogFrame<T extends string>({ header, busy, className, onSubmi
         </div>
       )}
       <div className="dialog-body">{children}</div>
+      {error !== undefined && <p className="dialog-field-error">{error}</p>}
       <div className="dialog-buttons">{buttons}</div>
     </>
   );

@@ -298,7 +298,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   fields.splice(
     dialog.valueIndex ?? 0,
     0,
-    <Field key="value" label={dialog.label}>
+    <Field key="value" label={dialog.label} error={refused}>
       {dialog.suggestion ? (
         // Paired like a path field and its Browse button; the spinner replaces the wand while
         // suggesting.
@@ -318,7 +318,6 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       ) : (
         input
       )}
-      {refused !== undefined && <p className="dialog-field-error">{refused}</p>}
     </Field>
   );
 

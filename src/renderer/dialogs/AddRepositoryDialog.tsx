@@ -12,7 +12,6 @@ import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Field, TextField } from "../ui/Field";
 import { CloseIcon, SpinnerIcon } from "../ui/icons";
-import { notify } from "../ui/Notices";
 import { RadioGroup } from "../ui/RadioGroup";
 import { useEscape } from "../ui/use-escape";
 
@@ -111,6 +110,9 @@ function AccountForm({ onAdded }: AccountFormProps) {
   const [host, setHost] = useState(DEFAULT_HOST.github);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
+  /** What the host refused, above this form's own buttons: the token is checked against the host,
+   *  so neither field alone can be blamed. Cleared by the next edit of either. */
+  const [refused, setRefused] = useState<string | undefined>(undefined);
 
   /** Replaces the host only while it is empty or a provider default. */
   const pick = (next: ProviderId): void => {
@@ -126,12 +128,13 @@ function AccountForm({ onAdded }: AccountFormProps) {
 
   const submit = async (): Promise<void> => {
     setBusy(true);
+    setRefused(undefined);
     try {
       const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
       if (result.account) {
         onAdded(result.account);
       } else {
-        notify("error", result.error ?? "The account could not be added");
+        setRefused(result.error ?? "The account could not be added");
       }
     } finally {
       setBusy(false);
@@ -141,12 +144,22 @@ function AccountForm({ onAdded }: AccountFormProps) {
   return (
     <div className="account-form">
       <ProviderPicker provider={provider} onPick={pick} />
-      <TextField label="Host" value={host} onChange={setHost} />
+      <TextField
+        label="Host"
+        value={host}
+        onChange={(next) => {
+          setHost(next);
+          setRefused(undefined);
+        }}
+      />
       <TextField
         label="Personal access token"
         type="password"
         value={token}
-        onChange={setToken}
+        onChange={(next) => {
+          setToken(next);
+          setRefused(undefined);
+        }}
         // Enter here means this form, not the dialog's.
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -157,6 +170,7 @@ function AccountForm({ onAdded }: AccountFormProps) {
           }
         }}
       />
+      {refused !== undefined && <p className="dialog-field-error">{refused}</p>}
       {/* Its own row: the dialog's Cancel closes the whole dialog. */}
       <div className="dialog-buttons">
         <button
@@ -221,6 +235,8 @@ function RemoteTab({ onClone }: RemoteTabProps) {
   /** Loaded lists by account, kept while the dialog is open. */
   const [repos, setRepos] = useState<Record<string, RemoteRepository[]>>({});
   const [loading, setLoading] = useState(false);
+  /** Why the list is empty, in the list's own place. */
+  const [listError, setListError] = useState<string | undefined>(undefined);
   const [filter, setFilter] = useState("");
   /** The group picked in this dialog, "" for all; null while none was picked here. */
   const [namespace, setNamespace] = useState<string | null>(null);
@@ -242,6 +258,8 @@ function RemoteTab({ onClone }: RemoteTabProps) {
   }, [selectedId]);
 
   useEffect(() => {
+    // Another account's failure is not this one's.
+    setListError(undefined);
     if (selectedId === null || repos[selectedId]) {
       return;
     }
@@ -255,8 +273,9 @@ function RemoteTab({ onClone }: RemoteTabProps) {
       const list = result.repos;
       if (list) {
         setRepos((current) => ({ ...current, [selectedId]: list }));
+        setListError(undefined);
       } else {
-        notify("error", result.error ?? "The repositories could not be listed");
+        setListError(result.error ?? "The repositories could not be listed");
       }
     });
     return () => {
@@ -403,7 +422,10 @@ function RemoteTab({ onClone }: RemoteTabProps) {
                     </button>
                   </div>
                 ))}
-              {!loading && list && filtered.length === 0 && <div className="placeholder">No repositories.</div>}
+              {!loading && listError !== undefined && <p className="dialog-field-error">{listError}</p>}
+              {!loading && listError === undefined && list && filtered.length === 0 && (
+                <div className="placeholder">No repositories.</div>
+              )}
             </div>
           </>
         )}
@@ -511,6 +533,10 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   const [token, setToken] = useState("");
   const [tokenProvider, setTokenProvider] = useState<ProviderId>("github");
   const [busy, setBusy] = useState(false);
+  /** What refused the add, above the buttons: which field is to blame depends on the tab — a url,
+   *  a path, a folder name — so none of them carries it. Cleared on the next try and on a tab
+   *  switch, both of which make it wrong. */
+  const [refused, setRefused] = useState<string | undefined>(undefined);
   const firstField = useRef<HTMLInputElement>(null);
 
   // Focus the current mode's first field.
@@ -563,6 +589,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
 
   const submit = async (): Promise<void> => {
     setBusy(true);
+    setRefused(undefined);
     try {
       const result =
         mode === "add"
@@ -575,7 +602,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
         onClose();
         return;
       }
-      notify("error", result.error ?? "The repository could not be added");
+      setRefused(result.error ?? "The repository could not be added");
       // Only the first time: a second failure must not discard what was typed.
       if (result.authRequired && authAccounts === null) {
         await askForCredentials();
@@ -589,6 +616,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   const switchMode = (next: Mode): void => {
     setMode(next);
     setName(null);
+    setRefused(undefined);
   };
 
   /** A remote row's Clone: the clone tab filled in, with the row's account. */
@@ -605,6 +633,7 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   return (
     <DialogFrame
       header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose }}
+      error={refused}
       className="add-repository-dialog"
       onSubmit={() => {
         if (ready && !busy) {

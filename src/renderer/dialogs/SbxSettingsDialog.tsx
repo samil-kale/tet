@@ -93,6 +93,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   const [storedSecrets, setStoredSecrets] = useState<readonly string[]>([]);
   const [saving, setSaving] = useState(false);
+  /** What refused the Save, above the buttons: the rows it is about may be on another tab, and
+   *  their own marks say which (`tabMarks`). Cleared on the next try. */
+  const [refused, setRefused] = useState<string | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
 
@@ -153,10 +156,11 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** Stores typed secret values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
   const save = async (): Promise<void> => {
     setSaving(true);
+    setRefused(undefined);
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toSecretValues(state));
     setSaving(false);
     if (!result.ok) {
-      notify("error", result.error ?? "Could not save the SBX configuration");
+      setRefused(result.error ?? "Could not save the SBX configuration");
       return;
     }
     notify("info", `SBX configuration saved for ${project.name}.`);
@@ -189,6 +193,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       }
       className={phase.kind === "ready" ? "wide sbx-settings-dialog" : "sbx-settings-dialog"}
       busy={busy}
+      error={refused}
       buttons={
         <>
           <button type="button" className="button secondary" onClick={close}>

@@ -17,7 +17,6 @@ import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
-import { notify } from "../ui/Notices";
 import { RadioGroup } from "../ui/RadioGroup";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
@@ -93,6 +92,9 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  /** What refused the Save, above the buttons: it is about tet.json, not about one of the switches
+   *  on the Files tab. Cleared on the next try. */
+  const [refused, setRefused] = useState<string | undefined>(undefined);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
   /** What Save writes: the keys the dialog touched, and no others. tet-ctl may set another one
    *  while the dialog stands open, and Save must not take it back (settings.ts's patch). */
@@ -154,6 +156,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   /** One settings.json write, then one tet.json write per changed Explorer key. */
   const save = async (): Promise<void> => {
     setSaving(true);
+    setRefused(undefined);
     if (Object.keys(edits.current).length > 0) {
       await window.tet.settings.patch(edits.current);
     }
@@ -165,7 +168,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
         }
         const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
         if (!result.ok) {
-          notify("error", result.error ?? "Could not update tet.json");
+          setRefused(result.error ?? "Could not update tet.json");
           setSaving(false);
           return;
         }
@@ -178,6 +181,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   return (
     <DialogFrame
       header={{ tabs: TABS, active: tab, onSelect: setTab, onClose }}
+      error={refused}
       className="wide settings-dialog"
       buttons={
         <>
