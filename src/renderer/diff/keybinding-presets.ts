@@ -27,8 +27,7 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "ctrl+-": "editor.fold",
       "ctrl+=": "editor.unfold",
       "ctrl+shift+-": "editor.foldAll",
-      "ctrl+shift+=": "editor.unfoldAll",
-      "ctrl+r": "editor.action.startFindReplaceAction"
+      "ctrl+shift+=": "editor.unfoldAll"
     }
   },
   {

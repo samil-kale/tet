@@ -1196,21 +1196,20 @@ textarea:focus,
 }
 
 /* The find widget's buttons as icon-buttons. `!important`: monaco's findWidget.css is bundled
-   after this file and wins on order. `.toggle`s keep their box: 24px overflows the search field. */
+   after this file and wins on order. */
 .editor-host .find-widget .button {
-  background-color: transparent !important;
-}
-
-.editor-host .find-widget .button:not(.toggle) {
   width: 24px !important;
   height: 24px !important;
   border-radius: 3px !important;
+  background-color: transparent !important;
   opacity: 0.8;
 }
 
-.editor-host .find-widget .button.toggle {
-  border-radius: 3px !important;
-  opacity: 0.8;
+/* No replace: the widget's only `.toggle` is the one opening the replace row, which tet offers
+   neither in the context menu nor on a key (`configureEditor`). */
+.editor-host .find-widget .button.toggle,
+.editor-host .find-widget > .replace-part {
+  display: none !important;
 }
 
 .editor-host .find-widget .button:not(.disabled):hover {

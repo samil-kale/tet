@@ -1,5 +1,6 @@
 import type { editor as MonacoEditor } from "monaco-editor";
 import type { FileContent } from "../../shared/types";
+import { isMac } from "../platform";
 import { confirm } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
@@ -766,7 +767,8 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
       followEditor(view);
     }
   });
-  // Monaco's find actions declare no context menu group.
+  // Monaco's find action declares no context menu group. Replace is left out of the widget
+  // (styles.css hides its toggle), so it gets no entry of its own.
   editor.addAction({
     id: "tet.find",
     label: "Find",
@@ -774,17 +776,16 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
     contextMenuOrder: 1,
     run: (instance) => void instance.getAction("actions.find")?.run()
   });
-  editor.addAction({
-    id: "tet.findReplace",
-    label: "Find and Replace",
-    contextMenuGroupId: "1_find",
-    contextMenuOrder: 2,
-    run: (instance) => void instance.getAction("editor.action.startFindReplaceAction")?.run()
-  });
   // Unknown combos are skipped at parse, unknown command ids silently at run. A command's keybinding
   // is page-wide and the last registered wins, so each is scoped to this editor the way `addAction`
   // scopes its own — the tab's other editor included, which has its own id.
   const scope = `editorId == '${editor.getId()}'`;
+  // Replace is the one monaco action tet doesn't offer, and monaco binds it itself: its key does
+  // nothing here. Before the preset below, which may claim the same combo for something of its own.
+  const replaceCombo = parseKeyCombo(setup.monaco, isMac() ? "alt+ctrl+f" : "ctrl+h");
+  if (replaceCombo !== undefined) {
+    editor.addCommand(replaceCombo, () => {}, scope);
+  }
   for (const [combo, commandId] of Object.entries(setup.keybindings)) {
     const parsed = parseKeyCombo(setup.monaco, combo);
     // Elsewhere Ctrl+Shift+V pastes as plain text: VS Code binds its preview for Markdown alone.
