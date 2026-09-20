@@ -95,8 +95,8 @@ const EDITOR_CSS_VARS: Record<string, string> = {
   "editorIndentGuide.background1": "--vscode-editorIndentGuide-background1",
   "editorIndentGuide.activeBackground1": "--vscode-editorIndentGuide-activeBackground1",
   "editorWidget.background": "--vscode-editorWidget-background",
-  // The find widget's text and every button in it: unset, monaco falls back to the shiki theme's
-  // own foreground, which against tet's widget background reads anywhere from off to invisible.
+  // The find widget's text and, through `styles.css`, its buttons: unset, monaco falls back to the
+  // shiki theme's own foreground, which is the one color in the widget not from tet's stylesheet.
   "editorWidget.foreground": "--vscode-foreground",
   "editorWidget.border": "--vscode-editorWidget-border",
   "widget.shadow": "--vscode-widget-shadow"

@@ -1281,8 +1281,10 @@ textarea:focus,
 }
 
 /* The find widget's buttons as icon-buttons. `!important`: monaco's findWidget.css is bundled
-   after this file and wins on order. */
+   after this file and wins on order. The color is tet's own `.button` undone: monaco names these
+   `button` too, and a rule matching them beats the color they would inherit from the widget. */
 .editor-host .find-widget .button {
+  color: var(--vscode-editorWidget-foreground);
   width: 24px !important;
   height: 24px !important;
   border-radius: 3px !important;
@@ -1290,9 +1292,9 @@ textarea:focus,
   opacity: 0.8;
 }
 
-/* Monaco places the close button for its own 16px button; 2px up centers the 24px one. */
+/* Monaco places the close button for its own 16px button; 1px up centers the 24px one. */
 .editor-host .find-widget > .button.codicon-widget-close {
-  top: 3px !important;
+  top: 4px !important;
 }
 
 /* No replace: the widget's only `.toggle` is the one opening the replace row, which tet offers
