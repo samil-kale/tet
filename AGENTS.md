@@ -233,10 +233,16 @@ When asked for a release, run it:
 
 0. Ask the user for the version number (AskUserQuestion) — never pick patch/minor/major yourself;
    a published version can't be taken back once an install has updated to it.
-1. Write the release's section at the top of `CHANGELOG.md` — `## <version> (<date>)`, then one
-   bullet per change a user would notice, read off `git log <last tag>..HEAD`: a bold title of a
-   few words, then a sentence or two on what changed for the user. Leave out refactors, docs and
-   fixes to unreleased work. Commit it on its own (`changelog for <version>`).
+1. Write the release's section at the top of `CHANGELOG.md` — `## <version> (<date>)`, then a
+   handful of bullets, read off `git log <last tag>..HEAD`: a bold title of a few words, then one
+   or two short sentences. **Written against the last release, not against the commits**: a
+   feature born and refined since the tag is one bullet saying it is there, never the steps it
+   took — what the last section says is what the user has. Few bullets: only what a user would
+   notice, the smaller repairs gathered in a closing **Fixes** bullet. Out entirely: refactors,
+   docs, fixes to unreleased work, agent version bumps, keyboard and menu details. Commit it on
+   its own (`changelog for <version>`).
+   A section is its GitHub Release's notes, so a release edited by hand there is copied back into
+   `CHANGELOG.md`: the published notes are the text, tet's file follows.
 2. `npm version patch` (or `minor` / `major`), then `git push && git push --tags`.
 
 `npm version` refuses a dirty tree, hence the changelog commit first. The tag push runs
