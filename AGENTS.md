@@ -63,7 +63,7 @@ others.
 - Paths through `path.join`; every spawn through `resolveCommand` (`src/main/terminals/pty.ts`),
   never a shell.
 - A generated file PowerShell reads gets a UTF-8 BOM; a generated `sh` script is LF; anything
-  written into a script is quoted with `shellSingleQuote` (`src/shared/script-text.ts`).
+  written into a script is quoted with `shellSingleQuote` (`src/main/script-text.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
   `tet-ctl hook <event>`.
 - A file another process reads (hook settings, opencode records) is written beside the target and

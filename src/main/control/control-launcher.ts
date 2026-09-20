@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { shellSingleQuote, writePosixScript } from "../../shared/script-text";
+import { shellSingleQuote, writePosixScript } from "../script-text";
 
 /**
  * The `tet-ctl` launcher, rewritten into the data folder at every start (install and `npm start`
