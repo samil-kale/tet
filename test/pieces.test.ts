@@ -19,7 +19,7 @@ import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/termin
 import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/main/script-text";
 import { ProjectStore } from "../src/main/projects";
-import { readSbxConfig, writeSbxConfig } from "../src/main/git/commands";
+import { readSbxConfig, writeSbxConfig } from "../src/main/tet-json";
 import {
   contractHome,
   fixedMountSpecs,

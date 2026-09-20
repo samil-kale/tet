@@ -21,7 +21,7 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { addExclude, addFolder, type ExplorerView, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "./commands";
+import { addExclude, addFolder, type ExplorerView, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { git } from "./git-client";
 import { readLinkedGitDir } from "./linked-git-dir";

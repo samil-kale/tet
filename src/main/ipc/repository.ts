@@ -13,7 +13,7 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { DEFAULT_EXPLORER_VIEW } from "../git/commands";
+import { DEFAULT_EXPLORER_VIEW } from "../tet-json";
 import { suggestCommitMessage } from "../git/commit-message";
 import { git } from "../git/git-client";
 import type { Repository } from "../git/repository";

@@ -17,7 +17,7 @@ import type {
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
-import { readSbxConfig } from "../git/commands";
+import { readSbxConfig } from "../tet-json";
 import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
 import type { SbxSecretStore } from "../sbx-secrets";
 import type { SettingsStore } from "../settings";

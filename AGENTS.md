@@ -23,7 +23,7 @@ project's terminals.
 
 - `src/` is one folder per process — `main/`, `renderer/`, `preload/`, `cli/` — plus `shared/`,
   the only folder imported across them (`no-restricted-imports` in `eslint.config.mjs`).
-- `src/main/`: `git/` (the git process and everything talking to it, `tet.json` included),
+- `src/main/`: `git/` (the git process and everything talking to it),
   `terminals/` (pty, sessions, hooks), `control/` (`tet-ctl`), `ipc/` (one registrar per `TETApi`
   group, each taking only the singletons it touches), `agents/`, `providers/`; flat is the app
   itself — window, settings, sbx.
@@ -37,7 +37,7 @@ project's terminals.
   (`src/renderer/ui/agent-icons.tsx`, the only agent-specific code outside `agents/`).
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
   the Explorer view (shaped like a `.code-workspace`) and `sbx`. Read defensively
-  (`src/main/git/commands.ts`): missing or malformed means nothing configured.
+  (`src/main/tet-json.ts`): missing or malformed means nothing configured.
 
 ## Never assume the agents behave alike
 

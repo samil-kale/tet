@@ -18,7 +18,7 @@ import type {
 } from "../shared/types";
 import { getAgent } from "./agents";
 import type { AgentPaths } from "./agents/agent";
-import { readSbxConfig, writeSbxConfig } from "./git/commands";
+import { readSbxConfig, writeSbxConfig } from "./tet-json";
 import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
 import { relativeInside } from "./path-inside";

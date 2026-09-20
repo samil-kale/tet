@@ -3,7 +3,7 @@ import * as path from "node:path";
 // The ESM build: esbuild can't follow the UMD build's `require("./impl/format")`.
 import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
 import writeFileAtomic from "write-file-atomic";
-import { COMMAND_COLORS } from "../../shared/types";
+import { COMMAND_COLORS } from "../shared/types";
 import type {
   CommandColor,
   ExplorerRoot,
@@ -16,7 +16,7 @@ import type {
   SbxPort,
   SbxProjectConfig,
   SbxSecret
-} from "../../shared/types";
+} from "../shared/types";
 
 /** A project's saved commands and Explorer view, in its own root so it travels with the repository.
  *  Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by

@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import type { ProjectCommand, TerminalDescriptor } from "../../shared/types";
-import { readCommands, writeCommands } from "../git/commands";
+import { readCommands, writeCommands } from "../tet-json";
 import type { IpcDeps } from "./deps";
 
 /** The project's saved commands (tet.json), and running one in a tab of its own. */

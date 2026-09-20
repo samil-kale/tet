@@ -12,7 +12,7 @@ import {
   removeFolder,
   writeCommands,
   writeSbxConfig
-} from "../src/main/git/commands";
+} from "../src/main/tet-json";
 
 /** tet.json: the user's file, read defensively and written back with nothing of theirs lost. */
 
