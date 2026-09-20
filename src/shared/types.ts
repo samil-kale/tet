@@ -77,6 +77,26 @@ export type PromptId = "commitMessage";
 
 export type PromptSettings = Record<PromptId, string>;
 
+/**
+ * A settings write: the keys it names and no others. The dialog and `tet-ctl` both write single
+ * settings, and neither may take back what the other set meanwhile, so the two nested objects
+ * merge by their own keys too — setting one prompt leaves the rest alone.
+ */
+export type SettingsEdits = Partial<Omit<AppSettings, "notifications" | "prompts">> & {
+  notifications?: Partial<NotificationSettings>;
+  prompts?: Partial<PromptSettings>;
+};
+
+/** `edits` laid over `base`, by that rule. */
+export function withSettings<T extends SettingsEdits>(base: T, edits: SettingsEdits): T {
+  return {
+    ...base,
+    ...edits,
+    ...(edits.notifications && { notifications: { ...base.notifications, ...edits.notifications } }),
+    ...(edits.prompts && { prompts: { ...base.prompts, ...edits.prompts } })
+  };
+}
+
 /** Agents that run in an sbx sandbox: three with Docker's built-in kit, pi through a community kit
  *  (`AgentDefinition.sandboxKit`). Not the shell. */
 export type SbxAgentId = "claude" | "codex" | "opencode" | "pi";
@@ -328,7 +348,8 @@ export interface WorktreeInfo {
   /** Its checked-out branch; absent while detached. */
   branch?: string;
   /** The branch a linked worktree's branch was made from, as tet records it (`branch.<name>.base`
-   *  in the repository's config, git.ts's worktreeAdd); absent for one made elsewhere. */
+   *  in the repository's config, git.ts's worktreeAdd); absent for one made elsewhere. Laid over
+   *  the read by `Repository.emit`, with the remote urls, not read per refresh. */
   base?: string;
   /** The one holding the repository's `.git`, which is never renamed or deleted. */
   main: boolean;
@@ -463,12 +484,18 @@ export interface GitActionResult {
   error?: string;
   /** git wanted credentials; set only by network commands, acted on only by the clone. */
   authRequired?: boolean;
-  /** A discard could not move a file to the trash; nothing was reset. Asked again, it deletes. */
-  trashFailed?: boolean;
-  /** A rebase was not started: it rewrites commits already on the upstream. Asked again, it runs. */
-  rewritesPushed?: boolean;
-  /** A worktree was not deleted, nor its terminals closed: it has changes. Forced, it goes. */
-  uncommitted?: boolean;
+  /**
+   * Nothing was done: the command waits on a question. Which one is the reason named here, and
+   * the view that offered the action puts it in its own words and runs the action again
+   * confirmed (AGENTS.md: main asks nothing). One field, so a new question is a new reason and
+   * not another flag every other caller has to ignore.
+   *
+   * - `trash-failed`: a discard could not move a file to the trash; nothing was reset. Confirmed,
+   *   it deletes.
+   * - `rewrites-pushed`: a rebase would rewrite commits already on the upstream.
+   * - `uncommitted`: a worktree has changes, so neither it nor its terminals were touched.
+   */
+  needsConfirmation?: "trash-failed" | "rewrites-pushed" | "uncommitted";
 }
 
 /** A worktree an action names: its folder, and the main worktree its git commands run in. */

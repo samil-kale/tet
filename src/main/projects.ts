@@ -196,7 +196,7 @@ export async function deleteWorktree(
   const gone = !fs.existsSync(worktreePath);
   const uncommitted = async (): Promise<boolean> => !gone && !force && (await git.hasChanges(worktreePath));
   if (await uncommitted()) {
-    return { ok: false, uncommitted: true };
+    return { ok: false, needsConfirmation: "uncommitted" };
   }
   // One hold of the repository: a command running elsewhere refuses this before the project closes.
   return repository.exclusive(async () => {
@@ -207,7 +207,7 @@ export async function deleteWorktree(
       // without the question being put.
       async () =>
         (await uncommitted())
-          ? { ok: false, uncommitted: true }
+          ? { ok: false, needsConfirmation: "uncommitted" }
           : gone
             ? repository.pruneWorktrees()
             : repository.removeWorktree(worktreePath, force),

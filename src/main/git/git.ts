@@ -433,8 +433,6 @@ export async function readWorktrees(cwd: string, gitDirOf: Promise<string> = res
   );
   const linkedRoot = path.join(commonDir, "worktrees");
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
-  // Only a linked worktree carries a base, so a repository without one never reads the config.
-  const bases = ids.length > 0 ? await readBaseBranches(commonDir) : new Map<string, string>();
   const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
     const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
     const branch = /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
@@ -442,7 +440,6 @@ export async function readWorktrees(cwd: string, gitDirOf: Promise<string> = res
       // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
       path: await fs.realpath(worktreePath).catch(() => worktreePath),
       branch,
-      base: main || branch === undefined ? undefined : bases.get(branch),
       main,
       current: adminDir === gitDir
     };
@@ -463,30 +460,19 @@ export async function readWorktrees(cwd: string, gitDirOf: Promise<string> = res
 }
 
 /**
- * Every `branch.<name>.base` (worktreeAdd) in the repository's config file, read as text rather than
- * by a git process on the refresh path. Only the file tet writes the key into: an included config
- * could hold it too, but tet never puts it there. Branch names are case-sensitive, keys are not.
+ * Every `branch.<name>.base` tet recorded (worktreeAdd), by branch. Asked of git, not parsed out
+ * of the config file: git owns that format. Off the refresh path — Repository reads this on open,
+ * after a `.git/config` change, and after the two actions that write the key.
  */
-async function readBaseBranches(commonDir: string): Promise<Map<string, string>> {
-  const bases = new Map<string, string>();
-  const config = await fs.readFile(path.join(commonDir, "config"), "utf8").catch(() => "");
-  let branch: string | undefined;
-  for (const line of config.split(/\r?\n/)) {
-    const section = /^\s*\[\s*branch\s+"((?:[^"\\]|\\.)*)"\s*\]/i.exec(line);
-    if (section) {
-      branch = section[1].replace(/\\(.)/g, "$1");
-      continue;
-    }
-    if (/^\s*\[/.test(line)) {
-      branch = undefined;
-      continue;
-    }
-    if (branch === undefined) {
-      continue;
-    }
-    const entry = /^\s*base\s*=\s*(.*?)\s*$/i.exec(line);
+export async function readWorktreeBases(cwd: string): Promise<Record<string, string>> {
+  const bases: Record<string, string> = {};
+  // Exit 1 where nothing matches, which `run` would turn into an error; the empty stdout is right.
+  const result = await git(cwd, ["config", "--get-regexp", "^branch\\..*\\.base$"]).catch(() => undefined);
+  for (const line of result?.stdout.split("\n") ?? []) {
+    // Greedy, so a branch named "x.base" keeps its dot: the last `.base` is the key's.
+    const entry = /^branch\.(.+)\.base (.*)$/.exec(line.trim());
     if (entry) {
-      bases.set(branch, entry[1].replace(/^"(.*)"$/, "$1"));
+      bases[entry[1]] = entry[2];
     }
   }
   return bases;

@@ -38,7 +38,7 @@ const api: TETApi = {
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),
-    save: (settings) => ipcRenderer.invoke("settings:save", settings)
+    patch: (edits) => ipcRenderer.invoke("settings:patch", edits)
   },
   projects: {
     list: () => ipcRenderer.invoke("projects:list"),

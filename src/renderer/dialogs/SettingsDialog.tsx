@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
-import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../../shared/types";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types";
 import type {
   AppInfo,
   AppSettings,
@@ -10,7 +10,8 @@ import type {
   ExplorerSortOrder,
   NotificationSettings,
   Project,
-  PromptId
+  PromptId,
+  SettingsEdits
 } from "../../shared/types";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
@@ -19,7 +20,6 @@ import { notify } from "../ui/Notices";
 import { RadioGroup } from "../ui/RadioGroup";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
-import { withEdits } from "./settings-edits";
 
 interface SettingsDialogProps {
   /** Whose tet.json the Files tab's Explorer settings edit; null hides them. */
@@ -93,17 +93,14 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
-  /** settings.json as opened: Save writes only what differs, over what is saved by then
-   *  (withEdits). */
-  const loadedSettings = useRef<AppSettings | null>(null);
+  /** What Save writes: the keys the dialog touched, and no others. tet-ctl may set another one
+   *  while the dialog stands open, and Save must not take it back (settings.ts's patch). */
+  const edits = useRef<SettingsEdits>({});
   /** tet.json as opened: Save writes only the keys that differ. */
   const loadedExplorer = useRef<ExplorerSettings | null>(null);
 
   useEffect(() => {
-    void window.tet.settings.get().then((loaded) => {
-      loadedSettings.current = loaded;
-      setSettings(loaded);
-    });
+    void window.tet.settings.get().then(setSettings);
     // Cannot change while the process runs.
     void window.tet.app.info().then(setInfo);
   }, []);
@@ -126,19 +123,19 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   useEscape(onClose);
 
-  /** Edits the local copy; settings.json is written whole on Save (settings.ts). */
-  const patch = (change: (current: AppSettings) => Partial<AppSettings>): void =>
-    setSettings((current) => (current ? { ...current, ...change(current) } : current));
+  /** Edits the shown copy and records the change for Save. */
+  const edit = (change: SettingsEdits): void => {
+    edits.current = withSettings(edits.current, change);
+    setSettings((current) => (current ? withSettings(current, change) : current));
+  };
 
-  const flip = (key: keyof NotificationSettings, value: boolean): void =>
-    patch((current) => ({ notifications: { ...current.notifications, [key]: value } }));
+  const flip = (key: keyof NotificationSettings, value: boolean): void => edit({ notifications: { [key]: value } });
 
-  const applyPreset = (id: string): void => patch(() => ({ editorKeybindingPreset: id }));
+  const applyPreset = (id: string): void => edit({ editorKeybindingPreset: id });
 
-  const applyColorScheme = (scheme: ColorScheme): void => patch(() => ({ colorScheme: scheme }));
+  const applyColorScheme = (scheme: ColorScheme): void => edit({ colorScheme: scheme });
 
-  const applyTheme = (kind: ThemeKind, id: string): void =>
-    patch(() => ({ [themeKey(kind)]: id }));
+  const applyTheme = (kind: ThemeKind, id: string): void => edit({ [themeKey(kind)]: id });
 
   // The kind shown now, and the one Save asks for — "system" resolved by the OS now (Electron's
   // prefers-color-scheme follows nativeTheme, which main.ts's currentTheme reads).
@@ -148,7 +145,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   /** Tet's own text is stored as "", as in settings.ts; the reset button reads that. */
   const applyPrompt = (id: PromptId, text: string): void =>
-    patch((current) => ({ prompts: { ...current.prompts, [id]: text === DEFAULT_PROMPTS[id] ? "" : text } }));
+    edit({ prompts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } });
 
   const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
     setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
@@ -156,9 +153,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   /** One settings.json write, then one tet.json write per changed Explorer key. */
   const save = async (): Promise<void> => {
     setSaving(true);
-    const loadedApp = loadedSettings.current;
-    if (settings && loadedApp && JSON.stringify(settings) !== JSON.stringify(loadedApp)) {
-      await window.tet.settings.save(withEdits(await window.tet.settings.get(), loadedApp, settings));
+    if (Object.keys(edits.current).length > 0) {
+      await window.tet.settings.patch(edits.current);
     }
     const loaded = loadedExplorer.current;
     if (activeProject && explorerSettings && loaded) {

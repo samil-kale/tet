@@ -184,7 +184,7 @@ describe("a worktree written to while its terminals close", () => {
       }
     });
     const result = await deleteWorktree(deps, repo.worktree("busy"), { force: false, onRemote: false });
-    assert.deepEqual(result, { ok: false, uncommitted: true });
+    assert.deepEqual(result, { ok: false, needsConfirmation: "uncommitted" });
     assert.ok(fs.existsSync(path.join(repo.at("busy"), "late.txt")), "nothing deleted without the question");
     assert.deepEqual(await deleteWorktree(deps, repo.worktree("busy"), { force: true, onRemote: false }), { ok: true });
     assert.ok(!fs.existsSync(repo.at("busy")));

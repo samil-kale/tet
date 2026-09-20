@@ -24,6 +24,7 @@ import type {
   SbxPath,
   SbxProjectConfig,
   SbxStatus,
+  SettingsEdits,
   StashCommand,
   TerminalDescriptor,
   TerminalOutput,
@@ -82,7 +83,8 @@ export interface TETApi {
   settings: {
     get(): Promise<AppSettings>;
     /** Writes all of it. A switch applies to agents set up after it. */
-    save(settings: AppSettings): Promise<void>;
+    /** Writes the named keys and leaves the rest as stored (settings.ts's patch). */
+    patch(edits: SettingsEdits): Promise<void>;
   };
   projects: {
     list(): Promise<Project[]>;
@@ -145,7 +147,7 @@ export interface TETApi {
     deleteRemoteBranch(projectId: string, remote: string, name: string): Promise<GitActionResult>;
     /** Into the current branch. A conflict is reported and left in the tree. */
     merge(projectId: string, ref: string): Promise<GitActionResult>;
-    /** Unless `confirmed`, answers `rewritesPushed` instead where commits on the upstream would be
+    /** Unless `confirmed`, answers `rewrites-pushed` instead where commits on the upstream would be
      *  rewritten; the caller asks and calls again. */
     rebase(projectId: string, ref: string, confirmed: boolean): Promise<GitActionResult>;
     /** Aborts `RepositoryState.operation`. */
@@ -166,7 +168,7 @@ export interface TETApi {
     stashPush(projectId: string, message: string): Promise<GitActionResult>;
     /** By `StashEntry.sha`, looked up when it runs. */
     stash(projectId: string, command: StashCommand, sha: string): Promise<GitActionResult>;
-    /** The caller confirms first. Files go to the trash; where that fails the answer is `trashFailed`,
+    /** The caller confirms first. Files go to the trash; where that fails the answer is `trash-failed`,
      *  and `permanently` deletes them instead. */
     discard(projectId: string, paths: string[], permanently: boolean): Promise<GitActionResult>;
     /** Appends the file, or its extension, to .gitignore. */

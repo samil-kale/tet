@@ -3,8 +3,8 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { DEFAULT_THEME_IDS, THEMES, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
-import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS } from "../shared/types";
-import type { AppSettings, ColorScheme, PromptSettings } from "../shared/types";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../shared/types";
+import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../shared/types";
 
 const DEFAULTS: AppSettings = {
   notifications: {
@@ -35,6 +35,15 @@ export class SettingsStore {
 
   get(): AppSettings {
     return this.settings;
+  }
+
+  /**
+   * Writes the settings `edits` names and leaves the rest as stored. The single place the merge
+   * happens: a caller that read, changed and wrote the whole thing would take back whatever was
+   * set between its read and its write.
+   */
+  patch(edits: SettingsEdits): void {
+    this.save(withSettings(this.settings, edits));
   }
 
   save(settings: AppSettings): void {

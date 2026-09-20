@@ -113,7 +113,10 @@ export class Repository {
   /** `init.defaultBranch`, or "main": the default branch where no remote names one (GitHub Desktop's
    *  fallback). Read with the urls, on open and after `.git/config` changes. */
   private defaultBranchName = "main";
-  private remoteUrlsStale = false;
+  /** Each worktree branch's `branch.<name>.base`, read with the urls and for the same reason: it is
+   *  written once, when the worktree is made, and read on every refresh. */
+  private worktreeBases: Record<string, string> = {};
+  private configStale = false;
   /** Checked once on open; if false, nothing is read or watched. */
   private isGit = false;
   /** The project was closed; anything still in flight doesn't report. */
@@ -158,10 +161,11 @@ export class Repository {
   private async startReading(): Promise<void> {
     // All three at once: each is a git start (the measured cost); in sequence they visibly delay
     // the pane.
-    const [isGit, urls, defaultBranchName, read] = await Promise.all([
+    const [isGit, urls, defaultBranchName, bases, read] = await Promise.all([
       git.isRepository(this.project.path).catch(() => false),
       git.readRemoteUrls(this.project.path).catch(() => ({})),
       git.readDefaultBranchName(this.project.path).catch(() => "main"),
+      git.readWorktreeBases(this.project.path).catch(() => ({})),
       this.read()
     ]);
     this.isGit = isGit;
@@ -171,6 +175,7 @@ export class Repository {
     }
     this.remoteUrls = urls;
     this.defaultBranchName = defaultBranchName;
+    this.worktreeBases = bases;
     // The first read ran without the remote names; only a name holding a "/" changes it.
     this.emit(Object.keys(urls).some((name) => name.includes("/")) ? await this.read() : read);
     // Closed during the first read: a watcher started now would never be closed.
@@ -181,11 +186,13 @@ export class Repository {
     this.autoFetchTimer = setInterval(() => void this.autoFetch(), AUTO_FETCH_INTERVAL_MS);
   }
 
-  private async loadRemoteUrls(): Promise<void> {
-    this.remoteUrlsStale = false;
-    [this.remoteUrls, this.defaultBranchName] = await Promise.all([
+  /** Everything read out of the repository's config rather than per refresh. */
+  private async loadConfig(): Promise<void> {
+    this.configStale = false;
+    [this.remoteUrls, this.defaultBranchName, this.worktreeBases] = await Promise.all([
       git.readRemoteUrls(this.project.path).catch(() => ({})),
-      git.readDefaultBranchName(this.project.path).catch(() => "main")
+      git.readDefaultBranchName(this.project.path).catch(() => "main"),
+      git.readWorktreeBases(this.project.path).catch(() => ({}))
     ]);
   }
 
@@ -235,12 +242,13 @@ export class Repository {
     }
     countActivity("git");
     this.inflight = (async () => {
-      if (this.remoteUrlsStale) {
-        await this.loadRemoteUrls();
+      if (this.configStale) {
+        await this.loadConfig();
       }
-      const next = await this.read();
-      this.emit(next);
-      return next;
+      this.emit(await this.read());
+      // What the views are given, not the bare read: `emit` lays the config over it (the remotes'
+      // urls, the default branch, each worktree's base).
+      return this.state;
     })().finally(() => {
       this.inflight = undefined;
       this.lastRefreshAt = Date.now();
@@ -268,7 +276,12 @@ export class Repository {
     const defaultBranch =
       read.defaultBranch ??
       (read.localBranches.includes(this.defaultBranchName) ? { name: this.defaultBranchName } : undefined);
-    const next: RepositoryState = { ...read, remotes, defaultBranch };
+    const worktrees = read.worktrees.map((worktree) => ({
+      ...worktree,
+      // Only a linked worktree carries a base; the main one was made with the repository.
+      base: worktree.main || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch]
+    }));
+    const next: RepositoryState = { ...read, remotes, defaultBranch, worktrees };
     this.reportError(next);
     // Only on an actual change: the watcher fires for edits leaving the state identical, and every
     // emit re-renders the views. Labeled "emit", not "git": this runs after git has finished.
@@ -379,11 +392,11 @@ export class Repository {
     return this.state.remotes[0]?.name;
   }
 
-  /** Re-reads the urls after, since only this changes them. */
+  /** Re-reads the config after, since only this changes a url. */
   setRemoteUrl(remote: string, url: string): Promise<GitActionResult> {
     return this.runAction(async () => {
       const result = await git.setRemoteUrl(this.project.path, remote, url);
-      await this.loadRemoteUrls();
+      await this.loadConfig();
       return result;
     });
   }
@@ -392,9 +405,14 @@ export class Repository {
     return this.runAction(() => git.createBranch(this.project.path, name, startPoint));
   }
 
-  /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). */
+  /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). Re-reads the config
+   *  after: this is what records `branch.<name>.base`, and the new row shows it at once. */
   addWorktree(target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
-    return this.runAction(() => git.worktreeAdd(this.project.path, target, branch, base));
+    return this.runAction(async () => {
+      const result = await git.worktreeAdd(this.project.path, target, branch, base);
+      await this.loadConfig();
+      return result;
+    });
   }
 
   removeWorktree(target: string, force: boolean): Promise<GitActionResult> {
@@ -409,8 +427,14 @@ export class Repository {
     return this.runAction(() => git.worktreePrune(this.project.path));
   }
 
+  /** git moves the branch's whole config section with it, `branch.<name>.base` included, so the
+   *  config is read again. */
   renameBranch(from: string, to: string): Promise<GitActionResult> {
-    return this.runAction(() => git.renameBranch(this.project.path, from, to));
+    return this.runAction(async () => {
+      const result = await git.renameBranch(this.project.path, from, to);
+      await this.loadConfig();
+      return result;
+    });
   }
 
   /** Locally and, if asked, its upstream on the remote. Local first: it can't fail for reasons off the
@@ -447,12 +471,12 @@ export class Repository {
     return this.runAction(() => git.merge(this.project.path, ref));
   }
 
-  /** Unless `confirmed`, refused with `rewritesPushed` where it would rewrite commits the upstream
+  /** Unless `confirmed`, refused with `rewrites-pushed` where it would rewrite commits the upstream
    *  has: the caller asks, since pushing them afterwards takes a force push. */
   rebase(ref: string, confirmed: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
       if (!confirmed && (await git.rebaseRewritesPushed(this.project.path, ref))) {
-        return { ok: false, rewritesPushed: true };
+        return { ok: false, needsConfirmation: "rewrites-pushed" };
       }
       return git.rebase(this.project.path, ref);
     });
@@ -536,7 +560,7 @@ export class Repository {
   /** Throws away changes to these files, each file on disk going to the trash first, as in GitHub
    *  Desktop, so an edit can be had back. A merge stays in progress: a conflict is only reset to HEAD.
    *  When the trash fails, what went to it before is still reset and the rest is left
-   *  (`trashFailed`); `permanently` then deletes instead. */
+   *  (`trash-failed`); `permanently` then deletes instead. */
   discard(paths: string[], permanently: boolean): Promise<GitActionResult> {
     // Through runAction: `git restore` takes the index lock, and failing on it during a fetch or
     // checkout would leave the files already trashed.
@@ -565,7 +589,7 @@ export class Repository {
               // Reset what the trash already took, or it would be missing until asked again.
               const reset = await git.discard(this.project.path, targets);
               const message = error instanceof Error ? error.message : String(error);
-              return reset.ok ? { ok: false, error: message, trashFailed: true } : reset;
+              return reset.ok ? { ok: false, error: message, needsConfirmation: "trash-failed" } : reset;
             }
             // What HEAD has is written over by the restore; the rest would stay behind untracked.
             if (notInHead) {
@@ -882,7 +906,7 @@ export class Repository {
         // Events arrive, so the next failure backs off from the start.
         this.watchRetryDelay = WATCH_RETRY_MS;
         if (name && /^\.git[\\/]config$/.test(name)) {
-          this.remoteUrlsStale = true;
+          this.configStale = true;
         }
         if (name === PROJECT_FILE) {
           // Debounced: the file is written in place, and a read mid-write finds half of it.
@@ -943,7 +967,7 @@ export class Repository {
         return;
       }
       if (name === ".git/config") {
-        this.remoteUrlsStale = true;
+        this.configStale = true;
       }
       this.scheduleRefresh();
     });

@@ -12,6 +12,7 @@ import type {
   AddRepositoryResult,
   AgentId,
   AppSettings,
+  SettingsEdits,
   EditorListing,
   EditorReport,
   ExplorerListing,
@@ -42,7 +43,7 @@ export interface ControlDeps {
   };
   settings: {
     get(): AppSettings;
-    save(settings: AppSettings): void;
+    patch(edits: SettingsEdits): void;
   };
   sessions: {
     get(projectId: string): ControlTerminals | undefined;
@@ -326,7 +327,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!theme) {
         throw new ControlError("bad_args", `unknown theme: ${id} (see list-themes)`);
       }
-      settings.save({ ...settings.get(), [themeKey(theme.kind)]: id });
+      settings.patch({ [themeKey(theme.kind)]: id });
       // Shown at once if the window is in that kind. The flag is for the agent to relay; restarting
       // is the user's call.
       return { result: { saved: true, restartRequired: deps.applyTheme() } };
@@ -338,7 +339,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!colorScheme) {
         throw new ControlError("bad_args", `unknown color scheme: ${value} (one of ${COLOR_SCHEMES.join(", ")})`);
       }
-      settings.save({ ...settings.get(), colorScheme });
+      settings.patch({ colorScheme });
       // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
       return { result: { saved: true, restartRequired: deps.applyTheme() } };
     },
@@ -350,8 +351,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       }
       // No text resets: "" means tet's own prompt, read by ipc.ts when asking.
       const value = args.text;
-      const current = settings.get();
-      settings.save({ ...current, prompts: { ...current.prompts, [id]: typeof value === "string" ? value : "" } });
+      settings.patch({ prompts: { [id]: typeof value === "string" ? value : "" } });
       return { result: { saved: true } };
     },
 
@@ -417,7 +417,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", "a worktree cannot delete itself: run this from another project's tab");
       }
       const deleted = await deps.deleteWorktree({ path: found.path, mainPath: found.mainPath }, args.force === true);
-      if (deleted.uncommitted) {
+      if (deleted.needsConfirmation === "uncommitted") {
         throw new ControlError("bad_args", `${found.name} has uncommitted changes: pass --force to delete them too`);
       }
       if (!deleted.ok) {

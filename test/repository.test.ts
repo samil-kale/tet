@@ -96,7 +96,7 @@ describe("a discard, through the trash as in GitHub Desktop", () => {
     trashRefuses = () => true;
     try {
       const refused = await repository.discard(["a.txt", "new.txt"], false);
-      assert.deepEqual(refused, { ok: false, error: "The trash is not available", trashFailed: true });
+      assert.deepEqual(refused, { ok: false, error: "The trash is not available", needsConfirmation: "trash-failed" });
       assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "edited\n");
       assert.equal(fs.existsSync(path.join(dir, "new.txt")), true);
 
@@ -114,7 +114,7 @@ describe("a discard, through the trash as in GitHub Desktop", () => {
     trashRefuses = (absolute) => path.basename(absolute) === "new.txt";
     try {
       const refused = await repository.discard(["a.txt", "new.txt"], false);
-      assert.deepEqual(refused, { ok: false, error: "The trash is not available", trashFailed: true });
+      assert.deepEqual(refused, { ok: false, error: "The trash is not available", needsConfirmation: "trash-failed" });
       // Asked no further: a.txt is in the trash and back to HEAD, not missing.
       assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "committed\n");
       assert.equal(fs.existsSync(path.join(dir, "new.txt")), true);
@@ -166,7 +166,7 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
     git(dir, "branch", "older", "HEAD~1");
     await repository.refresh();
     const head = git(dir, "rev-parse", "HEAD");
-    assert.deepEqual(await repository.rebase("older", false), { ok: false, rewritesPushed: true });
+    assert.deepEqual(await repository.rebase("older", false), { ok: false, needsConfirmation: "rewrites-pushed" });
     assert.equal(git(dir, "rev-parse", "HEAD"), head, "nothing was rebased");
     assert.deepEqual(await repository.rebase("older", true), { ok: true });
     git(dir, "branch", "-D", "older");

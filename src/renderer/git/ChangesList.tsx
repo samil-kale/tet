@@ -38,7 +38,7 @@ export async function confirmDiscard(projectId: string, paths: string[], act: Fi
   if (answer.confirmed) {
     act(async () => {
       const result = await window.tet.repository.discard(projectId, paths, false);
-      if (!result.trashFailed) {
+      if (result.needsConfirmation !== "trash-failed") {
         return result;
       }
       void confirmDiscardPermanently(projectId, paths, result.error, act);

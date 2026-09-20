@@ -220,11 +220,11 @@ export const BranchTree = memo(function BranchTree({
     }
   };
 
-  /** Asks first only when the main process answers `rewritesPushed`, as GitHub Desktop warns. */
+  /** Asks first only when the main process answers `rewrites-pushed`, as GitHub Desktop warns. */
   const rebaseOnto = (ref: string, confirmed = false): void =>
     branch.run(`Rebasing onto ${ref}...`, async () => {
       const result = await repository.rebase(projectId, ref, confirmed);
-      if (!result.rewritesPushed) {
+      if (result.needsConfirmation !== "rewrites-pushed") {
         return result;
       }
       void askRebasePushed(ref);

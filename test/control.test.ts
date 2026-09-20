@@ -9,7 +9,7 @@ import { findControlPort, startControlServer } from "../src/main/control/control
 import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
 import { tabControlToken } from "../src/main/control/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
-import { EMPTY_REPOSITORY_STATE } from "../src/shared/types";
+import { EMPTY_REPOSITORY_STATE, withSettings } from "../src/shared/types";
 import type { AppSettings, Project, ProjectCommand, TerminalDescriptor } from "../src/shared/types";
 import { eventually, tetCtl as runCli } from "./helpers";
 import type { Run } from "./helpers";
@@ -155,8 +155,8 @@ function deps(): ControlDeps {
     store: { list: () => projects, get: (id) => projects.find((project) => project.id === id) },
     settings: {
       get: () => settings,
-      save: (next) => {
-        settings = next;
+      patch: (edits) => {
+        settings = withSettings(settings, edits);
       }
     },
     sessions: {
@@ -189,7 +189,7 @@ function deps(): ControlDeps {
     },
     deleteWorktree: async (worktree, force) => {
       calls.worktreesDeleted.push([worktree.path, force]);
-      return force ? { ok: true } : { ok: false, uncommitted: true };
+      return force ? { ok: true } : { ok: false, needsConfirmation: "uncommitted" as const };
     },
     readCommands: async () => [{ command: "npm run build", name: "build" }, { command: "a && b" }],
     shutdown: (relaunch) => {

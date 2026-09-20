@@ -29,6 +29,7 @@ import type {
   SbxPath,
   SbxProjectConfig,
   SbxStatus,
+  SettingsEdits,
   StashCommand,
   TerminalDescriptor,
   WorktreeRef
@@ -251,9 +252,9 @@ export function registerIpc({
 
   ipcMain.handle("settings:get", (): AppSettings => settings.get());
 
-  // Written whole. The dialog itself says when a theme waits for a restart.
-  ipcMain.handle("settings:save", (_event, next: AppSettings): void => {
-    settings.save(next);
+  // Only the keys the dialog touched. It says itself when a theme waits for a restart.
+  ipcMain.handle("settings:patch", (_event, edits: SettingsEdits): void => {
+    settings.patch(edits);
     applyTheme();
   });
 

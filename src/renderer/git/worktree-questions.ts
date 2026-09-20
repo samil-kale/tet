@@ -81,7 +81,7 @@ export async function askDeleteWorktree(
   const options = { force: false, onRemote: answer.checked };
   run(`Deleting ${branch}...`, async () => {
     const result = await window.tet.projects.deleteWorktree(worktree, options);
-    if (!result.uncommitted) {
+    if (result.needsConfirmation !== "uncommitted") {
       return result;
     }
     const forced = await confirm({
