@@ -42,6 +42,7 @@ import {
   keepEditor,
   openEditorFile,
   previewEditorTab,
+  revealEditorMatch,
   setEditorVersion,
   showDiff,
   showMarkdownPreview
@@ -741,6 +742,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         if (how.diff) {
           showDiff(tabId, true);
         }
+        if (how.reveal) {
+          revealEditorMatch(tabId, how.reveal);
+        }
       } else if (preview !== undefined) {
         tabId = preview;
         openEditorFile(projectId, tabId, path, true, how);
@@ -783,8 +787,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     },
     [activeProjectId, openEditor]
   );
-  /** Every other way in — the Explorer, a path ctrl-clicked in a terminal, a Markdown preview's
-   *  link: the file itself, in the project the view names. */
+  /** Every other way in — the Explorer, its search, a path ctrl-clicked in a terminal, a Markdown
+   *  preview's link: the file itself, in the project the view names. */
   const openProjectFile = useCallback(
     (projectId: string, path: string, how?: OpenEditor) => openEditor(projectId, path, how),
     [openEditor]

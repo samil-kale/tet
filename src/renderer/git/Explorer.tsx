@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder, FileChange, Project } from "../../shared/types";
+import type {
+  ExplorerListing,
+  ExplorerRoot,
+  ExplorerSortOrder,
+  FileChange,
+  FileSearchMatch,
+  FileSearchQuery,
+  FileSearchResult,
+  Project
+} from "../../shared/types";
+import { searchPattern } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import { type FileAct } from "./ChangesList";
 import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
-import { ChevronIcon, SearchIcon, TREE_CHEVRON } from "../ui/icons";
+import { CaseSensitiveIcon, ChevronIcon, type IconProps, RegexIcon, SearchIcon, TREE_CHEVRON, WholeWordIcon } from "../ui/icons";
 import { isMarkdown } from "../diff/diff-highlight";
 
 /** As VS Code resolves an icon theme: the name, then each extension from the longest (`a.spec.ts`
@@ -26,8 +36,10 @@ function fileMark(name: string): FileMark | null {
 }
 
 /** A Seti font glyph, sized by `.file-mark` in styles.css (`Svg`'s extent-cropping reaches only a
- *  path); its color class maps to the theme's terminal colors. */
-function FileMarkIcon({ mark: [glyph, color] }: { mark: FileMark }) {
+ *  path); its color class maps to the theme's terminal colors. Seti gives every file an icon, so
+ *  the slot is kept even where tet draws no mark. */
+function FileMarkIcon({ name }: { name: string }) {
+  const [glyph, color] = fileMark(name) ?? ["", ""];
   return (
     <span className={`tree-icon file-mark${color ? ` ${color}` : ""}`} aria-hidden="true">
       {glyph}
@@ -59,6 +71,19 @@ const INDENT_BASE = 9;
 /** Holds a folder's chevron: the chevron's own 12px box. */
 const TWISTIE_WIDTH = 12;
 const TWISTIE_GAP = 4;
+/** A match row starts under its file row's label: past the twistie and the file mark, a 12px
+ *  `.tree-icon` with the 4px gap `.explorer-tree .file-mark` adds. */
+const MATCH_INDENT = INDENT_BASE + TWISTIE_WIDTH + TWISTIE_GAP + 12 + 4;
+
+/** An empty search field: nothing typed, every toggle off. */
+const EMPTY_SEARCH: FileSearchQuery = { text: "", matchCase: false, wholeWord: false, regex: false, include: "", exclude: "" };
+
+/** VS Code's three toggles inside the search box, in its order and under its titles. */
+const SEARCH_TOGGLES: { key: "matchCase" | "wholeWord" | "regex"; title: string; Icon: (props: IconProps) => React.ReactNode }[] = [
+  { key: "matchCase", title: "Match Case", Icon: CaseSensitiveIcon },
+  { key: "wholeWord", title: "Match Whole Word", Icon: WholeWordIcon },
+  { key: "regex", title: "Use Regular Expression", Icon: RegexIcon }
+];
 
 /** Case-insensitive, locale-aware. */
 function compareNames(a: TreeNode, b: TreeNode): number {
@@ -208,16 +233,16 @@ function parentOf(entryPath: string): string {
 }
 
 /** A matching folder keeps its whole subtree; otherwise only matches survive, with their ancestors. */
-function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
+function filterTree(nodes: TreeNode[], pattern: RegExp): TreeNode[] {
   const result: TreeNode[] = [];
   for (const node of nodes) {
-    const matches = node.path.toLowerCase().includes(query);
+    const matches = pattern.test(node.path);
     if (node.children) {
       if (matches) {
         result.push(node);
         continue;
       }
-      const children = filterTree(node.children, query);
+      const children = filterTree(node.children, pattern);
       if (children.length > 0) {
         result.push({ ...node, children });
       }
@@ -240,6 +265,25 @@ function ancestorsOf(filePath: string): string[] {
   return ancestors;
 }
 
+/** A folder's or a result file's chevron, in the box the labels are measured against. */
+function Twistie({ open }: { open: boolean }) {
+  return (
+    <span
+      style={{
+        display: "flex",
+        flex: "none",
+        width: TWISTIE_WIDTH,
+        alignSelf: "stretch",
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: TWISTIE_GAP
+      }}
+    >
+      <ChevronIcon expanded={open} className="tree-icon" scale={TREE_CHEVRON} />
+    </span>
+  );
+}
+
 interface RowsProps {
   nodes: TreeNode[];
   depth: number;
@@ -259,7 +303,6 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
         const isFolder = node.children !== undefined;
         // A root starts open, everything else closed.
         const open = forceExpanded || (expanded[node.id] ?? node.root === true);
-        const mark = isFolder ? null : fileMark(node.name);
         return (
           <div key={node.id}>
             <button
@@ -279,26 +322,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
               onDoubleClick={() => !isFolder && onOpen(node.path, { keep: true })}
               onContextMenu={(event) => onContextMenu(event, node)}
             >
-              {isFolder ? (
-                <span
-                  style={{
-                    display: "flex",
-                    flex: "none",
-                    width: TWISTIE_WIDTH,
-                    alignSelf: "stretch",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginRight: TWISTIE_GAP,
-                  }}
-                >
-                  <ChevronIcon expanded={open} className="tree-icon" scale={TREE_CHEVRON} />
-                </span>
-              ) : mark ? (
-                <FileMarkIcon mark={mark} />
-              ) : (
-                // Seti gives every file an icon, so the slot is kept even where tet draws no mark.
-                <span className="tree-icon file-mark" aria-hidden="true" />
-              )}
+              {isFolder ? <Twistie open={open} /> : <FileMarkIcon name={node.name} />}
               <span className="tree-label">{node.name}</span>
             </button>
             {isFolder && open && (
@@ -321,6 +345,84 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
   );
 }
 
+/** VS Code's line above its results, and what stands in for it when there are none. */
+function summaryOf(result: FileSearchResult): string {
+  const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
+  const matches = result.files.reduce((count, file) => count + file.matches.length, 0);
+  if (result.error) {
+    return result.error;
+  }
+  if (matches === 0) {
+    return "No results in files";
+  }
+  const found = `${plural(matches, "result")} in ${plural(result.files.length, "file")}`;
+  return result.truncated ? `${found}, more left out` : found;
+}
+
+interface SearchResultsProps {
+  result: FileSearchResult;
+  onOpenMatch: (path: string, match: FileSearchMatch) => void;
+}
+
+/**
+ * What the search found in the files, under the tree that the same query filters by name. Listed as
+ * VS Code's search view does: a summary, then a row per file — open unless folded away — and under
+ * it a row per match, the line number and the line with the match marked.
+ */
+function SearchResults({ result, onOpenMatch }: SearchResultsProps) {
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  // Every search lists its files open again, as VS Code's does; the previous one's folds are gone.
+  const [listed, setListed] = useState(result);
+  if (listed !== result) {
+    setListed(result);
+    setFolded({});
+  }
+
+  return (
+    <>
+      <div className={`search-summary${result.error ? " error" : ""}`}>{summaryOf(result)}</div>
+      {result.files.map((file) => {
+        const open = !folded[file.path];
+        const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+        const dir = parentOf(file.path);
+        return (
+          <div key={file.path}>
+            <button
+              className="tree-item"
+              style={{ paddingLeft: INDENT_BASE }}
+              title={file.path}
+              onClick={() => setFolded((current) => ({ ...current, [file.path]: open }))}
+            >
+              <Twistie open={open} />
+              <FileMarkIcon name={name} />
+              <span className="tree-label">{name}</span>
+              {dir && <span className="search-dir">{dir}</span>}
+              <span className="count-badge search-count">{file.matches.length}</span>
+            </button>
+            {open &&
+              file.matches.map((match) => (
+                <button
+                  key={`${match.line}:${match.column}`}
+                  className="tree-item search-match"
+                  style={{ paddingLeft: MATCH_INDENT }}
+                  title={`${file.path}:${match.line}`}
+                  onClick={() => onOpenMatch(file.path, match)}
+                >
+                  <span className="search-line">{match.line}</span>
+                  <span className="tree-label">
+                    {match.text.slice(0, match.textColumn)}
+                    <span className="search-hit">{match.text.slice(match.textColumn, match.textColumn + match.length)}</span>
+                    {match.text.slice(match.textColumn + match.length)}
+                  </span>
+                </button>
+              ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 interface ExplorerProps {
   project: Project;
   /** Undefined while the listing is read. */
@@ -332,6 +434,10 @@ interface ExplorerProps {
   /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked. */
   /** The project is named: the same handler serves every view that opens a file. */
   onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
+  /** What the search field last asked for, undefined while it is empty (`useFileSearch`). */
+  searchResult: FileSearchResult | undefined;
+  /** The field asks for a search here, or for none; the owner runs it and shows it running. */
+  runSearch: (query: FileSearchQuery | null) => void;
   /** The owner shows it running on its own bar. */
   act: FileAct;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
@@ -351,9 +457,24 @@ export interface ExplorerHandle {
  * The files pane's tree of every repository file. No ↑/↓ of its own. Shaped by tet.json via the
  * listing: `folders` make it multi-root (overlap allowed); `exclude`/`excludeGitIgnore` are already
  * applied; `sortOrder`/`compactFolders` are applied here.
+ *
+ * Its field is VS Code's search box, one query for both halves: the tree keeps the paths it
+ * matches, and `runSearch` looks for the same in the files' lines, listed under the tree.
  */
-export function Explorer({ project, files, shown: visible, selected, onOpenFile, act, onExplorerChanged, ref }: ExplorerProps) {
-  const [filter, setFilter] = useState("");
+export function Explorer({
+  project,
+  files,
+  shown: visible,
+  selected,
+  onOpenFile,
+  searchResult,
+  runSearch,
+  act,
+  onExplorerChanged,
+  ref
+}: ExplorerProps) {
+  const [search, setSearch] = useState<FileSearchQuery>(EMPTY_SEARCH);
+  const [details, setDetails] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
   const rows = useRef(new Map<string, HTMLButtonElement>());
@@ -362,15 +483,31 @@ export function Explorer({ project, files, shown: visible, selected, onOpenFile,
     (path: string, how?: OpenEditor) => onOpenFile(project.id, path, how),
     [onOpenFile, project.id]
   );
+  /** A match row: the same file, at the match, which its editor selects. */
+  const onOpenMatch = useCallback(
+    (path: string, match: FileSearchMatch) =>
+      onOpen(path, { reveal: { line: match.line, column: match.column, length: match.length } }),
+    [onOpen]
+  );
 
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
-  const query = filter.trim().toLowerCase();
-  const filtering = query.length > 0;
+  // Nothing but whitespace asks for nothing: no search, and the tree unfiltered.
+  const asked = search.text.trim() ? search : null;
+  // An invalid regex leaves the tree unfiltered too; the search says what is wrong with it.
+  const pattern = useMemo(() => {
+    try {
+      return asked ? searchPattern(asked) : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [asked]);
+  const filtering = pattern !== undefined;
   // Compacted after filtering: a folder pruned to one subfolder folds with it.
   const shown = useMemo(() => {
-    const filtered = filtering ? filterTree(tree, query) : tree;
+    const filtered = pattern ? filterTree(tree, pattern) : tree;
     return files?.compactFolders ? compactTree(filtered) : filtered;
-  }, [tree, query, filtering, files?.compactFolders]);
+  }, [tree, pattern, files?.compactFolders]);
+  useEffect(() => runSearch(asked), [asked, runSearch]);
 
   // Reveals the active editor tab's file in the innermost root containing it.
   const roots = files?.roots;
@@ -587,10 +724,48 @@ export function Explorer({ project, files, shown: visible, selected, onOpenFile,
 
   return (
     <div className="explorer-tree">
-      <div className="filter-field">
-        <SearchIcon className="filter-icon" />
-        <input type="text" placeholder="Filter files..." value={filter} onChange={(event) => setFilter(event.target.value)} />
+      <div className="filter-row">
+        <button className="icon-button" title="Toggle Search Details" onClick={() => setDetails(!details)}>
+          <ChevronIcon expanded={details} className="tree-icon" scale={TREE_CHEVRON} />
+        </button>
+        <div className="filter-field">
+          <SearchIcon className="filter-icon" />
+          <input
+            type="text"
+            placeholder="Search"
+            value={search.text}
+            onChange={(event) => setSearch({ ...search, text: event.target.value })}
+          />
+          <span className="filter-toggles">
+            {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
+              <button
+                key={key}
+                className={`icon-button${search[key] ? " active" : ""}`}
+                title={title}
+                onClick={() => setSearch({ ...search, [key]: !search[key] })}
+              >
+                <Icon />
+              </button>
+            ))}
+          </span>
+        </div>
       </div>
+      {details && (
+        <div className="filter-details">
+          <input
+            type="text"
+            placeholder="files to include"
+            value={search.include}
+            onChange={(event) => setSearch({ ...search, include: event.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="files to exclude"
+            value={search.exclude}
+            onChange={(event) => setSearch({ ...search, exclude: event.target.value })}
+          />
+        </div>
+      )}
       <div
         className="tree"
         onContextMenu={(event) => {
@@ -618,6 +793,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpenFile,
           }}
           rows={rows.current}
         />
+        {searchResult && <SearchResults result={searchResult} onOpenMatch={onOpenMatch} />}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.node)} onClose={() => setMenu(null)} />}
     </div>

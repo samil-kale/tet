@@ -23,6 +23,13 @@ export function nextEditorTabId(): string {
  * How a file is opened, named rather than passed as a row of booleans: every view that opens one
  * says the same thing, and the rule for its own kind of click lives at that one call.
  */
+/** Where a search result opens its file: the match, 1-based as the editor counts. */
+export interface EditorReveal {
+  line: number;
+  column: number;
+  length: number;
+}
+
 export interface OpenEditor {
   /** The side the tab opens on: the changes list opens a change against HEAD, everything else a
    *  plain file, as VS Code shows it. A tab already open only ever has its diff switched on. */
@@ -31,6 +38,8 @@ export interface OpenEditor {
   keep?: boolean;
   /** A Markdown file with its preview beside the editor. */
   markdownPreview?: boolean;
+  /** A search result's match, selected once the file's text is in the editor. */
+  reveal?: EditorReveal;
 }
 
 export interface EditorTab {

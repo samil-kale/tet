@@ -498,6 +498,7 @@ textarea:focus,
   cursor: progress;
 }
 
+/* Shared by the branch tree's filter and the Explorer's search box, which adds to it below. */
 .filter-field {
   position: relative;
   padding: 8px 6px;
@@ -516,6 +517,59 @@ textarea:focus,
   transform: translateY(-50%);
   opacity: 0.6;
   pointer-events: none;
+}
+
+/* The Explorer's search box, VS Code's: the twistie for the two glob fields stands outside the
+   field, the three toggles inside it. The row takes over the field's own padding, so that it holds
+   the twistie too. */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+}
+
+.filter-row .filter-field {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+/* Room for the three toggles ending the field (`.filter-toggles`: 20px each, 2px apart, 4px off
+   the edge). */
+.filter-row .filter-field input {
+  padding-right: 72px;
+}
+
+/* The field no longer carries the 6px the branch tree's icon is placed against. */
+.filter-row .filter-icon {
+  left: 7px;
+}
+
+/* `.icon-button` in every other respect, `active` included: only the box shrinks, since VS Code's
+   input actions are 20px and three of them plus the twistie would take a narrow pane's whole row. */
+.filter-row .icon-button {
+  width: 20px;
+  height: 20px;
+}
+
+.filter-toggles {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* "files to include"/"files to exclude", behind the twistie and level with the field above them
+   (`.filter-row`'s padding, the 20px twistie and the 2px gap). */
+.filter-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 6px 8px 28px;
 }
 
 .tree {
@@ -630,6 +684,55 @@ textarea:focus,
 
 .explorer-tree .tree-icon.pink {
   color: var(--vscode-terminal-ansiBrightMagenta);
+}
+
+/* What the search found in the files, under the tree the same query filters (Explorer.tsx). The
+   rows are the tree's, so only what they carry beyond a file row is stated here. */
+.search-summary {
+  margin-top: 8px;
+  padding: 4px 6px 4px 9px;
+  border-top: 1px solid var(--vscode-panel-border);
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.search-summary.error {
+  color: var(--vscode-errorForeground);
+}
+
+/* The folder a result's file sits in, after its name as VS Code's result rows show it. */
+.search-dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+/* Pushed to the right edge, where a branch row's counts sit. */
+.search-count {
+  flex: none;
+  margin-left: auto;
+  padding-left: 6px;
+}
+
+/* A match row carries the line it found, in the editor's font as VS Code shows it. */
+.search-match {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+}
+
+.search-line {
+  flex: none;
+  min-width: 28px;
+  margin-right: 8px;
+  color: var(--vscode-descriptionForeground);
+  text-align: right;
+}
+
+.search-hit {
+  background: var(--vscode-editor-findMatchHighlightBackground);
 }
 
 /* 1px under --icon-size, like the Explorer's. */

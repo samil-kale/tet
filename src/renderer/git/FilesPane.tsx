@@ -3,6 +3,7 @@ import type { Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { useFileAct } from "./use-file-act";
+import { useFileSearch } from "./use-file-search";
 import { CollapseAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -14,7 +15,8 @@ interface FilesPaneProps {
   shown: boolean;
   /** The active editor tab's file — the tree reveals it. */
   openPath: string | null;
-  /** Opens in the project's preview tab, or as `how` asks (`editor-tab.ts`). */
+  /** Opens in the project's preview tab, or as `how` asks (`editor-tab.ts`) — a search result at
+   *  its match. */
   onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
 }
 
@@ -42,8 +44,9 @@ function useDelayed(active: boolean, delayMs: number): boolean {
 export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpenFile }: FilesPaneProps) {
   const { acting, act } = useFileAct(project.id);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
+  const { searchResult, searching, search } = useFileSearch(project.id);
   const explorerRef = useRef<ExplorerHandle>(null);
-  const showProgress = useDelayed(listing || acting, PROGRESS_DELAY_MS);
+  const showProgress = useDelayed(listing || acting || searching, PROGRESS_DELAY_MS);
 
   return (
     <div className={`side-pane-content${shown ? "" : " hidden"}`}>
@@ -91,6 +94,8 @@ export const FilesPane = memo(function FilesPane({ project, state, shown, openPa
           shown={shown}
           selected={openPath}
           onOpenFile={onOpenFile}
+          searchResult={searchResult}
+          runSearch={search}
           act={act}
           onExplorerChanged={refreshExplorer}
         />

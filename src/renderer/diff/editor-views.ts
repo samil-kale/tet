@@ -7,7 +7,7 @@ import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-hig
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine } from "./markdown";
-import type { OpenEditor } from "../terminal/editor-tab";
+import type { EditorReveal, OpenEditor } from "../terminal/editor-tab";
 import { openFile } from "../terminal/terminal-views";
 
 /**
@@ -97,6 +97,8 @@ interface EditorView {
   version: string | undefined;
   /** A report that came while the open's read was in flight, applied when it lands. */
   pendingVersion: string | undefined;
+  /** A match to select, kept until there is a model to select it in (`applyReveal`). */
+  pendingReveal: EditorReveal | undefined;
   snapshot: EditorSnapshot;
 }
 
@@ -179,6 +181,34 @@ function applyMode(view: EditorView): void {
 function setModels(view: EditorView, models: EditorView["models"]): void {
   view.diffEditor?.setModel(models);
   view.plainEditor?.setModel(models?.modified ?? null);
+}
+
+/** Selects the match a search result opened the file at, once its model is in an editor. Centred
+ *  only where it is off screen, as monaco goes to a find match. */
+function applyReveal(view: EditorView): void {
+  const reveal = view.pendingReveal;
+  const editor = activeEditor(view);
+  if (!reveal || !editor) {
+    return;
+  }
+  view.pendingReveal = undefined;
+  editor.setSelection({
+    startLineNumber: reveal.line,
+    startColumn: reveal.column,
+    endLineNumber: reveal.line,
+    endColumn: reveal.column + reveal.length
+  });
+  editor.revealLineInCenterIfOutsideViewport(reveal.line);
+}
+
+/** A match in a tab already open (`App.openEditor`), which needs no new read. */
+export function revealEditorMatch(tabId: string, reveal: EditorReveal): void {
+  const view = views.get(tabId);
+  if (!view) {
+    return;
+  }
+  view.pendingReveal = reveal;
+  applyReveal(view);
 }
 
 function setReadOnly(view: EditorView, readOnly: boolean): void {
@@ -284,9 +314,10 @@ export function editorContent(tabId: string): string | undefined {
 
 /**
  * Reads `path` afresh into the tab, making its editor on the first call, on the side and with the
- * preview `how` asks for (App's `openEditor`). `preview` is whether the tab is the project's
- * preview tab, which is App's to decide. The caller has made sure nothing unsaved is lost, and
- * calls this before the tab is drawn, whose host attaches the element made here.
+ * preview `how` asks for, selecting its match once the text is there (App's `openEditor`).
+ * `preview` is whether the tab is the project's preview tab, which is App's to decide. The caller
+ * has made sure nothing unsaved is lost, and calls this before the tab is drawn, whose host
+ * attaches the element made here.
  */
 export function openEditorFile(projectId: string, tabId: string, path: string, preview: boolean, how: OpenEditor): void {
   let view = views.get(tabId);
@@ -312,6 +343,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
       saves: 0,
       version: undefined,
       pendingVersion: undefined,
+      pendingReveal: undefined,
       snapshot: CLOSED
     };
     views.set(tabId, view);
@@ -322,6 +354,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
   clearPreview(view);
   view.version = undefined;
   view.pendingVersion = undefined;
+  view.pendingReveal = how.reveal;
   publish(view, {
     path,
     file: null,
@@ -598,6 +631,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   setReadOnly(view, isReadOnly(file));
   setModels(view, models);
   view.models = models;
+  applyReveal(view);
   renderPreview(view, 0);
   publish(view, { building: false });
 }

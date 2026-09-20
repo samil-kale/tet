@@ -10,6 +10,8 @@ import type {
   ExplorerListing,
   ExplorerSettings,
   FileContent,
+  FileSearchQuery,
+  FileSearchResult,
   FileWriteResult,
   GitActionResult,
   ListRepositoriesResult,
@@ -194,6 +196,8 @@ export interface TETApi {
       value: ExplorerSettings[K]
     ): Promise<GitActionResult>;
     listExplorer(projectId: string): Promise<ExplorerListing>;
+    /** The Explorer search field's matches, in the files the tree lists minus what git ignores. */
+    searchFiles(projectId: string, query: FileSearchQuery): Promise<FileSearchResult>;
     /** tet.json alone, no filesystem walk. */
     explorerSettings(projectId: string): Promise<ExplorerSettings>;
     readFile(projectId: string, path: string): Promise<FileContent>;
