@@ -5,26 +5,24 @@ changed for the user, not the commit list.
 
 ## 0.10.0 (2026-09-20)
 
-- **SEARCH is a pane of its own.** Searching the repository moved out of the Explorer into its
-  own pane beside it, and now finds matches inside files, not just file names. Results are
-  grouped per file and folded away until the file is opened; a match opens the file at its line.
-  The include/exclude fields are gone.
-- **Markdown preview.** A `.md` file opens rendered beside the editor, live as it is edited and
-  scroll-synced in both directions, with images from the repository and from https. A tab comes
-  back the way it was last left.
+- **Search.** A SEARCH pane sits beside the Explorer and searches the project's files for a
+  text, matches inside the files included. The hits are grouped per file, each file folded away
+  until it is opened, and a match opens the file in the editor at its line.
+- **Markdown preview.** A `.md` file is read rendered, in a preview beside the editor that
+  follows the file as it is edited and scrolls in step with it, both ways, with images from the
+  repository and from https. A file comes back the way it was last left.
 - **The editor tab toggles between the diff and the plain file.** A changed file's tab switches
   between monaco's inline diff and the file as it stands.
 - **A question says what refused it, where it was asked.** A dialog that git or the filesystem
   turned down stays up, holding what was typed, and shows the reason under the field to blame or
-  above the buttons — in git's own words, instead of a notice that appears somewhere else. While
-  the answer runs, the dialog shows its own progress bar.
+  above the buttons — in git's own words, instead of a notice elsewhere on screen. While the
+  answer runs, the dialog shows its own progress bar.
 - **Replace is gone from the find widget.** The editor's widget finds only: its replace toggle
   and the context menu's Find and Replace are gone, and Ctrl+H (Alt+Cmd+F on macOS) does nothing.
 - **pi 0.86.1.** The new version was measured through tet's terminals again: readiness, how it
   quits and the gap before it does.
-- **Fixes.** Writing to a terminal whose process has already exited no longer reports an error;
-  settings save only what actually changed; a Markdown preview's image follows redirects only
-  while they stay on https; and the git pane opens fewer git and sbx processes on refresh.
+- **Fixes.** Writing to a terminal whose process has already exited no longer reports an error,
+  and saving the settings writes only the keys the dialog touched.
 
 ## 0.9.2 (2026-09-19)
 
