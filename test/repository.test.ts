@@ -8,6 +8,7 @@ import { shell } from "electron";
 import { Repository } from "../src/main/git/repository";
 import { readMainWorktree } from "../src/main/git/linked-git-dir";
 import { worktreeBase } from "../src/shared/types";
+import type { FileSearchQuery, FileSearchResult } from "../src/shared/types";
 import { forkGitInProcess, git, isolateGitConfig } from "./helpers";
 
 /**
@@ -318,5 +319,103 @@ describe("where a worktree starts without a remote HEAD", () => {
     const repository = await open(dir);
     assert.equal(repository.getState().defaultBranch, undefined);
     assert.deepEqual(worktreeBase(repository.getState()), { name: "trunk" });
+  });
+});
+
+describe("the Explorer's search, VS Code's search in files", () => {
+  let dir: string;
+  let repository: Repository;
+
+  const search = (query: Partial<FileSearchQuery>): Promise<FileSearchResult> =>
+    repository.searchFiles({
+      text: "",
+      matchCase: false,
+      wholeWord: false,
+      regex: false,
+      include: "",
+      exclude: "",
+      ...query
+    });
+  /** Files and their matches as `path:line:column`, which is what the row opens. */
+  const found = (result: FileSearchResult): string[] =>
+    result.files.flatMap((file) => file.matches.map((match) => `${file.path}:${match.line}:${match.column}`));
+
+  before(async () => {
+    dir = init("tet-repository-search-");
+    fs.mkdirSync(path.join(dir, "src"));
+    fs.writeFileSync(path.join(dir, "src", "a.ts"), "const needle = 1;\n  needle();\n");
+    fs.writeFileSync(path.join(dir, "src", "b.txt"), "NEEDLE haystack\nneedless\n");
+    // Ignored and binary: the tree lists both, the search reads neither.
+    fs.writeFileSync(path.join(dir, ".gitignore"), "out/\n");
+    fs.mkdirSync(path.join(dir, "out"));
+    fs.writeFileSync(path.join(dir, "out", "built.js"), "needle\n");
+    fs.writeFileSync(path.join(dir, "src", "bin.dat"), Buffer.from([0x6e, 0x00, 0x65]));
+    repository = await open(dir);
+  });
+
+  it("finds every match in the listed files, and hands the row the line without its indent", async () => {
+    const result = await search({ text: "needle" });
+    assert.deepEqual(found(result), ["src/a.ts:1:7", "src/a.ts:2:3", "src/b.txt:1:1", "src/b.txt:2:1"]);
+    assert.equal(result.truncated, false);
+    assert.deepEqual(result.files[0].matches[1], { line: 2, column: 3, length: 6, text: "needle();", textColumn: 0 });
+  });
+
+  it("keeps the indent in the row where the match reaches into it", async () => {
+    const result = await search({ text: "^\\s+needle", regex: true });
+    assert.deepEqual(result.files[0].matches, [{ line: 2, column: 1, length: 8, text: "  needle();", textColumn: 0 }]);
+  });
+
+  it("reads neither what git ignores nor a binary file, both of which the tree lists", async () => {
+    assert.deepEqual(found(await search({ text: "needle" })).filter((match) => match.startsWith("out/")), []);
+    assert.deepEqual(found(await search({ text: "n" })).filter((match) => match.startsWith("src/bin")), []);
+    const listing = await repository.listExplorer();
+    assert.deepEqual(listing.files.includes("out/built.js") && listing.files.includes("src/bin.dat"), true);
+  });
+
+  it("narrows by the include and exclude fields, a bare glob matching at any depth", async () => {
+    assert.deepEqual(found(await search({ text: "needle", include: "*.ts" })), ["src/a.ts:1:7", "src/a.ts:2:3"]);
+    assert.deepEqual(found(await search({ text: "needle", exclude: "src/a.ts" })), ["src/b.txt:1:1", "src/b.txt:2:1"]);
+    assert.deepEqual(found(await search({ text: "needle", include: "out" })), []);
+  });
+
+  it("takes the case, whole-word and regex toggles, and reports a regex that will not parse", async () => {
+    assert.deepEqual(found(await search({ text: "needle", matchCase: true })), [
+      "src/a.ts:1:7",
+      "src/a.ts:2:3",
+      "src/b.txt:2:1"
+    ]);
+    assert.deepEqual(found(await search({ text: "needle", wholeWord: true })), [
+      "src/a.ts:1:7",
+      "src/a.ts:2:3",
+      "src/b.txt:1:1"
+    ]);
+    assert.deepEqual(found(await search({ text: "n..dle\\(", regex: true })), ["src/a.ts:2:3"]);
+    const broken = await search({ text: "(", regex: true });
+    assert.deepEqual(broken.files, []);
+    assert.equal(typeof broken.error, "string");
+  });
+
+  it("stops at the match cap without listing a file it then has no match for", async () => {
+    // Three files read at once, each more than half the cap: the two that land after it is reached
+    // are cut, and a file cut to nothing is no result.
+    const capped = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-capped-"));
+    git(capped, "init", "-q", "--initial-branch=main");
+    for (const name of ["a.txt", "b.txt", "c.txt"]) {
+      fs.writeFileSync(path.join(capped, name), "needle\n".repeat(1500));
+    }
+    const result = await (await open(capped)).searchFiles({
+      text: "needle",
+      matchCase: false,
+      wholeWord: false,
+      regex: false,
+      include: "",
+      exclude: ""
+    });
+    assert.equal(result.truncated, true);
+    assert.equal(
+      result.files.reduce((count, file) => count + file.matches.length, 0),
+      2000
+    );
+    assert.deepEqual(result.files.filter((file) => file.matches.length === 0), []);
   });
 });

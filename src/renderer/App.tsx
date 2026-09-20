@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
-import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import type { FileSearchMatch, GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
 import type { BranchActions } from "./git/BranchTree";
@@ -37,10 +37,12 @@ import {
   canDiscardProjectEdits,
   disposeEditor,
   disposeProjectEditors,
+  type EditorReveal,
   editorContent,
   keepEditor,
   openEditorFile,
   previewEditorTab,
+  revealEditorMatch,
   setEditorVersion,
   showDiff,
   showMarkdownPreview
@@ -743,9 +745,11 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * `diff` is the side the tab opens on: the changes list opens a change against HEAD, everything
    * else a file, plain as VS Code shows it. A tab already open only ever has its diff switched on,
    * never off, so opening a file again leaves what the user chose there (`showDiff`).
+   *
+   * `reveal` is a search result's match, selected in whichever editor the tab shows.
    */
   const openEditor = useCallback(
-    (projectId: string, path: string, diff: boolean, keep = false, markdownPreview = false) => {
+    (projectId: string, path: string, diff: boolean, keep = false, markdownPreview = false, reveal?: EditorReveal) => {
       const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path);
       const preview = keep ? undefined : previewEditorTab(projectId);
       let tabId: string;
@@ -760,16 +764,19 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         if (diff) {
           showDiff(tabId, true);
         }
+        if (reveal) {
+          revealEditorMatch(tabId, reveal);
+        }
       } else if (preview !== undefined) {
         tabId = preview;
-        openEditorFile(projectId, tabId, path, true, markdownPreview, diff);
+        openEditorFile(projectId, tabId, path, true, markdownPreview, diff, reveal);
         setEditorTabs((current) => ({
           ...current,
           [projectId]: (current[projectId] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
         }));
       } else {
         tabId = nextEditorTabId();
-        openEditorFile(projectId, tabId, path, !keep, markdownPreview, diff);
+        openEditorFile(projectId, tabId, path, !keep, markdownPreview, diff, reveal);
         setEditorTabs((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), { tabId, projectId, path }] }));
       }
       activateTab(projectId, tabId);
@@ -807,6 +814,19 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     (path: string, keep?: boolean, markdownPreview?: boolean) => {
       if (activeProjectId) {
         openEditor(activeProjectId, path, false, keep, markdownPreview);
+      }
+    },
+    [activeProjectId, openEditor]
+  );
+  /** The Explorer search's: the file at the match it found. */
+  const openActiveMatch = useCallback(
+    (path: string, match: FileSearchMatch) => {
+      if (activeProjectId) {
+        openEditor(activeProjectId, path, false, false, false, {
+          line: match.line,
+          column: match.column,
+          length: match.length
+        });
       }
     },
     [activeProjectId, openEditor]
@@ -997,6 +1017,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     : null
                 }
                 onOpen={openActiveFile}
+                onOpenMatch={openActiveMatch}
               />
               <GitPane
                 project={activeProject}

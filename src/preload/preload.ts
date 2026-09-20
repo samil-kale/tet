@@ -102,6 +102,7 @@ const api: TETApi = {
     setExplorerSetting: (projectId, key, value) =>
       ipcRenderer.invoke("repo:set-explorer-setting", projectId, key, value),
     listExplorer: (projectId) => ipcRenderer.invoke("repo:explorer", projectId),
+    searchFiles: (projectId, query) => ipcRenderer.invoke("repo:search", projectId, query),
     explorerSettings: (projectId) => ipcRenderer.invoke("repo:explorer-settings", projectId),
     readFile: (projectId, filePath) => ipcRenderer.invoke("repo:file-read", projectId, filePath),
     writeFile: (projectId, filePath, content, expectedMtimeMs) =>

@@ -1,7 +1,8 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { Project, RepositoryState } from "../../shared/types";
+import type { FileSearchMatch, Project, RepositoryState } from "../../shared/types";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { useFileAct } from "./use-file-act";
+import { useFileSearch } from "./use-file-search";
 import { CollapseAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -16,6 +17,8 @@ interface FilesPaneProps {
   /** Opens in the project's preview tab, or kept (`editor-tab.ts`); a Markdown file with its
    *  preview if asked. */
   onOpen: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
+  /** A search result: the same tab, at the match, which its editor selects. */
+  onOpenMatch: (path: string, match: FileSearchMatch) => void;
 }
 
 /** The listing is re-read on every show and usually lands in milliseconds; no flashing bar. */
@@ -39,11 +42,12 @@ function useDelayed(active: boolean, delayMs: number): boolean {
  * The side pane's files view, shown instead of the git view (VS Code's Explorer and Source Control,
  * one sidebar). The listing is read only while on screen.
  */
-export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpen }: FilesPaneProps) {
+export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpen, onOpenMatch }: FilesPaneProps) {
   const { acting, act } = useFileAct(project.id);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
+  const { searchResult, searching, search } = useFileSearch(project.id);
   const explorerRef = useRef<ExplorerHandle>(null);
-  const showProgress = useDelayed(listing || acting, PROGRESS_DELAY_MS);
+  const showProgress = useDelayed(listing || acting || searching, PROGRESS_DELAY_MS);
 
   return (
     <div className={`side-pane-content${shown ? "" : " hidden"}`}>
@@ -91,6 +95,9 @@ export const FilesPane = memo(function FilesPane({ project, state, shown, openPa
           shown={shown}
           selected={openPath}
           onOpen={onOpen}
+          onOpenMatch={onOpenMatch}
+          searchResult={searchResult}
+          runSearch={search}
           act={act}
           onExplorerChanged={refreshExplorer}
         />

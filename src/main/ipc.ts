@@ -16,6 +16,8 @@ import type {
   ExplorerListing,
   ExplorerSettings,
   FileContent,
+  FileSearchQuery,
+  FileSearchResult,
   FileWriteResult,
   GitActionResult,
   ListRepositoriesResult,
@@ -513,6 +515,10 @@ export function registerIpc({
         sortOrder: DEFAULT_EXPLORER_VIEW.sortOrder
       }
     );
+  });
+
+  ipcMain.handle("repo:search", async (_event, projectId: string, query: FileSearchQuery): Promise<FileSearchResult> => {
+    return (await repositories.get(projectId)?.searchFiles(query)) ?? { files: [], truncated: false };
   });
 
   // The settings Files tab: tet.json's view settings only, no walk.

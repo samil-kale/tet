@@ -2,13 +2,17 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
-import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
+import { EMPTY_REPOSITORY_STATE, searchPattern } from "../../shared/types";
 import type {
   CheckoutTarget,
   ExplorerListing,
   ExplorerSettings,
   FileChange,
   FileContent,
+  FileSearchFile,
+  FileSearchMatch,
+  FileSearchQuery,
+  FileSearchResult,
   FileWriteResult,
   GitActionResult,
   HeadBlob,
@@ -17,7 +21,7 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "./commands";
+import { addExclude, addFolder, type ExplorerView, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "./commands";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { git } from "./git-client";
 import { readLinkedGitDir } from "./linked-git-dir";
@@ -44,8 +48,44 @@ const AUTO_FETCH_TIMEOUT_MS = 2 * 60_000;
  *  recursively (a network share) fails every time, and a fixed one-second retry is a busy loop. */
 const WATCH_RETRY_MS = 1000;
 const WATCH_RETRY_MAX_MS = 60_000;
-/** Above this, the editor shows "too large" instead of reading the file into the renderer. */
+/** Above this, the editor shows "too large" instead of reading the file into the renderer; a file
+ *  the tab cannot show is no use as a search result either. */
 const MAX_EDIT_BYTES = 4 * 1024 * 1024;
+
+/** A search's cap, counted in matches, since every one of them is a row the renderer draws. A
+ *  one-character query in a large repository stops here instead of filling the pane. */
+const MAX_SEARCH_MATCHES = 2000;
+/** Files read at once; beyond a handful only file handles are spent. */
+const SEARCH_READERS = 8;
+/** The longest result row, and how much of the line is kept before a match far to the right. */
+const MAX_MATCH_TEXT = 400;
+const MATCH_LEAD = 40;
+
+/** What a result row shows: the line without its indent, cut to a window holding the match — which
+ *  may itself start inside the indent, and then keeps it. */
+function matchText(line: string, index: number): { text: string; textColumn: number } {
+  const indent = line.length - line.trimStart().length;
+  const start = Math.min(index, Math.max(indent, index - MATCH_LEAD));
+  return { text: line.slice(start, start + MAX_MATCH_TEXT), textColumn: index - start };
+}
+
+/**
+ * A "files to include"/"files to exclude" field, or undefined where it is empty. VS Code's rules:
+ * comma-separated globs against the repository-relative path, a pattern without a slash matching at
+ * any depth (`*.ts` finds every TypeScript file) and one naming a folder taking everything under it.
+ */
+function globMatcher(patterns: string): ((filePath: string) => boolean) | undefined {
+  const globs = patterns
+    .split(",")
+    .map((pattern) => pattern.trim().replace(/^\.?\//, "").replace(/\/$/, ""))
+    .filter((pattern) => pattern.length > 0)
+    .flatMap((pattern) => (pattern.includes("/") ? [pattern] : [pattern, `**/${pattern}`]))
+    .flatMap((pattern) => [pattern, `${pattern}/**`]);
+  if (globs.length === 0) {
+    return undefined;
+  }
+  return (filePath) => globs.some((pattern) => path.matchesGlob(filePath, pattern));
+}
 
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
  *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus). */
@@ -114,6 +154,8 @@ export class Repository {
    *  fallback). Read with the urls, on open and after `.git/config` changes. */
   private defaultBranchName = "main";
   private remoteUrlsStale = false;
+  /** Bumped by every `searchFiles`: the readers of one overtaken stop where they are. */
+  private searchSeq = 0;
   /** Checked once on open; if false, nothing is read or watched. */
   private isGit = false;
   /** The project was closed; anything still in flight doesn't report. */
@@ -588,22 +630,38 @@ export class Repository {
     return this.runAction(() => git.ignorePath(this.project.path, filePath, scope));
   }
 
-  /**
-   * Every file, plus empty directories — see `ExplorerListing`. A filesystem walk, not a git
-   * process: off the index lock `runAction` serialises, and `fs.promises` so a large `node_modules`
-   * doesn't hold the main event loop. Skips `exclude` globs and, if opted in, git's ignore list (one
-   * `ls-files` per listing, never on the refresh path); walks only the outermost `folders`. Mtimes
-   * cost a `stat` per entry, so only `modified` reads them.
-   */
+  /** Every file, plus empty directories — see `ExplorerListing`. The walk's own doc is
+   *  `walkExplorer`; mtimes cost a `stat` per entry, so only `modified` asks for them. */
   async listExplorer(): Promise<ExplorerListing> {
     const view = await readExplorerView(this.project.path);
+    const wantMtimes = view.sortOrder === "modified";
+    const walked = await this.walkExplorer(view, wantMtimes);
+    return {
+      files: walked.files.sort(),
+      emptyDirs: walked.emptyDirs.sort(),
+      roots: view.folders.length > 0 ? view.folders : undefined,
+      compactFolders: view.compactFolders,
+      sortOrder: view.sortOrder,
+      mtimes: walked.mtimes
+    };
+  }
+
+  /**
+   * The Explorer's entries under one view. A filesystem walk, not a git process: off the index lock
+   * `runAction` serialises, and `fs.promises` so a large `node_modules` doesn't hold the main event
+   * loop. Skips `exclude` globs and, if the view says so, git's ignore list (one `ls-files` per
+   * walk, never on the refresh path); walks only the outermost `folders`.
+   */
+  private async walkExplorer(
+    view: ExplorerView,
+    wantMtimes: boolean
+  ): Promise<{ files: string[]; emptyDirs: string[]; mtimes: Record<string, number> | undefined }> {
     const ignored = view.excludeGitIgnore ? await git.listIgnored(this.project.path).catch(() => []) : [];
     const ignoredFiles = new Set(ignored.filter((entry) => !entry.endsWith("/")));
     const ignoredDirs = new Set(ignored.filter((entry) => entry.endsWith("/")).map((entry) => entry.slice(0, -1)));
     const skip = (relativePath: string, isDirectory: boolean): boolean =>
       (isDirectory ? ignoredDirs : ignoredFiles).has(relativePath) ||
       view.exclude.some((pattern) => path.matchesGlob(relativePath, pattern));
-    const wantMtimes = view.sortOrder === "modified";
 
     const files: string[] = [];
     const emptyDirs: string[] = [];
@@ -653,7 +711,7 @@ export class Repository {
           pending.push(stat(absolutePath, relativePath));
         }
       }
-      // In parallel; the final sorts keep the listing deterministic.
+      // In parallel; the caller's sort keeps the listing deterministic.
       await Promise.all(pending);
     };
     const roots = view.folders;
@@ -665,14 +723,98 @@ export class Repository {
     } else {
       await Promise.all(outermost.map((root) => walk(path.join(this.project.path, root.path), root.path)));
     }
-    return {
-      files: files.sort(),
-      emptyDirs: emptyDirs.sort(),
-      roots: roots.length > 0 ? roots : undefined,
-      compactFolders: view.compactFolders,
-      sortOrder: view.sortOrder,
-      mtimes: wantMtimes ? mtimes : undefined
+    return { files, emptyDirs, mtimes: wantMtimes ? mtimes : undefined };
+  }
+
+  /**
+   * The Explorer search field's matches, VS Code's "search in files": every line of every listed
+   * file the query matches. The Explorer's own file set, always without what git ignores — VS
+   * Code's `search.useIgnoreFiles`, which the tree's `excludeGitIgnore` does not decide, and a
+   * search must not read `node_modules`. `include`/`exclude` narrow it further, then the files are
+   * read a few at a time (more only costs file handles) until the match cap.
+   *
+   * The cap bounds what is listed, not the reading: a query matching nothing still costs the whole
+   * repository. So a search started here gives up as soon as the next one is asked for — typing in
+   * a large repository would otherwise have several full scans running at once, all but the last
+   * one already discarded by the renderer.
+   */
+  async searchFiles(query: FileSearchQuery): Promise<FileSearchResult> {
+    let matcher: RegExp;
+    try {
+      matcher = searchPattern(query, "g");
+    } catch (error) {
+      return { files: [], truncated: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    const seq = ++this.searchSeq;
+    const view = await readExplorerView(this.project.path);
+    const { files } = await this.walkExplorer({ ...view, excludeGitIgnore: true }, false);
+    const include = globMatcher(query.include);
+    const exclude = globMatcher(query.exclude);
+    const wanted = files
+      .filter((filePath) => (include?.(filePath) ?? true) && !exclude?.(filePath))
+      .sort();
+
+    const found: (FileSearchFile | undefined)[] = new Array(wanted.length);
+    let next = 0;
+    let matches = 0;
+    let truncated = false;
+    const read = async (): Promise<void> => {
+      while (next < wanted.length && !truncated && seq === this.searchSeq) {
+        const index = next++;
+        const filePath = wanted[index];
+        const lines = await this.matchesIn(filePath, matcher);
+        if (matches + lines.length > MAX_SEARCH_MATCHES) {
+          lines.length = MAX_SEARCH_MATCHES - matches;
+          truncated = true;
+        }
+        // Empty, or emptied by the cap another reader reached while this file was being read.
+        if (lines.length === 0) {
+          continue;
+        }
+        matches += lines.length;
+        found[index] = { path: filePath, matches: lines };
+      }
     };
+    await Promise.all(Array.from({ length: Math.min(SEARCH_READERS, wanted.length) }, read));
+    // The cap is only ever reached mid-file, so it always left matches out.
+    return { files: found.filter((file) => file !== undefined), truncated };
+  }
+
+  /**
+   * One file's matches, empty for a file too large, binary or unreadable — none of which the editor
+   * would show either. The readers share `matcher`, whose `lastIndex` the loop below carries from
+   * one match to the next: nothing in that loop awaits, so no second reader can reach it meanwhile.
+   */
+  private async matchesIn(filePath: string, matcher: RegExp): Promise<FileSearchMatch[]> {
+    const absolute = path.join(this.project.path, filePath);
+    let content: string;
+    try {
+      const stat = await fs.promises.stat(absolute);
+      if (!stat.isFile() || stat.size > MAX_EDIT_BYTES) {
+        return [];
+      }
+      const buffer = await fs.promises.readFile(absolute);
+      if (buffer.includes(0)) {
+        return [];
+      }
+      content = buffer.toString("utf8");
+    } catch {
+      // Vanished or unreadable between the walk and the read.
+      return [];
+    }
+    const matches: FileSearchMatch[] = [];
+    content.split(/\r?\n/).forEach((line, index) => {
+      matcher.lastIndex = 0;
+      for (let match = matcher.exec(line); match; match = matcher.exec(line)) {
+        if (match[0].length === 0) {
+          // A pattern that can match nothing (`a*`) would never advance on its own.
+          matcher.lastIndex++;
+          continue;
+        }
+        matches.push({ line: index + 1, column: match.index + 1, length: match[0].length, ...matchText(line, match.index) });
+      }
+    });
+    return matches;
   }
 
   /** A repository-relative path for a new entry, resolved, or an error if outside or taken.

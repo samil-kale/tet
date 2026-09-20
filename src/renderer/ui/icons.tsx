@@ -295,6 +295,79 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
+/** Lucide's `case-sensitive` — the search field's "Match Case", VS Code's `Aa`. Measured: 20 by 10
+ *  (stroke included), extent 14.14 (their geometric mean), centered at (12, 11). */
+export function CaseSensitiveIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(14.14, 12, 11, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(14.14, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m3 15 4-8 4 8" />
+      <path d="M4 13h6" />
+      <circle cx="18" cy="12" r="3" />
+      <path d="M21 9v6" />
+    </svg>
+  );
+}
+
+/** Lucide's `whole-word` — "Match Whole Word", VS Code's underlined `ab`. Measured: 22 by 14,
+ *  extent 17.55, centered at (12, 13). */
+export function WholeWordIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(17.55, 12, 13, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(17.55, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="7" cy="12" r="3" />
+      <path d="M10 9v6" />
+      <circle cx="17" cy="12" r="3" />
+      <path d="M14 7v8" />
+      <path d="M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1" />
+    </svg>
+  );
+}
+
+/** Lucide's `regex` — "Use Regular Expression", VS Code's `.*`. Measured: 20.33 by 20, extent
+ *  20.16, centered at (12.17, 12). */
+export function RegexIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(20.16, 12.17, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(20.16, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M17 3v10" />
+      <path d="m12.67 5.5 8.66 5" />
+      <path d="m12.67 10.5 8.66-5" />
+      <path d="M9 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z" />
+    </svg>
+  );
+}
+
 export function ChevronIcon({ expanded, scale, ...props }: IconProps & { expanded: boolean; scale?: number }) {
   return (
     <Svg {...props} extent={8.34} scale={scale}>
