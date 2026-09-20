@@ -1,6 +1,6 @@
 /**
- * Generates src/renderer/git/file-icons.ts, the Explorer's file marks, and copies Seti's font beside
- * it as src/renderer/git/seti.woff:
+ * Generates src/renderer/files/file-icons.ts, the Explorer's file marks, and copies Seti's font
+ * beside it as src/renderer/files/seti.woff:
  *
  *   node scripts/file-icons.js <VS Code's resources/app>
  *
@@ -22,7 +22,7 @@ if (!vscodeApp) {
   process.exit(1);
 }
 const extensions = path.join(vscodeApp, "extensions");
-const outDir = path.join(__dirname, "..", "src", "renderer", "git");
+const outDir = path.join(__dirname, "..", "src", "renderer", "files");
 
 /** Seti's palette to the color classes styles.css draws in the theme's terminal colors. */
 const PALETTE = {

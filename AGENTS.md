@@ -27,7 +27,8 @@ project's terminals.
   `terminals/` (pty, sessions, hooks), `control/` (`tet-ctl`), `ipc/` (one registrar per `TETApi`
   group, each taking only the singletons it touches), `agents/`, `providers/`; flat is the app
   itself — window, settings, sbx.
-- `src/renderer/`: `terminal/` (xterm, split view, link providers), `git/` (the side pane's views),
+- `src/renderer/`: `terminal/` (xterm, split view, link providers), `git/` (the side pane's git
+  view), `files/` (its other one: the Explorer tree, the SEARCH pane, Seti's file icons),
   `diff/` (the editor tab: monaco + shiki), `sidebar/`, `dialogs/`, `ui/`; flat is the shell —
   `App`, `Startup`, the stylesheets, `shortcuts.ts`.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`

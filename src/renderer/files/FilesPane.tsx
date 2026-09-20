@@ -1,15 +1,9 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { FileSearchMatch, Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
-import {
-  Explorer,
-  FileSearch,
-  searchSummary,
-  useExplorerListing,
-  type ExplorerHandle,
-  type FileSearchHandle
-} from "./Explorer";
-import { useFileAct } from "./use-file-act";
+import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
+import { FileSearch, searchSummary, type FileSearchHandle } from "./FileSearch";
+import { useFileAct } from "../git/use-file-act";
 import { useFileSearch } from "./use-file-search";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { ClearIcon, CollapseAllIcon, ExpandAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";

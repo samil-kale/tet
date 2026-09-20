@@ -7,7 +7,7 @@ import { useStartedHere } from "./git/use-file-act";
 import type { BranchActions } from "./git/BranchTree";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
-import { FilesPane } from "./git/FilesPane";
+import { FilesPane } from "./files/FilesPane";
 import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";

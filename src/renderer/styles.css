@@ -622,13 +622,13 @@ textarea:focus,
   gap: 0;
 }
 
-/* A file mark is a glyph of Seti's font (git/file-icons.ts), centred in the chevron's 12px
+/* A file mark is a glyph of Seti's font (files/file-icons.ts), centred in the chevron's 12px
    `.tree-icon` box. VS Code draws it at 150% of the 13px label in a 16px box; the same share of this
-   12px box. The chevron's gap after it (TWISTIE_WIDTH + TWISTIE_GAP in Explorer.tsx), so file and
+   12px box. The chevron's gap after it (TWISTIE_WIDTH + TWISTIE_GAP in files/tree-rows.tsx), so file and
    folder labels stay level. */
 @font-face {
   font-family: "seti";
-  src: url("./git/seti.woff") format("woff");
+  src: url("./files/seti.woff") format("woff");
   font-weight: normal;
   font-style: normal;
 }
@@ -643,7 +643,7 @@ textarea:focus,
   line-height: 1;
 }
 
-/* Seti's palette (FileMarkColor in git/file-icons.ts) in the terminal's ANSI colors, which every
+/* Seti's palette (FileMarkColor in files/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
 .explorer-tree .tree-icon.blue {
   color: var(--vscode-terminal-ansiBlue);
@@ -673,7 +673,7 @@ textarea:focus,
   color: var(--vscode-terminal-ansiBrightMagenta);
 }
 
-/* What the search found in the files (Explorer.tsx's `FileSearch`). The rows are the tree's, so
+/* What the search found in the files (files/FileSearch.tsx). The rows are the tree's, so
    only what they carry beyond a file row is stated here. */
 
 /* The SEARCH header's title with the summary beside it, long enough to be cut off before the
