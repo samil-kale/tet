@@ -146,10 +146,10 @@ TET always requires:
 
 In addition, at least one of the following must be available:
 
-* Claude Code
-* Codex CLI
-* OpenCode
-* Pi
+* `claude`
+* `codex`
+* `opencode`
+* `pi`
 * `sbx`
 
 The startup check tells you what is missing.
