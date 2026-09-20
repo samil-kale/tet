@@ -1,12 +1,13 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
 import type { GitActionResult, Project, RemoteInfo } from "../../shared/types";
 import { canDiscardProjectEdits } from "../diff/editor-views";
+import type { GitRun } from "../git/BranchTree";
+import { notifyRefused } from "../git/use-file-act";
 import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
-import { notify } from "../ui/Notices";
 import { ProgressBar } from "../ui/ProgressBar";
 import { ChangesIcon, CloseIcon, CommentIcon, PlusIcon, QuestionIcon, ShieldIcon, SpinnerIcon } from "../ui/icons";
 
@@ -85,7 +86,7 @@ interface ProjectListProps {
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
   /** `App.runBranchAction`: a worktree command shows in this list's bar and fails as a notice. */
-  onGitAction: (projectId: string, label: string, action: () => Promise<GitActionResult>) => void;
+  onGitAction: (projectId: string, label: string, action: () => Promise<GitActionResult>) => Promise<string | undefined>;
   /** A command started here runs, in any project. */
   gitBusy: boolean;
   /** git creates and renames worktrees (Requirements.worktrees); else both entries say why not. */
@@ -187,26 +188,27 @@ export const ProjectList = memo(function ProjectList({
   };
 
   const askRemoteUrl = async (project: Project, remote: RemoteInfo): Promise<void> => {
-    const answer = await prompt({
+    await prompt({
       title: "Change remote URL",
       label: `URL of ${remote.name}`,
       value: remote.url ?? "",
-      confirmLabel: "Change URL"
+      confirmLabel: "Change URL",
+      submit: async ({ value }) => {
+        if (value === remote.url) {
+          return undefined;
+        }
+        const result = await window.tet.repository.setRemoteUrl(project.id, remote.name, value);
+        return result.ok ? undefined : (result.error ?? "Could not change the remote URL");
+      }
     });
-    if (!answer || answer.value === remote.url) {
-      return;
-    }
-    const result = await window.tet.repository.setRemoteUrl(project.id, remote.name, answer.value);
-    if (!result.ok) {
-      notify("error", result.error ?? "Could not change the remote URL");
-    }
   };
 
-  /** How a command runs in a project: its progress bar, a failure as a notice. */
-  const runIn =
-    (projectId: string) =>
-    (label: string, action: () => Promise<GitActionResult>): void =>
-      onGitAction(projectId, label, action);
+  /** How a command runs in a project (`GitRun`): its progress bar, and its failure either as a
+   *  notice or handed back to the question that asked for the name. */
+  const runIn = (projectId: string): GitRun => ({
+    run: (label, action) => void onGitAction(projectId, label, action).then(notifyRefused),
+    ask: (label, action) => onGitAction(projectId, label, action)
+  });
 
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
    *  pane, where its target is on screen — but for a worktree's own row, which is that tree. */
@@ -229,7 +231,7 @@ export const ProjectList = memo(function ProjectList({
             run:
               base && baseProject && !detached
                 ? () =>
-                    runIn(baseProject.id)(`Merging ${name} into ${base}...`, () =>
+                    runIn(baseProject.id).run(`Merging ${name} into ${base}...`, () =>
                       window.tet.repository.merge(baseProject.id, name)
                     )
                 : undefined

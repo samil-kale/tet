@@ -112,10 +112,16 @@ or a per-line decision is for an agent.
   `src/renderer/terminal/pane-layout.ts`.
 - **Everything the user is told is a notice**: `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`). No view keeps a message of its own. A status (marks, progress bar) is not a
-  notice.
+  notice. The one exception is what refused an answer that is still on screen — see below.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native dialogs. Ask only before something
   irreversible. Card dialogs are drawn in `DialogFrame`.
+- **A question runs its own answer** (`PromptOptions.submit`): the dialog stays up while the
+  action runs and shows what refused it under the field it was typed in, holding the text so it
+  can be corrected — git's own words for a name it will not take, never tet's guess at them.
+  What runs it hands the failure back rather than notifying it (`GitRun.ask`, `FileAsk`, and
+  the main-process verbs answering a `GitActionResult`); `run`/`act` notify it, for an action
+  with nothing left on screen to carry it — a `confirm` has no field, so it notifies.
 - **Nothing is written until Save**; Cancel and Escape drop edits. A setting reaches an agent at
   its setup (`AgentPaths`), so it applies to projects opened afterwards.
 - **One `.progress-bar` per pane** (`ProgressBar.tsx`): a new slow reason feeds the existing bar.

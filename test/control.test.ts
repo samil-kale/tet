@@ -76,6 +76,8 @@ let server: { close: () => Promise<void> };
 let settings: AppSettings;
 /** What the faked applyTheme answers. */
 let themeWaits = false;
+/** What the faked renameTab answers: an agent's refusal, as a real one can give. */
+let refuseRename: string | undefined;
 let calls: Calls;
 
 function terminalsOf(projectId: string): ControlTerminals {
@@ -115,6 +117,7 @@ function terminalsOf(projectId: string): ControlTerminals {
     },
     renameTab: async (tabId, title) => {
       calls.renamed.push([tabId, title]);
+      return refuseRename;
     },
     hookEvent: (tabId, event, payload, at) => {
       calls.hooks.push([tabId, event, payload]);
@@ -281,6 +284,7 @@ describe("tet-ctl against the control server", () => {
     }
     tab2Session = undefined;
     themeWaits = false;
+    refuseRename = undefined;
   });
 
   it("answers help by itself, with every verb", async () => {
@@ -502,6 +506,13 @@ describe("tet-ctl against the control server", () => {
   it("renames a tab", async () => {
     assert.deepEqual((await tetCtl(["tabs-rename", "tab-2", "Build log"])).result, { renamed: "tab-2" });
     assert.deepEqual(calls.renamed, [["tab-2", "Build log"]]);
+  });
+
+  it("fails rather than reporting a rename the agent refused", async () => {
+    refuseRename = "Could not rename Claude Code session: no such session";
+    const answer = await tetCtl(["tabs-rename", "tab-2", "Build log"]);
+    assert.equal(answer.status, EXIT_CODES.internal);
+    assert.match(answer.stderr, /no such session/);
   });
 
   it("refuses to rename a tab it does not know", async () => {

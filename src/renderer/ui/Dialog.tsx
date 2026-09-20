@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DialogFrame } from "./DialogFrame";
 import { Checkbox, Field, TextField } from "./Field";
-import { SparkleIcon, SpinnerIcon } from "./icons";
+import { CircleAlertIcon, SparkleIcon, SpinnerIcon } from "./icons";
 import { notify } from "./Notices";
 
 export interface ConfirmOptions {
@@ -54,6 +54,13 @@ export interface PromptOptions {
     title: string;
     run: () => Promise<string>;
   };
+  /**
+   * Runs the answer while the question still stands, so what refuses it is shown at the field it
+   * was typed in rather than as a notice once the dialog is gone — git's own words for a name it
+   * will not take. A message means refused: the dialog stays up, holding what was typed. Nothing
+   * means done, and it closes. Left out, the answer is simply handed back.
+   */
+  submit?: (answer: PromptAnswer) => Promise<string | undefined>;
 }
 
 export interface PromptAnswer {
@@ -134,6 +141,8 @@ interface FrameProps {
   confirmLabel: string;
   /** Nothing to go through with yet, e.g. an empty name. */
   disabled?: boolean;
+  /** `PromptOptions.submit` is underway: the header's bar, as everywhere else. */
+  busy?: boolean;
   /** See PromptOptions.wide. */
   wide?: boolean;
   /** The confirm button takes the focus, for a dialog with no field. */
@@ -143,10 +152,11 @@ interface FrameProps {
   children: React.ReactNode;
 }
 
-function Frame({ title, confirmLabel, disabled, wide, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
+function Frame({ title, confirmLabel, disabled, busy, wide, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
   return (
     <DialogFrame
       header={{ title, onClose: onCancel }}
+      busy={busy}
       className={wide ? "wide" : undefined}
       // A form, so Enter answers from the field or the checkbox alike.
       onSubmit={() => {
@@ -195,13 +205,51 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const [color, setColor] = useState(dialog.colors?.value ?? "");
   const [checked, setChecked] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  /** What `submit` refused, under the answer's field; cleared by the next keystroke, which is
+   *  about to make it wrong. */
+  const [refused, setRefused] = useState<string | undefined>(undefined);
+  const [running, setRunning] = useState(false);
   const field = useRef<HTMLInputElement>(null);
+  /** Escape closes the question while `submit` runs: the refusal then has no field to sit at and
+   *  falls back to a notice, so it is never lost. */
+  const live = useRef(true);
 
   // Focus and select the first field once on mount; per render would swallow keystrokes.
   useEffect(() => {
     field.current?.focus();
     field.current?.select();
   }, []);
+
+  useEffect(() => () => void (live.current = false), []);
+
+  const submit = async (): Promise<void> => {
+    const answered: PromptAnswer = {
+      value: value.trim(),
+      extras: extras.map((entry) => entry.trim()),
+      color,
+      checked
+    };
+    if (!dialog.submit) {
+      dialog.answer(answered);
+      return;
+    }
+    setRunning(true);
+    setRefused(undefined);
+    const message = await dialog.submit(answered);
+    if (!live.current) {
+      if (message !== undefined) {
+        notify("error", message);
+      }
+      return;
+    }
+    setRunning(false);
+    if (message === undefined) {
+      dialog.answer(answered);
+    } else {
+      setRefused(message);
+      field.current?.focus();
+    }
+  };
 
   const suggest = async (): Promise<void> => {
     if (!dialog.suggestion || suggesting) {
@@ -239,8 +287,11 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       type="text"
       value={value}
       maxLength={dialog.maxLength}
-      disabled={suggesting}
-      onChange={(event) => setValue(event.target.value)}
+      disabled={suggesting || running}
+      onChange={(event) => {
+        setValue(event.target.value);
+        setRefused(undefined);
+      }}
       ref={field}
     />
   );
@@ -267,6 +318,12 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       ) : (
         input
       )}
+      {refused !== undefined && (
+        <p className="dialog-field-error">
+          <CircleAlertIcon />
+          {refused}
+        </p>
+      )}
     </Field>
   );
 
@@ -274,9 +331,10 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     <Frame
       title={dialog.title}
       confirmLabel={dialog.confirmLabel}
-      disabled={suggesting || value.trim().length === 0}
+      disabled={suggesting || running || value.trim().length === 0}
+      busy={running}
       wide={dialog.wide}
-      onSubmit={() => dialog.answer({ value: value.trim(), extras: extras.map((entry) => entry.trim()), color, checked })}
+      onSubmit={() => void submit()}
       onCancel={() => dialog.answer(null)}
     >
       {fields}

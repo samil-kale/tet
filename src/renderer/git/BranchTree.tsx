@@ -22,13 +22,21 @@ import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } f
 
 /** One git command at a time per project, labelled while it runs. The tree asks its questions
  *  itself, knowing which remote holds a branch and where HEAD is. */
-export interface BranchActions {
+export interface BranchActions extends GitRun {
   /** A command runs in this project; no second one is offered. */
   busy: boolean;
   /** That command was started here, so this pane's bar shows it; one started from the project
    *  list shows in that list's bar instead. */
   startedHere: boolean;
+}
+
+/** The two ways a view runs a git command, differing only in where its failure is told: `run`
+ *  notifies it, for an action with nothing left on screen to carry it; `ask` hands it back, for a
+ *  question that stays up and shows it under the field the answer was typed in (`prompt`'s
+ *  `submit`). */
+export interface GitRun {
   run: (label: string, action: () => Promise<GitActionResult>) => void;
+  ask: (label: string, action: () => Promise<GitActionResult>) => Promise<string | undefined>;
 }
 
 interface BranchTreeProps {
@@ -173,23 +181,29 @@ export const BranchTree = memo(function BranchTree({
   };
 
   const askCreateBranch = async (startPoint: string): Promise<void> => {
-    const answer = await prompt({
+    await prompt({
       title: "Create branch",
       label: "Name",
       detail: `The new branch starts at ${startPoint} and is checked out.`,
       value: "",
-      confirmLabel: "Create branch"
+      confirmLabel: "Create branch",
+      // git's own words for a name it will not take, at the field (`prompt`'s `submit`).
+      submit: ({ value }) =>
+        branch.ask(`Creating ${value}...`, () => repository.createBranch(projectId, value, startPoint))
     });
-    if (answer) {
-      branch.run(`Creating ${answer.value}...`, () => repository.createBranch(projectId, answer.value, startPoint));
-    }
   };
 
   const askRenameBranch = async (name: string): Promise<void> => {
-    const answer = await prompt({ title: "Rename branch", label: "Name", value: name, confirmLabel: "Rename" });
-    if (answer && answer.value !== name) {
-      branch.run(`Renaming ${name}...`, () => repository.renameBranch(projectId, name, answer.value));
-    }
+    await prompt({
+      title: "Rename branch",
+      label: "Name",
+      value: name,
+      confirmLabel: "Rename",
+      submit: ({ value }) =>
+        value === name
+          ? Promise.resolve(undefined)
+          : branch.ask(`Renaming ${name}...`, () => repository.renameBranch(projectId, name, value))
+    });
   };
 
   /** `git branch -D`: unmerged work goes too, as the question says. The checked-out branch gives way
@@ -244,19 +258,16 @@ export const BranchTree = memo(function BranchTree({
   };
 
   const askCreateTag = async (target: string): Promise<void> => {
-    const answer = await prompt({
+    await prompt({
       title: "Create tag",
       label: "Name",
       detail: `The tag points at ${target}.`,
       value: "",
       confirmLabel: "Create tag",
-      extras: [{ label: "Message", placeholder: "Optional" }]
+      extras: [{ label: "Message", placeholder: "Optional" }],
+      submit: ({ value, extras }) =>
+        branch.ask(`Creating tag ${value}...`, () => repository.createTag(projectId, value, target, extras[0]))
     });
-    if (answer) {
-      branch.run(`Creating tag ${answer.value}...`, () =>
-        repository.createTag(projectId, answer.value, target, answer.extras[0])
-      );
-    }
   };
 
   const askDeleteTag = async (name: string): Promise<void> => {
@@ -396,12 +407,12 @@ export const BranchTree = memo(function BranchTree({
       worktreeEntry(
         "New worktree",
         worktreesSupported,
-        newWorktreeBase ? () => void askNewWorktree(projectId, branch.run, newWorktreeBase) : undefined
+        newWorktreeBase ? () => void askNewWorktree(projectId, branch, newWorktreeBase) : undefined
       ),
-      worktreeEntry("Rename worktree", worktreesSupported, linked ? () => void askRenameWorktree(linked, name, branch.run, canClose) : undefined),
+      worktreeEntry("Rename worktree", worktreesSupported, linked ? () => void askRenameWorktree(linked, name, branch, canClose) : undefined),
       {
         label: "Delete worktree...",
-        run: linked ? () => void askDeleteWorktree(linked, name, mergedUpstream, branch.run, canClose) : undefined
+        run: linked ? () => void askDeleteWorktree(linked, name, mergedUpstream, branch, canClose) : undefined
       },
       SEPARATOR,
       { label: "Copy path", run: () => void navigator.clipboard.writeText(worktree.path) }

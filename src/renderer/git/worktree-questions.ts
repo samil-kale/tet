@@ -1,18 +1,18 @@
 import { WORKTREES_NEED_GIT } from "../../shared/types";
-import type { GitActionResult, WorktreeRef } from "../../shared/types";
+import type { WorktreeRef } from "../../shared/types";
+import type { GitRun } from "./BranchTree";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 
 /**
  * The worktree questions, asked alike from a project row and from the branch tree's WORKTREES:
- * each view hands in how it runs a command (its progress bar, a failure as a notice) and, where the
- * worktree is an open project, whether its unsaved editor edits may go with its terminals.
+ * each view hands in how it runs a command (`GitRun`: its progress bar, and the failure either
+ * notified or handed back to the field it was typed in) and, where the worktree is an open project,
+ * whether its unsaved editor edits may go with its terminals.
  *
  * A worktree and its branch are one (projects.ts): made together under one name, renamed and
  * deleted together.
  */
-type Run = (label: string, action: () => Promise<GitActionResult>) => void;
-
 /** "New worktree" or "Rename worktree" in a menu: disabled, saying why, where git is too old
  *  (Requirements.worktrees). */
 export function worktreeEntry(label: string, supported: boolean, run: (() => void) | undefined): ContextMenuEntry {
@@ -20,20 +20,19 @@ export function worktreeEntry(label: string, supported: boolean, run: (() => voi
 }
 
 /** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
-export async function askNewWorktree(projectId: string, run: Run, base: string): Promise<void> {
-  const answer = await prompt({
+export async function askNewWorktree(projectId: string, run: GitRun, base: string): Promise<void> {
+  await prompt({
     title: "New worktree",
     label: "Name",
     detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/worktrees and opened as a project.`,
     value: "",
-    confirmLabel: "Create worktree"
-  });
-  if (!answer) {
-    return;
-  }
-  run(`Creating worktree ${answer.value}...`, async () => {
-    const added = await window.tet.projects.addWorktree(projectId, answer.value);
-    return added.project ? { ok: true } : { ok: false, error: added.error };
+    confirmLabel: "Create worktree",
+    // The name is the branch's, so git refuses the same names here; shown at the field.
+    submit: ({ value }) =>
+      run.ask(`Creating worktree ${value}...`, async () => {
+        const added = await window.tet.projects.addWorktree(projectId, value);
+        return added.project ? { ok: true } : { ok: false, error: added.error };
+      })
   });
 }
 
@@ -41,19 +40,23 @@ export async function askNewWorktree(projectId: string, run: Run, base: string):
 export async function askRenameWorktree(
   worktree: WorktreeRef,
   branch: string,
-  run: Run,
+  run: GitRun,
   canClose: () => Promise<boolean>
 ): Promise<void> {
-  const answer = await prompt({
+  await prompt({
     title: "Rename worktree",
     label: "Name",
     detail: "Renames the worktree and its folder. Its terminals are closed first, and agent sessions started there can no longer be resumed.",
     value: branch,
-    confirmLabel: "Rename"
+    confirmLabel: "Rename",
+    submit: async ({ value }) => {
+      // Unchanged, or its unsaved edits kept it: nothing to say, and the question is done.
+      if (value === branch || !(await canClose())) {
+        return undefined;
+      }
+      return run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, value));
+    }
   });
-  if (answer && answer.value !== branch && (await canClose())) {
-    run(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, answer.value));
-  }
 }
 
 /**
@@ -65,7 +68,7 @@ export async function askDeleteWorktree(
   worktree: WorktreeRef,
   branch: string,
   upstream: string | undefined,
-  run: Run,
+  run: GitRun,
   canClose: () => Promise<boolean>
 ): Promise<void> {
   const answer = await confirm({
@@ -79,7 +82,7 @@ export async function askDeleteWorktree(
     return;
   }
   const options = { force: false, onRemote: answer.checked };
-  run(`Deleting ${branch}...`, async () => {
+  run.run(`Deleting ${branch}...`, async () => {
     const result = await window.tet.projects.deleteWorktree(worktree, options);
     if (result.needsConfirmation !== "uncommitted") {
       return result;

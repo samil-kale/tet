@@ -251,16 +251,20 @@ export const Pane = memo(function Pane({
 
   const askRename = useCallback(
     async (tab: TerminalDescriptor) => {
-      const answer = await prompt({
+      await prompt({
         title: "Rename session",
         label: "Name",
         value: tab.title,
         confirmLabel: "Rename",
-        maxLength: MAX_TITLE_LENGTH
+        maxLength: MAX_TITLE_LENGTH,
+        submit: async ({ value }) => {
+          if (value === tab.title) {
+            return undefined;
+          }
+          const result = await window.tet.terminals.rename(projectId, tab.tabId, value);
+          return result.ok ? undefined : (result.error ?? "Could not rename the session");
+        }
       });
-      if (answer !== null && answer.value !== tab.title) {
-        void window.tet.terminals.rename(projectId, tab.tabId, answer.value);
-      }
     },
     [projectId]
   );

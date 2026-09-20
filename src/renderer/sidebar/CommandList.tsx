@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
 import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
 import { ContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
+import { notifyRefused } from "../git/use-file-act";
 import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { PlayIcon, PlusIcon } from "../ui/icons";
@@ -144,18 +145,23 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
     setCommands(next);
   };
 
-  /** Writes the list whole. */
-  const save = (next: ProjectCommand[]): void => {
+  /** Writes the list whole, handing back what refused it — for the questions that stay up to show
+   *  it at their field (`prompt`'s `submit`). */
+  const saveAsked = async (next: ProjectCommand[]): Promise<string | undefined> => {
     // A dialog answered after the project changed built `next` from the other project's list.
     if (!projectId || projectId !== shownProject.current) {
-      return;
+      return undefined;
     }
     applyCommands(next);
-    void window.tet.commands.save(projectId, next);
+    const result = await window.tet.commands.save(projectId, next);
+    return result.ok ? undefined : (result.error ?? "Could not save the commands");
   };
 
+  /** The same for a change with no question up: a reorder, a remove. */
+  const save = (next: ProjectCommand[]): void => void saveAsked(next).then(notifyRefused);
+
   const askAdd = async (): Promise<void> => {
-    const answer = await prompt({
+    await prompt({
       title: "New command",
       label: "Command",
       detail: COMMAND_DETAIL,
@@ -164,16 +170,16 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       extras: EXTRA_FIELDS,
       valueIndex: 1,
       colors: COLOR_FIELD,
-      wide: true
+      wide: true,
+      submit: (answer) => {
+        const command = toCommand(answer);
+        const current = latest.current;
+        // Already saved word for word: nothing to add, and nothing to say about it.
+        return current.some((entry) => isSameCommand(entry, command))
+          ? Promise.resolve(undefined)
+          : saveAsked([...current, command]);
+      }
     });
-    if (answer === null) {
-      return;
-    }
-    const command = toCommand(answer);
-    const current = latest.current;
-    if (!current.some((entry) => isSameCommand(entry, command))) {
-      save([...current, command]);
-    }
   };
 
   /** The command's index in the latest list: by identity, else by content, since a re-read while a
@@ -185,7 +191,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
 
   /** `askAdd`'s dialog, prefilled. */
   const askEdit = async (command: ProjectCommand): Promise<void> => {
-    const answer = await prompt({
+    await prompt({
       title: "Edit command",
       label: "Command",
       detail: COMMAND_DETAIL,
@@ -198,18 +204,17 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       ],
       valueIndex: 1,
       colors: { ...COLOR_FIELD, value: command.color },
-      wide: true
+      wide: true,
+      submit: (answer) => {
+        const current = latest.current;
+        const index = indexOf(command);
+        // Removed while the dialog was open: writing it back would resurrect it.
+        if (index === -1) {
+          return Promise.resolve(undefined);
+        }
+        return saveAsked(current.map((entry, position) => (position === index ? toCommand(answer, command) : entry)));
+      }
     });
-    if (answer === null) {
-      return;
-    }
-    const current = latest.current;
-    const index = indexOf(command);
-    // Removed while the dialog was open: writing it back would resurrect it.
-    if (index === -1) {
-      return;
-    }
-    save(current.map((entry, position) => (position === index ? toCommand(answer, command) : entry)));
   };
 
   const askRemove = async (command: ProjectCommand): Promise<void> => {

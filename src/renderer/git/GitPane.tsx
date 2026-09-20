@@ -38,7 +38,7 @@ export const GitPane = memo(function GitPane({
   canCloseWorktree,
   worktreesSupported
 }: GitPaneProps) {
-  const { acting, act } = useFileAct(project.id);
+  const { acting, act, ask } = useFileAct(project.id);
 
   // Fetch, pull and push share the one action slot with discard and stash.
   const remote = state.remotes[0]?.name;
@@ -114,7 +114,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title="Commit all changes"
               disabled={locked || state.changes.length === 0}
-              onClick={() => void askCommit(project, state, undefined, act)}
+              onClick={() => void askCommit(project, state, undefined, ask)}
             >
               <CommitIcon />
             </button>
@@ -139,7 +139,7 @@ export const GitPane = memo(function GitPane({
           {/* This section's bar — everything `act` covers. */}
           {acting && <ProgressBar />}
         </div>
-        <ChangesList project={project} state={state} act={act} onOpenDiff={onOpenDiff} />
+        <ChangesList project={project} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
       </div>
     </div>
   );

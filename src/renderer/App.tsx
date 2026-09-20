@@ -3,7 +3,7 @@ import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../sha
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
-import { useStartedHere } from "./git/use-file-act";
+import { notifyRefused, useStartedHere } from "./git/use-file-act";
 import type { BranchActions } from "./git/BranchTree";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
@@ -385,22 +385,23 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * Mirrors `Repository.runAction`; `BranchActions.run` is the one way in, a view asking its own
    * question first.
    */
-  const runBranchAction = useCallback(async (projectId: string, label: string, action: () => Promise<GitActionResult>) => {
-    if (branchActionsRef.current.has(projectId)) {
-      return;
-    }
-    branchActionsRef.current.add(projectId);
-    setBranchActions(new Set(branchActionsRef.current));
-    try {
-      const result = await action();
-      if (!result.ok) {
-        notify("error", result.error ?? `${label} failed`);
+  const runBranchAction = useCallback(
+    async (projectId: string, label: string, action: () => Promise<GitActionResult>): Promise<string | undefined> => {
+      if (branchActionsRef.current.has(projectId)) {
+        return "Another command is running in this repository";
       }
-    } finally {
-      branchActionsRef.current.delete(projectId);
+      branchActionsRef.current.add(projectId);
       setBranchActions(new Set(branchActionsRef.current));
-    }
-  }, []);
+      try {
+        const result = await action();
+        return result.ok ? undefined : (result.error ?? `${label} failed`);
+      } finally {
+        branchActionsRef.current.delete(projectId);
+        setBranchActions(new Set(branchActionsRef.current));
+      }
+    },
+    []
+  );
 
   /**
    * Shows a tab opened from outside the terminals pane, bringing its project to front — a one-off
@@ -877,19 +878,20 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     }
   }, [editorTabs, states, fileWrites]);
   const runActiveBranchAction = useCallback(
-    (label: string, action: () => Promise<GitActionResult>) =>
-      activeProjectId ? runBranchAction(activeProjectId, label, action) : Promise.resolve(),
+    (label: string, action: () => Promise<GitActionResult>): Promise<string | undefined> =>
+      activeProjectId ? runBranchAction(activeProjectId, label, action) : Promise.resolve(undefined),
     [activeProjectId, runBranchAction]
   );
   /** The git pane's actions, for the project on screen; its own bar shows the ones it started. */
-  const { startedHere: gitPaneActing, start: startActiveBranchAction } = useStartedHere(runActiveBranchAction);
+  const { startedHere: gitPaneActing, start: askActiveBranchAction } = useStartedHere(runActiveBranchAction);
   const activeBranch = useMemo<BranchActions>(
     () => ({
       busy: activeProjectId !== null && branchActions.has(activeProjectId),
       startedHere: gitPaneActing,
-      run: startActiveBranchAction
+      run: (label, action) => void askActiveBranchAction(label, action).then(notifyRefused),
+      ask: askActiveBranchAction
     }),
-    [branchActions, activeProjectId, gitPaneActing, startActiveBranchAction]
+    [branchActions, activeProjectId, gitPaneActing, askActiveBranchAction]
   );
   /** The project list's, likewise: its bar shows a command it started, in any project. */
   const { startedHere: projectListBusy, start: runProjectListAction } = useStartedHere(runBranchAction);

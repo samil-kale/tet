@@ -1114,15 +1114,18 @@ export class ProjectSessionManager {
   }
 
   /** Without a sessionId nothing is renamed, and the renderer's optimistic label reverts. */
-  async renameTab(tabId: string, title: string): Promise<void> {
+  /** Answers what the agent refused rather than notifying it: the window's question is still up
+   *  and shows it under the field the name was typed in, and `tabs-rename` fails instead of
+   *  reporting a rename that did not happen. */
+  async renameTab(tabId: string, title: string): Promise<string | undefined> {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
     if (!tab) {
-      return;
+      return undefined;
     }
     const { agent, executable } = this.runtimeFor(tab.agentId);
     if (!tab.sessionId || !agent.sessions) {
       this.postTabs();
-      return;
+      return undefined;
     }
     const previousTitle = tab.title;
     try {
@@ -1136,10 +1139,12 @@ export class ProjectSessionManager {
       // A name the user picked is final.
       tab.provisionalTitle = false;
     } catch (error) {
-      this.callbacks.onNotice("error", `Could not rename ${agent.displayName} session: ${String(error)}`);
       tab.title = previousTitle;
+      this.postTabs();
+      return `Could not rename ${agent.displayName} session: ${String(error)}`;
     }
     this.postTabs();
+    return undefined;
   }
 
   /**

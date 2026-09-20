@@ -119,7 +119,8 @@ export interface ControlTerminals {
   createTab(agentId: AgentId, sandboxOnly: boolean): TerminalDescriptor;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
-  renameTab(tabId: string, title: string): Promise<void>;
+  /** The agent's refusal, or nothing when it went through. */
+  renameTab(tabId: string, title: string): Promise<string | undefined>;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
    *  may have closed while its CLI ended the turn. */
   hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined): HookOutcome;
@@ -580,7 +581,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "tabs-rename": async (args, caller) => {
       const { tabs, tabId } = knownTab(args, caller);
-      await tabs.renameTab(tabId, text(args, "title", "title"));
+      const refused = await tabs.renameTab(tabId, text(args, "title", "title"));
+      if (refused !== undefined) {
+        throw new ControlError("internal", refused);
+      }
       return { result: { renamed: tabId } };
     },
 

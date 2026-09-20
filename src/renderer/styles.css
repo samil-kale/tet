@@ -1943,6 +1943,21 @@ textarea:focus,
   color: var(--vscode-descriptionForeground);
 }
 
+/* What `submit` refused, on its own line under the input it was typed in (`prompt`'s `submit`):
+   the error mark's colour, as .session-mark-error. Its own class rather than a span, which
+   `.dialog-field span` above would grey; the icon keeps to the first line of a message that wraps. */
+.dialog-field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: var(--vscode-errorForeground);
+}
+
+.dialog-field-error svg {
+  flex: none;
+  margin-top: 2px;
+}
+
 /* A prompt's color swatches, in the 24px of every action button. The colors themselves come from
    the choices, as theme variables, so the row repaints with the theme. */
 .dialog-colors {

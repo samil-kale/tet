@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { ExplorerListing, FileChange, Project } from "../../shared/types";
+import type { ExplorerListing, FileChange, GitActionResult, Project } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
-import { type FileAct } from "../git/ChangesList";
+import { type FileAct, type FileAsk } from "../git/ChangesList";
 import {
   ancestorsOf,
   buildForest,
@@ -93,6 +93,8 @@ interface ExplorerProps {
   onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
   /** The owner shows it running on its own bar. */
   act: FileAct;
+  /** The same, for the questions that show a refusal at their field (`prompt`'s `submit`). */
+  ask: FileAsk;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
    *  else triggers a re-read. */
   onExplorerChanged: () => void;
@@ -122,6 +124,7 @@ export function Explorer({
   selected,
   onOpenFile,
   act,
+  ask,
   onExplorerChanged,
   onFiltering,
   ref
@@ -221,50 +224,55 @@ export function Explorer({
     });
   };
 
-  /** `act`, then a listing re-read on success. */
-  const run: FileAct = (action) =>
-    act(() =>
-      action().then((result) => {
-        if (result.ok) {
-          onExplorerChanged();
-        }
-        return result;
-      })
-    );
+  /** The action, then a listing re-read on success. */
+  const reread = (action: () => Promise<GitActionResult>) => () =>
+    action().then((result) => {
+      if (result.ok) {
+        onExplorerChanged();
+      }
+      return result;
+    });
+  const run: FileAct = (action) => act(reread(action));
+  /** `run` for a question that stays up to show what refused it. */
+  const runAsked: FileAsk = (action) => ask(reread(action));
+
+  const under = (dir: string, name: string): string => (dir ? `${dir}/${name}` : name);
 
   const askNewFile = async (dir: string): Promise<void> => {
-    const answer = await prompt({
+    await prompt({
       title: "New File",
       label: "Name",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
       value: "",
-      confirmLabel: "Create"
+      confirmLabel: "Create",
+      submit: ({ value }) => runAsked(() => window.tet.repository.createFile(project.id, under(dir, value)))
     });
-    if (answer) {
-      run(() => window.tet.repository.createFile(project.id, dir ? `${dir}/${answer.value}` : answer.value));
-    }
   };
 
   const askNewFolder = async (dir: string): Promise<void> => {
-    const answer = await prompt({
+    await prompt({
       title: "New Folder",
       label: "Name",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
       value: "",
-      confirmLabel: "Create"
+      confirmLabel: "Create",
+      submit: ({ value }) => runAsked(() => window.tet.repository.createDirectory(project.id, under(dir, value)))
     });
-    if (answer) {
-      run(() => window.tet.repository.createDirectory(project.id, dir ? `${dir}/${answer.value}` : answer.value));
-    }
   };
 
   const askRename = async (node: TreeNode): Promise<void> => {
-    const answer = await prompt({ title: "Rename", label: "Name", value: node.name, confirmLabel: "Rename" });
-    if (answer && answer.value !== node.name) {
-      // A compacted row's answer replaces the whole chain, so it goes where the outermost folder is.
-      const dir = node.path.split("/").slice(0, -node.name.split("/").length).join("/");
-      run(() => window.tet.repository.renamePath(project.id, node.path, dir ? `${dir}/${answer.value}` : answer.value));
-    }
+    // A compacted row's answer replaces the whole chain, so it goes where the outermost folder is.
+    const dir = node.path.split("/").slice(0, -node.name.split("/").length).join("/");
+    await prompt({
+      title: "Rename",
+      label: "Name",
+      value: node.name,
+      confirmLabel: "Rename",
+      submit: ({ value }) =>
+        value === node.name
+          ? Promise.resolve(undefined)
+          : runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(dir, value)))
+    });
   };
 
   const askDelete = async (node: TreeNode): Promise<void> => {

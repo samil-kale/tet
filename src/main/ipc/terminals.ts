@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import type { AgentId, EditorReport, NoticeReport, TerminalDescriptor } from "../../shared/types";
+import type { AgentId, EditorReport, GitActionResult, NoticeReport, TerminalDescriptor } from "../../shared/types";
 import { countActivity } from "../event-loop-monitor";
 import type { IpcDeps } from "./deps";
 
@@ -25,9 +25,13 @@ export function registerTerminalsIpc({
     await sessions.get(projectId)?.closeTabs(tabIds);
   });
 
-  ipcMain.handle("terminal:rename", async (_event, projectId: string, tabId: string, title: string): Promise<void> => {
-    await sessions.get(projectId)?.renameTab(tabId, title);
-  });
+  ipcMain.handle(
+    "terminal:rename",
+    async (_event, projectId: string, tabId: string, title: string): Promise<GitActionResult> => {
+      const refused = await sessions.get(projectId)?.renameTab(tabId, title);
+      return refused === undefined ? { ok: true } : { ok: false, error: refused };
+    }
+  );
 
   ipcMain.handle("terminal:restart", (_event, projectId: string, tabId: string): void => {
     sessions.get(projectId)?.restartTab(tabId);

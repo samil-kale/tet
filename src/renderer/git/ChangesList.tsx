@@ -9,11 +9,17 @@ import { isMarkdown } from "../diff/diff-highlight";
 /** Runs a file action; the owner shows it running on its own bar. */
 export type FileAct = (action: () => Promise<GitActionResult>) => void;
 
+/** `FileAct` awaited, handing the failure back instead of notifying it: a question stays up and
+ *  shows it under the field the name was typed in (`prompt`'s `submit`). */
+export type FileAsk = (action: () => Promise<GitActionResult>) => Promise<string | undefined>;
+
 interface ChangesListProps {
   project: Project;
   /** The changes are the list; the rest feeds a commit from the menu. */
   state: RepositoryState;
   act: FileAct;
+  /** For the commit, whose question stays up to show what git refused. */
+  ask: FileAsk;
   /** On a double-click; a Markdown file with its preview from the menu. */
   onOpenDiff: (path: string, how?: OpenEditor) => void;
 }
@@ -71,11 +77,11 @@ export async function askCommit(
   project: Project,
   state: RepositoryState,
   paths: string[] | undefined,
-  act: FileAct
+  ask: FileAsk
 ): Promise<void> {
   const remote = state.remotes[0]?.name;
   const canSync = remote !== undefined && !state.detached;
-  const answer = await prompt({
+  await prompt({
     title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
     label: "Message",
     detail: !paths
@@ -96,20 +102,20 @@ export async function askCommit(
       ? state.upstream === undefined
         ? `Also push ${state.head} to ${remote} and track it`
         : `Also push to ${state.upstream}`
-      : undefined
+      : undefined,
+    // What git refused — an empty commit, a hook's veto — at the message it was typed for.
+    submit: ({ value, checked }) =>
+      ask(async () => {
+        const committed = await (paths
+          ? window.tet.repository.commitPaths(project.id, value, paths)
+          : window.tet.repository.commitAll(project.id, value));
+        return committed.ok && checked ? window.tet.repository.push(project.id) : committed;
+      })
   });
-  if (answer) {
-    act(async () => {
-      const committed = await (paths
-        ? window.tet.repository.commitPaths(project.id, answer.value, paths)
-        : window.tet.repository.commitAll(project.id, answer.value));
-      return committed.ok && answer.checked ? window.tet.repository.push(project.id) : committed;
-    });
-  }
 }
 
 /** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */
-export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProps) {
+export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
   /** Ctrl- and shift-click extend it, so one action can cover several files. */
@@ -187,7 +193,7 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
       {
         label: one ? "Commit changes..." : `Commit ${paths.length} selected changes...`,
         // git refuses a commit of some paths while a merge is being concluded.
-        run: state.operation === undefined ? () => void askCommit(project, state, paths, act) : undefined
+        run: state.operation === undefined ? () => void askCommit(project, state, paths, ask) : undefined
       },
       { label: one ? "Discard changes..." : `Discard ${paths.length} selected changes...`, run: discard(paths) },
       {

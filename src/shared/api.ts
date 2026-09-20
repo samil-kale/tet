@@ -223,8 +223,9 @@ export interface TETApi {
   /** Saved shell commands, in the project root's tet.json so they travel with it. */
   commands: {
     list(projectId: string): Promise<ProjectCommand[]>;
-    /** The whole list; add, remove and reorder all go through here. */
-    save(projectId: string, commands: ProjectCommand[]): Promise<void>;
+    /** The whole list; add, remove and reorder all go through here. Answers what refused it, for
+     *  the question that is still up to show it at its field. */
+    save(projectId: string, commands: ProjectCommand[]): Promise<GitActionResult>;
     /** A tab whose process is the command; null when nothing can run it. */
     run(projectId: string, command: ProjectCommand): Promise<TerminalDescriptor | null>;
     /** tet.json changed on disk, whoever wrote it. */
@@ -236,7 +237,8 @@ export interface TETApi {
     create(projectId: string, agentId: AgentId): Promise<TerminalDescriptor>;
     /** Also deletes the sessions behind them. */
     close(projectId: string, tabIds: string[]): Promise<void>;
-    rename(projectId: string, tabId: string, title: string): Promise<void>;
+    /** Answers what the agent refused, for the question still up to show it at its field. */
+    rename(projectId: string, tabId: string, title: string): Promise<GitActionResult>;
     /** Respawns a saved command in the same tab. */
     restart(projectId: string, tabId: string): Promise<void>;
     /** Clears `finishedAt` — only the renderer knows which tab is in front. */
