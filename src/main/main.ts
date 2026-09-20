@@ -544,7 +544,7 @@ function createWindow(): void {
     height: 900,
     // The panes' floors summed (--pane-min-width twice, --content-min-width, the stacked sections,
     // title and branch bars); below this something clips.
-    minWidth: 700,
+    minWidth: 800,
     minHeight: 340,
     // Painted before the first frame in the title bar's color, since the window controls overlay
     // shows at once. Equals --vscode-titleBar-activeBackground and --vscode-sideBar-background.

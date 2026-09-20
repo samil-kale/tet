@@ -202,7 +202,7 @@ textarea:focus,
      --vscode-focusBorder. */
   /* Pane floors, as MIN_PANE_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
-  --pane-min-width: 180px;
+  --pane-min-width: 230px;
   --pane-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 28px;
@@ -498,7 +498,8 @@ textarea:focus,
   cursor: progress;
 }
 
-/* Shared by the branch tree's filter and the Explorer's search box, which adds to it below. */
+/* Shared by the branch tree's and the Explorer's filter and by the SEARCH pane's box, which adds
+   to it below. */
 .filter-field {
   position: relative;
   padding: 8px 6px;
@@ -519,19 +520,13 @@ textarea:focus,
   pointer-events: none;
 }
 
-/* The Explorer's search box, VS Code's: the twistie for the two glob fields stands outside the
-   field, the three toggles inside it. The row takes over the field's own padding, so that it holds
-   the twistie too. */
+/* The SEARCH pane's box, VS Code's: the three toggles stand inside the field, which leaves its own
+   padding to the row. */
 .filter-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
   padding: 8px 6px;
 }
 
 .filter-row .filter-field {
-  flex: 1;
-  min-width: 0;
   padding: 0;
 }
 
@@ -547,7 +542,7 @@ textarea:focus,
 }
 
 /* `.icon-button` in every other respect, `active` included: only the box shrinks, since VS Code's
-   input actions are 20px and three of them plus the twistie would take a narrow pane's whole row. */
+   input actions are 20px and three of the pane's own would take a narrow pane's whole row. */
 .filter-row .icon-button {
   width: 20px;
   height: 20px;
@@ -561,15 +556,6 @@ textarea:focus,
   right: 4px;
   top: 50%;
   transform: translateY(-50%);
-}
-
-/* "files to include"/"files to exclude", behind the twistie and level with the field above them
-   (`.filter-row`'s padding, the 20px twistie and the 2px gap). */
-.filter-details {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 6px 8px 28px;
 }
 
 .tree {
@@ -620,7 +606,8 @@ textarea:focus,
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-/* The files pane's EXPLORER tree. It nests arbitrarily deep, so rows set `padding-left` inline. */
+/* The files pane's EXPLORER tree, and the SEARCH pane under it, whose rows are of the same shape.
+   It nests arbitrarily deep, so rows set `padding-left` inline. */
 .explorer-tree {
   display: flex;
   flex-direction: column;
@@ -686,16 +673,19 @@ textarea:focus,
   color: var(--vscode-terminal-ansiBrightMagenta);
 }
 
-/* What the search found in the files, under the tree the same query filters (Explorer.tsx). The
-   rows are the tree's, so only what they carry beyond a file row is stated here. */
-.search-summary {
-  margin-top: 8px;
-  padding: 4px 6px 4px 9px;
-  border-top: 1px solid var(--vscode-panel-border);
-  color: var(--vscode-descriptionForeground);
-  font-size: 12px;
+/* What the search found in the files (Explorer.tsx's `FileSearch`). The rows are the tree's, so
+   only what they carry beyond a file row is stated here. */
+
+/* The SEARCH header's title with the summary beside it, long enough to be cut off before the
+   header's buttons. */
+.search-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* A regex that will not parse takes the summary's place. */
 .search-summary.error {
   color: var(--vscode-errorForeground);
 }
@@ -721,14 +711,6 @@ textarea:focus,
 .search-match {
   font-family: var(--vscode-editor-font-family);
   font-size: 12px;
-}
-
-.search-line {
-  flex: none;
-  min-width: 28px;
-  margin-right: 8px;
-  color: var(--vscode-descriptionForeground);
-  text-align: right;
 }
 
 .search-hit {
@@ -1306,6 +1288,11 @@ textarea:focus,
   border-radius: 3px !important;
   background-color: transparent !important;
   opacity: 0.8;
+}
+
+/* Monaco places the close button for its own 16px button; 2px up centers the 24px one. */
+.editor-host .find-widget > .button.codicon-widget-close {
+  top: 3px !important;
 }
 
 /* No replace: the widget's only `.toggle` is the one opening the replace row, which tet offers

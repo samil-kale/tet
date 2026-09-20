@@ -9,7 +9,6 @@ import type {
   FileSearchResult,
   Project
 } from "../../shared/types";
-import { searchPattern } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import { type FileAct } from "./ChangesList";
@@ -71,12 +70,12 @@ const INDENT_BASE = 9;
 /** Holds a folder's chevron: the chevron's own 12px box. */
 const TWISTIE_WIDTH = 12;
 const TWISTIE_GAP = 4;
-/** A match row starts under its file row's label: past the twistie and the file mark, a 12px
- *  `.tree-icon` with the 4px gap `.explorer-tree .file-mark` adds. */
-const MATCH_INDENT = INDENT_BASE + TWISTIE_WIDTH + TWISTIE_GAP + 12 + 4;
+/** A match row starts a pixel past its file row's label (`INDENT_BASE` plus the twistie and its
+ *  gap): the line it found gets the width the rest of the nesting would have eaten. */
+const MATCH_INDENT = 26;
 
 /** An empty search field: nothing typed, every toggle off. */
-const EMPTY_SEARCH: FileSearchQuery = { text: "", matchCase: false, wholeWord: false, regex: false, include: "", exclude: "" };
+const EMPTY_SEARCH: FileSearchQuery = { text: "", matchCase: false, wholeWord: false, regex: false };
 
 /** VS Code's three toggles inside the search box, in its order and under its titles. */
 const SEARCH_TOGGLES: { key: "matchCase" | "wholeWord" | "regex"; title: string; Icon: (props: IconProps) => React.ReactNode }[] = [
@@ -233,16 +232,16 @@ function parentOf(entryPath: string): string {
 }
 
 /** A matching folder keeps its whole subtree; otherwise only matches survive, with their ancestors. */
-function filterTree(nodes: TreeNode[], pattern: RegExp): TreeNode[] {
+function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
   const result: TreeNode[] = [];
   for (const node of nodes) {
-    const matches = pattern.test(node.path);
+    const matches = node.path.toLowerCase().includes(query);
     if (node.children) {
       if (matches) {
         result.push(node);
         continue;
       }
-      const children = filterTree(node.children, pattern);
+      const children = filterTree(node.children, query);
       if (children.length > 0) {
         result.push({ ...node, children });
       }
@@ -345,8 +344,9 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
   );
 }
 
-/** VS Code's line above its results, and what stands in for it when there are none. */
-function summaryOf(result: FileSearchResult): string {
+/** VS Code's line above its results, the pane's header here, and what stands in for it when there
+ *  are none. */
+export function searchSummary(result: FileSearchResult): string {
   const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
   const matches = result.files.reduce((count, file) => count + file.matches.length, 0);
   if (result.error) {
@@ -359,17 +359,35 @@ function summaryOf(result: FileSearchResult): string {
   return result.truncated ? `${found}, more left out` : found;
 }
 
-interface SearchResultsProps {
-  result: FileSearchResult;
+/** For the SEARCH header's title-bar buttons. */
+export interface FileSearchHandle {
+  clear(): void;
+  toggleAll(): void;
+}
+
+interface FileSearchProps {
+  /** What the field last asked for, undefined while it is empty (`useFileSearch`). */
+  result: FileSearchResult | undefined;
+  /** The field asks for a search here, or for none; the pane runs it and shows it running. */
+  runSearch: (query: FileSearchQuery | null) => void;
+  /** What the header's fold button stands for, reported as it changes. */
+  onAllFolded: (allFolded: boolean) => void;
   onOpenMatch: (path: string, match: FileSearchMatch) => void;
+  ref?: React.Ref<FileSearchHandle>;
 }
 
 /**
- * What the search found in the files, under the tree that the same query filters by name. Listed as
- * VS Code's search view does: a summary, then a row per file — open unless folded away — and under
- * it a row per match, the line number and the line with the match marked.
+ * The SEARCH pane: VS Code's search box, its own query, over what that query finds in the files'
+ * lines. Listed as VS Code's search view does — a row per file, open unless folded away, and under
+ * it a row per match with the match marked; the summary is the pane's header. Rows of the
+ * Explorer's shape, so its class carries the styles they share.
  */
-function SearchResults({ result, onOpenMatch }: SearchResultsProps) {
+export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }: FileSearchProps) {
+  const [search, setSearch] = useState<FileSearchQuery>(EMPTY_SEARCH);
+  // Nothing but whitespace asks for nothing.
+  const asked = search.text.trim() ? search : null;
+  useEffect(() => runSearch(asked), [asked, runSearch]);
+
   const [folded, setFolded] = useState<Record<string, boolean>>({});
   // Every search lists its files open again, as VS Code's does; the previous one's folds are gone.
   const [listed, setListed] = useState(result);
@@ -377,49 +395,82 @@ function SearchResults({ result, onOpenMatch }: SearchResultsProps) {
     setListed(result);
     setFolded({});
   }
+  const files = result?.files ?? [];
+  const allFolded = files.length > 0 && files.every((file) => folded[file.path]);
+  useEffect(() => onAllFolded(allFolded), [allFolded, onAllFolded]);
+
+  useImperativeHandle(ref, () => ({
+    // The text alone: the toggles are the field's own, as VS Code keeps them.
+    clear: () => setSearch((current) => ({ ...current, text: "" })),
+    // VS Code's one button for both: every file folded away, or all of them listed open again.
+    toggleAll: () => setFolded(allFolded ? {} : Object.fromEntries(files.map((file) => [file.path, true])))
+  }));
 
   return (
-    <>
-      <div className={`search-summary${result.error ? " error" : ""}`}>{summaryOf(result)}</div>
-      {result.files.map((file) => {
-        const open = !folded[file.path];
-        const name = file.path.slice(file.path.lastIndexOf("/") + 1);
-        const dir = parentOf(file.path);
-        return (
-          <div key={file.path}>
-            <button
-              className="tree-item"
-              style={{ paddingLeft: INDENT_BASE }}
-              title={file.path}
-              onClick={() => setFolded((current) => ({ ...current, [file.path]: open }))}
-            >
-              <Twistie open={open} />
-              <FileMarkIcon name={name} />
-              <span className="tree-label">{name}</span>
-              {dir && <span className="search-dir">{dir}</span>}
-              <span className="count-badge search-count">{file.matches.length}</span>
-            </button>
-            {open &&
-              file.matches.map((match) => (
-                <button
-                  key={`${match.line}:${match.column}`}
-                  className="tree-item search-match"
-                  style={{ paddingLeft: MATCH_INDENT }}
-                  title={`${file.path}:${match.line}`}
-                  onClick={() => onOpenMatch(file.path, match)}
-                >
-                  <span className="search-line">{match.line}</span>
-                  <span className="tree-label">
-                    {match.text.slice(0, match.textColumn)}
-                    <span className="search-hit">{match.text.slice(match.textColumn, match.textColumn + match.length)}</span>
-                    {match.text.slice(match.textColumn + match.length)}
-                  </span>
-                </button>
-              ))}
-          </div>
-        );
-      })}
-    </>
+    <div className="explorer-tree">
+      <div className="filter-row">
+        <div className="filter-field">
+          <SearchIcon className="filter-icon" />
+          <input
+            type="text"
+            placeholder="Search"
+            value={search.text}
+            onChange={(event) => setSearch({ ...search, text: event.target.value })}
+          />
+          <span className="filter-toggles">
+            {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
+              <button
+                key={key}
+                className={`icon-button${search[key] ? " active" : ""}`}
+                title={title}
+                onClick={() => setSearch({ ...search, [key]: !search[key] })}
+              >
+                <Icon />
+              </button>
+            ))}
+          </span>
+        </div>
+      </div>
+      <div className="tree">
+        {files.map((file) => {
+          const open = !folded[file.path];
+          const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+          const dir = parentOf(file.path);
+          return (
+            <div key={file.path}>
+              <button
+                className="tree-item"
+                style={{ paddingLeft: INDENT_BASE }}
+                title={file.path}
+                onClick={() => setFolded((current) => ({ ...current, [file.path]: open }))}
+              >
+                <Twistie open={open} />
+                <FileMarkIcon name={name} />
+                <span className="tree-label">{name}</span>
+                {dir && <span className="search-dir">{dir}</span>}
+                <span className="count-badge search-count">{file.matches.length}</span>
+              </button>
+              {open &&
+                file.matches.map((match) => (
+                  <button
+                    key={`${match.line}:${match.column}`}
+                    className="tree-item search-match"
+                    style={{ paddingLeft: MATCH_INDENT }}
+                    title={`${file.path}:${match.line}`}
+                    onClick={() => onOpenMatch(file.path, match)}
+                  >
+                    <span className="tree-label">
+                      {match.text.slice(0, match.textColumn)}
+                      <span className="search-hit">{match.text.slice(match.textColumn, match.textColumn + match.length)}</span>
+                      {match.text.slice(match.textColumn + match.length)}
+                    </span>
+                  </button>
+                ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -434,15 +485,13 @@ interface ExplorerProps {
   /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked. */
   /** The project is named: the same handler serves every view that opens a file. */
   onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
-  /** What the search field last asked for, undefined while it is empty (`useFileSearch`). */
-  searchResult: FileSearchResult | undefined;
-  /** The field asks for a search here, or for none; the owner runs it and shows it running. */
-  runSearch: (query: FileSearchQuery | null) => void;
   /** The owner shows it running on its own bar. */
   act: FileAct;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
    *  else triggers a re-read. */
   onExplorerChanged: () => void;
+  /** What the header's clear button stands for, reported as it changes: the tree holds the filter. */
+  onFiltering: (filtering: boolean) => void;
   ref?: React.Ref<ExplorerHandle>;
 }
 
@@ -451,15 +500,14 @@ export interface ExplorerHandle {
   newFile(): void;
   newFolder(): void;
   collapseAll(): void;
+  clearFilter(): void;
 }
 
 /**
  * The files pane's tree of every repository file. No ↑/↓ of its own. Shaped by tet.json via the
  * listing: `folders` make it multi-root (overlap allowed); `exclude`/`excludeGitIgnore` are already
- * applied; `sortOrder`/`compactFolders` are applied here.
- *
- * Its field is VS Code's search box, one query for both halves: the tree keeps the paths it
- * matches, and `runSearch` looks for the same in the files' lines, listed under the tree.
+ * applied; `sortOrder`/`compactFolders` are applied here. Its field filters it by name; what a
+ * search finds in the files' lines is the pane under it (`FileSearch`).
  */
 export function Explorer({
   project,
@@ -467,14 +515,12 @@ export function Explorer({
   shown: visible,
   selected,
   onOpenFile,
-  searchResult,
-  runSearch,
   act,
   onExplorerChanged,
+  onFiltering,
   ref
 }: ExplorerProps) {
-  const [search, setSearch] = useState<FileSearchQuery>(EMPTY_SEARCH);
-  const [details, setDetails] = useState(false);
+  const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
   const rows = useRef(new Map<string, HTMLButtonElement>());
@@ -483,31 +529,17 @@ export function Explorer({
     (path: string, how?: OpenEditor) => onOpenFile(project.id, path, how),
     [onOpenFile, project.id]
   );
-  /** A match row: the same file, at the match, which its editor selects. */
-  const onOpenMatch = useCallback(
-    (path: string, match: FileSearchMatch) =>
-      onOpen(path, { reveal: { line: match.line, column: match.column, length: match.length } }),
-    [onOpen]
-  );
 
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
-  // Nothing but whitespace asks for nothing: no search, and the tree unfiltered.
-  const asked = search.text.trim() ? search : null;
-  // An invalid regex leaves the tree unfiltered too; the search says what is wrong with it.
-  const pattern = useMemo(() => {
-    try {
-      return asked ? searchPattern(asked) : undefined;
-    } catch {
-      return undefined;
-    }
-  }, [asked]);
-  const filtering = pattern !== undefined;
+  const query = filter.trim().toLowerCase();
+  const filtering = query.length > 0;
+  // The clear button is the header's; only the tree knows whether there is a filter to clear.
+  useEffect(() => onFiltering(filtering), [filtering, onFiltering]);
   // Compacted after filtering: a folder pruned to one subfolder folds with it.
   const shown = useMemo(() => {
-    const filtered = pattern ? filterTree(tree, pattern) : tree;
+    const filtered = query ? filterTree(tree, query) : tree;
     return files?.compactFolders ? compactTree(filtered) : filtered;
-  }, [tree, pattern, files?.compactFolders]);
-  useEffect(() => runSearch(asked), [asked, runSearch]);
+  }, [tree, query, files?.compactFolders]);
 
   // Reveals the active editor tab's file in the innermost root containing it.
   const roots = files?.roots;
@@ -646,7 +678,8 @@ export function Explorer({
   useImperativeHandle(ref, () => ({
     newFile: () => void askNewFile(""),
     newFolder: () => void askNewFolder(""),
-    collapseAll
+    collapseAll,
+    clearFilter: () => setFilter("")
   }));
 
   /** `ChangesList`'s menu minus the change-only entries, plus new/rename/delete and the workspace
@@ -724,48 +757,15 @@ export function Explorer({
 
   return (
     <div className="explorer-tree">
-      <div className="filter-row">
-        <button className="icon-button" title="Toggle Search Details" onClick={() => setDetails(!details)}>
-          <ChevronIcon expanded={details} className="tree-icon" scale={TREE_CHEVRON} />
-        </button>
-        <div className="filter-field">
-          <SearchIcon className="filter-icon" />
-          <input
-            type="text"
-            placeholder="Search"
-            value={search.text}
-            onChange={(event) => setSearch({ ...search, text: event.target.value })}
-          />
-          <span className="filter-toggles">
-            {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
-              <button
-                key={key}
-                className={`icon-button${search[key] ? " active" : ""}`}
-                title={title}
-                onClick={() => setSearch({ ...search, [key]: !search[key] })}
-              >
-                <Icon />
-              </button>
-            ))}
-          </span>
-        </div>
+      <div className="filter-field">
+        <SearchIcon className="filter-icon" />
+        <input
+          type="text"
+          placeholder="Filter files..."
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+        />
       </div>
-      {details && (
-        <div className="filter-details">
-          <input
-            type="text"
-            placeholder="files to include"
-            value={search.include}
-            onChange={(event) => setSearch({ ...search, include: event.target.value })}
-          />
-          <input
-            type="text"
-            placeholder="files to exclude"
-            value={search.exclude}
-            onChange={(event) => setSearch({ ...search, exclude: event.target.value })}
-          />
-        </div>
-      )}
       <div
         className="tree"
         onContextMenu={(event) => {
@@ -793,7 +793,6 @@ export function Explorer({
           }}
           rows={rows.current}
         />
-        {searchResult && <SearchResults result={searchResult} onOpenMatch={onOpenMatch} />}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.node)} onClose={() => setMenu(null)} />}
     </div>

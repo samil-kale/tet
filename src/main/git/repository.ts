@@ -69,24 +69,6 @@ function matchText(line: string, index: number): { text: string; textColumn: num
   return { text: line.slice(start, start + MAX_MATCH_TEXT), textColumn: index - start };
 }
 
-/**
- * A "files to include"/"files to exclude" field, or undefined where it is empty. VS Code's rules:
- * comma-separated globs against the repository-relative path, a pattern without a slash matching at
- * any depth (`*.ts` finds every TypeScript file) and one naming a folder taking everything under it.
- */
-function globMatcher(patterns: string): ((filePath: string) => boolean) | undefined {
-  const globs = patterns
-    .split(",")
-    .map((pattern) => pattern.trim().replace(/^\.?\//, "").replace(/\/$/, ""))
-    .filter((pattern) => pattern.length > 0)
-    .flatMap((pattern) => (pattern.includes("/") ? [pattern] : [pattern, `**/${pattern}`]))
-    .flatMap((pattern) => [pattern, `${pattern}/**`]);
-  if (globs.length === 0) {
-    return undefined;
-  }
-  return (filePath) => globs.some((pattern) => path.matchesGlob(filePath, pattern));
-}
-
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
  *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus). */
 function isIgnoredEvent(relativePath: string): boolean {
@@ -754,8 +736,8 @@ export class Repository {
    * The Explorer search field's matches, VS Code's "search in files": every line of every listed
    * file the query matches. The Explorer's own file set, always without what git ignores — VS
    * Code's `search.useIgnoreFiles`, which the tree's `excludeGitIgnore` does not decide, and a
-   * search must not read `node_modules`. `include`/`exclude` narrow it further, then the files are
-   * read a few at a time (more only costs file handles) until the match cap.
+   * search must not read `node_modules`. The files are read a few at a time (more only costs file
+   * handles) until the match cap.
    *
    * The cap bounds what is listed, not the reading: a query matching nothing still costs the whole
    * repository. So a search started here gives up as soon as the next one is asked for — typing in
@@ -772,11 +754,7 @@ export class Repository {
     const seq = ++this.searchSeq;
     const view = await readExplorerView(this.project.path);
     const { files } = await this.walkExplorer({ ...view, excludeGitIgnore: true }, false);
-    const include = globMatcher(query.include);
-    const exclude = globMatcher(query.exclude);
-    const wanted = files
-      .filter((filePath) => (include?.(filePath) ?? true) && !exclude?.(filePath))
-      .sort();
+    const wanted = [...files].sort();
 
     const found: (FileSearchFile | undefined)[] = new Array(wanted.length);
     let next = 0;

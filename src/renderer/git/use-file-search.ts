@@ -5,9 +5,9 @@ import type { FileSearchQuery, FileSearchResult } from "../../shared/types";
 const SEARCH_DELAY_MS = 300;
 
 /**
- * The Explorer search field's matches. Held by the files pane, so its one progress bar covers the
- * search too (`useFileAct` is held the same way); the field itself lives in the tree and asks for
- * a query here, or for null where it is empty.
+ * The SEARCH pane's matches. Held by the files pane, which shows them and the search running
+ * (`useFileAct` is held the same way); the field itself lives in the pane and asks for a query
+ * here, or for null where it is empty.
  *
  * Held with its project, as the listing is: one files pane serves all, and a switch must not show
  * the previous project's matches. Answers are counted, not flagged — while one search is still

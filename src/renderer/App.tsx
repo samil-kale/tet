@@ -152,6 +152,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
   const [sidePaneWidth, setSidePaneWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
+  const [fileSearchHeight, setFileSearchHeight] = usePaneSize("file-search", 260, MIN_PANE_HEIGHT);
   // 40% of the window it first opens in.
   const [commandsHeight, setCommandsHeight] = usePaneSize(
     "commands",
@@ -965,6 +966,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     : null
                 }
                 onOpenFile={openProjectFile}
+                searchHeight={fileSearchHeight}
+                onSearchHeight={setFileSearchHeight}
               />
               <GitPane
                 project={activeProject}

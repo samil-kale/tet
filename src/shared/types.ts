@@ -480,9 +480,9 @@ export interface ExplorerSettings {
 }
 
 /**
- * What the Explorer's search field asks for: VS Code's search box with its three toggles and the
- * two glob fields behind "...". One query does both halves — it filters the tree's paths and
- * searches the files' lines (`searchPattern`, `Repository.searchFiles`).
+ * What the SEARCH pane's field asks for: VS Code's search box with its three toggles, over the
+ * files' lines (`searchPattern`, `Repository.searchFiles`). The Explorer's own field filters the
+ * tree by name and asks for nothing here.
  */
 export interface FileSearchQuery {
   /** What was typed; a regex when `regex` is on. */
@@ -490,9 +490,6 @@ export interface FileSearchQuery {
   matchCase: boolean;
   wholeWord: boolean;
   regex: boolean;
-  /** VS Code's "files to include"/"files to exclude": comma-separated globs, empty for no limit. */
-  include: string;
-  exclude: string;
 }
 
 /** One match, not one line: two matches in a line are two rows, as VS Code lists them. */
@@ -523,11 +520,10 @@ export interface FileSearchResult {
 }
 
 /**
- * The query as a regex, `flags` on top of the case flag. The search adds "g" to walk a line's
- * matches; the tree's filter tests paths without it, since a global regex carries `lastIndex` from
- * one test into the next. Throws on an invalid regex, which the search field reports.
+ * The query as a regex, `flags` on top of the case flag — "g" for the search, which walks a line's
+ * matches. Throws on an invalid regex, which the SEARCH pane reports.
  */
-export function searchPattern(query: FileSearchQuery, flags = ""): RegExp {
+export function searchPattern(query: FileSearchQuery, flags: string): RegExp {
   const escaped = query.regex ? query.text : query.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // As ripgrep's `-w`, which VS Code searches with: the whole expression between word boundaries.
   const source = query.wholeWord ? `\\b(?:${escaped})\\b` : escaped;

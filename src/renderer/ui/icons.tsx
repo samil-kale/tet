@@ -295,18 +295,19 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `case-sensitive` — the search field's "Match Case", VS Code's `Aa`. Measured: 20 by 10
- *  (stroke included), extent 14.14 (their geometric mean), centered at (12, 11). */
+/** Lucide's `case-sensitive` — the search field's "Match Case", VS Code's `Aa`. Wide and flat, so
+ *  the long-side cap, which their geometric mean (14.14) would have drawn past the box: measured
+ *  20 by 10 (stroke included), extent 18.39, centered at (12, 11). */
 export function CaseSensitiveIcon(props: IconProps) {
   return (
     <svg
       className={props.className}
       width="13"
       height="13"
-      viewBox={fitIcon(14.14, 12, 11, 24)}
+      viewBox={fitIcon(18.39, 12, 11, 24)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={fitStroke(14.14, 24, 2)}
+      strokeWidth={fitStroke(18.39, 24, 2)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -319,18 +320,19 @@ export function CaseSensitiveIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `whole-word` — "Match Whole Word", VS Code's underlined `ab`. Measured: 22 by 14,
- *  extent 17.55, centered at (12, 13). */
+/** Lucide's `whole-word` — "Match Whole Word", VS Code's underlined `ab`. The long-side cap again,
+ *  so it reads level with the `Aa` beside it: measured 22 by 14 (stroke included), extent 20.23,
+ *  centered at (12, 13). */
 export function WholeWordIcon(props: IconProps) {
   return (
     <svg
       className={props.className}
       width="13"
       height="13"
-      viewBox={fitIcon(17.55, 12, 13, 24)}
+      viewBox={fitIcon(20.23, 12, 13, 24)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={fitStroke(17.55, 24, 2)}
+      strokeWidth={fitStroke(20.23, 24, 2)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -769,6 +771,55 @@ export function CollapseAllIcon(props: IconProps) {
       <line x1="12" x2="18" y1="15" y2="15" />
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
+/** The results pane's "Expand All": Lucide's `copy-plus`, `copy-minus` with one line more, which
+ *  sits inside its box — the same extent. */
+export function ExpandAllIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(22, 12, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(22, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="15" x2="15" y1="12" y2="18" />
+      <line x1="12" x2="18" y1="15" y2="15" />
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  );
+}
+
+/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap: measured 19.5
+ *  by 16 (stroke included), extent 17.93, centered at (11.75, 12). */
+export function ClearIcon(props: IconProps) {
+  return (
+    <svg
+      className={props.className}
+      width="13"
+      height="13"
+      viewBox={fitIcon(17.93, 11.75, 12, 24)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={fitStroke(17.93, 24, 2)}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M16 5H3" />
+      <path d="M11 12H3" />
+      <path d="M16 19H3" />
+      <path d="m15.5 9.5 5 5" />
+      <path d="m20.5 9.5-5 5" />
     </svg>
   );
 }

@@ -323,8 +323,6 @@ describe("the Explorer's search, VS Code's search in files", () => {
       matchCase: false,
       wholeWord: false,
       regex: false,
-      include: "",
-      exclude: "",
       ...query
     });
   /** Files and their matches as `path:line:column`, which is what the row opens. */
@@ -363,12 +361,6 @@ describe("the Explorer's search, VS Code's search in files", () => {
     assert.deepEqual(listing.files.includes("out/built.js") && listing.files.includes("src/bin.dat"), true);
   });
 
-  it("narrows by the include and exclude fields, a bare glob matching at any depth", async () => {
-    assert.deepEqual(found(await search({ text: "needle", include: "*.ts" })), ["src/a.ts:1:7", "src/a.ts:2:3"]);
-    assert.deepEqual(found(await search({ text: "needle", exclude: "src/a.ts" })), ["src/b.txt:1:1", "src/b.txt:2:1"]);
-    assert.deepEqual(found(await search({ text: "needle", include: "out" })), []);
-  });
-
   it("takes the case, whole-word and regex toggles, and reports a regex that will not parse", async () => {
     assert.deepEqual(found(await search({ text: "needle", matchCase: true })), [
       "src/a.ts:1:7",
@@ -398,9 +390,7 @@ describe("the Explorer's search, VS Code's search in files", () => {
       text: "needle",
       matchCase: false,
       wholeWord: false,
-      regex: false,
-      include: "",
-      exclude: ""
+      regex: false
     });
     assert.equal(result.truncated, true);
     assert.equal(
