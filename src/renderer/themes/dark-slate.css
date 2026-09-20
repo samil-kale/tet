@@ -82,7 +82,9 @@
   --vscode-button-secondaryForeground: #dde2e9;
   --vscode-button-secondaryHoverBackground: #2a2f39;
 
-  --vscode-editorWidget-background: #1b1f27;
+  /* The screenshot has no widget; raised off the editor the way GitHub Dark Default's #161b22
+     sits over its #0d1117 — at the editor's own tone find/replace shows only its border. */
+  --vscode-editorWidget-background: #232830;
   --vscode-editorWidget-border: #2a2d35;
   /* Dark Modern's. */
   --vscode-widget-shadow: #0000005c;
