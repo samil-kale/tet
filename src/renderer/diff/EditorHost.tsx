@@ -9,13 +9,14 @@ import {
   getEditorSnapshot,
   isReadOnly,
   saveEditorFile,
+  showDiff,
   showMarkdownPreview,
   subscribeEditor,
   subscribeProjectEditors,
   type EditorSnapshot
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
-import { EyeIcon, SaveIcon } from "../ui/icons";
+import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
 import { MIN_PANE_WIDTH, Sash, usePaneShare } from "../ui/Sash";
 import { isMac, isModifierHeld } from "../platform";
 
@@ -60,7 +61,7 @@ interface EditorHostProps {
  * move React removes a frame with it inside, and the next host's attach takes it out again.
  */
 export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
-  const { path, file, building, saving, dirty, markdownPreview } = useEditorStore(tabId, whole);
+  const { path, file, building, saving, dirty, diff, markdownPreview } = useEditorStore(tabId, whole);
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
   const previewFrame = useRef<HTMLDivElement>(null);
@@ -131,6 +132,15 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
             onClick={() => void saveEditorFile(tabId)}
           >
             <SaveIcon />
+          </button>
+          {/* The file against HEAD, or on its own in a plain editor — a diff only a text file has. */}
+          <button
+            className={`icon-button${diff ? " active" : ""}`}
+            title={`${diff ? "Hide" : "Show"} Changes`}
+            disabled={kind !== "text"}
+            onClick={() => showDiff(tabId, !diff)}
+          >
+            <CompareIcon />
           </button>
           {isMarkdown(path) && (
             <button

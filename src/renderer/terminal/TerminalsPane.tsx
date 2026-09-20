@@ -64,7 +64,7 @@ interface TerminalsPaneProps {
   externalBusy: boolean;
   /** Opens a path ctrl-clicked in a terminal, or linked from a Markdown preview, in the project's
    *  preview tab. */
-  onOpenDiff: (projectId: string, path: string, keep?: boolean, markdownPreview?: boolean) => void;
+  onOpenFile: (projectId: string, path: string, keep?: boolean, markdownPreview?: boolean) => void;
   onCloseEditors: (projectId: string, tabIds: string[]) => void;
   layout: ProjectLayout;
   onActivateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
@@ -88,7 +88,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   onToggleGit,
   onToggleFiles,
   externalBusy,
-  onOpenDiff,
+  onOpenFile,
   onCloseEditors,
   layout,
   onActivateTab,
@@ -110,8 +110,8 @@ export const TerminalsPane = memo(function TerminalsPane({
   const knownTabs = useRef<PaneTab[]>([]);
 
   useEffect(
-    () => setRevealHandler(project.id, (path, markdownPreview) => onOpenDiff(project.id, path, false, markdownPreview)),
-    [project.id, onOpenDiff]
+    () => setRevealHandler(project.id, (path, markdownPreview) => onOpenFile(project.id, path, false, markdownPreview)),
+    [project.id, onOpenFile]
   );
 
   const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(project.id, tabIds), [onCloseEditors, project.id]);

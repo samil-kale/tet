@@ -1166,11 +1166,20 @@ textarea:focus,
   min-width: var(--pane-min-width);
 }
 
-/* Where monaco mounts. No `overflow: hidden`: monaco clips its own content, so it would only cut
-   off overlay widgets reaching outside this box. */
+/* Where monaco mounts. Two per tab, stacked: the diff editor and the plain one (`applyMode`). No
+   `overflow: hidden`: monaco clips its own content, so it would only cut off overlay widgets
+   reaching outside this box. */
 .editor-host {
   position: absolute;
   inset: 0;
+}
+
+/* The editor the tab isn't showing. Hidden by visibility and `!important` like `.editor-split`,
+   for the same reason: monaco writes `visibility: visible` inline on its editors, and the box
+   stays laid out, so the switch needs no relayout. */
+.editor-host.hidden,
+.editor-host.hidden * {
+  visibility: hidden !important;
 }
 
 /* Unsaved edits: on from the first keystroke until Ctrl+S reaches disk. */

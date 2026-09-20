@@ -79,29 +79,58 @@ export async function renderMarkdown(
   return doc;
 }
 
+interface Mark {
+  /** The block's first source line, 0-based. */
+  line: number;
+  /** Its offset in the scroller. */
+  top: number;
+}
+
+/** Every marked block, in document order, which is also the source's. */
+function blocks(scroller: HTMLElement, body: HTMLElement): Mark[] {
+  const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+  return [...body.querySelectorAll(`[${LINE_ATTRIBUTE}]`)].map((block) => ({
+    line: Number(block.getAttribute(LINE_ATTRIBUTE)),
+    top: block.getBoundingClientRect().top - origin
+  }));
+}
+
+/** The last block `reached` holds for, and the one after it — what a position falls between. */
+function around(marks: Mark[], reached: (mark: Mark) => boolean): [Mark | undefined, Mark | undefined] {
+  let index = -1;
+  while (index + 1 < marks.length && reached(marks[index + 1])) {
+    index++;
+  }
+  return [marks[index], marks[index + 1]];
+}
+
 /**
  * Scrolls the preview to the editor's `line` (0-based, fractional): between the blocks marked
  * around it, in proportion.
  */
 export function scrollToLine(scroller: HTMLElement, body: HTMLElement, line: number): void {
-  const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
-  let before: { line: number; top: number } | undefined;
-  let after: { line: number; top: number } | undefined;
-  for (const block of body.querySelectorAll(`[${LINE_ATTRIBUTE}]`)) {
-    const mark = { line: Number(block.getAttribute(LINE_ATTRIBUTE)), top: block.getBoundingClientRect().top - origin };
-    if (mark.line <= line) {
-      before = mark;
-    } else {
-      after = mark;
-      break;
-    }
-  }
+  const [before, after] = around(blocks(scroller, body), (mark) => mark.line <= line);
   if (!before) {
     scroller.scrollTop = 0;
     return;
   }
   const share = after ? (line - before.line) / (after.line - before.line) : 0;
   scroller.scrollTop = before.top + share * ((after?.top ?? before.top) - before.top);
+}
+
+/**
+ * The other way round: the source line at the top of the preview, 0-based and fractional, for the
+ * editor to follow. Undefined while nothing is rendered.
+ */
+export function lineAtScroll(scroller: HTMLElement, body: HTMLElement): number | undefined {
+  const marks = blocks(scroller, body);
+  const [before, after] = around(marks, (mark) => mark.top <= scroller.scrollTop);
+  if (!before) {
+    return marks.length > 0 ? 0 : undefined;
+  }
+  const height = after ? after.top - before.top : 0;
+  const share = height > 0 ? (scroller.scrollTop - before.top) / height : 0;
+  return before.line + share * ((after?.line ?? before.line) - before.line);
 }
 
 async function highlightBlock(code: Element): Promise<void> {

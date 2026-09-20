@@ -621,6 +621,8 @@ function createWindow(): void {
   // Nothing in the page takes the window away from tet or opens another: a link or form in a
   // Markdown preview, a stray drop. A new window is what monaco's ctrl-clicked link asks for, so
   // its web and mail links reach the browser as `shell:open-url`'s do; nothing else leaves.
+  // Measured: a navigation to `about:blank` reaches neither event — Chromium offers no cancel for
+  // it — so only the page's own script could blank the window, and there is none but tet's.
   window.webContents.on("will-navigate", (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isOpenableUrl(url)) {

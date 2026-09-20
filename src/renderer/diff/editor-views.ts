@@ -3,9 +3,9 @@ import type { FileContent } from "../../shared/types";
 import { confirm } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
-import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco } from "./editor";
+import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
-import { createPreview, renderMarkdown, resolveLink, scrollToLine } from "./markdown";
+import { createPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine } from "./markdown";
 import { openFile } from "../terminal/terminal-views";
 
 /**
@@ -13,11 +13,19 @@ import { openFile } from "../terminal/terminal-views";
  * element, the diff editor and the file, one set per tab (`editor-tab.ts`), and a Markdown file's
  * preview beside it. The elements follow a tab moved between panes, so an edit survives the move,
  * where React would rebuild the editor.
+ *
+ * A tab holds two editors, as VS Code has two editor kinds: monaco's diff editor against HEAD, and
+ * a plain one for the file alone (`showDiff`). Both are made on the same modified model, so the
+ * edit, its undo stack and the dirty mark carry over; each is built the first time its side is
+ * shown, and the one off screen keeps its box (`applyMode`).
  */
 
 /** Typing re-renders the preview once it pauses: each render parses, sanitizes and colors the
  *  whole file. */
 const PREVIEW_RENDER_DELAY_MS = 150;
+/** How long a scroll one side drove is expected to echo back from the other, which must not then
+ *  drive it again (VS Code keeps the two in step the same way, by counting the echoes). */
+const SCROLL_ECHO_MS = 150;
 /** A render while typing shows only images already loaded; a new source, likely half typed
  *  (`https://exa`), is asked for once typing has stopped this long. */
 const PREVIEW_IMAGE_DELAY_MS = 1000;
@@ -34,6 +42,8 @@ export interface EditorSnapshot {
   dirty: boolean;
   /** The tab the next file replaces — until kept, which the first edit does (VS Code). */
   preview: boolean;
+  /** The file against HEAD in the diff editor; off shows it in the plain one (`showDiff`). */
+  diff: boolean;
   /** The rendered file beside the editor, for a Markdown file (VS Code's "Open Preview to the
    *  Side"). Off again for the next file. */
   markdownPreview: boolean;
@@ -54,16 +64,22 @@ interface PreviewView {
   timer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by every render: one overtaken is dropped. */
   renderSeq: number;
+  /** Which side last set a scroll position, and when (`echoing`). */
+  scrolledBy: { side: "editor" | "preview"; at: number } | undefined;
 }
 
 interface EditorView {
   projectId: string;
   tabId: string;
-  /** Moved between containers, never rendered by React. */
+  /** The diff editor's element and the plain editor's, stacked in the tab's frame and moved
+   *  between containers together; never rendered by React. */
   host: HTMLDivElement;
-  editor: MonacoEditor.IStandaloneDiffEditor | null;
-  /** Shared by every file opened while the editor builds. */
-  building: Promise<MonacoEditor.IStandaloneDiffEditor | null> | null;
+  plainHost: HTMLDivElement;
+  diffEditor: MonacoEditor.IStandaloneDiffEditor | null;
+  plainEditor: MonacoEditor.IStandaloneCodeEditor | null;
+  /** Shared by every file opened while that editor builds. */
+  buildingDiff: Promise<MonacoEditor.IStandaloneDiffEditor | null> | null;
+  buildingPlain: Promise<MonacoEditor.IStandaloneCodeEditor | null> | null;
   models: { original: MonacoEditor.ITextModel; modified: MonacoEditor.ITextModel } | null;
   /** The modified model's version at the last load or save; anything else is dirty. */
   savedVersionId: number;
@@ -98,6 +114,7 @@ const CLOSED: EditorSnapshot = {
   saving: false,
   dirty: false,
   preview: false,
+  diff: true,
   markdownPreview: false
 };
 
@@ -142,6 +159,59 @@ export function subscribeEditor(tabId: string, listener: () => void): () => void
 /** Fires for any of the project's editor tabs. */
 export function subscribeProjectEditors(projectId: string, listener: () => void): () => void {
   return subscribe(projectListeners, projectId, listener);
+}
+
+/** The code editor on screen: the diff editor's modified side, or the plain one. Null until the
+ *  side in the snapshot has been built. */
+function activeEditor(view: EditorView): MonacoEditor.IStandaloneCodeEditor | null {
+  return (view.snapshot.diff ? view.diffEditor?.getModifiedEditor() : view.plainEditor) ?? null;
+}
+
+/** Shows the editor the tab's snapshot asks for and hides the other, both keeping their box. */
+function applyMode(view: EditorView): void {
+  view.host.classList.toggle("hidden", !view.snapshot.diff);
+  view.plainHost.classList.toggle("hidden", view.snapshot.diff);
+}
+
+/** Both editors carry the tab's models, so the one off screen is ready for the switch. */
+function setModels(view: EditorView, models: EditorView["models"]): void {
+  view.diffEditor?.setModel(models);
+  view.plainEditor?.setModel(models?.modified ?? null);
+}
+
+function setReadOnly(view: EditorView, readOnly: boolean): void {
+  view.diffEditor?.updateOptions({ readOnly });
+  view.plainEditor?.updateOptions({ readOnly });
+}
+
+/**
+ * Switches the tab between the diff editor and the plain one, carrying the cursor and the scroll
+ * over. The models stay as they are, HEAD's included, so switching back shows the diff against a
+ * HEAD kept current meanwhile (`setEditorVersion`).
+ */
+export function showDiff(tabId: string, shown: boolean): void {
+  const view = views.get(tabId);
+  if (!view || view.snapshot.diff === shown) {
+    return;
+  }
+  const leaving = activeEditor(view);
+  const state = leaving?.saveViewState() ?? null;
+  const focused = leaving?.hasTextFocus() ?? false;
+  // Shown once the other editor is there, or the switch would uncover an empty frame while it builds.
+  publish(view, { diff: shown });
+  void ensureEditor(view).then((built) => {
+    if (views.get(tabId) !== view || !built || view.snapshot.diff !== shown) {
+      return;
+    }
+    applyMode(view);
+    const editor = activeEditor(view);
+    if (state) {
+      editor?.restoreViewState(state);
+    }
+    if (focused) {
+      editor?.focus();
+    }
+  });
 }
 
 /** Shows or hides the Markdown preview beside the tab's editor; a file of another kind has none. */
@@ -212,26 +282,33 @@ export function editorContent(tabId: string): string | undefined {
 
 /**
  * Reads `path` afresh into the tab, making its editor on the first call; a Markdown file with its
- * preview if `markdownPreview`. The caller has made sure nothing unsaved is lost, and calls this
- * before the tab is drawn, whose host attaches the element made here.
+ * preview if `markdownPreview`, against HEAD if `diff` (App's `openEditor`). The caller has made
+ * sure nothing unsaved is lost, and calls this before the tab is drawn, whose host attaches the
+ * element made here.
  */
 export function openEditorFile(
   projectId: string,
   tabId: string,
   path: string,
   preview: boolean,
-  markdownPreview: boolean
+  markdownPreview: boolean,
+  diff: boolean
 ): void {
   let view = views.get(tabId);
   if (!view) {
     const host = document.createElement("div");
     host.className = "editor-host";
+    const plainHost = document.createElement("div");
+    plainHost.className = "editor-host";
     view = {
       projectId,
       tabId,
       host,
-      editor: null,
-      building: null,
+      plainHost,
+      diffEditor: null,
+      plainEditor: null,
+      buildingDiff: null,
+      buildingPlain: null,
       models: null,
       savedVersionId: 0,
       reloading: false,
@@ -258,8 +335,10 @@ export function openEditorFile(
     saving: false,
     dirty: false,
     preview,
+    diff,
     markdownPreview: markdownPreview && isMarkdown(path)
   });
+  applyMode(view);
   const current = view;
   void window.tet.repository.readFile(projectId, path).then((file) => {
     if (views.get(tabId) !== current || current.readSeq !== seq) {
@@ -356,7 +435,7 @@ export function setEditorVersion(tabId: string, version: string): void {
       }
       view.savedVersionId = model.getAlternativeVersionId();
       // As in `showText`: deleted under the tab means read-only, restored means editable.
-      view.editor?.updateOptions({ readOnly: isReadOnly(result) });
+      setReadOnly(view, isReadOnly(result));
       publish(view, { dirty: false });
     } else {
       // A new generation: the open may still be building models, and both would create the same two.
@@ -433,16 +512,20 @@ export function attachMarkdownPreview(tabId: string, container: HTMLElement): vo
   renderPreview(view, 0);
 }
 
-/** Moves the element into the tab's host, new after a pane move; monaco remeasures (`automaticLayout`). */
+/** Moves both elements into the tab's frame, new after a pane move; monaco remeasures
+ *  (`automaticLayout`). */
 export function attachEditor(tabId: string, container: HTMLElement): void {
   const view = views.get(tabId);
   if (view && view.host.parentElement !== container) {
-    container.appendChild(view.host);
+    container.append(view.host, view.plainHost);
   }
 }
 
 export function focusEditor(tabId: string): void {
-  views.get(tabId)?.editor?.getModifiedEditor().focus();
+  const view = views.get(tabId);
+  if (view) {
+    activeEditor(view)?.focus();
+  }
 }
 
 /** The editor tab closed. */
@@ -454,8 +537,10 @@ export function disposeEditor(tabId: string): void {
   views.delete(tabId);
   clearModels(view);
   clearPreview(view);
-  view.editor?.dispose();
+  view.diffEditor?.dispose();
+  view.plainEditor?.dispose();
   view.host.remove();
+  view.plainHost.remove();
   view.preview?.scroller.remove();
   emit(view);
   // Safe here, not in an unsubscribe: ids are never reused, so nobody subscribes to this one again.
@@ -471,27 +556,27 @@ export function disposeProjectEditors(projectId: string): void {
 }
 
 /**
- * Editor first: disposing a model it still holds throws. A model left behind blocks its URI for the
- * next open of the same file.
+ * Editors first: disposing a model one still holds throws. A model left behind blocks its URI for
+ * the next open of the same file.
  */
 function clearModels(view: EditorView): void {
   if (!view.models) {
     return;
   }
-  view.editor?.setModel(null);
+  setModels(view, null);
   view.models.original.dispose();
   view.models.modified.dispose();
   view.models = null;
 }
 
-/** Hands a text file to the editor, building it first if needed. */
+/** Hands a text file to the tab's editors, building the one on screen first if needed. */
 async function showText(view: EditorView, seq: number, file: FileContent): Promise<void> {
-  const editor = await ensureEditor(view);
+  const built = await ensureEditor(view);
   const monaco = await loadMonaco();
   // A grammar diff-highlight.ts doesn't bundle is "plaintext".
   const language = languageForPath(file.path) ?? null;
   await ensureLanguage(monaco, language);
-  if (!editor || views.get(view.tabId) !== view || view.readSeq !== seq) {
+  if (!built || views.get(view.tabId) !== view || view.readSeq !== seq) {
     return;
   }
   // One model per URI or monaco throws; the project is the authority, as two can show one path.
@@ -515,8 +600,8 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
       publish(view, { dirty, preview: view.snapshot.preview && !dirty });
     }
   });
-  editor.updateOptions({ readOnly: isReadOnly(file) });
-  editor.setModel(models);
+  setReadOnly(view, isReadOnly(file));
+  setModels(view, models);
   view.models = models;
   renderPreview(view, 0);
   publish(view, { building: false });
@@ -541,7 +626,8 @@ function makePreview(view: EditorView): PreviewView {
       void window.tet.shell.openUrl(href);
     }
   });
-  return { scroller, body, images: new Map(), timer: undefined, renderSeq: 0 };
+  scroller.addEventListener("scroll", () => followPreview(view));
+  return { scroller, body, images: new Map(), timer: undefined, renderSeq: 0, scrolledBy: undefined };
 }
 
 /**
@@ -609,74 +695,148 @@ function clearPreview(view: EditorView): void {
   }
 }
 
+/** Still the answer to the scroll the other side was given: that one must not drive it back. */
+function echoing(preview: PreviewView, side: "editor" | "preview"): boolean {
+  return preview.scrolledBy !== undefined && preview.scrolledBy.side !== side && performance.now() - preview.scrolledBy.at < SCROLL_ECHO_MS;
+}
+
 /** Scrolls the preview to the editor's first visible line, the share of it scrolled past included. */
 function followEditor(view: EditorView): void {
-  const editor = view.editor?.getModifiedEditor();
+  const editor = activeEditor(view);
   const line = editor?.getVisibleRanges()[0]?.startLineNumber;
-  if (!view.preview || !view.snapshot.markdownPreview || !editor || line === undefined) {
+  if (!view.preview || !view.snapshot.markdownPreview || !editor || line === undefined || echoing(view.preview, "editor")) {
     return;
   }
   const top = editor.getTopForLineNumber(line);
   const height = editor.getTopForLineNumber(line + 1) - top;
   const share = height > 0 ? Math.min(1, Math.max(0, (editor.getScrollTop() - top) / height)) : 0;
+  view.preview.scrolledBy = { side: "editor", at: performance.now() };
   scrollToLine(view.preview.scroller, view.preview.body, line - 1 + share);
 }
 
+/** And back: the editor scrolls to the line at the top of the preview (VS Code's
+ *  `scrollEditorWithPreview`). */
+function followPreview(view: EditorView): void {
+  const preview = view.preview;
+  const editor = activeEditor(view);
+  if (!preview || !editor || echoing(preview, "preview")) {
+    return;
+  }
+  const line = lineAtScroll(preview.scroller, preview.body);
+  if (line === undefined) {
+    return;
+  }
+  const whole = Math.floor(line);
+  const top = editor.getTopForLineNumber(whole + 1);
+  const height = editor.getTopForLineNumber(whole + 2) - top;
+  preview.scrolledBy = { side: "preview", at: performance.now() };
+  editor.setScrollTop(top + (height > 0 ? (line - whole) * height : 0));
+}
+
+/** What both of a tab's editors are made and configured with. */
+interface EditorSetup {
+  monaco: Monaco;
+  options: Record<string, unknown>;
+  keybindings: Record<string, string>;
+}
+
+/** Null for a tab closed while this was awaited. */
+async function editorSetup(view: EditorView): Promise<EditorSetup | null> {
+  const monaco = await loadMonaco();
+  // Defines the theme before the editor exists, or it paints once in monaco's colors.
+  await ensureLanguage(monaco, null);
+  const { editorKeybindingPreset } = await window.tet.settings.get();
+  if (views.get(view.tabId) !== view) {
+    return null;
+  }
+  const fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim();
+  return { monaco, options: editorOptions(fontFamily), keybindings: resolveKeybindings(editorKeybindingPreset) };
+}
+
+/**
+ * The actions, keybindings and listeners a tab's editor carries. Given a diff editor's modified
+ * side, which is where its `addAction` and `addCommand` put them anyway, so the plain editor is
+ * configured by the same call.
+ */
+function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEditor.IStandaloneCodeEditor): void {
+  // Bound through the resolved keybindings below.
+  editor.addAction({ id: "tet.save", label: "Save", run: () => void saveEditorFile(view.tabId) });
+  // VS Code's "Markdown: Open Preview to the Side", as a toggle.
+  editor.addAction({
+    id: "tet.markdownPreview",
+    label: "Toggle Preview",
+    run: () => showMarkdownPreview(view.tabId, !view.snapshot.markdownPreview)
+  });
+  editor.onDidScrollChange((event) => {
+    if (event.scrollTopChanged) {
+      followEditor(view);
+    }
+  });
+  // Monaco's find actions declare no context menu group.
+  editor.addAction({
+    id: "tet.find",
+    label: "Find",
+    contextMenuGroupId: "1_find",
+    contextMenuOrder: 1,
+    run: (instance) => void instance.getAction("actions.find")?.run()
+  });
+  editor.addAction({
+    id: "tet.findReplace",
+    label: "Find and Replace",
+    contextMenuGroupId: "1_find",
+    contextMenuOrder: 2,
+    run: (instance) => void instance.getAction("editor.action.startFindReplaceAction")?.run()
+  });
+  // Unknown combos are skipped at parse, unknown command ids silently at run. A command's keybinding
+  // is page-wide and the last registered wins, so each is scoped to this editor the way `addAction`
+  // scopes its own — the tab's other editor included, which has its own id.
+  const scope = `editorId == '${editor.getId()}'`;
+  for (const [combo, commandId] of Object.entries(setup.keybindings)) {
+    const parsed = parseKeyCombo(setup.monaco, combo);
+    // Elsewhere Ctrl+Shift+V pastes as plain text: VS Code binds its preview for Markdown alone.
+    const when = commandId === "tet.markdownPreview" ? `${scope} && editorLangId == 'markdown'` : scope;
+    if (parsed !== undefined) {
+      editor.addCommand(parsed, () => editor.getAction(commandId)?.run(), when);
+    }
+  }
+}
+
 /** Built once per tab, kept for every file after (the preview tab's change). */
-function ensureEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDiffEditor | null> {
-  view.building ??= (async () => {
-    const monaco = await loadMonaco();
-    // Defines the theme before the editor exists, or it paints once in monaco's colors.
-    await ensureLanguage(monaco, null);
-    const { editorKeybindingPreset } = await window.tet.settings.get();
-    if (views.get(view.tabId) !== view) {
+function ensureDiffEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDiffEditor | null> {
+  view.buildingDiff ??= (async () => {
+    const setup = await editorSetup(view);
+    if (!setup) {
       return null;
     }
-    const fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim();
-    const editor = monaco.editor.createDiffEditor(view.host, { ...editorOptions(fontFamily), ...diffEditorOptions() });
-    view.editor = editor;
-    // Bound through the resolved keybindings below.
-    editor.addAction({ id: "tet.save", label: "Save", run: () => void saveEditorFile(view.tabId) });
-    // VS Code's "Markdown: Open Preview to the Side", as a toggle.
-    editor.addAction({
-      id: "tet.markdownPreview",
-      label: "Toggle Preview",
-      run: () => showMarkdownPreview(view.tabId, !view.snapshot.markdownPreview)
-    });
-    editor.getModifiedEditor().onDidScrollChange((event) => {
-      if (event.scrollTopChanged) {
-        followEditor(view);
-      }
-    });
-    // Monaco's find actions declare no context menu group.
-    editor.addAction({
-      id: "tet.find",
-      label: "Find",
-      contextMenuGroupId: "1_find",
-      contextMenuOrder: 1,
-      run: (instance) => void instance.getAction("actions.find")?.run()
-    });
-    editor.addAction({
-      id: "tet.findReplace",
-      label: "Find and Replace",
-      contextMenuGroupId: "1_find",
-      contextMenuOrder: 2,
-      run: (instance) => void instance.getAction("editor.action.startFindReplaceAction")?.run()
-    });
-    // Unknown combos are skipped at parse, unknown command ids silently at run. On a diff editor,
-    // `addCommand` and `addAction` reach the modified side, where these belong. A command's keybinding
-    // is page-wide and the last registered wins, so each is scoped to this editor the way `addAction`
-    // scopes its own.
-    const scope = `editorId == '${editor.getModifiedEditor().getId()}'`;
-    for (const [combo, commandId] of Object.entries(resolveKeybindings(editorKeybindingPreset))) {
-      const parsed = parseKeyCombo(monaco, combo);
-      // Elsewhere Ctrl+Shift+V pastes as plain text: VS Code binds its preview for Markdown alone.
-      const when = commandId === "tet.markdownPreview" ? `${scope} && editorLangId == 'markdown'` : scope;
-      if (parsed !== undefined) {
-        editor.addCommand(parsed, () => editor.getModifiedEditor().getAction(commandId)?.run(), when);
-      }
-    }
+    const editor = setup.monaco.editor.createDiffEditor(view.host, { ...setup.options, ...diffEditorOptions() });
+    view.diffEditor = editor;
+    configureEditor(view, setup, editor.getModifiedEditor());
+    // The file is already open when the tab is switched back to the diff.
+    setReadOnly(view, isReadOnly(view.snapshot.file));
+    setModels(view, view.models);
     return editor;
   })();
-  return view.building;
+  return view.buildingDiff;
+}
+
+/** Built the first time the tab's diff is switched off, on the same models as the diff editor. */
+function ensurePlainEditor(view: EditorView): Promise<MonacoEditor.IStandaloneCodeEditor | null> {
+  view.buildingPlain ??= (async () => {
+    const setup = await editorSetup(view);
+    if (!setup) {
+      return null;
+    }
+    const editor = setup.monaco.editor.create(view.plainHost, setup.options);
+    view.plainEditor = editor;
+    configureEditor(view, setup, editor);
+    setReadOnly(view, isReadOnly(view.snapshot.file));
+    setModels(view, view.models);
+    return editor;
+  })();
+  return view.buildingPlain;
+}
+
+/** Builds the editor the tab's side needs; false for a tab closed while it built. */
+async function ensureEditor(view: EditorView): Promise<boolean> {
+  return Boolean(view.snapshot.diff ? await ensureDiffEditor(view) : await ensurePlainEditor(view));
 }

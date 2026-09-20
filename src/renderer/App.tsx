@@ -42,6 +42,7 @@ import {
   openEditorFile,
   previewEditorTab,
   setEditorVersion,
+  showDiff,
   showMarkdownPreview
 } from "./diff/editor-views";
 
@@ -738,9 +739,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * The editor is told before the tab draws, since the tab attaches what it made; the tab is
    * activated before it appears in `stripTabs`, as a new terminal tab is — both in one handler, so
    * the layout and the list agree on the first render.
+   *
+   * `diff` is the side the tab opens on: the changes list opens a change against HEAD, everything
+   * else a file, plain as VS Code shows it. A tab already open only ever has its diff switched on,
+   * never off, so opening a file again leaves what the user chose there (`showDiff`).
    */
-  const openDiff = useCallback(
-    (projectId: string, path: string, keep = false, markdownPreview = false) => {
+  const openEditor = useCallback(
+    (projectId: string, path: string, diff: boolean, keep = false, markdownPreview = false) => {
       const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path);
       const preview = keep ? undefined : previewEditorTab(projectId);
       let tabId: string;
@@ -752,16 +757,19 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         if (markdownPreview) {
           showMarkdownPreview(tabId, true);
         }
+        if (diff) {
+          showDiff(tabId, true);
+        }
       } else if (preview !== undefined) {
         tabId = preview;
-        openEditorFile(projectId, tabId, path, true, markdownPreview);
+        openEditorFile(projectId, tabId, path, true, markdownPreview, diff);
         setEditorTabs((current) => ({
           ...current,
           [projectId]: (current[projectId] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
         }));
       } else {
         tabId = nextEditorTabId();
-        openEditorFile(projectId, tabId, path, !keep, markdownPreview);
+        openEditorFile(projectId, tabId, path, !keep, markdownPreview, diff);
         setEditorTabs((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), { tabId, projectId, path }] }));
       }
       activateTab(projectId, tabId);
@@ -773,9 +781,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     () =>
       window.tet.repository.onOpenEditor(({ projectId, path, keep }) => {
         setActiveProjectId(projectId);
-        openDiff(projectId, path, keep);
+        openEditor(projectId, path, false, keep);
       }),
-    [openDiff]
+    [openEditor]
   );
   useEffect(
     () =>
@@ -785,13 +793,29 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }),
     []
   );
+  /** The changes list's: the file against HEAD. */
   const openActiveDiff = useCallback(
     (path: string, keep?: boolean, markdownPreview?: boolean) => {
       if (activeProjectId) {
-        openDiff(activeProjectId, path, keep, markdownPreview);
+        openEditor(activeProjectId, path, true, keep, markdownPreview);
       }
     },
-    [activeProjectId, openDiff]
+    [activeProjectId, openEditor]
+  );
+  /** The Explorer's: the file alone. */
+  const openActiveFile = useCallback(
+    (path: string, keep?: boolean, markdownPreview?: boolean) => {
+      if (activeProjectId) {
+        openEditor(activeProjectId, path, false, keep, markdownPreview);
+      }
+    },
+    [activeProjectId, openEditor]
+  );
+  /** A path ctrl-clicked in a terminal or linked from a Markdown preview: a file too. */
+  const openProjectFile = useCallback(
+    (projectId: string, path: string, keep?: boolean, markdownPreview?: boolean) =>
+      openEditor(projectId, path, false, keep, markdownPreview),
+    [openEditor]
   );
   /** Disposes the editors; the layout collapses a pane left empty. */
   const closeEditors = useCallback((projectId: string, tabIds: string[]) => {
@@ -972,7 +996,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     ? (editorTabs[activeProjectId]?.find((tab) => tab.tabId === activeEditors[activeProjectId])?.path ?? null)
                     : null
                 }
-                onOpen={openActiveDiff}
+                onOpen={openActiveFile}
               />
               <GitPane
                 project={activeProject}
@@ -1010,7 +1034,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               onToggleFiles={toggleFiles}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
-              onOpenDiff={openDiff}
+              onOpenFile={openProjectFile}
               onCloseEditors={closeEditors}
               layout={layouts[project.id] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
