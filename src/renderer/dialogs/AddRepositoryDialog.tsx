@@ -10,7 +10,7 @@ import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { Field, TextField } from "../ui/Field";
+import { DialogError, Field, TextField } from "../ui/Field";
 import { CloseIcon, SpinnerIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
 import { useEscape } from "../ui/use-escape";
@@ -170,7 +170,7 @@ function AccountForm({ onAdded }: AccountFormProps) {
           }
         }}
       />
-      {refused !== undefined && <p className="dialog-field-error">{refused}</p>}
+      <DialogError message={refused} />
       {/* Its own row: the dialog's Cancel closes the whole dialog. */}
       <div className="dialog-buttons">
         <button
@@ -422,7 +422,7 @@ function RemoteTab({ onClone }: RemoteTabProps) {
                     </button>
                   </div>
                 ))}
-              {!loading && listError !== undefined && <p className="dialog-field-error">{listError}</p>}
+              {!loading && <DialogError message={listError} />}
               {!loading && listError === undefined && list && filtered.length === 0 && (
                 <div className="placeholder">No repositories.</div>
               )}

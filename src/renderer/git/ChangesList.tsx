@@ -1,22 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
+import type { ChangeStatus, FileChange, Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
+import type { FileAct, FileAsk } from "./run-action";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { isMarkdown } from "../diff/diff-highlight";
-
-/** Runs a file action; the owner shows it running on its own bar. */
-export type FileAct = (action: () => Promise<GitActionResult>) => void;
-
-/** `FileAct` awaited, handing the failure back instead of notifying it: a question stays up and
- *  shows it under the field the name was typed in (`prompt`'s `submit`). */
-export type FileAsk = (action: () => Promise<GitActionResult>) => Promise<string | undefined>;
 
 interface ChangesListProps {
   project: Project;
   /** The changes are the list; the rest feeds a commit from the menu. */
   state: RepositoryState;
+  /** The owner shows it running on its own bar. */
   act: FileAct;
   /** For the commit, whose question stays up to show what git refused. */
   ask: FileAsk;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState 
 import type { ExplorerListing, FileChange, GitActionResult, Project } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
-import { type FileAct, type FileAsk } from "../git/ChangesList";
+import { notifying, type FileAsk } from "../git/run-action";
 import {
   ancestorsOf,
   buildForest,
@@ -91,9 +91,8 @@ interface ExplorerProps {
   /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked. */
   /** The project is named: the same handler serves every view that opens a file. */
   onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
-  /** The owner shows it running on its own bar. */
-  act: FileAct;
-  /** The same, for the questions that show a refusal at their field (`prompt`'s `submit`). */
+  /** The owner shows it running on its own bar; its failure goes to the question that asked for
+   *  the name, or to a notice where there is none (`notifying`). */
   ask: FileAsk;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
    *  else triggers a re-read. */
@@ -123,7 +122,6 @@ export function Explorer({
   shown: visible,
   selected,
   onOpenFile,
-  act,
   ask,
   onExplorerChanged,
   onFiltering,
@@ -232,9 +230,10 @@ export function Explorer({
       }
       return result;
     });
-  const run: FileAct = (action) => act(reread(action));
-  /** `run` for a question that stays up to show what refused it. */
+  /** The pane's `ask`, re-reading: for the questions that stay up to show what refused them. */
   const runAsked: FileAsk = (action) => ask(reread(action));
+  /** The same with the failure notified, for a menu entry that asks nothing. */
+  const run = notifying(runAsked);
 
   const under = (dir: string, name: string): string => (dir ? `${dir}/${name}` : name);
 
@@ -268,9 +267,9 @@ export function Explorer({
       label: "Name",
       value: node.name,
       confirmLabel: "Rename",
-      submit: ({ value }) =>
+      submit: async ({ value }) =>
         value === node.name
-          ? Promise.resolve(undefined)
+          ? undefined
           : runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(dir, value)))
     });
   };

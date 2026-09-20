@@ -1,6 +1,6 @@
 import { WORKTREES_NEED_GIT } from "../../shared/types";
 import type { WorktreeRef } from "../../shared/types";
-import type { GitRun } from "./BranchTree";
+import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 
@@ -49,13 +49,11 @@ export async function askRenameWorktree(
     detail: "Renames the worktree and its folder. Its terminals are closed first, and agent sessions started there can no longer be resumed.",
     value: branch,
     confirmLabel: "Rename",
-    submit: async ({ value }) => {
-      // Unchanged, or its unsaved edits kept it: nothing to say, and the question is done.
-      if (value === branch || !(await canClose())) {
-        return undefined;
-      }
-      return run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, value));
-    }
+    // Unchanged, or its unsaved edits kept it: nothing to say, and the question is done.
+    submit: async ({ value }) =>
+      value === branch || !(await canClose())
+        ? undefined
+        : run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, value))
   });
 }
 

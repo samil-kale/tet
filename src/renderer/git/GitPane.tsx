@@ -3,7 +3,7 @@ import type { Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
-import { useFileAct } from "./use-file-act";
+import { useFileAct } from "./run-action";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIcon } from "../ui/icons";
 import { ProgressBar } from "../ui/ProgressBar";

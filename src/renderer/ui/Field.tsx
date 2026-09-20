@@ -1,10 +1,19 @@
 import type { KeyboardEvent, ReactNode, Ref } from "react";
 
+/**
+ * What refused an answer, where the answer was given: under the field to blame (`Field`), above a
+ * card's button row (`DialogFrame`), or in place of the list that could not be loaded. Words
+ * alone, since the colour and the place already say what it is; nothing at all while there is
+ * nothing to say.
+ */
+export function DialogError({ message }: { message: string | undefined }) {
+  return message === undefined ? null : <p className="dialog-error">{message}</p>;
+}
+
 interface FieldProps {
   label: string;
   children: ReactNode;
-  /** What refused this field's value, on its own line under the control: words alone, since the
-   *  colour and the place already say what it is. */
+  /** What refused this field's value, on its own line under the control (`DialogError`). */
   error?: string;
 }
 
@@ -18,7 +27,7 @@ export function Field({ label, children, error }: FieldProps) {
     <label className="dialog-field">
       <span>{label}</span>
       {children}
-      {error !== undefined && <p className="dialog-field-error">{error}</p>}
+      <DialogError message={error} />
     </label>
   );
 }

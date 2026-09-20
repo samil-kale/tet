@@ -4,6 +4,7 @@ import type { AgentId, AgentInfo, TerminalDescriptor } from "../../shared/types"
 import { fitTerminal, focusTerminal, hideTerminal, showTerminal } from "./terminal-views";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
+import { refusal } from "../git/run-action";
 import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
@@ -257,13 +258,10 @@ export const Pane = memo(function Pane({
         value: tab.title,
         confirmLabel: "Rename",
         maxLength: MAX_TITLE_LENGTH,
-        submit: async ({ value }) => {
-          if (value === tab.title) {
-            return undefined;
-          }
-          const result = await window.tet.terminals.rename(projectId, tab.tabId, value);
-          return result.ok ? undefined : (result.error ?? "Could not rename the session");
-        }
+        submit: async ({ value }) =>
+          value === tab.title
+            ? undefined
+            : refusal(await window.tet.terminals.rename(projectId, tab.tabId, value), "Could not rename the session")
       });
     },
     [projectId]

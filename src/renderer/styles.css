@@ -1943,12 +1943,11 @@ textarea:focus,
   color: var(--vscode-descriptionForeground);
 }
 
-/* What refused an answer, under the field it was typed in (`Field`'s `error`) or above the button
-   row where no single field can be blamed (`DialogFrame`'s `error`): the error mark's colour, as
-   .session-mark-error. Words alone, no mark — the colour and the place already say it. Its own
+/* What refused an answer, wherever the answer was given (`DialogError`): the error mark's colour,
+   as .session-mark-error. Words alone, no mark — the colour and the place already say it. Its own
    class rather than a span, which `.dialog-field span` above would grey. A path or a branch name
    in git's message breaks anywhere, as .dialog-message. */
-.dialog-field-error {
+.dialog-error {
   margin: 0;
   overflow-wrap: anywhere;
   color: var(--vscode-errorForeground);

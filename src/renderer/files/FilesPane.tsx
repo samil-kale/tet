@@ -3,7 +3,7 @@ import type { FileSearchMatch, Project, RepositoryState } from "../../shared/typ
 import type { OpenEditor } from "../terminal/editor-tab";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { FileSearch, searchSummary, type FileSearchHandle } from "./FileSearch";
-import { useFileAct } from "../git/use-file-act";
+import { useFileAct } from "../git/run-action";
 import { useFileSearch } from "./use-file-search";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { ClearIcon, CollapseAllIcon, ExpandAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
@@ -55,7 +55,7 @@ export const FilesPane = memo(function FilesPane({
   searchHeight,
   onSearchHeight
 }: FilesPaneProps) {
-  const { acting, act, ask } = useFileAct(project.id);
+  const { acting, ask } = useFileAct(project.id);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
   const { searchResult, searching, search } = useFileSearch(project.id);
   const explorerRef = useRef<ExplorerHandle>(null);
@@ -126,7 +126,6 @@ export const FilesPane = memo(function FilesPane({
           shown={shown}
           selected={openPath}
           onOpenFile={onOpenFile}
-          act={act}
           ask={ask}
           onExplorerChanged={refreshExplorer}
           onFiltering={setFiltering}

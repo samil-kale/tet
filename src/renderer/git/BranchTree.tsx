@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { refName, upstreamName, worktreeBase } from "../../shared/types";
-import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
+import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
+import type { GitRun } from "./run-action";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
@@ -20,23 +21,14 @@ import {
 } from "../ui/icons";
 import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "./worktree-questions";
 
-/** One git command at a time per project, labelled while it runs. The tree asks its questions
- *  itself, knowing which remote holds a branch and where HEAD is. */
+/** One git command at a time per project, labelled while it runs (`GitRun`). The tree asks its
+ *  questions itself, knowing which remote holds a branch and where HEAD is. */
 export interface BranchActions extends GitRun {
   /** A command runs in this project; no second one is offered. */
   busy: boolean;
   /** That command was started here, so this pane's bar shows it; one started from the project
    *  list shows in that list's bar instead. */
   startedHere: boolean;
-}
-
-/** The two ways a view runs a git command, differing only in where its failure is told: `run`
- *  notifies it, for an action with nothing left on screen to carry it; `ask` hands it back, for a
- *  question that stays up and shows it under the field the answer was typed in (`prompt`'s
- *  `submit`). */
-export interface GitRun {
-  run: (label: string, action: () => Promise<GitActionResult>) => void;
-  ask: (label: string, action: () => Promise<GitActionResult>) => Promise<string | undefined>;
 }
 
 interface BranchTreeProps {
@@ -199,10 +191,8 @@ export const BranchTree = memo(function BranchTree({
       label: "Name",
       value: name,
       confirmLabel: "Rename",
-      submit: ({ value }) =>
-        value === name
-          ? Promise.resolve(undefined)
-          : branch.ask(`Renaming ${name}...`, () => repository.renameBranch(projectId, name, value))
+      submit: async ({ value }) =>
+        value === name ? undefined : branch.ask(`Renaming ${name}...`, () => repository.renameBranch(projectId, name, value))
     });
   };
 

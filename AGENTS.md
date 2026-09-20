@@ -125,9 +125,9 @@ or a per-line decision is for an agent.
   first. A `confirm` has no field, so it notifies.
 - To get this, **a question runs its own answer** (`PromptOptions.submit`): the dialog stays up
   while the action runs. So what runs it hands the failure back instead of notifying it
-  (`GitRun.ask`, `FileAsk`, and the main-process verbs answering a `GitActionResult`);
-  `run`/`act` notify. A new verb a dialog calls answers its failure rather than sending
-  `app:notice`.
+  (`git/run-action.ts`'s `GitRun.ask` and `FileAsk`, and the main-process verbs answering a
+  `GitActionResult`); `notifying` turns one into the other. A new verb a dialog calls answers its
+  failure rather than sending `app:notice`.
 - **Nothing is written until Save**; Cancel and Escape drop edits. A setting reaches an agent at
   its setup (`AgentPaths`), so it applies to projects opened afterwards.
 - **One `.progress-bar` per pane** (`ProgressBar.tsx`): a new slow reason feeds the existing bar.

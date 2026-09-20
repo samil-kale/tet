@@ -1113,10 +1113,12 @@ export class ProjectSessionManager {
     }
   }
 
-  /** Without a sessionId nothing is renamed, and the renderer's optimistic label reverts. */
-  /** Answers what the agent refused rather than notifying it: the window's question is still up
-   *  and shows it under the field the name was typed in, and `tabs-rename` fails instead of
-   *  reporting a rename that did not happen. */
+  /**
+   * Without a sessionId nothing is renamed, and the renderer's optimistic label reverts. Answers
+   * what the agent refused rather than notifying it: the window's question is still up and shows
+   * it under the field the name was typed in, and `tabs-rename` fails instead of reporting a
+   * rename that did not happen.
+   */
   async renameTab(tabId: string, title: string): Promise<string | undefined> {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
     if (!tab) {

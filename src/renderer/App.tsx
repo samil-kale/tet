@@ -3,7 +3,7 @@ import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../sha
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
-import { notifyRefused, useStartedHere } from "./git/use-file-act";
+import { notifying, refusal, useStartedHere } from "./git/run-action";
 import type { BranchActions } from "./git/BranchTree";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
@@ -393,8 +393,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       branchActionsRef.current.add(projectId);
       setBranchActions(new Set(branchActionsRef.current));
       try {
-        const result = await action();
-        return result.ok ? undefined : (result.error ?? `${label} failed`);
+        return refusal(await action(), `${label} failed`);
       } finally {
         branchActionsRef.current.delete(projectId);
         setBranchActions(new Set(branchActionsRef.current));
@@ -888,7 +887,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     () => ({
       busy: activeProjectId !== null && branchActions.has(activeProjectId),
       startedHere: gitPaneActing,
-      run: (label, action) => void askActiveBranchAction(label, action).then(notifyRefused),
+      run: notifying(askActiveBranchAction),
       ask: askActiveBranchAction
     }),
     [branchActions, activeProjectId, gitPaneActing, askActiveBranchAction]

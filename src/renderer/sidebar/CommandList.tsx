@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
 import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
 import { ContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { notifyRefused } from "../git/use-file-act";
+import { notifying, refusal } from "../git/run-action";
 import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { PlayIcon, PlusIcon } from "../ui/icons";
@@ -153,12 +153,11 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       return undefined;
     }
     applyCommands(next);
-    const result = await window.tet.commands.save(projectId, next);
-    return result.ok ? undefined : (result.error ?? "Could not save the commands");
+    return refusal(await window.tet.commands.save(projectId, next), "Could not save the commands");
   };
 
   /** The same for a change with no question up: a reorder, a remove. */
-  const save = (next: ProjectCommand[]): void => void saveAsked(next).then(notifyRefused);
+  const save = notifying(saveAsked);
 
   const askAdd = async (): Promise<void> => {
     await prompt({
@@ -171,13 +170,11 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       valueIndex: 1,
       colors: COLOR_FIELD,
       wide: true,
-      submit: (answer) => {
+      submit: async (answer) => {
         const command = toCommand(answer);
         const current = latest.current;
         // Already saved word for word: nothing to add, and nothing to say about it.
-        return current.some((entry) => isSameCommand(entry, command))
-          ? Promise.resolve(undefined)
-          : saveAsked([...current, command]);
+        return current.some((entry) => isSameCommand(entry, command)) ? undefined : saveAsked([...current, command]);
       }
     });
   };
@@ -205,14 +202,13 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       valueIndex: 1,
       colors: { ...COLOR_FIELD, value: command.color },
       wide: true,
-      submit: (answer) => {
+      submit: async (answer) => {
         const current = latest.current;
         const index = indexOf(command);
         // Removed while the dialog was open: writing it back would resurrect it.
-        if (index === -1) {
-          return Promise.resolve(undefined);
-        }
-        return saveAsked(current.map((entry, position) => (position === index ? toCommand(answer, command) : entry)));
+        return index === -1
+          ? undefined
+          : saveAsked(current.map((entry, position) => (position === index ? toCommand(answer, command) : entry)));
       }
     });
   };
