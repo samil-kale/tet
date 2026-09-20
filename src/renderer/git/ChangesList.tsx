@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
+import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
@@ -14,7 +15,7 @@ interface ChangesListProps {
   state: RepositoryState;
   act: FileAct;
   /** On a double-click; a Markdown file with its preview from the menu. */
-  onOpenDiff: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
+  onOpenDiff: (path: string, how?: OpenEditor) => void;
 }
 
 const STATUS_LETTER: Record<ChangeStatus, string> = {
@@ -176,7 +177,7 @@ export function ChangesList({ project, state, act, onOpenDiff }: ChangesListProp
     const entries: ContextMenuEntry[] = [
       { label: "Open diff", run: one ? () => onOpenDiff(change.path) : undefined },
       ...(isMarkdown(change.path)
-        ? [{ label: "Open Preview", run: one ? () => onOpenDiff(change.path, false, true) : undefined }]
+        ? [{ label: "Open Preview", run: one ? () => onOpenDiff(change.path, { markdownPreview: true }) : undefined }]
         : []),
       {
         label: "Open in external editor",

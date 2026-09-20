@@ -8,7 +8,7 @@ import { shell } from "electron";
 import { Repository } from "../src/main/git/repository";
 import { readMainWorktree } from "../src/main/git/linked-git-dir";
 import { worktreeBase } from "../src/shared/types";
-import { forkGitInProcess, git, isolateGitConfig } from "./helpers";
+import { forkGitInProcess, git, initRepository, isolateGitConfig } from "./helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
@@ -58,15 +58,6 @@ async function open(dir: string): Promise<Repository> {
 
 after(() => opened.forEach((repository) => repository.dispose()));
 
-/** A repository on main with one commit of a.txt. */
-function init(prefix: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  git(dir, "init", "-q", "--initial-branch=main");
-  fs.writeFileSync(path.join(dir, "a.txt"), "committed\n");
-  git(dir, "add", "a.txt");
-  git(dir, "commit", "-q", "-m", "base");
-  return dir;
-}
 
 describe("a discard, through the trash as in GitHub Desktop", () => {
   let dir: string;
@@ -78,7 +69,7 @@ describe("a discard, through the trash as in GitHub Desktop", () => {
   };
 
   before(async () => {
-    dir = init("tet-repository-discard-");
+    dir = initRepository("tet-repository-discard-");
     repository = await open(dir);
   });
 
@@ -126,7 +117,7 @@ describe("a discard, through the trash as in GitHub Desktop", () => {
   });
 
   it("puts an untracked repository inside it in the trash, whole", async () => {
-    const outer = init("tet-repository-nested-");
+    const outer = initRepository("tet-repository-nested-");
     const nested = path.join(outer, "nested");
     fs.mkdirSync(nested);
     git(nested, "init", "-q");
@@ -150,7 +141,7 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
   before(async () => {
     bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-bare-"));
     git(bare, "init", "-q", "--bare", "--initial-branch=main");
-    dir = init("tet-repository-remote-");
+    dir = initRepository("tet-repository-remote-");
     fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
     git(dir, "add", "b.txt");
     git(dir, "commit", "-q", "-m", "second");
@@ -218,7 +209,7 @@ describe("worktrees, each with a branch of its own", () => {
   const real = (folder: string): string => fs.realpathSync.native(folder);
 
   before(async () => {
-    dir = init("tet-repository-wt-");
+    dir = initRepository("tet-repository-wt-");
     // A base behind HEAD, so a worktree's start is told from HEAD.
     git(dir, "branch", "base");
     fs.writeFileSync(path.join(dir, "b.txt"), "b\n");

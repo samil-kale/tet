@@ -1,5 +1,5 @@
 import * as http from "node:http";
-import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
+import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_GROUPS, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
 
 /**
@@ -24,50 +24,6 @@ function whenToUse(sandboxed: boolean): string[] {
     "Leave it alone for files and git: read the repository and run git yourself."
   ];
 }
-
-/** The verbs in the order help prints them, under the question each group answers; every verb is
- *  in exactly one group but the unlisted ones (control.test.ts). */
-const GROUPS: ReadonlyArray<{ heading: string; verbs: readonly string[] }> = [
-  {
-    heading: "TET itself",
-    verbs: [
-      "version",
-      "settings-get",
-      "list-themes",
-      "list-agents",
-      "settings-set-theme",
-      "settings-set-color-scheme",
-      "settings-set-prompt",
-      "projects-list",
-      "projects-add",
-      "projects-remove",
-      "worktree-add",
-      "worktree-delete",
-      "repo-state",
-      "restart-app"
-    ]
-  },
-  {
-    heading: "The other tabs",
-    verbs: [
-      "tabs-list",
-      "tabs-output",
-      "events-tail",
-      "tabs-wait",
-      "tabs-send",
-      "tabs-create",
-      "tabs-run-command",
-      "tabs-start",
-      "tabs-restart",
-      "tabs-rename",
-      "tabs-close"
-    ]
-  },
-  {
-    heading: "In front of the user",
-    verbs: ["editor-open", "editor-state", "editor-list", "explorer-list", "notices-list", "notify"]
-  }
-];
 
 /** Set on sbx sessions alone (sbx.ts hands it in as the host to reach), so the CLI knows where it
  *  runs without asking: a sandboxed agent is listed only the verbs the server answers it, instead
@@ -100,14 +56,13 @@ function limits(sandboxed: boolean): string[] {
 function usage(): string {
   const sandboxed = inSandbox();
   // `sandbox` absent is refused there (ControlVerb.sandbox), which is what leaves a verb out.
-  const listed = (verb: string): ControlVerb | undefined =>
-    CONTROL_VERBS.find((entry) => entry.verb === verb && (!sandboxed || entry.sandbox !== undefined));
-  const groups = GROUPS.map((group) => ({
-    heading: group.heading,
-    lines: group.verbs.flatMap((verb) => {
-      const entry = listed(verb);
-      return entry ? [`  ${entry.usage}`, `      ${entry.summary}`] : [];
-    })
+  const listed = (entry: ControlVerb): boolean => !entry.unlisted && (!sandboxed || entry.sandbox !== undefined);
+  const groups = CONTROL_GROUPS.map((heading) => ({
+    heading,
+    lines: CONTROL_VERBS.filter((entry) => entry.group === heading && listed(entry)).flatMap((entry) => [
+      `  ${entry.usage}`,
+      `      ${entry.summary}`
+    ])
   })).filter((group) => group.lines.length > 0);
   return [
     "tet-ctl — control the TET app this terminal runs in",

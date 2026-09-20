@@ -160,8 +160,7 @@ function deps(): ControlDeps {
       }
     },
     sessions: {
-      get: (id) => (projects.some((project) => project.id === id) ? terminalsOf(id) : undefined),
-      sandboxed: (_projectId, tabId) => tabId === SANDBOX_TAB
+      get: (id) => (projects.some((project) => project.id === id) ? terminalsOf(id) : undefined)
     },
     repositories: {
       get: (id) =>
@@ -217,7 +216,11 @@ function tetCtl(args: string[], env: Record<string, string | undefined> = {}, in
   const ids = { [CONTROL_ENV.projectId]: PROJECT.id, [CONTROL_ENV.tabId]: OWN_TAB, ...env };
   const projectId = ids[CONTROL_ENV.projectId];
   const tabId = ids[CONTROL_ENV.tabId];
-  const token = projectId === undefined && tabId === undefined ? TOKEN : tabControlToken(TOKEN, projectId ?? "", tabId ?? "");
+  const token =
+    projectId === undefined && tabId === undefined
+      ? TOKEN
+      // The sandbox is in the token, as it is for a real tab (pty.ts's buildEnv).
+      : tabControlToken(TOKEN, projectId ?? "", tabId ?? "", tabId === SANDBOX_TAB);
   return runCli(args, { [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: token, ...ids }, input);
 }
 
@@ -285,7 +288,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.match(run.stdout, /settings-set-theme <theme-id>/);
     assert.match(run.stdout, /restart-app --confirm/);
-    // Printed by group (GROUPS in tet-ctl.ts), which leaves out a verb it does not name.
+    // Printed under each verb's own group (ControlVerb.group), which an unlisted one has not.
     for (const entry of CONTROL_VERBS) {
       assert.equal(helpLines(run.stdout, entry.usage), entry.unlisted ? 0 : 1, entry.verb);
     }
@@ -314,7 +317,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("takes a caller's ids only with the token made for them", async () => {
-    const ownToken = tabControlToken(TOKEN, PROJECT.id, OWN_TAB);
+    const ownToken = tabControlToken(TOKEN, PROJECT.id, OWN_TAB, false);
     const otherProject = await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: ownToken, [CONTROL_ENV.projectId]: OTHER.id });
     assertRefused(otherProject, /not a terminal of this TET/, "another project named");
     assertRefused(await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: TOKEN }), /not a terminal of this TET/, "the run's token with a tab's ids");

@@ -47,8 +47,6 @@ export interface ControlDeps {
   };
   sessions: {
     get(projectId: string): ControlTerminals | undefined;
-    /** Whether this tab's process runs, or ran, in the project's sandbox — closed or not. */
-    sandboxed(projectId: string, tabId: string): boolean;
   };
   repositories: {
     get(projectId: string): { getState(): RepositoryState; listExplorer(): Promise<ExplorerListing> } | undefined;
@@ -153,19 +151,25 @@ interface Answer {
 type Caller = ControlRequest["caller"] & { sandboxed: boolean };
 
 /**
- * Refuses a sandboxed caller a file that is missing or resolves, links followed, outside the
- * repository: a link committed or made in the mounted repository would otherwise hand it a file of
- * this machine through the editor. Missing too, since the editor still holds what it last read.
+ * The file an answer names (`ControlVerb.sandboxFile`), refused where it is missing or resolves,
+ * links followed, outside the repository: a link committed or made in the mounted repository would
+ * otherwise hand a sandboxed caller a file of this machine through the editor. Missing too, since
+ * the editor still holds what it last read. An answer naming none is nothing to refuse.
  */
-async function assertSandboxReadable(caller: Caller, root: string, relative: string): Promise<void> {
-  if (!caller.sandboxed) {
+async function assertSandboxFile(root: string | undefined, result: unknown, key: string): Promise<void> {
+  const named = (result as Record<string, unknown> | null | undefined)?.[key];
+  if (named === undefined || named === null) {
     return;
   }
-  const resolved = await Promise.all([root, path.join(root, relative)].map((entry) => fs.promises.realpath(path.resolve(entry)))).catch(
-    () => undefined
-  );
+  const relative = typeof named === "string" ? named : undefined;
+  const resolved =
+    root === undefined || relative === undefined
+      ? undefined
+      : await Promise.all([root, path.join(root, relative)].map((entry) => fs.promises.realpath(path.resolve(entry)))).catch(
+          () => undefined
+        );
   if (!resolved || relativeInside(resolved[0], resolved[1]) === undefined) {
-    throw new ControlError("unauthorized", `${relative} is missing or leads outside the repository`);
+    throw new ControlError("unauthorized", `${String(named)} is missing or leads outside the repository`);
   }
 }
 
@@ -512,18 +516,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (filePath === undefined) {
         throw new ControlError("bad_args", `not inside the repository: ${typed}`);
       }
-      await assertSandboxReadable(caller, found.path, filePath);
       const keep = args.keep === true;
-      deps.openEditor(found.id, filePath, keep);
-      return { result: { opened: filePath, keep } };
+      // In `after`, so a file the sandbox check refuses is never opened.
+      return { result: { opened: filePath, keep }, after: () => deps.openEditor(found.id, filePath, keep) };
     },
 
     "editor-state": async (args, caller) => {
       const found = project(args, caller);
       const report = deps.records.editor(found.id);
-      if (report) {
-        await assertSandboxReadable(caller, found.path, report.path);
-      }
       return { result: report ? { ...report, content: await deps.editorContent(found.id) } : null };
     },
 
@@ -659,13 +659,18 @@ export async function startControlServer(
     };
     // A caller's ids count only with the token made for them; the run's own token speaks for no
     // tab, and no terminal has it (control-token.ts).
-    const expected = Buffer.from(
-      caller.projectId === undefined && caller.tabId === undefined
-        ? token
-        : tabControlToken(token, caller.projectId ?? "", caller.tabId ?? "")
-    );
     const given = Buffer.from(typeof request.token === "string" ? request.token : "");
-    if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
+    const matches = (expected: string): boolean => {
+      const want = Buffer.from(expected);
+      return given.length === want.length && crypto.timingSafeEqual(given, want);
+    };
+    // A caller naming no tab is the run itself. For a tab, which of its two tokens matches says
+    // whether it runs in a sandbox: read off the token, not looked up, so a tab closed with its
+    // project is still answered by the rules it started under (control-token.ts).
+    const ofTab = caller.projectId !== undefined || caller.tabId !== undefined;
+    const tokenOf = (sandbox: boolean): string => tabControlToken(token, caller.projectId ?? "", caller.tabId ?? "", sandbox);
+    const sandboxed = ofTab && matches(tokenOf(true));
+    if (!(ofTab ? sandboxed || matches(tokenOf(false)) : matches(token))) {
       return { response: reject("unauthorized", "not a terminal of this TET") };
     }
     const entry = request.verb === HELP_VERB ? undefined : CONTROL_VERBS.find((candidate) => candidate.verb === request.verb);
@@ -673,11 +678,6 @@ export async function startControlServer(
     if (!entry || !handler) {
       return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
     }
-    // Looked up, not carried by the token: the session manager knows which tabs run in a sandbox.
-    const sandboxed =
-      caller.projectId !== undefined &&
-      caller.tabId !== undefined &&
-      deps.sessions.sandboxed(caller.projectId, caller.tabId);
     if (sandboxed && !entry.sandbox) {
       return { response: reject("unauthorized", `${request.verb} does not answer from inside a sandbox`) };
     }
@@ -690,6 +690,9 @@ export async function startControlServer(
     }
     try {
       const answer = await handler(request.args ?? {}, { ...caller, sandboxed }, request.at, gone);
+      if (sandboxed && entry.sandboxFile !== undefined) {
+        await assertSandboxFile(deps.store.get(caller.projectId ?? "")?.path, answer.result, entry.sandboxFile);
+      }
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {
       if (error instanceof ControlError) {

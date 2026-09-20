@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder, FileChange, Project } from "../../shared/types";
+import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import { type FileAct } from "./ChangesList";
 import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
@@ -246,7 +247,7 @@ interface RowsProps {
   toggle: (node: TreeNode) => void;
   forceExpanded: boolean;
   selected: string | null;
-  onOpen: (path: string, keep?: boolean) => void;
+  onOpen: (path: string, how?: OpenEditor) => void;
   onContextMenu: (event: React.MouseEvent, node: TreeNode) => void;
   rows: Map<string, HTMLButtonElement>;
 }
@@ -275,7 +276,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
               onClick={() => (isFolder ? toggle(node) : onOpen(node.path))}
               // VS Code: a single click previews, a double click keeps. The clicks before it
               // already opened the file, so this only keeps.
-              onDoubleClick={() => !isFolder && onOpen(node.path, true)}
+              onDoubleClick={() => !isFolder && onOpen(node.path, { keep: true })}
               onContextMenu={(event) => onContextMenu(event, node)}
             >
               {isFolder ? (
@@ -329,7 +330,8 @@ interface ExplorerProps {
   /** The active editor tab's file — revealed and highlighted. */
   selected: string | null;
   /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked. */
-  onOpen: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
+  /** The project is named: the same handler serves every view that opens a file. */
+  onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
   /** The owner shows it running on its own bar. */
   act: FileAct;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
@@ -350,11 +352,16 @@ export interface ExplorerHandle {
  * listing: `folders` make it multi-root (overlap allowed); `exclude`/`excludeGitIgnore` are already
  * applied; `sortOrder`/`compactFolders` are applied here.
  */
-export function Explorer({ project, files, shown: visible, selected, onOpen, act, onExplorerChanged, ref }: ExplorerProps) {
+export function Explorer({ project, files, shown: visible, selected, onOpenFile, act, onExplorerChanged, ref }: ExplorerProps) {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
   const rows = useRef(new Map<string, HTMLButtonElement>());
+  /** The project is this view's; the rows say only which file and how. */
+  const onOpen = useCallback(
+    (path: string, how?: OpenEditor) => onOpenFile(project.id, path, how),
+    [onOpenFile, project.id]
+  );
 
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
   const query = filter.trim().toLowerCase();
@@ -515,7 +522,7 @@ export function Explorer({ project, files, shown: visible, selected, onOpen, act
     const openEntries: ContextMenuEntry[] = isFile
       ? [
           { label: "Open", run: () => onOpen(node.path) },
-          ...(isMarkdown(node.path) ? [{ label: "Open Preview", run: () => onOpen(node.path, false, true) }] : []),
+          ...(isMarkdown(node.path) ? [{ label: "Open Preview", run: () => onOpen(node.path, { markdownPreview: true }) }] : []),
           { label: "Open in external editor", run: () => void window.tet.shell.openFileExternally(project.id, node.path) },
           SEPARATOR
         ]

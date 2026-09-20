@@ -243,10 +243,6 @@ export class ProjectSessionManager {
   private readonly reportWaiters = new Map<string, () => void>();
   /** See `events`. */
   private readonly recorded: ControlEvent[] = [];
-  /** Every tab that ran in the sandbox or was opened from it, kept past its close and the
-   *  manager's: a process it left there still holds the tab's control token, which stays valid for
-   *  the whole run (control-token.ts). */
-  readonly sandboxedTabs = new Set<string>();
   /** Closed; nothing still in flight may start anything back up. */
   private disposed = false;
   /** Said once per project — see resolveSbxRun's own-session-id fallback. */
@@ -643,6 +639,12 @@ export class ProjectSessionManager {
     );
   }
 
+  /** Whether the project still has this tab: main drops output it batched for one that closed
+   *  before the batch was flushed (main.ts's flushOutput). */
+  hasTab(tabId: string): boolean {
+    return this.tabs.some((tab) => tab.tabId === tabId);
+  }
+
   createTab(agentId: AgentId, sandboxOnly = false): TerminalDescriptor {
     return this.addTab(agentId, sandboxOnly ? { sandboxOnly } : {});
   }
@@ -692,9 +694,7 @@ export class ProjectSessionManager {
       ...extra
     };
     this.tabs.push(tab);
-    if (tab.sandboxOnly) {
-      this.sandboxedTabs.add(tab.tabId);
-    }
+
     this.postTabs();
     // Starting begins with the first fit.
     return toDescriptor(tab, false);
@@ -955,13 +955,13 @@ export class ProjectSessionManager {
       args,
       tab.env,
       // What `tet-ctl` in this tab reports as its caller — see src/shared/control.ts.
-      { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId }
+      {
+        env: { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId },
+        sandboxed: sbxArgs !== null
+      }
     );
 
     this.sessions.set(tabId, session);
-    if (sbxArgs) {
-      this.sandboxedTabs.add(tabId);
-    }
     session.markInstalled(this.canStart(runtime));
     return session;
   }
@@ -1451,8 +1451,7 @@ export class ProjectSessionManager {
 /** The open projects' session managers. */
 export class SessionManagerRegistry {
   private readonly managers = new Map<string, ProjectSessionManager>();
-  /** A closed project's sandboxedTabs, as `[projectId, tabId]`. */
-  private readonly closedSandboxedTabs = new Set<string>();
+
   /** The renderer's last report, sent only on change — for a project opened after it. */
   private inFront: { projectId: string | null; tabIds: readonly string[] } = { projectId: null, tabIds: [] };
 
@@ -1481,11 +1480,6 @@ export class SessionManagerRegistry {
     return this.managers.get(projectId);
   }
 
-  /** What `tet-ctl` from this tab may do (ControlVerb.sandbox), for a closed tab or project too. */
-  sandboxed(projectId: string, tabId: string): boolean {
-    const own = this.managers.get(projectId)?.sandboxedTabs.has(tabId) === true;
-    return own || this.closedSandboxedTabs.has(JSON.stringify([projectId, tabId]));
-  }
 
   /** The tabs in front belong to one project at most. */
   setInFront(projectId: string | null, tabIds: readonly string[]): void {
@@ -1506,9 +1500,6 @@ export class SessionManagerRegistry {
     const manager = this.managers.get(projectId);
     // Dropped before the wait, so a project removed and reopened at once never has two.
     this.managers.delete(projectId);
-    for (const tabId of manager?.sandboxedTabs ?? []) {
-      this.closedSandboxedTabs.add(JSON.stringify([projectId, tabId]));
-    }
     await manager?.dispose();
   }
 

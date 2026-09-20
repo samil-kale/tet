@@ -1,6 +1,7 @@
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
+import type { OpenEditor } from "./editor-tab";
 import { Terminal } from "@xterm/xterm";
 import type { AgentInfo } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
@@ -30,7 +31,7 @@ const views = new Map<string, TerminalView>();
 
 /** Per project, opens a file inside the repository in the preview tab, a Markdown file with its
  *  preview beside the editor if asked. Set by the pane. */
-const revealHandlers = new Map<string, (path: string, markdownPreview: boolean) => void>();
+const revealHandlers = new Map<string, (path: string, how: OpenEditor) => void>();
 
 function viewKey(projectId: string, tabId: string): string {
   return `${projectId} ${tabId}`;
@@ -65,12 +66,6 @@ export function takeOutputStats(): { writes: number; tabs: number; hidden: numbe
 const earlyOutput = new Map<string, string>();
 const MAX_EARLY_OUTPUT = 64 * 1024;
 
-/**
- * Tabs disposed and not attached since: a batch flushed after the close is late, not early — kept,
- * it would replay into the tab main puts back when its session delete fails. Attaching again
- * (`createView`) takes it off; that tab's process starts only on its first fit, after.
- */
-const disposedViews = new Set<string>();
 
 // Output arrives batched: one message, and one flush, for every terminal.
 window.tet.terminals.onOutput((batch) => {
@@ -78,9 +73,7 @@ window.tet.terminals.onOutput((batch) => {
     const key = viewKey(projectId, tabId);
     const view = views.get(key);
     if (!view) {
-      if (!disposedViews.has(key)) {
-        earlyOutput.set(key, ((earlyOutput.get(key) ?? "") + data).slice(-MAX_EARLY_OUTPUT));
-      }
+      earlyOutput.set(key, ((earlyOutput.get(key) ?? "") + data).slice(-MAX_EARLY_OUTPUT));
       continue;
     }
     outputWrites += 1;
@@ -95,7 +88,7 @@ window.tet.terminals.onOutput((batch) => {
 
 export function setRevealHandler(
   projectId: string,
-  handler: (path: string, markdownPreview: boolean) => void
+  handler: (path: string, how: OpenEditor) => void
 ): () => void {
   revealHandlers.set(projectId, handler);
   return () => revealHandlers.delete(projectId);
@@ -115,7 +108,7 @@ function openUrl(url: string): void {
 export function openFile(projectId: string, filePath: string, markdownPreview = false): void {
   void window.tet.shell.openFile(projectId, filePath).then((repoPath) => {
     if (repoPath) {
-      revealHandlers.get(projectId)?.(repoPath, markdownPreview);
+      revealHandlers.get(projectId)?.(repoPath, { markdownPreview });
     }
   });
 }
@@ -430,7 +423,6 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
   const view: TerminalView = { term, fit, agent };
   const key = viewKey(projectId, tabId);
   views.set(key, view);
-  disposedViews.delete(key);
   const buffered = earlyOutput.get(key);
   if (buffered) {
     earlyOutput.delete(key);
@@ -590,7 +582,6 @@ export function clearTerminal(projectId: string, tabId: string): void {
 export function disposeTerminal(projectId: string, tabId: string): void {
   const key = viewKey(projectId, tabId);
   earlyOutput.delete(key);
-  disposedViews.add(key);
   const view = views.get(key);
   if (!view) {
     return;
@@ -625,11 +616,7 @@ export function disposeProjectTerminals(projectId: string): void {
       earlyOutput.delete(key);
     }
   }
-  for (const key of [...disposedViews]) {
-    if (key.startsWith(prefix)) {
-      disposedViews.delete(key);
-    }
-  }
+
   for (const [key, view] of [...views]) {
     if (key.startsWith(prefix)) {
       dropView(key, view);

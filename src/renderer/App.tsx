@@ -3,6 +3,7 @@ import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../sha
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
+import { useStartedHere } from "./git/use-file-act";
 import type { BranchActions } from "./git/BranchTree";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
@@ -31,7 +32,7 @@ import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
 import { activeEditorTab, defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
-import { nextEditorTabId, type EditorTab, type PaneTab } from "./terminal/editor-tab";
+import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./terminal/editor-tab";
 import {
   canDiscardEdits,
   canDiscardProjectEdits,
@@ -75,8 +76,7 @@ function sameHead(previous: ProjectHead, entry: ProjectHead): boolean {
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
 const NO_IDS: string[] = [];
-/** Which view started a branch command: its bar shows it. */
-type BranchActionSource = "git" | "projects";
+
 const DEFAULT_LAYOUT = defaultLayout();
 
 let renderStartedAt = 0;
@@ -141,11 +141,11 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     stripTabs,
     starting
   );
-  /** Projects with a branch command in flight — per project: a fetch ending in A must not free B —
-   *  and the view it was started from, whose bar shows it. */
-  const [branchActions, setBranchActions] = useState<ReadonlyMap<string, BranchActionSource>>(() => new Map());
+  /** Projects with a branch command in flight, per project: a fetch ending in A must not free B.
+   *  Which view started it is that view's own business (useStartedHere). */
+  const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Read synchronously: a second double-click can land before a re-render. */
-  const branchActionsRef = useRef(new Map<string, BranchActionSource>());
+  const branchActionsRef = useRef(new Set<string>());
   // Pane defaults and limits; both side-pane views share the two below ("git-panels" predates the
   // files view).
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
@@ -389,30 +389,22 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * Mirrors `Repository.runAction`; `BranchActions.run` is the one way in, a view asking its own
    * question first.
    */
-  const runBranchAction = useCallback(
-    async (
-      projectId: string,
-      label: string,
-      action: () => Promise<GitActionResult>,
-      source: BranchActionSource = "git"
-    ) => {
-      if (branchActionsRef.current.has(projectId)) {
-        return;
+  const runBranchAction = useCallback(async (projectId: string, label: string, action: () => Promise<GitActionResult>) => {
+    if (branchActionsRef.current.has(projectId)) {
+      return;
+    }
+    branchActionsRef.current.add(projectId);
+    setBranchActions(new Set(branchActionsRef.current));
+    try {
+      const result = await action();
+      if (!result.ok) {
+        notify("error", result.error ?? `${label} failed`);
       }
-      branchActionsRef.current.set(projectId, source);
-      setBranchActions(new Map(branchActionsRef.current));
-      try {
-        const result = await action();
-        if (!result.ok) {
-          notify("error", result.error ?? `${label} failed`);
-        }
-      } finally {
-        branchActionsRef.current.delete(projectId);
-        setBranchActions(new Map(branchActionsRef.current));
-      }
-    },
-    []
-  );
+    } finally {
+      branchActionsRef.current.delete(projectId);
+      setBranchActions(new Set(branchActionsRef.current));
+    }
+  }, []);
 
   /**
    * Shows a tab opened from outside the terminals pane, bringing its project to front — a one-off
@@ -723,43 +715,42 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [activeProjectId, toggleSideView, setFilesShown, setSidePaneOpen]
   );
   /**
-   * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), a Markdown file with its
-   * preview beside the editor if `markdownPreview`. A path already open is brought to front, kept if
-   * asked; else the preview tab takes it, unless `keep`; else a new tab.
+   * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), the way `how` asks for
+   * (`OpenEditor`). A path already open is brought to front, kept if asked; else the preview tab
+   * takes it, unless `keep`; else a new tab.
    * The editor is told before the tab draws, since the tab attaches what it made; the tab is
    * activated before it appears in `stripTabs`, as a new terminal tab is — both in one handler, so
    * the layout and the list agree on the first render.
    *
-   * `diff` is the side the tab opens on: the changes list opens a change against HEAD, everything
-   * else a file, plain as VS Code shows it. A tab already open only ever has its diff switched on,
-   * never off, so opening a file again leaves what the user chose there (`showDiff`).
+   * A tab already open only ever has its diff switched on, never off, so opening a file again
+   * leaves what the user chose there (`showDiff`).
    */
   const openEditor = useCallback(
-    (projectId: string, path: string, diff: boolean, keep = false, markdownPreview = false) => {
+    (projectId: string, path: string, how: OpenEditor = {}) => {
       const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path);
-      const preview = keep ? undefined : previewEditorTab(projectId);
+      const preview = how.keep ? undefined : previewEditorTab(projectId);
       let tabId: string;
       if (open) {
         tabId = open.tabId;
-        if (keep) {
+        if (how.keep) {
           keepEditor(tabId);
         }
-        if (markdownPreview) {
+        if (how.markdownPreview) {
           showMarkdownPreview(tabId, true);
         }
-        if (diff) {
+        if (how.diff) {
           showDiff(tabId, true);
         }
       } else if (preview !== undefined) {
         tabId = preview;
-        openEditorFile(projectId, tabId, path, true, markdownPreview, diff);
+        openEditorFile(projectId, tabId, path, true, how);
         setEditorTabs((current) => ({
           ...current,
           [projectId]: (current[projectId] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
         }));
       } else {
         tabId = nextEditorTabId();
-        openEditorFile(projectId, tabId, path, !keep, markdownPreview, diff);
+        openEditorFile(projectId, tabId, path, how.keep !== true, how);
         setEditorTabs((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), { tabId, projectId, path }] }));
       }
       activateTab(projectId, tabId);
@@ -771,7 +762,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     () =>
       window.tet.repository.onOpenEditor(({ projectId, path, keep }) => {
         setActiveProjectId(projectId);
-        openEditor(projectId, path, false, keep);
+        openEditor(projectId, path, { keep });
       }),
     [openEditor]
   );
@@ -783,28 +774,19 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }),
     []
   );
-  /** The changes list's: the file against HEAD. */
+  /** The changes list's, the one view that opens a file against HEAD. */
   const openActiveDiff = useCallback(
-    (path: string, keep?: boolean, markdownPreview?: boolean) => {
+    (path: string, how?: OpenEditor) => {
       if (activeProjectId) {
-        openEditor(activeProjectId, path, true, keep, markdownPreview);
+        openEditor(activeProjectId, path, { ...how, diff: true });
       }
     },
     [activeProjectId, openEditor]
   );
-  /** The Explorer's: the file alone. */
-  const openActiveFile = useCallback(
-    (path: string, keep?: boolean, markdownPreview?: boolean) => {
-      if (activeProjectId) {
-        openEditor(activeProjectId, path, false, keep, markdownPreview);
-      }
-    },
-    [activeProjectId, openEditor]
-  );
-  /** A path ctrl-clicked in a terminal or linked from a Markdown preview: a file too. */
+  /** Every other way in — the Explorer, a path ctrl-clicked in a terminal, a Markdown preview's
+   *  link: the file itself, in the project the view names. */
   const openProjectFile = useCallback(
-    (projectId: string, path: string, keep?: boolean, markdownPreview?: boolean) =>
-      openEditor(projectId, path, false, keep, markdownPreview),
+    (projectId: string, path: string, how?: OpenEditor) => openEditor(projectId, path, how),
     [openEditor]
   );
   /** Disposes the editors; the layout collapses a pane left empty. */
@@ -896,30 +878,22 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     }
   }, [editorTabs, states, fileWrites]);
   const runActiveBranchAction = useCallback(
-    (label: string, action: () => Promise<GitActionResult>) => {
-      if (activeProjectId) {
-        void runBranchAction(activeProjectId, label, action);
-      }
-    },
+    (label: string, action: () => Promise<GitActionResult>) =>
+      activeProjectId ? runBranchAction(activeProjectId, label, action) : Promise.resolve(),
     [activeProjectId, runBranchAction]
   );
-  /** The git pane's actions, for the project on screen. */
+  /** The git pane's actions, for the project on screen; its own bar shows the ones it started. */
+  const { startedHere: gitPaneActing, start: startActiveBranchAction } = useStartedHere(runActiveBranchAction);
   const activeBranch = useMemo<BranchActions>(
     () => ({
       busy: activeProjectId !== null && branchActions.has(activeProjectId),
-      startedHere: activeProjectId !== null && branchActions.get(activeProjectId) === "git",
-      run: runActiveBranchAction
+      startedHere: gitPaneActing,
+      run: startActiveBranchAction
     }),
-    [branchActions, activeProjectId, runActiveBranchAction]
+    [branchActions, activeProjectId, gitPaneActing, startActiveBranchAction]
   );
-  /** The project list's bar: a command it started, in any project. */
-  const projectListBusy = useMemo(() => [...branchActions.values()].includes("projects"), [branchActions]);
-  /** The project list's commands, told apart so they show in its own bar. */
-  const runProjectListAction = useCallback(
-    (projectId: string, label: string, action: () => Promise<GitActionResult>) =>
-      void runBranchAction(projectId, label, action, "projects"),
-    [runBranchAction]
-  );
+  /** The project list's, likewise: its bar shows a command it started, in any project. */
+  const { startedHere: projectListBusy, start: runProjectListAction } = useStartedHere(runBranchAction);
 
   return (
     <div className="app">
@@ -986,7 +960,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     ? (editorTabs[activeProjectId]?.find((tab) => tab.tabId === activeEditors[activeProjectId])?.path ?? null)
                     : null
                 }
-                onOpen={openActiveFile}
+                onOpenFile={openProjectFile}
               />
               <GitPane
                 project={activeProject}

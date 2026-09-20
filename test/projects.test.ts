@@ -9,7 +9,7 @@ import { addWorktree, deleteWorktree, ProjectStore, renameWorktree, type Project
 import { SbxSecretStore } from "../src/main/sbx-secrets";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import type { Project } from "../src/shared/types";
-import { eventually, forkGitInProcess, git, isolateGitConfig } from "./helpers";
+import { eventually, forkGitInProcess, git, initBare, isolateGitConfig } from "./helpers";
 
 /**
  * projects.ts's worktree actions against the real git and real Repositories, the project's
@@ -28,8 +28,7 @@ const real = (folder: string): string => fs.realpathSync.native(folder);
  * published with an upstream. `worktree` is the shape deleteWorktree and renameWorktree take.
  */
 function repositoryWithWorktrees(names: string[]) {
-  const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-bare-"));
-  git(bare, "init", "-q", "--bare", "--initial-branch=main");
+  const bare = initBare("tet-projects-bare-");
   const main = real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-main-")));
   git(main, "init", "-q", "--initial-branch=main");
   git(main, "commit", "-q", "--allow-empty", "-m", "base");

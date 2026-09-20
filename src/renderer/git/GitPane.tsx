@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { Project, RepositoryState } from "../../shared/types";
+import type { OpenEditor } from "../terminal/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
 import { useFileAct } from "./use-file-act";
@@ -17,7 +18,7 @@ interface GitPaneProps {
   treeHeight: number;
   onTreeHeight: (size: number) => void;
   /** Opens in the project's preview tab, a Markdown file with its preview if asked. */
-  onOpenDiff: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
+  onOpenDiff: (path: string, how?: OpenEditor) => void;
   /** See BranchTree. */
   onOpenWorktree: (worktreePath: string) => void;
   canCloseWorktree: (worktreePath: string) => Promise<boolean>;

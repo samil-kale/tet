@@ -19,6 +19,20 @@ export function nextEditorTabId(): string {
   return `${EDITOR_TAB_PREFIX}${++editorTabs}`;
 }
 
+/**
+ * How a file is opened, named rather than passed as a row of booleans: every view that opens one
+ * says the same thing, and the rule for its own kind of click lives at that one call.
+ */
+export interface OpenEditor {
+  /** The side the tab opens on: the changes list opens a change against HEAD, everything else a
+   *  plain file, as VS Code shows it. A tab already open only ever has its diff switched on. */
+  diff?: boolean;
+  /** A tab of its own instead of the project's preview tab. */
+  keep?: boolean;
+  /** A Markdown file with its preview beside the editor. */
+  markdownPreview?: boolean;
+}
+
 export interface EditorTab {
   tabId: string;
   projectId: string;

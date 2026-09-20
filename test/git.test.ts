@@ -34,7 +34,7 @@ import {
   version
 } from "../src/main/git/git";
 import { worktreesSupported } from "../src/shared/types";
-import { git, isolateGitConfig } from "./helpers";
+import { git, initBare, isolateGitConfig } from "./helpers";
 
 /**
  * git.ts against the real git, in a repository built up step by step. It imports nothing from
@@ -224,8 +224,7 @@ describe("a repository, from init on", () => {
   });
 
   it("publishes to a remote and counts what is ahead of it", async () => {
-    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-"));
-    assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
+    const bare = initBare("tet-bare-");
     run("remote", "add", "origin", bare);
     assert.deepEqual(await push(cwd, "origin", "main", undefined), { ok: true });
     run("remote", "set-head", "origin", "main");
@@ -451,8 +450,7 @@ describe("remotes the tree has to read carefully", () => {
   });
 
   it("keeps a remote whose name holds a slash as one remote", async () => {
-    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-fork-"));
-    assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
+    const bare = initBare("tet-bare-fork-");
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-fork-"));
     run("init", "-q");
     run("symbolic-ref", "HEAD", "refs/heads/main");

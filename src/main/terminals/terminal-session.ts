@@ -88,8 +88,9 @@ export class TerminalSession {
     private readonly args: string[] = [],
     /** A saved command's variables, outranking the machine's. */
     private readonly envOverride?: Record<string, string>,
-    /** See SpawnOptions.own. */
-    private readonly own?: Record<string, string>
+    /** What `tet-ctl` in this tab reports as its caller (SpawnOptions.own), and whether the tab
+     *  runs in a sandbox — both go into its control token. */
+    private readonly caller?: { env: Record<string, string>; sandboxed: boolean }
   ) {}
 
   private setStatus(status: TerminalStatus): void {
@@ -133,7 +134,8 @@ export class TerminalSession {
           rows,
           env: this.env,
           envOverride: this.envOverride,
-          own: this.own
+          own: this.caller?.env,
+          sandboxed: this.caller?.sandboxed
         })
       );
     } catch (error) {

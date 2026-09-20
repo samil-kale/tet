@@ -6,6 +6,7 @@ import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-hig
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine } from "./markdown";
+import type { OpenEditor } from "../terminal/editor-tab";
 import { openFile } from "../terminal/terminal-views";
 
 /**
@@ -281,19 +282,12 @@ export function editorContent(tabId: string): string | undefined {
 }
 
 /**
- * Reads `path` afresh into the tab, making its editor on the first call; a Markdown file with its
- * preview if `markdownPreview`, against HEAD if `diff` (App's `openEditor`). The caller has made
- * sure nothing unsaved is lost, and calls this before the tab is drawn, whose host attaches the
- * element made here.
+ * Reads `path` afresh into the tab, making its editor on the first call, on the side and with the
+ * preview `how` asks for (App's `openEditor`). `preview` is whether the tab is the project's
+ * preview tab, which is App's to decide. The caller has made sure nothing unsaved is lost, and
+ * calls this before the tab is drawn, whose host attaches the element made here.
  */
-export function openEditorFile(
-  projectId: string,
-  tabId: string,
-  path: string,
-  preview: boolean,
-  markdownPreview: boolean,
-  diff: boolean
-): void {
+export function openEditorFile(projectId: string, tabId: string, path: string, preview: boolean, how: OpenEditor): void {
   let view = views.get(tabId);
   if (!view) {
     const host = document.createElement("div");
@@ -335,8 +329,8 @@ export function openEditorFile(
     saving: false,
     dirty: false,
     preview,
-    diff,
-    markdownPreview: markdownPreview && isMarkdown(path)
+    diff: how.diff === true,
+    markdownPreview: how.markdownPreview === true && isMarkdown(path)
   });
   applyMode(view);
   const current = view;

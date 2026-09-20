@@ -327,6 +327,25 @@ export class ProjectStore {
     this.save();
   }
 
+  /**
+   * Each project's `mainPath` as the disk has it: a folder may have become a worktree since it was
+   * stored, or stopped being one. Off the start path, where it was up to two reads and a realpath
+   * per project before the window existed — the stored value is drawn until this corrects it.
+   * True where anything changed, for the window to be told.
+   */
+  refreshMainPaths(): boolean {
+    let changed = false;
+    this.projects = this.projects.map((project) => {
+      const mainPath = readMainWorktree(project.path);
+      changed ||= mainPath !== project.mainPath;
+      return mainPath === project.mainPath ? project : { ...project, mainPath };
+    });
+    if (changed) {
+      this.save();
+    }
+    return changed;
+  }
+
   private load(): void {
     try {
       const raw = fs.readFileSync(this.file, "utf8");
@@ -340,8 +359,11 @@ export class ProjectStore {
             typeof (entry as Project).path === "string" &&
             typeof (entry as Project).name === "string"
         );
-        // Read again rather than trusted: a folder may have become or stopped being a worktree.
-        this.projects = this.projects.map((project) => ({ ...project, mainPath: readMainWorktree(project.path) }));
+        // The stored `mainPath` draws the window; `refreshMainPaths` reads the disk once it is up.
+        this.projects = this.projects.map((project) => ({
+          ...project,
+          mainPath: typeof project.mainPath === "string" ? project.mainPath : undefined
+        }));
       }
     } catch {
       // No file yet, or unreadable.

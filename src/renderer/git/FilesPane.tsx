@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { Project, RepositoryState } from "../../shared/types";
+import type { OpenEditor } from "../terminal/editor-tab";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { useFileAct } from "./use-file-act";
 import { CollapseAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
@@ -13,9 +14,8 @@ interface FilesPaneProps {
   shown: boolean;
   /** The active editor tab's file — the tree reveals it. */
   openPath: string | null;
-  /** Opens in the project's preview tab, or kept (`editor-tab.ts`); a Markdown file with its
-   *  preview if asked. */
-  onOpen: (path: string, keep?: boolean, markdownPreview?: boolean) => void;
+  /** Opens in the project's preview tab, or as `how` asks (`editor-tab.ts`). */
+  onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
 }
 
 /** The listing is re-read on every show and usually lands in milliseconds; no flashing bar. */
@@ -39,7 +39,7 @@ function useDelayed(active: boolean, delayMs: number): boolean {
  * The side pane's files view, shown instead of the git view (VS Code's Explorer and Source Control,
  * one sidebar). The listing is read only while on screen.
  */
-export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpen }: FilesPaneProps) {
+export const FilesPane = memo(function FilesPane({ project, state, shown, openPath, onOpenFile }: FilesPaneProps) {
   const { acting, act } = useFileAct(project.id);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
   const explorerRef = useRef<ExplorerHandle>(null);
@@ -90,7 +90,7 @@ export const FilesPane = memo(function FilesPane({ project, state, shown, openPa
           files={explorerListing}
           shown={shown}
           selected={openPath}
-          onOpen={onOpen}
+          onOpenFile={onOpenFile}
           act={act}
           onExplorerChanged={refreshExplorer}
         />

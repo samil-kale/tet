@@ -16,6 +16,9 @@ export interface SpawnOptions {
   /** This process's project and tab for the control channel (`TET_PROJECT_ID`, `TET_TAB_ID`).
    *  Above the machine's, like `controlEnv`. */
   own?: Record<string, string>;
+  /** The tab runs in an sbx sandbox. Part of its control token, which is what the control server
+   *  reads it back off (control-token.ts). */
+  sandboxed?: boolean;
 }
 
 /** The control channel's port and token, set from main.ts. Above `process.env`, since a tet started
@@ -129,7 +132,7 @@ export function killProcessTree(child: ChildProcess): void {
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), then
  *  tet's own (controlEnv, options.own) with the tab's own control token in place of the run's
  *  (control-token.ts), then a saved command's envOverride. Testable without a pty. */
-export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own">): Record<string, string> {
+export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "sandboxed">): Record<string, string> {
   const env: Record<string, string> = {
     ...options.env,
     ...(process.env as Record<string, string>),
@@ -138,7 +141,12 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
   };
   const runToken = controlEnv[CONTROL_ENV.token];
   if (runToken) {
-    env[CONTROL_ENV.token] = tabControlToken(runToken, env[CONTROL_ENV.projectId] ?? "", env[CONTROL_ENV.tabId] ?? "");
+    env[CONTROL_ENV.token] = tabControlToken(
+      runToken,
+      env[CONTROL_ENV.projectId] ?? "",
+      env[CONTROL_ENV.tabId] ?? "",
+      options.sandboxed === true
+    );
   }
   if (launcherDir) {
     const key = pathKey(env);

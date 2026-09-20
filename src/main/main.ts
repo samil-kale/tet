@@ -94,12 +94,17 @@ function editorContent(projectId: string): Promise<string | undefined> {
 const pendingOutput = new Map<string, TerminalOutput>();
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** One message for all tabs: see TerminalOutput. */
+/**
+ * One message for all tabs: see TerminalOutput. Output whose tab closed while it was batched is
+ * dropped here: the renderer has disposed that view by now, and a late batch would look to it
+ * like output for a tab not yet attached (terminal-views.ts's earlyOutput).
+ */
 function flushOutput(): void {
   flushTimer = undefined;
-  if (pendingOutput.size > 0) {
-    send("terminal:output", [...pendingOutput.values()]);
-    pendingOutput.clear();
+  const live = [...pendingOutput.values()].filter((pending) => sessions.get(pending.projectId)?.hasTab(pending.tabId));
+  pendingOutput.clear();
+  if (live.length > 0) {
+    send("terminal:output", live);
   }
 }
 
@@ -689,6 +694,13 @@ if (!app.requestSingleInstanceLock()) {
       applyTheme
     });
     timeStartup("window", createWindow);
+    // Off the start path: reading each project's main worktree is up to two reads and a realpath,
+    // and the stored value is right until a folder is made or unmade a worktree behind tet's back.
+    setImmediate(() => {
+      if (store.refreshMainPaths()) {
+        projectDeps.projectsChanged({});
+      }
+    });
     // The git process inherits its environment at the fork, so it waits for PATH; started up front
     // while the renderer loads.
     await pathReady;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { FileAct } from "./ChangesList";
 import { notify } from "../ui/Notices";
 
@@ -32,4 +32,23 @@ export function useFileAct(projectId: string): { acting: boolean; act: FileAct }
       .finally(() => count(-1));
   };
   return { acting: actingIn.has(projectId), act };
+}
+
+/**
+ * The same for a branch command, which App runs (`runBranchAction`: one per project, whatever
+ * started it) while the bar belongs to the view that offered it — the git pane and the project
+ * list each have one. Counted for the same reason as above.
+ */
+export function useStartedHere<A extends unknown[]>(
+  run: (...args: A) => Promise<void>
+): { startedHere: boolean; start: (...args: A) => void } {
+  const [running, setRunning] = useState(0);
+  const start = useCallback(
+    (...args: A) => {
+      setRunning((count) => count + 1);
+      void run(...args).finally(() => setRunning((count) => count - 1));
+    },
+    [run]
+  );
+  return { startedHere: running > 0, start };
 }

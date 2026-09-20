@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Project } from "../../shared/types";
 import { sameList } from "../identity";
+import type { OpenEditor } from "./editor-tab";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
@@ -64,7 +65,7 @@ interface TerminalsPaneProps {
   externalBusy: boolean;
   /** Opens a path ctrl-clicked in a terminal, or linked from a Markdown preview, in the project's
    *  preview tab. */
-  onOpenFile: (projectId: string, path: string, keep?: boolean, markdownPreview?: boolean) => void;
+  onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
   onCloseEditors: (projectId: string, tabIds: string[]) => void;
   layout: ProjectLayout;
   onActivateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
@@ -110,7 +111,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   const knownTabs = useRef<PaneTab[]>([]);
 
   useEffect(
-    () => setRevealHandler(project.id, (path, markdownPreview) => onOpenFile(project.id, path, false, markdownPreview)),
+    () => setRevealHandler(project.id, (path, how) => onOpenFile(project.id, path, how)),
     [project.id, onOpenFile]
   );
 

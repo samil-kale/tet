@@ -113,7 +113,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   const ctl = (...ctlArgs: string[]): Promise<Run> => tetCtl(ctlArgs, env);
   const asTab = (projectId: string, tabId: string): Record<string, string | undefined> => ({
     ...env,
-    [CONTROL_ENV.token]: tabControlToken(token, projectId, tabId),
+    [CONTROL_ENV.token]: tabControlToken(token, projectId, tabId, false),
     [CONTROL_ENV.projectId]: projectId,
     [CONTROL_ENV.tabId]: tabId
   });
@@ -178,6 +178,23 @@ export function git(cwd: string, ...args: string[]): string {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
   assert.equal(result.status, 0, `git ${args.join(" ")}: ${result.stderr}`);
   return result.stdout.trim();
+}
+
+/** A repository on main with one commit of a.txt, in a temporary folder named after `prefix`. */
+export function initRepository(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  git(dir, "init", "-q", "--initial-branch=main");
+  fs.writeFileSync(path.join(dir, "a.txt"), "committed\n");
+  git(dir, "add", "a.txt");
+  git(dir, "commit", "-q", "-m", "base");
+  return dir;
+}
+
+/** A bare repository on main, for a test that needs something to push to. */
+export function initBare(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  git(dir, "init", "-q", "--bare", "--initial-branch=main");
+  return dir;
 }
 
 /** The electron stub's `utilityProcess` running git.ts in this process, as git-host.ts would. */

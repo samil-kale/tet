@@ -13,7 +13,7 @@ import { SbxSecretStore } from "../src/main/sbx-secrets";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
-import { ProjectSessionManager, SessionManagerRegistry, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
+import { ProjectSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
@@ -139,26 +139,13 @@ describe("a tab of a missing agent", () => {
 });
 
 describe("a sandboxed tab's control token", () => {
-  it("keeps the sandbox's limits after its tab and its project close", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sandboxed-"));
-    const originalPath = process.env.PATH;
-    process.env.PATH = path.join(root, "empty");
-    const sessions = new SessionManagerRegistry(root, new SettingsStore(root), new SbxSecretStore(root), NO_CALLBACKS);
-    try {
-      const manager = sessions.open({ id: "p", path: root, name: "repo" });
-      const { tabId } = manager.createTab("claude", true);
-      await manager.closeTabs([tabId]);
-      assert.ok(sessions.sandboxed("p", tabId), "its tab closed");
-      await sessions.close("p");
-      assert.ok(sessions.sandboxed("p", tabId), "its project closed");
-      // Reopened, a new tab never takes the closed one's id, and with it its token.
-      const reopened = sessions.open({ id: "p", path: root, name: "repo" });
-      assert.notEqual(reopened.createTab("claude").tabId, tabId);
-    } finally {
-      await sessions.disposeAll();
-      process.env.PATH = originalPath;
-      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
-    }
+  it("differs from the same tab's on the host, so its limits outlive the tab", () => {
+    const host = tabControlToken("run-token", "p", "tab-1", false);
+    const sandboxed = tabControlToken("run-token", "p", "tab-1", true);
+    assert.notEqual(host, sandboxed);
+    // Nothing is kept per tab: the control server reads the flag back off whichever of the two
+    // matches, so a process left in the sandbox is answered by the rules its tab started under
+    // even once the tab and its project are closed.
   });
 });
 
@@ -183,8 +170,13 @@ describe("a terminal's environment", () => {
   it("gives a terminal its own tab's control token, never the run's", () => {
     setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
     const env = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
-    assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-1"));
-    assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-2"), "another tab's differs");
+    assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-1", false));
+    assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-2", false), "another tab's differs");
+    const inSandbox = buildEnv({
+      own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" },
+      sandboxed: true
+    });
+    assert.equal(inSandbox[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-1", true), "the sandbox is in it");
     setControlEnv({}, "");
   });
 
