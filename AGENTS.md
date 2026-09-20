@@ -117,8 +117,9 @@ or a per-line decision is for an agent.
   action; the main process asks nothing, no native dialogs. Ask only before something
   irreversible. Card dialogs are drawn in `DialogFrame`.
 - **A question runs its own answer** (`PromptOptions.submit`): the dialog stays up while the
-  action runs and shows what refused it under the field it was typed in, holding the text so it
-  can be corrected — git's own words for a name it will not take, never tet's guess at them.
+  action runs and shows what refused it under the field it was typed in — words alone, no mark —
+  holding the text so it can be corrected. git's own words for a name it will not take, never
+  tet's guess at them.
   What runs it hands the failure back rather than notifying it (`GitRun.ask`, `FileAsk`, and
   the main-process verbs answering a `GitActionResult`); `run`/`act` notify it, for an action
   with nothing left on screen to carry it — a `confirm` has no field, so it notifies.

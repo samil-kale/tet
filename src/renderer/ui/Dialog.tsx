@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DialogFrame } from "./DialogFrame";
 import { Checkbox, Field, TextField } from "./Field";
-import { CircleAlertIcon, SparkleIcon, SpinnerIcon } from "./icons";
+import { SparkleIcon, SpinnerIcon } from "./icons";
 import { notify } from "./Notices";
 
 export interface ConfirmOptions {
@@ -318,12 +318,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       ) : (
         input
       )}
-      {refused !== undefined && (
-        <p className="dialog-field-error">
-          <CircleAlertIcon />
-          {refused}
-        </p>
-      )}
+      {refused !== undefined && <p className="dialog-field-error">{refused}</p>}
     </Field>
   );
 
