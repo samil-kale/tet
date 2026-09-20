@@ -77,6 +77,9 @@ jobs:
       - run: node --test dist-test/install.test.js
         if: runner.os != 'Linux'
 
+      # Only a handoff to the release job of this same run; the Release itself keeps the
+      # archives. The default 90 days of it would be ~740 MB per run against the account's
+      # Actions storage, which is metered even though a public repository's minutes are not.
       - uses: actions/upload-artifact@v4
         with:
           name: archives-${{ runner.os }}
@@ -84,6 +87,7 @@ jobs:
             release/TET-*.zip
             release/TET-*.tar.gz
           if-no-files-found: error
+          retention-days: 1
 
   # The GitHub Release for the tag, named after the bare version (no "v"), carrying the notes and
   # every archive. Marked latest: `releases/latest` is what the scripts and the update ask.
