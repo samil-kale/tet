@@ -55,7 +55,7 @@ export const FilesPane = memo(function FilesPane({
   searchHeight,
   onSearchHeight
 }: FilesPaneProps) {
-  const { acting, ask } = useFileAct(project.id);
+  const { acting, act, ask } = useFileAct(project.id);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
   const { searchResult, searching, search } = useFileSearch(project.id);
   const explorerRef = useRef<ExplorerHandle>(null);
@@ -127,6 +127,7 @@ export const FilesPane = memo(function FilesPane({
           selected={openPath}
           onOpenFile={onOpenFile}
           ask={ask}
+          act={act}
           onExplorerChanged={refreshExplorer}
           onFiltering={setFiltering}
         />

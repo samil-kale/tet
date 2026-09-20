@@ -1,7 +1,7 @@
 import { memo, useMemo, useState, type ReactNode } from "react";
-import type { GitActionResult, Project, RemoteInfo } from "../../shared/types";
+import type { Project, RemoteInfo } from "../../shared/types";
 import { canDiscardProjectEdits } from "../diff/editor-views";
-import { notifying, type GitRun } from "../git/run-action";
+import type { GitRun } from "../git/run-action";
 import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -84,8 +84,9 @@ interface ProjectListProps {
   onShowChanges: (projectId: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
-  /** `App.runBranchAction`: a worktree command shows in this list's bar and fails as a notice. */
-  onGitAction: (projectId: string, label: string, action: () => Promise<GitActionResult>) => Promise<string | undefined>;
+  /** `App.runInProject`: how a command runs in one of these projects — `run` on this list's bar
+   *  and failing as a notice, `ask` on the bar of the question that asked for it. */
+  runIn: (projectId: string) => GitRun;
   /** A command started here runs, in any project. */
   gitBusy: boolean;
   /** git creates and renames worktrees (Requirements.worktrees); else both entries say why not. */
@@ -158,7 +159,7 @@ export const ProjectList = memo(function ProjectList({
   onShowWaiting,
   onShowChanges,
   onSbxSettings,
-  onGitAction,
+  runIn,
   gitBusy,
   worktreesSupported
 }: ProjectListProps) {
@@ -184,13 +185,6 @@ export const ProjectList = memo(function ProjectList({
       classes.push("active");
     }
     return classes.join(" ");
-  };
-
-  /** How a command runs in a project (`GitRun`): its progress bar, and its failure either as a
-   *  notice or handed back to the question that asked for the name. */
-  const runIn = (projectId: string): GitRun => {
-    const ask: GitRun["ask"] = (label, action) => onGitAction(projectId, label, action);
-    return { ask, run: notifying(ask) };
   };
 
   const askRemoteUrl = async (project: Project, remote: RemoteInfo): Promise<void> => {

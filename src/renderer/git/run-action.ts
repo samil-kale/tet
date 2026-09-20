@@ -8,6 +8,10 @@ import { notify } from "../ui/Notices";
  * stays up to show it under the field the answer was typed in (`prompt`'s `submit`); `notifying`
  * turns one into the notice an action with no dialog up needs instead.
  *
+ * A question carries its progress the same way — the dialog header's bar (`DialogFrame`'s `busy`)
+ * is the one indicator while it is up. So `ask` leaves the view's bar alone and only `run`/`act`,
+ * which have no dialog to show them, raise it; two bars for one command is the bug this avoids.
+ *
  * A file action needs no label — the pane's own bar covers the whole section — while a git command
  * says what it is doing.
  */
@@ -42,9 +46,9 @@ export function notifying<A extends unknown[]>(
 
 /**
  * Runs a file action. The running mark is per project, since one side pane serves all; called once
- * per section, each with its own bar. Counted, not flagged: an action the main process refuses
- * while another runs (a context menu entry during a commit) ends first, and must not clear the mark
- * of the one still running.
+ * per section, each with its own bar, and raised by `act` alone. Counted, not flagged: an action
+ * the main process refuses while another runs (a context menu entry during a commit) ends first,
+ * and must not clear the mark of the one still running.
  */
 export function useFileAct(projectId: string): { acting: boolean; act: FileAct; ask: FileAsk } {
   const [actingIn, setActingIn] = useState<ReadonlyMap<string, number>>(() => new Map());
@@ -59,21 +63,23 @@ export function useFileAct(projectId: string): { acting: boolean; act: FileAct; 
       }
       return next;
     });
-  const ask: FileAsk = async (action) => {
+  const ask: FileAsk = async (action) => refusal(await action(), "Git command failed");
+  const act: FileAct = notifying(async (action) => {
     count(1);
     try {
-      return refusal(await action(), "Git command failed");
+      return await ask(action);
     } finally {
       count(-1);
     }
-  };
-  return { acting: actingIn.has(projectId), act: notifying(ask), ask };
+  });
+  return { acting: actingIn.has(projectId), act, ask };
 }
 
 /**
  * The same for a branch command, which App runs (`runBranchAction`: one per project, whatever
  * started it) while the bar belongs to the view that offered it — the git pane and the project
- * list each have one. Counted for the same reason as above.
+ * list each have one. Counted for the same reason as above, and wrapped around `run` alone: what a
+ * question asked for runs on the question's bar.
  */
 export function useStartedHere<A extends unknown[], R>(
   run: (...args: A) => Promise<R>

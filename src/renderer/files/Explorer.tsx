@@ -2,7 +2,7 @@ import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState 
 import type { ExplorerListing, FileChange, GitActionResult, Project } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
-import { notifying, type FileAsk } from "../git/run-action";
+import type { FileAct, FileAsk } from "../git/run-action";
 import {
   ancestorsOf,
   buildForest,
@@ -91,9 +91,11 @@ interface ExplorerProps {
   /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked. */
   /** The project is named: the same handler serves every view that opens a file. */
   onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
-  /** The owner shows it running on its own bar; its failure goes to the question that asked for
-   *  the name, or to a notice where there is none (`notifying`). */
+  /** What a question runs, shown on the question's own bar and refused at its field. */
   ask: FileAsk;
+  /** What a menu entry that asks nothing runs: the owner's bar shows it, a notice tells its
+   *  failure. */
+  act: FileAct;
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
    *  else triggers a re-read. */
   onExplorerChanged: () => void;
@@ -123,6 +125,7 @@ export function Explorer({
   selected,
   onOpenFile,
   ask,
+  act,
   onExplorerChanged,
   onFiltering,
   ref
@@ -232,8 +235,8 @@ export function Explorer({
     });
   /** The pane's `ask`, re-reading: for the questions that stay up to show what refused them. */
   const runAsked: FileAsk = (action) => ask(reread(action));
-  /** The same with the failure notified, for a menu entry that asks nothing. */
-  const run = notifying(runAsked);
+  /** The pane's `act`, likewise, for a menu entry that asks nothing. */
+  const run: FileAct = (action) => act(reread(action));
 
   const under = (dir: string, name: string): string => (dir ? `${dir}/${name}` : name);
 

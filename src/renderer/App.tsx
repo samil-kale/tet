@@ -3,7 +3,7 @@ import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../sha
 import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { CommandList } from "./sidebar/CommandList";
-import { notifying, refusal, useStartedHere } from "./git/run-action";
+import { notifying, refusal, useStartedHere, type GitRun } from "./git/run-action";
 import type { BranchActions } from "./git/BranchTree";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
@@ -881,19 +881,30 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       activeProjectId ? runBranchAction(activeProjectId, label, action) : Promise.resolve(undefined),
     [activeProjectId, runBranchAction]
   );
-  /** The git pane's actions, for the project on screen; its own bar shows the ones it started. */
-  const { startedHere: gitPaneActing, start: askActiveBranchAction } = useStartedHere(runActiveBranchAction);
+  /** The git pane's actions, for the project on screen; its own bar shows the ones it started,
+   *  `ask` excepted — the question that asked for it shows that one (run-action.ts). */
+  const { startedHere: gitPaneActing, start: runActiveHere } = useStartedHere(runActiveBranchAction);
   const activeBranch = useMemo<BranchActions>(
     () => ({
       busy: activeProjectId !== null && branchActions.has(activeProjectId),
       startedHere: gitPaneActing,
-      run: notifying(askActiveBranchAction),
-      ask: askActiveBranchAction
+      run: notifying(runActiveHere),
+      ask: runActiveBranchAction
     }),
-    [branchActions, activeProjectId, gitPaneActing, askActiveBranchAction]
+    [branchActions, activeProjectId, gitPaneActing, runActiveHere, runActiveBranchAction]
   );
   /** The project list's, likewise: its bar shows a command it started, in any project. */
-  const { startedHere: projectListBusy, start: runProjectListAction } = useStartedHere(runBranchAction);
+  const { startedHere: projectListBusy, start: runProjectListHere } = useStartedHere(runBranchAction);
+  /** How the list runs a command in one of its projects (`GitRun`). */
+  const runInProject = useCallback(
+    (projectId: string): GitRun => ({
+      run: notifying((label: string, action: () => Promise<GitActionResult>) =>
+        runProjectListHere(projectId, label, action)
+      ),
+      ask: (label, action) => runBranchAction(projectId, label, action)
+    }),
+    [runProjectListHere, runBranchAction]
+  );
 
   return (
     <div className="app">
@@ -921,7 +932,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             onShowFinished={showFinished}
             onShowWaiting={showWaiting}
             onSbxSettings={openSbxSettings}
-            onGitAction={runProjectListAction}
+            runIn={runInProject}
             gitBusy={projectListBusy}
             worktreesSupported={worktreesSupported}
           />
