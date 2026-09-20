@@ -51,7 +51,7 @@ import { DEFAULT_EXPLORER_VIEW, readCommands, writeCommands } from "./git/comman
 import { suggestCommitMessage } from "./git/commit-message";
 import { countActivity, markStartup, reportRendererSlow, reportRendererTask } from "./event-loop-monitor";
 import { git } from "./git/git-client";
-import { relativeInside } from "./path-inside";
+import { repositoryRelative } from "./path-inside";
 import {
   addProject,
   addWorktree,
@@ -213,7 +213,7 @@ export function registerIpc({
       const stored = sbxSecrets.encrypted(project.id);
       try {
         sbxSecrets.update(project.id, secretValues, request.secrets.map((secret) => secret.env));
-        const { removed, portFailures, secretFailures } = await saveSbxConfig(
+        const { removed, failures } = await saveSbxConfig(
           project.path,
           project.id,
           request,
@@ -226,7 +226,6 @@ export function registerIpc({
             : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
           send("app:notice", { severity: "info", message });
         }
-        const failures = [...portFailures, ...secretFailures];
         if (failures.length > 0) {
           return { ok: false, error: `Saved, but not applied: ${failures.join(" ")}` };
         }
@@ -697,10 +696,9 @@ export function registerIpc({
       send("app:notice", { severity: "error", message: `Could not find file: ${rawPath}` });
       return null;
     }
-    // In git's shape: root-relative, forward slashes.
-    const relative = relativeInside(root, resolved);
+    const relative = repositoryRelative(root, resolved);
     if (relative !== undefined) {
-      return relative.replace(/\\/g, "/");
+      return relative;
     }
     if (isExecutableFile(resolved, stat.mode)) {
       shell.showItemInFolder(resolved);

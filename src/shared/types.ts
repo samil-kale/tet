@@ -215,7 +215,6 @@ export interface RemoteRepository {
   fullName: string;
   /** The clone tab's default folder name. */
   name: string;
-  private: boolean;
   /** The https url; the account's token can authenticate it. */
   cloneUrl: string;
 }
@@ -302,9 +301,9 @@ export interface RepositoryState {
   /** Ahead/behind of non-current branches, only where `%(upstream:trackshort)` says they differ —
    *  each count costs a `rev-list`. The current branch's are `ahead`/`behind`. */
   branchTrack: Record<string, { ahead: number; behind: number }>;
-  /** Each local branch's upstream on a remote, e.g. `{ remote: "origin", branch: "main" }` — what a
-   *  push goes to and "Also delete on the remote" deletes. Absent without one. */
-  branchUpstreams: Record<string, { remote: string; branch: string }>;
+  /** Each local branch's upstream on a remote — what a push goes to and "Also delete on the
+   *  remote" deletes. Absent without one. */
+  branchUpstreams: Record<string, BranchUpstream>;
   /** The repository's worktrees, main first (git.ts's readWorktrees). A branch checked out in
    *  another one is shown there on a checkout, as in GitHub Desktop: git refuses it here. */
   worktrees: WorktreeInfo[];
@@ -557,6 +556,17 @@ export function worktreeBase(state: RepositoryState): CheckoutTarget | undefined
 /** The ref git and the UI name a target by: `remote/name` for a remote branch. */
 export function refName(target: CheckoutTarget): string {
   return target.remote ? `${target.remote}/${target.name}` : target.name;
+}
+
+/** A local branch's upstream on a remote, e.g. `{ remote: "origin", branch: "main" }`. */
+export interface BranchUpstream {
+  remote: string;
+  branch: string;
+}
+
+/** The upstream as git names it and a message shows it: "origin/main". */
+export function upstreamName(upstream: BranchUpstream): string {
+  return `${upstream.remote}/${upstream.branch}`;
 }
 
 /** As every spinner shows it: never while waiting on a question, whatever `busy` says. */

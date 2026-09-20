@@ -72,10 +72,13 @@ export async function renderMarkdown(
       }
     }
   }
+  const previous = colored;
+  const current = new Map<string, string>();
   await Promise.all([
-    ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code)),
+    ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code, previous, current)),
     ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage))
   ]);
+  colored = current;
   return doc;
 }
 
@@ -133,20 +136,34 @@ export function lineAtScroll(scroller: HTMLElement, body: HTMLElement): number |
   return before.line + share * ((after?.line ?? before.line) - before.line);
 }
 
-async function highlightBlock(code: Element): Promise<void> {
+/**
+ * The colored HTML of the last render's code blocks, by theme, language and text. The preview is
+ * rendered again on every keystroke, and shiki would tokenize every block of the file each time,
+ * though only the one being typed in changed. Carried one render forward, so it holds a document
+ * rather than the history of one being written; a theme change misses every key and falls out.
+ */
+let colored = new Map<string, string>();
+
+async function highlightBlock(code: Element, previous: Map<string, string>, current: Map<string, string>): Promise<void> {
   const fence = [...code.classList].find((name) => name.startsWith("language-"));
   const language = fence && languageForFence(fence.slice("language-".length));
   if (!language) {
     return;
   }
+  const text = code.textContent ?? "";
+  const theme = highlightTheme();
+  const key = `${theme}\u0000${language}\u0000${text}`;
+  const html = previous.get(key) ?? (await colorBlock(text, language, theme));
+  current.set(key, html);
+  code.innerHTML = html;
+}
+
+/** shiki with the block's grammar loaded. Spans alone: the block's surface is the preview's, not
+ *  the theme's editor background. */
+async function colorBlock(text: string, language: string, theme: string): Promise<string> {
   const shiki = await highlighter();
   await loadGrammar(shiki, language);
-  // Spans alone: the block's surface is the preview's, not the theme's editor background.
-  code.innerHTML = shiki.codeToHtml(code.textContent ?? "", {
-    lang: language,
-    theme: highlightTheme(),
-    structure: "inline"
-  });
+  return shiki.codeToHtml(text, { lang: language, theme, structure: "inline" });
 }
 
 async function resolveImage(

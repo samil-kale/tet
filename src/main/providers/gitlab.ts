@@ -12,8 +12,6 @@ function headers(token: string): Record<string, string> {
 interface GitLabProject {
   path_with_namespace: string;
   path: string;
-  /** "private", "internal" or "public". */
-  visibility: string;
   http_url_to_repo: string;
 }
 
@@ -36,7 +34,6 @@ export const gitlab: GitProvider = {
       (entry): RemoteRepository => ({
         fullName: entry.path_with_namespace,
         name: entry.path,
-        private: entry.visibility !== "public",
         cloneUrl: entry.http_url_to_repo
       })
     );

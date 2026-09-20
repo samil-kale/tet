@@ -70,7 +70,7 @@ export function useCollapsedSections(key: string, initial: string[]): [(section:
  * write is synchronous and a drag delivers 60+ values a second. A write pending on unmount is
  * dropped.
  */
-export function usePersistedNumber(storageKey: string, restore: (stored: number) => number): [number, (next: number) => void] {
+function usePersistedNumber(storageKey: string, restore: (stored: number) => number): [number, (next: number) => void] {
   const [value, setValue] = useState(() => restore(Number(localStorage.getItem(storageKey))));
   const persist = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const set = useCallback(

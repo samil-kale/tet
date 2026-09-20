@@ -24,7 +24,7 @@ import type {
   WorktreeRef
 } from "../../shared/types";
 import { TET_SYSTEM_PROMPT } from "../agents/system-prompt";
-import { relativeInside } from "../path-inside";
+import { relativeInside, repositoryRelative } from "../path-inside";
 import { tabControlToken } from "./control-token";
 
 /**
@@ -508,12 +508,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "editor-open": async (args, caller) => {
       const found = project(args, caller);
       const typed = text(args, "path", "path");
-      // In git's shape, as the editor tabs match it: root-relative, forward slashes.
-      const relative = relativeInside(found.path, path.resolve(found.path, typed));
-      if (relative === undefined) {
+      const filePath = repositoryRelative(found.path, path.resolve(found.path, typed));
+      if (filePath === undefined) {
         throw new ControlError("bad_args", `not inside the repository: ${typed}`);
       }
-      const filePath = relative.replace(/\\/g, "/");
       await assertSandboxReadable(caller, found.path, filePath);
       const keep = args.keep === true;
       deps.openEditor(found.id, filePath, keep);

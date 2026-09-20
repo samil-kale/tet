@@ -4,6 +4,7 @@ import type { Project, SbxBlocker } from "../../shared/types";
 import {
   SbxSettingsFields,
   fromConfig,
+  policyName,
   saveBlocked,
   tabMarks,
   toConfig,
@@ -221,8 +222,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       {phase.kind === "blocked" && (
         <>
           <p className="dialog-message">
-            {phase.organization ? "Your organization's SBX policy" : "SBX's policy"} has to allow these
-            before tet can sandbox {project.name}:
+            {policyName(phase.organization !== undefined)} has to allow these before tet can sandbox {project.name}:
           </p>
           <div className="requirement-list">
             {phase.blockers.map((blocker) => (

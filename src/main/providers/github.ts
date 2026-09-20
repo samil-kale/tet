@@ -18,7 +18,6 @@ function headers(token: string): Record<string, string> {
 interface GitHubRepository {
   full_name: string;
   name: string;
-  private: boolean;
   clone_url: string;
 }
 
@@ -39,7 +38,6 @@ export const github: GitProvider = {
       (entry): RemoteRepository => ({
         fullName: entry.full_name,
         name: entry.name,
-        private: entry.private,
         cloneUrl: entry.clone_url
       })
     );

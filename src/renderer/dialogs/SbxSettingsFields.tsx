@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
 import { CircleAlertIcon, CloseIcon } from "../ui/icons";
 import { ActionLink } from "../ui/ActionLink";
@@ -38,6 +38,15 @@ let nextRowId = 0;
 function withId<T>(row: T): Row<T> {
   nextRowId += 1;
   return { ...row, id: `row-${nextRowId}` };
+}
+
+/** The two things every section does to one of its rows, by the id `withId` gave it. */
+function patched<T extends { id: string }>(rows: T[], id: string, change: Partial<T>): T[] {
+  return rows.map((entry) => (entry.id === id ? { ...entry, ...change } : entry));
+}
+
+function without<T extends { id: string }>(rows: T[], id: string): T[] {
+  return rows.filter((entry) => entry.id !== id);
 }
 
 /** `sbx:get-config`'s answer as rows. Only the user's paths: tet's directories and each agent's
@@ -201,8 +210,8 @@ export function usePolicyAnswers(state: FieldsState, ready: boolean): PolicyAnsw
   return { deniedPaths, hostsAllowed };
 }
 
-/** Who refuses, in the marks. */
-function policyName(governed: boolean): string {
+/** Who refuses, in the marks and in the dialog's blocked message. */
+export function policyName(governed: boolean): string {
   return governed ? "Your organization's SBX policy" : "SBX's policy";
 }
 
@@ -241,6 +250,44 @@ function RowMark({ title }: { title: string | undefined }) {
     <span className="sbx-path-denied" title={title}>
       <CircleAlertIcon />
     </span>
+  );
+}
+
+/** Every row's last cell. */
+function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
+  return (
+    <button className="icon-button" title={title} onClick={onClick}>
+      <CloseIcon />
+    </button>
+  );
+}
+
+/**
+ * The box a section's rows sit in: its label, the rows or a line saying there are none, and what
+ * adds one underneath.
+ */
+function RowSection<T extends { id: string }>({
+  label,
+  empty,
+  rows,
+  renderRow,
+  add
+}: {
+  label: string;
+  empty: string;
+  rows: T[];
+  renderRow: (row: T) => ReactNode;
+  add: ReactNode;
+}) {
+  return (
+    <div className="dialog-field">
+      <span className="dialog-field-label">{label}</span>
+      <div className="sbx-rows">
+        {rows.length === 0 && <p className="dialog-detail">{empty}</p>}
+        {rows.map(renderRow)}
+      </div>
+      {add}
+    </div>
   );
 }
 
@@ -293,7 +340,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                   <span>{label}</span>
                 </label>
                 {access !== false && (
-                  <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value as SbxAccess)} />
+                  <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value)} />
                 )}
               </div>
             );
@@ -305,192 +352,162 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
 
   if (section === "ports") {
     return (
-      <div className="dialog-field">
-        <span className="dialog-field-label">Port forwarding</span>
-        <div className="sbx-rows">
-          {state.ports.length === 0 && <p className="dialog-detail">No ports forwarded yet</p>}
-          {state.ports.map((port) => {
-            const setPort = (change: Partial<typeof port>): void =>
-              update("ports", (ports) => ports.map((entry) => (entry.id === port.id ? { ...entry, ...change } : entry)));
-            return (
-              <div key={port.id} className="sbx-port-row">
-                <input
-                  className="sbx-port-input"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="3000"
-                  value={port.host}
-                  onChange={(event) => setPort({ host: event.target.value })}
-                />
-                <span className="sbx-arrow">→</span>
-                <input
-                  className="sbx-port-input"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="3000"
-                  value={port.container}
-                  onChange={(event) => setPort({ container: event.target.value })}
-                />
-                <RowMark title={isBadPortRow(port) ? BAD_PORT : undefined} />
-                <button
-                  className="icon-button"
-                  title="Remove port"
-                  onClick={() => update("ports", (ports) => ports.filter((entry) => entry.id !== port.id))}
-                >
-                  <CloseIcon />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        <ActionLink
-          onClick={() => update("ports", (ports) => [...ports, withId({ host: "", container: "" })])}
-        >
-          + Add port
-        </ActionLink>
-      </div>
+      <RowSection
+        label="Port forwarding"
+        empty="No ports forwarded yet"
+        rows={state.ports}
+        renderRow={(port) => {
+          const setPort = (change: Partial<typeof port>): void =>
+            update("ports", (ports) => patched(ports, port.id, change));
+          return (
+            <div key={port.id} className="sbx-port-row">
+              <input
+                className="sbx-port-input"
+                type="text"
+                inputMode="numeric"
+                placeholder="3000"
+                value={port.host}
+                onChange={(event) => setPort({ host: event.target.value })}
+              />
+              <span className="sbx-arrow">→</span>
+              <input
+                className="sbx-port-input"
+                type="text"
+                inputMode="numeric"
+                placeholder="3000"
+                value={port.container}
+                onChange={(event) => setPort({ container: event.target.value })}
+              />
+              <RowMark title={isBadPortRow(port) ? BAD_PORT : undefined} />
+              <RemoveRow title="Remove port" onClick={() => update("ports", (ports) => without(ports, port.id))} />
+            </div>
+          );
+        }}
+        add={
+          <ActionLink onClick={() => update("ports", (ports) => [...ports, withId({ host: "", container: "" })])}>
+            + Add port
+          </ActionLink>
+        }
+      />
     );
   }
 
   if (section === "paths") {
     return (
-      <div className="dialog-field">
-        <span className="dialog-field-label">Allowed paths</span>
-        <div className="sbx-rows">
-          {state.paths.length === 0 && <p className="dialog-detail">No paths shared yet</p>}
-          {state.paths.map((row) => (
-            <div key={row.id} className="sbx-path-row">
-              {/* Plain text: the path is what the picker returned. */}
-              <span className="sbx-path-value" title={row.path}>
-                {row.path}
-              </span>
-              <Dropdown
-                value={row.access}
-                options={ACCESS_OPTIONS}
-                onChange={(value) =>
-                  update("paths", (paths) => paths.map((entry) => (entry.id === row.id ? { ...entry, access: value as SbxAccess } : entry)))
-                }
-              />
-              <RowMark title={pathMark(row, answers, governed)} />
-              <button
-                className="icon-button"
-                title="Remove path"
-                onClick={() => update("paths", (paths) => paths.filter((entry) => entry.id !== row.id))}
-              >
-                <CloseIcon />
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="sbx-add-paths">
-          <ActionLink
-            onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox"))}
-          >
-            + Add folder
-          </ActionLink>
-          <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>
-            + Add file
-          </ActionLink>
-        </div>
-      </div>
+      <RowSection
+        label="Allowed paths"
+        empty="No paths shared yet"
+        rows={state.paths}
+        renderRow={(row) => (
+          <div key={row.id} className="sbx-path-row">
+            {/* Plain text: the path is what the picker returned. */}
+            <span className="sbx-path-value" title={row.path}>
+              {row.path}
+            </span>
+            <Dropdown
+              value={row.access}
+              options={ACCESS_OPTIONS}
+              onChange={(access) => update("paths", (paths) => patched(paths, row.id, { access }))}
+            />
+            <RowMark title={pathMark(row, answers, governed)} />
+            <RemoveRow title="Remove path" onClick={() => update("paths", (paths) => without(paths, row.id))} />
+          </div>
+        )}
+        add={
+          <div className="sbx-add-paths">
+            <ActionLink onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox"))}>
+              + Add folder
+            </ActionLink>
+            <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>
+              + Add file
+            </ActionLink>
+          </div>
+        }
+      />
     );
   }
 
   if (section === "secrets") {
     return (
-      <div className="dialog-field">
-        <span className="dialog-field-label">Secrets</span>
-        <div className="sbx-rows">
-          {state.secrets.length === 0 && <p className="dialog-detail">No secrets yet</p>}
-          {state.secrets.map((row) => {
-            const setSecret = (change: Partial<typeof row>): void =>
-              update("secrets", (secrets) => secrets.map((entry) => (entry.id === row.id ? { ...entry, ...change } : entry)));
-            const stored = storedSecrets.includes(row.env.trim());
-            return (
-              // The path row's box, as the host rows.
-              <div key={row.id} className="sbx-path-row">
-                <input
-                  className="sbx-secret-input"
-                  type="text"
-                  placeholder="GITLAB_TOKEN"
-                  title="The environment variable the sandbox sees, holding a placeholder instead of the value"
-                  value={row.env}
-                  onChange={(event) => setSecret({ env: event.target.value })}
-                />
-                <input
-                  className="sbx-host-input"
-                  type="text"
-                  placeholder="gitlab.example.com"
-                  title="Where sbx puts the value in place of the placeholder, in request headers only: exact host or *.example.com, comma-separated, no scheme or port"
-                  value={row.hosts}
-                  onChange={(event) => setSecret({ hosts: event.target.value })}
-                />
-                <input
-                  className="sbx-secret-input"
-                  type="password"
-                  autoComplete="off"
-                  // A stored value as a set password shows, never the value itself (the title says so).
-                  placeholder={stored ? "••••••••" : "Value"}
-                  title={
-                    stored
-                      ? "Stored on this machine; typing replaces it. The sandbox never sees it."
-                      : "Stored on this machine, never in tet.json. The sandbox never sees it."
-                  }
-                  value={row.value}
-                  onChange={(event) => setSecret({ value: event.target.value })}
-                />
-                <RowMark title={secretMark(row, state.secrets, answers, governed)} />
-                <button
-                  className="icon-button"
-                  title="Remove secret"
-                  onClick={() => update("secrets", (secrets) => secrets.filter((entry) => entry.id !== row.id))}
-                >
-                  <CloseIcon />
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        <ActionLink
-          onClick={() => update("secrets", (secrets) => [...secrets, withId({ env: "", hosts: "", value: "" })])}
-        >
-          + Add secret
-        </ActionLink>
-      </div>
+      <RowSection
+        label="Secrets"
+        empty="No secrets yet"
+        rows={state.secrets}
+        renderRow={(row) => {
+          const setSecret = (change: Partial<typeof row>): void =>
+            update("secrets", (secrets) => patched(secrets, row.id, change));
+          const stored = storedSecrets.includes(row.env.trim());
+          return (
+            // The path row's box, as the host rows.
+            <div key={row.id} className="sbx-path-row">
+              <input
+                className="sbx-secret-input"
+                type="text"
+                placeholder="GITLAB_TOKEN"
+                title="The environment variable the sandbox sees, holding a placeholder instead of the value"
+                value={row.env}
+                onChange={(event) => setSecret({ env: event.target.value })}
+              />
+              <input
+                className="sbx-host-input"
+                type="text"
+                placeholder="gitlab.example.com"
+                title="Where sbx puts the value in place of the placeholder, in request headers only: exact host or *.example.com, comma-separated, no scheme or port"
+                value={row.hosts}
+                onChange={(event) => setSecret({ hosts: event.target.value })}
+              />
+              <input
+                className="sbx-secret-input"
+                type="password"
+                autoComplete="off"
+                // A stored value as a set password shows, never the value itself (the title says so).
+                placeholder={stored ? "••••••••" : "Value"}
+                title={
+                  stored
+                    ? "Stored on this machine; typing replaces it. The sandbox never sees it."
+                    : "Stored on this machine, never in tet.json. The sandbox never sees it."
+                }
+                value={row.value}
+                onChange={(event) => setSecret({ value: event.target.value })}
+              />
+              <RowMark title={secretMark(row, state.secrets, answers, governed)} />
+              <RemoveRow title="Remove secret" onClick={() => update("secrets", (secrets) => without(secrets, row.id))} />
+            </div>
+          );
+        }}
+        add={
+          <ActionLink
+            onClick={() => update("secrets", (secrets) => [...secrets, withId({ env: "", hosts: "", value: "" })])}
+          >
+            + Add secret
+          </ActionLink>
+        }
+      />
     );
   }
 
   return (
-    <div className="dialog-field">
-      <span className="dialog-field-label">Allowed hosts</span>
-      <div className="sbx-rows">
-        {state.hosts.length === 0 && <p className="dialog-detail">No hosts allowed yet</p>}
-        {state.hosts.map((row) => (
-          // The path row's box: the input's flex: 1 pushes the button right, as .sbx-path-value does.
-          <div key={row.id} className="sbx-path-row">
-            <input
-              className="sbx-host-input"
-              type="text"
-              placeholder="api.example.com"
-              title="Exact host, *.example.com, or host:443"
-              value={row.host}
-              onChange={(event) =>
-                update("hosts", (hosts) => hosts.map((entry) => (entry.id === row.id ? { ...entry, host: event.target.value } : entry)))
-              }
-            />
-            <button
-              className="icon-button"
-              title="Remove host"
-              onClick={() => update("hosts", (hosts) => hosts.filter((entry) => entry.id !== row.id))}
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        ))}
-      </div>
-      <ActionLink onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>
-        + Add host
-      </ActionLink>
-    </div>
+    <RowSection
+      label="Allowed hosts"
+      empty="No hosts allowed yet"
+      rows={state.hosts}
+      renderRow={(row) => (
+        // The path row's box: the input's flex: 1 pushes the button right, as .sbx-path-value does.
+        <div key={row.id} className="sbx-path-row">
+          <input
+            className="sbx-host-input"
+            type="text"
+            placeholder="api.example.com"
+            title="Exact host, *.example.com, or host:443"
+            value={row.host}
+            onChange={(event) => update("hosts", (hosts) => patched(hosts, row.id, { host: event.target.value }))}
+          />
+          <RemoveRow title="Remove host" onClick={() => update("hosts", (hosts) => without(hosts, row.id))} />
+        </div>
+      )}
+      add={
+        <ActionLink onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>+ Add host</ActionLink>
+      }
+    />
   );
 }

@@ -5,6 +5,7 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
 import type {
+  BranchUpstream,
   CheckoutTarget,
   ChangeStatus,
   FileChange,
@@ -61,14 +62,19 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: n
 }
 
 /** git's version as it prints it ("2.55.0.windows.3"); undefined when the CLI cannot be started.
- *  Runs in the temp directory, which exists everywhere. */
-export async function version(): Promise<string | undefined> {
-  try {
-    const result = await git(os.tmpdir(), ["--version"]);
-    return result.code === 0 ? result.stdout.trim().replace(/^git version /, "") : undefined;
-  } catch {
-    return undefined;
-  }
+ *  Runs in the temp directory, which exists everywhere. Asked once: git does not change under a
+ *  running app, and the worktree actions would otherwise spawn a process each to ask again. */
+let gitVersion: Promise<string | undefined> | undefined;
+export function version(): Promise<string | undefined> {
+  gitVersion ??= (async () => {
+    try {
+      const result = await git(os.tmpdir(), ["--version"]);
+      return result.code === 0 ? result.stdout.trim().replace(/^git version /, "") : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+  return gitVersion;
 }
 
 export async function isRepository(cwd: string): Promise<boolean> {
@@ -162,7 +168,7 @@ async function readRefs(
   tags: string[];
   defaultBranch?: CheckoutTarget;
   branchTrack: Record<string, { ahead: number; behind: number }>;
-  branchUpstreams: Record<string, { remote: string; branch: string }>;
+  branchUpstreams: Record<string, BranchUpstream>;
   headCommit?: string;
 }> {
   // Full ref names, not %(refname:short): that shortens "refs/remotes/origin/HEAD" to "origin", like
@@ -185,7 +191,7 @@ async function readRefs(
   // Per remote: refs come sorted, and "backup/HEAD" would otherwise beat "origin/HEAD".
   const defaultBranches = new Map<string, string>();
   const diverged: { name: string; head: string; upstream: string }[] = [];
-  const branchUpstreams: Record<string, { remote: string; branch: string }> = {};
+  const branchUpstreams: Record<string, BranchUpstream> = {};
   /** The local branches tracking each full upstream ref, for the default branch. */
   const trackers = new Map<string, string[]>();
   let headCommit: string | undefined;
@@ -400,8 +406,8 @@ async function resolveGitDir(cwd: string): Promise<string> {
 /**
  * A merge or rebase stopped midway, for the "Abort" entry — three stats instead of a git process,
  * as GitHub Desktop reads it. */
-async function readOperation(cwd: string): Promise<GitOperation | undefined> {
-  const gitDir = await resolveGitDir(cwd);
+async function readOperation(gitDirOf: Promise<string>): Promise<GitOperation | undefined> {
+  const gitDir = await gitDirOf;
   const exists = (name: string): Promise<boolean> =>
     fs.stat(path.join(gitDir, name)).then(
       () => true,
@@ -419,13 +425,16 @@ async function readOperation(cwd: string): Promise<GitOperation | undefined> {
  * refresh: its `HEAD` for the main one, and per linked one under `worktrees/<id>` a `gitdir`
  * naming the worktree's `.git` (relative since `--relative-paths`) and its own `HEAD`.
  */
-export async function readWorktrees(cwd: string): Promise<WorktreeInfo[]> {
-  const gitDir = await resolveGitDir(cwd);
+export async function readWorktrees(cwd: string, gitDirOf: Promise<string> = resolveGitDir(cwd)): Promise<WorktreeInfo[]> {
+  const gitDir = await gitDirOf;
   const commonDir = await fs.readFile(path.join(gitDir, "commondir"), "utf8").then(
     (pointer) => path.resolve(gitDir, pointer.trim()),
     () => gitDir
   );
-  const bases = await readBaseBranches(commonDir);
+  const linkedRoot = path.join(commonDir, "worktrees");
+  const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
+  // Only a linked worktree carries a base, so a repository without one never reads the config.
+  const bases = ids.length > 0 ? await readBaseBranches(commonDir) : new Map<string, string>();
   const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
     const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
     const branch = /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
@@ -438,8 +447,6 @@ export async function readWorktrees(cwd: string): Promise<WorktreeInfo[]> {
       current: adminDir === gitDir
     };
   };
-  const linkedRoot = path.join(commonDir, "worktrees");
-  const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
   const linked = await Promise.all(
     ids.map(async (id) => {
       const adminDir = path.join(linkedRoot, id);
@@ -500,12 +507,15 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
     // refresh where starting git is slow. The stash list is the third process, earned by being a
     // list the user acts on; anything added here has to earn its process too. All three run at
     // once, so no extra wall time. Operation and worktrees are file reads.
+    // One resolution of the git directory for both file readers, started with them so it never
+    // delays a git process.
+    const gitDirOf = resolveGitDir(cwd);
     const [status, refs, stashes, operation, worktrees] = await Promise.all([
       readStatus(cwd),
       readRefs(cwd, remoteNames),
       readStashes(cwd),
-      readOperation(cwd),
-      readWorktrees(cwd)
+      readOperation(gitDirOf),
+      readWorktrees(cwd, gitDirOf)
     ]);
     return { ...status, ...refs, stashes, operation, worktrees };
   } catch (error) {

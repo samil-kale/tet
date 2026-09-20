@@ -22,6 +22,40 @@ export function forget<T>(record: Record<string, T>, projectId: string): Record<
   return rest;
 }
 
+/**
+ * A record rebuilt every render, keeping each entry's identity where it is unchanged and the
+ * record's own where every entry is. `same` decides what unchanged means; it defaults to the
+ * entry's own fields compared by `===`, so a field added to the entry is compared without a line
+ * of its own. `ref` holds what was last handed out.
+ */
+export function stableRecord<V extends object>(
+  ref: { current: Record<string, V> },
+  next: Record<string, V>,
+  same: (previous: V, entry: V) => boolean = sameFields
+): Record<string, V> {
+  const held = ref.current;
+  const kept: Record<string, V> = {};
+  let changed = Object.keys(held).length !== Object.keys(next).length;
+  for (const [key, entry] of Object.entries(next)) {
+    const previous = held[key];
+    kept[key] = previous !== undefined && same(previous, entry) ? previous : entry;
+    changed ||= kept[key] !== previous;
+  }
+  if (!changed) {
+    return held;
+  }
+  ref.current = kept;
+  return kept;
+}
+
+/** The same own keys, each value the same object. */
+function sameFields(previous: object, entry: object): boolean {
+  const keys = Object.keys(entry);
+  const before = previous as Record<string, unknown>;
+  const after = entry as Record<string, unknown>;
+  return keys.length === Object.keys(previous).length && keys.every((key) => before[key] === after[key]);
+}
+
 /** `previous` if it holds the same keys and values, else `next`. */
 export function sameRecord<V>(previous: Record<string, V>, next: Record<string, V>): Record<string, V> {
   const keys = Object.keys(next);

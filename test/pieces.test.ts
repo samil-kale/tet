@@ -432,7 +432,7 @@ if (args[0] === "ls") {
       `ports ${name} --json`,
       `ports ${name} --publish 3000:3000`
     ]);
-    assert.deepEqual(result, { removed: [], portFailures: [], secretFailures: [] });
+    assert.deepEqual(result, { removed: [], failures: [] });
   });
 
   it("unpublishes what the sandbox has and tet.json dropped, and leaves a port in both alone", async () => {
@@ -445,7 +445,7 @@ if (args[0] === "ls") {
 
   it("reports a refused publish under the agent's name, keeping the port in tet.json", async () => {
     const { result, projectPath } = await save({ has: [], before: [3000], now: [3000], refuse: "3000:3000" });
-    assert.deepEqual(result.portFailures, [
+    assert.deepEqual(result.failures, [
       "The Claude sandbox could not publish port 3000:3000 (publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published)."
     ]);
     assert.deepEqual((await readSbxConfig(projectPath)).ports, [port(3000)]);
@@ -505,7 +505,7 @@ if (args[0] === "ls") {
       `secret set-custom --sandbox ${name} --placeholder ${placeholder("ADDED")} --host a.example.com --host *.b.example.com`,
       "stdin v-added"
     ]);
-    assert.deepEqual(result.secretFailures, []);
+    assert.deepEqual(result.failures, []);
     assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts, a row without a value too");
     assert.ok(!fs.readFileSync(path.join(projectPath, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
   });
@@ -526,7 +526,7 @@ if (args[0] === "ls") {
       saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]))
     );
     assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
-    assert.deepEqual(result.secretFailures, ["The Claude sandbox could not list its secrets, so none were changed."]);
+    assert.deepEqual(result.failures, ["The Claude sandbox could not list its secrets, so none were changed."]);
   });
 });
 

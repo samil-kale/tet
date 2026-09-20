@@ -26,7 +26,7 @@ import type { SideView } from "./terminal/Pane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
 import { useWindowCovered } from "./ui/window-covered";
-import { forget, sameList, sameRecord } from "./identity";
+import { forget, sameList, sameRecord, stableRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
 import { activeEditorTab, defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
@@ -53,6 +53,24 @@ const SIDE_PANE_SLIDE_MS = 180;
  *  file's status, and a write on disk (`writes`), which leaves a modified file's status unchanged. */
 function diffVersion(state: RepositoryState | undefined, filePath: string, writes: number | undefined): string {
   return `${state?.head}:${state?.headCommit}:${state?.changes.find((change) => change.path === filePath)?.status}:${writes ?? 0}`;
+}
+
+/**
+ * Two rows the same. Every field but the remote is a value; `states` is rebuilt on every push,
+ * so the remote is compared by what the row shows of it.
+ */
+function sameHead(previous: ProjectHead, entry: ProjectHead): boolean {
+  return (
+    previous.head === entry.head &&
+    previous.detached === entry.detached &&
+    previous.upstream === entry.upstream &&
+    previous.base === entry.base &&
+    previous.baseAt === entry.baseAt &&
+    previous.defaultBranch === entry.defaultBranch &&
+    previous.dirty === entry.dirty &&
+    previous.remote?.name === entry.remote?.name &&
+    previous.remote?.url === entry.remote?.url
+  );
 }
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
@@ -474,30 +492,16 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const marksRef = useRef<Record<string, ProjectMarks>>({});
   const marks = useMemo(() => {
     const next: Record<string, ProjectMarks> = {};
-    let changed = Object.keys(marksRef.current).length !== Object.keys(tabs).length;
     for (const projectId of Object.keys(tabs)) {
       const previous = marksRef.current[projectId];
-      const entry: ProjectMarks = {
+      next[projectId] = {
         finished: sameList(previous?.finished, markedTabs(projectId, "finishedAt").map((tab) => tab.tabId), NO_IDS),
         waiting: sameList(previous?.waiting, markedTabs(projectId, "waitingAt").map((tab) => tab.tabId), NO_IDS),
         starting: sameList(previous?.starting, startingTabs(projectId).map((tab) => tab.tabId), NO_IDS),
         busy: (tabs[projectId] ?? []).some(isWorking)
       };
-      next[projectId] =
-        previous &&
-        previous.finished === entry.finished &&
-        previous.waiting === entry.waiting &&
-        previous.starting === entry.starting &&
-        previous.busy === entry.busy
-          ? previous
-          : entry;
-      changed ||= next[projectId] !== previous;
     }
-    if (!changed) {
-      return marksRef.current;
-    }
-    marksRef.current = next;
-    return next;
+    return stableRecord(marksRef, next);
   }, [tabs, markedTabs, startingTabs]);
 
   /**
@@ -507,35 +511,21 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const headsRef = useRef<Record<string, ProjectHead>>({});
   const heads = useMemo(() => {
     const next: Record<string, ProjectHead> = {};
-    let changed = Object.keys(headsRef.current).length !== Object.keys(states).length;
     for (const [projectId, state] of Object.entries(states)) {
-      const previous = headsRef.current[projectId];
-      const remote = state.remotes[0];
-      const dirty = state.changes.length > 0;
       const base = state.worktrees.find((worktree) => worktree.current)?.base;
-      const baseAt = base === undefined ? undefined : state.worktrees.find((worktree) => worktree.branch === base)?.path;
       const target = worktreeBase(state);
-      const defaultBranch = target && refName(target);
-      next[projectId] =
-        previous &&
-        previous.head === state.head &&
-        previous.detached === state.detached &&
-        previous.upstream === state.upstream &&
-        previous.base === base &&
-        previous.baseAt === baseAt &&
-        previous.defaultBranch === defaultBranch &&
-        previous.remote?.name === remote?.name &&
-        previous.remote?.url === remote?.url &&
-        previous.dirty === dirty
-          ? previous
-          : { head: state.head, detached: state.detached, upstream: state.upstream, base, baseAt, defaultBranch, remote, dirty };
-      changed ||= next[projectId] !== previous;
+      next[projectId] = {
+        head: state.head,
+        detached: state.detached,
+        upstream: state.upstream,
+        base,
+        baseAt: base === undefined ? undefined : state.worktrees.find((worktree) => worktree.branch === base)?.path,
+        defaultBranch: target && refName(target),
+        remote: state.remotes[0],
+        dirty: state.changes.length > 0
+      };
     }
-    if (!changed) {
-      return headsRef.current;
-    }
-    headsRef.current = next;
-    return next;
+    return stableRecord(headsRef, next, sameHead);
   }, [states]);
 
   /**

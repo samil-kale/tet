@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from "react";
-import { refName, worktreeBase } from "../../shared/types";
+import type { ReactNode } from "react";
+import { refName, upstreamName, worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, GitActionResult, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
@@ -57,6 +58,35 @@ const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the
 /** A worktree by its branch, which is its name; by its folder's while detached. */
 function worktreeName(worktree: WorktreeInfo): string {
   return worktree.branch ?? worktree.path.split(/[\\/]/).filter(Boolean).pop() ?? worktree.path;
+}
+
+/**
+ * One collapsible section of the tree. `rows` is called only while the section is open, so a
+ * collapsed one with thousands of tags builds no elements.
+ */
+function TreeSection({
+  label,
+  count,
+  collapsed,
+  onToggle,
+  rows
+}: {
+  label: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  rows: () => ReactNode;
+}) {
+  return (
+    <div className="tree-section">
+      <button className="tree-header" onClick={onToggle}>
+        <ChevronIcon expanded={!collapsed} scale={TREE_CHEVRON} />
+        <span>{label}</span>
+        <span className="count-badge">({count})</span>
+      </button>
+      {!collapsed && rows()}
+    </div>
+  );
 }
 
 export const BranchTree = memo(function BranchTree({
@@ -171,7 +201,7 @@ export const BranchTree = memo(function BranchTree({
       message: `Are you sure you want to delete ${name}?`,
       detail: isCurrent(name) && defaultRef ? `Switches to ${defaultRef} first. ${COMMITS_LOST}` : COMMITS_LOST,
       confirmLabel: "Delete branch",
-      checkboxLabel: upstream ? `Also delete ${upstream.remote}/${upstream.branch} on the remote` : undefined
+      checkboxLabel: upstream ? `Also delete ${upstreamName(upstream)} on the remote` : undefined
     });
     if (answer.confirmed) {
       branch.run(`Deleting ${name}...`, () => repository.deleteBranch(projectId, name, answer.checked));
@@ -348,7 +378,7 @@ export const BranchTree = memo(function BranchTree({
     const mainPath = state.worktrees.find((entry) => entry.main)?.path;
     const linked = mainPath !== undefined ? { path: worktree.path, mainPath } : undefined;
     const upstream = merged ? state.branchUpstreams[merged] : undefined;
-    const upstreamName = upstream ? `${upstream.remote}/${upstream.branch}` : undefined;
+    const mergedUpstream = upstream ? upstreamName(upstream) : undefined;
     const canClose = (): Promise<boolean> => canCloseWorktree(worktree.path);
     return [
       ...abortEntries(),
@@ -371,7 +401,7 @@ export const BranchTree = memo(function BranchTree({
       worktreeEntry("Rename worktree", worktreesSupported, linked ? () => void askRenameWorktree(linked, name, branch.run, canClose) : undefined),
       {
         label: "Delete worktree...",
-        run: linked ? () => void askDeleteWorktree(linked, name, upstreamName, branch.run, canClose) : undefined
+        run: linked ? () => void askDeleteWorktree(linked, name, mergedUpstream, branch.run, canClose) : undefined
       },
       SEPARATOR,
       { label: "Copy path", run: () => void navigator.clipboard.writeText(worktree.path) }
@@ -409,13 +439,12 @@ export const BranchTree = memo(function BranchTree({
       </div>
 
       <div className="tree">
-        <div className="tree-section">
-          <button className="tree-header" onClick={() => toggle("local")}>
-            <ChevronIcon expanded={!isCollapsed("local")} scale={TREE_CHEVRON} />
-            <span>LOCAL BRANCHES</span>
-            <span className="count-badge">({ownBranches.length})</span>
-          </button>
-          {!isCollapsed("local") &&
+        <TreeSection
+          label="LOCAL BRANCHES"
+          count={ownBranches.length}
+          collapsed={isCollapsed("local")}
+          onToggle={() => toggle("local")}
+          rows={() =>
             localBranches.map((localBranch) => {
               const status = track(localBranch);
               return (
@@ -447,15 +476,14 @@ export const BranchTree = memo(function BranchTree({
                 </button>
               );
             })}
-        </div>
+        />
 
-        <div className="tree-section">
-          <button className="tree-header" onClick={() => toggle("worktrees")}>
-            <ChevronIcon expanded={!isCollapsed("worktrees")} scale={TREE_CHEVRON} />
-            <span>WORKTREES</span>
-            <span className="count-badge">({linkedWorktrees.length})</span>
-          </button>
-          {!isCollapsed("worktrees") &&
+        <TreeSection
+          label="WORKTREES"
+          count={linkedWorktrees.length}
+          collapsed={isCollapsed("worktrees")}
+          onToggle={() => toggle("worktrees")}
+          rows={() =>
             worktrees.map((worktree) => (
               <button
                 key={worktree.path}
@@ -471,15 +499,14 @@ export const BranchTree = memo(function BranchTree({
                 )}
               </button>
             ))}
-        </div>
+        />
 
-        <div className="tree-section">
-          <button className="tree-header" onClick={() => toggle("remotes")}>
-            <ChevronIcon expanded={!isCollapsed("remotes")} scale={TREE_CHEVRON} />
-            <span>REMOTES</span>
-            <span className="count-badge">({state.remotes.length})</span>
-          </button>
-          {!isCollapsed("remotes") &&
+        <TreeSection
+          label="REMOTES"
+          count={state.remotes.length}
+          collapsed={isCollapsed("remotes")}
+          onToggle={() => toggle("remotes")}
+          rows={() =>
             remotes.map((entry) => (
               <div key={entry.name}>
                 <button className="tree-item remote" onClick={() => toggle(`remote:${entry.name}`)}>
@@ -505,15 +532,14 @@ export const BranchTree = memo(function BranchTree({
                   ))}
               </div>
             ))}
-        </div>
+        />
 
-        <div className="tree-section">
-          <button className="tree-header" onClick={() => toggle("tags")}>
-            <ChevronIcon expanded={!isCollapsed("tags")} scale={TREE_CHEVRON} />
-            <span>TAGS</span>
-            <span className="count-badge">({state.tags.length})</span>
-          </button>
-          {!isCollapsed("tags") &&
+        <TreeSection
+          label="TAGS"
+          count={state.tags.length}
+          collapsed={isCollapsed("tags")}
+          onToggle={() => toggle("tags")}
+          rows={() =>
             tags.map((tag) => (
               <button
                 key={tag}
@@ -526,15 +552,14 @@ export const BranchTree = memo(function BranchTree({
                 <span className="tree-label">{tag}</span>
               </button>
             ))}
-        </div>
+        />
 
-        <div className="tree-section">
-          <button className="tree-header" onClick={() => toggle("stashes")}>
-            <ChevronIcon expanded={!isCollapsed("stashes")} scale={TREE_CHEVRON} />
-            <span>STASHES</span>
-            <span className="count-badge">({state.stashes.length})</span>
-          </button>
-          {!isCollapsed("stashes") &&
+        <TreeSection
+          label="STASHES"
+          count={state.stashes.length}
+          collapsed={isCollapsed("stashes")}
+          onToggle={() => toggle("stashes")}
+          rows={() =>
             state.stashes.map((stash) => (
               <button
                 key={stash.ref}
@@ -547,7 +572,7 @@ export const BranchTree = memo(function BranchTree({
                 <span className="tree-label">{stash.message}</span>
               </button>
             ))}
-        </div>
+        />
       </div>
 
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu)} onClose={() => setMenu(null)} />}

@@ -8,22 +8,22 @@ const MAX_LIST_HEIGHT = 300;
 /** Gap between the open list and the window's bottom edge. */
 const WINDOW_MARGIN = 8;
 
-interface DropdownOption {
-  value: string;
+interface DropdownOption<T extends string> {
+  value: T;
   label: string;
 }
 
-interface DropdownProps {
-  value: string;
-  options: DropdownOption[];
-  onChange: (value: string) => void;
+interface DropdownProps<T extends string> {
+  value: T;
+  options: DropdownOption<T>[];
+  onChange: (value: T) => void;
 }
 
 /**
  * A `<select>` stand-in on `ContextMenu`: Chrome draws a native select's open list itself and
  * ignores CSS colors (`option:hover`/`:checked`) for the highlighted row (measured).
  */
-export function Dropdown({ value, options, onChange }: DropdownProps) {
+export function Dropdown<T extends string>({ value, options, onChange }: DropdownProps<T>) {
   const [menu, setMenu] = useState<{ x: number; y: number; width: number; maxHeight: number } | null>(null);
   const selected = options.find((option) => option.value === value);
 

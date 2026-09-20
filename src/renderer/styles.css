@@ -60,11 +60,10 @@ textarea,
   border: 1px solid var(--vscode-input-border);
 }
 
-/* One height for every single-line field and dropdown, wherever it stands: a `.button`'s. */
 input[type="text"],
 input[type="password"],
 .dropdown-trigger {
-  height: 29px;
+  height: var(--field-height);
 }
 
 input::placeholder {
@@ -113,7 +112,7 @@ textarea:focus,
 }
 
 .radio-option {
-  height: 29px;
+  height: var(--field-height);
   padding: 0 11px;
   color: var(--vscode-radio-inactiveForeground);
   background: var(--vscode-radio-inactiveBackground);
@@ -207,6 +206,9 @@ textarea:focus,
   --pane-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 28px;
+  /* One height for every single-line field, and for a button beside one: input,
+     .dropdown-trigger, .radio-option, .button, and the rows built to sit level with them. */
+  --field-height: 29px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
   --icon-size: 13px;
 }
@@ -1458,11 +1460,10 @@ textarea:focus,
   color: var(--vscode-descriptionForeground);
 }
 
-/* The fields' height (input, .dropdown-trigger), so a button beside one reads level. */
 .button {
   display: inline-flex;
   align-items: center;
-  height: 29px;
+  height: var(--field-height);
   gap: 6px;
   padding: 5px 11px;
   border: 1px solid var(--vscode-button-border);
@@ -1621,7 +1622,7 @@ textarea:focus,
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 29px;
+  height: var(--field-height);
 }
 
 .sbx-port-row,
@@ -1660,11 +1661,11 @@ textarea:focus,
   color: var(--vscode-descriptionForeground);
 }
 
-/* Plain text, pinned to the row's 29px; a long path is cut, and whole in the title. */
+/* Plain text, pinned to the row's height; a long path is cut, and whole in the title. */
 .sbx-path-value {
   flex: 1;
   min-width: 0;
-  line-height: 29px;
+  line-height: var(--field-height);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2038,7 +2039,7 @@ textarea:focus,
   gap: 12px;
   padding: 0 0 0 8px;
   font-size: 13px;
-  height: 29px;
+  height: var(--field-height);
   border-radius: 2px;
 }
 
@@ -2052,12 +2053,6 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.repository-private {
-  flex: none;
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground);
 }
 
 /* Shown on hover only. */

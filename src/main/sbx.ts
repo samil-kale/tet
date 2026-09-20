@@ -401,8 +401,12 @@ async function isControlChannelAllowed(): Promise<boolean> {
  * only letters, numbers, hyphens and periods.
  */
 export function sandboxName(projectId: string, agentId: SbxAgentId): string {
-  const hash = crypto.createHash("sha1").update(projectId).digest("hex").slice(0, 12);
-  return `tet-${agentId}-${hash}`;
+  return `tet-${agentId}-${projectHash(projectId)}`;
+}
+
+/** The project's share of a sandbox name and of a secret placeholder: one identity, one place. */
+function projectHash(projectId: string): string {
+  return crypto.createHash("sha1").update(projectId).digest("hex").slice(0, 12);
 }
 
 /** Expands tet.json's `~` and `~/…` (contractHome) — `sbx` is no shell. On win32 `~\…` too. */
@@ -885,7 +889,7 @@ export function secretPlaceholder(projectId: string, env: string): string {
 }
 
 function secretPrefix(projectId: string): string {
-  return `tet-${crypto.createHash("sha1").update(projectId).digest("hex").slice(0, 12)}-`;
+  return `tet-${projectHash(projectId)}-`;
 }
 
 /** A custom secret as `sbx secret ls --json` lists it. */
@@ -1116,7 +1120,7 @@ export async function saveSbxConfig(
   request: SbxProjectConfig,
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>
-): Promise<{ removed: SbxAgentId[]; portFailures: string[]; secretFailures: string[] }> {
+): Promise<{ removed: SbxAgentId[]; failures: string[] }> {
   const previous = await readSbxConfig(projectPath);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   await writeSbxConfig(projectPath, config);
@@ -1129,8 +1133,7 @@ export async function saveSbxConfig(
     ? await Promise.all([readSandboxHosts(), secrets ? readSandboxSecrets() : new Map<string, LiveSecret[]>()])
     : [new Map<string, string[]>(), new Map<string, LiveSecret[]>()];
   const removed: SbxAgentId[] = [];
-  const portFailures: string[] = [];
-  const secretFailures: string[] = [];
+  const failures: string[] = [];
   for (const agentId of SBX_AGENT_IDS) {
     const name = sandboxName(projectId, agentId);
     const existing = sandboxes.get(name);
@@ -1151,16 +1154,20 @@ export async function saveSbxConfig(
     const ports = config.ports.length > 0 || previous.ports.length > 0;
     if ((stale.length > 0 || ports) && (await ensureRunning(name))) {
       await revokeMounts(name, stale);
-      portFailures.push(...(await applyPortChanges(name, portDelta(await readSandboxPorts(name), config.ports))).map(inSandbox));
+      failures.push(...(await applyPortChanges(name, portDelta(await readSandboxPorts(name), config.ports))).map(inSandbox));
     }
-    await revokeStaleHosts(name, liveHosts.get(name) ?? [], config.hosts);
-    await allowHosts(name, config.hosts);
+    const live = liveHosts.get(name) ?? [];
+    await revokeStaleHosts(name, live, config.hosts);
+    await allowHosts(
+      name,
+      config.hosts.filter((host) => !live.includes(host))
+    );
     if (secrets) {
-      const failures = liveSecrets
+      const refused = liveSecrets
         ? await applySecrets(name, projectId, config.secrets, secretValues, liveSecrets.get(name) ?? [], changedSecrets)
         : ["could not list its secrets, so none were changed"];
-      secretFailures.push(...failures.map(inSandbox));
+      failures.push(...refused.map(inSandbox));
     }
   }
-  return { removed, portFailures, secretFailures };
+  return { removed, failures };
 }

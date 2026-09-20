@@ -801,6 +801,16 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
   }
 }
 
+/**
+ * What both editors need once monaco has made one, in the order they need it. The file is already
+ * open whenever the tab is switched from one to the other, so each starts on the models it finds.
+ */
+function adoptEditor(view: EditorView, setup: EditorSetup, code: MonacoEditor.IStandaloneCodeEditor): void {
+  configureEditor(view, setup, code);
+  setReadOnly(view, isReadOnly(view.snapshot.file));
+  setModels(view, view.models);
+}
+
 /** Built once per tab, kept for every file after (the preview tab's change). */
 function ensureDiffEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDiffEditor | null> {
   view.buildingDiff ??= (async () => {
@@ -810,10 +820,7 @@ function ensureDiffEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDif
     }
     const editor = setup.monaco.editor.createDiffEditor(view.host, { ...setup.options, ...diffEditorOptions() });
     view.diffEditor = editor;
-    configureEditor(view, setup, editor.getModifiedEditor());
-    // The file is already open when the tab is switched back to the diff.
-    setReadOnly(view, isReadOnly(view.snapshot.file));
-    setModels(view, view.models);
+    adoptEditor(view, setup, editor.getModifiedEditor());
     return editor;
   })();
   return view.buildingDiff;
@@ -828,9 +835,7 @@ function ensurePlainEditor(view: EditorView): Promise<MonacoEditor.IStandaloneCo
     }
     const editor = setup.monaco.editor.create(view.plainHost, setup.options);
     view.plainEditor = editor;
-    configureEditor(view, setup, editor);
-    setReadOnly(view, isReadOnly(view.snapshot.file));
-    setModels(view, view.models);
+    adoptEditor(view, setup, editor);
     return editor;
   })();
   return view.buildingPlain;

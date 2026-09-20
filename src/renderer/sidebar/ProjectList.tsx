@@ -98,11 +98,19 @@ interface ProjectListProps {
  * which is grouped again — a worktree cannot leave its group.
  */
 function groupWorktrees(projects: Project[]): Project[] {
-  const mains = new Set(projects.map((project) => project.path));
-  const isNested = (project: Project): boolean => project.mainPath !== undefined && mains.has(project.mainPath);
+  const nested = nestedIds(projects);
   return projects
-    .filter((project) => !isNested(project))
-    .flatMap((main) => [main, ...projects.filter((project) => isNested(project) && project.mainPath === main.path)]);
+    .filter((project) => !nested.has(project.id))
+    .flatMap((main) => [main, ...projects.filter((project) => nested.has(project.id) && project.mainPath === main.path)]);
+}
+
+/** The worktrees whose main worktree is open too — the rows drawn indented under it. One pass,
+ *  so the row rendering asks the set instead of scanning the list again per row. */
+function nestedIds(projects: Project[]): Set<string> {
+  const mains = new Set(projects.map((project) => project.path));
+  return new Set(
+    projects.filter((project) => project.mainPath !== undefined && mains.has(project.mainPath)).map((project) => project.id)
+  );
 }
 
 /** A remote's web page, or null. Takes both git spellings: "git@host:owner/repo.git" and a url
@@ -156,6 +164,7 @@ export const ProjectList = memo(function ProjectList({
 }: ProjectListProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
   const rows = useMemo(() => groupWorktrees(projects), [projects]);
+  const nested = useMemo(() => nestedIds(rows), [rows]);
 
   const { rowProps, listProps, rowClasses } = useDragReorder({
     dragType: DRAG_TYPE,
@@ -168,7 +177,7 @@ export const ProjectList = memo(function ProjectList({
 
   const itemClass = (project: Project, index: number): string => {
     const classes = ["project-item", ...rowClasses(index)];
-    if (rows.some((main) => main.path === project.mainPath)) {
+    if (nested.has(project.id)) {
       classes.push("worktree");
     }
     if (project.id === activeProjectId) {

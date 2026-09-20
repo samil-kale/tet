@@ -198,7 +198,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <p className="dialog-detail">Color scheme</p>
           <RadioGroup
             value={scheme}
-            onChange={(option) => applyColorScheme(option as ColorScheme)}
+            onChange={applyColorScheme}
             options={COLOR_SCHEMES.map((option) => ({ value: option, label: COLOR_SCHEME_LABELS[option] }))}
           />
           <label className="dialog-field">
@@ -274,7 +274,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <span>Sort order</span>
                 <Dropdown
                   value={explorerSettings.sortOrder}
-                  onChange={(order) => editExplorerSetting("sortOrder", order as ExplorerSortOrder)}
+                  onChange={(order) => editExplorerSetting("sortOrder", order)}
                   options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
                 />
               </label>
@@ -293,7 +293,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <div className="settings-prompt-header">
             <Dropdown
               value={promptId}
-              onChange={(id) => setPromptId(id as PromptId)}
+              onChange={setPromptId}
               options={PROMPT_IDS.map((id) => ({ value: id, label: PROMPT_LABELS[id] }))}
             />
             <button

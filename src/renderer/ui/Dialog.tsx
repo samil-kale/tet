@@ -169,6 +169,24 @@ function Frame({ title, confirmLabel, disabled, wide, focusSubmit, onSubmit, onC
   );
 }
 
+/** The optional checkbox a confirm or a prompt carries, drawn the same in both. */
+function DialogCheckbox({
+  label,
+  checked,
+  onChange
+}: {
+  label: string | undefined;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return !label ? null : (
+    <label className="dialog-checkbox">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
   const [checked, setChecked] = useState(false);
   return (
@@ -183,12 +201,7 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
     >
       <p className="dialog-message">{dialog.message}</p>
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
-      {dialog.checkboxLabel && (
-        <label className="dialog-checkbox">
-          <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
-          <span>{dialog.checkboxLabel}</span>
-        </label>
-      )}
+      <DialogCheckbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />
     </Frame>
   );
 }
@@ -308,12 +321,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
           </div>
         </div>
       )}
-      {dialog.checkboxLabel && (
-        <label className="dialog-checkbox">
-          <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
-          <span>{dialog.checkboxLabel}</span>
-        </label>
-      )}
+      <DialogCheckbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
     </Frame>
   );

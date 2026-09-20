@@ -58,7 +58,7 @@ function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (p
   return (
     <div className="dialog-field">
       <span>Provider</span>
-      <RadioGroup value={provider} options={PROVIDER_OPTIONS} onChange={(value) => onPick(value as ProviderId)} />
+      <RadioGroup value={provider} options={PROVIDER_OPTIONS} onChange={onPick} />
     </div>
   );
 }

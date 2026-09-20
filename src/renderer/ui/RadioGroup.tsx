@@ -1,19 +1,19 @@
-interface RadioOption {
-  value: string;
+interface RadioOption<T extends string> {
+  value: T;
   label: string;
 }
 
-interface RadioGroupProps {
-  value: string;
-  options: RadioOption[];
-  onChange: (value: string) => void;
+interface RadioGroupProps<T extends string> {
+  value: T;
+  options: RadioOption<T>[];
+  onChange: (value: T) => void;
 }
 
 /**
  * VS Code's radio widget (base/browser/ui/radio): a row of joined buttons, the chosen one marked.
  * The borders between them are drawn once — by the chosen one, or else by the right-hand one.
  */
-export function RadioGroup({ value, options, onChange }: RadioGroupProps) {
+export function RadioGroup<T extends string>({ value, options, onChange }: RadioGroupProps<T>) {
   const activeIndex = options.findIndex((option) => option.value === value);
   return (
     <div className="radio-group" role="radiogroup">
