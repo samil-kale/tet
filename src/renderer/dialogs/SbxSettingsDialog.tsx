@@ -14,7 +14,6 @@ import {
 } from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Checkbox } from "../ui/Field";
-import { notify } from "../ui/Notices";
 import { useEscape } from "../ui/use-escape";
 
 interface SbxSettingsDialogProps {
@@ -164,7 +163,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       setRefused(result.error ?? "Could not save the SBX configuration");
       return;
     }
-    notify("info", `SBX configuration saved for ${project.name}.`);
     close();
   };
 
