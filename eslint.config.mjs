@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -7,6 +8,17 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // The renderer's views are memoized and the terminals live outside React (AGENTS.md, "UI rules"),
+  // so a stale closure or a dependency too many is a wrong screen, not a slow one — and every
+  // "read it from a ref instead" here is deliberate. The rules keep those decisions honest.
+  {
+    files: ["src/renderer/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "error"
+    }
+  },
   {
     languageOptions: {
       parserOptions: {

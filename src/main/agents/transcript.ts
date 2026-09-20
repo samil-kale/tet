@@ -1,10 +1,18 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as readline from "node:readline";
 
 /**
- * Shared reading of append-only JSONL transcripts from the end: the chunked read, title rules,
+ * Shared reading of append-only JSONL transcripts from either end: the chunked read, title rules,
  * directory lookup. Entry types and the stop test live in each agent's `sessions.ts`.
  */
+
+/**
+ * How much of a transcript either scan reads. Bounds a pathological single line; forwards it also
+ * has to hold what the agent writes before the first prompt (Codex's `session_meta` carries the
+ * whole base instructions, measured at 0.14x of this).
+ */
+export const TRANSCRIPT_SCAN_BYTES = 256 * 1024;
 
 /**
  * The directory `root/<encoded>` of an agent keeping one per repository (Claude Code, pi), or
@@ -32,15 +40,18 @@ export async function findEncodedDir(root: string, encoded: string): Promise<str
 }
 
 /**
- * Evicts cached transcripts in `dir` no longer among `files` (the agent's picker deletes them
- * behind tet's back). Scoped to `dir`: a sandbox root (SessionProvider.sandbox) shares these
- * caches, and each pass would evict the other root's entries.
+ * Evicts cached transcripts under `root` no longer among `present` (the agent's picker deletes
+ * them behind tet's back); both are absolute paths. Scoped to `root`: a sandbox root
+ * (SessionProvider.sandbox) shares these caches, and each pass would evict the other root's
+ * entries. A prefix, so it serves an agent keeping its transcripts in one directory and one
+ * nesting them (Codex's `YYYY/MM/DD`) alike.
  */
-export function forgetMissing(dir: string, files: string[], caches: Map<string, unknown>[]): void {
-  const present = new Set(files.map((file) => path.join(dir, file)));
+export function forgetMissing(root: string, present: string[], caches: Map<string, unknown>[]): void {
+  const kept = new Set(present);
+  const prefix = root + path.sep;
   for (const cache of caches) {
     for (const filePath of cache.keys()) {
-      if (path.dirname(filePath) === dir && !present.has(filePath)) {
+      if (filePath.startsWith(prefix) && !kept.has(filePath)) {
         cache.delete(filePath);
       }
     }
@@ -50,6 +61,64 @@ export function forgetMissing(dir: string, files: string[], caches: Map<string, 
 /** Transcript fields are untrusted JSON — a title only counts if it's a non-blank string. */
 export function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+/** One JSONL entry, or undefined for a line that is not an object — a half-written last line, or
+ *  a `.jsonl` that is not a transcript at all. */
+export function parseLine(line: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(line);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An entry's ISO timestamp as ms, or undefined where it is missing or unparseable. */
+export function timestampOf(value: unknown): number | undefined {
+  const ms = Date.parse(nonEmptyString(value) ?? "");
+  return Number.isNaN(ms) ? undefined : ms;
+}
+
+/** A title the user typed, or the refusal every `SessionProvider.rename` answers for a blank one. */
+export function requireTitle(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new Error("title must be non-empty");
+  }
+  return trimmed;
+}
+
+/**
+ * Hands `onLine` the transcript's lines from the start until it returns true or the window ends —
+ * the forward counterpart to `readLinesBackwards`, for what only the head of a file says (the
+ * session's id, when it began, the first prompt).
+ *
+ * Answers whether the read itself held up: false means it failed (logged under `label`) and
+ * `onLine` saw only part of the window, so a caller caching by size must not keep that answer.
+ */
+export async function readHeadLines(
+  filePath: string,
+  byteLimit: number,
+  label: string,
+  onLine: (line: string) => boolean
+): Promise<boolean> {
+  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: byteLimit });
+  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  try {
+    for await (const line of lines) {
+      if (onLine(line)) {
+        return true;
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error(`[tet] ${label} transcript head scan failed:`, error);
+    return false;
+  } finally {
+    lines.close();
+    stream.destroy();
+  }
 }
 
 /** What the tab strip has room for. */

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import writeFileAtomic from "write-file-atomic";
+import { errorMessage } from "../shared/errors";
 import type { UpdateResult } from "../shared/release";
 
 /**
@@ -68,7 +69,7 @@ function main(): void {
     fs.rmSync(old, { recursive: true, force: true });
     retried(() => fs.renameSync(root, old));
   } catch (error) {
-    writeResult(resultFile, { version, ok: false, output: `could not move ${root} aside: ${String(error)}` });
+    writeResult(resultFile, { version, ok: false, output: `could not move ${root} aside: ${errorMessage(error)}` });
     return;
   }
   try {
@@ -79,7 +80,7 @@ function main(): void {
       fs.cpSync(staged, root, { recursive: true, verbatimSymlinks: true });
     }
   } catch (error) {
-    let output = `could not put ${version} in place: ${String(error)}`;
+    let output = `could not put ${version} in place: ${errorMessage(error)}`;
     // Retried, never blocking the result: a scanner holding a copied file must not hide the failure.
     try {
       retried(() => fs.rmSync(root, { recursive: true, force: true }));

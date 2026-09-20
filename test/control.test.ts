@@ -364,6 +364,25 @@ describe("tet-ctl against the control server", () => {
     assert.equal(JSON.parse(await post("null")).error.code, "bad_args");
   });
 
+  it("refuses a request past the cap instead of holding it, token or not", async () => {
+    // The token is only checked once the body is whole, so the cap is what stands between an
+    // unauthenticated caller and this process's memory.
+    for (const token of [TOKEN, "wrong"]) {
+      const body = await post(JSON.stringify({ token, verb: "version", args: { pad: "x".repeat(2 * 1024 * 1024) }, caller: {} }));
+      const answer = JSON.parse(body) as { error: { code: string; message: string } };
+      assert.equal(answer.error.code, "bad_args", token);
+      assert.match(answer.error.message, /longer than/);
+    }
+    // Still answering afterwards.
+    assert.equal(JSON.parse(await post("null")).error.code, "bad_args");
+  });
+
+  it("takes a request just under the cap", async () => {
+    const pad = "x".repeat(900 * 1024);
+    const answer = JSON.parse(await post(JSON.stringify({ token: TOKEN, verb: "version", args: { pad }, caller: {} })));
+    assert.equal(answer.ok, true, "a long but legitimate request is answered");
+  });
+
   it("reports the version", async () => {
     assert.deepEqual((await tetCtl(["version"])).result, { version: "1.2.3", pid: 4242 });
   });

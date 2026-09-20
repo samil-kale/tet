@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { net, shell } from "electron";
 import { ipcMain } from "electron";
+import { errorMessage } from "../../shared/errors";
 import { repositoryRelative } from "../path-inside";
 import { isExecutableFile, isOpenableUrl } from "../shell-open";
 import type { IpcDeps } from "./deps";
@@ -11,6 +12,42 @@ import type { IpcDeps } from "./deps";
  *  and a badge service that hangs is given up on. */
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const FETCH_IMAGE_TIMEOUT_MS = 15_000;
+/** As many hops as a badge service needs; past that it is a loop, not a move. */
+const MAX_IMAGE_REDIRECTS = 5;
+
+/** What `fetchHttpsImage` sends a request with; `net.fetch` in the app, a stand-in in the tests. */
+type FetchLike = (url: string, init: { signal: AbortSignal; redirect: "manual" }) => Promise<Response>;
+
+/**
+ * Fetches `url` with every hop checked to be https, the whole chain under one timeout. Undefined
+ * as soon as a hop is not https, names no location, or the chain runs long — a README's image must
+ * not become a request to another scheme or to a host behind the machine.
+ */
+export async function fetchHttpsImage(url: string, fetchFn: FetchLike = net.fetch): Promise<Response | undefined> {
+  const signal = AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS);
+  // A relative location resolves against the hop that sent it; undefined where it is no URL at all.
+  const resolve = (value: string, base?: string): string | undefined => {
+    try {
+      const resolved = new URL(value, base);
+      // A `javascript:` or `data:` location resolves to itself and is refused here, like `http:`.
+      return resolved.protocol === "https:" ? resolved.href : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  let target = resolve(url);
+  for (let hop = 0; target !== undefined && hop <= MAX_IMAGE_REDIRECTS; hop++) {
+    const response = await fetchFn(target, { signal, redirect: "manual" });
+    // 3xx without a location is not a redirect; anything else is the answer.
+    const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+    if (location === null) {
+      return response;
+    }
+    target = resolve(location, target);
+  }
+  return undefined;
+}
 
 /** What tet hands to the OS: links, files and folders. */
 export function registerShellIpc({
@@ -25,7 +62,7 @@ export function registerShellIpc({
     try {
       await shell.openExternal(url);
     } catch (error) {
-      send("app:notice", { severity: "error", message: `Could not open URL: ${url} (${String(error)})` });
+      send("app:notice", { severity: "error", message: `Could not open URL: ${url} (${errorMessage(error)})` });
     }
   });
 
@@ -33,13 +70,18 @@ export function registerShellIpc({
    * A Markdown preview's web image as a data URL, fetched here so the page's CSP keeps it off the
    * network; null for anything that isn't an https image within the cap. `net.fetch` for the
    * machine's proxy and certificates, as `providers/provider.ts`.
+   *
+   * Redirects are followed by hand (`fetchHttpsImage`): a followed one is a fetch of its own, and
+   * left to `net.fetch` it would carry a README's image off https and onto whatever host the
+   * redirect names — the machine's own network included, which is what fetching here instead of
+   * in the page was meant to prevent.
    */
   ipcMain.handle("shell:fetch-image", async (_event, url: string): Promise<string | null> => {
     try {
-      if (new URL(url).protocol !== "https:") {
+      const response = await fetchHttpsImage(url);
+      if (!response) {
         return null;
       }
-      const response = await net.fetch(url, { signal: AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS) });
       const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
       if (!response.ok || !type.startsWith("image/") || !response.body) {
         return null;

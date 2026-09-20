@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import { getAgent } from "../agents";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
+import { errorMessage } from "../../shared/errors";
 import type { GitActionResult, SbxPath, SbxProjectConfig, SbxStatus } from "../../shared/types";
 import {
   cancelSbxSetup,
@@ -73,7 +74,7 @@ export function registerSbxIpc({
         return { ok: true };
       } catch (error) {
         sbxSecrets.restore(project.id, stored);
-        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        return { ok: false, error: errorMessage(error) };
       }
     }
   );

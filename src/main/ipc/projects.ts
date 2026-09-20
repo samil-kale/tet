@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { dialog, ipcMain } from "electron";
+import { errorMessage } from "../../shared/errors";
 import type {
   AddAccountResult,
   AddRepositoryResult,
@@ -79,7 +80,7 @@ export function registerProjectsIpc({
       }
     } catch (error) {
       // The git process died mid-command.
-      return { error: error instanceof Error ? error.message : String(error) };
+      return { error: errorMessage(error) };
     }
     const project = store.add(directory);
     openProject(project);
@@ -117,7 +118,7 @@ export function registerProjectsIpc({
         const user = await PROVIDERS[provider].validate(bare, token);
         return { account: accounts.add(provider, bare, user, token) };
       } catch (error) {
-        return { error: error instanceof Error ? error.message : String(error) };
+        return { error: errorMessage(error) };
       }
     }
   );
@@ -137,7 +138,7 @@ export function registerProjectsIpc({
     try {
       return { repos: await PROVIDERS[account.provider].listRepositories(account.host, token) };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+      return { error: errorMessage(error) };
     }
   });
 

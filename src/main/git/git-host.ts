@@ -1,4 +1,5 @@
 import * as git from "./git";
+import { errorMessage } from "../../shared/errors";
 
 /**
  * The git process: all of `git.ts` runs here, in its own `utilityProcess`; the main process sends
@@ -34,7 +35,7 @@ process.parentPort.on("message", (event) => {
       respond({ id, value: await call(...args) });
     } catch (error) {
       // An Error doesn't survive a structured clone, so only its message crosses.
-      respond({ id, error: error instanceof Error ? error.message : String(error) });
+      respond({ id, error: errorMessage(error) });
     }
   })();
 });

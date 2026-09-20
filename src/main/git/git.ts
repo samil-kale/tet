@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
+import { errorMessage } from "../../shared/errors";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
 import type {
   BranchUpstream,
@@ -505,7 +506,7 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
     ]);
     return { ...status, ...refs, stashes, operation, worktrees };
   } catch (error) {
-    return { ...EMPTY_REPOSITORY_STATE, error: error instanceof Error ? error.message : String(error) };
+    return { ...EMPTY_REPOSITORY_STATE, error: errorMessage(error) };
   }
 }
 
@@ -524,7 +525,7 @@ async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout
       .trim();
     return { ok: false, error: message };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: errorMessage(error) };
   }
 }
 
@@ -1055,7 +1056,7 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
     await fs.appendFile(file, `${separator}${rule}${newline}`, "utf8");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: errorMessage(error) };
   }
 }
 

@@ -150,7 +150,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
 
   useEffect(() => {
     void setup();
-    // Once; "Check again" reruns it.
+    // Once; "Check again" reruns it. `setup` is remade every render, so naming it would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Stores typed secret values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
@@ -181,6 +182,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
         return { ...entry, disabled, mark };
       }),
+    // `marks` itself is rebuilt every render (tabMarks); its three fields are all of it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [enabled, locked, organization, marks.ports, marks.paths, marks.secrets]
   );
 

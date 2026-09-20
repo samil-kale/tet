@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { IPty } from "node-pty";
 import type { TerminalStatus } from "../../shared/types";
-import { resolveCommand, spawnAgentProcess } from "./pty";
+import { killProcessTree, resolveCommand, spawnAgentProcess } from "./pty";
 import { timeStartup } from "../event-loop-monitor";
 
 export interface SessionCallbacks {
@@ -38,24 +38,48 @@ function exitedWithin(exited: Promise<void>, ms: number): Promise<boolean> {
 /** The last answer per executable — a program installed while tet runs is not on its PATH anyway. */
 const installedChecks = new Map<string, Promise<boolean>>();
 
-/** Always spawns (the requirements re-check needs that) and remembers the answer. */
+/**
+ * How long a version check may take before the program counts as missing. This runs before the
+ * workspace opens (requirements.ts), so a check that never ends holds the whole start: generous
+ * enough for a cold cmd.exe shim behind an antivirus scan, short enough to be a wait and not a
+ * hang. Whatever it kills is reported as not installed — the tab then offers Restart, where a
+ * start that hangs forever offers nothing.
+ */
+const VERSION_CHECK_TIMEOUT_MS = 10_000;
+
+/**
+ * Always spawns (the requirements re-check needs that) and remembers the answer.
+ *
+ * stdin is closed, as at every other spawn here: with the default pipe it stays open, and a
+ * `--version` that reads a line (an interactive shim, a login prompt, cmd.exe's "Terminate batch
+ * job (Y/N)?") waits for input nobody sends. stdout and stderr are ignored rather than piped —
+ * nothing reads them, and an unread pipe fills and blocks the program it was meant to measure.
+ */
 export function checkAgentInstalled(executable: string, versionArgs: string[], cwd: string): Promise<boolean> {
   const check = new Promise<boolean>((resolve) => {
     const command = resolveCommand(executable, versionArgs);
-    const process = spawn(command.command, command.args, {
+    const child = spawn(command.command, command.args, {
       cwd,
       windowsHide: true,
-      windowsVerbatimArguments: command.windowsVerbatimArguments
+      windowsVerbatimArguments: command.windowsVerbatimArguments,
+      stdio: ["ignore", "ignore", "ignore"]
     });
     let resolved = false;
     const finish = (installed: boolean) => {
       if (!resolved) {
         resolved = true;
+        clearTimeout(timer);
         resolve(installed);
       }
     };
-    process.on("error", () => finish(false));
-    process.on("exit", (code) => finish(code === 0));
+    // With its children: on win32 the program sits behind a cmd.exe that `kill()` alone would leave
+    // it running under (killProcessTree).
+    const timer = setTimeout(() => {
+      killProcessTree(child);
+      finish(false);
+    }, VERSION_CHECK_TIMEOUT_MS);
+    child.on("error", () => finish(false));
+    child.on("exit", (code) => finish(code === 0));
   });
   installedChecks.set(`${executable}\0${versionArgs.join("\0")}`, check);
   return check;

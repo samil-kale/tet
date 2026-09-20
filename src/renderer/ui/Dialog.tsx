@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DialogFrame } from "./DialogFrame";
 import { Checkbox, Field, TextField } from "./Field";
 import { SparkleIcon, SpinnerIcon } from "./icons";
 import { notify } from "./Notices";
+import { createStore, useStore } from "./store";
+import { errorMessage } from "../../shared/errors";
 
 export interface ConfirmOptions {
   title: string;
@@ -87,32 +89,24 @@ type Pending =
  * happens: a tab is too narrow to name inline, and a commit-on-blur field loses typing to a stray
  * click.
  */
-let pending: Pending | null = null;
-const listeners = new Set<() => void>();
-
-function publish(next: Pending | null): void {
-  pending = next;
-  for (const listener of listeners) {
-    listener();
-  }
-}
+const pending = createStore<Pending | null>(null);
 
 /** One at a time: the overlay swallows the clicks that could start a second question. */
 function ask<T>(build: (answer: (value: T) => void) => Pending, cancelled: T): Promise<T> {
-  if (pending) {
+  if (pending.get()) {
     return Promise.resolve(cancelled);
   }
   return new Promise((resolve) => {
     // Answered once: a second call (an Escape between the click and the listener's removal) would
     // clear whatever dialog is up by then, possibly the next one.
     let answered = false;
-    publish(
+    pending.set(
       build((value) => {
         if (answered) {
           return;
         }
         answered = true;
-        publish(null);
+        pending.set(null);
         resolve(value);
       })
     );
@@ -129,11 +123,6 @@ export function confirm(options: ConfirmOptions): Promise<ConfirmAnswer> {
 /** Resolves to what the user typed, or null when they cancelled. */
 export function prompt(options: PromptOptions): Promise<PromptAnswer | null> {
   return ask<PromptAnswer | null>((answer) => ({ kind: "prompt", ...options, answer }), null);
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
 }
 
 interface FrameProps {
@@ -266,7 +255,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
         });
       }
     } catch (error) {
-      notify("error", `Could not suggest a value: ${String(error)}`);
+      notify("error", `Could not suggest a value: ${errorMessage(error)}`);
     } finally {
       setSuggesting(false);
     }
@@ -359,7 +348,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
 
 /** Mounted once, next to `Notices`. */
 export function Dialogs() {
-  const dialog = useSyncExternalStore(subscribe, () => pending);
+  const dialog = useStore(pending);
 
   useEffect(() => {
     if (!dialog) {

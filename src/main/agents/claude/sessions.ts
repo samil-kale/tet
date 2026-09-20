@@ -1,9 +1,19 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { findEncodedDir, forgetMissing, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
+import {
+  findEncodedDir,
+  forgetMissing,
+  nonEmptyString,
+  parseLine,
+  readHeadLines,
+  requireTitle,
+  scanTranscriptTail,
+  timestampOf,
+  TRANSCRIPT_SCAN_BYTES,
+  truncateTitle
+} from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
@@ -56,23 +66,24 @@ async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
       return [];
     }
     const files = (await fs.promises.readdir(projectDir)).filter((file) => file.endsWith(".jsonl"));
-    forgetMissing(projectDir, files, [headCache, scanCache, createdAtCache]);
+    forgetMissing(
+      projectDir,
+      files.map((file) => path.join(projectDir, file)),
+      [headCache, scanCache]
+    );
     const entries = await Promise.all(
       files.map(async (file) => {
         const id = file.slice(0, -".jsonl".length);
         const filePath = path.join(projectDir, file);
-        const [tail, stat, createdAt] = await Promise.all([
-          scanTail(filePath, id),
-          fs.promises.stat(filePath),
-          extractCreatedAt(filePath)
-        ]);
-        const { title, provisional } = await extractTitle(filePath, stat.size, tail);
+        const [tail, stat] = await Promise.all([scanTail(filePath, id), fs.promises.stat(filePath)]);
+        const head = await scanHead(filePath, stat.size);
+        const { title, provisional } = resolveTitle(head, tail);
         return {
           id,
           title,
           updatedAt: stat.mtimeMs,
           provisionalTitle: provisional,
-          createdAt: createdAt ?? stat.mtimeMs,
+          createdAt: head.createdAt ?? stat.mtimeMs,
           turnEndedAt: tail.turnEndedAt
         };
       })
@@ -98,15 +109,11 @@ async function removeIn(root: string, cwd: string, sessionId: string): Promise<v
   await fs.promises.rm(path.join(projectDir, sessionId), { recursive: true, force: true });
   scanCache.delete(filePath);
   headCache.delete(filePath);
-  createdAtCache.delete(filePath);
 }
 
 /** Mirrors Claude Code's `/rename`: a `custom-title` entry, which outranks every derived title. */
 async function renameIn(root: string, cwd: string, sessionId: string, title: string): Promise<void> {
-  const trimmed = title.trim();
-  if (!trimmed) {
-    throw new Error("title must be non-empty");
-  }
+  const trimmed = requireTitle(title);
   const projectDir = await findProjectDir(root, cwd);
   if (!projectDir) {
     throw new Error("Claude project directory not found");
@@ -124,8 +131,6 @@ function findProjectDir(root: string, cwd: string): Promise<string | undefined> 
   return findEncodedDir(root, cwd.replace(/[^a-zA-Z0-9]/g, "-"));
 }
 
-const TITLE_SCAN_BYTE_LIMIT = 256 * 1024;
-
 interface ResolvedTitle {
   title: string;
   /** No name assigned yet — `title` is the first prompt. */
@@ -138,11 +143,10 @@ interface ResolvedTitle {
  *  "summary" (only after `/compact`); else the first typed prompt; else "".
  *
  *  Change with care: a regression silently shows the wrong tab title. */
-async function extractTitle(filePath: string, size: number, tail: TranscriptTail): Promise<ResolvedTitle> {
+function resolveTitle(head: TranscriptHead, tail: TranscriptTail): ResolvedTitle {
   if (tail.customTitle) {
     return { title: truncateTitle(tail.customTitle), provisional: false };
   }
-  const head = await scanHead(filePath, size);
   // The tail's are the file's last and outrank the head's: a resume appends a fresh ai-title,
   // and a long session's lies past the window.
   const assigned = tail.agentName ?? head.agentName ?? tail.aiTitle ?? head.aiTitle ?? head.summary;
@@ -150,12 +154,14 @@ async function extractTitle(filePath: string, size: number, tail: TranscriptTail
   return { title: title ? truncateTitle(title) : "", provisional: assigned === undefined };
 }
 
-/** The title sources found in a transcript's head window. */
+/** What a transcript's head window says: the title sources, and when the session began. */
 interface TranscriptHead {
   agentName?: string;
   aiTitle?: string;
   summary?: string;
   firstPrompt?: string;
+  /** The first timestamped entry, steadier than mtime. */
+  createdAt?: number;
 }
 
 /** The last head scan per path (a listing scans every session on any change). Keyed by how much of
@@ -165,90 +171,48 @@ const headCache = new Map<string, { size: number; head: TranscriptHead }>();
 /** Only lines naming one of these are parsed — most of a transcript is not. */
 const HEAD_ENTRY_TYPES = ['"agent-name"', '"ai-title"', '"summary"'];
 
+/**
+ * Read for every listed session, whatever `resolveTitle` ends up using: a renamed session still
+ * needs its `createdAt`, which is why this is not folded into the title rules.
+ */
 async function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead> {
-  const size = Math.min(fileSize, TITLE_SCAN_BYTE_LIMIT);
+  const size = Math.min(fileSize, TRANSCRIPT_SCAN_BYTES);
   const cached = headCache.get(filePath);
   if (cached?.size === size) {
     return cached.head;
   }
-  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: TITLE_SCAN_BYTE_LIMIT });
-  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
   const head: TranscriptHead = {};
-  try {
-    for await (const line of lines) {
-      // Only the first `user` entry; later ones (mostly tool results) go unparsed.
-      const wanted =
-        HEAD_ENTRY_TYPES.some((type) => line.includes(type)) ||
-        (head.firstPrompt === undefined && line.includes('"user"'));
-      if (!wanted) {
-        continue;
-      }
-      let entry: Record<string, unknown>;
-      try {
-        entry = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      // agent-name/ai-title keep the last occurrence, summary and prompt the first; an empty
-      // value never displaces one.
-      if (entry.type === "agent-name") {
-        head.agentName = nonEmptyString(entry.agentName) ?? head.agentName;
-      } else if (entry.type === "ai-title") {
-        head.aiTitle = nonEmptyString(entry.aiTitle) ?? head.aiTitle;
-      } else if (entry.type === "summary") {
-        head.summary ??= nonEmptyString(entry.summary);
-      } else if (head.firstPrompt === undefined && entry.type === "user") {
-        // Truncated right away: a pasted prompt can be long.
-        const prompt = typedPromptText(entry);
-        head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
-      }
+  const read = await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, "claude", (line) => {
+    // Every line until the first timestamp is found — it can sit on an entry of any type — then
+    // only the few naming a title, and the first `user` entry (later ones are mostly tool results).
+    const wanted =
+      head.createdAt === undefined ||
+      HEAD_ENTRY_TYPES.some((type) => line.includes(type)) ||
+      (head.firstPrompt === undefined && line.includes('"user"'));
+    const entry = wanted ? parseLine(line) : undefined;
+    if (!entry) {
+      return false;
     }
+    head.createdAt ??= timestampOf(entry.timestamp);
+    // agent-name/ai-title keep the last occurrence, summary and prompt the first; an empty
+    // value never displaces one.
+    if (entry.type === "agent-name") {
+      head.agentName = nonEmptyString(entry.agentName) ?? head.agentName;
+    } else if (entry.type === "ai-title") {
+      head.aiTitle = nonEmptyString(entry.aiTitle) ?? head.aiTitle;
+    } else if (entry.type === "summary") {
+      head.summary ??= nonEmptyString(entry.summary);
+    } else if (head.firstPrompt === undefined && entry.type === "user") {
+      // Truncated right away: a pasted prompt can be long.
+      const prompt = typedPromptText(entry);
+      head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
+    }
+    return false;
+  });
+  if (read) {
     headCache.set(filePath, { size, head });
-  } catch (error) {
-    console.error("[tet] claude title extraction failed:", error);
-  } finally {
-    lines.close();
-    stream.destroy();
   }
   return head;
-}
-
-/** A transcript's first timestamp never changes, so it is read once per path. */
-const createdAtCache = new Map<string, number>();
-
-/** The first timestamped entry, steadier than mtime. Not part of extractTitle's scan, which
- *  returns early on a custom-title and would leave renamed sessions without one. */
-async function extractCreatedAt(filePath: string): Promise<number | undefined> {
-  const cached = createdAtCache.get(filePath);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: TITLE_SCAN_BYTE_LIMIT });
-  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
-  try {
-    for await (const line of lines) {
-      let entry: Record<string, unknown>;
-      try {
-        entry = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      const timestamp = nonEmptyString(entry.timestamp);
-      if (timestamp) {
-        const ms = Date.parse(timestamp);
-        if (!Number.isNaN(ms)) {
-          createdAtCache.set(filePath, ms);
-          return ms;
-        }
-      }
-    }
-  } catch (error) {
-    console.error("[tet] claude createdAt extraction failed:", error);
-  } finally {
-    lines.close();
-    stream.destroy();
-  }
-  return undefined;
 }
 
 /** Most `user` entries are tool results; only `origin.kind === "human"` ones are typed prompts. */
@@ -322,10 +286,8 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
     if (!TAIL_ENTRY_TYPES.some((type) => line.includes(type))) {
       continue;
     }
-    let entry: Record<string, unknown>;
-    try {
-      entry = JSON.parse(line) as Record<string, unknown>;
-    } catch {
+    const entry = parseLine(line);
+    if (!entry) {
       continue;
     }
     // A pending turn_duration is resolved by the next *turn* entry below it: its parent
@@ -362,9 +324,9 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
       // for, so this must not end the turn either.
       !(typeof entry.pendingBackgroundAgentCount === "number" && entry.pendingBackgroundAgentCount > 0)
     ) {
-      const ms = Date.parse(nonEmptyString(entry.timestamp) ?? "");
+      const ms = timestampOf(entry.timestamp);
       const parentUuid = nonEmptyString(entry.parentUuid);
-      if (Number.isNaN(ms) || parentUuid === undefined) {
+      if (ms === undefined || parentUuid === undefined) {
         // Can't be matched to a Stop hook summary — nothing to report.
         tail.turnEndResolved = true;
       } else {
@@ -372,8 +334,8 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
       }
     } else if (tail.turnEndResolved === undefined && tail.pendingTurnEnd === undefined && isInterruptEntry(entry)) {
       // A turn cut short without a turn_duration of its own.
-      const ms = Date.parse(nonEmptyString(entry.timestamp) ?? "");
-      if (!Number.isNaN(ms)) {
+      const ms = timestampOf(entry.timestamp);
+      if (ms !== undefined) {
         tail.turnEndedAt = ms;
       }
       tail.turnEndResolved = true;
@@ -390,7 +352,7 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
  *  turns cut short, an interrupt entry (isInterruptEntry); sidechain entries are subagent turns. */
 function scanTail(filePath: string, sessionId: string): Promise<TranscriptTail> {
   return scanTranscriptTail(filePath, scanCache, {
-    byteLimit: TITLE_SCAN_BYTE_LIMIT,
+    byteLimit: TRANSCRIPT_SCAN_BYTES,
     label: "claude",
     create: (): TranscriptTail => ({}),
     read: (lines, tail) => {

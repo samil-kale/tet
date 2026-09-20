@@ -2,9 +2,19 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { findEncodedDir, forgetMissing, nonEmptyString, scanTranscriptTail, truncateTitle } from "../transcript";
+import {
+  findEncodedDir,
+  forgetMissing,
+  nonEmptyString,
+  parseLine,
+  readHeadLines,
+  requireTitle,
+  scanTranscriptTail,
+  timestampOf,
+  TRANSCRIPT_SCAN_BYTES,
+  truncateTitle
+} from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
@@ -68,7 +78,11 @@ async function listIn(root: string, cwd: string, paths = path): Promise<AgentSes
       return [];
     }
     const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
-    forgetMissing(dir, files, [headCache, scanCache]);
+    forgetMissing(
+      dir,
+      files.map((file) => path.join(dir, file)),
+      [headCache, scanCache]
+    );
     const entries = await Promise.all(
       files.map(async (file): Promise<AgentSessionInfo | undefined> => {
         const filePath = path.join(dir, file);
@@ -120,10 +134,7 @@ async function removeIn(root: string, cwd: string, sessionId: string, paths = pa
  * valid); a running pi shows the name only after a restart.
  */
 async function renameIn(root: string, cwd: string, sessionId: string, title: string, paths = path): Promise<void> {
-  const trimmed = title.trim();
-  if (!trimmed) {
-    throw new Error("title must be non-empty");
-  }
+  const trimmed = requireTitle(title);
   const dir = await findSessionDir(root, cwd, paths);
   if (!dir) {
     throw new Error("pi session directory not found");
@@ -135,10 +146,8 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   // The whole file: the new id must be unique across it (pi keys its tree by id); renames are rare.
   const text = await fs.promises.readFile(filePath, "utf8");
   const lines = text.split("\n").filter((line) => line.trim() !== "");
-  let last: Record<string, unknown>;
-  try {
-    last = JSON.parse(lines[lines.length - 1] ?? "") as Record<string, unknown>;
-  } catch {
+  const last = parseLine(lines[lines.length - 1] ?? "");
+  if (!last) {
     throw new Error("pi transcript is not readable");
   }
   // An entry right after the header is a root (parentId null), as pi writes its first entry.
@@ -206,57 +215,46 @@ interface TranscriptHead {
   firstPrompt?: string;
 }
 
-/** pi's own picker reads the whole file; the head needs only the start. */
-const HEAD_SCAN_BYTE_LIMIT = 256 * 1024;
-
-/** Keyed by how much of the window the file fills: only the first HEAD_SCAN_BYTE_LIMIT bytes of an
+/** Keyed by how much of the window the file fills: only the first TRANSCRIPT_SCAN_BYTES of an
  *  append-only file are read. */
 const headCache = new Map<string, { size: number; head: TranscriptHead }>();
 
 /** Undefined for a `.jsonl` that is not a pi transcript. */
 async function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead | undefined> {
-  const size = Math.min(fileSize, HEAD_SCAN_BYTE_LIMIT);
+  const size = Math.min(fileSize, TRANSCRIPT_SCAN_BYTES);
   const cached = headCache.get(filePath);
   if (cached?.size === size) {
     return cached.head;
   }
-  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: HEAD_SCAN_BYTE_LIMIT });
-  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
   let head: TranscriptHead | undefined;
-  try {
-    for await (const line of lines) {
-      if (!head) {
-        // Like pi's listing, skip a file whose first line is not a header.
-        const header = parseLine(line);
-        const id = header?.type === "session" ? nonEmptyString(header.id) : undefined;
-        if (id === undefined) {
-          return undefined;
-        }
-        const createdAt = Date.parse(nonEmptyString(header?.timestamp) ?? "");
-        head = { id, createdAt: Number.isNaN(createdAt) ? undefined : createdAt };
-        continue;
+  const read = await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, "pi", (line) => {
+    const found = head;
+    if (!found) {
+      // Like pi's listing, skip a file whose first line is not a header.
+      const header = parseLine(line);
+      const id = header?.type === "session" ? nonEmptyString(header.id) : undefined;
+      if (id === undefined) {
+        return true;
       }
-      // Only the first user message; other lines go unparsed.
-      if (!line.includes('"user"')) {
-        continue;
-      }
-      const entry = parseLine(line);
-      const message = entry?.type === "message" ? (entry.message as Record<string, unknown> | undefined) : undefined;
-      if (message?.role === "user") {
-        const prompt = messageText(message.content);
-        head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
-        break;
-      }
+      head = { id, createdAt: timestampOf(header?.timestamp) };
+      return false;
     }
-    // No prompt yet: cache only once the window is full, since the file can still grow one.
-    if (head && (head.firstPrompt !== undefined || size >= HEAD_SCAN_BYTE_LIMIT)) {
-      headCache.set(filePath, { size, head });
+    // Only the first user message; other lines go unparsed.
+    if (!line.includes('"user"')) {
+      return false;
     }
-  } catch (error) {
-    console.error("[tet] pi title extraction failed:", error);
-  } finally {
-    lines.close();
-    stream.destroy();
+    const entry = parseLine(line);
+    const message = entry?.type === "message" ? (entry.message as Record<string, unknown> | undefined) : undefined;
+    if (message?.role !== "user") {
+      return false;
+    }
+    const prompt = messageText(message.content);
+    found.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
+    return true;
+  });
+  // No prompt yet: cache only once the window is full, since the file can still grow one.
+  if (read && head && (head.firstPrompt !== undefined || size >= TRANSCRIPT_SCAN_BYTES)) {
+    headCache.set(filePath, { size, head });
   }
   return head;
 }
@@ -275,15 +273,6 @@ function messageText(content: unknown): string | undefined {
   return texts.length > 0 ? texts.join(" ") : undefined;
 }
 
-function parseLine(line: string): Record<string, unknown> | undefined {
-  try {
-    const parsed: unknown = JSON.parse(line);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 interface TranscriptTail {
   /** The last session_info's name, trimmed; "" clears it (pi reads `entry.name?.trim() || undefined`). */
   name?: string;
@@ -292,8 +281,6 @@ interface TranscriptTail {
    *  getMessageActivityTime reads it. */
   turnEndedAt?: number;
 }
-
-const TAIL_SCAN_BYTE_LIMIT = 256 * 1024;
 
 /** Only lines naming one of these are parsed — most of a transcript is tool output. */
 const TAIL_ENTRY_TYPES = ['"session_info"', '"assistant"'];
@@ -307,7 +294,7 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
  */
 function scanTail(filePath: string): Promise<TranscriptTail> {
   return scanTranscriptTail(filePath, scanCache, {
-    byteLimit: TAIL_SCAN_BYTE_LIMIT,
+    byteLimit: TRANSCRIPT_SCAN_BYTES,
     label: "pi",
     create: (): TranscriptTail => ({}),
     read: (lines, tail) => {
@@ -339,8 +326,8 @@ function readTailEntries(lines: string[], tail: TranscriptTail): void {
       if (message?.role !== "assistant" || message.stopReason === "toolUse") {
         continue;
       }
-      const ms = typeof message.timestamp === "number" ? message.timestamp : Date.parse(nonEmptyString(entry.timestamp) ?? "");
-      if (Number.isFinite(ms)) {
+      const ms = typeof message.timestamp === "number" ? message.timestamp : timestampOf(entry.timestamp);
+      if (ms !== undefined && Number.isFinite(ms)) {
         tail.turnEndedAt = ms;
       }
     }

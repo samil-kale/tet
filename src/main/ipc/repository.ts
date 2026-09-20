@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import { AGENTS, findAskableAgent } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
+import { errorMessage } from "../../shared/errors";
 import type {
   CheckoutTarget,
   ExplorerListing,
@@ -105,7 +106,7 @@ export function registerRepositoryIpc({
       }
       return message;
     } catch (error) {
-      send("app:notice", { severity: "error", message: `Could not suggest a commit message: ${String(error)}` });
+      send("app:notice", { severity: "error", message: `Could not suggest a commit message: ${errorMessage(error)}` });
       return "";
     } finally {
       await agent.cleanupAsk?.(executable, project.path).catch(() => undefined);

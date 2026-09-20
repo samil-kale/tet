@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { refName, upstreamName, worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
@@ -103,7 +103,9 @@ export const BranchTree = memo(function BranchTree({
   const [menu, setMenu] = useState<BranchMenu | null>(null);
 
   const query = filter.trim().toLowerCase();
-  const matches = (name: string): boolean => name.toLowerCase().includes(query);
+  // Memoized so the lists below can name it as their dependency: it reads `query` and nothing else,
+  // and naming the query instead would hide a second source added here later.
+  const matches = useCallback((name: string): boolean => name.toLowerCase().includes(query), [query]);
 
   // The linked ones alone: the main worktree is the repository itself, not one made from it. A
   // linked worktree and its branch are one (projects.ts), listed under WORKTREES only.
@@ -112,16 +114,16 @@ export const BranchTree = memo(function BranchTree({
     () => state.localBranches.filter((name) => !linkedWorktrees.some((worktree) => worktree.branch === name)),
     [state.localBranches, linkedWorktrees]
   );
-  const localBranches = useMemo(() => ownBranches.filter(matches), [ownBranches, query]);
+  const localBranches = useMemo(() => ownBranches.filter(matches), [ownBranches, matches]);
   const remotes = useMemo(
     () => state.remotes.map((remote) => ({ ...remote, branches: remote.branches.filter(matches) })),
-    [state.remotes, query]
+    [state.remotes, matches]
   );
   // The filter reads as "find a ref", so it covers tags and worktrees too.
-  const tags = useMemo(() => state.tags.filter(matches), [state.tags, query]);
+  const tags = useMemo(() => state.tags.filter(matches), [state.tags, matches]);
   const worktrees = useMemo(
     () => linkedWorktrees.filter((worktree) => matches(worktreeName(worktree))),
-    [linkedWorktrees, query]
+    [linkedWorktrees, matches]
   );
   /** A linked worktree keeps its branch: nothing here switches it (projects.ts couples the two). */
   const inWorktree = linkedWorktrees.some((worktree) => worktree.current);

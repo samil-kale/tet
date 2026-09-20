@@ -1,4 +1,5 @@
 import * as http from "node:http";
+import { errorMessage } from "../shared/errors";
 import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_GROUPS, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
 
@@ -241,7 +242,7 @@ async function main(): Promise<void> {
     if (quiet) {
       return;
     }
-    fail(`could not reach TET: ${error instanceof Error ? error.message : String(error)}`, EXIT_CODES.internal);
+    fail(`could not reach TET: ${errorMessage(error)}`, EXIT_CODES.internal);
   }
   if (!response.ok) {
     if (quiet) {

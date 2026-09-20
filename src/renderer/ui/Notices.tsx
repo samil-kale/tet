@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from "react";
 import type { NoticeSeverity } from "../../shared/types";
 import { SeverityIcon } from "./icons";
+import { createStore, useStore } from "./store";
 
 /** VS Code's durations (notificationsToasts.ts). */
 const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_000, error: 15_000 };
@@ -16,26 +16,18 @@ interface ShownNotice {
  * not a hook or prop, so anything anywhere can report without a threaded callback — modelled on
  * VS Code's `window.showErrorMessage`. The main process says things through `app:notice`.
  */
-let shown: ShownNotice[] = [];
-const listeners = new Set<() => void>();
+const shown = createStore<ShownNotice[]>([]);
 let nextId = 0;
 /** The notice under the pointer, kept while hovered. */
 let hovered: number | undefined;
 
-function publish(next: ShownNotice[]): void {
-  shown = next;
-  for (const listener of listeners) {
-    listener();
-  }
-}
-
 export function notify(severity: NoticeSeverity, message: string): void {
   const id = ++nextId;
   // An identical message already standing is dropped, not stacked.
-  if (shown.some((notice) => notice.message === message && notice.severity === severity)) {
+  if (shown.get().some((notice) => notice.message === message && notice.severity === severity)) {
     return;
   }
-  publish([...shown, { id, severity, message }]);
+  shown.set([...shown.get(), { id, severity, message }]);
   scheduleDismiss(id, severity);
   window.tet.app.reportNotice({ severity, message, at: Date.now() });
 }
@@ -46,7 +38,7 @@ export function notify(severity: NoticeSeverity, message: string): void {
  */
 function scheduleDismiss(id: number, severity: NoticeSeverity): void {
   setTimeout(() => {
-    if (!shown.some((notice) => notice.id === id)) {
+    if (!shown.get().some((notice) => notice.id === id)) {
       return;
     }
     if (hovered === id) {
@@ -64,17 +56,12 @@ function dismissNotice(id: number): void {
   if (hovered === id) {
     hovered = undefined;
   }
-  publish(shown.filter((notice) => notice.id !== id));
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+  shown.set(shown.get().filter((notice) => notice.id !== id));
 }
 
 /** Stacked in the bottom right corner, newest at the bottom, dismissed by a click. */
 export function Notices() {
-  const notices = useSyncExternalStore(subscribe, () => shown);
+  const notices = useStore(shown);
   if (notices.length === 0) {
     return null;
   }

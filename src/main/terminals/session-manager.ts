@@ -4,6 +4,7 @@ import { AGENTS, getAgent } from "../agents";
 
 import type { AgentDefinition, AgentPaths, AgentSessionInfo, SpawnPreparation } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
+import { errorMessage } from "../../shared/errors";
 import { CONTROL_ENV } from "../../shared/control";
 import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
@@ -449,6 +450,36 @@ export class ProjectSessionManager {
     return sandboxSessionDir(this.agentDirOf(agentId));
   }
 
+  /**
+   * A tab's session operations, bound to wherever that session lives: the sandbox's mounted root
+   * and the path the agent sees inside it (SessionProvider.sandbox), or the host's repository.
+   * Answered once, so no caller can pair a sandboxed session with the host's arguments — the two
+   * providers take different ones. Undefined for an agent keeping no sessions (the shell).
+   */
+  private sessionActions(
+    tab: TabState,
+    runtime: AgentRuntime
+  ): { remove: (sessionId: string) => Promise<void>; rename: (sessionId: string, title: string) => Promise<void> } | undefined {
+    const { agent, executable } = runtime;
+    const sessions = agent.sessions;
+    if (!sessions) {
+      return undefined;
+    }
+    const sandbox = tab.sandbox ? sessions.sandbox : undefined;
+    if (!sandbox) {
+      return {
+        remove: (sessionId) => sessions.remove(executable, this.project.path, sessionId),
+        rename: (sessionId, title) => sessions.rename(executable, this.project.path, sessionId, title)
+      };
+    }
+    const root = this.sandboxSessionRoot(agent.id);
+    const cwd = toContainerPath(this.project.path);
+    return {
+      remove: (sessionId) => sandbox.remove(executable, root, cwd, sessionId),
+      rename: (sessionId, title) => sandbox.rename(executable, root, cwd, sessionId, title)
+    };
+  }
+
   private canStart(runtime: AgentRuntime): boolean {
     return runtime.startable && !runtime.prepareFailed;
   }
@@ -623,7 +654,7 @@ export class ProjectSessionManager {
       return true;
     } catch (error) {
       console.error("[tet] spawn preparation failed:", error);
-      this.callbacks.onNotice("error", `${agent.displayName} could not be started: ${String(error)}`);
+      this.callbacks.onNotice("error", `${agent.displayName} could not be started: ${errorMessage(error)}`);
       // A rerun keeps the earlier setup, which still starts the agent (themeChanged).
       runtime.prepareFailed = runtime.preparation === undefined;
       return false;
@@ -752,7 +783,7 @@ export class ProjectSessionManager {
         this.startSession(tab, sbxArgs).ensureStarted(dims.cols, dims.rows);
       })
       .catch((error: unknown) => {
-        this.callbacks.onNotice("error", `${getAgent(tab.agentId).displayName} could not be started: ${String(error)}`);
+        this.callbacks.onNotice("error", `${getAgent(tab.agentId).displayName} could not be started: ${errorMessage(error)}`);
         // Spawned nothing; `error` offers Restart, as above.
         if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
           tab.status = "error";
@@ -1066,7 +1097,7 @@ export class ProjectSessionManager {
     const session = this.sessions.get(tab.tabId);
     this.lastSizes.delete(tab.tabId);
     const runtime = this.runtimeFor(tab.agentId);
-    const { agent, executable } = runtime;
+    const { agent } = runtime;
     const detached = this.detachedTabs.includes(tab);
     try {
       if (session) {
@@ -1097,14 +1128,9 @@ export class ProjectSessionManager {
       if (session) {
         await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
       }
-      const sandbox = tab.sandbox ? agent.sessions.sandbox : undefined;
-      if (sandbox) {
-        await sandbox.remove(executable, this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path), sessionId);
-      } else {
-        await agent.sessions.remove(executable, this.project.path, sessionId);
-      }
+      await this.sessionActions(tab, runtime)?.remove(sessionId);
     } catch (error) {
-      this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${String(error)}`);
+      this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${errorMessage(error)}`);
       tab.status = "ready";
       this.tabs.splice(Math.min(index, this.tabs.length), 0, tab);
       this.postTabs();
@@ -1124,26 +1150,22 @@ export class ProjectSessionManager {
     if (!tab) {
       return undefined;
     }
-    const { agent, executable } = this.runtimeFor(tab.agentId);
+    const runtime = this.runtimeFor(tab.agentId);
+    const { agent } = runtime;
     if (!tab.sessionId || !agent.sessions) {
       this.postTabs();
       return undefined;
     }
     const previousTitle = tab.title;
     try {
-      const sandbox = tab.sandbox ? agent.sessions.sandbox : undefined;
-      if (sandbox) {
-        await sandbox.rename(executable, this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path), tab.sessionId, title);
-      } else {
-        await agent.sessions.rename(executable, this.project.path, tab.sessionId, title);
-      }
+      await this.sessionActions(tab, runtime)?.rename(tab.sessionId, title);
       tab.title = title.trim();
       // A name the user picked is final.
       tab.provisionalTitle = false;
     } catch (error) {
       tab.title = previousTitle;
       this.postTabs();
-      return `Could not rename ${agent.displayName} session: ${String(error)}`;
+      return `Could not rename ${agent.displayName} session: ${errorMessage(error)}`;
     }
     this.postTabs();
     return undefined;
@@ -1478,7 +1500,7 @@ export class SessionManagerRegistry {
     manager.setInFront(project.id === this.inFront.projectId ? this.inFront.tabIds : []);
     this.managers.set(project.id, manager);
     manager.bootstrap().catch((error: unknown) => {
-      this.callbacks.onNotice("error", `${project.name} could not be opened: ${String(error)}`);
+      this.callbacks.onNotice("error", `${project.name} could not be opened: ${errorMessage(error)}`);
     });
     return manager;
   }

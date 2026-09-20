@@ -1,9 +1,18 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as readline from "node:readline";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { nonEmptyString, readLinesBackwards, truncateTitle } from "../transcript";
+import {
+  forgetMissing,
+  nonEmptyString,
+  parseLine,
+  readHeadLines,
+  readLinesBackwards,
+  requireTitle,
+  timestampOf,
+  TRANSCRIPT_SCAN_BYTES,
+  truncateTitle
+} from "../transcript";
 import { deleteThread, renameThread } from "./app-server-client";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 import { mapLimited } from "../../map-limited";
@@ -21,12 +30,6 @@ function sessionsRoot(home: string): string {
 function sessionIndexFile(home: string): string {
   return path.join(home, "session_index.jsonl");
 }
-
-/** Bounds a pathological single line, as Claude's scan does. */
-const TAIL_SCAN_BYTE_LIMIT = 256 * 1024;
-/** `session_meta` is first but not small: it carries the whole base instructions (measured,
- *  0.14x), and a smaller budget cuts it short so no session lists. */
-const META_SCAN_BYTE_LIMIT = TAIL_SCAN_BYTE_LIMIT;
 
 interface SessionMeta {
   sessionId: string;
@@ -56,36 +59,19 @@ async function readSessionMeta(filePath: string): Promise<SessionMeta | undefine
 }
 
 async function parseSessionMeta(filePath: string): Promise<SessionMeta | undefined> {
-  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: META_SCAN_BYTE_LIMIT });
-  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
-  try {
-    for await (const line of lines) {
-      let entry: Record<string, unknown>;
-      try {
-        entry = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        return undefined;
-      }
-      if (entry.type !== "session_meta") {
-        return undefined;
-      }
-      const payload = entry.payload as Record<string, unknown> | undefined;
-      const sessionId = nonEmptyString(payload?.session_id);
-      const cwd = nonEmptyString(payload?.cwd);
-      const source = nonEmptyString(payload?.source);
-      if (!sessionId || !cwd) {
-        return undefined;
-      }
-      const createdAt = Date.parse(nonEmptyString(entry.timestamp) ?? "");
-      return { sessionId, cwd, source: source ?? "", createdAt: Number.isNaN(createdAt) ? undefined : createdAt };
+  let meta: SessionMeta | undefined;
+  await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, "codex", (line) => {
+    const entry = parseLine(line);
+    const payload = entry?.type === "session_meta" ? (entry.payload as Record<string, unknown> | undefined) : undefined;
+    const sessionId = nonEmptyString(payload?.session_id);
+    const cwd = nonEmptyString(payload?.cwd);
+    if (entry && sessionId && cwd) {
+      meta = { sessionId, cwd, source: nonEmptyString(payload?.source) ?? "", createdAt: timestampOf(entry.timestamp) };
     }
-  } catch (error) {
-    console.error("[tet] codex session_meta read failed:", error);
-  } finally {
-    lines.close();
-    stream.destroy();
-  }
-  return undefined;
+    // Only ever the first line: a rollout that does not open with a usable `session_meta` is none.
+    return true;
+  });
+  return meta;
 }
 
 /**
@@ -110,16 +96,14 @@ function readTurnEnd(lines: string[]): number | undefined {
     if (!TURN_END_TYPES.some((type) => line.includes(type))) {
       continue;
     }
-    let entry: Record<string, unknown>;
-    try {
-      entry = JSON.parse(line) as Record<string, unknown>;
-    } catch {
+    const entry = parseLine(line);
+    if (!entry) {
       continue;
     }
     const payload = entry.payload as Record<string, unknown> | undefined;
     if (payload?.type === "task_complete" || payload?.type === "turn_aborted") {
-      const ms = Date.parse(nonEmptyString(entry.timestamp) ?? "");
-      if (!Number.isNaN(ms)) {
+      const ms = timestampOf(entry.timestamp);
+      if (ms !== undefined) {
         return ms;
       }
     }
@@ -129,16 +113,14 @@ function readTurnEnd(lines: string[]): number | undefined {
 
 /** The first real prompt, read forwards: it follows Codex's injected context blocks. */
 async function readFirstPrompt(handle: fs.promises.FileHandle, size: number): Promise<string | undefined> {
-  const buffer = Buffer.alloc(Math.min(size, TAIL_SCAN_BYTE_LIMIT));
+  const buffer = Buffer.alloc(Math.min(size, TRANSCRIPT_SCAN_BYTES));
   await handle.read(buffer, 0, buffer.length, 0);
   for (const line of buffer.toString("utf8").split("\n")) {
     if (!PROMPT_TYPES.some((type) => line.includes(type))) {
       continue;
     }
-    let entry: Record<string, unknown>;
-    try {
-      entry = JSON.parse(line) as Record<string, unknown>;
-    } catch {
+    const entry = parseLine(line);
+    if (!entry) {
       continue;
     }
     const prompt = extractUserPrompt(entry);
@@ -180,8 +162,8 @@ async function scanTail(filePath: string): Promise<TailInfo> {
     // A written first prompt never changes; only a session without one looks again.
     tail.firstPrompt = cached?.tail.firstPrompt ?? (await readFirstPrompt(handle, size));
     const previous = cached && cached.size < size ? cached : undefined;
-    const floor = previous ? Math.max(0, previous.size - TAIL_SCAN_BYTE_LIMIT) : 0;
-    await readLinesBackwards(handle, size, floor, TAIL_SCAN_BYTE_LIMIT, (lines) => {
+    const floor = previous ? Math.max(0, previous.size - TRANSCRIPT_SCAN_BYTES) : 0;
+    await readLinesBackwards(handle, size, floor, TRANSCRIPT_SCAN_BYTES, (lines) => {
       tail.turnEndedAt = readTurnEnd(lines);
       return tail.turnEndedAt !== undefined;
     });
@@ -208,20 +190,16 @@ async function readSessionNames(home: string): Promise<Map<string, string>> {
     if (!line.trim()) {
       continue;
     }
-    try {
-      const entry = JSON.parse(line) as { id?: unknown; thread_name?: unknown };
-      const id = nonEmptyString(entry.id);
-      const name = nonEmptyString(entry.thread_name);
-      if (id) {
-        // Last entry wins: renames append, and clearing a name appends an entry without one.
-        if (name) {
-          names.set(id, name);
-        } else {
-          names.delete(id);
-        }
+    const entry = parseLine(line);
+    const id = nonEmptyString(entry?.id);
+    if (id) {
+      // Last entry wins: renames append, and clearing a name appends an entry without one.
+      const name = nonEmptyString(entry?.thread_name);
+      if (name) {
+        names.set(id, name);
+      } else {
+        names.delete(id);
       }
-    } catch {
-      continue;
     }
   }
   return names;
@@ -255,23 +233,6 @@ async function safeReaddir(dir: string): Promise<string[]> {
     return await fs.promises.readdir(dir);
   } catch {
     return [];
-  }
-}
-
-/**
- * Evicts cached rollouts that are gone (Codex's picker deletes them behind tet's back). Scoped to
- * `root`: a sandbox root (SessionProvider.sandbox) shares these caches, and the two would evict
- * each other's entries.
- */
-function forgetMissing(files: string[], root: string): void {
-  const present = new Set(files);
-  const prefix = root + path.sep;
-  for (const cache of [metaCache, tailCache]) {
-    for (const filePath of cache.keys()) {
-      if (filePath.startsWith(prefix) && !present.has(filePath)) {
-        cache.delete(filePath);
-      }
-    }
   }
 }
 
@@ -383,7 +344,7 @@ export const codexSessionProvider: SessionProvider = {
 async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
   try {
     const files = await listRolloutFiles(home);
-    forgetMissing(files, sessionsRoot(home));
+    forgetMissing(sessionsRoot(home), files, [metaCache, tailCache]);
     const names = await readSessionNames(home);
     const entries = await mapLimited(files, READ_CONCURRENCY, async (filePath): Promise<AgentSessionInfo | undefined> => {
       const meta = await readSessionMeta(filePath);
@@ -412,11 +373,7 @@ async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
 
 /** Only the app-server RPC writes a thread's name — no CLI command, no rollout entry. */
 async function renameIn(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
-  const trimmed = title.trim();
-  if (!trimmed) {
-    throw new Error("title must be non-empty");
-  }
-  await renameThread(executable, cwd, sessionId, trimmed);
+  await renameThread(executable, cwd, sessionId, requireTitle(title));
 }
 
 /**
@@ -449,10 +406,7 @@ async function removeInHome(home: string, sessionId: string): Promise<void> {
  * sandbox reads names from its own db only, so it keeps showing the old name.
  */
 async function renameInHome(home: string, sessionId: string, title: string): Promise<void> {
-  const trimmed = title.trim();
-  if (!trimmed) {
-    throw new Error("title must be non-empty");
-  }
+  const trimmed = requireTitle(title);
   const entry = { id: sessionId, thread_name: trimmed, updated_at: new Date().toISOString().replace("Z", "0000Z") };
   await fs.promises.appendFile(sessionIndexFile(home), JSON.stringify(entry) + "\n");
 }

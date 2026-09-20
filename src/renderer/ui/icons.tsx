@@ -67,16 +67,22 @@ function Svg({
   extent = TARGET_EXTENT,
   cx = 8,
   cy = 8,
-  scale = 1
+  scale = 1,
+  grid = GRID,
+  stroke = 1.5
 }: IconProps & {
   children: React.ReactNode;
   extent?: number;
   cx?: number;
   cy?: number;
   scale?: number;
+  /** The units the drawing was authored on — tet's own 16, Lucide's 24 (see `Lucide`). */
+  grid?: number;
+  /** The drawing's own stroke on that grid, scaled by the crop like everything else. */
+  stroke?: number;
 }) {
   // Dividing widens the crop, shrinking the drawing in the same box.
-  const { viewBox, strokeWidth } = geometry(extent / scale, cx, cy, GRID, 1.5);
+  const { viewBox, strokeWidth } = geometry(extent / scale, cx, cy, grid, stroke);
   return (
     <svg
       className={className}
@@ -96,25 +102,23 @@ function Svg({
   );
 }
 
-/** Lucide's `plus` (lucide.dev, ISC), on its native 24-unit grid. Measured: 16 by 16, extent 16,
- *  centered at (12, 12). Stroke 2.3 instead of Lucide's 2, to read heavier leading a row. */
+/**
+ * A vendored Lucide icon (lucide.dev, ISC): its native 24-unit grid, centred where most of them
+ * are, and its stroke of 2. Only the measured `extent` differs from one to the next — an icon off
+ * that centre or drawn heavier says so, and one drawn `SMALLER`/`LARGER` passes it as `scale`.
+ */
+function Lucide(props: Parameters<typeof Svg>[0]) {
+  return <Svg grid={24} cx={12} cy={12} stroke={2} {...props} />;
+}
+
+/** Lucide's `plus`. Measured: 16 by 16, extent 16, centered at (12, 12). Stroke 2.3 instead of
+ *  Lucide's 2, to read heavier leading a row. */
 export function PlusIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(16, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(16, 24, 2.3)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={16} stroke={2.3}>
       <path d="M5 12h14" />
       <path d="M12 5v14" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -122,21 +126,10 @@ export function PlusIcon(props: IconProps) {
  *  extent 14 becomes 16.55, centered at (12, 12). */
 export function CloseIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(14 / SMALLER, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(14 / SMALLER, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={14} scale={SMALLER}>
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -145,20 +138,9 @@ export function CloseIcon(props: IconProps) {
  *  stands beside the session marks in the project row. */
 export function ShieldIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.23, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.23, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.23}>
       <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -167,23 +149,12 @@ export function ShieldIcon(props: IconProps) {
  *  (12, 12). */
 export function ChangesIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.23, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.23, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.23}>
       <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
       <path d="M9 10h6" />
       <path d="M12 13V7" />
       <path d="M9 17h6" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -206,22 +177,11 @@ export function SeverityIcon({ severity, ...props }: IconProps & { severity: Not
  *  (12, 12). */
 export function BranchIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20}>
       <path d="M15 6a9 9 0 0 0-9 9V3" />
       <circle cx="18" cy="6" r="3" />
       <circle cx="6" cy="18" r="3" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -229,23 +189,12 @@ export function BranchIcon(props: IconProps) {
  *  included: 22 by 21, extent 21.49 (the geometric mean), centered at (12, 12.5). */
 export function WorktreeIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(21.49, 12, 12.5, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(21.49, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={21.49} cy={12.5}>
       <path d="M18 19a5 5 0 0 1-5-5v8" />
       <path d="M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v5" />
       <circle cx="13" cy="12" r="2" />
       <circle cx="20" cy="19" r="2" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -277,21 +226,10 @@ export function GitIcon(props: IconProps) {
  *  (12, 12). */
 export function SearchIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20}>
       <path d="m21 21-4.34-4.34" />
       <circle cx="11" cy="11" r="8" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -300,23 +238,12 @@ export function SearchIcon(props: IconProps) {
  *  20 by 10 (stroke included), extent 18.39, centered at (12, 11). */
 export function CaseSensitiveIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(18.39, 12, 11, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(18.39, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={18.39} cy={11}>
       <path d="m3 15 4-8 4 8" />
       <path d="M4 13h6" />
       <circle cx="18" cy="12" r="3" />
       <path d="M21 9v6" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -325,24 +252,13 @@ export function CaseSensitiveIcon(props: IconProps) {
  *  centered at (12, 13). */
 export function WholeWordIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.23, 12, 13, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.23, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.23} cy={13}>
       <circle cx="7" cy="12" r="3" />
       <path d="M10 9v6" />
       <circle cx="17" cy="12" r="3" />
       <path d="M14 7v8" />
       <path d="M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -350,23 +266,12 @@ export function WholeWordIcon(props: IconProps) {
  *  20.16, centered at (12.17, 12). */
 export function RegexIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.16, 12.17, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.16, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.16} cx={12.17}>
       <path d="M17 3v10" />
       <path d="m12.67 5.5 8.66 5" />
       <path d="m12.67 10.5 8.66-5" />
       <path d="M9 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2z" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -394,18 +299,7 @@ export function SpinnerIcon(props: IconProps) {
  *  Measured: 21 by 21, extent 21, centered at (12.5, 11.5). */
 export function SparkleIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(21, 12.5, 11.5, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(21, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={21} cx={12.5} cy={11.5}>
       <path d="M15 4V2" />
       <path d="M15 16v-2" />
       <path d="M8 9h2" />
@@ -415,7 +309,7 @@ export function SparkleIcon(props: IconProps) {
       <path d="M17.8 6.2 19 5" />
       <path d="m3 21 9-9" />
       <path d="M12.2 6.2 11 5" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -423,20 +317,9 @@ export function SparkleIcon(props: IconProps) {
  *  (stroke included), extent 18.98 becomes 22.43, centered at (13, 12). */
 export function PlayIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(18.98 / SMALLER, 13, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(18.98 / SMALLER, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={18.98} scale={SMALLER} cx={13}>
       <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -444,21 +327,10 @@ export function PlayIcon(props: IconProps) {
  *  (12, 12). */
 export function TagIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(22, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(22, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={22}>
       <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
       <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -466,22 +338,11 @@ export function TagIcon(props: IconProps) {
  *  measured 20 by 8, extent 18.39, centered at (12, 12). */
 export function CommitIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(18.39, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(18.39, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={18.39}>
       <circle cx="12" cy="12" r="3" />
       <line x1="3" x2="9" y1="12" y2="12" />
       <line x1="15" x2="21" y1="12" y2="12" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -500,22 +361,11 @@ export function StashIcon(props: IconProps) {
  *  20.98, centered at (12, 12). */
 export function DiscardIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.98, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.98, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.98}>
       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
       <path d="M3 6h18" />
       <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -523,21 +373,10 @@ export function DiscardIcon(props: IconProps) {
  *  (12, 12). */
 export function ArrowUpIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(16, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(16, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={16}>
       <path d="m5 12 7-7 7 7" />
       <path d="M12 19V5" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -545,21 +384,10 @@ export function ArrowUpIcon(props: IconProps) {
  *  (12, 12). */
 export function ArrowDownIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(16, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(16, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={16}>
       <path d="M12 5v14" />
       <path d="m19 12-7 7-7-7" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -567,23 +395,12 @@ export function ArrowDownIcon(props: IconProps) {
  *  centered at (12, 12). */
 export function SyncIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20}>
       <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
       <path d="M21 3v5h-5" />
       <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
       <path d="M8 16H3v5" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -607,22 +424,11 @@ export function QuestionIcon(props: IconProps) {
  */
 export function CircleAlertIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(22, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(22, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={22}>
       <circle cx="12" cy="12" r="10" />
       <line x1="12" x2="12" y1="8" y2="12" />
       <line x1="12" x2="12.01" y1="16" y2="16" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -630,20 +436,9 @@ export function CircleAlertIcon(props: IconProps) {
  *  Measured: 22 by 21, extent 21.49, centered at (12, 12.5). */
 export function CommentIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(21.49, 12, 12.5, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(21.49, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={21.49} cy={12.5}>
       <path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -660,21 +455,10 @@ export function RemoteIcon(props: IconProps) {
  *  (12, 12). Drawn `LARGER`: a gear is mostly gaps and reads small beside the git mark. */
 export function GearIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.91 / LARGER, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.91 / LARGER, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.91} scale={LARGER}>
       <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
       <circle cx="12" cy="12" r="3" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -683,23 +467,12 @@ export function GearIcon(props: IconProps) {
  *  20.23, centered at (12, 12). */
 export function FilesIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.23, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.23, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.23}>
       <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
       <path d="M14 2v5a1 1 0 0 0 1 1h5" />
       <path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1" />
       <path d="M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -708,23 +481,12 @@ export function FilesIcon(props: IconProps) {
  *  geometric mean would clip the bottom, so the long-axis cap: extent 20.23, centered at (12, 12). */
 export function NewFileIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.23, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.23, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.23}>
       <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" />
       <path d="M14 2v5a1 1 0 0 0 1 1h5" />
       <path d="M9 15h6" />
       <path d="M12 18v-6" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -733,22 +495,11 @@ export function NewFileIcon(props: IconProps) {
  *  (12, 11.5). */
 export function NewFolderIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.45, 12, 11.5, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.45, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.45} cy={11.5}>
       <path d="M12 10v6" />
       <path d="M9 13h6" />
       <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -756,22 +507,11 @@ export function NewFolderIcon(props: IconProps) {
  *  at (12, 12). */
 export function CollapseAllIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(22, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(22, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={22}>
       <line x1="12" x2="18" y1="15" y2="15" />
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -779,23 +519,12 @@ export function CollapseAllIcon(props: IconProps) {
  *  sits inside its box — the same extent. */
 export function ExpandAllIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(22, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(22, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={22}>
       <line x1="15" x2="15" y1="12" y2="18" />
       <line x1="12" x2="18" y1="15" y2="15" />
       <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -803,46 +532,24 @@ export function ExpandAllIcon(props: IconProps) {
  *  by 16 (stroke included), extent 17.93, centered at (11.75, 12). */
 export function ClearIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(17.93, 11.75, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(17.93, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={17.93} cx={11.75}>
       <path d="M16 5H3" />
       <path d="M11 12H3" />
       <path d="M16 19H3" />
       <path d="m15.5 9.5 5 5" />
       <path d="m20.5 9.5-5 5" />
-    </svg>
+    </Lucide>
   );
 }
 
 /** Lucide's `save`, vendored the same way. Measured: 20 by 20, extent 20, centered at (12, 12). */
 export function SaveIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20}>
       <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
       <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7" />
       <path d="M7 3v4a1 1 0 0 0 1 1h7" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -850,21 +557,10 @@ export function SaveIcon(props: IconProps) {
  *  measured 22 by 16 (stroke included), extent 20.23, centered at (12, 12). */
 export function EyeIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20.23, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20.23, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20.23}>
       <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
       <circle cx="12" cy="12" r="3" />
-    </svg>
+    </Lucide>
   );
 }
 
@@ -872,22 +568,11 @@ export function EyeIcon(props: IconProps) {
  *  20 by 20 (stroke included), extent 20, centered at (12, 12). */
 export function CompareIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(20, 12, 12, 24)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(20, 24, 2)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Lucide {...props} extent={20}>
       <circle cx="18" cy="18" r="3" />
       <circle cx="6" cy="6" r="3" />
       <path d="M13 6h3a2 2 0 0 1 2 2v7" />
       <path d="M11 18H8a2 2 0 0 1-2-2V9" />
-    </svg>
+    </Lucide>
   );
 }

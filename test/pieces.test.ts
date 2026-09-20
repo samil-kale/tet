@@ -33,6 +33,8 @@ import {
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { SbxSecretStore } from "../src/main/sbx-secrets";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
+import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
+import { fetchHttpsImage } from "../src/main/ipc/shell";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
@@ -732,6 +734,106 @@ describe("session readiness checks", () => {
     // A real frame: two box-drawing characters clear the threshold.
     assert.equal(ready("▄"), false);
     assert.equal(ready("▄"), true);
+  });
+});
+
+/**
+ * A Markdown preview's images are fetched in main so the page's CSP keeps them off the network.
+ * A followed redirect is a fetch of its own, so each hop is checked like the first.
+ */
+describe("a Markdown preview's image fetch", () => {
+  /** Answers the chain in `hops`, then "200 ok"; records what was asked for. */
+  const server = (hops: Record<string, string>) => {
+    const asked: string[] = [];
+    const fetchFn = (url: string): Promise<Response> => {
+      asked.push(url);
+      const location = hops[url];
+      return Promise.resolve(
+        location === undefined
+          ? new Response("image bytes", { status: 200, headers: { "content-type": "image/png" } })
+          : new Response(null, { status: 302, headers: { location } })
+      );
+    };
+    return { asked, fetchFn };
+  };
+
+  it("follows an https redirect chain to the image", async () => {
+    const { asked, fetchFn } = server({
+      "https://a.example/badge.svg": "https://b.example/real.png"
+    });
+    const response = await fetchHttpsImage("https://a.example/badge.svg", fetchFn);
+    assert.equal(response?.status, 200);
+    assert.deepEqual(asked, ["https://a.example/badge.svg", "https://b.example/real.png"]);
+  });
+
+  it("resolves a relative location against the hop that sent it", async () => {
+    const { asked, fetchFn } = server({ "https://a.example/x/badge.svg": "../y/real.png" });
+    assert.equal((await fetchHttpsImage("https://a.example/x/badge.svg", fetchFn))?.status, 200);
+    assert.deepEqual(asked, ["https://a.example/x/badge.svg", "https://a.example/y/real.png"]);
+  });
+
+  it("stops where a redirect leaves https, without sending that request", async () => {
+    // What the fetch-in-main was meant to prevent: a README's image reaching the machine's network,
+    // the disk, or the page's own scheme.
+    const targets = [
+      "http://192.168.1.1/admin",
+      "http://localhost:9200/_cat",
+      "file:///etc/passwd",
+      "javascript:alert(1)",
+      "data:text/html,<script>x</script>",
+      // No URL at all — neither followed nor thrown out of the handler.
+      "http://[",
+      "//"
+    ];
+    for (const target of targets) {
+      const { asked, fetchFn } = server({ "https://a.example/badge.svg": target });
+      assert.equal(await fetchHttpsImage("https://a.example/badge.svg", fetchFn), undefined, target);
+      assert.deepEqual(asked, ["https://a.example/badge.svg"], `${target} was never requested`);
+    }
+  });
+
+  it("refuses a first hop that is not https, without sending anything", async () => {
+    for (const url of ["http://a.example/x.png", "file:///x.png", "not a url"]) {
+      const { asked, fetchFn } = server({});
+      assert.equal(await fetchHttpsImage(url, fetchFn), undefined, url);
+      assert.deepEqual(asked, [], url);
+    }
+  });
+
+  it("gives up on a redirect loop", async () => {
+    const { asked, fetchFn } = server({
+      "https://a.example/1": "https://a.example/2",
+      "https://a.example/2": "https://a.example/1"
+    });
+    assert.equal(await fetchHttpsImage("https://a.example/1", fetchFn), undefined);
+    assert.ok(asked.length <= 7, `stopped after ${asked.length} hops`);
+  });
+});
+
+/**
+ * The check runs before the workspace opens (requirements.ts), so it must answer for anything it
+ * spawns. Each case hangs forever on the stdio Node gives a spawn by default.
+ */
+describe("an agent's version check", () => {
+  /** node standing in for the agent, running `script` as its `--version`. */
+  const check = (script: string): Promise<boolean> => checkAgentInstalled(process.execPath, ["-e", script], os.tmpdir());
+
+  it("answers for a program that reads stdin, rather than waiting for input nobody sends", async () => {
+    // An interactive shim, a login prompt, cmd.exe's "Terminate batch job (Y/N)?": with stdin left
+    // open it reads forever. Closed, it sees EOF at once.
+    assert.equal(await check('process.stdin.on("end", () => process.exit(0)); process.stdin.resume();'), true);
+  });
+
+  it("answers for a program that prints more than a pipe holds", async () => {
+    // Nothing reads the child's output, so a piped stdout fills and blocks it mid-write.
+    assert.equal(await check(`process.stdout.write("x".repeat(${4 * 1024 * 1024})); process.exit(0);`), true);
+  });
+
+  it("gives up on a program that never exits, counting it as missing", async () => {
+    const started = Date.now();
+    assert.equal(await check("setInterval(() => undefined, 1000);"), false);
+    // The timeout did it, not a crash.
+    assert.ok(Date.now() - started >= 9_000, `gave up after ${Date.now() - started}ms`);
   });
 });
 

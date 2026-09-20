@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
+import { errorMessage } from "../../shared/errors";
 import { EMPTY_REPOSITORY_STATE, searchPattern } from "../../shared/types";
 import type {
   CheckoutTarget,
@@ -83,6 +84,23 @@ function isIgnoredEvent(relativePath: string): boolean {
     /^\.git\/(COMMIT_EDITMSG|ORIG_HEAD|FETCH_HEAD|MERGE_MSG|rebase-)/.test(normalized) ||
     normalized.includes("node_modules/")
   );
+}
+
+/** What every path check answers for a path that escapes the repository root. */
+const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" } as const;
+
+/**
+ * A filesystem action as a `GitActionResult`: whatever it threw becomes the failure's message, in
+ * the words the OS used. For the Explorer's own edits, which run off `runAction` — they take no
+ * index lock (Repository.listExplorer).
+ */
+async function attempt(action: () => Promise<unknown>): Promise<GitActionResult> {
+  try {
+    await action();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
 }
 
 /** Whether two paths name one entry, e.g. differing in case on a case-insensitive filesystem. By
@@ -612,7 +630,7 @@ export class Repository {
             if (!permanently) {
               // Reset what the trash already took, or it would be missing until asked again.
               const reset = await git.discard(this.project.path, targets);
-              const message = error instanceof Error ? error.message : String(error);
+              const message = errorMessage(error);
               return reset.ok ? { ok: false, error: message, needsConfirmation: "trash-failed" } : reset;
             }
             // What HEAD has is written over by the restore; the rest would stay behind untracked.
@@ -749,7 +767,7 @@ export class Repository {
     try {
       matcher = searchPattern(query, "g");
     } catch (error) {
-      return { files: [], truncated: false, error: error instanceof Error ? error.message : String(error) };
+      return { files: [], truncated: false, error: errorMessage(error) };
     }
     const seq = ++this.searchSeq;
     const view = await readExplorerView(this.project.path);
@@ -825,7 +843,7 @@ export class Repository {
   private async resolveNew(filePath: string, renaming?: string): Promise<{ absolute: string } | { error: string }> {
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
-      return { error: "Path is outside the repository" };
+      return { error: OUTSIDE_REPOSITORY.error };
     }
     if (fs.existsSync(absolute) && !(renaming && sameEntry(absolute, renaming))) {
       return { error: `A file or folder "${filePath}" already exists at this location` };
@@ -839,13 +857,10 @@ export class Repository {
     if ("error" in target) {
       return { ok: false, error: target.error };
     }
-    try {
+    return attempt(async () => {
       await fs.promises.mkdir(path.dirname(target.absolute), { recursive: true });
       await fs.promises.writeFile(target.absolute, "", { flag: "wx" });
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
+    });
   }
 
   /** The Explorer's "New Folder...". */
@@ -854,45 +869,32 @@ export class Repository {
     if ("error" in target) {
       return { ok: false, error: target.error };
     }
-    try {
-      await fs.promises.mkdir(target.absolute, { recursive: true });
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
+    return attempt(() => fs.promises.mkdir(target.absolute, { recursive: true }));
   }
 
   /** The Explorer's "Delete...": to the trash, like `discard`. */
   async deletePath(filePath: string): Promise<GitActionResult> {
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
-      return { ok: false, error: "Path is outside the repository" };
+      return OUTSIDE_REPOSITORY;
     }
-    try {
-      await shell.trashItem(absolute);
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
+    return attempt(() => shell.trashItem(absolute));
   }
 
   /** The Explorer's "Rename...", which may also move. */
   async renamePath(fromPath: string, toPath: string): Promise<GitActionResult> {
     const from = this.resolveInside(fromPath);
     if (!from) {
-      return { ok: false, error: "Path is outside the repository" };
+      return OUTSIDE_REPOSITORY;
     }
     const to = await this.resolveNew(toPath, from);
     if ("error" in to) {
       return { ok: false, error: to.error };
     }
-    try {
+    return attempt(async () => {
       await fs.promises.mkdir(path.dirname(to.absolute), { recursive: true });
       await fs.promises.rename(from, to.absolute);
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
+    });
   }
 
   /** The Explorer's tet.json edits ("Add Folder to Workspace", "Remove Folder from Workspace",
@@ -919,13 +921,8 @@ export class Repository {
     return this.editExplorer(() => setExplorerSetting(this.project.path, key, value));
   }
 
-  private async editExplorer(edit: () => Promise<void>): Promise<GitActionResult> {
-    try {
-      await edit();
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
-    }
+  private editExplorer(edit: () => Promise<void>): Promise<GitActionResult> {
+    return attempt(edit);
   }
 
   /** The absolute path, or undefined if it escapes the root. */
@@ -941,7 +938,7 @@ export class Repository {
     const base = { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false };
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
-      return { ...base, error: "Path is outside the repository" };
+      return { ...base, error: OUTSIDE_REPOSITORY.error };
     }
     const change = this.state.changes.find((candidate) => candidate.path === filePath);
     try {
@@ -971,7 +968,7 @@ export class Repository {
         head: binary && !image ? undefined : await this.headBlob(filePath, change)
       };
     } catch (error) {
-      return { ...base, error: error instanceof Error ? error.message : String(error) };
+      return { ...base, error: errorMessage(error) };
     }
   }
 
@@ -995,7 +992,7 @@ export class Repository {
   async writeFile(filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> {
     const absolute = this.resolveInside(filePath);
     if (!absolute) {
-      return { ok: false, error: "Path is outside the repository" };
+      return OUTSIDE_REPOSITORY;
     }
     try {
       const before = await fs.promises.stat(absolute);
@@ -1006,7 +1003,7 @@ export class Repository {
       const after = await fs.promises.stat(absolute);
       return { ok: true, mtimeMs: after.mtimeMs };
     } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return { ok: false, error: errorMessage(error) };
     }
   }
 

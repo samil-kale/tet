@@ -323,21 +323,34 @@ export async function setExplorerSetting<K extends keyof ExplorerSettings>(
 
 const SBX_ACCESS: readonly SbxAccess[] = ["ro", "rw"];
 
-function toSbxPorts(value: unknown): SbxPort[] {
+/**
+ * The object entries of a stored array, each handed to `row`; a non-array, and an entry that is
+ * not an object, is nothing. `row` answers undefined for a row it will not take — every list in
+ * tet.json is read this defensively (see the file header).
+ */
+function objectRows<T>(value: unknown, row: (entry: Record<string, unknown>) => T | undefined): T[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const ports: SbxPort[] = [];
+  const rows: T[] = [];
   for (const entry of value) {
     if (typeof entry !== "object" || entry === null) {
       continue;
     }
-    const { host, container } = entry as { host?: unknown; container?: unknown };
-    if (typeof host === "string" && typeof container === "string" && host.trim() && container.trim()) {
-      ports.push({ host, container });
+    const taken = row(entry as Record<string, unknown>);
+    if (taken !== undefined) {
+      rows.push(taken);
     }
   }
-  return ports;
+  return rows;
+}
+
+function toSbxPorts(value: unknown): SbxPort[] {
+  return objectRows(value, ({ host, container }) =>
+    typeof host === "string" && typeof container === "string" && host.trim() && container.trim()
+      ? { host, container }
+      : undefined
+  );
 }
 
 /** Trimmed: sbx validates nothing, so a stray space becomes a rule that matches no request. */
@@ -351,22 +364,13 @@ function toSbxHosts(value: unknown): string[] {
 /** A row needs an env name and a host; hosts trimmed as toSbxHosts, a repeated env name dropped —
  *  sbx refuses a second secret for one (measured, 0.42.1). */
 function toSbxSecrets(value: unknown): SbxSecret[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const secrets: SbxSecret[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "object" || entry === null) {
-      continue;
-    }
-    const { env, hosts } = entry as { env?: unknown; hosts?: unknown };
+  const secrets = objectRows(value, ({ env, hosts }) => {
     const name = typeof env === "string" ? env.trim() : "";
     const trimmedHosts = toSbxHosts(hosts);
-    if (name && trimmedHosts.length > 0 && !secrets.some((secret) => secret.env === name)) {
-      secrets.push({ env: name, hosts: trimmedHosts });
-    }
-  }
-  return secrets;
+    return name && trimmedHosts.length > 0 ? { env: name, hosts: trimmedHosts } : undefined;
+  });
+  // A repeated env name keeps the first row only.
+  return secrets.filter((secret, i) => secrets.findIndex((other) => other.env === secret.env) === i);
 }
 
 /** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path
@@ -381,24 +385,16 @@ function appliesHere(entry: StoredSbxPath): boolean {
 }
 
 function toSbxPaths(value: unknown): StoredSbxPath[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const paths: StoredSbxPath[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "object" || entry === null) {
-      continue;
+  return objectRows(value, ({ path: hostPath, access, os }) => {
+    if (typeof hostPath !== "string" || !hostPath.trim()) {
+      return undefined;
     }
-    const { path: hostPath, access, os } = entry as { path?: unknown; access?: unknown; os?: unknown };
-    if (typeof hostPath === "string" && hostPath.trim()) {
-      const row: StoredSbxPath = { path: hostPath, access: SBX_ACCESS.find((candidate) => candidate === access) ?? "rw" };
-      if (typeof os === "string") {
-        row.os = os;
-      }
-      paths.push(row);
+    const row: StoredSbxPath = { path: hostPath, access: SBX_ACCESS.find((candidate) => candidate === access) ?? "rw" };
+    if (typeof os === "string") {
+      row.os = os;
     }
-  }
-  return paths;
+    return row;
+  });
 }
 
 function sbxSection(content: ProjectFile): Record<string, unknown> {

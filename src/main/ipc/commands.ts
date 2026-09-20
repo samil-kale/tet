@@ -1,4 +1,5 @@
 import { ipcMain } from "electron";
+import { errorMessage } from "../../shared/errors";
 import type { GitActionResult, ProjectCommand, TerminalDescriptor } from "../../shared/types";
 import { readCommands, writeCommands } from "../tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
@@ -23,7 +24,7 @@ export function registerCommandsIpc({ store, sessions }: Pick<IpcDeps, "store" |
         await writeCommands(project.path, commands);
         return { ok: true };
       } catch (error) {
-        return { ok: false, error: `Could not save commands: ${String(error)}` };
+        return { ok: false, error: `Could not save commands: ${errorMessage(error)}` };
       }
     }
   );

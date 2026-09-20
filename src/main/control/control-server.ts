@@ -4,6 +4,7 @@ import * as http from "node:http";
 import * as net from "node:net";
 import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
+import { errorMessage } from "../../shared/errors";
 import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
@@ -634,6 +635,9 @@ function reject(code: ControlErrorCode, message: string): ControlResponse {
 /** A tet-ctl writes its request at once. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/** How long a request may be, checked while it arrives — see the read in `startControlServer`. */
+const MAX_REQUEST_CHARS = 1024 * 1024;
+
 /**
  * The server `tet-ctl` talks to: one POST per connection on 127.0.0.1. HTTP, not raw TCP, because
  * a sandbox reaches `host.docker.internal` through sbx's HTTP-only proxy (measured: raw TCP
@@ -696,7 +700,7 @@ export async function startControlServer(
       if (error instanceof ControlError) {
         return { response: reject(error.code, error.message) };
       }
-      return { response: reject("internal", error instanceof Error ? error.message : String(error)) };
+      return { response: reject("internal", errorMessage(error)) };
     }
   };
 
@@ -716,10 +720,32 @@ export async function startControlServer(
     }
     req.setEncoding("utf8");
     let body = "";
+    let tooLarge = false;
     req.on("data", (chunk: string) => {
+      if (tooLarge) {
+        return;
+      }
+      if (tooLarge) {
+        return;
+      }
       body += chunk;
+      // The token is only checked once the body is whole, so an unauthenticated caller would
+      // otherwise decide how much of this process's memory to take. Well past the longest real
+      // request (`tabs-send`'s text) and nowhere near what would hurt.
+      //
+      // Nothing is kept from here on, but the rest is still read and dropped, and the answer waits
+      // for `end` like any other: closing the connection early (`req.destroy()`, or answering while
+      // the caller still writes) reaches it as ECONNRESET instead of the refusal.
+      if (body.length > MAX_REQUEST_CHARS) {
+        tooLarge = true;
+        body = "";
+      }
     });
     req.on("end", () => {
+      if (tooLarge) {
+        respond(res, reject("bad_args", `the request is longer than ${MAX_REQUEST_CHARS} characters`));
+        return;
+      }
       let request: ControlRequest;
       try {
         request = JSON.parse(body) as ControlRequest;

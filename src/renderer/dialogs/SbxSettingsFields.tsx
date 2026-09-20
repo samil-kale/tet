@@ -172,6 +172,8 @@ export function usePolicyAnswers(state: FieldsState, ready: boolean): PolicyAnsw
     return () => {
       current = false;
     };
+    // `pathsKey` holds every field the rows are read for; the array itself is new each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, pathsKey]);
 
   // Kept while the dialog is open: only a host not asked yet is. An answer holds for its host
@@ -206,6 +208,8 @@ export function usePolicyAnswers(state: FieldsState, ready: boolean): PolicyAnsw
       }
     }, delay);
     return () => clearTimeout(timer);
+    // `unaskedKey` is the serialized list the effect reads, which is new each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, unaskedKey]);
 
   return { deniedPaths, hostsAllowed };
