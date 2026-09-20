@@ -163,6 +163,20 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
   return Object.assign(env, options.envOverride);
 }
 
+/**
+ * node-pty leaves the pipe it writes into unguarded: `windowsTerminal.js` puts an `error` listener
+ * on the pipe it reads from, `windowsPtyAgent.js` puts none on `inSocket`. A write landing after the
+ * process behind it has gone — a tab closed, a quit, a resize on the way out — then fails with
+ * nothing listening, which is an uncaught `write EAGAIN` and, through uncaught.ts, a notice telling
+ * the user TET hit an unexpected error. There is nothing to do about the write itself; those bytes
+ * had nowhere to go. Measured on win32 through test/app.test.ts, which fails a run on any uncaught
+ * exception. POSIX has no `_agent` and node-pty guards its socket there, so this is a no-op.
+ */
+function guardPtyInput(spawned: IPty): void {
+  const agent = (spawned as unknown as { _agent?: { inSocket?: { on?: (event: string, listener: () => void) => void } } })._agent;
+  agent?.inSocket?.on?.("error", () => undefined);
+}
+
 export function spawnAgentProcess(executable: string, args: string[], options: SpawnOptions): IPty {
   const env = buildEnv(options);
   // A path is the tab's folder's, as child_process takes it; node-pty looks from this process's
@@ -170,7 +184,7 @@ export function spawnAgentProcess(executable: string, args: string[], options: S
   const program = path.basename(executable) === executable ? executable : path.resolve(options.cwd, executable);
   const resolved = resolveCommand(program, args);
 
-  return pty.spawn(resolved.command, resolved.windowsVerbatimArguments ? resolved.args.join(" ") : resolved.args, {
+  const spawned = pty.spawn(resolved.command, resolved.windowsVerbatimArguments ? resolved.args.join(" ") : resolved.args, {
     name: "xterm-256color",
     cols: options.cols,
     rows: options.rows,
@@ -179,4 +193,6 @@ export function spawnAgentProcess(executable: string, args: string[], options: S
     // Windows only: node-pty's bundled conpty.dll is maintained better than the inbox conhost.exe.
     useConptyDll: true
   });
+  guardPtyInput(spawned);
+  return spawned;
 }
