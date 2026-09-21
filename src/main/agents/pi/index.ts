@@ -7,11 +7,11 @@ import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { writePiExtension } from "./extension";
 import { piSessionProvider } from "./sessions";
-import { TET_SYSTEM_PROMPT } from "../system-prompt";
+import { systemPrompt } from "../system-prompt";
 
 /** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32
  *  (measured, see system-prompt.ts). */
-const SYSTEM_PROMPT_ARGS = ["--append-system-prompt", TET_SYSTEM_PROMPT];
+const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
 
 /**
  * pi (pi.dev, `@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts,
@@ -49,7 +49,7 @@ export const piAgent: AgentDefinition = {
     }
     // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
     // settings.json untouched (measured).
-    args.push("--use-theme", paths.theme.kind, ...SYSTEM_PROMPT_ARGS);
+    args.push("--use-theme", paths.theme.kind, ...systemPromptArgs(false));
     return Promise.resolve({ args });
   },
   prepareSandboxSpawn: (_cwd, paths) => {
@@ -60,10 +60,10 @@ export const piAgent: AgentDefinition = {
       // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the safety
       // boundary, as for Claude Code and opencode. The community pi-kit does not set it (measured,
       // docker/sbx-kits-contrib pi/spec.yaml).
-      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind, "-a", ...SYSTEM_PROMPT_ARGS] };
+      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
     } catch (error) {
       console.error("[tet] could not write pi's sandbox extension:", error);
-      return { args: ["--use-theme", paths.theme.kind, "-a", ...SYSTEM_PROMPT_ARGS] };
+      return { args: ["--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
     }
   },
   // Per pi's bundled docs (0.85.1): skills in `~/.pi/agent/skills` and `~/.agents/skills`,

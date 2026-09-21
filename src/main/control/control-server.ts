@@ -23,7 +23,8 @@ import type {
   TerminalDescriptor,
   WorktreeRef
 } from "../../shared/types";
-import { TET_SYSTEM_PROMPT } from "../agents/system-prompt";
+import { systemPrompt } from "../agents/system-prompt";
+import type { CredentialAccess } from "../credentials";
 import { relativeInside, repositoryRelative } from "../path-inside";
 import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
@@ -80,6 +81,7 @@ export interface ControlDeps {
   notify(title: string, body: string, target?: ToastTarget): void;
   /** main.ts's `applyTheme`: returns whether a restart is still needed. */
   applyTheme(): boolean;
+  credentials: CredentialAccess;
 }
 
 export interface ToastTarget {
@@ -229,17 +231,18 @@ const OUTPUT_KB = 16;
  * stdout as JSON, and every agent takes JSON on hook channels not appended to the prompt
  * (measured). `prompt-submit`'s stdout would be appended to the prompt: "". `session-start`
  * carries TET's system prompt as added context, appended to the user's instructions (measured,
- * Codex 0.154.0: in the first turn, and again on `resume`).
+ * Codex 0.154.0: in the first turn, and again on `resume`) — a sandbox's without the credentials.
  */
-const HOOK_STDOUT: Record<HookEvent, string> = {
-  "session-start": JSON.stringify({
-    hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: TET_SYSTEM_PROMPT }
-  }),
-  "prompt-submit": "",
-  stop: "{}",
-  permission: "{}",
-  question: "{}",
-  idle: "{}"
+const HOOK_STDOUT: Record<HookEvent, (sandboxed: boolean) => string> = {
+  "session-start": (sandboxed) =>
+    JSON.stringify({
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: systemPrompt(sandboxed) }
+    }),
+  "prompt-submit": () => "",
+  stop: () => "{}",
+  permission: () => "{}",
+  question: () => "{}",
+  idle: () => "{}"
 };
 
 const DYNAMIC_PORT_START = 49152;
@@ -424,6 +427,49 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", deleted.error ?? "could not delete the worktree");
       }
       return { result: { deleted: id } };
+    },
+
+    "credentials-get": (args) => {
+      const name = text(args, "name", "credential name");
+      const info = deps.credentials.info(name);
+      const value = info && deps.credentials.get(name);
+      if (!info || value === undefined) {
+        throw new ControlError(
+          "not_found",
+          info
+            ? `${name} can no longer be decrypted on this machine: ask again with credentials-request`
+            : `no credential named ${name}: see credentials-list, or ask with credentials-request`
+        );
+      }
+      return { result: { name, host: info.host, account: info.account, description: info.description, value } };
+    },
+
+    "credentials-request": async (args, caller, _at, gone) => {
+      const optional = (name: string): string | undefined => (typeof args[name] === "string" && args[name] !== "" ? args[name] : undefined);
+      const name = text(args, "name", "credential name");
+      const saved = await deps.credentials.ask(
+        {
+          projectId: caller.projectId,
+          tabId: caller.tabId,
+          name,
+          host: optional("host"),
+          account: optional("account"),
+          description: optional("description"),
+          reason: optional("reason")
+        },
+        gone
+      );
+      return { result: saved === undefined ? { cancelled: true } : { saved } };
+    },
+
+    "credentials-list": () => ({ result: deps.credentials.list() }),
+
+    "credentials-remove": (args) => {
+      const name = text(args, "name", "credential name");
+      if (!deps.credentials.remove(name)) {
+        throw new ControlError("not_found", `no credential named ${name}`);
+      }
+      return { result: { removed: name } };
     },
 
     "tabs-list": (args, caller) => ({ result: terminals(project(args, caller)).inspect() }),
@@ -623,7 +669,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (outcome.toast) {
         deps.notify(outcome.toast.title, outcome.toast.body, { projectId: where.id, tabId: caller.tabId });
       }
-      return { result: { stdout: HOOK_STDOUT[event as HookEvent] } };
+      return { result: { stdout: HOOK_STDOUT[event as HookEvent](caller.sandboxed) } };
     }
   };
 }

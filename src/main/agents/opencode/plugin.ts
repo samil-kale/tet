@@ -4,7 +4,7 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { sandboxHookDir, type HookTarget } from "../../terminals/hook-target";
 import { renderHookReport } from "../hook-report";
-import { TET_SYSTEM_PROMPT } from "../system-prompt";
+import { systemPrompt } from "../system-prompt";
 
 /**
  * opencode is driven by one generated plugin per repository: a `.ts` under a config dir's
@@ -111,7 +111,7 @@ import * as path from "node:path";
 import * as http from "node:http";
 
 const PROJECT_ROOT = ${JSON.stringify(options.projectRoot)};
-const SYSTEM_PROMPT = ${JSON.stringify(TET_SYSTEM_PROMPT)};
+const SYSTEM_PROMPT = ${JSON.stringify(systemPrompt(options.sandbox !== null))};
 const SESSIONS_DIR = ${JSON.stringify(options.sessionsDir)};
 const RENAME_DIR = ${JSON.stringify(options.renameDir)};
 const SANDBOX: string | null = ${JSON.stringify(options.sandbox)};

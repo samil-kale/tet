@@ -14,6 +14,7 @@ import { readCommands } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
+import { CredentialRequests, CredentialStore } from "./credentials";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
@@ -203,6 +204,19 @@ const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
 const sbxSecrets = new SbxSecretStore(dataRoot);
+const credentials = new CredentialStore(dataRoot);
+// Asked only once App listens (noticesHeard), which is also when the dialog can show.
+const credentialRequests = new CredentialRequests(
+  credentials,
+  (request) => {
+    if (!noticesHeard || !window || window.isDestroyed()) {
+      return false;
+    }
+    send("credentials:request", request);
+    return true;
+  },
+  (id) => send("credentials:withdrawn", id)
+);
 /** What control verbs answer beyond the stores. */
 const records = new ControlRecords();
 const repositories = new RepositoryManager(
@@ -360,7 +374,14 @@ async function startControl(): Promise<void> {
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
         projectsChanged: projectDeps.projectsChanged,
         notify: showDesktopNotification,
-        applyTheme
+        applyTheme,
+        credentials: {
+          list: () => credentials.list(),
+          info: (name) => credentials.info(name),
+          get: (name) => credentials.get(name),
+          remove: (name) => credentials.remove(name),
+          ask: (ask, gone) => credentialRequests.ask(ask, gone)
+        }
       },
       controlChannel.token,
       controlChannel.port
@@ -440,6 +461,8 @@ function createWindow(): void {
   // Every load, reloads included, has no listener until App subscribes.
   window.webContents.on("did-start-loading", () => {
     noticesHeard = false;
+    // The dialog went with the page.
+    credentialRequests.drop();
   });
   // A reload reads the theme off the window's original arguments, possibly stale since applyTheme.
   // The renderer ignores its own theme id.
@@ -550,6 +573,8 @@ if (!app.requestSingleInstanceLock()) {
       settings,
       accounts,
       sbxSecrets,
+      credentials,
+      credentialRequests,
       repositories,
       sessions,
       records,

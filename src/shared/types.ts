@@ -229,6 +229,46 @@ export interface ProviderAccount {
   namespace?: string;
 }
 
+/** A credential an agent asked for with `tet-ctl credentials-request`. Its value is kept
+ *  encrypted, main-side, and leaves only through `credentials-get`. */
+export interface CredentialInfo {
+  /** What an agent asks for it by. */
+  name: string;
+  host?: string;
+  account?: string;
+  /** What it is and what it grants, for an agent picking one off `credentials-list`. */
+  description?: string;
+  /** Ms since epoch of the last `credentials-get`; undefined never read. */
+  lastUsed?: number;
+}
+
+/** What `credentials-request` puts in front of the user. */
+export interface CredentialRequest {
+  id: number;
+  /** The asking tab, for the dialog to name. */
+  projectId?: string;
+  tabId?: string;
+  name: string;
+  host?: string;
+  account?: string;
+  /** The agent's proposal, or what is stored when replacing. */
+  description?: string;
+  /** The agent's own words. */
+  reason?: string;
+  /** The name is stored already: the dialog replaces its value. */
+  replace: boolean;
+}
+
+/** What the credential dialog answers: the fields as typed, or null for Cancel. */
+export interface CredentialAnswer {
+  /** Fixed when replacing. */
+  name: string;
+  host: string;
+  account: string;
+  description: string;
+  value: string;
+}
+
 /** A repository the remote tab lists. */
 export interface RemoteRepository {
   /** "owner/name". */

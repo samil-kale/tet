@@ -113,7 +113,8 @@ or a per-line decision is for an agent.
   notice. The one exception is what refused an answer that is still on screen — see below.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native dialogs. Ask only before something
-  irreversible. Card dialogs are drawn in `DialogFrame`.
+  irreversible. Card dialogs are drawn in `DialogFrame`. The one exception: an agent's
+  `credentials-request`, answered in `CredentialDialog`, one at a time (`credentials.ts`).
 - **A dialog on screen carries its own failure; prefer this to a notice.** It belongs where the
   answer was typed: under that field (`Field`'s `error`), else above the button row
   (`DialogFrame`'s `error`) where the fields are several or across tabs. Words alone, no mark, and
@@ -176,9 +177,13 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 
 - `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
-- Agents learn of `tet-ctl` once per session: `TET_SYSTEM_PROMPT`
+- Agents learn of `tet-ctl` once per session: `systemPrompt`
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt, never replacing the
   user's instructions.
+- **Credentials** (`src/main/credentials.ts`): global, encrypted by `safeStorage`, the fallback
+  after the agent's own environment. Typed only into TET's dialog, never the chat; `credentials-get`
+  hands the value to the agent by design. Refused *and* unmentioned in a sandbox — not in `help`, not
+  in its system prompt. TET never reads env or the credential helper for them.
 - A caller's project and tab ids count only with the token made for them
   (`control-token.ts`): a terminal gets its tab's token, never the run's.
 - `tabs-send` and `tabs-output` answer only for a tab of the caller's own project

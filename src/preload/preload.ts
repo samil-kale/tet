@@ -63,6 +63,13 @@ const api: TETApi = {
     setNamespace: (accountId, namespace) => ipcRenderer.invoke("providers:set-namespace", accountId, namespace),
     repos: (accountId) => ipcRenderer.invoke("providers:repos", accountId)
   },
+  credentials: {
+    list: () => ipcRenderer.invoke("credentials:list"),
+    remove: (name) => ipcRenderer.invoke("credentials:remove", name),
+    answer: (id, answer) => ipcRenderer.invoke("credentials:answer", id, answer),
+    onRequest: (listener) => subscribe("credentials:request", listener),
+    onWithdrawn: (listener) => subscribe("credentials:withdrawn", listener)
+  },
   repository: {
     state: (projectId) => ipcRenderer.invoke("repo:state", projectId),
     refresh: (projectId) => ipcRenderer.invoke("repo:refresh", projectId),

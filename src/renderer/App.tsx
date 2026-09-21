@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
-import type { GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import type { AgentInfo, CredentialRequest, GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
+import { CredentialDialog } from "./dialogs/CredentialDialog";
 import { CommandList } from "./sidebar/CommandList";
 import { notifying, refusal, useStartedHere, type GitRun } from "./git/run-action";
 import type { BranchActions } from "./git/BranchTree";
@@ -21,6 +22,7 @@ import type { SideView } from "./terminal/Pane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
 import { useWindowCovered } from "./ui/window-covered";
+import { useAgents } from "./ui/use-agents";
 import { forget, sameList, sameRecord, stableRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
@@ -67,6 +69,20 @@ function sameHead(previous: ProjectHead, entry: ProjectHead): boolean {
     previous.remote?.name === entry.remote?.name &&
     previous.remote?.url === entry.remote?.url
   );
+}
+
+/** Who asks for a credential, as the window names that tab: "Claude (fix login) in autocontract". */
+function requesterOf(
+  request: CredentialRequest,
+  projects: Project[],
+  tabs: Record<string, TerminalDescriptor[]>,
+  agents: AgentInfo[]
+): string {
+  const project = projects.find((entry) => entry.id === request.projectId);
+  const tab = project && tabs[project.id]?.find((entry) => entry.tabId === request.tabId);
+  const agent = tab && (agents.find((entry) => entry.id === tab.agentId)?.displayName ?? tab.agentId);
+  const who = agent ? (tab.title ? `${agent} (${tab.title})` : agent) : "An agent";
+  return project ? `${who} in ${project.name}` : who;
 }
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
@@ -214,6 +230,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** Window-wide, not per project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
+  /** What an agent asked for with `tet-ctl credentials-request`; main sends one at a time. */
+  const [credentialRequest, setCredentialRequest] = useState<CredentialRequest | null>(null);
   /**
    * Each tet.json's `sbx.enabled`, replaced only where it changed (the memoized list re-renders
    * otherwise). Any writer of that file (dialog, agent, editor, checkout) arrives as `commands:changed`.
@@ -765,6 +783,18 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }),
     [openEditor]
   );
+  useEffect(() => {
+    const offRequest = window.tet.credentials.onRequest(setCredentialRequest);
+    const offWithdrawn = window.tet.credentials.onWithdrawn((id) =>
+      setCredentialRequest((current) => (current?.id === id ? null : current))
+    );
+    return () => {
+      offRequest();
+      offWithdrawn();
+    };
+  }, []);
+  const closeCredentialRequest = useCallback(() => setCredentialRequest(null), []);
+  const agents = useAgents();
   useEffect(
     () =>
       window.tet.repository.onEditorContentRequest((projectId) => {
@@ -1039,6 +1069,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
       {settingsOpen && <SettingsDialog activeProject={activeProject} onClose={closeSettings} />}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
+      {credentialRequest && (
+        <CredentialDialog
+          key={credentialRequest.id}
+          request={credentialRequest}
+          requester={requesterOf(credentialRequest, projects, tabs, agents)}
+          onClose={closeCredentialRequest}
+        />
+      )}
 
       <Notices />
       <Dialogs />

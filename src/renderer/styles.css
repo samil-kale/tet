@@ -1761,6 +1761,19 @@ textarea:focus,
   font-family: var(--vscode-editor-font-family);
 }
 
+/* The Settings' Credentials rows (.sbx-path-row): name and account in two equal columns, each
+   starting at the same place in every row, then when it was last read. In the row's font
+   (.sbx-path-value): Segoe UI beside Consolas sits some 2px lower at the same line height. Its
+   width fits the longest wording ("used 59 minutes ago"), so the columns before it stay put. */
+.credential-used {
+  flex: 0 0 20ch;
+  margin-left: 12px;
+  line-height: var(--field-height);
+  white-space: nowrap;
+  text-align: right;
+  font-family: var(--vscode-editor-font-family);
+}
+
 /* A row Save or sbx's policy refuses: the error mark's colour, as .session-mark-error. Scoped to
    `.dialog-field` to outrank `.dialog-field span`, which would grey it. */
 .dialog-field .sbx-path-denied {
@@ -1881,7 +1894,8 @@ textarea:focus,
 /* Wider than a question, for the rows of switches and the Prompts tab's text box. Fixed height:
    switching tabs must not resize the dialog under the pointer. */
 .settings-dialog {
-  width: 560px;
+  /* The sbx dialog's width (.sbx-settings-dialog): seven tabs no longer fit in 560. */
+  width: 620px;
   height: 420px;
 }
 
@@ -1889,6 +1903,26 @@ textarea:focus,
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* The Credentials tab fills the body, and only its rows scroll: the text above them stays put, and
+   the body never needs a bar of its own besides theirs. */
+.settings-credentials {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-credentials .dialog-field {
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-credentials .sbx-rows {
+  flex: 1;
+  max-height: none;
 }
 
 .settings-prompt-header {

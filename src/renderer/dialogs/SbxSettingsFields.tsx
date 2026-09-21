@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
-import { CircleAlertIcon, CloseIcon } from "../ui/icons";
+import { CircleAlertIcon } from "../ui/icons";
 import { ActionLink } from "../ui/ActionLink";
+import { RemoveRow, RowSection } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox } from "../ui/Field";
 
@@ -255,44 +256,6 @@ function RowMark({ title }: { title: string | undefined }) {
     <span className="sbx-path-denied" title={title}>
       <CircleAlertIcon />
     </span>
-  );
-}
-
-/** Every row's last cell. */
-function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
-  return (
-    <button className="icon-button" title={title} onClick={onClick}>
-      <CloseIcon />
-    </button>
-  );
-}
-
-/**
- * The box a section's rows sit in: its label, the rows or a line saying there are none, and what
- * adds one underneath.
- */
-function RowSection<T extends { id: string }>({
-  label,
-  empty,
-  rows,
-  renderRow,
-  add
-}: {
-  label: string;
-  empty: string;
-  rows: T[];
-  renderRow: (row: T) => ReactNode;
-  add: ReactNode;
-}) {
-  return (
-    <div className="dialog-field">
-      <span className="dialog-field-label">{label}</span>
-      <div className="sbx-rows">
-        {rows.length === 0 && <p className="dialog-detail">{empty}</p>}
-        {rows.map(renderRow)}
-      </div>
-      {add}
-    </div>
   );
 }
 

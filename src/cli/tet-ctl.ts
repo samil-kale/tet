@@ -10,7 +10,7 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
  * stderr on failure, and an exit code to branch on.
  */
 
-/** When tet-ctl is the right tool at all. TET_SYSTEM_PROMPT's one line sends an agent here, so this
+/** When tet-ctl is the right tool at all. systemPrompt's one line sends an agent here, so this
  *  sits beside the verbs: nothing installed into an agent's configuration, and all four read it
  *  alike. It does not repeat that prompt. */
 function whenToUse(sandboxed: boolean): string[] {
@@ -22,7 +22,19 @@ function whenToUse(sandboxed: boolean): string[] {
     // A sandboxed tab is not offered tabs-run-command, so it is not sent looking for one.
     sandboxed ? "should do the job." : "or a saved command should do the job.",
     "",
-    "Leave it alone for files and git: read the repository and run git yourself."
+    "Leave it alone for files and git: read the repository and run git yourself.",
+    // Never offered in a sandbox (ControlVerb.sandbox absent), so not mentioned there either.
+    ...(sandboxed
+      ? []
+      : [
+          "",
+          "A credential (token, password) comes from the environment first: env variables, a CLI's own",
+          "login (gh, glab), git credential fill. Only when none has it, credentials-list and",
+          "credentials-get; when TET has none either, credentials-request, which the user answers in",
+          "TET's dialog — with a --description of what it is and grants. Never ask for a credential in",
+          "the chat. Use a value only inside the command that needs it,",
+          "$(tet-ctl credentials-get <name> --value), so it never shows in your output."
+        ])
   ];
 }
 
@@ -263,6 +275,13 @@ async function main(): Promise<void> {
   if (quiet) {
     const answer = (response.result as { stdout?: unknown } | null)?.stdout;
     process.stdout.write(typeof answer === "string" ? answer : "");
+    return;
+  }
+  // The value alone, for a command substitution: `$(tet-ctl credentials-get <name> --value)` puts
+  // it into the command without it ever showing in the agent's output.
+  const value = (response.result as { value?: unknown } | null)?.value;
+  if (args.value === true && typeof value === "string") {
+    process.stdout.write(value);
     return;
   }
   process.stdout.write(JSON.stringify(response.result, null, 2) + "\n");

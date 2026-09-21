@@ -6,6 +6,9 @@ import type {
   AppInfo,
   AppSettings,
   CheckoutTarget,
+  CredentialAnswer,
+  CredentialInfo,
+  CredentialRequest,
   EditorReport,
   ExplorerListing,
   ExplorerSettings,
@@ -129,6 +132,17 @@ export interface TETApi {
     setNamespace(accountId: string, namespace: string): Promise<void>;
     /** Most recently active first. */
     repos(accountId: string): Promise<ListRepositoriesResult>;
+  };
+  credentials: {
+    /** Never the values. */
+    list(): Promise<CredentialInfo[]>;
+    remove(name: string): Promise<void>;
+    /** The dialog's Save (values) or Cancel (null): why it could not be saved, else nothing. */
+    answer(id: number, answer: CredentialAnswer | null): Promise<string | undefined>;
+    /** An agent asked through `tet-ctl credentials-request`; one at a time. */
+    onRequest(listener: (request: CredentialRequest) => void): Unsubscribe;
+    /** The asking agent is gone: the dialog of that request closes. */
+    onWithdrawn(listener: (id: number) => void): Unsubscribe;
   };
   repository: {
     state(projectId: string): Promise<RepositoryState>;

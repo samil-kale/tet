@@ -4,9 +4,10 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
-import { TET_SYSTEM_PROMPT } from "../src/main/agents/system-prompt";
+import { systemPrompt } from "../src/main/agents/system-prompt";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
 import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
+import type { CredentialAsk } from "../src/main/credentials";
 import { tabControlToken } from "../src/main/control/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
 import { EMPTY_REPOSITORY_STATE, withSettings } from "../src/shared/types";
@@ -58,6 +59,9 @@ interface Calls {
   editorsOpened: [string, string, boolean][];
   /** One entry per `inspect`, the call `tabs-wait` polls. */
   inspected: string[];
+  /** Per `credentials-request`, what the dialog was asked; the ids of those whose caller left. */
+  credentialAsks: CredentialAsk[];
+  credentialsWithdrawn: string[];
 }
 
 /** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
@@ -79,6 +83,12 @@ let themeWaits = false;
 /** What the faked renameTab answers: an agent's refusal, as a real one can give. */
 let refuseRename: string | undefined;
 let calls: Calls;
+/** The faked credential store: value by name. */
+let credentialValues: Map<string, string>;
+/** What the faked dialog answers: the name saved under, undefined for Cancel, or DIALOG_STAYS_OPEN to stay
+ *  up until the caller leaves. */
+let dialogAnswer: string | undefined;
+const DIALOG_STAYS_OPEN = "(stays open)";
 
 function terminalsOf(projectId: string): ControlTerminals {
   return {
@@ -207,7 +217,25 @@ function deps(): ControlDeps {
       calls.notified.push([title, body, target]);
     },
     // Stands in for main.ts's applyTheme.
-    applyTheme: () => themeWaits
+    applyTheme: () => themeWaits,
+    credentials: {
+      list: () => [...credentialValues.keys()].map((name) => ({ name, host: "gitlab.example.com" })),
+      info: (name) => (credentialValues.has(name) ? { name, host: "gitlab.example.com" } : undefined),
+      get: (name) => credentialValues.get(name),
+      remove: (name) => credentialValues.delete(name),
+      ask: (ask, gone) => {
+        calls.credentialAsks.push(ask);
+        if (dialogAnswer !== DIALOG_STAYS_OPEN) {
+          return Promise.resolve(dialogAnswer);
+        }
+        return new Promise((resolve) =>
+          gone.addEventListener("abort", () => {
+            calls.credentialsWithdrawn.push(ask.name);
+            resolve(undefined);
+          })
+        );
+      }
+    }
   };
 }
 
@@ -260,7 +288,9 @@ describe("tet-ctl against the control server", () => {
       restarted: [],
       written: [],
       editorsOpened: [],
-      inspected: []
+      inspected: [],
+      credentialAsks: [],
+      credentialsWithdrawn: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -285,6 +315,8 @@ describe("tet-ctl against the control server", () => {
     tab2Session = undefined;
     themeWaits = false;
     refuseRename = undefined;
+    credentialValues = new Map([["gitlab-work", "glpat-secret"]]);
+    dialogAnswer = undefined;
   });
 
   it("answers help by itself, with every verb", async () => {
@@ -640,7 +672,11 @@ describe("tet-ctl against the control server", () => {
       ["tabs-send", "tab-2", "x"],
       ["settings-set-theme", "dark-modern"],
       ["settings-set-prompt", "commitMessage", "x"],
-      ["restart-app", "--confirm"]
+      ["restart-app", "--confirm"],
+      ["credentials-get", "gitlab-work"],
+      ["credentials-request", "gitlab-work"],
+      ["credentials-list"],
+      ["credentials-remove", "gitlab-work"]
     ];
     for (const args of refused) {
       assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
@@ -839,10 +875,74 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["hook", "session-start"], {}, payload);
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual(JSON.parse(run.stdout), {
-      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: TET_SYSTEM_PROMPT }
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: systemPrompt(false) }
     });
     assert.deepEqual(calls.hooks, [[OWN_TAB, "session-start", payload]]);
     assert.deepEqual(calls.notified, [], "nothing to toast about a session");
+  });
+
+  it("tells a sandboxed session start nothing of the credentials", async () => {
+    const run = await tetCtl(["hook", "session-start"], { [CONTROL_ENV.tabId]: SANDBOX_TAB }, "{}");
+    assert.equal(run.status, EXIT_CODES.ok);
+    const context = (JSON.parse(run.stdout) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
+    assert.equal(context, systemPrompt(true));
+    assert.doesNotMatch(context, /credential/);
+    assert.match(systemPrompt(false), /credentials-request/);
+  });
+
+  it("hands out a stored credential by name, and lists and removes them without values", async () => {
+    assert.deepEqual((await tetCtl(["credentials-get", "gitlab-work"])).result, {
+      name: "gitlab-work",
+      host: "gitlab.example.com",
+      value: "glpat-secret"
+    });
+    const raw = await tetCtl(["credentials-get", "gitlab-work", "--value"]);
+    assert.equal(raw.stdout, "glpat-secret", "the value alone, for a command substitution");
+    const missing = await tetCtl(["credentials-get", "github"]);
+    assert.equal(missing.status, EXIT_CODES.usage);
+    assert.match(missing.stderr, /no credential named github/);
+    assert.deepEqual((await tetCtl(["credentials-list"])).result, [{ name: "gitlab-work", host: "gitlab.example.com" }]);
+    assert.deepEqual((await tetCtl(["credentials-remove", "gitlab-work"])).result, { removed: "gitlab-work" });
+    assert.equal((await tetCtl(["credentials-remove", "gitlab-work"])).status, EXIT_CODES.usage, "gone already");
+  });
+
+  it("asks for a credential with the caller's tab and answers what the dialog did", async () => {
+    dialogAnswer = "gitlab-work";
+    const saved = await tetCtl([
+      "credentials-request",
+      "gitlab-work",
+      "--host",
+      "gitlab.example.com",
+      "--description",
+      "GitLab token, scope api",
+      "--reason",
+      "401"
+    ]);
+    assert.deepEqual(saved.result, { saved: "gitlab-work" });
+    assert.deepEqual(calls.credentialAsks, [
+      {
+        projectId: PROJECT.id,
+        tabId: OWN_TAB,
+        name: "gitlab-work",
+        host: "gitlab.example.com",
+        account: undefined,
+        description: "GitLab token, scope api",
+        reason: "401"
+      }
+    ]);
+    dialogAnswer = undefined;
+    assert.deepEqual((await tetCtl(["credentials-request", "github"])).result, { cancelled: true });
+  });
+
+  it("takes the credential dialog down once the asking CLI is gone", async () => {
+    dialogAnswer = DIALOG_STAYS_OPEN;
+    const body = JSON.stringify({ token: TOKEN, verb: "credentials-request", args: { name: "github" }, caller: {} });
+    const req = http.request({ host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } });
+    req.on("error", () => undefined);
+    req.end(body);
+    await eventually("the dialog asked", () => calls.credentialAsks.length === 1, 5000);
+    req.destroy();
+    await eventually("the dialog withdrawn", () => calls.credentialsWithdrawn.length === 1, 5000);
   });
 
   it("answers one JSON value where the event has nothing to say, and shows its toast", async () => {

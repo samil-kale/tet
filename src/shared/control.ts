@@ -106,7 +106,12 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   kb: "value",
   timeout: "value",
   keep: "switch",
-  force: "switch"
+  force: "switch",
+  host: "value",
+  account: "value",
+  description: "value",
+  reason: "value",
+  value: "switch"
 };
 
 /** An `events-tail` entry: what the session manager heard, in arrival order. */
@@ -200,6 +205,36 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "restart-app --confirm",
     summary: "Restart TET. Ends every terminal in every project, this one included — only when the user asked for it.",
     positionals: []
+  },
+  {
+    verb: "credentials-get",
+    group: "TET itself",
+    usage: "credentials-get <name> [--value]",
+    summary:
+      "A credential stored in TET (name, host, account, value); --value prints the value alone, for $(...). Only when the environment provides none — env, a CLI's login, git credential fill.",
+    positionals: ["name"]
+  },
+  {
+    verb: "credentials-request",
+    group: "TET itself",
+    usage: "credentials-request <name> [--host <host>] [--account <account>] [--description <text>] [--reason <text>]",
+    summary:
+      "Ask the user to type a credential into TET's dialog, never into the chat; waits for the answer. --description says what it is and grants, for whoever picks it later. An existing name asks to replace its value — after a 401, say so in --reason.",
+    positionals: ["name"]
+  },
+  {
+    verb: "credentials-list",
+    group: "TET itself",
+    usage: "credentials-list",
+    summary: "The stored credentials (name, host, account, description, last used), never their values.",
+    positionals: []
+  },
+  {
+    verb: "credentials-remove",
+    group: "TET itself",
+    usage: "credentials-remove <name>",
+    summary: "Delete a stored credential.",
+    positionals: ["name"]
   },
   {
     verb: "tabs-list",

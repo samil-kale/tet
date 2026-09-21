@@ -8,11 +8,13 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { safeStorage } from "electron";
 import * as esbuild from "esbuild";
+import { claudeHoldsTurnEnd } from "../src/main/agents/claude/hooks";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { hookSessionId } from "../src/main/agents/hook-payload";
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
-import { TET_SYSTEM_PROMPT } from "../src/main/agents/system-prompt";
+import { systemPrompt } from "../src/main/agents/system-prompt";
+import { CredentialRequests, CredentialStore } from "../src/main/credentials";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
@@ -551,6 +553,109 @@ describe("the sbx secrets kept on this machine", () => {
   });
 });
 
+describe("the credentials agents asked for", () => {
+  // "sealed:" stands in for the OS's encryption, as for the sbx secrets above.
+  const sealing = (available: boolean): void => {
+    Object.assign(safeStorage, {
+      isEncryptionAvailable: () => available,
+      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
+      decryptString: (buffer: Buffer) => {
+        const text = buffer.toString();
+        if (!text.startsWith("sealed:")) {
+          throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+        }
+        return text.slice("sealed:".length);
+      }
+    });
+  };
+  const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-credentials-"));
+
+  it("keep one row per name, remember their last use and read the file fresh every time", () => {
+    sealing(true);
+    const root = tempRoot();
+    const store = new CredentialStore(root);
+    store.set("gitlab-work", "gitlab.example.com", "skale", "", "old");
+    store.set("gitlab-work", "gitlab.example.com", "samil", "GitLab token, scope api", "new");
+    store.set("stripe", "", "", "", "sk");
+    assert.deepEqual(store.list(), [
+      { name: "gitlab-work", host: "gitlab.example.com", account: "samil", description: "GitLab token, scope api", lastUsed: undefined },
+      { name: "stripe", host: undefined, account: undefined, description: undefined, lastUsed: undefined }
+    ]);
+    assert.equal(store.get("gitlab-work"), "new");
+    assert.equal(typeof store.info("gitlab-work")?.lastUsed, "number");
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "credentials.json"), "utf8"), /"new"/, "never in the clear");
+    const reopened = new CredentialStore(root);
+    assert.equal(reopened.get("stripe"), "sk");
+    assert.equal(reopened.remove("stripe"), true);
+    assert.equal(reopened.remove("stripe"), false);
+    assert.equal(store.info("stripe"), undefined, "a change from outside is seen, not overwritten");
+    assert.equal(store.get("gitlab-work"), "new");
+  });
+
+  it("store nothing where the OS offers no encryption", () => {
+    sealing(false);
+    const store = new CredentialStore(tempRoot());
+    assert.throws(() => store.set("github", "github.com", "", "", "token"), /no keyring/);
+    assert.deepEqual(store.list(), []);
+  });
+
+  it("are asked for one at a time; a replacement keeps name and host, a new name is not taken twice", async () => {
+    sealing(true);
+    const store = new CredentialStore(tempRoot());
+    store.set("gitlab-work", "gitlab.example.com", "skale", "GitLab token", "old");
+    const shown: number[] = [];
+    const requests = new CredentialRequests(
+      store,
+      (request) => {
+        shown.push(request.id);
+        return true;
+      },
+      () => undefined
+    );
+    const alive = new AbortController().signal;
+    const replaced = requests.ask({ name: "gitlab-work" }, alive);
+    const added = requests.ask({ name: "github", host: "github.com" }, alive);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(shown, [1], "the second waits for the first");
+    assert.equal(
+      requests.answer(1, { name: "renamed", host: "elsewhere", account: "samil", description: "GitLab token, scope api", value: "new" }),
+      undefined
+    );
+    assert.equal(await replaced, "gitlab-work");
+    assert.deepEqual(store.info("gitlab-work"), {
+      name: "gitlab-work",
+      host: "gitlab.example.com",
+      account: "samil",
+      description: "GitLab token, scope api",
+      lastUsed: undefined
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(shown, [1, 2]);
+    assert.match(requests.answer(2, { name: "gitlab-work", host: "", account: "", description: "", value: "x" }) ?? "", /exists already/);
+    assert.equal(requests.answer(2, null), undefined);
+    assert.equal(await added, undefined);
+  });
+
+  it("withdraw a request whose caller left, and refuse without a window", async () => {
+    sealing(true);
+    const withdrawn: number[] = [];
+    let listening = true;
+    const requests = new CredentialRequests(
+      new CredentialStore(tempRoot()),
+      () => listening,
+      (id) => withdrawn.push(id)
+    );
+    const caller = new AbortController();
+    const asked = requests.ask({ name: "github" }, caller.signal);
+    await new Promise((resolve) => setImmediate(resolve));
+    caller.abort();
+    assert.equal(await asked, undefined);
+    assert.deepEqual(withdrawn, [1]);
+    listening = false;
+    await assert.rejects(requests.ask({ name: "github" }, new AbortController().signal), /not ready/);
+  });
+});
+
 describe("sbx's filesystem policy", () => {
   // `sbx policy ls --type filesystem --json` on an organization-governed account, sbx 0.42.1
   // (2026-09-14), trimmed to the fields read. `local` is an ungoverned account's active defaults.
@@ -893,11 +998,31 @@ describe("which of two turn reports counts", () => {
   });
 });
 
+describe("Claude Code's end of a turn", () => {
+  const stop = (tasks: unknown[]): string => JSON.stringify({ hook_event_name: "Stop", background_tasks: tasks });
+
+  it("is held while a background subagent or shell still runs", () => {
+    assert.equal(claudeHoldsTurnEnd(stop([{ id: "a", type: "subagent", status: "running" }])), true);
+    assert.equal(claudeHoldsTurnEnd(stop([{ id: "b", type: "shell", status: "running" }])), true);
+    assert.equal(claudeHoldsTurnEnd(stop([{ id: "a", type: "subagent", status: "completed" }])), false);
+  });
+
+  it("is not held by a monitor, which runs for the whole session", () => {
+    // Measured 2026-09-21: an artifact's live updates, listed on every Stop.
+    const monitor = { id: "s1", type: "monitor", status: "running", description: "live updates for artifact" };
+    assert.equal(claudeHoldsTurnEnd(stop([monitor])), false);
+    assert.equal(claudeHoldsTurnEnd(stop([])), false);
+    assert.equal(claudeHoldsTurnEnd(""), false);
+  });
+});
+
 describe("TET's system prompt", () => {
   // It crosses cmd.exe, `sbx run` and a TOML basic string, measured only as a plain line
   // (system-prompt.ts).
   it("stays one line of letters, digits and plain punctuation", () => {
-    assert.match(TET_SYSTEM_PROMPT, /^[A-Za-z0-9 .,;:'-]+$/);
+    for (const sandboxed of [false, true]) {
+      assert.match(systemPrompt(sandboxed), /^[A-Za-z0-9 .,;:'-]+$/);
+    }
   });
 });
 
@@ -1037,7 +1162,8 @@ describe("opencode's plugin", () => {
       await hooks["chat.message"]({}, { message: { id: "msg_2", sessionID: "ses_child" }, parts: [] });
       const request = { system: ["opencode's own"] };
       await hooks["experimental.chat.system.transform"]({ sessionID: "ses_a" }, request);
-      assert.deepEqual(request.system, ["opencode's own", TET_SYSTEM_PROMPT]);
+      // Sandboxed ("tet-opencode-abc"): the prompt without the credentials.
+      assert.deepEqual(request.system, ["opencode's own", systemPrompt(true)]);
 
       // Raised on every step of a turn, so not reported: each would be a round trip, the last
       // racing the idle below.

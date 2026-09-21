@@ -6,6 +6,7 @@ import type {
   AppInfo,
   AppSettings,
   ColorScheme,
+  CredentialInfo,
   ExplorerSettings,
   ExplorerSortOrder,
   NotificationSettings,
@@ -19,6 +20,7 @@ import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
+import { RemoveRow, RowSection } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 
@@ -28,7 +30,7 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "info";
+type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "credentials" | "info";
 
 /** The dialog opens on the first. */
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -37,6 +39,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "shortcuts", label: "Shortcuts" },
   { id: "files", label: "Files" },
   { id: "prompts", label: "Prompts" },
+  { id: "credentials", label: "Credentials" },
   { id: "info", label: "Info" }
 ];
 
@@ -73,6 +76,25 @@ const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
 /** The Files tab's tet.json keys, one write each, in Save's order. */
 const EXPLORER_KEYS: (keyof ExplorerSettings)[] = ["excludeGitIgnore", "compactFolders", "sortOrder"];
 
+const RELATIVE_TIME = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+/** When `credentials-get` last read it, in the largest unit that is at least one. */
+function lastUsedLabel(at: number | undefined, now: number): string {
+  if (at === undefined) {
+    return "never used";
+  }
+  const minutes = Math.round((at - now) / 60_000);
+  const hours = Math.round(minutes / 60);
+  const days = Math.round(hours / 24);
+  if (minutes > -60) {
+    return `used ${RELATIVE_TIME.format(minutes, "minute")}`;
+  }
+  if (hours > -24) {
+    return `used ${RELATIVE_TIME.format(hours, "hour")}`;
+  }
+  return `used ${days > -30 ? RELATIVE_TIME.format(days, "day") : RELATIVE_TIME.format(Math.round(days / 30), "month")}`;
+}
+
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
   { key: "version", label: "TET" },
   { key: "electron", label: "Electron" },
@@ -102,11 +124,16 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const edits = useRef<SettingsEdits>({});
   /** tet.json as opened: Save writes only the keys that differ. */
   const loadedExplorer = useRef<ExplorerSettings | null>(null);
+  /** The Credentials tab's rows, less those removed; only agents add one (credentials-request). */
+  const [credentials, setCredentials] = useState<CredentialInfo[]>([]);
+  /** What Save deletes. */
+  const removedCredentials = useRef<string[]>([]);
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
     // Cannot change while the process runs.
     void window.tet.app.info().then(setInfo);
+    void window.tet.credentials.list().then(setCredentials);
   }, []);
 
   // Read once, on open; Save goes through patchSetting (commands.ts), which reads the file fresh
@@ -154,12 +181,21 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
     setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
 
-  /** One settings.json write, then one tet.json write per changed Explorer key. */
+  const removeCredential = (name: string): void => {
+    removedCredentials.current.push(name);
+    setCredentials((current) => current.filter((credential) => credential.name !== name));
+  };
+
+  /** One settings.json write, one delete per removed credential, then one tet.json write per
+   *  changed Explorer key. */
   const save = async (): Promise<void> => {
     setSaving(true);
     setRefused(undefined);
     if (Object.keys(edits.current).length > 0) {
       await window.tet.settings.patch(edits.current);
+    }
+    for (const name of removedCredentials.current.splice(0)) {
+      await window.tet.credentials.remove(name);
     }
     const loaded = loadedExplorer.current;
     if (activeProject && explorerSettings && loaded) {
@@ -318,6 +354,32 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             onChange={(event) => applyPrompt(promptId, event.target.value)}
           />
         </>
+      )}
+      {tab === "credentials" && (
+        <div className="settings-credentials">
+          <p className="dialog-detail">
+            What agents asked for with tet-ctl credentials-request, when their own environment had nothing. Encrypted by
+            the OS on this machine; never offered in a sandbox.
+          </p>
+          <RowSection
+            label="Credentials"
+            empty="No credentials yet"
+            rows={credentials.map((credential) => ({ ...credential, id: credential.name }))}
+            renderRow={(row) => (
+              <div key={row.id} className="sbx-path-row">
+                <span className="sbx-path-value" title={row.description ?? row.name}>
+                  {row.name}
+                </span>
+                {/* Even empty: it holds the column, so every account starts at the same place. */}
+                <span className="sbx-path-value" title={row.account}>
+                  {row.account}
+                </span>
+                <span className="credential-used">{lastUsedLabel(row.lastUsed, Date.now())}</span>
+                <RemoveRow title="Remove credential" onClick={() => removeCredential(row.name)} />
+              </div>
+            )}
+          />
+        </div>
       )}
       {tab === "info" && info && (
         <div className="settings-info">

@@ -6,10 +6,10 @@ import { hookSessionId } from "../hook-payload";
 import { SANDBOX_HOME, sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { claudeHoldsTurnEnd, setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
-import { TET_SYSTEM_PROMPT } from "../system-prompt";
+import { systemPrompt } from "../system-prompt";
 
 /** Appended to Claude Code's own system prompt for this process (measured, see system-prompt.ts). */
-const SYSTEM_PROMPT_ARGS = ["--append-system-prompt", TET_SYSTEM_PROMPT];
+const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
 
 export const claudeAgent: AgentDefinition = {
   id: "claude",
@@ -30,14 +30,14 @@ export const claudeAgent: AgentDefinition = {
       // Swallowed, never rejected — see AgentDefinition.prepareSpawn.
       console.error("[tet] could not write Claude hook settings:", error);
     }
-    return Promise.resolve({ args: [...args, ...SYSTEM_PROMPT_ARGS] });
+    return Promise.resolve({ args: [...args, ...systemPromptArgs(false)] });
   },
   prepareSandboxSpawn: (_cwd, paths) => {
     try {
-      return { args: [...setupClaudeHooks(sandboxHookDir(paths.agentDir), paths, paths.theme.kind, SANDBOX_TARGET), ...SYSTEM_PROMPT_ARGS] };
+      return { args: [...setupClaudeHooks(sandboxHookDir(paths.agentDir), paths, paths.theme.kind, SANDBOX_TARGET), ...systemPromptArgs(true)] };
     } catch (error) {
       console.error("[tet] could not write Claude sandbox hook settings:", error);
-      return { args: SYSTEM_PROMPT_ARGS };
+      return { args: systemPromptArgs(true) };
     }
   },
   // See AgentDefinition.sandboxEnv.

@@ -1,6 +1,7 @@
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type { Project, RepositoryState } from "../../shared/types";
 import type { ControlRecords } from "../control/control-records";
+import type { CredentialRequests, CredentialStore } from "../credentials";
 import type { RepositoryManager } from "../git/repository";
 import type { ProjectDeps, ProjectStore } from "../projects";
 import type { AccountStore } from "../providers/accounts";
@@ -16,6 +17,9 @@ export interface IpcDeps {
   settings: SettingsStore;
   accounts: AccountStore;
   sbxSecrets: SbxSecretStore;
+  credentials: CredentialStore;
+  /** Shared with the control channel's `credentials-request`. */
+  credentialRequests: CredentialRequests;
   repositories: RepositoryManager;
   sessions: SessionManagerRegistry;
   /** The window's reports for the control verbs. */
