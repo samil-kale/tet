@@ -13,6 +13,7 @@ import type {
   PromptId,
   SettingsEdits
 } from "../../shared/types";
+import { confirm } from "../ui/Dialog";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field } from "../ui/Field";
@@ -176,6 +177,18 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     }
     setSaving(false);
     onClose();
+    // Asked after closing: a kind switch is saved either way, Cancel only waits for the next start.
+    if (chosenKind !== shownKind) {
+      const answer = await confirm({
+        title: "Restart TET",
+        message: `Restart TET now to switch to the ${chosenKind} theme?`,
+        detail: "This ends every terminal in every project. Otherwise it applies at the next start.",
+        confirmLabel: "Restart"
+      });
+      if (answer.confirmed) {
+        window.tet.app.restart();
+      }
+    }
   };
 
   return (

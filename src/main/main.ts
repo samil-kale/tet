@@ -557,7 +557,8 @@ if (!app.requestSingleInstanceLock()) {
       send,
       openProject,
       openWorkspace,
-      applyTheme
+      applyTheme,
+      shutdown
     });
     timeStartup("window", createWindow);
     // Off the start path: reading each project's main worktree is up to two reads and a realpath,

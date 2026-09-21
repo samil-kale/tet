@@ -56,6 +56,8 @@ export interface TETApi {
     reportSlow(label: string, ms: number): void;
     /** For `tet-ctl notices-list`. */
     reportNotice(report: NoticeReport): void;
+    /** Ends every session and starts tet again, as `tet-ctl restart-app` does. */
+    restart(): void;
   };
   /** Docker Sandboxes, opt-in per project through the project row's "SBX Settings". */
   sbx: {

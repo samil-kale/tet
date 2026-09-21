@@ -10,8 +10,9 @@ import type { IpcDeps } from "./deps";
 export function registerAppIpc({
   settings,
   openWorkspace,
-  applyTheme
-}: Pick<IpcDeps, "settings" | "openWorkspace" | "applyTheme">): void {
+  applyTheme,
+  shutdown
+}: Pick<IpcDeps, "settings" | "openWorkspace" | "applyTheme" | "shutdown">): void {
   /** The startup gate, asked on every re-check; passing opens the workspace. */
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
     // Re-scans for manager bin dirs created since startup, so "Check again" finds them.
@@ -27,6 +28,9 @@ export function registerAppIpc({
   ipcMain.handle("startup:any-agent-installed", () => anyAgentInstalled());
 
   ipcMain.on("startup:quit", () => app.quit());
+
+  // The settings dialog's answer to a light/dark switch; it asked the user first.
+  ipcMain.on("app:restart", () => shutdown(true));
 
   // The settings Info tab, fixed for the process's life.
   ipcMain.handle(

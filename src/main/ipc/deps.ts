@@ -30,6 +30,8 @@ export interface IpcDeps {
   openWorkspace: () => void;
   /** Returns whether a restart is still needed. */
   applyTheme: () => boolean;
+  /** main.ts's one way out, shared with the control channel's `restart-app`. */
+  shutdown: (relaunch: boolean) => void;
 }
 
 /** The answer of every verb addressed to a project that is not open. */
