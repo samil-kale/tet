@@ -1,6 +1,6 @@
 import { registerAppIpc } from "./app";
 import { registerCommandsIpc } from "./commands";
-import { registerCredentialsIpc } from "./credentials";
+import { registerEnvironmentIpc } from "./environment";
 import type { IpcDeps } from "./deps";
 import { registerFilesIpc } from "./files";
 import { registerProjectsIpc } from "./projects";
@@ -17,7 +17,7 @@ export { sweepTempFiles } from "./files";
 export function registerIpc(deps: IpcDeps): void {
   registerAppIpc(deps);
   registerSbxIpc(deps);
-  registerCredentialsIpc(deps);
+  registerEnvironmentIpc(deps);
   registerProjectsIpc(deps);
   registerRepositoryIpc(deps);
   registerCommandsIpc(deps);

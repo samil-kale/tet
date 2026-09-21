@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
-import type { AgentInfo, CredentialRequest, GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import type { AgentInfo, EnvRequest, GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
-import { CredentialDialog } from "./dialogs/CredentialDialog";
+import { EnvDialog } from "./dialogs/EnvDialog";
 import { CommandList } from "./sidebar/CommandList";
 import { notifying, refusal, useStartedHere, type GitRun } from "./git/run-action";
 import type { BranchActions } from "./git/BranchTree";
@@ -71,9 +71,10 @@ function sameHead(previous: ProjectHead, entry: ProjectHead): boolean {
   );
 }
 
-/** Who asks for a credential, as the window names that tab: "Claude (fix login) in autocontract". */
+/** Who asks for environment variables, as the window names that tab: "Claude (fix login) in
+ *  autocontract". */
 function requesterOf(
-  request: CredentialRequest,
+  request: EnvRequest,
   projects: Project[],
   tabs: Record<string, TerminalDescriptor[]>,
   agents: AgentInfo[]
@@ -230,8 +231,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** Window-wide, not per project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
-  /** What an agent asked for with `tet-ctl credentials-request`; main sends one at a time. */
-  const [credentialRequest, setCredentialRequest] = useState<CredentialRequest | null>(null);
+  /** What an agent asked for with `tet-ctl env-request`; main sends one at a time. */
+  const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
   /**
    * Each tet.json's `sbx.enabled`, replaced only where it changed (the memoized list re-renders
    * otherwise). Any writer of that file (dialog, agent, editor, checkout) arrives as `commands:changed`.
@@ -673,7 +674,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       let run: (() => void) | undefined;
       if (matchesShortcut(event, "settings")) {
         // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has
-        // to be the one on top — an agent's credential dialog, drawn last, can already be up.
+        // to be the one on top — an agent's environment dialog, drawn last, can already be up.
         run = () => !isWindowCovered() && setSettingsOpen(true);
       } else if (matchesShortcut(event, "toggleGit")) {
         run = () => actions.toggleSideView("git");
@@ -786,16 +787,16 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [openEditor]
   );
   useEffect(() => {
-    const offRequest = window.tet.credentials.onRequest(setCredentialRequest);
-    const offWithdrawn = window.tet.credentials.onWithdrawn((id) =>
-      setCredentialRequest((current) => (current?.id === id ? null : current))
+    const offRequest = window.tet.environment.onRequest(setEnvRequest);
+    const offWithdrawn = window.tet.environment.onWithdrawn((id) =>
+      setEnvRequest((current) => (current?.id === id ? null : current))
     );
     return () => {
       offRequest();
       offWithdrawn();
     };
   }, []);
-  const closeCredentialRequest = useCallback(() => setCredentialRequest(null), []);
+  const closeEnvRequest = useCallback(() => setEnvRequest(null), []);
   const agents = useAgents();
   useEffect(
     () =>
@@ -1071,12 +1072,12 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
       {settingsOpen && <SettingsDialog activeProject={activeProject} onClose={closeSettings} />}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
-      {credentialRequest && (
-        <CredentialDialog
-          key={credentialRequest.id}
-          request={credentialRequest}
-          requester={requesterOf(credentialRequest, projects, tabs, agents)}
-          onClose={closeCredentialRequest}
+      {envRequest && (
+        <EnvDialog
+          key={envRequest.id}
+          request={envRequest}
+          requester={requesterOf(envRequest, projects, tabs, agents)}
+          onClose={closeEnvRequest}
         />
       )}
 

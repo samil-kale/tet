@@ -6,10 +6,11 @@ import type {
   AppInfo,
   AppSettings,
   CheckoutTarget,
-  CredentialAnswer,
-  CredentialInfo,
-  CredentialRequest,
   EditorReport,
+  EnvAnswer,
+  EnvEdit,
+  EnvRequest,
+  EnvVarInfo,
   ExplorerListing,
   ExplorerSettings,
   FileContent,
@@ -133,14 +134,15 @@ export interface TETApi {
     /** Most recently active first. */
     repos(accountId: string): Promise<ListRepositoriesResult>;
   };
-  credentials: {
+  environment: {
     /** Never the values. */
-    list(): Promise<CredentialInfo[]>;
-    remove(name: string): Promise<void>;
-    /** The dialog's Save (values) or Cancel (null): why it could not be saved, else nothing. */
-    answer(id: number, answer: CredentialAnswer | null): Promise<string | undefined>;
-    /** An agent asked through `tet-ctl credentials-request`; one at a time. */
-    onRequest(listener: (request: CredentialRequest) => void): Unsubscribe;
+    list(): Promise<EnvVarInfo[]>;
+    /** The Settings' Environment tab, whole: why it could not be saved, else nothing. */
+    save(rows: EnvEdit[]): Promise<string | undefined>;
+    /** The dialog's Save (a row per variable) or Cancel (null): why it could not be saved, else nothing. */
+    answer(id: number, answer: EnvAnswer[] | null): Promise<string | undefined>;
+    /** An agent asked through `tet-ctl env-request`; one at a time. */
+    onRequest(listener: (request: EnvRequest) => void): Unsubscribe;
     /** The asking agent is gone: the dialog of that request closes. */
     onWithdrawn(listener: (id: number) => void): Unsubscribe;
   };

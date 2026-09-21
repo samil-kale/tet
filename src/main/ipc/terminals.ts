@@ -33,8 +33,9 @@ export function registerTerminalsIpc({
     }
   );
 
+  // The tab menu offers it only for a tab with no process; the environment dialog for a running one.
   ipcMain.handle("terminal:restart", (_event, projectId: string, tabId: string): void => {
-    sessions.get(projectId)?.restartTab(tabId);
+    sessions.get(projectId)?.restartTab(tabId, true);
   });
 
   /** The tab is in front of the user: clears its finished-turn mark. Only the renderer knows. */

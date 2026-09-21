@@ -81,7 +81,7 @@ type Pending =
  * Asking the user, as `notify` tells them: a function anything can call, and one mounted component
  * drawing what is pending, in the window rather than Electron's `dialog.showMessageBox`. The main
  * process asks nothing: a question lives in the view offering the action, except an agent's
- * `credentials-request` (`CredentialDialog`). Questions only — a form with two buttons;
+ * `env-request` (`EnvDialog`). Questions only — a form with two buttons;
  * `SettingsDialog` and the rest of `dialogs/` are not part of this.
  *
  * `confirm` is for the irreversible only. `prompt` is for a name, and is where every rename

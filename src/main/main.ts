@@ -8,13 +8,14 @@ import { AccountStore } from "./providers/accounts";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
+import { overridesMachineNote } from "../shared/types";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
-import { CredentialRequests, CredentialStore } from "./credentials";
+import { EnvRequests, EnvStore } from "./environment";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
@@ -23,7 +24,7 @@ import { configureSandboxes } from "./sbx";
 import { SbxSecretStore } from "./sbx-secrets";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
-import { setControlEnv } from "./terminals/pty";
+import { setControlEnv, setStoredEnv } from "./terminals/pty";
 import { installUncaughtHandler, logError } from "./uncaught";
 import { awaitedToastTab, showDesktopNotification, startNotifications } from "./notifications";
 import { isOpenableUrl } from "./shell-open";
@@ -204,29 +205,36 @@ const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
 const sbxSecrets = new SbxSecretStore(dataRoot);
-const credentials = new CredentialStore(dataRoot);
+const environment = new EnvStore(dataRoot);
+// Read at every spawn, so a restarted tab sees what was saved meanwhile.
+setStoredEnv(() => environment.values());
+// Held until the window listens (send), like any notice this early.
+const overriding = environment.list().filter((variable) => variable.overridesMachine).map((variable) => variable.name);
+if (overriding.length > 0) {
+  send("app:notice", { severity: "info", message: overridesMachineNote(overriding) });
+}
 // Asked only once App listens (noticesHeard), which is also when the dialog can show.
-const credentialRequests = new CredentialRequests(
-  credentials,
+const envRequests = new EnvRequests(
+  environment,
   (request) => {
     if (!noticesHeard || !window || window.isDestroyed()) {
       return false;
     }
-    send("credentials:request", request);
+    send("environment:request", request);
     // Out of sight, told as a question is (session-manager's toast): the agent's shell gives up
     // waiting at some point, and the dialog with it.
     if ((!window.isFocused() || window.isMinimized()) && settings.get().notifications.needsYou) {
       const tab = request.projectId ? sessions.get(request.projectId)?.snapshot().find((entry) => entry.tabId === request.tabId) : undefined;
       const agent = AGENTS.find((entry) => entry.id === tab?.agentId)?.displayName ?? "An agent";
       showDesktopNotification(
-        `${agent}: Credential needed`,
-        `Asks for ${request.name} — answer it in TET`,
+        `${agent}: Environment variables needed`,
+        `Asks for ${request.variables.map((variable) => variable.name).join(", ")} — answer it in TET`,
         tab && { projectId: tab.projectId, tabId: tab.tabId }
       );
     }
     return true;
   },
-  (id) => send("credentials:withdrawn", id)
+  (id) => send("environment:withdrawn", id)
 );
 /** What control verbs answer beyond the stores. */
 const records = new ControlRecords();
@@ -386,8 +394,8 @@ async function startControl(): Promise<void> {
         projectsChanged: projectDeps.projectsChanged,
         notify: showDesktopNotification,
         applyTheme,
-        credentials,
-        credentialRequests
+        environment,
+        envRequests
       },
       controlChannel.token,
       controlChannel.port
@@ -468,7 +476,7 @@ function createWindow(): void {
   window.webContents.on("did-start-loading", () => {
     noticesHeard = false;
     // The dialog went with the page.
-    credentialRequests.drop();
+    envRequests.drop();
   });
   // A reload reads the theme off the window's original arguments, possibly stale since applyTheme.
   // The renderer ignores its own theme id.
@@ -579,8 +587,8 @@ if (!app.requestSingleInstanceLock()) {
       settings,
       accounts,
       sbxSecrets,
-      credentials,
-      credentialRequests,
+      environment,
+      envRequests,
       repositories,
       sessions,
       records,

@@ -229,44 +229,45 @@ export interface ProviderAccount {
   namespace?: string;
 }
 
-/** A credential an agent asked for with `tet-ctl credentials-request`. Its value is kept
- *  encrypted, main-side, and leaves only through `credentials-get`. */
-export interface CredentialInfo {
-  /** What an agent asks for it by. */
+/** An environment variable tet sets in every tab it starts, a sandboxed one excepted, over the
+ *  machine's own. Its value is kept encrypted, main-side, and reaches only a tab's environment. */
+export interface EnvVarInfo {
   name: string;
-  host?: string;
-  account?: string;
-  /** What it is and what it grants, for an agent picking one off `credentials-list`. */
-  description?: string;
-  /** Ms since epoch of the last `credentials-get`; undefined never read. */
-  lastUsed?: number;
+  /** The environment TET was started with has it too — set on this machine (setx, a shell
+   *  profile); TET's value replaces it in its tabs. */
+  overridesMachine: boolean;
 }
 
-/** What `credentials-request` puts in front of the user. */
-export interface CredentialRequest {
+/** What TET tells the user of variables it keeps that the machine sets too — once at start, in the
+ *  dialog that saved them, over their row in the Settings. */
+export function overridesMachineNote(names: string[]): string {
+  return `${names.join(", ")} ${names.length === 1 ? "is" : "are"} set on this machine too; TET's value replaces it in the tabs it starts.`;
+}
+
+/** What `env-request` puts in front of the user: one row per variable. */
+export interface EnvRequest {
   id: number;
-  /** The asking tab, for the dialog to name. */
+  /** The asking tab, for the dialog to name and to restart. */
   projectId?: string;
   tabId?: string;
-  name: string;
-  host?: string;
-  account?: string;
-  /** The agent's proposal, or what is stored when replacing. */
-  description?: string;
+  /** A stored one's value the dialog replaces. */
+  variables: (EnvVarInfo & { stored: boolean })[];
   /** The agent's own words. */
   reason?: string;
-  /** The name is stored already: the dialog replaces its value. */
-  replace: boolean;
 }
 
-/** What the credential dialog answers: the fields as typed, or null for Cancel. */
-export interface CredentialAnswer {
-  /** Fixed when replacing. */
+/** What the dialog answers per row, as typed; null for Cancel. */
+export interface EnvAnswer {
   name: string;
-  host: string;
-  account: string;
-  description: string;
   value: string;
+}
+
+/** A row of the Settings' Environment tab on Save: `from` names the stored variable it shows (so a
+ *  renamed one keeps its value), `value` is what was typed — absent keeps the stored one. */
+export interface EnvEdit {
+  name: string;
+  from?: string;
+  value?: string;
 }
 
 /** A repository the remote tab lists. */

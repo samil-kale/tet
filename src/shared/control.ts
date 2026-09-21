@@ -74,6 +74,8 @@ export interface ControlVerb {
    * `sandbox` and `ownProjectOnly`, so a new verb that gives out a file cannot leave it out.
    */
   sandboxFile?: string;
+  /** The last positional takes every argument left, as a list. */
+  variadic?: true;
   /** Stdin goes in as `args.payload` — an agent's hook payload. */
   stdin?: true;
   /**
@@ -107,11 +109,7 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   timeout: "value",
   keep: "switch",
   force: "switch",
-  host: "value",
-  account: "value",
-  description: "value",
-  reason: "value",
-  value: "switch"
+  reason: "value"
 };
 
 /** An `events-tail` entry: what the session manager heard, in arrival order. */
@@ -207,33 +205,26 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     positionals: []
   },
   {
-    verb: "credentials-get",
+    verb: "env-request",
     group: "TET itself",
-    usage: "credentials-get <name> [--value]",
+    usage: "env-request <NAME> [NAME...] [--reason <text>]",
     summary:
-      "A credential stored in TET (name, host, account, value); --value prints the value alone, for $(...). Only when the environment provides none — env, a CLI's login, git credential fill.",
-    positionals: ["name"]
+      "Open TET's dialog for the user to type environment variables into, never into the chat; waits for the answer. Every missing one in one request. TET keeps them encrypted and sets them in every tab it starts; this tab sees them once restarted, which the dialog offers.",
+    positionals: ["names"],
+    variadic: true
   },
   {
-    verb: "credentials-request",
+    verb: "env-list",
     group: "TET itself",
-    usage: "credentials-request <name> [--host <host>] [--account <account>] [--description <text>] [--reason <text>]",
-    summary:
-      "Ask the user to type a credential into TET's dialog, never into the chat; waits for the answer. --description says what it is and grants, for whoever picks it later. An existing name asks to replace its value — after a 401, say so in --reason.",
-    positionals: ["name"]
-  },
-  {
-    verb: "credentials-list",
-    group: "TET itself",
-    usage: "credentials-list",
-    summary: "The stored credentials (name, host, account, description, last used), never their values.",
+    usage: "env-list",
+    summary: "The environment variables TET sets, never their values; overridesMachine: the machine sets it too, and TET's value replaces it.",
     positionals: []
   },
   {
-    verb: "credentials-remove",
+    verb: "env-remove",
     group: "TET itself",
-    usage: "credentials-remove <name>",
-    summary: "Delete a stored credential.",
+    usage: "env-remove <NAME>",
+    summary: "Delete an environment variable TET keeps.",
     positionals: ["name"]
   },
   {

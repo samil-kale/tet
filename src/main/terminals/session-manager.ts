@@ -242,6 +242,8 @@ export class ProjectSessionManager {
   private readonly detachedTabs: TabState[] = [];
   /** Per tab id, what ends a close's wait for the report naming its session (reportBeforeQuit). */
   private readonly reportWaiters = new Map<string, () => void>();
+  /** Running tabs quitting for a restart (restartTab), so a second click starts nothing more. */
+  private readonly restarting = new Set<string>();
   /** See `events`. */
   private readonly recorded: ControlEvent[] = [];
   /** Closed; nothing still in flight may start anything back up. */
@@ -1174,10 +1176,12 @@ export class ProjectSessionManager {
   /**
    * A saved command respawns in place (`TerminalSession.restart`). An agent tab with no process
    * (`stopped`, or `error` incl. a start that gave up) takes the whole start path: mounts do not
-   * survive a sandbox stop, so checks, sandbox and mounts are redone and the session resumed. A tab
-   * not fitted yet waits for its first fit. False where there was nothing to restart.
+   * survive a sandbox stop, so checks, sandbox and mounts are redone and the session resumed. With
+   * `running`, a running one quits first, then takes the same path — only the environment dialog
+   * asks that, never `tabs-restart`, which would let an agent end another's session or its own. A
+   * tab not fitted yet waits for its first fit. False where there was nothing to restart.
    */
-  restartTab(tabId: string): boolean {
+  restartTab(tabId: string, running = false): boolean {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
     if (!tab) {
       return false;
@@ -1187,7 +1191,30 @@ export class ProjectSessionManager {
       session?.restart();
       return session !== undefined;
     }
-    if (!this.lastSizes.has(tabId) || (tab.status !== "stopped" && tab.status !== "error")) {
+    if (!this.lastSizes.has(tabId)) {
+      return false;
+    }
+    if (running && tab.status === "running") {
+      // Asked to quit first, so its exit handlers run, then the start path below — as the
+      // environment dialog offers it, so the tab takes up what was saved meanwhile (pty.ts).
+      if (this.restarting.has(tabId)) {
+        return false;
+      }
+      this.restarting.add(tabId);
+      const session = this.sessions.get(tabId);
+      void this.reportBeforeQuit(tab)
+        .then(() => session?.stop())
+        .finally(() => {
+          this.restarting.delete(tabId);
+          // Closed meanwhile, or started anew by something else: nothing left to start.
+          if (this.tabs.includes(tab) && this.sessions.get(tabId) === session) {
+            this.sessions.delete(tabId);
+            this.startTab(tab);
+          }
+        });
+      return true;
+    }
+    if (tab.status !== "stopped" && tab.status !== "error") {
       return false;
     }
     // `startTab` gives up on a tab that already has a session.

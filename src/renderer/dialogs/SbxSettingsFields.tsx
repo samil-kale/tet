@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
 import { CircleAlertIcon } from "../ui/icons";
 import { ActionLink } from "../ui/ActionLink";
-import { RemoveRow, RowSection } from "../ui/RowSection";
+import { patched, RemoveRow, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox } from "../ui/Field";
 
@@ -22,9 +22,6 @@ const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
 /** How long typing in a secret's hosts pauses before they are checked against sbx's policy. */
 const HOST_CHECK_DELAY_MS = 500;
 
-/** A row as the fields hold it: the saved shape plus a local React key, never sent anywhere. */
-type Row<T> = T & { id: string };
-
 export interface FieldsState {
   /** tet.json's `knowledge`; what each kind mounts is `AgentDefinition.sandboxKnowledge`. */
   knowledge: SbxKnowledgeConfig;
@@ -34,21 +31,6 @@ export interface FieldsState {
   /** `hosts` as typed, comma-separated; `value` only what was typed since opening — a stored one
    *  never reaches the renderer. */
   secrets: Row<{ env: string; hosts: string; value: string }>[];
-}
-
-let nextRowId = 0;
-function withId<T>(row: T): Row<T> {
-  nextRowId += 1;
-  return { ...row, id: `row-${nextRowId}` };
-}
-
-/** The two things every section does to one of its rows, by the id `withId` gave it. */
-function patched<T extends { id: string }>(rows: T[], id: string, change: Partial<T>): T[] {
-  return rows.map((entry) => (entry.id === id ? { ...entry, ...change } : entry));
-}
-
-function without<T extends { id: string }>(rows: T[], id: string): T[] {
-  return rows.filter((entry) => entry.id !== id);
 }
 
 /** `sbx:get-config`'s answer as rows. Only the user's paths: tet's directories and each agent's

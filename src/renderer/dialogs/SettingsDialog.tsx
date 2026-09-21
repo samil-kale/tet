@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
-import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, overridesMachineNote, withSettings } from "../../shared/types";
 import type {
   AppInfo,
   AppSettings,
   ColorScheme,
-  CredentialInfo,
   ExplorerSettings,
   ExplorerSortOrder,
   NotificationSettings,
@@ -20,7 +19,8 @@ import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
-import { RemoveRow, RowSection } from "../ui/RowSection";
+import { ActionLink } from "../ui/ActionLink";
+import { patched, RemoveRow, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 
@@ -30,7 +30,7 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "credentials" | "info";
+type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "environment" | "info";
 
 /** The dialog opens on the first. */
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -39,7 +39,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "shortcuts", label: "Shortcuts" },
   { id: "files", label: "Files" },
   { id: "prompts", label: "Prompts" },
-  { id: "credentials", label: "Credentials" },
+  { id: "environment", label: "Environment" },
   { id: "info", label: "Info" }
 ];
 
@@ -76,25 +76,6 @@ const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
 /** The Files tab's tet.json keys, one write each, in Save's order. */
 const EXPLORER_KEYS: (keyof ExplorerSettings)[] = ["excludeGitIgnore", "compactFolders", "sortOrder"];
 
-const RELATIVE_TIME = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-
-/** When `credentials-get` last read it, in the largest unit that is at least one. */
-function lastUsedLabel(at: number | undefined, now: number): string {
-  if (at === undefined) {
-    return "never used";
-  }
-  const minutes = Math.round((at - now) / 60_000);
-  const hours = Math.round(minutes / 60);
-  const days = Math.round(hours / 24);
-  if (minutes > -60) {
-    return `used ${RELATIVE_TIME.format(minutes, "minute")}`;
-  }
-  if (hours > -24) {
-    return `used ${RELATIVE_TIME.format(hours, "hour")}`;
-  }
-  return `used ${days > -30 ? RELATIVE_TIME.format(days, "day") : RELATIVE_TIME.format(Math.round(days / 30), "month")}`;
-}
-
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
   { key: "version", label: "TET" },
   { key: "electron", label: "Electron" },
@@ -124,16 +105,19 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const edits = useRef<SettingsEdits>({});
   /** tet.json as opened: Save writes only the keys that differ. */
   const loadedExplorer = useRef<ExplorerSettings | null>(null);
-  /** The Credentials tab's rows, less those removed; only agents add one (credentials-request). */
-  const [credentials, setCredentials] = useState<CredentialInfo[]>([]);
-  /** What Save deletes. */
-  const removedCredentials = useRef<string[]>([]);
+  /** The Environment tab's rows: `from` the stored variable a row shows, `value` only what was
+   *  typed since opening — a stored one never reaches the renderer. */
+  const [variables, setVariables] = useState<Row<{ name: string; from?: string; value: string; overridesMachine: boolean }>[]>([]);
+  /** Save writes the tab only once it was touched. */
+  const variablesEdited = useRef(false);
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
     // Cannot change while the process runs.
     void window.tet.app.info().then(setInfo);
-    void window.tet.credentials.list().then(setCredentials);
+    void window.tet.environment.list().then((list) =>
+      setVariables(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })))
+    );
   }, []);
 
   // Read once, on open; Save goes through patchSetting (commands.ts), which reads the file fresh
@@ -181,21 +165,31 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
     setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
 
-  const removeCredential = (name: string): void => {
-    removedCredentials.current.push(name);
-    setCredentials((current) => current.filter((credential) => credential.name !== name));
+  const editVariables = (change: (rows: typeof variables) => typeof variables): void => {
+    variablesEdited.current = true;
+    setVariables(change);
   };
 
-  /** One settings.json write, one delete per removed credential, then one tet.json write per
-   *  changed Explorer key. */
+  /** One settings.json write, the Environment tab if touched, then one tet.json write per changed
+   *  Explorer key. */
   const save = async (): Promise<void> => {
     setSaving(true);
     setRefused(undefined);
     if (Object.keys(edits.current).length > 0) {
       await window.tet.settings.patch(edits.current);
     }
-    for (const name of removedCredentials.current.splice(0)) {
-      await window.tet.credentials.remove(name);
+    if (variablesEdited.current) {
+      // A row added and left empty is no row; a stored one left empty keeps its value.
+      const rows = variables
+        .filter((row) => row.from !== undefined || row.name.trim() !== "" || row.value !== "")
+        .map((row) => ({ name: row.name.trim(), from: row.from, value: row.value === "" ? undefined : row.value }));
+      const refusal = await window.tet.environment.save(rows);
+      if (refusal) {
+        setRefused(refusal);
+        setSaving(false);
+        return;
+      }
+      variablesEdited.current = false;
     }
     const loaded = loadedExplorer.current;
     if (activeProject && explorerSettings && loaded) {
@@ -355,29 +349,51 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           />
         </>
       )}
-      {tab === "credentials" && (
-        <div className="settings-credentials">
+      {tab === "environment" && (
+        <div className="settings-environment">
           <p className="dialog-detail">
-            What agents asked for with tet-ctl credentials-request, when their own environment had nothing. Encrypted by
-            the OS on this machine; never offered in a sandbox.
+            Set in every tab TET starts, a sandboxed one excepted, over what this machine sets itself; a running tab takes
+            up a change when it restarts. Encrypted by the OS on this machine.
           </p>
           <RowSection
-            label="Credentials"
-            empty="No credentials yet"
-            rows={credentials.map((credential) => ({ ...credential, id: credential.name }))}
+            label="Environment variables"
+            empty="No environment variables yet"
+            rows={variables}
             renderRow={(row) => (
               <div key={row.id} className="sbx-path-row">
-                <span className="sbx-path-value" title={row.description ?? row.name}>
-                  {row.name}
-                </span>
-                {/* Even empty: it holds the column, so every account starts at the same place. */}
-                <span className="sbx-path-value" title={row.account}>
-                  {row.account}
-                </span>
-                <span className="credential-used">{lastUsedLabel(row.lastUsed, Date.now())}</span>
-                <RemoveRow title="Remove credential" onClick={() => removeCredential(row.name)} />
+                <input
+                  className="sbx-host-input"
+                  type="text"
+                  placeholder="GITLAB_TOKEN"
+                  title="The name every tab sees"
+                  value={row.name}
+                  onChange={(event) => editVariables((rows) => patched(rows, row.id, { name: event.target.value }))}
+                />
+                <input
+                  className="sbx-secret-input"
+                  type="password"
+                  autoComplete="off"
+                  // A stored value as a set password shows, never the value itself (the title says so).
+                  placeholder={row.from ? "••••••••" : "Value"}
+                  title={row.from ? "Stored on this machine; typing replaces it" : "Stored encrypted on this machine"}
+                  value={row.value}
+                  onChange={(event) => editVariables((rows) => patched(rows, row.id, { value: event.target.value }))}
+                />
+                {row.overridesMachine && (
+                  <span className="env-overrides" title={overridesMachineNote([row.name])}>
+                    overrides machine
+                  </span>
+                )}
+                <RemoveRow title="Remove variable" onClick={() => editVariables((rows) => without(rows, row.id))} />
               </div>
             )}
+            add={
+              <ActionLink
+                onClick={() => editVariables((rows) => [...rows, withId({ name: "", value: "", overridesMachine: false })])}
+              >
+                + Add variable
+              </ActionLink>
+            }
           />
         </div>
       )}

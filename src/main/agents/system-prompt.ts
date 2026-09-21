@@ -14,11 +14,11 @@ const TET_SYSTEM_PROMPT =
   "tet-ctl controls TET and reads this project's tabs; run tet-ctl help before using it. " +
   "Use it when the user asks about TET, about something they ran or saw in a shell tab, or about what another agent did or said.";
 
-/** Only outside a sandbox, where the credentials verbs answer; a sandbox never hears of them. */
-const CREDENTIALS_SENTENCE =
-  " When a task needs a credential that neither the environment nor a CLI login provides, " +
-  "tet-ctl credentials-get and credentials-request supply one, typed by the user into TET, never into the chat.";
+/** Only outside a sandbox, where the env verbs answer; a sandbox never hears of them. */
+const ENVIRONMENT_SENTENCE =
+  " When an environment variable you need, a token or password, is not set, never ask for its value in the chat: " +
+  "offer the user to type it into TET or to set it themselves, as tet-ctl help describes.";
 
 export function systemPrompt(sandboxed: boolean): string {
-  return sandboxed ? TET_SYSTEM_PROMPT : TET_SYSTEM_PROMPT + CREDENTIALS_SENTENCE;
+  return sandboxed ? TET_SYSTEM_PROMPT : TET_SYSTEM_PROMPT + ENVIRONMENT_SENTENCE;
 }

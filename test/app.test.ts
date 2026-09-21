@@ -96,6 +96,8 @@ ${stderr.slice(uncaught)}`);
       async () => (await tabs()).some((entry) => entry.tabId === tab.tabId && entry.status === "running"),
       STARTUP_MS
     );
+    // Only a stopped one: a running session is never ended by an agent's tabs-restart.
+    assert.match((await ctl("tabs-restart", tab.tabId, "--project", project.id)).stderr, /has nothing to restart/);
     assert.equal((await ctl("tabs-rename", tab.tabId, "Build", "--project", project.id)).status, 0);
     assert.equal((await ctl("tabs-close", tab.tabId, "--project", project.id)).status, 0);
     await eventually("the tab gone", async () => !(await tabs()).some((entry) => entry.tabId === tab.tabId), 10_000);

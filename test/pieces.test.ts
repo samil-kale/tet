@@ -15,7 +15,9 @@ import { hookSessionId } from "../src/main/agents/hook-payload";
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
 import { systemPrompt } from "../src/main/agents/system-prompt";
-import { CredentialRequests, CredentialStore } from "../src/main/credentials";
+import { machineSets } from "../src/main/env-names";
+import { EnvRequests, EnvStore } from "../src/main/environment";
+import type { EnvRequest } from "../src/shared/types";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
@@ -554,7 +556,7 @@ describe("the sbx secrets kept on this machine", () => {
   });
 });
 
-describe("the credentials agents asked for", () => {
+describe("the environment variables kept in TET", () => {
   // "sealed:" stands in for the OS's encryption, as for the sbx secrets above.
   const sealing = (available: boolean): void => {
     Object.assign(safeStorage, {
@@ -569,120 +571,177 @@ describe("the credentials agents asked for", () => {
       }
     });
   };
-  const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-credentials-"));
+  const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-environment-"));
+  const row = (name: string, value: string): { name: string; value: string } => ({ name, value });
 
-  it("keep one row per name, remember their last use and read the file fresh every time", () => {
+  it("keep one row per name, hand out their values only decrypted, and read the file fresh every time", () => {
     sealing(true);
     const root = tempRoot();
-    const store = new CredentialStore(root);
-    store.set("gitlab-work", "gitlab.example.com", "skale", "", "old");
-    store.set("gitlab-work", "gitlab.example.com", "samil", "GitLab token, scope api", "new");
-    store.set("stripe", "", "", "", "sk");
+    const store = new EnvStore(root);
+    store.set([row("GITLAB_TOKEN", "old")]);
+    store.set([row("GITLAB_TOKEN", "new"), row("STRIPE_KEY", "sk")]);
     assert.deepEqual(store.list(), [
-      { name: "gitlab-work", host: "gitlab.example.com", account: "samil", description: "GitLab token, scope api", lastUsed: undefined },
-      { name: "stripe", host: undefined, account: undefined, description: undefined, lastUsed: undefined }
+      { name: "GITLAB_TOKEN", overridesMachine: false },
+      { name: "STRIPE_KEY", overridesMachine: false }
     ]);
-    assert.equal(store.get("gitlab-work")?.value, "new");
-    assert.equal(typeof store.info("gitlab-work")?.lastUsed, "number");
-    assert.doesNotMatch(fs.readFileSync(path.join(root, "credentials.json"), "utf8"), /"new"/, "never in the clear");
-    const reopened = new CredentialStore(root);
-    assert.equal(reopened.get("stripe")?.value, "sk");
-    assert.equal(reopened.remove("stripe"), true);
-    assert.equal(reopened.remove("stripe"), false);
-    assert.equal(store.info("stripe"), undefined, "a change from outside is seen, not overwritten");
-    assert.equal(store.get("gitlab-work")?.value, "new");
+    const machine = Object.keys(process.env)[0];
+    store.set([row(machine, "x")]);
+    assert.equal(store.info(machine)?.overridesMachine, true, "one this machine sets too");
+    store.remove(machine);
+    assert.deepEqual(store.values(), { GITLAB_TOKEN: "new", STRIPE_KEY: "sk" });
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "environment.json"), "utf8"), /"new"/, "never in the clear");
+    const other = new EnvStore(root);
+    assert.equal(other.remove("STRIPE_KEY"), true);
+    assert.equal(other.remove("STRIPE_KEY"), false);
+    assert.deepEqual(store.values(), { GITLAB_TOKEN: "new" }, "a change from outside is seen, not overwritten");
+  });
+
+  it("take a name in another case for the same variable where the machine does", { skip: process.platform !== "win32" }, () => {
+    sealing(true);
+    const store = new EnvStore(tempRoot());
+    store.set([row("gitlab_token", "old")]);
+    store.set([row("GITLAB_TOKEN", "new")]);
+    assert.deepEqual(store.values(), { GITLAB_TOKEN: "new" }, "one variable, not two in every tab");
+  });
+
+  it("tell the machine's variables from those a tet it was started from set", () => {
+    process.env.TET_TEST_FROM_OUTER = "outer";
+    process.env.TET_TEST_OWN_MACHINE = "machine";
+    process.env.TET_KEPT_ENV = "TET_TEST_FROM_OUTER";
+    try {
+      assert.equal(machineSets("TET_TEST_FROM_OUTER"), false, "an outer tet's, not the machine's");
+      assert.equal(machineSets("TET_TEST_OWN_MACHINE"), true);
+    } finally {
+      delete process.env.TET_TEST_FROM_OUTER;
+      delete process.env.TET_TEST_OWN_MACHINE;
+      delete process.env.TET_KEPT_ENV;
+    }
+  });
+
+  it("leave out a value sealed under another keychain", () => {
+    sealing(true);
+    const root = tempRoot();
+    fs.writeFileSync(
+      path.join(root, "environment.json"),
+      JSON.stringify([
+        { name: "READABLE", value: Buffer.from("sealed:value").toString("base64") },
+        { name: "LOST", value: Buffer.from("under another keychain").toString("base64") }
+      ])
+    );
+    assert.deepEqual(new EnvStore(root).values(), { READABLE: "value" });
   });
 
   it("store nothing where the OS offers no encryption", () => {
     sealing(false);
-    const store = new CredentialStore(tempRoot());
-    assert.throws(() => store.set("github", "github.com", "", "", "token"), /no keyring/);
+    const store = new EnvStore(tempRoot());
+    assert.throws(() => store.set([row("GITHUB_TOKEN", "token")]), /no keyring/);
     assert.deepEqual(store.list(), []);
   });
 
-  it("are asked for one at a time; a replacement keeps name and host, a new name is not taken twice", async () => {
+  it("write nothing over a file they cannot read, and drop no row they do not understand", () => {
     sealing(true);
-    const store = new CredentialStore(tempRoot());
-    store.set("gitlab-work", "gitlab.example.com", "skale", "GitLab token", "old");
-    const shown: number[] = [];
-    const requests = new CredentialRequests(
+    const root = tempRoot();
+    const file = path.join(root, "environment.json");
+    fs.writeFileSync(file, '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ');
+    const broken = new EnvStore(root);
+    assert.deepEqual(broken.list(), []);
+    assert.deepEqual(broken.values(), {});
+    assert.throws(() => broken.set([row("GITHUB_TOKEN", "token")]), /environment\.json/);
+    assert.throws(() => broken.remove("GITLAB_TOKEN"), /environment\.json/);
+    assert.equal(fs.readFileSync(file, "utf8"), '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ', "left as it was");
+
+    fs.writeFileSync(file, JSON.stringify([{ name: "FUTURE", value: 7 }]));
+    const store = new EnvStore(root);
+    store.set([row("GITHUB_TOKEN", "token")]);
+    assert.deepEqual(
+      (JSON.parse(fs.readFileSync(file, "utf8")) as { name: string }[]).map((entry) => entry.name),
+      ["FUTURE", "GITHUB_TOKEN"]
+    );
+    assert.deepEqual(store.list().map((entry) => entry.name), ["GITHUB_TOKEN"], "listed only when understood");
+  });
+
+  it("take the Settings' tab whole: added, renamed with its value, replaced, and the rest deleted", () => {
+    sealing(true);
+    const store = new EnvStore(tempRoot());
+    store.set([row("GITLAB_TOKEN", "gl"), row("STRIPE_KEY", "sk"), row("OLD", "o")]);
+    store.edit([
+      { name: "GITLAB_API_TOKEN", from: "GITLAB_TOKEN" },
+      { name: "STRIPE_KEY", from: "STRIPE_KEY", value: "sk-new" },
+      { name: "SENDGRID_API_KEY", value: "sg" }
+    ]);
+    assert.deepEqual(store.values(), { GITLAB_API_TOKEN: "gl", STRIPE_KEY: "sk-new", SENDGRID_API_KEY: "sg" });
+  });
+
+  it("refuse the Settings' tab with a row it cannot take, changing nothing", () => {
+    sealing(true);
+    const store = new EnvStore(tempRoot());
+    store.set([row("GITLAB_TOKEN", "gl")]);
+    const refusals: [{ name: string; from?: string; value?: string }[], RegExp][] = [
+      [[{ name: "1TOKEN", value: "x" }], /not an environment variable name/],
+      [[{ name: "Path", value: "x" }], /TET's own to set/],
+      [[{ name: "NEW" }], /NEW needs a value/],
+      [[{ name: "A", value: "x" }, { name: "A", value: "y" }], /A is there twice/]
+    ];
+    for (const [rows, refusal] of refusals) {
+      assert.throws(() => store.edit(rows), refusal);
+    }
+    assert.deepEqual(store.values(), { GITLAB_TOKEN: "gl" }, "left as it was");
+  });
+
+  it("are asked for one request at a time, several names in one, every one needing a value", async () => {
+    sealing(true);
+    const store = new EnvStore(tempRoot());
+    store.set([row("AUTOCONTRACT_USER", "old")]);
+    const shown: EnvRequest[] = [];
+    const requests = new EnvRequests(
       store,
       (request) => {
-        shown.push(request.id);
+        shown.push(request);
         return true;
       },
       () => undefined
     );
     const alive = new AbortController().signal;
-    const replaced = requests.ask({ name: "gitlab-work" }, alive);
-    const added = requests.ask({ name: "github", host: "github.com" }, alive);
+    const first = requests.ask({ names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"], reason: "401" }, alive);
+    const second = requests.ask({ names: ["GITHUB_TOKEN"] }, alive);
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(shown, [1], "the second waits for the first");
+    assert.equal(shown.length, 1, "the second waits for the first");
+    assert.deepEqual(shown[0].variables, [
+      { name: "AUTOCONTRACT_USER", overridesMachine: false, stored: true },
+      { name: "AUTOCONTRACT_PASSWORD", overridesMachine: false, stored: false }
+    ]);
+    assert.match(requests.answer(1, [row("AUTOCONTRACT_USER", "admin")]) ?? "", /needs a value/, "one missing");
     assert.equal(
-      requests.answer(1, { name: "renamed", host: "elsewhere", account: "samil", description: "GitLab token, scope api", value: "new" }),
+      requests.answer(1, [row("AUTOCONTRACT_USER", "admin"), row("AUTOCONTRACT_PASSWORD", "secret"), row("OTHER", "x")]),
       undefined
     );
-    assert.equal(await replaced, "gitlab-work");
-    assert.deepEqual(store.info("gitlab-work"), {
-      name: "gitlab-work",
-      host: "gitlab.example.com",
-      account: "samil",
-      description: "GitLab token, scope api",
-      lastUsed: undefined
-    });
+    assert.deepEqual(await first, ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"]);
+    assert.deepEqual(store.values(), { AUTOCONTRACT_USER: "admin", AUTOCONTRACT_PASSWORD: "secret" }, "only what was asked for");
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(shown, [1, 2]);
-    assert.match(requests.answer(2, { name: "gitlab-work", host: "", account: "", description: "", value: "x" }) ?? "", /exists already/);
+    assert.equal(shown.length, 2);
     assert.equal(requests.answer(2, null), undefined);
-    assert.equal(await added, undefined);
+    assert.equal(await second, undefined);
   });
 
-  it("withdraw a request whose caller left, and refuse without a window", async () => {
+  it("withdraw a request whose caller left, say a late Save saved nothing, and refuse without a window", async () => {
     sealing(true);
     const withdrawn: number[] = [];
     let listening = true;
-    const requests = new CredentialRequests(
-      new CredentialStore(tempRoot()),
+    const requests = new EnvRequests(
+      new EnvStore(tempRoot()),
       () => listening,
       (id) => withdrawn.push(id)
     );
     const caller = new AbortController();
-    const asked = requests.ask({ name: "github" }, caller.signal);
+    const asked = requests.ask({ names: ["GITHUB_TOKEN"] }, caller.signal);
     await new Promise((resolve) => setImmediate(resolve));
     caller.abort();
     assert.equal(await asked, undefined);
     assert.deepEqual(withdrawn, [1]);
-    // Saved a moment too late: said so, not closed as if it went through.
-    assert.match(
-      requests.answer(1, { name: "github", host: "", account: "", description: "", value: "x" }) ?? "",
-      /stopped waiting/
-    );
+    assert.match(requests.answer(1, [row("GITHUB_TOKEN", "x")]) ?? "", /stopped waiting/);
     assert.equal(requests.answer(1, null), undefined, "a late Cancel needs no words");
     listening = false;
-    await assert.rejects(requests.ask({ name: "github" }, new AbortController().signal), /not ready/);
-  });
-
-  it("write nothing over a file they cannot read, and drop no entry they do not understand", () => {
-    sealing(true);
-    const root = tempRoot();
-    const file = path.join(root, "credentials.json");
-    fs.writeFileSync(file, '[{"name": "gitlab", "value": "c2VhbGVkOng="}, ');
-    const broken = new CredentialStore(root);
-    assert.deepEqual(broken.list(), [], "nothing to show");
-    assert.throws(() => broken.set("github", "", "", "", "token"), /credentials\.json/);
-    assert.throws(() => broken.get("gitlab"), /credentials\.json/);
-    assert.throws(() => broken.remove("gitlab"), /credentials\.json/);
-    assert.equal(fs.readFileSync(file, "utf8"), '[{"name": "gitlab", "value": "c2VhbGVkOng="}, ', "left as it was");
-
-    // A row of a newer shape stays as it is when another one is written.
-    fs.writeFileSync(file, JSON.stringify([{ name: "future", value: "c2VhbGVkOng=", lastUsed: "yesterday" }]));
-    const store = new CredentialStore(root);
-    store.set("github", "", "", "", "token");
-    assert.deepEqual(
-      (JSON.parse(fs.readFileSync(file, "utf8")) as { name: string }[]).map((entry) => entry.name),
-      ["future", "github"]
-    );
-    assert.deepEqual(store.list().map((entry) => entry.name), ["github"], "listed only when understood");
+    await assert.rejects(requests.ask({ names: ["GITHUB_TOKEN"] }, new AbortController().signal), /not ready/);
   });
 });
 

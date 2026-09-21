@@ -24,7 +24,8 @@ import type {
   WorktreeRef
 } from "../../shared/types";
 import { systemPrompt } from "../agents/system-prompt";
-import type { CredentialRequests, CredentialStore } from "../credentials";
+import { isEnvName, isReservedName, machineName } from "../env-names";
+import type { EnvRequests, EnvStore } from "../environment";
 import { relativeInside, repositoryRelative } from "../path-inside";
 import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
@@ -81,9 +82,9 @@ export interface ControlDeps {
   notify(title: string, body: string, target?: ToastTarget): void;
   /** main.ts's `applyTheme`: returns whether a restart is still needed. */
   applyTheme(): boolean;
-  /** main.ts's, shared with ipc/credentials.ts. */
-  credentials: Pick<CredentialStore, "list" | "get" | "remove">;
-  credentialRequests: Pick<CredentialRequests, "ask">;
+  /** main.ts's, shared with ipc/environment.ts. */
+  environment: Pick<EnvStore, "list" | "remove">;
+  envRequests: Pick<EnvRequests, "ask">;
 }
 
 export interface ToastTarget {
@@ -233,7 +234,8 @@ const OUTPUT_KB = 16;
  * stdout as JSON, and every agent takes JSON on hook channels not appended to the prompt
  * (measured). `prompt-submit`'s stdout would be appended to the prompt: "". `session-start`
  * carries TET's system prompt as added context, appended to the user's instructions (measured,
- * Codex 0.154.0: in the first turn, and again on `resume`) — a sandbox's without the credentials.
+ * Codex 0.154.0: in the first turn, and again on `resume`) — a sandbox's without the environment
+ * variables.
  */
 const HOOK_STDOUT: Record<HookEvent, (sandboxed: boolean) => string> = {
   "session-start": (sandboxed) =>
@@ -431,40 +433,35 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { deleted: id } };
     },
 
-    "credentials-get": (args) => {
-      const name = text(args, "name", "credential name");
-      const credential = deps.credentials.get(name);
-      if (!credential) {
-        // Missing, or sealed under a keychain this machine no longer has: either way, asked for again.
-        throw new ControlError("not_found", `no readable credential named ${name}: see credentials-list, or ask with credentials-request`);
+    "env-request": async (args, caller, _at, gone) => {
+      const names = Array.isArray(args.names) ? args.names.filter((name): name is string => typeof name === "string" && name !== "") : [];
+      if (names.length === 0) {
+        throw new ControlError("bad_args", "missing variable names: env-request NAME [NAME...]");
       }
-      return { result: credential };
-    },
-
-    "credentials-request": async (args, caller, _at, gone) => {
-      const optional = (name: string): string | undefined => (typeof args[name] === "string" && args[name] !== "" ? args[name] : undefined);
-      const name = text(args, "name", "credential name");
-      const saved = await deps.credentialRequests.ask(
-        {
-          projectId: caller.projectId,
-          tabId: caller.tabId,
-          name,
-          host: optional("host"),
-          account: optional("account"),
-          description: optional("description"),
-          reason: optional("reason")
-        },
+      const invalid = names.find((name) => !isEnvName(name));
+      if (invalid) {
+        throw new ControlError("bad_args", `not an environment variable name: ${invalid}`);
+      }
+      const reserved = names.find(isReservedName);
+      if (reserved) {
+        throw new ControlError("bad_args", `${reserved} is TET's own to set in a tab (PATH, TET_*)`);
+      }
+      // Once per variable as the machine counts them: on win32 `a` and `A` are one.
+      const unique = names.filter((name, index) => names.findIndex((other) => machineName(other) === machineName(name)) === index);
+      const reason = typeof args.reason === "string" && args.reason !== "" ? args.reason : undefined;
+      const saved = await deps.envRequests.ask(
+        { projectId: caller.projectId, tabId: caller.tabId, names: unique, reason },
         gone
       );
-      return { result: saved === undefined ? { cancelled: true } : { saved } };
+      return { result: saved === undefined ? { cancelled: true } : { saved, restartRequired: true } };
     },
 
-    "credentials-list": () => ({ result: deps.credentials.list() }),
+    "env-list": () => ({ result: deps.environment.list() }),
 
-    "credentials-remove": (args) => {
-      const name = text(args, "name", "credential name");
-      if (!deps.credentials.remove(name)) {
-        throw new ControlError("not_found", `no credential named ${name}`);
+    "env-remove": (args) => {
+      const name = text(args, "name", "variable name");
+      if (!deps.environment.remove(name)) {
+        throw new ControlError("not_found", `TET keeps no environment variable named ${name}`);
       }
       return { result: { removed: name } };
     },

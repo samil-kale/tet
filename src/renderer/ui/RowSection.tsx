@@ -1,6 +1,24 @@
 import type { ReactNode } from "react";
 import { CloseIcon } from "./icons";
 
+/** A row as a dialog's fields hold it: the saved shape plus a local React key, never sent anywhere. */
+export type Row<T> = T & { id: string };
+
+let nextRowId = 0;
+export function withId<T>(row: T): Row<T> {
+  nextRowId += 1;
+  return { ...row, id: `row-${nextRowId}` };
+}
+
+/** The two things every section does to one of its rows, by the id `withId` gave it. */
+export function patched<T extends { id: string }>(rows: T[], id: string, change: Partial<T>): T[] {
+  return rows.map((entry) => (entry.id === id ? { ...entry, ...change } : entry));
+}
+
+export function without<T extends { id: string }>(rows: T[], id: string): T[] {
+  return rows.filter((entry) => entry.id !== id);
+}
+
 /** Every row's last cell. */
 export function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
   return (

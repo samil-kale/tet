@@ -5,6 +5,7 @@ import * as pty from "node-pty";
 import type { IPty } from "node-pty";
 import { CONTROL_ENV } from "../../shared/control";
 import { tabControlToken } from "../control/control-token";
+import { KEPT_ENV_NAME } from "../env-names";
 
 export interface SpawnOptions {
   cwd: string;
@@ -30,6 +31,14 @@ let launcherDir: string | undefined;
 export function setControlEnv(vars: Record<string, string>, binDir: string | undefined): void {
   controlEnv = vars;
   launcherDir = binDir;
+}
+
+/** The environment variables the user keeps in tet (environment.ts), read at every spawn so a
+ *  restarted tab sees what was saved meanwhile. */
+let storedEnv: () => Record<string, string> = () => ({});
+
+export function setStoredEnv(provider: () => Record<string, string>): void {
+  storedEnv = provider;
 }
 
 /** PATH's key in `env` — win32's `Path`; a key in another case would be a second variable. */
@@ -129,16 +138,37 @@ export function killProcessTree(child: ChildProcess): void {
   }
 }
 
-/** A terminal's env: options.env as defaults under the machine's (the user's value wins), then
- *  tet's own (controlEnv, options.own) with the tab's own control token in place of the run's
- *  (control-token.ts), then a saved command's envOverride. Testable without a pty. */
+/** The machine's variables without those `names` replace: on win32 a name in another case would be
+ *  a second variable, and of the two the child sees the inherited one (measured through node-pty). */
+function machineEnvWithout(names: string[]): Record<string, string> {
+  const env = { ...(process.env as Record<string, string>) };
+  if (process.platform === "win32") {
+    const replaced = new Set(names.map((name) => name.toUpperCase()));
+    for (const name of Object.keys(env).filter((key) => replaced.has(key.toUpperCase()))) {
+      delete env[name];
+    }
+  }
+  return env;
+}
+
+/** A terminal's env: options.env as defaults under the machine's (the user's value wins), the
+ *  variables kept in tet over it (none in a sandbox), then tet's own (controlEnv, options.own) with
+ *  the tab's own control token in place of the run's (control-token.ts), then a saved command's
+ *  envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "sandboxed">): Record<string, string> {
+  const stored = options.sandboxed ? {} : storedEnv();
   const env: Record<string, string> = {
     ...options.env,
-    ...(process.env as Record<string, string>),
+    ...machineEnvWithout(Object.keys(stored)),
+    ...stored,
     ...controlEnv,
     ...options.own
   };
+  // Never an outer tet's: this tab got exactly `stored`.
+  delete env[KEPT_ENV_NAME];
+  if (Object.keys(stored).length > 0) {
+    env[KEPT_ENV_NAME] = Object.keys(stored).join(",");
+  }
   const runToken = controlEnv[CONTROL_ENV.token];
   if (runToken) {
     env[CONTROL_ENV.token] = tabControlToken(

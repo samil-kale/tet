@@ -12,7 +12,7 @@ import { relativeInside } from "../src/main/path-inside";
 import { SbxSecretStore } from "../src/main/sbx-secrets";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
-import { buildEnv, setControlEnv } from "../src/main/terminals/pty";
+import { buildEnv, setControlEnv, setStoredEnv } from "../src/main/terminals/pty";
 import { ProjectSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
@@ -165,6 +165,41 @@ describe("a terminal's environment", () => {
     assert.equal(env.TET_TEST_OUTER, "inner", "tet's own beats what an outer tet left");
     assert.equal(env.TET_TEST_CONTROL, "own", "the tab's own beats the app-wide");
     assert.equal(env.TET_TEST_OWN, "command", "a saved command's beats everything");
+  });
+
+  it("sets the variables kept in TET over the machine's own, and none in a sandbox", () => {
+    process.env.TET_TEST_MACHINE = "machine";
+    let stored: Record<string, string> = { TET_TEST_STORED: "first", TET_TEST_MACHINE: "stored" };
+    setStoredEnv(() => stored);
+    try {
+      const env = buildEnv({ env: { TET_TEST_STORED: "agent" } });
+      assert.equal(env.TET_TEST_STORED, "first", "above an agent's default");
+      assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
+      assert.equal(buildEnv({ sandboxed: true }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
+      assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
+      stored = { TET_TEST_STORED: "second" };
+      assert.equal(buildEnv({}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
+      // A tet started from a tab of another inherits that one's list; its own tabs get their own.
+      process.env.TET_KEPT_ENV = "OUTER";
+      stored = {};
+      assert.equal(buildEnv({}).TET_KEPT_ENV, undefined, "none kept, none named");
+      delete process.env.TET_KEPT_ENV;
+      assert.equal(buildEnv({ sandboxed: true }).TET_TEST_STORED, undefined, "a sandbox gets none");
+    } finally {
+      setStoredEnv(() => ({}));
+    }
+  });
+
+  it("replaces the machine's variable spelled in another case, where names ignore case", { skip: process.platform !== "win32" }, () => {
+    process.env.TET_TEST_CASE = "machine";
+    setStoredEnv(() => ({ tet_test_case: "stored" }));
+    try {
+      const env = buildEnv({});
+      const names = Object.keys(env).filter((name) => name.toUpperCase() === "TET_TEST_CASE");
+      assert.deepEqual(names.map((name) => env[name]), ["stored"], "one variable, TET's");
+    } finally {
+      setStoredEnv(() => ({}));
+    }
   });
 
   it("gives a terminal its own tab's control token, never the run's", () => {
