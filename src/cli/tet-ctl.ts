@@ -33,7 +33,9 @@ function whenToUse(sandboxed: boolean): string[] {
           "credentials-get; when TET has none either, credentials-request, which the user answers in",
           "TET's dialog — with a --description of what it is and grants. Never ask for a credential in",
           "the chat. Use a value only inside the command that needs it,",
-          "$(tet-ctl credentials-get <name> --value), so it never shows in your output."
+          "$(tet-ctl credentials-get <name> --value), so it never shows in your output.",
+          "credentials-request waits for the user: run it with your longest command timeout (10 minutes),",
+          "or its dialog closes when your shell gives up on it."
         ])
   ];
 }

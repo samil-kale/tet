@@ -16,6 +16,11 @@ export function useCoversWindow(): void {
   }, []);
 }
 
+/** For a listener outside React. */
+export function isWindowCovered(): boolean {
+  return covering.get() > 0;
+}
+
 export function useWindowCovered(): boolean {
   return useStore(covering) > 0;
 }

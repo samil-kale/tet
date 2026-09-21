@@ -59,7 +59,7 @@ interface Calls {
   editorsOpened: [string, string, boolean][];
   /** One entry per `inspect`, the call `tabs-wait` polls. */
   inspected: string[];
-  /** Per `credentials-request`, what the dialog was asked; the ids of those whose caller left. */
+  /** Per `credentials-request`, what the dialog was asked; the names of those whose caller left. */
   credentialAsks: CredentialAsk[];
   credentialsWithdrawn: string[];
 }
@@ -220,9 +220,13 @@ function deps(): ControlDeps {
     applyTheme: () => themeWaits,
     credentials: {
       list: () => [...credentialValues.keys()].map((name) => ({ name, host: "gitlab.example.com" })),
-      info: (name) => (credentialValues.has(name) ? { name, host: "gitlab.example.com" } : undefined),
-      get: (name) => credentialValues.get(name),
-      remove: (name) => credentialValues.delete(name),
+      get: (name) => {
+        const value = credentialValues.get(name);
+        return value === undefined ? undefined : { name, host: "gitlab.example.com", value };
+      },
+      remove: (name) => credentialValues.delete(name)
+    },
+    credentialRequests: {
       ask: (ask, gone) => {
         calls.credentialAsks.push(ask);
         if (dialogAnswer !== DIALOG_STAYS_OPEN) {
@@ -324,6 +328,9 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.match(run.stdout, /settings-set-theme <theme-id>/);
     assert.match(run.stdout, /restart-app --confirm/);
+    // An agent's shell gives up on a command after its own timeout (Claude Code: 2 minutes), which
+    // takes the dialog down before the user has seen it.
+    assert.match(run.stdout, /credentials-request waits[^.]*timeout/);
     // Printed under each verb's own group (ControlVerb.group), which an unlisted one has not.
     for (const entry of CONTROL_VERBS) {
       assert.equal(helpLines(run.stdout, entry.usage), entry.unlisted ? 0 : 1, entry.verb);
@@ -900,7 +907,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(raw.stdout, "glpat-secret", "the value alone, for a command substitution");
     const missing = await tetCtl(["credentials-get", "github"]);
     assert.equal(missing.status, EXIT_CODES.usage);
-    assert.match(missing.stderr, /no credential named github/);
+    assert.match(missing.stderr, /no readable credential named github/);
     assert.deepEqual((await tetCtl(["credentials-list"])).result, [{ name: "gitlab-work", host: "gitlab.example.com" }]);
     assert.deepEqual((await tetCtl(["credentials-remove", "gitlab-work"])).result, { removed: "gitlab-work" });
     assert.equal((await tetCtl(["credentials-remove", "gitlab-work"])).status, EXIT_CODES.usage, "gone already");

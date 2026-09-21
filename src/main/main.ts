@@ -213,6 +213,17 @@ const credentialRequests = new CredentialRequests(
       return false;
     }
     send("credentials:request", request);
+    // Out of sight, told as a question is (session-manager's toast): the agent's shell gives up
+    // waiting at some point, and the dialog with it.
+    if ((!window.isFocused() || window.isMinimized()) && settings.get().notifications.needsYou) {
+      const tab = request.projectId ? sessions.get(request.projectId)?.snapshot().find((entry) => entry.tabId === request.tabId) : undefined;
+      const agent = AGENTS.find((entry) => entry.id === tab?.agentId)?.displayName ?? "An agent";
+      showDesktopNotification(
+        `${agent}: Credential needed`,
+        `Asks for ${request.name} — answer it in TET`,
+        tab && { projectId: tab.projectId, tabId: tab.tabId }
+      );
+    }
     return true;
   },
   (id) => send("credentials:withdrawn", id)
@@ -375,13 +386,8 @@ async function startControl(): Promise<void> {
         projectsChanged: projectDeps.projectsChanged,
         notify: showDesktopNotification,
         applyTheme,
-        credentials: {
-          list: () => credentials.list(),
-          info: (name) => credentials.info(name),
-          get: (name) => credentials.get(name),
-          remove: (name) => credentials.remove(name),
-          ask: (ask, gone) => credentialRequests.ask(ask, gone)
-        }
+        credentials,
+        credentialRequests
       },
       controlChannel.token,
       controlChannel.port

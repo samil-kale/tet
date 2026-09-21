@@ -21,7 +21,7 @@ import { TerminalsPane } from "./terminal/TerminalsPane";
 import type { SideView } from "./terminal/Pane";
 import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
-import { useWindowCovered } from "./ui/window-covered";
+import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList, sameRecord, stableRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
@@ -672,7 +672,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       const actions = shortcutActions.current;
       let run: (() => void) | undefined;
       if (matchesShortcut(event, "settings")) {
-        run = () => setSettingsOpen(true);
+        // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has
+        // to be the one on top — an agent's credential dialog, drawn last, can already be up.
+        run = () => !isWindowCovered() && setSettingsOpen(true);
       } else if (matchesShortcut(event, "toggleGit")) {
         run = () => actions.toggleSideView("git");
       } else if (matchesShortcut(event, "toggleFiles")) {

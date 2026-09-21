@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 import { safeStorage } from "electron";
 import * as esbuild from "esbuild";
 import { claudeHoldsTurnEnd } from "../src/main/agents/claude/hooks";
+import { holdEscape } from "../src/renderer/ui/use-escape";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { hookSessionId } from "../src/main/agents/hook-payload";
 import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
@@ -581,15 +582,15 @@ describe("the credentials agents asked for", () => {
       { name: "gitlab-work", host: "gitlab.example.com", account: "samil", description: "GitLab token, scope api", lastUsed: undefined },
       { name: "stripe", host: undefined, account: undefined, description: undefined, lastUsed: undefined }
     ]);
-    assert.equal(store.get("gitlab-work"), "new");
+    assert.equal(store.get("gitlab-work")?.value, "new");
     assert.equal(typeof store.info("gitlab-work")?.lastUsed, "number");
     assert.doesNotMatch(fs.readFileSync(path.join(root, "credentials.json"), "utf8"), /"new"/, "never in the clear");
     const reopened = new CredentialStore(root);
-    assert.equal(reopened.get("stripe"), "sk");
+    assert.equal(reopened.get("stripe")?.value, "sk");
     assert.equal(reopened.remove("stripe"), true);
     assert.equal(reopened.remove("stripe"), false);
     assert.equal(store.info("stripe"), undefined, "a change from outside is seen, not overwritten");
-    assert.equal(store.get("gitlab-work"), "new");
+    assert.equal(store.get("gitlab-work")?.value, "new");
   });
 
   it("store nothing where the OS offers no encryption", () => {
@@ -651,8 +652,61 @@ describe("the credentials agents asked for", () => {
     caller.abort();
     assert.equal(await asked, undefined);
     assert.deepEqual(withdrawn, [1]);
+    // Saved a moment too late: said so, not closed as if it went through.
+    assert.match(
+      requests.answer(1, { name: "github", host: "", account: "", description: "", value: "x" }) ?? "",
+      /stopped waiting/
+    );
+    assert.equal(requests.answer(1, null), undefined, "a late Cancel needs no words");
     listening = false;
     await assert.rejects(requests.ask({ name: "github" }, new AbortController().signal), /not ready/);
+  });
+
+  it("write nothing over a file they cannot read, and drop no entry they do not understand", () => {
+    sealing(true);
+    const root = tempRoot();
+    const file = path.join(root, "credentials.json");
+    fs.writeFileSync(file, '[{"name": "gitlab", "value": "c2VhbGVkOng="}, ');
+    const broken = new CredentialStore(root);
+    assert.deepEqual(broken.list(), [], "nothing to show");
+    assert.throws(() => broken.set("github", "", "", "", "token"), /credentials\.json/);
+    assert.throws(() => broken.get("gitlab"), /credentials\.json/);
+    assert.throws(() => broken.remove("gitlab"), /credentials\.json/);
+    assert.equal(fs.readFileSync(file, "utf8"), '[{"name": "gitlab", "value": "c2VhbGVkOng="}, ', "left as it was");
+
+    // A row of a newer shape stays as it is when another one is written.
+    fs.writeFileSync(file, JSON.stringify([{ name: "future", value: "c2VhbGVkOng=", lastUsed: "yesterday" }]));
+    const store = new CredentialStore(root);
+    store.set("github", "", "", "", "token");
+    assert.deepEqual(
+      (JSON.parse(fs.readFileSync(file, "utf8")) as { name: string }[]).map((entry) => entry.name),
+      ["future", "github"]
+    );
+    assert.deepEqual(store.list().map((entry) => entry.name), ["github"], "listed only when understood");
+  });
+});
+
+describe("Escape over the window's dialogs", () => {
+  it("closes only the last one opened, then the one below it", () => {
+    // What the renderer's `document` does with a keydown, enough for the capture listener.
+    const globals = globalThis as { document?: EventTarget };
+    globals.document = new EventTarget();
+    try {
+      const closed: string[] = [];
+      const escape = (): Event => Object.assign(new Event("keydown", { cancelable: true }), { key: "Escape" });
+      const releaseSettings = holdEscape({ current: () => closed.push("settings") });
+      const releaseCredential = holdEscape({ current: () => closed.push("credential") });
+      globals.document.dispatchEvent(escape());
+      assert.deepEqual(closed, ["credential"], "the credential dialog over the Settings");
+      releaseCredential();
+      globals.document.dispatchEvent(escape());
+      assert.deepEqual(closed, ["credential", "settings"]);
+      releaseSettings();
+      globals.document.dispatchEvent(escape());
+      assert.deepEqual(closed, ["credential", "settings"], "nothing left to close");
+    } finally {
+      delete globals.document;
+    }
   });
 });
 

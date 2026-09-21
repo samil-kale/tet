@@ -24,7 +24,7 @@ import type {
   WorktreeRef
 } from "../../shared/types";
 import { systemPrompt } from "../agents/system-prompt";
-import type { CredentialAccess } from "../credentials";
+import type { CredentialRequests, CredentialStore } from "../credentials";
 import { relativeInside, repositoryRelative } from "../path-inside";
 import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
@@ -81,7 +81,9 @@ export interface ControlDeps {
   notify(title: string, body: string, target?: ToastTarget): void;
   /** main.ts's `applyTheme`: returns whether a restart is still needed. */
   applyTheme(): boolean;
-  credentials: CredentialAccess;
+  /** main.ts's, shared with ipc/credentials.ts. */
+  credentials: Pick<CredentialStore, "list" | "get" | "remove">;
+  credentialRequests: Pick<CredentialRequests, "ask">;
 }
 
 export interface ToastTarget {
@@ -431,23 +433,18 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "credentials-get": (args) => {
       const name = text(args, "name", "credential name");
-      const info = deps.credentials.info(name);
-      const value = info && deps.credentials.get(name);
-      if (!info || value === undefined) {
-        throw new ControlError(
-          "not_found",
-          info
-            ? `${name} can no longer be decrypted on this machine: ask again with credentials-request`
-            : `no credential named ${name}: see credentials-list, or ask with credentials-request`
-        );
+      const credential = deps.credentials.get(name);
+      if (!credential) {
+        // Missing, or sealed under a keychain this machine no longer has: either way, asked for again.
+        throw new ControlError("not_found", `no readable credential named ${name}: see credentials-list, or ask with credentials-request`);
       }
-      return { result: { name, host: info.host, account: info.account, description: info.description, value } };
+      return { result: credential };
     },
 
     "credentials-request": async (args, caller, _at, gone) => {
       const optional = (name: string): string | undefined => (typeof args[name] === "string" && args[name] !== "" ? args[name] : undefined);
       const name = text(args, "name", "credential name");
-      const saved = await deps.credentials.ask(
+      const saved = await deps.credentialRequests.ask(
         {
           projectId: caller.projectId,
           tabId: caller.tabId,
