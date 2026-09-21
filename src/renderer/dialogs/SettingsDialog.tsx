@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { envRowRefusal } from "../../shared/env-rules";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, overridesMachineNote, withSettings } from "../../shared/types";
 import type {
   AppInfo,
+  EnvEdit,
   AppSettings,
   ColorScheme,
   ExplorerSettings,
@@ -20,7 +22,8 @@ import { Checkbox, Field } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
 import { ActionLink } from "../ui/ActionLink";
-import { patched, RemoveRow, RowSection, withId, without, type Row } from "../ui/RowSection";
+import { isWindows } from "../platform";
+import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 
@@ -42,6 +45,34 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "environment", label: "Environment" },
   { id: "info", label: "Info" }
 ];
+
+type EnvRow = Row<{ name: string; from?: string; value: string; overridesMachine: boolean }>;
+
+/** A row as Save sends it; undefined for one added and left empty, which is no row. A stored one
+ *  left empty keeps its value. */
+function envEdit(row: EnvRow): EnvEdit | undefined {
+  if (row.from === undefined && row.name.trim() === "" && row.value === "") {
+    return undefined;
+  }
+  return { name: row.name.trim(), from: row.from, value: row.value === "" ? undefined : row.value };
+}
+
+/** Each row's mark by id — the rule the store refuses by (env-rules.ts), so Save never meets it. */
+function envMarks(rows: EnvRow[]): Map<string, string> {
+  const marks = new Map<string, string>();
+  const before: EnvEdit[] = [];
+  for (const row of rows) {
+    const edit = envEdit(row);
+    if (edit) {
+      const refusal = envRowRefusal(edit, before, isWindows());
+      if (refusal) {
+        marks.set(row.id, refusal);
+      }
+      before.push(edit);
+    }
+  }
+  return marks;
+}
 
 const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
   system: "System",
@@ -107,7 +138,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const loadedExplorer = useRef<ExplorerSettings | null>(null);
   /** The Environment tab's rows: `from` the stored variable a row shows, `value` only what was
    *  typed since opening — a stored one never reaches the renderer. */
-  const [variables, setVariables] = useState<Row<{ name: string; from?: string; value: string; overridesMachine: boolean }>[]>([]);
+  const [variables, setVariables] = useState<EnvRow[]>([]);
   /** Save writes the tab only once it was touched. */
   const variablesEdited = useRef(false);
 
@@ -179,10 +210,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       await window.tet.settings.patch(edits.current);
     }
     if (variablesEdited.current) {
-      // A row added and left empty is no row; a stored one left empty keeps its value.
-      const rows = variables
-        .filter((row) => row.from !== undefined || row.name.trim() !== "" || row.value !== "")
-        .map((row) => ({ name: row.name.trim(), from: row.from, value: row.value === "" ? undefined : row.value }));
+      const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
       const refusal = await window.tet.environment.save(rows);
       if (refusal) {
         setRefused(refusal);
@@ -221,9 +249,14 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     }
   };
 
+  const envRowMarks = useMemo(() => envMarks(variables), [variables]);
+  // As in the sbx dialog: Save waits for every marked row, and the tab repeats the mark.
+  const blocked = envRowMarks.values().next().value;
+  const tabs = useMemo(() => TABS.map((entry) => (entry.id === "environment" ? { ...entry, mark: blocked } : entry)), [blocked]);
+
   return (
     <DialogFrame
-      header={{ tabs: TABS, active: tab, onSelect: setTab, onClose }}
+      header={{ tabs, active: tab, onSelect: setTab, onClose }}
       error={refused}
       className="settings-dialog"
       buttons={
@@ -231,7 +264,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="button" disabled={saving} onClick={() => void save()}>
+          <button type="button" className="button" disabled={saving || blocked !== undefined} title={blocked} onClick={() => void save()}>
             Save
           </button>
         </>
@@ -360,7 +393,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             empty="No environment variables yet"
             rows={variables}
             renderRow={(row) => (
-              <div key={row.id} className="sbx-path-row">
+              <EditRow
+                key={row.id}
+                mark={envRowMarks.get(row.id)}
+                remove="Remove variable"
+                onRemove={() => editVariables((rows) => without(rows, row.id))}
+              >
                 <input
                   className="sbx-host-input"
                   type="text"
@@ -369,6 +407,11 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   value={row.name}
                   onChange={(event) => editVariables((rows) => patched(rows, row.id, { name: event.target.value }))}
                 />
+                {row.overridesMachine && (
+                  <span className="env-overrides" title={overridesMachineNote([row.name])}>
+                    overrides machine
+                  </span>
+                )}
                 <input
                   className="sbx-secret-input"
                   type="password"
@@ -379,13 +422,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   value={row.value}
                   onChange={(event) => editVariables((rows) => patched(rows, row.id, { value: event.target.value }))}
                 />
-                {row.overridesMachine && (
-                  <span className="env-overrides" title={overridesMachineNote([row.name])}>
-                    overrides machine
-                  </span>
-                )}
-                <RemoveRow title="Remove variable" onClick={() => editVariables((rows) => without(rows, row.id))} />
-              </div>
+              </EditRow>
             )}
             add={
               <ActionLink

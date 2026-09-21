@@ -4,7 +4,8 @@ import { safeStorage } from "electron";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage } from "../shared/errors";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
-import { isEnvName, isReservedName, machineName, machineSets } from "./env-names";
+import { envEditRefusal } from "../shared/env-rules";
+import { machineName, machineSets } from "./env-names";
 
 /** What the file holds: the variable plus its value, encrypted by the OS and base64-wrapped. */
 interface StoredVar {
@@ -90,7 +91,7 @@ export class EnvStore {
    * anything, naming the first row it cannot take (envEditRefusal) or, as `seal` does, the OS.
    */
   edit(rows: EnvEdit[]): void {
-    const refusal = envEditRefusal(rows);
+    const refusal = envEditRefusal(rows, process.platform === "win32");
     if (refusal) {
       throw new Error(refusal);
     }
@@ -167,40 +168,11 @@ function seal(value: string): string {
   return safeStorage.encryptString(value).toString("base64");
 }
 
-/** Why the Settings' rows cannot be saved as they are, for the first row that says so; the same
- *  words the tab marks the row with (SettingsDialog). */
-export function envEditRefusal(rows: EnvEdit[]): string | undefined {
-  for (const [index, row] of rows.entries()) {
-    const refusal = envRowRefusal(row, rows.slice(0, index));
-    if (refusal) {
-      return refusal;
-    }
-  }
-  return undefined;
-}
-
-function envRowRefusal(row: EnvEdit, before: EnvEdit[]): string | undefined {
-  if (!isEnvName(row.name)) {
-    return `${row.name || "A variable"} is not an environment variable name: letters, digits and _, not starting with a digit`;
-  }
-  if (isReservedName(row.name)) {
-    return `${row.name} is TET's own to set in a tab (PATH, TET_*)`;
-  }
-  if (before.some((other) => machineName(other.name) === machineName(row.name))) {
-    return `${row.name} is there twice`;
-  }
-  if (row.from === undefined && !row.value) {
-    return `${row.name} needs a value`;
-  }
-  return undefined;
-}
-
-/** What `env-request` passes on: the asking tab, the names and the agent's words. */
+/** What `env-request` passes on: the asking tab and the names. */
 export interface EnvAsk {
   projectId?: string;
   tabId?: string;
   names: string[];
-  reason?: string;
 }
 
 /**
@@ -270,7 +242,6 @@ export class EnvRequests {
       id: this.lastId,
       projectId: ask.projectId,
       tabId: ask.tabId,
-      reason: ask.reason,
       variables: ask.names.map((name) => {
         const stored = this.store.info(name);
         // The spelling stored stands: Save replaces it (EnvStore.set).

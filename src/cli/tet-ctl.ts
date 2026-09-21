@@ -37,6 +37,8 @@ function whenToUse(sandboxed: boolean): string[] {
           "  2. themselves: setx (Windows) or their shell profile; TET itself must then be restarted,",
           "     since it hands its tabs the environment it was started with — and a value TET keeps",
           "     under the same name still wins.",
+          "When a service refuses one (401, 403), it is wrong or expired: say so, and ask the same way",
+          "how to replace it — env-request's dialog writes over a value TET keeps.",
           "env-request waits for the user: run it with your longest command timeout (10 minutes), or",
           "its dialog closes when your shell gives up on it."
         ])

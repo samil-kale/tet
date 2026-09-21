@@ -108,8 +108,7 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   kb: "value",
   timeout: "value",
   keep: "switch",
-  force: "switch",
-  reason: "value"
+  force: "switch"
 };
 
 /** An `events-tail` entry: what the session manager heard, in arrival order. */
@@ -207,7 +206,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "env-request",
     group: "TET itself",
-    usage: "env-request <NAME> [NAME...] [--reason <text>]",
+    usage: "env-request <NAME> [NAME...]",
     summary:
       "Open TET's dialog for the user to type environment variables into, never into the chat; waits for the answer. Every missing one in one request. TET keeps them encrypted and sets them in every tab it starts; this tab sees them once restarted, which the dialog offers.",
     positionals: ["names"],

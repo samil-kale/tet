@@ -2,7 +2,7 @@ export function isMac(): boolean {
   return navigator.platform.toLowerCase().includes("mac");
 }
 
-function isWindows(): boolean {
+export function isWindows(): boolean {
   return navigator.platform.toLowerCase().includes("win");
 }
 

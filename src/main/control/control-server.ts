@@ -24,7 +24,8 @@ import type {
   WorktreeRef
 } from "../../shared/types";
 import { systemPrompt } from "../agents/system-prompt";
-import { isEnvName, isReservedName, machineName } from "../env-names";
+import { isEnvName, isReservedName } from "../../shared/env-rules";
+import { machineName } from "../env-names";
 import type { EnvRequests, EnvStore } from "../environment";
 import { relativeInside, repositoryRelative } from "../path-inside";
 import type { ProjectLookup } from "../projects";
@@ -448,9 +449,8 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       }
       // Once per variable as the machine counts them: on win32 `a` and `A` are one.
       const unique = names.filter((name, index) => names.findIndex((other) => machineName(other) === machineName(name)) === index);
-      const reason = typeof args.reason === "string" && args.reason !== "" ? args.reason : undefined;
       const saved = await deps.envRequests.ask(
-        { projectId: caller.projectId, tabId: caller.tabId, names: unique, reason },
+        { projectId: caller.projectId, tabId: caller.tabId, names: unique },
         gone
       );
       return { result: saved === undefined ? { cancelled: true } : { saved, restartRequired: true } };

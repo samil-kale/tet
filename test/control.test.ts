@@ -909,10 +909,10 @@ describe("tet-ctl against the control server", () => {
 
   it("asks for several variables at once with the caller's tab, and answers what the dialog did", async () => {
     dialogAnswer = ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"];
-    const saved = await tetCtl(["env-request", "AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD", "AUTOCONTRACT_USER", "--reason", "401"]);
+    const saved = await tetCtl(["env-request", "AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD", "AUTOCONTRACT_USER"]);
     assert.deepEqual(saved.result, { saved: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"], restartRequired: true });
     assert.deepEqual(calls.envAsks, [
-      { projectId: PROJECT.id, tabId: OWN_TAB, names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"], reason: "401" }
+      { projectId: PROJECT.id, tabId: OWN_TAB, names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"] }
     ]);
     dialogAnswer = undefined;
     assert.deepEqual((await tetCtl(["env-request", "GITHUB_TOKEN"])).result, { cancelled: true });

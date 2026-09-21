@@ -584,10 +584,15 @@ describe("the environment variables kept in TET", () => {
       { name: "GITLAB_TOKEN", overridesMachine: false },
       { name: "STRIPE_KEY", overridesMachine: false }
     ]);
-    const machine = Object.keys(process.env)[0];
-    store.set([row(machine, "x")]);
-    assert.equal(store.info(machine)?.overridesMachine, true, "one this machine sets too");
-    store.remove(machine);
+    // Its own name: the first one in process.env may be one a tet this runs in kept (TET_KEPT_ENV).
+    process.env.TET_TEST_MACHINE = "machine";
+    try {
+      store.set([row("TET_TEST_MACHINE", "x")]);
+      assert.equal(store.info("TET_TEST_MACHINE")?.overridesMachine, true, "one this machine sets too");
+    } finally {
+      delete process.env.TET_TEST_MACHINE;
+    }
+    store.remove("TET_TEST_MACHINE");
     assert.deepEqual(store.values(), { GITLAB_TOKEN: "new", STRIPE_KEY: "sk" });
     assert.doesNotMatch(fs.readFileSync(path.join(root, "environment.json"), "utf8"), /"new"/, "never in the clear");
     const other = new EnvStore(root);
@@ -605,6 +610,7 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("tell the machine's variables from those a tet it was started from set", () => {
+    const inherited = process.env.TET_KEPT_ENV;
     process.env.TET_TEST_FROM_OUTER = "outer";
     process.env.TET_TEST_OWN_MACHINE = "machine";
     process.env.TET_KEPT_ENV = "TET_TEST_FROM_OUTER";
@@ -614,7 +620,11 @@ describe("the environment variables kept in TET", () => {
     } finally {
       delete process.env.TET_TEST_FROM_OUTER;
       delete process.env.TET_TEST_OWN_MACHINE;
-      delete process.env.TET_KEPT_ENV;
+      if (inherited === undefined) {
+        delete process.env.TET_KEPT_ENV;
+      } else {
+        process.env.TET_KEPT_ENV = inherited;
+      }
     }
   });
 
@@ -702,7 +712,7 @@ describe("the environment variables kept in TET", () => {
       () => undefined
     );
     const alive = new AbortController().signal;
-    const first = requests.ask({ names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"], reason: "401" }, alive);
+    const first = requests.ask({ names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"] }, alive);
     const second = requests.ask({ names: ["GITHUB_TOKEN"] }, alive);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(shown.length, 1, "the second waits for the first");

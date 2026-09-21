@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CloseIcon } from "./icons";
+import { CircleAlertIcon, CloseIcon } from "./icons";
 
 /** A row as a dialog's fields hold it: the saved shape plus a local React key, never sent anywhere. */
 export type Row<T> = T & { id: string };
@@ -19,8 +19,39 @@ export function without<T extends { id: string }>(rows: T[], id: string): T[] {
   return rows.filter((entry) => entry.id !== id);
 }
 
-/** Every row's last cell. */
-export function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
+/**
+ * A section's row: its fields, then the mark saying what is wrong with it, then its remove button —
+ * none for a row that is asked for rather than kept (EnvDialog). The mark takes its room from the
+ * field before it (styles.css), so nothing else in the row moves.
+ */
+export function EditRow({
+  mark,
+  remove,
+  onRemove,
+  children
+}: {
+  mark?: string;
+  children: ReactNode;
+} & ({ remove: string; onRemove: () => void } | { remove?: undefined; onRemove?: undefined })) {
+  return (
+    <div className="sbx-path-row">
+      {children}
+      <RowMark title={mark} />
+      {onRemove && <RemoveRow title={remove} onClick={onRemove} />}
+    </div>
+  );
+}
+
+/** Nothing without a reason. */
+function RowMark({ title }: { title: string | undefined }) {
+  return title === undefined ? null : (
+    <span className="sbx-path-denied" title={title}>
+      <CircleAlertIcon />
+    </span>
+  );
+}
+
+function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
   return (
     <button className="icon-button" title={title} onClick={onClick}>
       <CloseIcon />

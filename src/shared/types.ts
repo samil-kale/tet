@@ -252,8 +252,6 @@ export interface EnvRequest {
   tabId?: string;
   /** A stored one's value the dialog replaces. */
   variables: (EnvVarInfo & { stored: boolean })[];
-  /** The agent's own words. */
-  reason?: string;
 }
 
 /** What the dialog answers per row, as typed; null for Cancel. */

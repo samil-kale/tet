@@ -1714,7 +1714,6 @@ textarea:focus,
   height: var(--field-height);
 }
 
-.sbx-port-row,
 .sbx-path-row {
   display: flex;
   align-items: center;
@@ -1725,13 +1724,14 @@ textarea:focus,
   padding: 4px;
 }
 
-/* The path field's flex: 1 pushes its remove button right; fixed-width port fields need this. */
-.sbx-port-row .icon-button {
+/* A row of fixed-width fields (ports) leaves room, and its remove button still sits right. */
+.sbx-path-row > .icon-button {
   margin-left: auto;
 }
 
 .sbx-port-input {
-  width: 70px;
+  --field-width: 70px;
+  width: var(--field-width);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1741,9 +1741,17 @@ textarea:focus,
   min-width: 0;
 }
 
+/* A path's access: one width for either choice, which still holds "Read+Write" (102px, measured)
+   once the row's mark takes its room. */
+.sbx-path-row > .select-field {
+  --field-width: 120px;
+  width: var(--field-width);
+}
+
 /* A secret's name and value, either side of its hosts (.sbx-host-input). */
 .sbx-secret-input {
-  width: 140px;
+  --field-width: 140px;
+  width: var(--field-width);
 }
 
 .sbx-arrow {
@@ -1761,6 +1769,15 @@ textarea:focus,
   font-family: var(--vscode-editor-font-family);
 }
 
+/* Twice the body's gap around the words, so the rows and the buttons read as their own sections. */
+.env-dialog .dialog-message {
+  margin-bottom: 8px;
+}
+
+.env-dialog .dialog-detail {
+  margin: 8px 0;
+}
+
 /* The Environment tab's word for a variable this machine sets too, in the row's font
    (.sbx-path-value) and colour (.dialog-field span). */
 .env-overrides {
@@ -1776,6 +1793,12 @@ textarea:focus,
   display: flex;
   flex: none;
   color: var(--vscode-errorForeground);
+}
+
+/* EditRow's promise: the field before the mark gives up the mark's room (icon plus the row's gap),
+   so the rest of the row stays where it was. A field without --field-width keeps its own width. */
+.sbx-path-row > :has(+ .sbx-path-denied) {
+  width: calc(var(--field-width) - var(--icon-size) - 4px);
 }
 
 .sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail,
@@ -1902,7 +1925,8 @@ textarea:focus,
 }
 
 /* The Environment tab fills the body, and only its rows scroll: the text above them stays put, and
-   the body never needs a bar of its own besides theirs. */
+   the body never needs a bar of its own besides theirs. The rows' box is as tall as its rows, so
+   "+ Add" follows the last one as in the sbx dialog, and shrinks to scroll once they outgrow it. */
 .settings-environment {
   display: flex;
   flex-direction: column;
@@ -1917,7 +1941,8 @@ textarea:focus,
 }
 
 .settings-environment .sbx-rows {
-  flex: 1;
+  flex: 0 1 auto;
+  min-height: 0;
   max-height: none;
 }
 

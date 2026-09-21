@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
-import { CircleAlertIcon } from "../ui/icons";
 import { ActionLink } from "../ui/ActionLink";
-import { patched, RemoveRow, RowSection, withId, without, type Row } from "../ui/RowSection";
+import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox } from "../ui/Field";
 
@@ -232,15 +231,6 @@ export function tabMarks(state: FieldsState, answers: PolicyAnswers, governed: b
   };
 }
 
-/** A row's mark, in every tab right before the row's remove button; nothing without a reason. */
-function RowMark({ title }: { title: string | undefined }) {
-  return title === undefined ? null : (
-    <span className="sbx-path-denied" title={title}>
-      <CircleAlertIcon />
-    </span>
-  );
-}
-
 interface SbxSettingsFieldsProps {
   /** Owned by SbxSettingsDialog, which builds the save request. */
   state: FieldsState;
@@ -307,7 +297,12 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
           const setPort = (change: Partial<typeof port>): void =>
             update("ports", (ports) => patched(ports, port.id, change));
           return (
-            <div key={port.id} className="sbx-port-row">
+            <EditRow
+              key={port.id}
+              mark={isBadPortRow(port) ? BAD_PORT : undefined}
+              remove="Remove port"
+              onRemove={() => update("ports", (ports) => without(ports, port.id))}
+            >
               <input
                 className="sbx-port-input"
                 type="text"
@@ -325,9 +320,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                 value={port.container}
                 onChange={(event) => setPort({ container: event.target.value })}
               />
-              <RowMark title={isBadPortRow(port) ? BAD_PORT : undefined} />
-              <RemoveRow title="Remove port" onClick={() => update("ports", (ports) => without(ports, port.id))} />
-            </div>
+            </EditRow>
           );
         }}
         add={
@@ -346,7 +339,12 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
         empty="No paths shared yet"
         rows={state.paths}
         renderRow={(row) => (
-          <div key={row.id} className="sbx-path-row">
+          <EditRow
+            key={row.id}
+            mark={pathMark(row, answers, governed)}
+            remove="Remove path"
+            onRemove={() => update("paths", (paths) => without(paths, row.id))}
+          >
             {/* Plain text: the path is what the picker returned. */}
             <span className="sbx-path-value" title={row.path}>
               {row.path}
@@ -356,9 +354,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
               options={ACCESS_OPTIONS}
               onChange={(access) => update("paths", (paths) => patched(paths, row.id, { access }))}
             />
-            <RowMark title={pathMark(row, answers, governed)} />
-            <RemoveRow title="Remove path" onClick={() => update("paths", (paths) => without(paths, row.id))} />
-          </div>
+          </EditRow>
         )}
         add={
           <div className="sbx-add-paths">
@@ -385,8 +381,12 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
             update("secrets", (secrets) => patched(secrets, row.id, change));
           const stored = storedSecrets.includes(row.env.trim());
           return (
-            // The path row's box, as the host rows.
-            <div key={row.id} className="sbx-path-row">
+            <EditRow
+              key={row.id}
+              mark={secretMark(row, state.secrets, answers, governed)}
+              remove="Remove secret"
+              onRemove={() => update("secrets", (secrets) => without(secrets, row.id))}
+            >
               <input
                 className="sbx-secret-input"
                 type="text"
@@ -417,9 +417,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                 value={row.value}
                 onChange={(event) => setSecret({ value: event.target.value })}
               />
-              <RowMark title={secretMark(row, state.secrets, answers, governed)} />
-              <RemoveRow title="Remove secret" onClick={() => update("secrets", (secrets) => without(secrets, row.id))} />
-            </div>
+            </EditRow>
           );
         }}
         add={
@@ -439,8 +437,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
       empty="No hosts allowed yet"
       rows={state.hosts}
       renderRow={(row) => (
-        // The path row's box: the input's flex: 1 pushes the button right, as .sbx-path-value does.
-        <div key={row.id} className="sbx-path-row">
+        <EditRow key={row.id} remove="Remove host" onRemove={() => update("hosts", (hosts) => without(hosts, row.id))}>
           <input
             className="sbx-host-input"
             type="text"
@@ -449,8 +446,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
             value={row.host}
             onChange={(event) => update("hosts", (hosts) => patched(hosts, row.id, { host: event.target.value }))}
           />
-          <RemoveRow title="Remove host" onClick={() => update("hosts", (hosts) => without(hosts, row.id))} />
-        </div>
+        </EditRow>
       )}
       add={
         <ActionLink onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>+ Add host</ActionLink>

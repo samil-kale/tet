@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { overridesMachineNote } from "../../shared/types";
 import type { EnvRequest } from "../../shared/types";
 import { DialogFrame } from "../ui/DialogFrame";
-import { TextField } from "../ui/Field";
+import { EditRow, RowSection } from "../ui/RowSection";
 import { useEscape } from "../ui/use-escape";
 
 interface EnvDialogProps {
@@ -20,8 +20,9 @@ interface EnvDialogProps {
  * the dialog offers to restart the asking one — never on its own.
  */
 export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
+  // Keyed by name: the agent's names are unique (the verb dedupes them).
   const [rows, setRows] = useState(() =>
-    request.variables.map((variable) => ({ name: variable.name, value: "" }))
+    request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" }))
   );
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -52,7 +53,10 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       return;
     }
     setBusy(true);
-    const error = await window.tet.environment.answer(request.id, rows);
+    const error = await window.tet.environment.answer(
+      request.id,
+      rows.map((row) => ({ name: row.name, value: row.value }))
+    );
     setBusy(false);
     if (error === undefined) {
       setSaved(true);
@@ -71,6 +75,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   if (saved) {
     return (
       <DialogFrame
+        className="env-dialog"
         header={{ title: "Environment variables saved", onClose }}
         onSubmit={tab ? restart : onClose}
         buttons={
@@ -102,7 +107,11 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
 
   return (
     <DialogFrame
-      header={{ title: `Environment variables for ${requester}`, onClose: cancel }}
+      className="env-dialog"
+      header={{
+        title: rows.length === 1 ? "Environment variable needed" : "Environment variables needed",
+        onClose: cancel
+      }}
       busy={busy}
       error={refused}
       onSubmit={() => void save()}
@@ -118,20 +127,33 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       }
     >
       <p className="dialog-message">{requester} asks for environment variables.</p>
-      {request.reason && <p className="dialog-detail">“{request.reason}”</p>}
-      {rows.map((row, index) => {
-        const stored = request.variables.find((variable) => variable.name === row.name)?.stored;
-        return (
-          <TextField
-            key={row.name}
-            label={stored ? `${row.name} (replaces the stored value)` : row.name}
-            type="password"
-            value={row.value}
-            onChange={(value) => edit(row.name, value)}
-            ref={index === 0 ? firstValue : undefined}
-          />
-        );
-      })}
+      <RowSection
+        label="Environment variables"
+        empty=""
+        rows={rows}
+        renderRow={(row) => (
+          // The Settings' Environment rows, the name fixed: it is the agent's.
+          <EditRow key={row.id}>
+            <input className="sbx-host-input" type="text" value={row.name} disabled />
+            {row.overridesMachine && (
+              <span className="env-overrides" title={overridesMachineNote([row.name])}>
+                overrides machine
+              </span>
+            )}
+            <input
+              ref={row === rows[0] ? firstValue : undefined}
+              className="sbx-secret-input"
+              type="password"
+              autoComplete="off"
+              // A stored value as a set password shows, never the value itself (the title says so).
+              placeholder={row.stored ? "••••••••" : "Value"}
+              title={row.stored ? "Stored on this machine; typing replaces it" : "Stored encrypted on this machine"}
+              value={row.value}
+              onChange={(event) => edit(row.name, event.target.value)}
+            />
+          </EditRow>
+        )}
+      />
       <p className="dialog-detail">
         Stored encrypted on this machine and set in every tab TET starts, a sandboxed one excepted.
       </p>

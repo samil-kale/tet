@@ -1,6 +1,7 @@
 /**
- * How the environment variables kept in tet (environment.ts) are named and compared — apart from
- * the store, so the control server and pty.ts reach it without electron.
+ * How the environment variables kept in tet (environment.ts) meet this machine's — apart from the
+ * store, so the control server and pty.ts reach it without electron. What a name may be is
+ * src/shared/env-rules.ts, which the Settings' tab shares.
  */
 
 /** Names the variables a tab got from the ones kept in tet, so a tet started from that tab does
@@ -10,18 +11,6 @@ export const KEPT_ENV_NAME = "TET_KEPT_ENV";
 /** A variable's name as this machine compares it: win32 ignores case. */
 export function machineName(name: string): string {
   return process.platform === "win32" ? name.toUpperCase() : name;
-}
-
-/** A name a shell can export: letters, digits, underscores, not starting with a digit. */
-export function isEnvName(name: string): boolean {
-  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
-}
-
-/** Names tet sets in a tab itself (`PATH` with its launcher dir, `TET_*` for the control channel):
- *  one kept in tet would replace the machine's whole PATH, or be overwritten. */
-export function isReservedName(name: string): boolean {
-  const upper = name.toUpperCase();
-  return upper === "PATH" || upper.startsWith("TET_");
 }
 
 /** Whether the environment tet was started with — what every tab would inherit — has the name. One
