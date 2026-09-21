@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.11.0 (2026-09-22)
+
+- **Environment variables for agents.** An agent that needs a token or password asks TET for it,
+  and it is typed only into TET's dialog, never the chat. TET keeps it encrypted and sets it in
+  every tab it starts; the settings list, edit and remove them.
+- **GameBoy theme.** GameBoy joins the light themes, in the window, the terminals and the editor.
+- **Switching between light and dark offers a restart.** Picking a theme of the other kind asks
+  to restart TET right away instead of waiting for the next start.
+- **Fixes.** Pane borders stay one pixel wide at fractional display scales; the requirements list
+  names the commands it looks for.
+
 ## 0.10.1 (2026-09-21)
 
 - **Dialogs say what they are doing.** Work started from a dialog's button is shown by the
