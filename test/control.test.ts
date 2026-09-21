@@ -399,7 +399,8 @@ describe("tet-ctl against the control server", () => {
       "dark-dracula:dark",
       "light-modern:light",
       "light-github:light",
-      "light-intellij:light"
+      "light-intellij:light",
+      "light-gameboy:light"
     ]);
   });
 

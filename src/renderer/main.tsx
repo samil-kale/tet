@@ -4,6 +4,7 @@ import "./themes/dark-github.css";
 import "./themes/dark-intellij.css";
 import "./themes/dark-modern.css";
 import "./themes/dark-slate.css";
+import "./themes/light-gameboy.css";
 import "./themes/light-github.css";
 import "./themes/light-intellij.css";
 import "./themes/light-modern.css";

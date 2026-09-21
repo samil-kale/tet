@@ -7,7 +7,8 @@ export interface ThemeDefinition {
   /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */
   label: string;
   /** Token colors: Dark/Light Modern `include` Dark+/Light+; Dark Slate's is tet's own
-   *  (src/renderer/themes/dark-slate.json), the IntelliJ themes' the extension's, beside it. */
+   *  (src/renderer/themes/dark-slate.json), the IntelliJ and GameBoy themes' their extensions',
+   *  beside it. */
   shikiTheme:
     | "dark-plus"
     | "light-plus"
@@ -16,7 +17,8 @@ export interface ThemeDefinition {
     | "dark-slate"
     | "dark-intellij"
     | "dracula"
-    | "light-intellij";
+    | "light-intellij"
+    | "light-gameboy";
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
   /** BrowserWindow paint and Windows title-bar overlay, set before the CSS exists — kept in step
@@ -109,6 +111,16 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#e7ebed",
     terminalBackground: "#ffffff",
     terminalForeground: "#000000"
+  },
+  {
+    id: "light-gameboy",
+    label: "GameBoy",
+    shikiTheme: "light-gameboy",
+    kind: "light",
+    windowBackground: "#c4bebb",
+    titleBarSymbolColor: "#494786",
+    terminalBackground: "#c0d297",
+    terminalForeground: "#0f380f"
   }
 ];
 
