@@ -38,7 +38,7 @@ const DEFS: ShortcutDef[] = [
   { id: "toggleFiles", description: "Show or hide the files", shift: true, key: "e", label: "E" },
   {
     id: "needsAttention",
-    description: "Jump to the session that needs you — a question first, then one that finished out of sight",
+    description: "Jump to the session that needs you",
     shift: true,
     key: "u",
     label: "U"
@@ -74,7 +74,7 @@ export function shortcutLabel(id: ShortcutId): string {
   return def.shift ? `${mod}+Shift+${def.label}` : `${mod}+${def.label}`;
 }
 
-/** The settings dialog's Shortcuts tab, in DEFS order. */
+/** The settings dialog's Info tab lists these, in DEFS order. */
 export const SHORTCUTS: { id: ShortcutId; description: string }[] = DEFS.map(({ id, description }) => ({
   id,
   description

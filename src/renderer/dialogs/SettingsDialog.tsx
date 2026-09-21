@@ -33,13 +33,12 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-type SettingsTab = "appearance" | "notifications" | "shortcuts" | "files" | "prompts" | "environment" | "info";
+type SettingsTab = "appearance" | "notifications" | "files" | "prompts" | "environment" | "info";
 
 /** The dialog opens on the first. */
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "appearance", label: "Appearance" },
   { id: "notifications", label: "Notifications" },
-  { id: "shortcuts", label: "Shortcuts" },
   { id: "files", label: "Files" },
   { id: "prompts", label: "Prompts" },
   { id: "environment", label: "Environment" },
@@ -311,16 +310,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               stand on arrival (session-manager's `toast`). */}
         </>
       )}
-      {tab === "shortcuts" && (
-        <div className="settings-shortcuts">
-          {SHORTCUTS.map(({ id, description }) => (
-            <div key={id} className="settings-shortcut-row">
-              <span>{shortcutLabel(id)}</span>
-              <span>{description}</span>
-            </div>
-          ))}
-        </div>
-      )}
       {tab === "files" && (
         <>
           <p className="dialog-detail">
@@ -385,8 +374,9 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       {tab === "environment" && (
         <div className="settings-environment">
           <p className="dialog-detail">
-            Set in every tab TET starts, a sandboxed one excepted, over what this machine sets itself; a running tab takes
-            up a change when it restarts. Encrypted by the OS on this machine.
+            Stored encrypted and set in every tab but sandboxed ones, over the machine's own.
+            <br />
+            <strong>A running tab sees changes after a restart.</strong>
           </p>
           <RowSection
             label="Environment variables"
@@ -435,13 +425,25 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
         </div>
       )}
       {tab === "info" && info && (
-        <div className="settings-info">
-          {INFO_ROWS.map(({ key, label }) => (
-            <div key={key} className="settings-info-row">
-              <span>{label}</span>
-              <span>{info[key]}</span>
-            </div>
-          ))}
+        <div className="settings-info-columns">
+          <div className="settings-info">
+            <p className="dialog-detail">Versions</p>
+            {INFO_ROWS.map(({ key, label }) => (
+              <div key={key} className="settings-info-row">
+                <span>{label}</span>
+                <span>{info[key]}</span>
+              </div>
+            ))}
+          </div>
+          <div className="settings-shortcuts">
+            <p className="dialog-detail">Shortcuts</p>
+            {SHORTCUTS.map(({ id, description }) => (
+              <div key={id} className="settings-shortcut-row">
+                <span>{shortcutLabel(id)}</span>
+                <span>{description}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </DialogFrame>

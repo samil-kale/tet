@@ -1967,6 +1967,14 @@ textarea:focus,
   padding: 5px 6px;
 }
 
+/* The Info tab: the versions left, the shortcuts right, filling the rest and wrapping a long
+   description. */
+.settings-info-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 60px;
+}
+
 .settings-info,
 .settings-shortcuts {
   display: flex;
@@ -1974,7 +1982,12 @@ textarea:focus,
   gap: 6px;
 }
 
-/* A column wide enough for "Ctrl+Shift+" plus a letter, shared with the Info tab's labels. */
+.settings-shortcuts {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A column wide enough for "Ctrl+Shift+" plus a letter, shared by the Info tab's two lists. */
 .settings-info-row,
 .settings-shortcut-row {
   display: flex;
