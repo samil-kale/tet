@@ -1487,13 +1487,16 @@ textarea:focus,
   flex: none;
 }
 
-/* Always drawn: the 1px `--vscode-panel-border` of every pane boundary, not the 4px hit area. */
+/* Always drawn: the 1px `--vscode-panel-border` of every pane boundary, not the 4px hit area.
+   A border, not a 1px background: at a fractional scale (125%) Chromium snaps a box's edges, so
+   1px paints one or two device pixels depending on where the sash sits, but rounds a border's
+   width to whole device pixels. */
 .sash::before {
   content: "";
   position: absolute;
-  background: var(--vscode-panel-border);
+  border: 0 solid var(--vscode-panel-border);
   /* Fades to the drag color and back, not from nothing. */
-  transition: background 0.1s linear;
+  transition: border-color 0.1s linear;
 }
 
 .sash.vertical {
@@ -1506,7 +1509,7 @@ textarea:focus,
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 1px;
+  border-left-width: 1px;
 }
 
 .sash.horizontal {
@@ -1519,12 +1522,12 @@ textarea:focus,
   left: 0;
   right: 0;
   top: 50%;
-  height: 1px;
+  border-top-width: 1px;
 }
 
 /* Only while dragged: on hover it would recolor whenever the pointer rests near a border. */
 .sash.dragging::before {
-  background: var(--vscode-sash-hoverBorder);
+  border-color: var(--vscode-sash-hoverBorder);
 }
 
 /* Shared bits ---------------------------------------------------------------------------- */
