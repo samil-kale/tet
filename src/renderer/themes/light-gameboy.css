@@ -3,8 +3,8 @@
  * Grossard). Values, token colors included, come from light-gameboy.json beside this file: the
  * extension's theme file as it ships, renamed. See dark-modern.css for the layer. A color the
  * theme leaves unset takes VS Code's registry fallback — what VS Code draws with this theme — or,
- * for a border, the theme's own border color; each is marked below. Exception: the hovered row,
- * marked where it stands.
+ * for a border, the theme's own border color; each is marked below. Exceptions: the hovered row,
+ * the active tab's border and the session marks on it, each marked where it stands.
  */
 :root[data-theme="light-gameboy"] {
   color-scheme: light;
@@ -41,6 +41,10 @@
 
   --vscode-tab-activeBackground: #494786;
   --vscode-tab-activeForeground: #c4bebb;
+  /* Not the theme's #9a2257: the tab's own background, so the active tab has no line under it. */
+  --vscode-tab-activeBorder: #494786;
+  /* tet's own: a session mark on the active tab or row takes its text color, not the accent. */
+  --tet-sessionMark-activeForeground: #c4bebb;
   --vscode-tab-inactiveBackground: #c4bebb;
   --vscode-tab-inactiveForeground: #494786;
   --vscode-tab-border: #c4bebb;

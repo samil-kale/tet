@@ -911,7 +911,7 @@ textarea:focus,
 .tab.active {
   color: var(--vscode-tab-activeForeground);
   background: var(--vscode-tab-activeBackground);
-  box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
+  box-shadow: inset 0 -1px 0 var(--vscode-tab-activeBorder, var(--vscode-focusBorder));
 }
 
 /* Plain icon buttons at the strip's start, none tab-shaped; boxed like `.new-tab` at the other
@@ -948,6 +948,12 @@ textarea:focus,
 .session-mark {
   flex: none;
   color: var(--vscode-focusBorder);
+}
+
+/* On the active tab or row's selection background. */
+.tab.active .session-mark:not(.session-mark-error),
+.project-item.active .session-mark:not(.session-mark-error) {
+  color: var(--tet-sessionMark-activeForeground, var(--vscode-focusBorder));
 }
 
 /* Not a fourth turn state: red is the one colour Dark Modern names for this meaning. */
@@ -1634,7 +1640,7 @@ textarea:focus,
 .dialog-tab.active {
   color: var(--vscode-tab-activeForeground);
   background: var(--vscode-tab-activeBackground);
-  box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
+  box-shadow: inset 0 -1px 0 var(--vscode-tab-activeBorder, var(--vscode-focusBorder));
 }
 
 .dialog-tab.disabled {
