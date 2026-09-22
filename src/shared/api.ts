@@ -27,7 +27,6 @@ import type {
   ProviderId,
   RepositoryState,
   Requirements,
-  SbxAgentKnowledge,
   SbxLocalSave,
   SbxPath,
   SbxProjectConfig,
@@ -89,8 +88,6 @@ export interface TETApi {
     /** Whether sbx's network policy lets a sandbox reach the host; true for a wildcard. One host
      *  per call, so each answer can show as it comes. */
     hostAllowed(host: string): Promise<boolean>;
-    /** What each sandbox would bring from this machine, per knowledge kind. */
-    knowledge(): Promise<SbxAgentKnowledge[]>;
   };
   /** One set for the whole app. */
   settings: {

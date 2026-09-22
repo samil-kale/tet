@@ -48,8 +48,8 @@ export const claudeAgent: AgentDefinition = {
     plugins: [{ host: path.join(os.homedir(), ".claude", "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
     instructions: [{ host: path.join(os.homedir(), ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }]
   }),
-  // Its one user skills folder (above), so the shared one goes there when `~/.claude/skills` does not.
-  sharedSkillsTarget: `${SANDBOX_HOME}/.claude/skills`,
+  // No `sharedSkillsTarget`: Claude Code reads only its own skills folder, and putting
+  // `~/.agents/skills` there would stand in for it.
   // Measured: the startup handshake is under 150 bytes, the main UI one ~850-byte chunk; a higher
   // threshold than 500 is not reliably reached.
   createIsSessionReady: () => createByteThresholdCheck(500),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import type { Project, SbxAgentKnowledge, SbxBlocker, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
+import type { Project, SbxBlocker, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
 import {
   SbxSettingsFields,
   fromConfig,
@@ -86,8 +86,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** No agent on this machine, so sandboxing cannot be switched off. Derived on every open, not
    *  stored. */
   const [locked, setLocked] = useState(false);
-  /** What each sandbox would bring from this machine (sbx.ts's readSandboxKnowledge). */
-  const [knowledge, setKnowledge] = useState<SbxAgentKnowledge[]>([]);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   /** As opened, for whether the edits wait for a restart (needsRestart). */
   const [loaded, setLoaded] = useState<SbxProjectConfig>(EMPTY_SBX_CONFIG);
@@ -140,14 +138,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       setPhase({ kind: "blocked", organization: status.organization, blockers: status.blockers });
       return;
     }
-    // Read after setup, so Save writes over what is on disk, not the mount-time defaults. Knowledge
-    // after the agent check above, whose fresh answers it reuses.
-    const [config, local, found] = await Promise.all([
-      window.tet.sbx.getConfig(project.id),
-      window.tet.sbx.stored(project.id),
-      window.tet.sbx.knowledge()
-    ]);
-    setKnowledge(found);
+    // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
+    const [config, local] = await Promise.all([window.tet.sbx.getConfig(project.id), window.tet.sbx.stored(project.id)]);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
     setLoaded(config);
@@ -293,8 +285,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             governed={organization !== undefined}
             stored={stored}
             answers={answers}
-            agentInstalled={!locked}
-            knowledge={knowledge}
           />
         </div>
       )}

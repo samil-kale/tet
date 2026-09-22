@@ -2,13 +2,12 @@ import { ipcMain } from "electron";
 import { getAgent } from "../agents";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import { errorMessage } from "../../shared/errors";
-import type { GitActionResult, SbxAgentKnowledge, SbxLocalSave, SbxPath, SbxProjectConfig, SbxStatus, SbxStoredLocal } from "../../shared/types";
+import type { GitActionResult, SbxLocalSave, SbxPath, SbxProjectConfig, SbxStatus, SbxStoredLocal } from "../../shared/types";
 import {
   cancelSbxSetup,
   initSbxPolicy,
   readLiveSbxConfig,
   readHostAllowed,
-  readSandboxKnowledge,
   readMountsAllowed,
   readSbxStatus,
   runSbxLogin,
@@ -35,8 +34,6 @@ export function registerSbxIpc({
   ipcMain.handle("sbx:mounts-allowed", (_event, paths: SbxPath[]): Promise<boolean[]> => readMountsAllowed(paths));
   // The Secrets rows' marks, likewise.
   ipcMain.handle("sbx:host-allowed", (_event, host: string): Promise<boolean> => readHostAllowed(host));
-  // The Knowledge tab; asked fresh, as agents and folders come and go.
-  ipcMain.handle("sbx:knowledge", (): Promise<SbxAgentKnowledge[]> => readSandboxKnowledge());
 
   // Read fresh; the hosts from the sandboxes themselves (sbx.ts's readLiveSbxConfig).
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {

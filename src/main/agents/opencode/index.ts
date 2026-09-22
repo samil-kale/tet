@@ -88,7 +88,8 @@ export const opencodeAgent: AgentDefinition = {
   // Documented, not verified: skills in `~/.config/opencode/skills`, `~/.claude/skills`,
   // `~/.agents/skills`; `~/.config/opencode/plugins`; rules `~/.config/opencode/AGENTS.md`, else
   // `~/.claude/CLAUDE.md`. Its config directory (the user's providers in `opencode.json`) stays out;
-  // auth is under `~/.local/share/opencode`.
+  // auth is under `~/.local/share/opencode`. `~/.claude/skills` is left out although opencode reads
+  // it: Claude's own folder goes to Claude's sandbox, the shared one to every agent.
   sandboxKnowledge: () => {
     const home = os.homedir();
     const rules = [
@@ -96,10 +97,7 @@ export const opencodeAgent: AgentDefinition = {
       { host: path.join(home, ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }
     ].find((entry) => fs.existsSync(entry.host));
     return {
-      skills: [
-        { host: path.join(home, ".config", "opencode", "skills"), target: `${SANDBOX_HOME}/.config/opencode/skills` },
-        { host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` }
-      ],
+      skills: [{ host: path.join(home, ".config", "opencode", "skills"), target: `${SANDBOX_HOME}/.config/opencode/skills` }],
       plugins: [{ host: path.join(home, ".config", "opencode", "plugins"), target: `${SANDBOX_HOME}/.config/opencode/plugins` }],
       instructions: rules ? [rules] : []
     };

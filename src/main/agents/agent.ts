@@ -202,7 +202,8 @@ export interface AgentDefinition {
   /**
    * Absolute container path where the sandboxed CLI reads `~/.agents/skills`, the skills folder no
    * agent owns: mounted whether or not the agent is installed here, unless one of its own skills
-   * folders already takes that target (sbx.ts's sandboxKnowledgeFor). Omitted by the shell.
+   * folders already takes that target (sbx.ts's sandboxKnowledgeFor). Omitted by the shell and by
+   * an agent that does not read that folder — tet never stands it in for one the CLI does read.
    */
   sharedSkillsTarget?: string;
   /**

@@ -8,7 +8,6 @@ import { CONTROL_ENV } from "../shared/control";
 import { SBX_AGENT_IDS } from "../shared/types";
 import type {
   SbxAgentId,
-  SbxAgentKnowledge,
   SbxBlocker,
   SbxKnowledgeConfig,
   SbxPath,
@@ -533,21 +532,6 @@ async function sandboxKnowledgeFor(agentId: SbxAgentId): Promise<KnowledgeEntrie
     skills.push({ host: shared, target });
   }
   return { skills, plugins: existing(own?.plugins), instructions: existing(own?.instructions) };
-}
-
-/** For the dialog's Knowledge tab: what each sandbox would bring from this host (sandboxKnowledgeFor). */
-export function readSandboxKnowledge(): Promise<SbxAgentKnowledge[]> {
-  return Promise.all(
-    SBX_AGENT_IDS.map(async (agentId) => {
-      const entries = await sandboxKnowledgeFor(agentId);
-      const hosts = (kind: keyof SbxKnowledgeConfig): string[] => entries[kind].map((entry) => contractHome(entry.host));
-      return {
-        agentId,
-        displayName: getAgent(agentId).displayName,
-        paths: { skills: hosts("skills"), plugins: hosts("plugins"), instructions: hosts("instructions") }
-      };
-    })
-  );
 }
 
 /**
