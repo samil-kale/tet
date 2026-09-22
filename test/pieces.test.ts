@@ -37,7 +37,7 @@ import {
   secretPlaceholder
 } from "../src/main/sbx";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
-import { SbxSecretStore } from "../src/main/sbx-secrets";
+import { SbxLocalStore } from "../src/main/sbx-local";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
 import { fetchHttpsImage } from "../src/main/ipc/shell";
@@ -568,8 +568,8 @@ describe("a sandboxed tab's variables", () => {
   });
 });
 
-describe("the sbx secrets kept on this machine", () => {
-  it("count as stored only where they can still be decrypted", () => {
+describe("what sbx keeps on this machine", () => {
+  it("counts a value as stored only where it can still be decrypted", () => {
     // "sealed:" stands in for the OS's encryption; anything else was sealed under another keychain.
     Object.assign(safeStorage, {
       decryptString: (buffer: Buffer) => {
@@ -580,7 +580,7 @@ describe("the sbx secrets kept on this machine", () => {
         return text.slice("sealed:".length);
       }
     });
-    const store = new SbxSecretStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
+    const store = new SbxLocalStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
       secrets: { READABLE: base64("sealed:value"), LOST: base64("under another keychain") },
@@ -591,7 +591,7 @@ describe("the sbx secrets kept on this machine", () => {
     assert.deepEqual([...store.values("p", "variables")], [["NPM_TOKEN", "npm"]]);
   });
 
-  it("read a file written before the variables as its secrets, and drop a project left with none", () => {
+  it("takes over sbx-secrets.json, read as secrets alone, and drops a project left with none", () => {
     Object.assign(safeStorage, {
       isEncryptionAvailable: () => true,
       encryptString: (text: string) => Buffer.from(`sealed:${text}`),
@@ -600,13 +600,14 @@ describe("the sbx secrets kept on this machine", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-"));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     fs.writeFileSync(path.join(root, "sbx-secrets.json"), JSON.stringify({ p: { TOKEN: base64("sealed:old") } }));
-    const store = new SbxSecretStore(root);
+    const store = new SbxLocalStore(root);
     assert.deepEqual([...store.values("p", "secrets")], [["TOKEN", "old"]]);
     store.update("p", { secretValues: {}, variableValues: { NPM_TOKEN: "npm" } }, { secrets: ["TOKEN"], variables: ["NPM_TOKEN"] });
-    const reread = new SbxSecretStore(root);
+    assert.ok(!fs.existsSync(path.join(root, "sbx-secrets.json")), "the old file is renamed, not copied");
+    const reread = new SbxLocalStore(root);
     assert.deepEqual(reread.stored("p"), { secrets: ["TOKEN"], variables: ["NPM_TOKEN"] });
     reread.update("p", { secretValues: {}, variableValues: {} }, { secrets: [], variables: [] });
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-secrets.json"), "utf8")), {}, "nothing left, no entry");
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "nothing left, no entry");
   });
 });
 

@@ -21,7 +21,7 @@ import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, type ProjectDeps } from "./projects";
 import { configureSandboxes } from "./sbx";
-import { SbxSecretStore } from "./sbx-secrets";
+import { SbxLocalStore } from "./sbx-local";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv, setStoredEnv } from "./terminals/pty";
@@ -204,7 +204,7 @@ installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
-const sbxSecrets = new SbxSecretStore(dataRoot);
+const sbxLocal = new SbxLocalStore(dataRoot);
 const environment = new EnvStore(dataRoot);
 // Read at every spawn, so a restarted tab sees what was saved meanwhile.
 setStoredEnv(() => environment.values());
@@ -252,7 +252,7 @@ const repositories = new RepositoryManager(
   (projectId) => send("repo:files-changed", { projectId }),
   (projectId, path) => send("repo:file-changed", { projectId, path })
 );
-const sessions = new SessionManagerRegistry(dataRoot, settings, sbxSecrets, {
+const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (projectId, tabs) => {
     send("terminal:tabs", { projectId, tabs });
     awaitedToastTab(projectId);
@@ -278,7 +278,7 @@ const projectDeps: ProjectDeps = {
   repositories,
   sessions,
   records,
-  sbxSecrets,
+  sbxLocal,
   openProject,
   dataRoot,
   projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change })
@@ -586,7 +586,7 @@ if (!app.requestSingleInstanceLock()) {
       store,
       settings,
       accounts,
-      sbxSecrets,
+      sbxLocal,
       environment,
       envRequests,
       repositories,

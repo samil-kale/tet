@@ -5,7 +5,7 @@ import {
   SbxSettingsFields,
   fromConfig,
   policyName,
-  restartTabs,
+  needsRestart,
   saveBlocked,
   tabMarks,
   toConfig,
@@ -94,7 +94,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  stored. */
   const [locked, setLocked] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
-  /** As opened, for the tabs whose edits wait for a restart (restartTabs). */
+  /** As opened, for whether the edits wait for a restart (needsRestart). */
   const [loaded, setLoaded] = useState<SbxProjectConfig>(EMPTY_SBX_CONFIG);
   const [stored, setStored] = useState<SbxStoredLocal>({ secrets: [], variables: [] });
   const [saving, setSaving] = useState(false);
@@ -206,7 +206,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       className={phase.kind === "ready" ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
       error={refused}
-      message={phase.kind === "ready" && restartTabs(loaded, state).size > 0 && <RestartNote />}
+      message={phase.kind === "ready" && needsRestart(loaded, state) && <RestartNote />}
       buttons={
         <>
           <button type="button" className="button secondary" onClick={close}>

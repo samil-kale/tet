@@ -81,7 +81,7 @@ function isBadSecretRow(row: SecretRow, rows: SecretRow[]): boolean {
   const env = row.env.trim();
   const hosts = secretHosts(row);
   return (
-    !/^[A-Za-z_][A-Za-z0-9_]*$/.test(env) ||
+    !isEnvName(env) ||
     rows.some((other) => other.id !== row.id && other.env.trim() === env) ||
     hosts.length === 0 ||
     hosts.some(isBadHost)
@@ -160,28 +160,21 @@ export function toVariableValues(state: FieldsState): Record<string, string> {
 }
 
 /**
- * The tabs whose edits since `loaded` reach a running tab only once it restarts: a mount is added
- * at a tab's start (a removed one goes at Save), and `sbx run -e` sets a variable, a new secret's
+ * Whether the edits since `loaded` reach a running tab only once it restarts: a mount is added at a
+ * tab's start (a removed one goes at Save), and `sbx run -e` sets a variable, a new secret's
  * placeholder included, only there (sbx.ts's prepareSbxRun). Ports, hosts and a secret's value or
  * hosts apply at Save.
  */
-export function restartTabs(loaded: SbxProjectConfig, state: FieldsState): ReadonlySet<keyof FieldsState> {
+export function needsRestart(loaded: SbxProjectConfig, state: FieldsState): boolean {
   const config = toConfig(state);
-  const tabs = new Set<keyof FieldsState>();
-  if (KNOWLEDGE_LABELS.some(({ kind }) => config.knowledge[kind] !== false && config.knowledge[kind] !== loaded.knowledge[kind])) {
-    tabs.add("knowledge");
-  }
-  if (config.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access))) {
-    tabs.add("paths");
-  }
-  if (config.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env))) {
-    tabs.add("secrets");
-  }
   const names = (variables: SbxProjectConfig["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
-  if (names(config.variables) !== names(loaded.variables) || Object.keys(toVariableValues(state)).length > 0) {
-    tabs.add("variables");
-  }
-  return tabs;
+  return (
+    KNOWLEDGE_LABELS.some(({ kind }) => config.knowledge[kind] !== false && config.knowledge[kind] !== loaded.knowledge[kind]) ||
+    config.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
+    config.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
+    names(config.variables) !== names(loaded.variables) ||
+    Object.keys(toVariableValues(state)).length > 0
+  );
 }
 
 /** sbx's policy on the rows, for their marks (usePolicyAnswers). */

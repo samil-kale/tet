@@ -936,7 +936,7 @@ async function readSandboxSecrets(): Promise<Map<string, LiveSecret[]> | undefin
  * - sbx sets `--env` in the sandbox only at `sbx create`, so tet leaves it out and passes the
  *   placeholder itself with `sbx run -e` (prepareSbxRun), which reaches an existing sandbox too.
  * - `sbx rm` removes the sandbox's secrets with it, and sbx never gives a value back: a new sandbox
- *   is seeded from this machine's store (sbx-secrets.ts).
+ *   is seeded from this machine's store (sbx-local.ts).
  * - no update: a second secret for one placeholder or env fails ("already exists", exit 1), so a
  *   changed one is removed and set again. `rm` without `-f` asks, cancels on closed stdin, exits 0.
  * - the value goes through stdin: `--value` would show in the process list.
@@ -1001,7 +1001,7 @@ export interface SbxRunRequest {
   agentArgs: string[];
   /** `AgentDefinition.sandboxEnv` — "KEY=VALUE" entries for `sbx run -e`. */
   env?: string[];
-  /** This machine's values of `config.secrets`, by env name (SbxSecretStore.values). */
+  /** This machine's values of `config.secrets`, by env name (SbxLocalStore.values). */
   secretValues: ReadonlyMap<string, string>;
   /** This machine's values of `config.variables`, likewise. */
   variableValues: ReadonlyMap<string, string>;

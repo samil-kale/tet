@@ -40,12 +40,21 @@ function toLocal(project: Record<string, unknown>): StoredSbxLocal {
  * leaves this class only decrypted into `sbx secret set-custom` or a sandboxed tab's `sbx run`
  * (sbx.ts's sandboxEnv); the renderer never sees one.
  */
-export class SbxSecretStore {
+export class SbxLocalStore {
   private readonly file: string;
   private projects: Record<string, StoredSbxLocal> = {};
 
   constructor(dataRoot: string) {
-    this.file = path.join(dataRoot, "sbx-secrets.json");
+    this.file = path.join(dataRoot, "sbx-local.json");
+    // The file's name before it held the variables too; its shape is read by `toLocal`.
+    const legacy = path.join(dataRoot, "sbx-secrets.json");
+    if (!fs.existsSync(this.file) && fs.existsSync(legacy)) {
+      try {
+        fs.renameSync(legacy, this.file);
+      } catch (error) {
+        console.error("[tet] could not rename sbx-secrets.json:", error);
+      }
+    }
     this.load();
   }
 
@@ -141,7 +150,7 @@ export class SbxSecretStore {
       // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
       writeFileAtomic.sync(this.file, JSON.stringify(this.projects, null, 2), "utf8");
     } catch (error) {
-      console.error("[tet] could not persist sbx secrets:", error);
+      console.error("[tet] could not persist sbx-local.json:", error);
     }
   }
 }

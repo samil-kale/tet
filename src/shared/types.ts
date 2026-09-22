@@ -134,7 +134,7 @@ export interface SbxKnowledgeConfig {
 /**
  * A "Secrets" row: an sbx custom secret. The sandbox sees `env` set to a placeholder, and sbx's
  * proxy swaps it for the value in requests to `hosts` (sbx.ts's applySecrets). Never the value,
- * which stays on this machine (sbx-secrets.ts).
+ * which stays on this machine (sbx-local.ts).
  */
 export interface SbxSecret {
   env: string;
@@ -144,7 +144,7 @@ export interface SbxSecret {
 
 /**
  * A "Variables" row: `env` set in the sandbox with its real value — which, unlike a secret's, the
- * sandbox sees (sbx.ts's sandboxEnv). Never the value, which stays on this machine (sbx-secrets.ts).
+ * sandbox sees (sbx.ts's sandboxEnv). Never the value, which stays on this machine (sbx-local.ts).
  */
 export interface SbxVariable {
   env: string;
@@ -165,7 +165,7 @@ export interface SbxProjectConfig {
   variables: SbxVariable[];
 }
 
-/** What the SBX Settings keep on this machine, never in tet.json (sbx-secrets.ts): which Secrets
+/** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Secrets
  *  and Variables rows hold a value here — never a value. */
 export interface SbxStoredLocal {
   secrets: string[];

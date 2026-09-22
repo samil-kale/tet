@@ -9,7 +9,7 @@ import { git } from "./git/git-client";
 import { readMainWorktree } from "./git/linked-git-dir";
 import type { Repository, RepositoryManager } from "./git/repository";
 import { removeProjectSandboxes } from "./sbx";
-import type { SbxSecretStore } from "./sbx-secrets";
+import type { SbxLocalStore } from "./sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 
 /** What opening and closing a project takes — the same singletons ipc.ts holds. */
@@ -18,7 +18,7 @@ export interface ProjectDeps {
   repositories: RepositoryManager;
   sessions: SessionManagerRegistry;
   records: ControlRecords;
-  sbxSecrets: SbxSecretStore;
+  sbxLocal: SbxLocalStore;
   openProject: (project: Project) => void;
   /** TET's data folder (data-root.ts), holding the worktrees tet creates. */
   dataRoot: string;
@@ -44,7 +44,7 @@ export async function addProject({ store, openProject }: ProjectDeps, directory:
 /** Resolves once the project's sessions and git commands have ended — a worktree's folder is
  *  removed or moved only then. */
 export function removeProject(
-  { store, repositories, sessions, records, sbxSecrets }: ProjectDeps,
+  { store, repositories, sessions, records, sbxLocal }: ProjectDeps,
   projectId: string
 ): Promise<void> {
   // The project leaves the window at once; its sessions still end by themselves
@@ -53,7 +53,7 @@ export function removeProject(
   const gitEnded = repositories.close(projectId);
   store.remove(projectId);
   // Reopened, the folder is a new project with new sandboxes (sbx.ts's sandboxName).
-  sbxSecrets.forgetProject(projectId);
+  sbxLocal.forgetProject(projectId);
   return Promise.all([sessionsEnded, gitEnded]).then(() => undefined);
 }
 
@@ -151,7 +151,7 @@ async function withWorktreeClosed(
 ): Promise<GitActionResult> {
   const folder = onDisk(worktreePath);
   const project = deps.store.list().find((entry) => onDisk(entry.path) === folder);
-  const local = project && deps.sbxSecrets.encrypted(project.id);
+  const local = project && deps.sbxLocal.encrypted(project.id);
   if (project) {
     await removeProject(deps, project.id);
     void removeProjectSandboxes(project.id);
@@ -161,7 +161,7 @@ async function withWorktreeClosed(
     const target = reopenAt(result);
     const reopened = target === undefined ? undefined : deps.store.add(onDisk(target));
     if (reopened && local) {
-      deps.sbxSecrets.restore(reopened.id, local);
+      deps.sbxLocal.restore(reopened.id, local);
       deps.openProject(reopened);
     }
     deps.projectsChanged({ removed: project.id, added: reopened?.id });

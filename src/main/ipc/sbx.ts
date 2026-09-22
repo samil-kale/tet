@@ -18,9 +18,9 @@ import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 /** The sandbox settings dialog: what sbx says, and what the project stores. */
 export function registerSbxIpc({
   store,
-  sbxSecrets,
+  sbxLocal,
   send
-}: Pick<IpcDeps, "store" | "sbxSecrets" | "send">): void {
+}: Pick<IpcDeps, "store" | "sbxLocal" | "send">): void {
   // Per project: the policy has to allow the project's folder.
   ipcMain.handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
     const project = store.get(projectId);
@@ -41,7 +41,7 @@ export function registerSbxIpc({
     return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
   // The Secrets and Variables rows holding a value on this machine; never the values.
-  ipcMain.handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxSecrets.stored(projectId));
+  ipcMain.handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
   // Stores the typed values first, so a machine without a keyring changes nothing; then
   // writes tet.json, a failure putting the values back. Notices for the sandboxes saveSbxConfig
   // removed, an error for what sbx refused.
@@ -52,9 +52,9 @@ export function registerSbxIpc({
       if (!project) {
         return { ok: false, error: MISSING_REPOSITORY.error };
       }
-      const stored = sbxSecrets.encrypted(project.id);
+      const stored = sbxLocal.encrypted(project.id);
       try {
-        sbxSecrets.update(project.id, local, {
+        sbxLocal.update(project.id, local, {
           secrets: request.secrets.map((secret) => secret.env),
           variables: request.variables.map((variable) => variable.env)
         });
@@ -62,7 +62,7 @@ export function registerSbxIpc({
           project.path,
           project.id,
           request,
-          sbxSecrets.values(project.id, "secrets"),
+          sbxLocal.values(project.id, "secrets"),
           new Set(Object.keys(local.secretValues))
         );
         for (const agentId of removed) {
@@ -76,7 +76,7 @@ export function registerSbxIpc({
         }
         return { ok: true };
       } catch (error) {
-        sbxSecrets.restore(project.id, stored);
+        sbxLocal.restore(project.id, stored);
         return { ok: false, error: errorMessage(error) };
       }
     }

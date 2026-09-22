@@ -425,7 +425,7 @@ function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
 /** The sbx settings: ports, allowed paths (a folder or a single file), hosts, which of the agent's
  *  skills, plugins and instructions to mount, the secrets' names and hosts and the variables' names.
  *  Never holds a token: each sandboxed agent signs in with its own `/login` inside the sandbox, and
- *  a secret's or variable's value stays on this machine (sbx-secrets.ts). */
+ *  a secret's or variable's value stays on this machine (sbx-local.ts). */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)

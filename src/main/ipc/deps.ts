@@ -5,7 +5,7 @@ import type { EnvRequests, EnvStore } from "../environment";
 import type { RepositoryManager } from "../git/repository";
 import type { ProjectDeps, ProjectStore } from "../projects";
 import type { AccountStore } from "../providers/accounts";
-import type { SbxSecretStore } from "../sbx-secrets";
+import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
 import type { SessionManagerRegistry } from "../terminals/session-manager";
 
@@ -16,7 +16,7 @@ export interface IpcDeps {
   store: ProjectStore;
   settings: SettingsStore;
   accounts: AccountStore;
-  sbxSecrets: SbxSecretStore;
+  sbxLocal: SbxLocalStore;
   environment: EnvStore;
   /** Shared with the control channel's `env-request`. */
   envRequests: EnvRequests;

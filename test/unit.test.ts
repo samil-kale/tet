@@ -9,7 +9,7 @@ import { ControlRecords } from "../src/main/control/control-records";
 import { tabControlToken } from "../src/main/control/control-token";
 import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../src/main/terminals/agent-path";
 import { relativeInside } from "../src/main/path-inside";
-import { SbxSecretStore } from "../src/main/sbx-secrets";
+import { SbxLocalStore } from "../src/main/sbx-local";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv, setStoredEnv } from "../src/main/terminals/pty";
@@ -29,7 +29,7 @@ describe("a turn's toast", () => {
     const settings = new SettingsStore(root);
     settings.save({ ...settings.get(), notifications: { finished: true, needsYou: true, idleReminder: true } });
     let pushed: TerminalDescriptor[] = [];
-    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, settings, new SbxSecretStore(root), {
+    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, settings, new SbxLocalStore(root), {
       onTabs: (_projectId, tabs) => (pushed = tabs),
       onOutput: () => undefined,
       onStatus: () => undefined,
@@ -90,7 +90,7 @@ async function withEmptyPath(
   fs.mkdirSync(project);
   const originalPath = process.env.PATH;
   process.env.PATH = path.join(root, "empty");
-  const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), new SbxSecretStore(root), {
+  const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), new SbxLocalStore(root), {
     ...NO_CALLBACKS,
     ...callbacks
   });

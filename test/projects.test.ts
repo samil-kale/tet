@@ -6,7 +6,7 @@ import { after, before, describe, it } from "node:test";
 import type { ControlRecords } from "../src/main/control/control-records";
 import { RepositoryManager } from "../src/main/git/repository";
 import { addWorktree, deleteWorktree, ProjectStore, renameWorktree, type ProjectDeps } from "../src/main/projects";
-import { SbxSecretStore } from "../src/main/sbx-secrets";
+import { SbxLocalStore } from "../src/main/sbx-local";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import type { Project } from "../src/shared/types";
 import { eventually, forkGitInProcess, git, initBare, isolateGitConfig } from "./helpers";
@@ -75,7 +75,7 @@ async function open(folders: string[], onClose: (project: Project) => void = () 
       open: () => undefined
     } as unknown as SessionManagerRegistry,
     records: { forgetProject: () => undefined } as unknown as ControlRecords,
-    sbxSecrets: new SbxSecretStore(dataRoot),
+    sbxLocal: new SbxLocalStore(dataRoot),
     openProject: (project) => void repositories.open(project),
     dataRoot,
     projectsChanged: (change) => changes.push(change)
@@ -217,14 +217,14 @@ describe("a worktree renamed to the folder it already has", () => {
     assert.ok(before);
     // Stored as the store keeps them, so no OS encryption is needed here.
     const local = { secrets: { GITLAB_TOKEN: "encrypted-value" }, variables: { NPM_TOKEN: "encrypted-npm" } };
-    deps.sbxSecrets.restore(before.id, local);
+    deps.sbxLocal.restore(before.id, local);
     assert.deepEqual(await renameWorktree(deps, repo.worktree("old-name"), "new-name"), { ok: true });
     const after = named("new-name");
     assert.ok(after && after.id !== before.id, "reopened as a new project");
     const nothing = { secrets: {}, variables: {} };
-    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), local);
-    assert.deepEqual(deps.sbxSecrets.encrypted(before.id), nothing, "the old id keeps nothing");
+    assert.deepEqual(deps.sbxLocal.encrypted(after.id), local);
+    assert.deepEqual(deps.sbxLocal.encrypted(before.id), nothing, "the old id keeps nothing");
     assert.deepEqual(await deleteWorktree(deps, repo.worktree("new-name"), { force: true, onRemote: false }), { ok: true });
-    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), nothing, "a deleted worktree's values go");
+    assert.deepEqual(deps.sbxLocal.encrypted(after.id), nothing, "a deleted worktree's values go");
   });
 });

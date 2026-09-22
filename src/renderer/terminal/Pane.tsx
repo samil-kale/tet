@@ -312,7 +312,7 @@ export const Pane = memo(function Pane({
     const terminal = tabs.find((tab): tab is TerminalDescriptor => tab.tabId === tabId && !isEditorTab(tab));
     const renamable = terminal?.sessionId !== undefined ? terminal : undefined;
     // A saved command restarts anytime; an agent once started — a running one quits first and its
-    // session resumes (restartTab), so it takes up what was saved meanwhile (the SBX Settings' notes).
+    // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
     const restartable =
       terminal !== undefined &&
       (terminal.savedCommand === true ||
