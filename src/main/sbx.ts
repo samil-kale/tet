@@ -581,7 +581,7 @@ function parseSandboxes(result: RunResult): SandboxList | undefined {
  * editable, as `sbx policy allow network --sandbox` makes it (measured, 0.42.1); a kit's rule is
  * not editable, a global one is the machine's. One rule per resource, so the list is their union.
  * Inactive rules count too: governance hides them by default (0 of 20 listed, measured, 0.42.1),
- * and Save would then drop the hosts from tet.json while the dialog hides them.
+ * and Save, which drops the hosts under governance, would then leave their rules behind.
  */
 async function readSandboxHosts(): Promise<Map<string, string[]>> {
   const hosts = new Map<string, string[]>();

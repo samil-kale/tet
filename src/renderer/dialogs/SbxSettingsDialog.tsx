@@ -159,13 +159,15 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Stores typed values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
+  /** Stores typed values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). Under
+   *  governance the hosts, which its tab can no longer edit, are dropped with their rules. */
   const save = async (): Promise<void> => {
     setSaving(true);
     setRefused(undefined);
+    const config = toConfig(state);
     const result = await window.tet.sbx.saveConfig(
       project.id,
-      { enabled, ...toConfig(state) },
+      { enabled, ...config, hosts: organization ? [] : config.hosts },
       toLocalSave(state)
     );
     setSaving(false);
