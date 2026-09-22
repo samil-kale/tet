@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.11.2 (2026-09-22)
+
+- **Shared skills reach every sandbox.** `~/.agents/skills` is brought into the Codex, opencode
+  and pi sandboxes even where the agent is not installed on this machine, so the knowledge tab
+  works with sbx alone. An agent's own skills, plugins and instructions come along only while it
+  is installed here.
+- **Fixes.** Under an organization's governance, saving the sandbox configuration removes the
+  hosts' rules along with the hosts.
+
 ## 0.11.1 (2026-09-22)
 
 - **Variables for sandboxed agents.** The sandbox configuration takes environment variables beside
