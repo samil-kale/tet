@@ -3,6 +3,16 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.11.1 (2026-09-22)
+
+- **Variables for sandboxed agents.** The sandbox configuration takes environment variables beside
+  the secrets. Their names travel with the project in `tet.json`; their values stay encrypted on
+  this machine and are set in every sandboxed tab.
+- **Saving asked-for environment variables restarts the tab.** The agent that asked picks the
+  values up right away, without a second question.
+- **Fixes.** A renamed secret or variable keeps its value; variable names are compared
+  case-insensitively on Windows.
+
 ## 0.11.0 (2026-09-22)
 
 - **Environment variables for agents.** An agent that needs a token or password asks TET for it,
