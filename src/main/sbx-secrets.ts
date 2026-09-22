@@ -2,20 +2,47 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { safeStorage } from "electron";
 import writeFileAtomic from "write-file-atomic";
+import type { SbxLocalSave, SbxStoredLocal } from "../shared/types";
 
-/** What the file holds: per project id, each secret's value by env name, encrypted by the OS and
+/** The two lists of the sbx dialog whose values stay here. */
+export type SbxValueKind = "secrets" | "variables";
+
+/** What the file holds per project id: each kind's values by env name, encrypted by the OS and
  *  base64-wrapped. */
-type StoredSecrets = Record<string, Record<string, string>>;
+export type StoredSbxLocal = Record<SbxValueKind, Record<string, string>>;
+
+function emptyLocal(): StoredSbxLocal {
+  return { secrets: {}, variables: {} };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringsOf(value: unknown): Record<string, string> {
+  return isRecord(value)
+    ? Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+    : {};
+}
+
+/** A project's entry as read. One written before the variables was its secrets' values alone. */
+function toLocal(project: Record<string, unknown>): StoredSbxLocal {
+  if (isRecord(project.secrets) || isRecord(project.variables)) {
+    return { secrets: stringsOf(project.secrets), variables: stringsOf(project.variables) };
+  }
+  return { secrets: stringsOf(project), variables: {} };
+}
 
 /**
- * The values of the sbx dialog's Secrets, which tet.json never holds (its rows are only names and
- * hosts). Kept here because sbx cannot give one back and forgets a sandbox's with `sbx rm`, so a
- * rebuilt sandbox is seeded from here (sbx.ts's applySecrets). A value leaves this class only
- * decrypted into `sbx secret set-custom`; the renderer never sees one.
+ * The values of the sbx dialog's Secrets and Variables, which tet.json never holds (its rows are
+ * only names and hosts). A secret's is kept because sbx cannot give one back and forgets a
+ * sandbox's with `sbx rm`, so a rebuilt sandbox is seeded from here (sbx.ts's applySecrets). A value
+ * leaves this class only decrypted into `sbx secret set-custom` or a sandboxed tab's `sbx run`
+ * (sbx.ts's sandboxEnv); the renderer never sees one.
  */
 export class SbxSecretStore {
   private readonly file: string;
-  private secrets: StoredSecrets = {};
+  private projects: Record<string, StoredSbxLocal> = {};
 
   constructor(dataRoot: string) {
     this.file = path.join(dataRoot, "sbx-secrets.json");
@@ -24,8 +51,11 @@ export class SbxSecretStore {
 
   /** The env names holding a value for the project that can still be decrypted — the ones a spawn
    *  applies, so the dialog asks again for the others. */
-  stored(projectId: string): string[] {
-    return [...this.values(projectId).keys()];
+  stored(projectId: string): SbxStoredLocal {
+    return {
+      secrets: [...this.values(projectId, "secrets").keys()],
+      variables: [...this.values(projectId, "variables").keys()]
+    };
   }
 
   /**
@@ -33,21 +63,27 @@ export class SbxSecretStore {
    * dialog). Throws before changing anything when the OS offers no encryption — on Linux without a
    * keyring, where safeStorage would fall back to a fixed key.
    */
-  update(projectId: string, values: Record<string, string>, keep: string[]): void {
-    if (Object.keys(values).length > 0 && !safeStorage.isEncryptionAvailable()) {
-      throw new Error("The OS offers no encryption to store a secret with (on Linux: no keyring)");
+  update(projectId: string, local: SbxLocalSave, keep: Record<SbxValueKind, string[]>): void {
+    const typed: Record<SbxValueKind, Record<string, string>> = { secrets: local.secretValues, variables: local.variableValues };
+    const anyValue = Object.values(typed).some((values) => Object.keys(values).length > 0);
+    if (anyValue && !safeStorage.isEncryptionAvailable()) {
+      throw new Error("The OS offers no encryption to store a value with (on Linux: no keyring)");
     }
-    const project = Object.fromEntries(Object.entries(this.secrets[projectId] ?? {}).filter(([env]) => keep.includes(env)));
-    for (const [env, value] of Object.entries(values)) {
-      project[env] = safeStorage.encryptString(value).toString("base64");
+    const current = this.projects[projectId] ?? emptyLocal();
+    const next = emptyLocal();
+    for (const kind of ["secrets", "variables"] as const) {
+      next[kind] = Object.fromEntries(Object.entries(current[kind]).filter(([env]) => keep[kind].includes(env)));
+      for (const [env, value] of Object.entries(typed[kind])) {
+        next[kind][env] = safeStorage.encryptString(value).toString("base64");
+      }
     }
-    this.setProject(projectId, project);
+    this.setProject(projectId, next);
   }
 
   /** The decrypted values by env name; one that cannot be decrypted is left out. */
-  values(projectId: string): Map<string, string> {
+  values(projectId: string, kind: SbxValueKind): Map<string, string> {
     const values = new Map<string, string>();
-    for (const [env, encrypted] of Object.entries(this.secrets[projectId] ?? {})) {
+    for (const [env, encrypted] of Object.entries(this.projects[projectId]?.[kind] ?? {})) {
       try {
         values.set(env, safeStorage.decryptString(Buffer.from(encrypted, "base64")));
       } catch {
@@ -59,28 +95,28 @@ export class SbxSecretStore {
 
   /** A removed project's values: its sandboxes' names (sbx.ts's sandboxName) never come back. */
   forgetProject(projectId: string): void {
-    this.setProject(projectId, {});
+    this.setProject(projectId, emptyLocal());
   }
 
   /** The project's values as stored, still encrypted — for `restore` under a project's new id
    *  (a renamed worktree, projects.ts's withWorktreeClosed). */
-  encrypted(projectId: string): Record<string, string> {
-    return { ...(this.secrets[projectId] ?? {}) };
+  encrypted(projectId: string): StoredSbxLocal {
+    return structuredClone(this.projects[projectId] ?? emptyLocal());
   }
 
-  restore(projectId: string, encrypted: Record<string, string>): void {
-    this.setProject(projectId, encrypted);
+  restore(projectId: string, local: StoredSbxLocal): void {
+    this.setProject(projectId, local);
   }
 
   /** Written only on a change: every SBX Save passes through `update`. */
-  private setProject(projectId: string, project: Record<string, string>): void {
-    if (JSON.stringify(project) === JSON.stringify(this.secrets[projectId] ?? {})) {
+  private setProject(projectId: string, local: StoredSbxLocal): void {
+    if (JSON.stringify(local) === JSON.stringify(this.projects[projectId] ?? emptyLocal())) {
       return;
     }
-    if (Object.keys(project).length > 0) {
-      this.secrets[projectId] = project;
+    if (Object.keys(local.secrets).length > 0 || Object.keys(local.variables).length > 0) {
+      this.projects[projectId] = local;
     } else {
-      delete this.secrets[projectId];
+      delete this.projects[projectId];
     }
     this.save();
   }
@@ -88,26 +124,22 @@ export class SbxSecretStore {
   private load(): void {
     try {
       const parsed: unknown = JSON.parse(fs.readFileSync(this.file, "utf8"));
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      if (isRecord(parsed)) {
         for (const [projectId, project] of Object.entries(parsed)) {
-          if (typeof project !== "object" || project === null || Array.isArray(project)) {
-            continue;
-          }
-          const values = Object.entries(project).filter((entry): entry is [string, string] => typeof entry[1] === "string");
-          if (values.length > 0) {
-            this.secrets[projectId] = Object.fromEntries(values);
+          if (isRecord(project)) {
+            this.projects[projectId] = toLocal(project);
           }
         }
       }
     } catch {
-      // No file yet, or unreadable — no secrets.
+      // No file yet, or unreadable — no values.
     }
   }
 
   private save(): void {
     try {
       // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
-      writeFileAtomic.sync(this.file, JSON.stringify(this.secrets, null, 2), "utf8");
+      writeFileAtomic.sync(this.file, JSON.stringify(this.projects, null, 2), "utf8");
     } catch (error) {
       console.error("[tet] could not persist sbx secrets:", error);
     }

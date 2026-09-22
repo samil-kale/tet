@@ -183,8 +183,8 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 - **Environment variables** (`src/main/environment.ts`): tokens and passwords an agent needs, typed
   only into TET's dialog (`env-request`), never the chat; kept encrypted by `safeStorage`, global, and
   set in every tab at its start (`buildEnv`), over what the machine sets itself — said in a notice.
-  A running tab takes them up only when restarted, which the dialog offers and never does on its
-  own. None in a sandbox, and the verbs refused *and* unmentioned there — not in `help`, not in its
+  A running tab takes them up only when restarted: the dialog's Save restarts the asking one.
+  None in a sandbox, and the verbs refused *and* unmentioned there — not in `help`, not in its
   system prompt.
 - A caller's project and tab ids count only with the token made for them
   (`control-token.ts`): a terminal gets its tab's token, never the run's.

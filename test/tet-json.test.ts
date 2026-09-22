@@ -258,7 +258,8 @@ describe("readSbxConfig", () => {
       ports: [],
       paths: [],
       hosts: [],
-      secrets: []
+      secrets: [],
+      variables: []
     });
   });
 
@@ -282,7 +283,8 @@ describe("readSbxConfig", () => {
         { path: "~/.npmrc", access: "ro" as const }
       ],
       hosts: ["gitlab.example.com", "*.s3.example.net:443"],
-      secrets: [{ env: "GITLAB_TOKEN", hosts: ["gitlab.example.com", "*.gitlab.example.com"] }]
+      secrets: [{ env: "GITLAB_TOKEN", hosts: ["gitlab.example.com", "*.gitlab.example.com"] }],
+      variables: ["NPM_TOKEN"]
     };
     await writeSbxConfig(root, config);
     assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
@@ -325,6 +327,7 @@ describe("readSbxConfig", () => {
             { env: "NO_HOST", hosts: [] },
             { hosts: ["no-env.example.com"] }
           ],
+          variables: [" NPM_TOKEN ", "NPM_TOKEN", "API_KEY", "PATH", "TET_TAB_ID", "not a name", 42, ""],
           tokens: { claude: "sk-ant-should-not-be-read" }
         }
       })
@@ -335,7 +338,8 @@ describe("readSbxConfig", () => {
       ports: [{ host: "3000", container: "3000" }],
       paths: [{ path: "~/data", access: "rw" }],
       hosts: ["ok.example.com", "spaced.example.com"],
-      secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }]
+      secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }],
+      variables: ["NPM_TOKEN"]
     });
   });
 });

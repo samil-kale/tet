@@ -151,7 +151,7 @@ async function withWorktreeClosed(
 ): Promise<GitActionResult> {
   const folder = onDisk(worktreePath);
   const project = deps.store.list().find((entry) => onDisk(entry.path) === folder);
-  const secrets = project ? deps.sbxSecrets.encrypted(project.id) : {};
+  const local = project && deps.sbxSecrets.encrypted(project.id);
   if (project) {
     await removeProject(deps, project.id);
     void removeProjectSandboxes(project.id);
@@ -160,8 +160,8 @@ async function withWorktreeClosed(
   if (project) {
     const target = reopenAt(result);
     const reopened = target === undefined ? undefined : deps.store.add(onDisk(target));
-    if (reopened) {
-      deps.sbxSecrets.restore(reopened.id, secrets);
+    if (reopened && local) {
+      deps.sbxSecrets.restore(reopened.id, local);
       deps.openProject(reopened);
     }
     deps.projectsChanged({ removed: project.id, added: reopened?.id });

@@ -3,6 +3,7 @@ import * as path from "node:path";
 // The ESM build: esbuild can't follow the UMD build's `require("./impl/format")`.
 import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
 import writeFileAtomic from "write-file-atomic";
+import { isEnvName, isReservedName } from "../shared/env-rules";
 import { COMMAND_COLORS } from "../shared/types";
 import type {
   CommandColor,
@@ -373,6 +374,16 @@ function toSbxSecrets(value: unknown): SbxSecret[] {
   return secrets.filter((secret, i) => secrets.findIndex((other) => other.env === secret.env) === i);
 }
 
+/** Env names, trimmed; a repeated one, one a secret already holds, or one of tet's own dropped —
+ *  the sandbox sees one value per name, and a secret's is its placeholder (sbx.ts's sandboxEnv). */
+function toSbxVariables(value: unknown, secrets: SbxSecret[]): string[] {
+  const names = toSbxHosts(value);
+  return names.filter(
+    (name, i) =>
+      names.indexOf(name) === i && isEnvName(name) && !isReservedName(name) && !secrets.some((secret) => secret.env === name)
+  );
+}
+
 /** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path
  *  means nothing on another OS, so readSbxConfig reads and writeSbxConfig replaces only this
  *  platform's rows. A `~/…` row carries no `os` and applies everywhere. */
@@ -409,21 +420,23 @@ function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
 }
 
 /** The sbx settings: ports, allowed paths (a folder or a single file), hosts, which of the agent's
- *  skills, plugins and instructions to mount, and the secrets' names and hosts. Never holds a token:
- *  each sandboxed agent signs in with its own `/login` inside the sandbox, and a secret's value
- *  stays on this machine (sbx-secrets.ts). */
+ *  skills, plugins and instructions to mount, the secrets' names and hosts and the variables' names.
+ *  Never holds a token: each sandboxed agent signs in with its own `/login` inside the sandbox, and
+ *  a secret's or variable's value stays on this machine (sbx-secrets.ts). */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
     .map(({ path: hostPath, access }) => ({ path: hostPath, access }));
+  const secrets = toSbxSecrets(sbx.secrets);
   return {
     enabled: sbx.enabled === true,
     knowledge: toSbxKnowledge(sbx.knowledge),
     ports: toSbxPorts(sbx.ports),
     paths,
     hosts: toSbxHosts(sbx.hosts),
-    secrets: toSbxSecrets(sbx.secrets)
+    secrets,
+    variables: toSbxVariables(sbx.variables, secrets)
   };
 }
 
@@ -441,7 +454,8 @@ export function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<
           ports: config.ports,
           paths: [...others, ...mine],
           hosts: config.hosts,
-          secrets: config.secrets
+          secrets: config.secrets,
+          variables: config.variables
         }
       ]
     ];

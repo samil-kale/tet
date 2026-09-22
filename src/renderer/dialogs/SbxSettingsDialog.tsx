@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import type { Project, SbxBlocker } from "../../shared/types";
+import type { Project, SbxBlocker, SbxStoredLocal } from "../../shared/types";
 import {
   SbxSettingsFields,
   fromConfig,
@@ -9,6 +9,7 @@ import {
   tabMarks,
   toConfig,
   toSecretValues,
+  toVariableValues,
   usePolicyAnswers,
   type FieldsState
 } from "./SbxSettingsFields";
@@ -39,8 +40,21 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "ports", label: "Ports" },
   { id: "paths", label: "Paths" },
   { id: "hosts", label: "Hosts" },
-  { id: "secrets", label: "Secrets" }
+  { id: "secrets", label: "Secrets" },
+  { id: "variables", label: "Variables" }
 ];
+
+/**
+ * What of a tab reaches a running tab only once it is restarted: mounts are added at a tab's start
+ * and removed at Save (sbx.ts's prepareSbxRun, saveSbxConfig), and `sbx run -e` sets a variable
+ * only at the start. Ports, hosts and a secret's value or hosts apply at Save.
+ */
+const RESTART_NOTES: Partial<Record<SbxSettingsTab, string>> = {
+  knowledge: "Added or changed ones reach a running tab after a restart; removed ones go at Save.",
+  paths: "Added or changed ones reach a running tab after a restart; removed ones go at Save.",
+  secrets: "A new secret reaches a running tab after a restart; a changed value or host applies at Save.",
+  variables: "A running tab sees changes after a restart."
+};
 
 /**
  * Why a tab cannot be chosen, or `undefined`. Nothing but the switch applies while sandboxing is
@@ -90,7 +104,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  stored. */
   const [locked, setLocked] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
-  const [storedSecrets, setStoredSecrets] = useState<readonly string[]>([]);
+  const [stored, setStored] = useState<SbxStoredLocal>({ secrets: [], variables: [] });
   const [saving, setSaving] = useState(false);
   /** What refused the Save, above the buttons: the rows it is about may be on another tab, and
    *  their own marks say which (`tabMarks`). Cleared on the next try. */
@@ -140,10 +154,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       return;
     }
     // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
-    const [config, stored] = await Promise.all([window.tet.sbx.getConfig(project.id), window.tet.sbx.storedSecrets(project.id)]);
+    const [config, local] = await Promise.all([window.tet.sbx.getConfig(project.id), window.tet.sbx.stored(project.id)]);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
-    setStoredSecrets(stored);
+    setStored(local);
     setPhase({ kind: "ready", organization: status.organization });
   };
 
@@ -153,11 +167,15 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Stores typed secret values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
+  /** Stores typed values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). */
   const save = async (): Promise<void> => {
     setSaving(true);
     setRefused(undefined);
-    const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toSecretValues(state));
+    const result = await window.tet.sbx.saveConfig(
+      project.id,
+      { enabled, ...toConfig(state) },
+      { secretValues: toSecretValues(state), variableValues: toVariableValues(state) }
+    );
     setSaving(false);
     if (!result.ok) {
       setRefused(result.error ?? "Could not save the SBX configuration");
@@ -180,9 +198,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
         return { ...entry, disabled, mark };
       }),
-    // `marks` itself is rebuilt every render (tabMarks); its three fields are all of it.
+    // `marks` itself is rebuilt every render (tabMarks); its four fields are all of it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [enabled, locked, organization, marks.ports, marks.paths, marks.secrets]
+    [enabled, locked, organization, marks.ports, marks.paths, marks.secrets, marks.variables]
   );
 
   return (
@@ -271,12 +289,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <div className="sbx-settings-pane">
+          {RESTART_NOTES[tab] && <p className="dialog-detail">{RESTART_NOTES[tab]}</p>}
           <SbxSettingsFields
             section={tab}
             state={state}
             setState={setState}
             governed={organization !== undefined}
-            storedSecrets={storedSecrets}
+            stored={stored}
             answers={answers}
           />
         </div>

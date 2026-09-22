@@ -311,10 +311,14 @@ export const Pane = memo(function Pane({
     const ids = tabs.map((tab) => tab.tabId);
     const terminal = tabs.find((tab): tab is TerminalDescriptor => tab.tabId === tabId && !isEditorTab(tab));
     const renamable = terminal?.sessionId !== undefined ? terminal : undefined;
-    // A saved command restarts anytime; anything else only once its process is gone.
+    // A saved command restarts anytime; an agent once started — a running one quits first and its
+    // session resumes (restartTab), so it takes up what was saved meanwhile (the SBX Settings' notes).
     const restartable =
       terminal !== undefined &&
-      (terminal.savedCommand === true || terminal.status === "stopped" || terminal.status === "error");
+      (terminal.savedCommand === true ||
+        terminal.status === "running" ||
+        terminal.status === "stopped" ||
+        terminal.status === "error");
     const closeAction = (label: string, targets: string[]): ContextMenuEntry => ({
       label,
       run: targets.length > 0 ? () => closeTabs(targets) : undefined

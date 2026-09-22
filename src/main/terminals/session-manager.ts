@@ -55,6 +55,12 @@ let newTabCounter = 0;
  */
 const SHELL_OPERATOR = /^(?:&&|\|\||[|;&]|\d*>>?|\d*>&\d*|<)$/;
 
+/** A sandboxed tab's `sbx run` line, and the values its `-e NAME` entries pass on (sandboxEnv). */
+interface SbxRun {
+  args: string[];
+  env: Record<string, string>;
+}
+
 interface TabState extends TerminalDescriptor {
   /** The session this tab's hooks named (AgentDefinition.sessionIdOf), claimed as `sessionId`
    *  once listed. */
@@ -769,7 +775,7 @@ export class ProjectSessionManager {
     const claimed = awaitsClaim(tab) ? runtime.ready.then(() => this.reconcile(runtime)) : Promise.resolve();
     void claimed
       .then(() => Promise.all([runtime.ready, this.resolveSbxRun(tab)]))
-      .then(([, sbxArgs]) => {
+      .then(([, sbxRun]) => {
         const dims = this.lastSizes.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
           // Closed while the setup ran.
@@ -777,12 +783,12 @@ export class ProjectSessionManager {
         }
         // Left in `error` so Restart retries: a `ready` tab gets no second fit for an unchanged
         // size (`sent` in terminal-views.ts). resolveSbxRun has said why.
-        if (sbxArgs === "stranded") {
+        if (sbxRun === "stranded") {
           tab.status = "error";
           this.callbacks.onStatus(this.project.id, tabId, "error");
           return;
         }
-        this.startSession(tab, sbxArgs).ensureStarted(dims.cols, dims.rows);
+        this.startSession(tab, sbxRun).ensureStarted(dims.cols, dims.rows);
       })
       .catch((error: unknown) => {
         this.callbacks.onNotice("error", `${getAgent(tab.agentId).displayName} could not be started: ${errorMessage(error)}`);
@@ -813,7 +819,7 @@ export class ProjectSessionManager {
    *
    * Null runs the tab on this machine; "stranded" runs it nowhere, its notice already said.
    */
-  private async resolveSbxRun(tab: TabState): Promise<string[] | null | "stranded"> {
+  private async resolveSbxRun(tab: TabState): Promise<SbxRun | null | "stranded"> {
     if (tab.executable || !isSbxAgent(tab.agentId)) {
       return null;
     }
@@ -865,7 +871,7 @@ export class ProjectSessionManager {
     const paths = this.pathsFor(runtime);
     const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
-    const { args, missing, missingSecrets } = await prepareSbxRun({
+    const { args, env, missing, missingSecrets, missingVariables } = await prepareSbxRun({
       agentId: tab.agentId,
       projectId: this.project.id,
       projectPath: this.project.path,
@@ -880,7 +886,8 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
-      secretValues: this.secrets.values(this.project.id),
+      secretValues: this.secrets.values(this.project.id, "secrets"),
+      variableValues: this.secrets.values(this.project.id, "variables"),
       onData: (data) => this.reportOutput(tab, data)
     });
     if (missing.length > 0) {
@@ -895,7 +902,13 @@ export class ProjectSessionManager {
         `${agent.displayName} in ${this.project.name} starts without ${missingSecrets.length === 1 ? "a secret that has no value" : "secrets that have no value"} on this machine: ${missingSecrets.join(", ")}. Enter ${missingSecrets.length === 1 ? "it" : "them"} in the project's SBX Settings.`
       );
     }
-    return args;
+    if (missingVariables.length > 0) {
+      this.callbacks.onNotice(
+        "warning",
+        `${agent.displayName} in ${this.project.name} starts without ${missingVariables.length === 1 ? "a variable that has no value" : "variables that have no value"} on this machine: ${missingVariables.join(", ")}. Enter ${missingVariables.length === 1 ? "it" : "them"} in the project's SBX Settings.`
+      );
+    }
+    return { args, env };
   }
 
   /**
@@ -930,7 +943,7 @@ export class ProjectSessionManager {
     }
   }
 
-  private startSession(tab: TabState, sbxArgs: string[] | null): TerminalSession {
+  private startSession(tab: TabState, sbxRun: SbxRun | null): TerminalSession {
     const runtime = this.runtimeFor(tab.agentId);
     const { agent, executable, preparation } = runtime;
     const tabId = tab.tabId;
@@ -950,15 +963,15 @@ export class ProjectSessionManager {
     };
 
     // The preparation's host-only executable/args/env apply to neither a saved command nor a
-    // sandboxed tab, whose `sbxArgs` is the full `sbx run` line, resumeArgs included.
+    // sandboxed tab, whose `sbxRun.args` is the full `sbx run` line, resumeArgs included.
     const args = tab.executable
       ? (tab.runArgs ?? [])
-      : (sbxArgs ?? [...(preparation?.args ?? []), ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])]);
+      : (sbxRun?.args ?? [...(preparation?.args ?? []), ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])]);
 
     const session = new TerminalSession(
-      sbxArgs ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),
+      sbxRun ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),
       tab.cwd ?? this.project.path,
-      sbxArgs ? undefined : preparation?.env,
+      sbxRun ? undefined : preparation?.env,
       {
         onOutput: (data) => {
           this.reportOutput(tab, data);
@@ -986,11 +999,13 @@ export class ProjectSessionManager {
       },
       agent.quitPresses ?? 0,
       args,
-      tab.env,
+      // A saved command's variables, or those `sbx run -e NAME` passes on — never both, as a saved
+      // command never runs in a sandbox. Over the machine's, so the sandbox gets the row's value.
+      sbxRun ? sbxRun.env : tab.env,
       // What `tet-ctl` in this tab reports as its caller — see src/shared/control.ts.
       {
         env: { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId },
-        sandboxed: sbxArgs !== null
+        sandboxed: sbxRun !== null
       }
     );
 
@@ -1177,9 +1192,10 @@ export class ProjectSessionManager {
    * A saved command respawns in place (`TerminalSession.restart`). An agent tab with no process
    * (`stopped`, or `error` incl. a start that gave up) takes the whole start path: mounts do not
    * survive a sandbox stop, so checks, sandbox and mounts are redone and the session resumed. With
-   * `running`, a running one quits first, then takes the same path — only the environment dialog
-   * asks that, never `tabs-restart`, which would let an agent end another's session or its own. A
-   * tab not fitted yet waits for its first fit. False where there was nothing to restart.
+   * `running`, a running one quits first, then takes the same path — only the window asks that
+   * (the tab menu, the environment dialog), never `tabs-restart`, which would let an agent end
+   * another's session or its own. A tab not fitted yet waits for its first fit. False where there
+   * was nothing to restart.
    */
   restartTab(tabId: string, running = false): boolean {
     const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
@@ -1196,7 +1212,7 @@ export class ProjectSessionManager {
     }
     if (running && tab.status === "running") {
       // Asked to quit first, so its exit handlers run, then the start path below — as the
-      // environment dialog offers it, so the tab takes up what was saved meanwhile (pty.ts).
+      // environment dialog's Save does it, so the tab takes up what was saved meanwhile (pty.ts).
       if (this.restarting.has(tabId)) {
         return false;
       }

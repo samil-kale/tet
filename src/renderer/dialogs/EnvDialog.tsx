@@ -16,15 +16,14 @@ interface EnvDialogProps {
 /**
  * What an agent asked for with `tet-ctl env-request`: environment variables typed here and never
  * into the chat. The one question the main process asks (AGENTS.md): it runs its own answer, so what
- * refuses Save stays in the dialog. A tab takes up saved values only when it starts, so once saved
- * the dialog offers to restart the asking one — never on its own.
+ * refuses Save stays in the dialog. A tab takes up saved values only when it starts, so saving restarts
+ * the asking one; a request without a tab only saves.
  */
 export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   // Keyed by name: the agent's names are unique (the verb dedupes them).
   const [rows, setRows] = useState(() =>
     request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" }))
   );
-  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const firstValue = useRef<HTMLInputElement>(null);
@@ -37,17 +36,15 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   };
 
   const cancel = (): void => {
-    if (!saved) {
-      void window.tet.environment.answer(request.id, null);
-    }
+    void window.tet.environment.answer(request.id, null);
     onClose();
   };
   useEscape(cancel);
 
   const complete = rows.every((row) => row.value !== "");
-  const overriding = request.variables.filter((variable) => variable.overridesMachine).map((variable) => variable.name);
   const tab = request.projectId && request.tabId ? { projectId: request.projectId, tabId: request.tabId } : undefined;
 
+  // The asking tab restarts once saved, so it takes up the values (pty.ts).
   const save = async (): Promise<void> => {
     if (!complete || busy) {
       return;
@@ -58,52 +55,15 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       rows.map((row) => ({ name: row.name, value: row.value }))
     );
     setBusy(false);
-    if (error === undefined) {
-      setSaved(true);
-    } else {
+    if (error !== undefined) {
       setRefused(error);
+      return;
     }
-  };
-
-  const restart = (): void => {
     if (tab) {
       void window.tet.terminals.restart(tab.projectId, tab.tabId);
     }
     onClose();
   };
-
-  if (saved) {
-    return (
-      <DialogFrame
-        className="env-dialog"
-        header={{ title: "Environment variables saved", onClose }}
-        onSubmit={tab ? restart : onClose}
-        buttons={
-          tab ? (
-            <>
-              <button type="button" className="button secondary" onClick={onClose}>
-                Later
-              </button>
-              <button type="submit" className="button">
-                Restart session
-              </button>
-            </>
-          ) : (
-            <button type="submit" className="button">
-              Close
-            </button>
-          )
-        }
-      >
-        <p className="dialog-message">
-          {tab
-            ? `${requester} sees them once its session restarts; every tab started from now on has them.`
-            : "Every tab started from now on has them."}
-        </p>
-        {overriding.length > 0 && <p className="dialog-detail">{overridesMachineNote(overriding)}</p>}
-      </DialogFrame>
-    );
-  }
 
   return (
     <DialogFrame
@@ -121,7 +81,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
             Cancel
           </button>
           <button type="submit" className="button" disabled={!complete || busy}>
-            Save
+            {tab ? "Save & Restart" : "Save"}
           </button>
         </>
       }

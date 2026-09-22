@@ -1003,6 +1003,8 @@ export interface SbxRunRequest {
   env?: string[];
   /** This machine's values of `config.secrets`, by env name (SbxSecretStore.values). */
   secretValues: ReadonlyMap<string, string>;
+  /** This machine's values of `config.variables`, likewise. */
+  variableValues: ReadonlyMap<string, string>;
   /** Where this agent's sessions land on the host; created if missing, rw, re-applied per spawn. */
   sessionMounts?: SbxSessionMount[];
   /** Setup output, forwarded live to the tab (see `RunOptions.onData`). */
@@ -1037,23 +1039,59 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
 }
 
 /**
+ * A sandboxed tab's variables for `sbx run -e`: the agent's own and each secret's placeholder as
+ * `NAME=value` (`env`), each variable only by name (`passed`, its value for the environment the
+ * caller spawns `sbx run` with, as the control channel's are), since the process list shows a
+ * command line and a variable's value is real. A variable a name of tet's own or a secret already
+ * holds is left out — tet.json and the dialog refuse one, a hand-edited file may not — and the
+ * secrets and variables without a value on this machine are listed for the caller to report.
+ */
+export function sandboxEnv({
+  projectId,
+  config,
+  env: agentEnv = [],
+  secretValues,
+  variableValues
+}: Pick<SbxRunRequest, "projectId" | "config" | "env" | "secretValues" | "variableValues">): {
+  env: string[];
+  passed: Record<string, string>;
+  missingSecrets: string[];
+  missingVariables: string[];
+} {
+  const secrets = config.secrets.filter((secret) => secretValues.has(secret.env));
+  const taken = new Set([
+    ...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))),
+    ...Object.values(CONTROL_ENV),
+    ...config.secrets.map((secret) => secret.env)
+  ]);
+  const passed: Record<string, string> = {};
+  for (const name of config.variables.filter((variable) => !taken.has(variable))) {
+    const value = variableValues.get(name);
+    if (value !== undefined) {
+      passed[name] = value;
+    }
+  }
+  return {
+    env: [...agentEnv, ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(projectId, secret.env)}`)],
+    passed,
+    missingSecrets: config.secrets.filter((secret) => !secretValues.has(secret.env)).map((secret) => secret.env),
+    missingVariables: config.variables.filter((variable) => !variableValues.has(variable))
+  };
+}
+
+/**
  * Readies a tab's sandbox and returns the `sbx run` arguments: tet's mounts, knowledge and Allowed
- * paths (`missing` for the caller to report), ports, secrets (`missingSecrets`, those without a
- * value on this machine), and with a control channel its env and the `tet-ctl` launcher. Creates the
- * sandbox itself (ensureSandboxExists), since the launcher must be written before `sbx run` starts
- * the agent. Rejects when creating fails or a folder of tet's own cannot be mounted; the rest is
- * best-effort.
+ * paths (`missing` for the caller to report), ports, secrets and variables (sandboxEnv: `env` for
+ * the caller to spawn `sbx run` with, `missingSecrets` and `missingVariables`), and with a control
+ * channel its env and the `tet-ctl` launcher. Creates the sandbox itself (ensureSandboxExists), since
+ * the launcher must be written before `sbx run` starts the agent. Rejects when creating fails or a
+ * folder of tet's own cannot be mounted; the rest is best-effort.
  */
 export async function prepareSbxRun(
   request: SbxRunRequest
-): Promise<{ args: string[]; missing: string[]; missingSecrets: string[] }> {
+): Promise<{ args: string[]; env: Record<string, string>; missing: string[]; missingSecrets: string[]; missingVariables: string[] }> {
   const { agentId, config, onData, secretValues } = request;
-  const secrets = config.secrets.filter((secret) => secretValues.has(secret.env));
-  const missingSecrets = config.secrets.filter((secret) => !secretValues.has(secret.env)).map((secret) => secret.env);
-  const env = [
-    ...(request.env ?? []),
-    ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(request.projectId, secret.env)}`)
-  ];
+  const { env, passed, missingSecrets, missingVariables } = sandboxEnv(request);
   const name = sandboxName(request.projectId, agentId);
   const created = await ensureSandboxExists(agentId, request.projectPath, name, request.sandboxes, onData);
   // The user's grants are best-effort: their failure must not keep the agent from starting. A row
@@ -1088,7 +1126,14 @@ export async function prepareSbxRun(
   // sbx run refuses them on an existing one even when unchanged (verified, 2026-09-08: "sandbox 'x'
   // already exists and can't be given new workspaces"). The agent positional is only verified by
   // sbx; `--name` finds the sandbox. The plain agent id even for a kit (AgentDefinition.sandboxKit).
-  const args = ["run", agentId, "--name", name, ...env.flatMap((entry) => ["-e", entry])];
+  const args = [
+    "run",
+    agentId,
+    "--name",
+    name,
+    ...env.flatMap((entry) => ["-e", entry]),
+    ...Object.keys(passed).flatMap((variable) => ["-e", variable])
+  ];
   if (control) {
     // The tab id too: a hook reports for the tab it runs in (ProjectSessionManager.hookEvent).
     const passThrough = [CONTROL_ENV.port, CONTROL_ENV.token, CONTROL_ENV.projectId, CONTROL_ENV.tabId];
@@ -1098,7 +1143,7 @@ export async function prepareSbxRun(
   }
   args.push("--", ...request.agentArgs);
   await suppressSbxFirstRunWizard();
-  return { args, missing, missingSecrets };
+  return { args, env: passed, missing, missingSecrets, missingVariables };
 }
 
 /**

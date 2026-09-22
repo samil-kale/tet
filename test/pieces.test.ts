@@ -31,6 +31,7 @@ import {
   parsePublishedPorts,
   pathMountSpecs,
   readHostAllowed,
+  sandboxEnv,
   sandboxName,
   saveSbxConfig,
   secretPlaceholder
@@ -536,6 +537,37 @@ if (args[0] === "ls") {
   });
 });
 
+describe("a sandboxed tab's variables", () => {
+  it("put a secret's placeholder on the command line and a variable's value only in the environment", () => {
+    const config = {
+      ...EMPTY_SBX_CONFIG,
+      enabled: true,
+      secrets: [
+        { env: "GITLAB_TOKEN", hosts: ["gitlab.example.com"] },
+        { env: "NO_VALUE_HERE", hosts: ["api.example.com"] }
+      ],
+      // A hand-edited tet.json: one the agent sets, one a secret holds, one without a value here.
+      variables: ["NPM_TOKEN", "AGENT_SET", "NO_VALUE_HERE", "MISSING"]
+    };
+    const result = sandboxEnv({
+      projectId: "p",
+      config,
+      env: ["AGENT_SET=agent"],
+      secretValues: new Map([["GITLAB_TOKEN", "glpat-real"]]),
+      variableValues: new Map([
+        ["NPM_TOKEN", "npm-real"],
+        ["AGENT_SET", "variable"],
+        ["NO_VALUE_HERE", "real"]
+      ])
+    });
+    assert.deepEqual(result.env, ["AGENT_SET=agent", `GITLAB_TOKEN=${secretPlaceholder("p", "GITLAB_TOKEN")}`]);
+    assert.deepEqual(result.passed, { NPM_TOKEN: "npm-real" }, "a secret without a value never falls back to a real one");
+    assert.deepEqual(result.missingSecrets, ["NO_VALUE_HERE"]);
+    assert.deepEqual(result.missingVariables, ["MISSING"]);
+    assert.doesNotMatch(result.env.join(" "), /real/, "no real value on the command line");
+  });
+});
+
 describe("the sbx secrets kept on this machine", () => {
   it("count as stored only where they can still be decrypted", () => {
     // "sealed:" stands in for the OS's encryption; anything else was sealed under another keychain.
@@ -550,9 +582,31 @@ describe("the sbx secrets kept on this machine", () => {
     });
     const store = new SbxSecretStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
-    store.restore("p", { READABLE: base64("sealed:value"), LOST: base64("under another keychain") });
-    assert.deepEqual(store.stored("p"), ["READABLE"]);
-    assert.deepEqual([...store.values("p")], [["READABLE", "value"]]);
+    store.restore("p", {
+      secrets: { READABLE: base64("sealed:value"), LOST: base64("under another keychain") },
+      variables: { NPM_TOKEN: base64("sealed:npm") }
+    });
+    assert.deepEqual(store.stored("p"), { secrets: ["READABLE"], variables: ["NPM_TOKEN"] });
+    assert.deepEqual([...store.values("p", "secrets")], [["READABLE", "value"]]);
+    assert.deepEqual([...store.values("p", "variables")], [["NPM_TOKEN", "npm"]]);
+  });
+
+  it("read a file written before the variables as its secrets, and drop a project left with none", () => {
+    Object.assign(safeStorage, {
+      isEncryptionAvailable: () => true,
+      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
+      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
+    });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-"));
+    const base64 = (text: string) => Buffer.from(text).toString("base64");
+    fs.writeFileSync(path.join(root, "sbx-secrets.json"), JSON.stringify({ p: { TOKEN: base64("sealed:old") } }));
+    const store = new SbxSecretStore(root);
+    assert.deepEqual([...store.values("p", "secrets")], [["TOKEN", "old"]]);
+    store.update("p", { secretValues: {}, variableValues: { NPM_TOKEN: "npm" } }, { secrets: ["TOKEN"], variables: ["NPM_TOKEN"] });
+    const reread = new SbxSecretStore(root);
+    assert.deepEqual(reread.stored("p"), { secrets: ["TOKEN"], variables: ["NPM_TOKEN"] });
+    reread.update("p", { secretValues: {}, variableValues: {} }, { secrets: [], variables: [] });
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-secrets.json"), "utf8")), {}, "nothing left, no entry");
   });
 });
 

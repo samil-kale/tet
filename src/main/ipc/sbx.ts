@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { getAgent } from "../agents";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import { errorMessage } from "../../shared/errors";
-import type { GitActionResult, SbxPath, SbxProjectConfig, SbxStatus } from "../../shared/types";
+import type { GitActionResult, SbxLocalSave, SbxPath, SbxProjectConfig, SbxStatus, SbxStoredLocal } from "../../shared/types";
 import {
   cancelSbxSetup,
   initSbxPolicy,
@@ -40,27 +40,30 @@ export function registerSbxIpc({
     const project = store.get(projectId);
     return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
-  // The Secrets rows holding a value on this machine; never the values.
-  ipcMain.handle("sbx:stored-secrets", (_event, projectId: string): string[] => sbxSecrets.stored(projectId));
-  // Stores the typed secret values first, so a machine without a keyring changes nothing; then
+  // The Secrets and Variables rows holding a value on this machine; never the values.
+  ipcMain.handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxSecrets.stored(projectId));
+  // Stores the typed values first, so a machine without a keyring changes nothing; then
   // writes tet.json, a failure putting the values back. Notices for the sandboxes saveSbxConfig
   // removed, an error for what sbx refused.
   ipcMain.handle(
     "sbx:save-config",
-    async (_event, projectId: string, request: SbxProjectConfig, secretValues: Record<string, string>): Promise<GitActionResult> => {
+    async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<GitActionResult> => {
       const project = store.get(projectId);
       if (!project) {
         return { ok: false, error: MISSING_REPOSITORY.error };
       }
       const stored = sbxSecrets.encrypted(project.id);
       try {
-        sbxSecrets.update(project.id, secretValues, request.secrets.map((secret) => secret.env));
+        sbxSecrets.update(project.id, local, {
+          secrets: request.secrets.map((secret) => secret.env),
+          variables: request.variables
+        });
         const { removed, failures } = await saveSbxConfig(
           project.path,
           project.id,
           request,
-          sbxSecrets.values(project.id),
-          new Set(Object.keys(secretValues))
+          sbxSecrets.values(project.id, "secrets"),
+          new Set(Object.keys(local.secretValues))
         );
         for (const agentId of removed) {
           const message = request.enabled

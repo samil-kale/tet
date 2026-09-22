@@ -33,7 +33,7 @@ function whenToUse(sandboxed: boolean): string[] {
           "never ask for its value in the chat: ask the user which way they want, naming every missing",
           "variable at once —",
           "  1. in TET: env-request NAME [NAME...] opens TET's dialog; they type the values there, TET",
-          "     keeps them encrypted, and this tab sees them once restarted, which the dialog offers.",
+          "     keeps them encrypted, and their Save restarts this tab, its session resumed, to see them.",
           "  2. themselves: setx (Windows) or their shell profile; TET itself must then be restarted,",
           "     since it hands its tabs the environment it was started with — and a value TET keeps",
           "     under the same name still wins.",

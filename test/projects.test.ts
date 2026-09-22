@@ -208,7 +208,7 @@ describe("a worktree renamed to the folder it already has", () => {
     assert.equal(git(repo.at("Lower"), "branch", "--show-current"), "Lower");
   });
 
-  it("carries its secret values over to the project reopened under a new id, and a delete drops them", async () => {
+  it("carries what sbx keeps on this machine over to the project reopened under a new id, and a delete drops it", async () => {
     const repo = repositoryWithWorktrees(["old-name"]);
     const { deps, store } = await open([repo.main, repo.at("old-name")]);
     // By name: the store keeps a folder in on-disk spelling (projects.ts's onDisk).
@@ -216,13 +216,15 @@ describe("a worktree renamed to the folder it already has", () => {
     const before = named("old-name");
     assert.ok(before);
     // Stored as the store keeps them, so no OS encryption is needed here.
-    deps.sbxSecrets.restore(before.id, { GITLAB_TOKEN: "encrypted-value" });
+    const local = { secrets: { GITLAB_TOKEN: "encrypted-value" }, variables: { NPM_TOKEN: "encrypted-npm" } };
+    deps.sbxSecrets.restore(before.id, local);
     assert.deepEqual(await renameWorktree(deps, repo.worktree("old-name"), "new-name"), { ok: true });
     const after = named("new-name");
     assert.ok(after && after.id !== before.id, "reopened as a new project");
-    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), { GITLAB_TOKEN: "encrypted-value" });
-    assert.deepEqual(deps.sbxSecrets.encrypted(before.id), {}, "the old id keeps nothing");
+    const nothing = { secrets: {}, variables: {} };
+    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), local);
+    assert.deepEqual(deps.sbxSecrets.encrypted(before.id), nothing, "the old id keeps nothing");
     assert.deepEqual(await deleteWorktree(deps, repo.worktree("new-name"), { force: true, onRemote: false }), { ok: true });
-    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), {}, "a deleted worktree's values go");
+    assert.deepEqual(deps.sbxSecrets.encrypted(after.id), nothing, "a deleted worktree's values go");
   });
 });

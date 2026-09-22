@@ -154,6 +154,22 @@ export interface SbxProjectConfig {
    *  The sandbox, not tet.json, is the truth here (sbx.ts's readLiveSbxConfig). */
   hosts: string[];
   secrets: SbxSecret[];
+  /** The "Variables" rows' env names, set in the sandbox with their real values — which, unlike a
+   *  secret's, the sandbox sees. The values stay on this machine (sbx-secrets.ts). */
+  variables: string[];
+}
+
+/** What the SBX Settings keep on this machine, never in tet.json (sbx-secrets.ts): which Secrets
+ *  and Variables rows hold a value here — never a value. */
+export interface SbxStoredLocal {
+  secrets: string[];
+  variables: string[];
+}
+
+/** Save's part for this machine: the values typed since opening, by env name. */
+export interface SbxLocalSave {
+  secretValues: Record<string, string>;
+  variableValues: Record<string, string>;
 }
 
 /** A rule sbx's policy must allow before tet can sandbox a project (sbx.ts's readSbxBlockers). */
@@ -187,7 +203,8 @@ export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
   ports: [],
   paths: [],
   hosts: [],
-  secrets: []
+  secrets: [],
+  variables: []
 };
 
 /** The Prompts tab's picker. */

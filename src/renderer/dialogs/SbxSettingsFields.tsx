@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig } from "../../shared/types";
+import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
+import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { ActionLink } from "../ui/ActionLink";
 import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
@@ -30,6 +31,8 @@ export interface FieldsState {
   /** `hosts` as typed, comma-separated; `value` only what was typed since opening — a stored one
    *  never reaches the renderer. */
   secrets: Row<{ env: string; hosts: string; value: string }>[];
+  /** `value` as for `secrets`. */
+  variables: Row<{ env: string; value: string }>[];
 }
 
 /** `sbx:get-config`'s answer as rows. Only the user's paths: tet's directories and each agent's
@@ -40,7 +43,8 @@ export function fromConfig(config: SbxProjectConfig): FieldsState {
     ports: config.ports.map(withId),
     paths: config.paths.map(withId),
     hosts: config.hosts.map((host) => withId({ host })),
-    secrets: config.secrets.map((secret) => withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "" }))
+    secrets: config.secrets.map((secret) => withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "" })),
+    variables: config.variables.map((env) => withId({ env, value: "" }))
   };
 }
 
@@ -84,14 +88,38 @@ function isBadSecretRow(row: SecretRow, rows: SecretRow[]): boolean {
   );
 }
 
+type VariableRow = FieldsState["variables"][number];
+
+function isEmptyVariableRow(row: VariableRow): boolean {
+  return row.env.trim() === "" && row.value === "";
+}
+
+/** A variable row Save refuses (an empty one is dropped): it needs a variable name no other row,
+ *  secret or variable, holds — the sandbox sees one value per name — and not one of tet's own
+ *  (isReservedName): its value is set on `sbx run` itself (sbx.ts's sandboxEnv). */
+function isBadVariableRow(row: VariableRow, state: FieldsState): boolean {
+  if (isEmptyVariableRow(row)) {
+    return false;
+  }
+  const env = row.env.trim();
+  return (
+    !isEnvName(env) ||
+    isReservedName(env) ||
+    state.variables.some((other) => other.id !== row.id && other.env.trim() === env) ||
+    state.secrets.some((secret) => secret.env.trim() === env)
+  );
+}
+
+const BAD_VARIABLE = "Needs a variable name no secret or other variable holds, not PATH or TET_*";
+
 /** A scheme or port, which `sbx secret set-custom` rejects (measured), or a leading "-", which sbx
  *  would read as an option of its own. */
 function isBadHost(host: string): boolean {
   return /^-|[/:]/.test(host);
 }
 
-/** Why Save waits, or `undefined`: every port row two ports or empty, every secret row complete or
- *  empty. The rows mark which is not. */
+/** Why Save waits, or `undefined`: every port row two ports or empty, every secret and variable row
+ *  complete or empty. The rows mark which is not. */
 export function saveBlocked(state: FieldsState): string | undefined {
   if (state.ports.some(isBadPortRow)) {
     return "A port on the Ports tab is not a whole number from 1 to 65535";
@@ -99,10 +127,13 @@ export function saveBlocked(state: FieldsState): string | undefined {
   if (state.secrets.some((row) => isBadSecretRow(row, state.secrets))) {
     return "A secret on the Secrets tab needs a variable name of its own and hosts without scheme or port";
   }
+  if (state.variables.some((row) => isBadVariableRow(row, state))) {
+    return "A variable on the Variables tab needs a name no secret or other variable holds, not PATH or TET_*";
+  }
   return undefined;
 }
 
-/** The inverse, for Save: ids dropped, as are empty port, host and secret rows. */
+/** The inverse, for Save: ids dropped, as are empty port, host, secret and variable rows. */
 export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> {
   return {
     knowledge: state.knowledge,
@@ -113,13 +144,19 @@ export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> 
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
     secrets: state.secrets
       .filter((row) => !isEmptySecretRow(row))
-      .map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) }))
+      .map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) })),
+    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => row.env.trim())
   };
 }
 
 /** The secret values typed since opening, by env name, for Save to store on this machine. */
 export function toSecretValues(state: FieldsState): Record<string, string> {
   return Object.fromEntries(state.secrets.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value]));
+}
+
+/** The variable values typed since opening, likewise. */
+export function toVariableValues(state: FieldsState): Record<string, string> {
+  return Object.fromEntries(state.variables.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value]));
 }
 
 /** sbx's policy on the rows, for their marks (usePolicyAnswers). */
@@ -227,7 +264,8 @@ export function tabMarks(state: FieldsState, answers: PolicyAnswers, governed: b
   return {
     ports: state.ports.some(isBadPortRow) ? BAD_PORT : undefined,
     paths: first(state.paths.map((row) => pathMark(row, answers, governed))),
-    secrets: first(state.secrets.map((row) => secretMark(row, state.secrets, answers, governed)))
+    secrets: first(state.secrets.map((row) => secretMark(row, state.secrets, answers, governed))),
+    variables: state.variables.some((row) => isBadVariableRow(row, state)) ? BAD_VARIABLE : undefined
   };
 }
 
@@ -238,15 +276,15 @@ interface SbxSettingsFieldsProps {
   section: keyof FieldsState;
   /** An organization manages sbx's policy; only words the paths' and secrets' marks. */
   governed: boolean;
-  /** The env names holding a value on this machine (`sbx:stored-secrets`). */
-  storedSecrets: readonly string[];
+  /** The env names holding a value on this machine (`sbx:stored`); never a value. */
+  stored: SbxStoredLocal;
   /** Asked by the dialog from its opening (usePolicyAnswers), for the tabs' marks too. */
   answers: PolicyAnswers;
 }
 
 /** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
  *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section, governed, storedSecrets, answers }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({ state, setState, section, governed, stored, answers }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -379,7 +417,7 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
         renderRow={(row) => {
           const setSecret = (change: Partial<typeof row>): void =>
             update("secrets", (secrets) => patched(secrets, row.id, change));
-          const stored = storedSecrets.includes(row.env.trim());
+          const valueStored = stored.secrets.includes(row.env.trim());
           return (
             <EditRow
               key={row.id}
@@ -408,9 +446,9 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
                 type="password"
                 autoComplete="off"
                 // A stored value as a set password shows, never the value itself (the title says so).
-                placeholder={stored ? "••••••••" : "Value"}
+                placeholder={valueStored ? "••••••••" : "Value"}
                 title={
-                  stored
+                  valueStored
                     ? "Stored on this machine; typing replaces it. The sandbox never sees it."
                     : "Stored on this machine, never in tet.json. The sandbox never sees it."
                 }
@@ -425,6 +463,57 @@ export function SbxSettingsFields({ state, setState, section, governed, storedSe
             onClick={() => update("secrets", (secrets) => [...secrets, withId({ env: "", hosts: "", value: "" })])}
           >
             + Add secret
+          </ActionLink>
+        }
+      />
+    );
+  }
+
+  if (section === "variables") {
+    return (
+      <RowSection
+        label="Variables"
+        empty="No variables yet"
+        rows={state.variables}
+        renderRow={(row) => {
+          const setVariable = (change: Partial<typeof row>): void =>
+            update("variables", (variables) => patched(variables, row.id, change));
+          const valueStored = stored.variables.includes(row.env.trim());
+          return (
+            <EditRow
+              key={row.id}
+              mark={isBadVariableRow(row, state) ? BAD_VARIABLE : undefined}
+              remove="Remove variable"
+              onRemove={() => update("variables", (variables) => without(variables, row.id))}
+            >
+              <input
+                className="sbx-host-input"
+                type="text"
+                placeholder="NPM_TOKEN"
+                title="The environment variable the sandbox sees, holding the value itself"
+                value={row.env}
+                onChange={(event) => setVariable({ env: event.target.value })}
+              />
+              <input
+                className="sbx-secret-input"
+                type="password"
+                autoComplete="off"
+                // A stored value as a set password shows, never the value itself (the title says so).
+                placeholder={valueStored ? "••••••••" : "Value"}
+                title={
+                  valueStored
+                    ? "Stored on this machine; typing replaces it. The sandbox sees it."
+                    : "Stored on this machine, never in tet.json. The sandbox sees it."
+                }
+                value={row.value}
+                onChange={(event) => setVariable({ value: event.target.value })}
+              />
+            </EditRow>
+          );
+        }}
+        add={
+          <ActionLink onClick={() => update("variables", (variables) => [...variables, withId({ env: "", value: "" })])}>
+            + Add variable
           </ActionLink>
         }
       />
