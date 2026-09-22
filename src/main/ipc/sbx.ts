@@ -54,16 +54,13 @@ export function registerSbxIpc({
       }
       const stored = sbxLocal.encrypted(project.id);
       try {
-        sbxLocal.update(project.id, local, {
-          secrets: request.secrets.map((secret) => secret.env),
-          variables: request.variables.map((variable) => variable.env)
-        });
+        sbxLocal.update(project.id, local);
         const { removed, failures } = await saveSbxConfig(
           project.path,
           project.id,
           request,
           sbxLocal.values(project.id, "secrets"),
-          new Set(Object.keys(local.secretValues))
+          new Set(Object.keys(local.secrets.values))
         );
         for (const agentId of removed) {
           const message = request.enabled

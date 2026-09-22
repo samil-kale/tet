@@ -602,12 +602,26 @@ describe("what sbx keeps on this machine", () => {
     fs.writeFileSync(path.join(root, "sbx-secrets.json"), JSON.stringify({ p: { TOKEN: base64("sealed:old") } }));
     const store = new SbxLocalStore(root);
     assert.deepEqual([...store.values("p", "secrets")], [["TOKEN", "old"]]);
-    store.update("p", { secretValues: {}, variableValues: { NPM_TOKEN: "npm" } }, { secrets: ["TOKEN"], variables: ["NPM_TOKEN"] });
+    store.update("p", { secrets: { values: {}, from: { TOKEN: "TOKEN" } }, variables: { values: { NPM_TOKEN: "npm" }, from: {} } });
     assert.ok(!fs.existsSync(path.join(root, "sbx-secrets.json")), "the old file is renamed, not copied");
     const reread = new SbxLocalStore(root);
     assert.deepEqual(reread.stored("p"), { secrets: ["TOKEN"], variables: ["NPM_TOKEN"] });
-    reread.update("p", { secretValues: {}, variableValues: {} }, { secrets: [], variables: [] });
+    reread.update("p", { secrets: { values: {}, from: {} }, variables: { values: {}, from: {} } });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "nothing left, no entry");
+  });
+
+  it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
+    Object.assign(safeStorage, {
+      isEncryptionAvailable: () => true,
+      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
+      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
+    });
+    const store = new SbxLocalStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
+    const none = { values: {}, from: {} };
+    store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} } });
+    // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
+    store.update("p", { secrets: none, variables: { values: {}, from: { NEW: "OLD" } } });
+    assert.deepEqual([...store.values("p", "variables")], [["NEW", "kept"]]);
   });
 });
 

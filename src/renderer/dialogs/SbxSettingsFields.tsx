@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { SbxAccess, SbxKnowledgeConfig, SbxPath, SbxPort, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
+import type {
+  SbxAccess,
+  SbxKnowledgeConfig,
+  SbxLocalEdits,
+  SbxLocalSave,
+  SbxPath,
+  SbxPort,
+  SbxProjectConfig,
+  SbxStoredLocal
+} from "../../shared/types";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
+import { isWindows } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
 import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
@@ -29,10 +39,10 @@ export interface FieldsState {
   paths: Row<SbxPath>[];
   hosts: Row<{ host: string }>[];
   /** `hosts` as typed, comma-separated; `value` only what was typed since opening — a stored one
-   *  never reaches the renderer. */
-  secrets: Row<{ env: string; hosts: string; value: string }>[];
-  /** `value` as for `secrets`. */
-  variables: Row<{ env: string; value: string }>[];
+   *  never reaches the renderer; `from` the name a row was opened under (SbxLocalEdits). */
+  secrets: Row<{ env: string; hosts: string; value: string; from?: string }>[];
+  /** `value` and `from` as for `secrets`. */
+  variables: Row<{ env: string; value: string; from?: string }>[];
 }
 
 /** `sbx:get-config`'s answer as rows. Only the user's paths: tet's directories and each agent's
@@ -43,8 +53,10 @@ export function fromConfig(config: SbxProjectConfig): FieldsState {
     ports: config.ports.map(withId),
     paths: config.paths.map(withId),
     hosts: config.hosts.map((host) => withId({ host })),
-    secrets: config.secrets.map((secret) => withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "" })),
-    variables: config.variables.map((variable) => withId({ env: variable.env, value: "" }))
+    secrets: config.secrets.map((secret) =>
+      withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "", from: secret.env })
+    ),
+    variables: config.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env }))
   };
 }
 
@@ -94,9 +106,15 @@ function isEmptyVariableRow(row: VariableRow): boolean {
   return row.env.trim() === "" && row.value === "";
 }
 
+/** A name as the machine compares it: win32 takes `a` and `A` for one variable. */
+function sameName(name: string): string {
+  return isWindows() ? name.toUpperCase() : name;
+}
+
 /** A variable row Save refuses (an empty one is dropped): it needs a variable name no other row,
- *  secret or variable, holds — the sandbox sees one value per name — and not one of tet's own
- *  (isReservedName): its value is set on `sbx run` itself (sbx.ts's sandboxEnv). */
+ *  secret or variable, holds — the sandbox sees one value per name, and `sbx run -e NAME` reads a
+ *  variable's from this machine's environment, which on win32 ignores case — and not one of tet's
+ *  own (isReservedName): its value is set on `sbx run` itself (sbx.ts's sandboxEnv). */
 function isBadVariableRow(row: VariableRow, state: FieldsState): boolean {
   if (isEmptyVariableRow(row)) {
     return false;
@@ -105,7 +123,7 @@ function isBadVariableRow(row: VariableRow, state: FieldsState): boolean {
   return (
     !isEnvName(env) ||
     isReservedName(env) ||
-    state.variables.some((other) => other.id !== row.id && other.env.trim() === env) ||
+    state.variables.some((other) => other.id !== row.id && sameName(other.env.trim()) === sameName(env)) ||
     state.secrets.some((secret) => secret.env.trim() === env)
   );
 }
@@ -149,14 +167,23 @@ export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> 
   };
 }
 
-/** The secret values typed since opening, by env name, for Save to store on this machine. */
-export function toSecretValues(state: FieldsState): Record<string, string> {
-  return Object.fromEntries(state.secrets.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value]));
+/** One list's rows as Save stores them on this machine; a row left without a name holds nothing. */
+function toLocalEdits(rows: { env: string; value: string; from?: string }[]): SbxLocalEdits {
+  const named = rows.filter((row) => row.env.trim() !== "");
+  return {
+    values: Object.fromEntries(named.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value])),
+    from: Object.fromEntries(named.flatMap((row) => (row.from === undefined ? [] : [[row.env.trim(), row.from]])))
+  };
 }
 
-/** The variable values typed since opening, likewise. */
-export function toVariableValues(state: FieldsState): Record<string, string> {
-  return Object.fromEntries(state.variables.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value]));
+/** The values typed since opening and each row's name when opened, for Save (SbxLocalEdits). */
+export function toLocalSave(state: FieldsState): SbxLocalSave {
+  return { secrets: toLocalEdits(state.secrets), variables: toLocalEdits(state.variables) };
+}
+
+/** Whether the row holds a value on this machine: the one of the name it was opened under. */
+function holdsValue(row: { from?: string }, stored: readonly string[]): boolean {
+  return row.from !== undefined && stored.includes(row.from);
 }
 
 /**
@@ -173,7 +200,7 @@ export function needsRestart(loaded: SbxProjectConfig, state: FieldsState): bool
     config.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
     config.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
     names(config.variables) !== names(loaded.variables) ||
-    Object.keys(toVariableValues(state)).length > 0
+    state.variables.some((row) => row.value !== "")
   );
 }
 
@@ -435,7 +462,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
         renderRow={(row) => {
           const setSecret = (change: Partial<typeof row>): void =>
             update("secrets", (secrets) => patched(secrets, row.id, change));
-          const valueStored = stored.secrets.includes(row.env.trim());
+          const valueStored = holdsValue(row, stored.secrets);
           return (
             <EditRow
               key={row.id}
@@ -496,7 +523,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
         renderRow={(row) => {
           const setVariable = (change: Partial<typeof row>): void =>
             update("variables", (variables) => patched(variables, row.id, change));
-          const valueStored = stored.variables.includes(row.env.trim());
+          const valueStored = holdsValue(row, stored.variables);
           return (
             <EditRow
               key={row.id}

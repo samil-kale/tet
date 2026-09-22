@@ -165,18 +165,24 @@ export interface SbxProjectConfig {
   variables: SbxVariable[];
 }
 
-/** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Secrets
- *  and Variables rows hold a value here — never a value. */
-export interface SbxStoredLocal {
-  secrets: string[];
-  variables: string[];
+/** The two lists of the SBX Settings whose values stay on this machine (sbx-local.ts). */
+export type SbxValueKind = "secrets" | "variables";
+
+/** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Secrets and
+ *  Variables rows hold a value here — never a value. */
+export type SbxStoredLocal = Record<SbxValueKind, string[]>;
+
+/**
+ * Save's part of one list for this machine, both by the row's env name: the values typed since
+ * opening, and the name each row was opened under — its stored value follows a renamed row, and a
+ * row added under a stored name does not inherit that value.
+ */
+export interface SbxLocalEdits {
+  values: Record<string, string>;
+  from: Record<string, string>;
 }
 
-/** Save's part for this machine: the values typed since opening, by env name. */
-export interface SbxLocalSave {
-  secretValues: Record<string, string>;
-  variableValues: Record<string, string>;
-}
+export type SbxLocalSave = Record<SbxValueKind, SbxLocalEdits>;
 
 /** A rule sbx's policy must allow before tet can sandbox a project (sbx.ts's readSbxBlockers). */
 export interface SbxBlocker {

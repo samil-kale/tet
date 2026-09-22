@@ -9,8 +9,7 @@ import {
   saveBlocked,
   tabMarks,
   toConfig,
-  toSecretValues,
-  toVariableValues,
+  toLocalSave,
   usePolicyAnswers,
   type FieldsState
 } from "./SbxSettingsFields";
@@ -167,7 +166,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     const result = await window.tet.sbx.saveConfig(
       project.id,
       { enabled, ...toConfig(state) },
-      { secretValues: toSecretValues(state), variableValues: toVariableValues(state) }
+      toLocalSave(state)
     );
     setSaving(false);
     if (!result.ok) {
