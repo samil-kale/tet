@@ -142,6 +142,14 @@ export interface SbxSecret {
   hosts: string[];
 }
 
+/**
+ * A "Variables" row: `env` set in the sandbox with its real value — which, unlike a secret's, the
+ * sandbox sees (sbx.ts's sandboxEnv). Never the value, which stays on this machine (sbx-secrets.ts).
+ */
+export interface SbxVariable {
+  env: string;
+}
+
 /** Per project, for every sandboxed tab whatever its agent. No authentication: each agent signs in
  *  inside the sandbox, pi excepted (a credential from sbx's own store, see sbx.ts). */
 export interface SbxProjectConfig {
@@ -154,9 +162,7 @@ export interface SbxProjectConfig {
    *  The sandbox, not tet.json, is the truth here (sbx.ts's readLiveSbxConfig). */
   hosts: string[];
   secrets: SbxSecret[];
-  /** The "Variables" rows' env names, set in the sandbox with their real values — which, unlike a
-   *  secret's, the sandbox sees. The values stay on this machine (sbx-secrets.ts). */
-  variables: string[];
+  variables: SbxVariable[];
 }
 
 /** What the SBX Settings keep on this machine, never in tet.json (sbx-secrets.ts): which Secrets

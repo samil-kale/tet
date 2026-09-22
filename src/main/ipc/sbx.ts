@@ -56,7 +56,7 @@ export function registerSbxIpc({
       try {
         sbxSecrets.update(project.id, local, {
           secrets: request.secrets.map((secret) => secret.env),
-          variables: request.variables
+          variables: request.variables.map((variable) => variable.env)
         });
         const { removed, failures } = await saveSbxConfig(
           project.path,

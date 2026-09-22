@@ -44,7 +44,7 @@ export function fromConfig(config: SbxProjectConfig): FieldsState {
     paths: config.paths.map(withId),
     hosts: config.hosts.map((host) => withId({ host })),
     secrets: config.secrets.map((secret) => withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "" })),
-    variables: config.variables.map((env) => withId({ env, value: "" }))
+    variables: config.variables.map((variable) => withId({ env: variable.env, value: "" }))
   };
 }
 
@@ -145,7 +145,7 @@ export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> 
     secrets: state.secrets
       .filter((row) => !isEmptySecretRow(row))
       .map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) })),
-    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => row.env.trim())
+    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => ({ env: row.env.trim() }))
   };
 }
 

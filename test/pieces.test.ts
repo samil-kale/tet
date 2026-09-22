@@ -547,7 +547,7 @@ describe("a sandboxed tab's variables", () => {
         { env: "NO_VALUE_HERE", hosts: ["api.example.com"] }
       ],
       // A hand-edited tet.json: one the agent sets, one a secret holds, one without a value here.
-      variables: ["NPM_TOKEN", "AGENT_SET", "NO_VALUE_HERE", "MISSING"]
+      variables: [{ env: "NPM_TOKEN" }, { env: "AGENT_SET" }, { env: "NO_VALUE_HERE" }, { env: "MISSING" }]
     };
     const result = sandboxEnv({
       projectId: "p",

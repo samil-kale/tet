@@ -16,7 +16,8 @@ import type {
   SbxKnowledgeConfig,
   SbxPort,
   SbxProjectConfig,
-  SbxSecret
+  SbxSecret,
+  SbxVariable
 } from "../shared/types";
 
 /** A project's saved commands and Explorer view, in its own root so it travels with the repository.
@@ -374,14 +375,16 @@ function toSbxSecrets(value: unknown): SbxSecret[] {
   return secrets.filter((secret, i) => secrets.findIndex((other) => other.env === secret.env) === i);
 }
 
-/** Env names, trimmed; a repeated one, one a secret already holds, or one of tet's own dropped —
- *  the sandbox sees one value per name, and a secret's is its placeholder (sbx.ts's sandboxEnv). */
-function toSbxVariables(value: unknown, secrets: SbxSecret[]): string[] {
-  const names = toSbxHosts(value);
-  return names.filter(
-    (name, i) =>
-      names.indexOf(name) === i && isEnvName(name) && !isReservedName(name) && !secrets.some((secret) => secret.env === name)
-  );
+/** A row needs an env name, trimmed; a repeated one, one a secret already holds, or one of tet's own
+ *  dropped — the sandbox sees one value per name, and a secret's is its placeholder (sbx.ts's
+ *  sandboxEnv). */
+function toSbxVariables(value: unknown, secrets: SbxSecret[]): SbxVariable[] {
+  const variables = objectRows(value, ({ env }) => {
+    const name = typeof env === "string" ? env.trim() : "";
+    return isEnvName(name) && !isReservedName(name) && !secrets.some((secret) => secret.env === name) ? { env: name } : undefined;
+  });
+  // A repeated env name keeps the first row only.
+  return variables.filter((variable, i) => variables.findIndex((other) => other.env === variable.env) === i);
 }
 
 /** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path

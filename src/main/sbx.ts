@@ -1065,7 +1065,7 @@ export function sandboxEnv({
     ...config.secrets.map((secret) => secret.env)
   ]);
   const passed: Record<string, string> = {};
-  for (const name of config.variables.filter((variable) => !taken.has(variable))) {
+  for (const { env: name } of config.variables.filter((variable) => !taken.has(variable.env))) {
     const value = variableValues.get(name);
     if (value !== undefined) {
       passed[name] = value;
@@ -1075,7 +1075,7 @@ export function sandboxEnv({
     env: [...agentEnv, ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(projectId, secret.env)}`)],
     passed,
     missingSecrets: config.secrets.filter((secret) => !secretValues.has(secret.env)).map((secret) => secret.env),
-    missingVariables: config.variables.filter((variable) => !variableValues.has(variable))
+    missingVariables: config.variables.filter((variable) => !variableValues.has(variable.env)).map((variable) => variable.env)
   };
 }
 
