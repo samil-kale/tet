@@ -517,8 +517,9 @@ type KnowledgeEntries = Record<keyof SbxKnowledgeConfig, SandboxKnowledgeEntry[]
 /**
  * What a sandboxed agent may bring from this host, per kind, only what exists: its own knowledge
  * only while it is installed here — a folder an uninstalled one left is not wanted — and
- * `~/.agents/skills` at its `sharedSkillsTarget` either way, unless its own skills sit there
- * (Claude's `~/.claude/skills` wins). The install check is cached (isAgentInstalled).
+ * `~/.agents/skills` at its `sharedSkillsTarget` either way, unless its own skills sit there. An
+ * agent without a `sharedSkillsTarget` (Claude) never gets it. The install check is cached
+ * (isAgentInstalled).
  */
 async function sandboxKnowledgeFor(agentId: SbxAgentId): Promise<KnowledgeEntries> {
   const agent = getAgent(agentId);
