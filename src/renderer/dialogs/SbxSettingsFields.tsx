@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type {
   SbxAccess,
+  SbxAgentKnowledge,
   SbxKnowledgeConfig,
   SbxLocalEdits,
   SbxLocalSave,
@@ -26,8 +27,17 @@ const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
 const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
   { kind: "skills", label: "Skills" },
   { kind: "plugins", label: "Plugins" },
-  { kind: "instructions", label: "Instructions file (CLAUDE.md / AGENTS.md)" }
+  { kind: "instructions", label: "CLAUDE.md / AGENTS.md" }
 ];
+
+/** Why no sandbox brings a knowledge kind: without an agent only the shared skills folder counts
+ *  (sbx.ts's sandboxKnowledgeFor). */
+function knowledgeMissing(kind: keyof SbxKnowledgeConfig, agentInstalled: boolean): string {
+  if (agentInstalled) {
+    return "None found on this machine";
+  }
+  return kind === "skills" ? "No ~/.agents/skills folder on this machine" : "Only from an installed agent";
+}
 
 /** How long typing in a secret's hosts pauses before they are checked against sbx's policy. */
 const HOST_CHECK_DELAY_MS = 500;
@@ -325,11 +335,24 @@ interface SbxSettingsFieldsProps {
   stored: SbxStoredLocal;
   /** Asked by the dialog from its opening (usePolicyAnswers), for the tabs' marks too. */
   answers: PolicyAnswers;
+  /** Any agent CLI on this machine; only words why a knowledge kind has nothing. */
+  agentInstalled: boolean;
+  /** What each sandbox would bring from this machine; a kind none brings is disabled. */
+  knowledge: SbxAgentKnowledge[];
 }
 
 /** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
  *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section, governed, stored, answers }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({
+  state,
+  setState,
+  section,
+  governed,
+  stored,
+  answers,
+  agentInstalled,
+  knowledge
+}: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -351,17 +374,37 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
         <span className="dialog-field-label">Bring from this machine</span>
         <div className="sbx-knowledge-rows">
           {KNOWLEDGE_LABELS.map(({ kind, label }) => {
-            const access = state.knowledge[kind];
+            // What this checkbox mounts, per sandbox: each agent reads its own folders. Shown while
+            // unchecked too, so what it would bring is seen before.
+            const agents = knowledge.filter((agent) => agent.paths[kind].length > 0);
+            // A kind with nothing here shows off but keeps tet.json's value, for a machine that has some.
+            const value = agents.length > 0 ? state.knowledge[kind] : false;
             return (
-              <div key={kind} className="sbx-knowledge-row">
-                <Checkbox
-                  label={label}
-                  checked={access !== false}
-                  onChange={(next) => setKnowledge(kind, next ? "ro" : false)}
-                />
-                {access !== false && (
-                  <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value)} />
-                )}
+              <div key={kind}>
+                <div className="sbx-knowledge-row">
+                  <Checkbox
+                    label={label}
+                    checked={value !== false}
+                    disabled={agents.length === 0}
+                    onChange={(next) => setKnowledge(kind, next ? "ro" : false)}
+                  />
+                  {value !== false && (
+                    <Dropdown value={value} options={ACCESS_OPTIONS} onChange={(next) => setKnowledge(kind, next)} />
+                  )}
+                </div>
+                {/* Why there is nothing stays readable; only unchecked paths are dimmed. */}
+                <div className={value === false && agents.length > 0 ? "sbx-knowledge-paths off" : "sbx-knowledge-paths"}>
+                  {agents.length > 0 ? (
+                    agents.map((agent) => (
+                      <div key={agent.agentId} className="sbx-knowledge-path">
+                        <span className="sbx-knowledge-agent">{agent.displayName}</span>
+                        <span className="sbx-knowledge-value">{agent.paths[kind].join(", ")}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="dialog-detail">{knowledgeMissing(kind, agentInstalled)}</p>
+                  )}
+                </div>
               </div>
             );
           })}

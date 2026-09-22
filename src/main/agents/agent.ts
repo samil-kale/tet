@@ -195,9 +195,16 @@ export interface AgentDefinition {
   sandboxEnv?: string[];
   /**
    * The agent's shareable knowledge on the host, per `SbxKnowledgeConfig` kind — never its config
-   * directory (sbx.ts's fixedMountSpecs). sbx.ts drops paths that do not exist. Omitted by the shell.
+   * directory (sbx.ts's fixedMountSpecs). sbx.ts drops paths that do not exist, and all of it while
+   * the agent is not installed on this host. Omitted by the shell.
    */
   sandboxKnowledge?: () => Record<keyof SbxKnowledgeConfig, SandboxKnowledgeEntry[]>;
+  /**
+   * Absolute container path where the sandboxed CLI reads `~/.agents/skills`, the skills folder no
+   * agent owns: mounted whether or not the agent is installed here, unless one of its own skills
+   * folders already takes that target (sbx.ts's sandboxKnowledgeFor). Omitted by the shell.
+   */
+  sharedSkillsTarget?: string;
   /**
    * `sbx create`'s agent argument where it is not the agent id: a kit sbx does not ship. Only
    * `create` takes it; `sbx run` reattaches by `--name` with the plain id. Omitted for a built-in kit.

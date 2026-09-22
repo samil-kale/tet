@@ -73,14 +73,12 @@ export const piAgent: AgentDefinition = {
     const home = os.homedir();
     const instructionsHost = [path.join(home, ".pi", "agent", "AGENTS.override.md"), path.join(home, ".pi", "agent", "AGENTS.md")].find((file) => fs.existsSync(file));
     return {
-      skills: [
-        { host: path.join(home, ".pi", "agent", "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` },
-        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
-      ],
+      skills: [{ host: path.join(home, ".pi", "agent", "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` }],
       plugins: [{ host: path.join(home, ".pi", "agent", "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
       instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : []
     };
   },
+  sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
   // pi has no built-in kit (not in `sbx create --help` at 0.42.1), so it is the community kit
   // (docker/sbx-kits-contrib), whose image (shell-docker plus pi, rebuilt nightly) sbx pulls on the
   // first create — nothing installed here; home is `/home/agent` like every built-in.

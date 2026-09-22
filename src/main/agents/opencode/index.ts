@@ -98,13 +98,13 @@ export const opencodeAgent: AgentDefinition = {
     return {
       skills: [
         { host: path.join(home, ".config", "opencode", "skills"), target: `${SANDBOX_HOME}/.config/opencode/skills` },
-        { host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` },
-        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
+        { host: path.join(home, ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` }
       ],
       plugins: [{ host: path.join(home, ".config", "opencode", "plugins"), target: `${SANDBOX_HOME}/.config/opencode/plugins` }],
       instructions: rules ? [rules] : []
     };
   },
+  sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
   // A raw byte count fires on blank repaints while opencode fetches its model list (measured,
   // 1.18.4). 20 is below the 164 non-ASCII bytes of the real frame and above blank repaints' 0.
   createIsSessionReady: () => createNonAsciiThresholdCheck(20),

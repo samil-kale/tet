@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import type { Project, SbxBlocker, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
+import type { Project, SbxAgentKnowledge, SbxBlocker, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
 import {
   SbxSettingsFields,
   fromConfig,
@@ -47,22 +47,16 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
 
 /**
  * Why a tab cannot be chosen, or `undefined`. Nothing but the switch applies while sandboxing is
- * off; knowledge from this machine is meaningless where no agent is installed; under an
- * organization's governance a local host rule is inactive (sbx.ts's readSandboxHosts). A tab is
- * disabled rather than dropped, so the dialog keeps its shape and says what is missing.
+ * off; under an organization's governance a local host rule is inactive (sbx.ts's
+ * readSandboxHosts). A tab is disabled rather than dropped, so the dialog keeps its shape and says
+ * what is missing.
  */
-function tabBlocked(
-  id: SbxSettingsTab,
-  { enabled, locked, organization }: { enabled: boolean; locked: boolean; organization?: string }
-): string | undefined {
+function tabBlocked(id: SbxSettingsTab, { enabled, organization }: { enabled: boolean; organization?: string }): string | undefined {
   if (id === "general") {
     return undefined;
   }
   if (!enabled) {
     return "Enable SBX sandboxing for this project first";
-  }
-  if (id === "knowledge" && locked) {
-    return "No agent is installed on this machine to bring anything from";
   }
   if (id === "hosts" && organization) {
     return "Disabled by governance";
@@ -92,6 +86,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** No agent on this machine, so sandboxing cannot be switched off. Derived on every open, not
    *  stored. */
   const [locked, setLocked] = useState(false);
+  /** What each sandbox would bring from this machine (sbx.ts's readSandboxKnowledge). */
+  const [knowledge, setKnowledge] = useState<SbxAgentKnowledge[]>([]);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
   /** As opened, for whether the edits wait for a restart (needsRestart). */
   const [loaded, setLoaded] = useState<SbxProjectConfig>(EMPTY_SBX_CONFIG);
@@ -144,8 +140,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       setPhase({ kind: "blocked", organization: status.organization, blockers: status.blockers });
       return;
     }
-    // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
-    const [config, local] = await Promise.all([window.tet.sbx.getConfig(project.id), window.tet.sbx.stored(project.id)]);
+    // Read after setup, so Save writes over what is on disk, not the mount-time defaults. Knowledge
+    // after the agent check above, whose fresh answers it reuses.
+    const [config, local, found] = await Promise.all([
+      window.tet.sbx.getConfig(project.id),
+      window.tet.sbx.stored(project.id),
+      window.tet.sbx.knowledge()
+    ]);
+    setKnowledge(found);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
     setLoaded(config);
@@ -187,14 +189,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const tabs = useMemo(
     () =>
       TABS.map((entry) => {
-        const disabled = tabBlocked(entry.id, { enabled, locked, organization });
+        const disabled = tabBlocked(entry.id, { enabled, organization });
         // A tab that cannot be chosen says why, not what is inside.
         const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
         return { ...entry, disabled, mark };
       }),
     // `marks` itself is rebuilt every render (tabMarks); its four fields are all of it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [enabled, locked, organization, marks.ports, marks.paths, marks.secrets, marks.variables]
+    [enabled, organization, marks.ports, marks.paths, marks.secrets, marks.variables]
   );
 
   return (
@@ -291,6 +293,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             governed={organization !== undefined}
             stored={stored}
             answers={answers}
+            agentInstalled={!locked}
+            knowledge={knowledge}
           />
         </div>
       )}

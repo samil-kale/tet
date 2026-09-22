@@ -3,6 +3,7 @@ import type { IPty } from "node-pty";
 import type { TerminalStatus } from "../../shared/types";
 import { killProcessTree, resolveCommand, spawnAgentProcess } from "./pty";
 import { timeStartup } from "../event-loop-monitor";
+import { isSimulatedMissing } from "../simulate";
 
 export interface SessionCallbacks {
   onOutput: (data: string) => void;
@@ -57,6 +58,11 @@ const VERSION_CHECK_TIMEOUT_MS = 10_000;
  */
 export function checkAgentInstalled(executable: string, versionArgs: string[], cwd: string): Promise<boolean> {
   const check = new Promise<boolean>((resolve) => {
+    // Missing for the whole app, not only the requirements dialog, so a simulation holds everywhere.
+    if (isSimulatedMissing(executable)) {
+      resolve(false);
+      return;
+    }
     const command = resolveCommand(executable, versionArgs);
     const child = spawn(command.command, command.args, {
       cwd,

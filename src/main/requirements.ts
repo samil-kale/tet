@@ -5,6 +5,7 @@ import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
 import { isSbxInstalled } from "./sbx";
+import { isSimulatedMissing } from "./simulate";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { checkAgentInstalled } from "./terminals/terminal-session";
 
@@ -21,14 +22,6 @@ const SBX: Omit<Requirement, "installed"> = {
   name: "Docker Sandboxes",
   command: "sbx"
 };
-
-/** Commands reported missing regardless, to reach the dialog on a full machine:
- *  `npm start -- --simulate=git,claude`. */
-const SIMULATED_MISSING = (process.argv.find((arg) => arg.startsWith("--simulate=")) ?? "")
-  .slice("--simulate=".length)
-  .split(",")
-  .map((entry) => entry.trim())
-  .filter((entry) => entry !== "");
 
 /** For test/app.test.ts: a CI runner with git and no agent still opens, shell only. */
 const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
@@ -52,7 +45,7 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
       (async (): Promise<Requirement> => ({
         name: agent.displayName,
         command,
-        installed: !SIMULATED_MISSING.includes(command) && (await checkAgentInstalled(command, agent.versionArgs, cwd))
+        installed: await checkAgentInstalled(command, agent.versionArgs, cwd)
       }))()
     );
     await yieldToLoop();
@@ -72,10 +65,10 @@ export async function checkRequirements(): Promise<Requirements> {
   const cwd = os.tmpdir();
 
   // In the git utility process (git-client.ts), so started alongside the agent checks.
-  const gitVersion = SIMULATED_MISSING.includes(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
+  const gitVersion = isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
 
   // A tick ahead of the agents: on win32 process creations hurt when sharing a tick (yieldToLoop).
-  const sbxInstalled = SIMULATED_MISSING.includes(SBX.command) ? Promise.resolve(false) : isSbxInstalled();
+  const sbxInstalled = isSbxInstalled();
   await yieldToLoop();
 
   const agents = await checkAgentRequirements(cwd);

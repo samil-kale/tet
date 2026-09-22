@@ -224,8 +224,8 @@ before that check (`augmentAgentPath`) and everything spawned inherits it.
   `xvfb-run` on Linux); `install.test.ts` runs only with `TET_INSTALL_TEST=1` (it writes shortcuts
   and the PATH entry for the account).
 - `npm start` — typecheck, compile, launch (see "Do not restart the app yourself").
-  `--simulate=git,claude` shows the requirements dialog; `--user-data-dir=<dir>` gives a run its
-  own profile.
+  `--simulate=git,claude` shows the requirements dialog, `--simulate=sbx-mode` a machine with
+  only git and sbx; `--user-data-dir=<dir>` gives a run its own profile.
 - `npm run dist` — package this platform's archives into `release/`.
 - The Linux side is testable from Windows in WSL: clone onto the Linux filesystem, `npm install`
   there, drive the app through `tet-ctl`.

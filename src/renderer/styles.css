@@ -1709,12 +1709,48 @@ textarea:focus,
   background-clip: padding-box;
 }
 
-/* The three knowledge checkboxes: a fixed count, so no scrollbox like .row-section-rows'. */
+/* The three knowledge checkboxes, each with its paths: a fixed count, so no scrollbox like
+   .row-section-rows'. */
 .sbx-knowledge-rows {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
   margin-top: 5px;
+}
+
+/* What a knowledge checkbox mounts per sandbox, under its label, in the paths' font
+   (.sbx-path-value), agents and paths alike. */
+.sbx-knowledge-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 30px;
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family);
+}
+
+/* Unchecked: what it would bring, dimmed as a disabled checkbox is. */
+.sbx-knowledge-paths.off {
+  opacity: 0.4;
+}
+
+.sbx-knowledge-path {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Lowercase, as the agents' commands are spelled. */
+.sbx-knowledge-agent {
+  flex: none;
+  width: 72px;
+  text-transform: lowercase;
+}
+
+/* Wrapped rather than cut: every folder counts. */
+.sbx-knowledge-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .sbx-knowledge-row {
@@ -1921,6 +1957,15 @@ textarea:focus,
     center / contain no-repeat;
 }
 
+/* Dimmed, not recolored, like a disabled button. */
+.dialog-checkbox:has(input:disabled) {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.dialog-checkbox input:disabled {
+  cursor: default;
+}
 
 /* Wider than a question, for the rows of switches and the Prompts tab's text box. Fixed height:
    switching tabs must not resize the dialog under the pointer. */

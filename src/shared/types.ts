@@ -131,6 +131,14 @@ export interface SbxKnowledgeConfig {
   instructions: SbxAccess | false;
 }
 
+/** One sandboxed agent's share of this machine's knowledge (sbx.ts's readSandboxKnowledge): per
+ *  kind, the host paths its sandbox would mount, under the home as `~/…`. */
+export interface SbxAgentKnowledge {
+  agentId: SbxAgentId;
+  displayName: string;
+  paths: Record<keyof SbxKnowledgeConfig, string[]>;
+}
+
 /**
  * A "Secrets" row: an sbx custom secret. The sandbox sees `env` set to a placeholder, and sbx's
  * proxy swaps it for the value in requests to `hosts` (sbx.ts's applySecrets). Never the value,

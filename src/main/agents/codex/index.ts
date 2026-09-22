@@ -74,14 +74,12 @@ export const codexAgent: AgentDefinition = {
     const home = os.homedir();
     const instructionsHost = [path.join(home, ".codex", "AGENTS.override.md"), path.join(home, ".codex", "AGENTS.md")].find((file) => fs.existsSync(file));
     return {
-      skills: [
-        { host: path.join(home, ".codex", "skills"), target: `${SANDBOX_HOME}/.codex/skills` },
-        { host: path.join(home, ".agents", "skills"), target: `${SANDBOX_HOME}/.agents/skills` }
-      ],
+      skills: [{ host: path.join(home, ".codex", "skills"), target: `${SANDBOX_HOME}/.codex/skills` }],
       plugins: [{ host: path.join(home, ".codex", "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
       instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
     };
   },
+  sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
   // Observed: setup and onboarding total a few hundred bytes before the first real redraw, one
   // ~700-900 byte chunk. Unverified for a logged-in start, which may draw less.
   createIsSessionReady: () => createByteThresholdCheck(600),
