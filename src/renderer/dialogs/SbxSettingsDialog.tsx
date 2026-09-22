@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import type { Project, SbxBlocker, SbxStoredLocal } from "../../shared/types";
+import type { Project, SbxBlocker, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
 import {
   SbxSettingsFields,
   fromConfig,
   policyName,
+  restartTabs,
   saveBlocked,
   tabMarks,
   toConfig,
@@ -14,6 +15,7 @@ import {
   type FieldsState
 } from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
+import { RestartNote } from "../ui/RestartNote";
 import { Checkbox } from "../ui/Field";
 import { useEscape } from "../ui/use-escape";
 
@@ -43,18 +45,6 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "secrets", label: "Secrets" },
   { id: "variables", label: "Variables" }
 ];
-
-/**
- * What of a tab reaches a running tab only once it is restarted: mounts are added at a tab's start
- * and removed at Save (sbx.ts's prepareSbxRun, saveSbxConfig), and `sbx run -e` sets a variable
- * only at the start. Ports, hosts and a secret's value or hosts apply at Save.
- */
-const RESTART_NOTES: Partial<Record<SbxSettingsTab, string>> = {
-  knowledge: "Added or changed ones reach a running tab after a restart; removed ones go at Save.",
-  paths: "Added or changed ones reach a running tab after a restart; removed ones go at Save.",
-  secrets: "A new secret reaches a running tab after a restart; a changed value or host applies at Save.",
-  variables: "A running tab sees changes after a restart."
-};
 
 /**
  * Why a tab cannot be chosen, or `undefined`. Nothing but the switch applies while sandboxing is
@@ -104,6 +94,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  stored. */
   const [locked, setLocked] = useState(false);
   const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
+  /** As opened, for the tabs whose edits wait for a restart (restartTabs). */
+  const [loaded, setLoaded] = useState<SbxProjectConfig>(EMPTY_SBX_CONFIG);
   const [stored, setStored] = useState<SbxStoredLocal>({ secrets: [], variables: [] });
   const [saving, setSaving] = useState(false);
   /** What refused the Save, above the buttons: the rows it is about may be on another tab, and
@@ -157,6 +149,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     const [config, local] = await Promise.all([window.tet.sbx.getConfig(project.id), window.tet.sbx.stored(project.id)]);
     setEnabled(isLocked || config.enabled);
     setState(fromConfig(config));
+    setLoaded(config);
     setStored(local);
     setPhase({ kind: "ready", organization: status.organization });
   };
@@ -213,6 +206,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       className={phase.kind === "ready" ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
       error={refused}
+      message={phase.kind === "ready" && restartTabs(loaded, state).size > 0 && <RestartNote />}
       buttons={
         <>
           <button type="button" className="button secondary" onClick={close}>
@@ -289,7 +283,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <div className="sbx-settings-pane">
-          {RESTART_NOTES[tab] && <p className="dialog-detail">{RESTART_NOTES[tab]}</p>}
           <SbxSettingsFields
             section={tab}
             state={state}

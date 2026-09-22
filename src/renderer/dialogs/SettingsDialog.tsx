@@ -21,6 +21,7 @@ import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
+import { RestartNote } from "../ui/RestartNote";
 import { ActionLink } from "../ui/ActionLink";
 import { isWindows } from "../platform";
 import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
@@ -54,6 +55,16 @@ function envEdit(row: EnvRow): EnvEdit | undefined {
     return undefined;
   }
   return { name: row.name.trim(), from: row.from, value: row.value === "" ? undefined : row.value };
+}
+
+/** Whether the rows differ from the variables `loaded` — a value typed, a name changed, a row added
+ *  or removed — which a running tab takes up only once it restarts (pty.ts's buildEnv). */
+function envChanged(rows: EnvRow[], loaded: readonly string[]): boolean {
+  const edits = rows.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
+  return (
+    edits.some((edit) => edit.value !== undefined || edit.name !== edit.from) ||
+    loaded.some((name) => !edits.some((edit) => edit.from === name))
+  );
 }
 
 /** Each row's mark by id — the rule the store refuses by (env-rules.ts), so Save never meets it. */
@@ -140,14 +151,17 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [variables, setVariables] = useState<EnvRow[]>([]);
   /** Save writes the tab only once it was touched. */
   const variablesEdited = useRef(false);
+  /** The stored variables' names as opened, for `envChanged`. */
+  const [loadedVariables, setLoadedVariables] = useState<readonly string[]>([]);
 
   useEffect(() => {
     void window.tet.settings.get().then(setSettings);
     // Cannot change while the process runs.
     void window.tet.app.info().then(setInfo);
-    void window.tet.environment.list().then((list) =>
-      setVariables(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })))
-    );
+    void window.tet.environment.list().then((list) => {
+      setVariables(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })));
+      setLoadedVariables(list.map((variable) => variable.name));
+    });
   }, []);
 
   // Read once, on open; Save goes through patchSetting (commands.ts), which reads the file fresh
@@ -257,6 +271,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     <DialogFrame
       header={{ tabs, active: tab, onSelect: setTab, onClose }}
       error={refused}
+      message={envChanged(variables, loadedVariables) && <RestartNote />}
       className="settings-dialog"
       buttons={
         <>
@@ -373,11 +388,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       )}
       {tab === "environment" && (
         <div className="settings-environment">
-          <p className="dialog-detail">
-            Stored encrypted and set in every tab but sandboxed ones, over the machine's own.
-            <br />
-            <strong>A running tab sees changes after a restart.</strong>
-          </p>
+          <p className="dialog-detail">Stored encrypted and set in every tab but sandboxed ones, over the machine's own.</p>
           <RowSection
             label="Environment variables"
             empty="No environment variables yet"

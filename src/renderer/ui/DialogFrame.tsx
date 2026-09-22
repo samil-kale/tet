@@ -38,6 +38,9 @@ interface DialogFrameProps<T extends string> {
    *  fields — several, or across tabs — no one of them can be blamed. A field that can writes it
    *  itself (`Field`). */
   error?: string;
+  /** Beside the buttons, on the row's left: what the dialog says about its unsaved edits as a whole
+   *  (`RestartNote`), never a failure — that is `error`. */
+  message?: React.ReactNode;
   /** Variants on `.dialog`: `wide`, or the dialog's own class. */
   className?: string;
   /**
@@ -61,6 +64,7 @@ export function DialogFrame<T extends string>({
   header,
   busy,
   error,
+  message,
   className,
   onSubmit,
   buttons,
@@ -114,7 +118,10 @@ export function DialogFrame<T extends string>({
       )}
       <div className="dialog-body">{children}</div>
       <DialogError message={error} />
-      <div className="dialog-buttons">{buttons}</div>
+      <div className="dialog-buttons">
+        {message && <div className="dialog-buttons-message">{message}</div>}
+        {buttons}
+      </div>
     </>
   );
   return (

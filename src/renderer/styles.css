@@ -2021,6 +2021,12 @@ textarea:focus,
   color: var(--vscode-errorForeground);
 }
 
+/* Edits a running tab takes up only once restarted (RestartNote): words alone, in the warning's
+   colour, as .dialog-error in the error's. */
+.restart-note {
+  color: var(--vscode-notificationsWarningIcon-foreground);
+}
+
 /* A prompt's color swatches, in the 24px of every action button. The colors themselves come from
    the choices, as theme variables, so the row repaints with the theme. */
 .dialog-colors {
@@ -2061,6 +2067,12 @@ textarea:focus,
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* DialogFrame's `message`: the row's left, the buttons kept right. */
+.dialog-buttons-message {
+  margin-right: auto;
+  align-self: center;
 }
 
 /* Labels vary and may gain a spinner; a floor keeps the row from shifting. */
