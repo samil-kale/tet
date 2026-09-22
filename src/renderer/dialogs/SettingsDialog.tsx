@@ -401,7 +401,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 onRemove={() => editVariables((rows) => without(rows, row.id))}
               >
                 <input
-                  className="sbx-host-input"
+                  className="row-fill-input"
                   type="text"
                   placeholder="GITLAB_TOKEN"
                   title="The name every tab sees"
@@ -414,7 +414,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   </span>
                 )}
                 <input
-                  className="sbx-secret-input"
+                  className="row-fixed-input"
                   type="password"
                   autoComplete="off"
                   // A stored value as a set password shows, never the value itself (the title says so).

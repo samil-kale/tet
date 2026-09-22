@@ -471,7 +471,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
               onRemove={() => update("secrets", (secrets) => without(secrets, row.id))}
             >
               <input
-                className="sbx-secret-input"
+                className="row-fixed-input"
                 type="text"
                 placeholder="GITLAB_TOKEN"
                 title="The environment variable the sandbox sees, holding a placeholder instead of the value"
@@ -479,7 +479,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
                 onChange={(event) => setSecret({ env: event.target.value })}
               />
               <input
-                className="sbx-host-input"
+                className="row-fill-input"
                 type="text"
                 placeholder="gitlab.example.com"
                 title="Where sbx puts the value in place of the placeholder, in request headers only: exact host or *.example.com, comma-separated, no scheme or port"
@@ -487,7 +487,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
                 onChange={(event) => setSecret({ hosts: event.target.value })}
               />
               <input
-                className="sbx-secret-input"
+                className="row-fixed-input"
                 type="password"
                 autoComplete="off"
                 // A stored value as a set password shows, never the value itself (the title says so).
@@ -532,7 +532,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
               onRemove={() => update("variables", (variables) => without(variables, row.id))}
             >
               <input
-                className="sbx-host-input"
+                className="row-fill-input"
                 type="text"
                 placeholder="NPM_TOKEN"
                 title="The environment variable the sandbox sees, holding the value itself"
@@ -540,7 +540,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
                 onChange={(event) => setVariable({ env: event.target.value })}
               />
               <input
-                className="sbx-secret-input"
+                className="row-fixed-input"
                 type="password"
                 autoComplete="off"
                 // A stored value as a set password shows, never the value itself (the title says so).
@@ -573,7 +573,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
       renderRow={(row) => (
         <EditRow key={row.id} remove="Remove host" onRemove={() => update("hosts", (hosts) => without(hosts, row.id))}>
           <input
-            className="sbx-host-input"
+            className="row-fill-input"
             type="text"
             placeholder="api.example.com"
             title="Exact host, *.example.com, or host:443"

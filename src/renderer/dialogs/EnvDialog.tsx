@@ -94,7 +94,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
         renderRow={(row) => (
           // The Settings' Environment rows, the name fixed: it is the agent's.
           <EditRow key={row.id}>
-            <input className="sbx-host-input" type="text" value={row.name} disabled />
+            <input className="row-fill-input" type="text" value={row.name} disabled />
             {row.overridesMachine && (
               <span className="env-overrides" title={overridesMachineNote([row.name])}>
                 overrides machine
@@ -102,7 +102,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
             )}
             <input
               ref={row === rows[0] ? firstValue : undefined}
-              className="sbx-secret-input"
+              className="row-fixed-input"
               type="password"
               autoComplete="off"
               // A stored value as a set password shows, never the value itself (the title says so).

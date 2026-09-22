@@ -34,7 +34,7 @@ export function EditRow({
   children: ReactNode;
 } & ({ remove: string; onRemove: () => void } | { remove?: undefined; onRemove?: undefined })) {
   return (
-    <div className="sbx-path-row">
+    <div className="edit-row">
       {children}
       <RowMark title={mark} />
       {onRemove && <RemoveRow title={remove} onClick={onRemove} />}
@@ -45,7 +45,7 @@ export function EditRow({
 /** Nothing without a reason. */
 function RowMark({ title }: { title: string | undefined }) {
   return title === undefined ? null : (
-    <span className="sbx-path-denied" title={title}>
+    <span className="row-mark" title={title}>
       <CircleAlertIcon />
     </span>
   );
@@ -79,7 +79,7 @@ export function RowSection<T extends { id: string }>({
   return (
     <div className="dialog-field">
       <span className="dialog-field-label">{label}</span>
-      <div className="sbx-rows">
+      <div className="row-section-rows">
         {rows.length === 0 && <p className="dialog-detail">{empty}</p>}
         {rows.map(renderRow)}
       </div>

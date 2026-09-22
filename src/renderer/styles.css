@@ -1642,7 +1642,7 @@ textarea:focus,
   cursor: default;
 }
 
-/* The rows' mark (.sbx-path-denied) repeated on their tab, so it shows from any pane. */
+/* The rows' mark (.row-mark) repeated on their tab, so it shows from any pane. */
 .dialog-tab-mark {
   display: flex;
   margin-top: 3px;
@@ -1689,16 +1689,27 @@ textarea:focus,
 }
 
 /* Its own scrollbox rather than growing the dialog, so labels and "+ Add" stay put. */
-.sbx-rows {
+.row-section-rows {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   margin-top: 5px;
   max-height: 245px;
   overflow-y: auto;
 }
 
-/* The three knowledge checkboxes: a fixed count, so no scrollbox like .sbx-rows'. */
+/* 2px between the rows and the scrollbar, there only while the scrollbar is: a transparent strip
+   on the bar's left, the thumb keeping the usual 10px. */
+.row-section-rows::-webkit-scrollbar {
+  width: 12px;
+}
+
+.row-section-rows::-webkit-scrollbar-thumb {
+  border-left: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* The three knowledge checkboxes: a fixed count, so no scrollbox like .row-section-rows'. */
 .sbx-knowledge-rows {
   display: flex;
   flex-direction: column;
@@ -1714,7 +1725,7 @@ textarea:focus,
   height: var(--field-height);
 }
 
-.sbx-path-row {
+.edit-row {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1725,7 +1736,7 @@ textarea:focus,
 }
 
 /* A row of fixed-width fields (ports) leaves room, and its remove button still sits right. */
-.sbx-path-row > .icon-button {
+.edit-row > .icon-button {
   margin-left: auto;
 }
 
@@ -1736,20 +1747,21 @@ textarea:focus,
 }
 
 /* Fills the row like .sbx-path-value. */
-.sbx-host-input {
+.row-fill-input {
   flex: 1;
   min-width: 0;
 }
 
 /* A path's access: one width for either choice, which still holds "Read+Write" (102px, measured)
    once the row's mark takes its room. */
-.sbx-path-row > .select-field {
+.edit-row > .select-field {
   --field-width: 120px;
   width: var(--field-width);
 }
 
-/* A secret's name and value, either side of its hosts (.sbx-host-input). */
-.sbx-secret-input {
+/* A name or value beside a field filling the row (.row-fill-input): a secret's either side of its
+   hosts, an environment variable's value. */
+.row-fixed-input {
   --field-width: 140px;
   width: var(--field-width);
 }
@@ -1789,7 +1801,7 @@ textarea:focus,
 
 /* A row Save or sbx's policy refuses: the error mark's colour, as .session-mark-error. Scoped to
    `.dialog-field` to outrank `.dialog-field span`, which would grey it. */
-.dialog-field .sbx-path-denied {
+.dialog-field .row-mark {
   display: flex;
   flex: none;
   color: var(--vscode-errorForeground);
@@ -1797,7 +1809,7 @@ textarea:focus,
 
 /* EditRow's promise: the field before the mark gives up the mark's room (icon plus the row's gap),
    so the rest of the row stays where it was. A field without --field-width keeps its own width. */
-.sbx-path-row > :has(+ .sbx-path-denied) {
+.edit-row > :has(+ .row-mark) {
   width: calc(var(--field-width) - var(--icon-size) - 4px);
 }
 
@@ -1940,7 +1952,7 @@ textarea:focus,
   min-height: 0;
 }
 
-.settings-environment .sbx-rows {
+.settings-environment .row-section-rows {
   flex: 0 1 auto;
   min-height: 0;
   max-height: none;
