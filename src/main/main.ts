@@ -635,6 +635,13 @@ app.on("window-all-closed", () => {
  * never reports its exit cannot block the quit.
  */
 const QUIT_TEARDOWN_TIMEOUT_MS = 5000;
+/**
+ * After `app.quit()` the exit is electron's: windows close, then `will-quit`. On macOS that has
+ * stalled there with nothing left to tear down (install.test.ts, a quit by Apple Event: the second
+ * `before-quit` logged, `will-quit` never). Everything of ours is written by then, so the process
+ * leaves on its own after this — said in the log, since a forced exit is not the normal way out.
+ */
+const QUIT_EXIT_TIMEOUT_MS = 5000;
 
 let quitting = false;
 
@@ -667,6 +674,10 @@ function shutdown(relaunch: boolean): void {
     }
     console.error("[tet] quit: done, quitting");
     app.quit();
+    setTimeout(() => {
+      console.error(`[tet] quit: still here after ${QUIT_EXIT_TIMEOUT_MS / 1000}s, exiting`);
+      app.exit(0);
+    }, QUIT_EXIT_TIMEOUT_MS).unref();
   });
 }
 

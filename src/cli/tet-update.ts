@@ -12,9 +12,13 @@ import type { UpdateResult } from "../shared/release";
 
 const EXIT_WAIT_MS = 60_000;
 const POLL_MS = 250;
-/** A handle briefly outliving the process (a pty's console host) fails a rename with EBUSY. */
-const ATTEMPTS = 5;
-const RETRY_MS = 2000;
+/**
+ * A handle briefly outliving the process (a pty's console host) fails a rename with EBUSY, or on
+ * win32 with EPERM. Measured: five tries over 10s were not enough on a CI runner (the release of
+ * 0.11.1 failed there), so the wait is a window, not a count of tries.
+ */
+const RETRY_WINDOW_MS = 30_000;
+const RETRY_MS = 1000;
 
 function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -31,12 +35,13 @@ function alive(pid: number): boolean {
 }
 
 function retried(action: () => void): void {
-  for (let attempt = 1; ; attempt++) {
+  const deadline = Date.now() + RETRY_WINDOW_MS;
+  for (;;) {
     try {
       action();
       return;
     } catch (error) {
-      if (attempt >= ATTEMPTS) {
+      if (Date.now() >= deadline) {
         throw error;
       }
       sleep(RETRY_MS);
@@ -69,7 +74,11 @@ function main(): void {
     fs.rmSync(old, { recursive: true, force: true });
     retried(() => fs.renameSync(root, old));
   } catch (error) {
-    writeResult(resultFile, { version, ok: false, output: `could not move ${root} aside: ${errorMessage(error)}` });
+    writeResult(resultFile, {
+      version,
+      ok: false,
+      output: `could not move ${root} aside within ${RETRY_WINDOW_MS / 1000}s: ${errorMessage(error)}`
+    });
     return;
   }
   try {
@@ -93,7 +102,7 @@ function main(): void {
   }
   writeResult(resultFile, { version, ok: true, output: "" });
   try {
-    fs.rmSync(old, { recursive: true, force: true, maxRetries: ATTEMPTS });
+    fs.rmSync(old, { recursive: true, force: true, maxRetries: 5 });
   } catch {
     // Left for the next update's rmSync; the new version is in place.
   }
