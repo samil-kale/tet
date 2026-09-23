@@ -574,9 +574,10 @@ export function rethemeTerminals(): void {
   }
 }
 
-/** Wipes scrollback and screen, for a restart. */
+/** Wipes scrollback and screen, for a restart. Written as a reset (RIS) rather than `clear()`, so it
+ *  lands after output xterm has queued but not parsed yet, and takes the cursor line too. */
 export function clearTerminal(projectId: string, tabId: string): void {
-  views.get(viewKey(projectId, tabId))?.term.clear();
+  views.get(viewKey(projectId, tabId))?.term.write("\x1bc");
 }
 
 export function disposeTerminal(projectId: string, tabId: string): void {

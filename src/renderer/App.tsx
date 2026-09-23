@@ -249,7 +249,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       ),
       window.tet.terminals.onStatus(({ projectId, tabId, status }) => {
       // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
-      // it off screen (the old output has arrived by then, the new one's has not).
+      // it off screen (main flushes the old output before the status, the new one's has not come).
         if (status === "running" && tabsRef.current[projectId]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
           clearTerminal(projectId, tabId);
         }

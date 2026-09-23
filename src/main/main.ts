@@ -262,7 +262,15 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
     records.addOutput(projectId, tabId, data);
     queueOutput(projectId, tabId, data);
   },
-  onStatus: (projectId, tabId, status: TerminalStatus) => send("terminal:status", { projectId, tabId, status }),
+  onStatus: (projectId, tabId, status: TerminalStatus) => {
+    // Output batched before the change goes first, so a status never overtakes it (a restart's
+    // clear in App.tsx would otherwise run before the dying process's last bytes arrive).
+    if (flushTimer) {
+      clearTimeout(flushTimer);
+      flushOutput();
+    }
+    send("terminal:status", { projectId, tabId, status });
+  },
   onStartupProgress: (projectId, show) => send("terminal:startup-progress", { projectId, show }),
   onNotice: (severity, message) => send("app:notice", { severity, message })
 });
