@@ -11,6 +11,7 @@ import { confirm } from "../ui/Dialog";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, Field, TextField } from "../ui/Field";
+import { FilterField } from "../ui/FilterField";
 import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
 import { useEscape } from "../ui/use-escape";
@@ -395,12 +396,7 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
           <div className="placeholder">No account yet — add one to browse its repositories.</div>
         ) : (
           <>
-            <input
-              type="text"
-              placeholder="Search"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-            />
+            <FilterField placeholder="Search" value={filter} onChange={setFilter} />
             {/* Only with more than one group. */}
             {groups.length > 1 && (
               <Dropdown

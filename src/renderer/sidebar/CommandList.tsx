@@ -6,6 +6,7 @@ import { notifying, refusal } from "../git/run-action";
 import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { PlayIcon, PlusIcon } from "../ui/icons";
+import { Section } from "../ui/Section";
 
 /** Our own type, so a row dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-command";
@@ -243,17 +244,16 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
   ];
 
   return (
-    <div className="section" style={{ height }}>
-      <div className="section-header">
-        <span>
-          COMMANDS <span className="count-badge">({commands.length})</span>
-        </span>
-        <span className="section-header-actions">
-          <button className="icon-button" title="New command" disabled={!projectId} onClick={() => void askAdd()}>
-            <PlusIcon />
-          </button>
-        </span>
-      </div>
+    <Section
+      title="COMMANDS"
+      count={commands.length}
+      height={height}
+      actions={
+        <button className="icon-button" title="New command" disabled={!projectId} onClick={() => void askAdd()}>
+          <PlusIcon />
+        </button>
+      }
+    >
       <div className="command-list" {...listProps}>
         {commands.map((command, index) => (
           <div
@@ -291,6 +291,6 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.command)} onClose={() => setMenu(null)} />
       )}
-    </div>
+    </Section>
   );
 });

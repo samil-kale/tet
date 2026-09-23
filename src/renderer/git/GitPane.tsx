@@ -7,7 +7,7 @@ import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
 import { useFileAct } from "./run-action";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIcon } from "../ui/icons";
-import { ProgressBar } from "../ui/ProgressBar";
+import { Section } from "../ui/Section";
 
 interface GitPaneProps {
   project: Project;
@@ -47,10 +47,13 @@ export const GitPane = memo(function GitPane({
 
   return (
     <div className={`side-pane-content${shown ? "" : " hidden"}`}>
-      <div className="section" style={{ height: treeHeight }}>
-        <div className="section-header">
-          <span>BRANCHES</span>
-          <span className="section-header-actions">
+      {/* This section's bar — everything `branch.run` covers. */}
+      <Section
+        title="BRANCHES"
+        busy={branch.startedHere}
+        height={treeHeight}
+        actions={
+          <>
             <button
               className="icon-button"
               title={remote ? `Fetch from ${remote}` : "This repository has no remote"}
@@ -83,10 +86,9 @@ export const GitPane = memo(function GitPane({
             >
               <ArrowUpIcon />
             </button>
-          </span>
-          {/* This section's bar — everything `branch.run` covers. */}
-          {branch.startedHere && <ProgressBar />}
-        </div>
+          </>
+        }
+      >
         <BranchTree
           projectId={project.id}
           state={state}
@@ -95,7 +97,7 @@ export const GitPane = memo(function GitPane({
           canCloseWorktree={canCloseWorktree}
           worktreesSupported={worktreesSupported}
         />
-      </div>
+      </Section>
       <Sash
         orientation="horizontal"
         size={treeHeight}
@@ -103,13 +105,14 @@ export const GitPane = memo(function GitPane({
         minOther={MIN_PANE_HEIGHT}
         onResize={onTreeHeight}
       />
-      <div className="section grows">
-        <div className="section-header">
-          <span>
-            LOCAL CHANGES <span className="count-badge">({state.changes.length})</span>
-          </span>
-          {/* What clears the whole list, ordered by cost. Narrower actions are in the context menu. */}
-          <span className="section-header-actions">
+      {/* What clears the whole list, ordered by cost. Narrower actions are in the context menu.
+          This section's bar — everything `act` covers. */}
+      <Section
+        title="LOCAL CHANGES"
+        count={state.changes.length}
+        busy={acting}
+        actions={
+          <>
             <button
               className="icon-button"
               title="Commit all changes"
@@ -135,12 +138,11 @@ export const GitPane = memo(function GitPane({
             >
               <DiscardIcon />
             </button>
-          </span>
-          {/* This section's bar — everything `act` covers. */}
-          {acting && <ProgressBar />}
-        </div>
+          </>
+        }
+      >
         <ChangesList project={project} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
-      </div>
+      </Section>
     </div>
   );
 });

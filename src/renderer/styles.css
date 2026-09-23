@@ -678,17 +678,17 @@ textarea:focus,
 /* What the search found in the files (files/FileSearch.tsx). The rows are the tree's, so
    only what they carry beyond a file row is stated here. */
 
-/* The SEARCH header's title with the summary beside it, long enough to be cut off before the
-   header's buttons. */
-.search-title {
+/* A section header's title with its count beside it — SEARCH's summary long enough to be cut off
+   before the header's buttons. */
+.section-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* A regex that will not parse takes the summary's place. */
-.search-summary.error {
+/* A regex that will not parse takes the SEARCH summary's place. */
+.count-badge.error {
   color: var(--vscode-errorForeground);
 }
 
@@ -2259,6 +2259,15 @@ textarea:focus,
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+
+/* The column's gap spaces the repository filter, which leaves its padding to it as in `.filter-row`. */
+.remote-main .filter-field {
+  padding: 0;
+}
+
+.remote-main .filter-icon {
+  left: 7px;
 }
 
 .repository-list {

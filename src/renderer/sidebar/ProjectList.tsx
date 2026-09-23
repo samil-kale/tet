@@ -7,8 +7,9 @@ import { revealLabel } from "../platform";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
-import { ProgressBar } from "../ui/ProgressBar";
-import { ChangesIcon, CloseIcon, CommentIcon, PlusIcon, QuestionIcon, ShieldIcon, SpinnerIcon } from "../ui/icons";
+import { Section } from "../ui/Section";
+import { SessionMark } from "../ui/SessionMark";
+import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";
@@ -257,16 +258,16 @@ export const ProjectList = memo(function ProjectList({
   };
 
   return (
-    <div className="section grows">
-      <div className="section-header">
-        <span>
-          PROJECTS <span className="count-badge">({projects.length})</span>
-        </span>
+    <Section
+      title="PROJECTS"
+      count={projects.length}
+      busy={gitBusy}
+      actions={
         <button className="icon-button" title="Add repository" onClick={onAdd}>
           <PlusIcon />
         </button>
-        {gitBusy && <ProgressBar />}
-      </div>
+      }
+    >
       <div className="project-list" {...listProps}>
         {rows.map((project, index) => {
           const extra = heads[project.id]?.base ?? heads[project.id]?.head;
@@ -294,20 +295,20 @@ export const ProjectList = memo(function ProjectList({
                 rowButton(
                   "Open the session waiting for an answer",
                   () => onShowWaiting(project.id),
-                  <QuestionIcon className="session-mark" />
+                  <SessionMark kind="waiting" />
                 )}
               {marks[project.id]?.busy &&
                 rowButton(
                   "Open the session that is working",
                   () => onShowBusy(project.id),
-                  <SpinnerIcon className="session-mark spinning" />
+                  <SessionMark kind="working" />
                 )}
               {/* Going to the session clears the mark. */}
               {(marks[project.id]?.finished.length ?? 0) > 0 &&
                 rowButton(
                   "Open the session that finished",
                   () => onShowFinished(project.id),
-                  <CommentIcon className="session-mark" />
+                  <SessionMark kind="finished" />
                 )}
               {/* From the status every refresh loads — no extra git call. */}
               {heads[project.id]?.dirty &&
@@ -324,6 +325,6 @@ export const ProjectList = memo(function ProjectList({
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.project)} onClose={() => setMenu(null)} />
       )}
-    </div>
+    </Section>
   );
 });

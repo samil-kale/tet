@@ -12,17 +12,8 @@ import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../diff/editor-views";
-import {
-  CircleAlertIcon,
-  CloseIcon,
-  CommentIcon,
-  FilesIcon,
-  GearIcon,
-  GitIcon,
-  PlusIcon,
-  QuestionIcon,
-  SpinnerIcon
-} from "../ui/icons";
+import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon } from "../ui/icons";
+import { SessionMark } from "../ui/SessionMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
 /** A window-edge drag fires dozens of observations; every pty resize repaints the TUI. */
@@ -476,15 +467,15 @@ export const Pane = memo(function Pane({
               {isEditorTab(tab) ? (
                 <FilesIcon className="tab-icon" />
               ) : tab.status === "missing" || tab.status === "error" ? (
-                <CircleAlertIcon className="tab-icon session-mark session-mark-error" />
+                <SessionMark kind="error" className="tab-icon" />
               ) : waitingTabIds.includes(tab.tabId) ? (
-                <QuestionIcon className="tab-icon session-mark" />
+                <SessionMark kind="waiting" className="tab-icon" />
               ) : isWorking(tab) ? (
                 // A question hidden on the tab in front (left out of `waitingTabIds`) gets no
                 // spinner: a session stopped on a question is not working.
-                <SpinnerIcon className="tab-icon session-mark spinning" />
+                <SessionMark kind="working" className="tab-icon" />
               ) : markedTabIds.includes(tab.tabId) ? (
-                <CommentIcon className="tab-icon session-mark" />
+                <SessionMark kind="finished" className="tab-icon" />
               ) : (
                 <AgentIcon agentId={tab.agentId} className="tab-icon" />
               )}

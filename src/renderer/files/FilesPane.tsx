@@ -7,7 +7,7 @@ import { useFileAct } from "../git/run-action";
 import { useFileSearch } from "./use-file-search";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { ClearIcon, CollapseAllIcon, ExpandAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
-import { ProgressBar } from "../ui/ProgressBar";
+import { Section } from "../ui/Section";
 
 interface FilesPaneProps {
   project: Project;
@@ -74,13 +74,13 @@ export const FilesPane = memo(function FilesPane({
 
   return (
     <div className={`side-pane-content${shown ? "" : " hidden"}`}>
-      <div className="section grows">
-        <div className="section-header">
-          <span>
-            EXPLORER{" "}
-            {explorerListing && <span className="count-badge">({explorerListing.files.length})</span>}
-          </span>
-          <span className="section-header-actions">
+      {/* This section's bar — the listing and the tree's edits. */}
+      <Section
+        title="EXPLORER"
+        count={explorerListing?.files.length}
+        busy={showProgress}
+        actions={
+          <>
             <button
               className="icon-button"
               title="New File..."
@@ -113,10 +113,9 @@ export const FilesPane = memo(function FilesPane({
             >
               <CollapseAllIcon />
             </button>
-          </span>
-          {/* This section's bar — the listing and the tree's edits. */}
-          {showProgress && <ProgressBar />}
-        </div>
+          </>
+        }
+      >
         {/* Keyed by project: fold and filter state is keyed by paths that repeat across repositories. */}
         <Explorer
           key={project.id}
@@ -131,7 +130,7 @@ export const FilesPane = memo(function FilesPane({
           onExplorerChanged={refreshExplorer}
           onFiltering={setFiltering}
         />
-      </div>
+      </Section>
       <Sash
         orientation="horizontal"
         size={searchHeight}
@@ -140,17 +139,15 @@ export const FilesPane = memo(function FilesPane({
         reverse
         onResize={onSearchHeight}
       />
-      <div className="section" style={{ height: searchHeight }}>
-        <div className="section-header">
-          <span className="search-title">
-            SEARCH{" "}
-            {searchResult && (
-              <span className={`count-badge search-summary${searchResult.error ? " error" : ""}`}>
-                ({searchSummary(searchResult)})
-              </span>
-            )}
-          </span>
-          <span className="section-header-actions">
+      {/* This section's bar — the search the field below asked for. */}
+      <Section
+        title="SEARCH"
+        count={searchResult && searchSummary(searchResult)}
+        countError={Boolean(searchResult?.error)}
+        busy={showSearchProgress}
+        height={searchHeight}
+        actions={
+          <>
             <button
               className="icon-button"
               title="Clear Search Results"
@@ -167,10 +164,9 @@ export const FilesPane = memo(function FilesPane({
             >
               {allFolded ? <ExpandAllIcon /> : <CollapseAllIcon />}
             </button>
-          </span>
-          {/* This section's bar — the search the field below asked for. */}
-          {showSearchProgress && <ProgressBar />}
-        </div>
+          </>
+        }
+      >
         {/* Its own query — the tree above filters by name, this looks inside the files. */}
         <FileSearch
           key={project.id}
@@ -180,7 +176,7 @@ export const FilesPane = memo(function FilesPane({
           onAllFolded={setAllFolded}
           onOpenMatch={onOpenMatch}
         />
-      </div>
+      </Section>
     </div>
   );
 });
