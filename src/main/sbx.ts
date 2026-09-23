@@ -422,6 +422,16 @@ export function sandboxName(projectId: string, agentId: SbxAgentId): string {
   return `tet-${agentId}-${projectHash(projectId)}`;
 }
 
+/**
+ * The agent of a sandbox tet made (sandboxName) for this workspace under another project id — the
+ * project closed and opened again. Nothing reaches it any more, yet it keeps grants, rules and
+ * secrets of its own; undefined for any other sandbox.
+ */
+function orphanAgent(name: string, workspaces: string[], projectId: string, projectPath: string): SbxAgentId | undefined {
+  const agentId = SBX_AGENT_IDS.find((candidate) => new RegExp(`^tet-${candidate}-[0-9a-f]{12}$`).test(name));
+  return agentId !== undefined && name !== sandboxName(projectId, agentId) && sameSet(workspaces, [projectPath]) ? agentId : undefined;
+}
+
 /** The project's share of a sandbox name and of a secret placeholder: one identity, one place. */
 function projectHash(projectId: string): string {
   return crypto.createHash("sha1").update(projectId).digest("hex").slice(0, 12);
@@ -465,7 +475,7 @@ function normalizeHostPath(hostPath: string): string {
 
 /**
  * A live bind mount's `sbx mount` and `sbx umount` specs. `mount` carries the access, so equal
- * `mount`s are the same grant (`staleMounts`).
+ * `mount`s are the same grant (saveSbxConfig narrows by it).
  */
 interface MountSpec {
   mount: string;
@@ -600,21 +610,31 @@ function knowledgeMountSpecs(entries: KnowledgeEntries, knowledge: SbxKnowledgeC
   });
 }
 
-/**
- * Every grant the dialog changes (Allowed paths, knowledge), as one list: Save narrows and each
- * spawn re-applies the same set (mountAll, staleMounts). Only what exists here; a missing row or
- * skills folder is a problem (readSbxProblems).
- */
-async function grantedMounts(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig, paths: SbxPath[]): Promise<MountSpec[]> {
-  return [
-    ...knowledgeMountSpecs(await sandboxKnowledgeFor(agentId, knowledge.skillsFolder), knowledge),
-    ...paths.filter((entry) => statOf(normalizeHostPath(entry.path))).map(pathMountSpecs)
-  ];
+/** A grant the dialog changes, with the row it is for (SbxProblems' option and row). */
+interface Grant extends MountSpec {
+  option: "paths" | "knowledge";
+  row: string;
 }
 
-/** Unmounts for grants `current` dropped; by `mount`, so rw→ro is a different grant. */
-function staleMounts(previous: MountSpec[], current: MountSpec[]): string[] {
-  return previous.filter((old) => !current.some((next) => next.mount === old.mount)).map((old) => old.unmount);
+/**
+ * Every grant the dialog changes (Allowed paths, knowledge), as one list: Save narrows and each
+ * spawn re-applies the same set (mountAll, revokeMounts). Only what exists here; a missing row or
+ * skills folder is a problem (readSbxProblems). A different access is a different grant (`mount`).
+ */
+async function grantsOf(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig, paths: SbxPath[]): Promise<Grant[]> {
+  const entries = await sandboxKnowledgeFor(agentId, knowledge.skillsFolder);
+  return [
+    ...SBX_KNOWLEDGE_KINDS.flatMap((kind) =>
+      knowledgeMountSpecs({ skills: [], plugins: [], instructions: [], [kind]: entries[kind] }, knowledge).map((spec) => ({
+        ...spec,
+        option: "knowledge" as const,
+        row: kind
+      }))
+    ),
+    ...paths
+      .filter((entry) => statOf(normalizeHostPath(entry.path)))
+      .map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path }))
+  ];
 }
 
 /** Sandboxes given the `tet-ctl` launcher this run; cleared in removeSandbox. */
@@ -843,13 +863,17 @@ async function mountAll(
 
 /**
  * Narrows grants at Save, not at the next restart: a dropped or rw→ro path or knowledge kind must
- * stop being accessible *now*. And a `sbx mount` grant survives a stop though the bind does not
- * (verified, 2026-09-08: a different access after a restart still hit "already mounted"), so no
- * later mount corrects it. The caller has started the sandbox (`sbx umount` refuses a stopped one).
+ * stop being accessible *now* in a running sandbox. A stopped one keeps the grant but not its bind
+ * (measured, 2026-09-23, 0.42.1: none of them back after a start), and the next spawn mounts only
+ * what tet.json holds, a grant of the other access replaced (mountAll). The caller has started the
+ * sandbox (`sbx umount` refuses a stopped one). Adds what sbx would not take back to `refused`.
  */
-async function revokeMounts(name: string, unmountSpecs: string[]): Promise<void> {
-  for (const spec of unmountSpecs) {
-    await runSbx(["umount", name, spec]);
+async function revokeMounts(name: string, grants: Grant[], refused: SbxProblems): Promise<void> {
+  for (const grant of grants) {
+    const result = await runSbx(["umount", name, grant.unmount]);
+    if (!result.ok) {
+      addProblems(refused, grant.option, { [grant.row]: sbxRefusal(result) });
+    }
   }
 }
 
@@ -1192,17 +1216,7 @@ export async function prepareSbxRun(
     ...worktreeMountSpecs(request.projectPath),
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
-  const entries = await sandboxKnowledgeFor(agentId, knowledge.skillsFolder);
-  const grants: (MountSpec & { option: SbxOption; row: string })[] = [
-    ...SBX_KNOWLEDGE_KINDS.flatMap((kind) =>
-      knowledgeMountSpecs({ skills: [], plugins: [], instructions: [], [kind]: entries[kind] }, knowledge).map((spec) => ({
-        ...spec,
-        option: "knowledge" as const,
-        row: kind
-      }))
-    ),
-    ...config.paths.map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path }))
-  ];
+  const grants = await grantsOf(agentId, knowledge, config.paths);
   const refused = await mountAll(name, [...own.map((mount) => ({ mount })), ...grants], onData, created ? undefined : request.warm);
   const ownFailed = own.filter((spec) => refused.has(spec));
   if (ownFailed.length > 0) {
@@ -1393,17 +1407,19 @@ async function applyProjectPorts(names: string[], ports: SbxPort[]): Promise<Rec
 
 /**
  * The dialog's Save of the rows readSbxProblems passed (saveProjectSbx): every sandbox goes if
- * sandboxing is off, and one with another workspace too (see ensureSandboxExists; rebuilt at its
- * next tab). The others are brought in line: ports (applyProjectPorts), hosts both ways without
+ * sandboxing is off, one with another workspace too (see ensureSandboxExists; rebuilt at its next
+ * tab), and one an earlier id of the project left (orphanAgent). The others are brought in line: ports (applyProjectPorts), hosts both ways without
  * governance (revokeStaleHosts, allowHosts) and secrets (applySecrets), each against the sandboxes'
  * own (readSandboxPorts, readSandboxHosts, readSandboxSecrets), so a hand-set rule deleted as a row
  * goes too and a port never published is tried again. A row sbx refuses in any sandbox is
  * `refused`, left out of tet.json and taken back where it went through — a port it would not
  * unpublish stays, as the sandbox still has it: tet.json holds what was applied. Grants are
- * narrowed last (revokeMounts), a mount cannot be given back at Save; ports and mounts need the
+ * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
+ * is `refused` too, its row and knowledge kind kept as they were. Ports and mounts need the
  * sandbox running. A sandbox that cannot be removed rejects, tet.json left as it was. Returns the agents
  * whose sandboxes were removed, for the caller to say so: a running session of theirs just lost its
- * sandbox; what sbx refused; what could not be taken back; and what tet.json now holds.
+ * sandbox; those of the earlier ids; what sbx refused; what could not be taken back; and what
+ * tet.json and the knowledge now hold.
  */
 export async function saveSbxConfig(
   projectPath: string,
@@ -1413,11 +1429,29 @@ export async function saveSbxConfig(
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>,
   organization: string | undefined
-): Promise<{ removed: SbxAgentId[]; refused: SbxProblems; failures: string[]; config: SbxProjectConfig }> {
+): Promise<{
+  removed: SbxAgentId[];
+  orphans: SbxAgentId[];
+  refused: SbxProblems;
+  failures: string[];
+  config: SbxProjectConfig;
+  knowledge: SbxKnowledgeConfig;
+}> {
   const previous = await readSbxConfig(projectPath);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   const sandboxes = (await listSandboxes()) ?? new Map();
   const removed: SbxAgentId[] = [];
+  const orphans: SbxAgentId[] = [];
+  for (const [name, workspaces] of sandboxes) {
+    const agentId = orphanAgent(name, workspaces, projectId, projectPath);
+    if (agentId === undefined) {
+      continue;
+    }
+    if (!(await removeSandbox(name))) {
+      throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
+    }
+    orphans.push(agentId);
+  }
   const kept: { agentId: SbxAgentId; name: string }[] = [];
   for (const agentId of SBX_AGENT_IDS) {
     const name = sandboxName(projectId, agentId);
@@ -1489,15 +1523,30 @@ export async function saveSbxConfig(
   };
   const failures =
     Object.keys(refused).length > 0 ? sbxProblemNotices(await apply(applied)).map((notice) => `Not taken back: ${notice}`) : [];
+  const unrevoked: SbxProblems = {};
   for (const { agentId, name } of kept) {
-    const stale = staleMounts(
-      await grantedMounts(agentId, knowledge.previous, previous.paths),
-      await grantedMounts(agentId, knowledge.current, applied.paths)
-    );
+    const current = new Set((await grantsOf(agentId, knowledge.current, applied.paths)).map((grant) => grant.mount));
+    const stale = (await grantsOf(agentId, knowledge.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
     if (stale.length > 0 && (await ensureRunning(name))) {
-      await revokeMounts(name, stale);
+      await revokeMounts(name, stale, unrevoked);
     }
   }
+  // A grant sbx would not take back is still there: its row stays as it was.
+  const stays = new Set(Object.keys(unrevoked.paths ?? {}).map(normalizeHostPath));
+  applied.paths = [
+    ...applied.paths.filter((entry) => !stays.has(normalizeHostPath(entry.path))),
+    ...previous.paths.filter((entry) => stays.has(normalizeHostPath(entry.path))).map((entry) => ({ ...entry, path: contractHome(entry.path) }))
+  ];
+  const appliedKnowledge = { ...knowledge.current };
+  for (const kind of SBX_KNOWLEDGE_KINDS.filter((candidate) => unrevoked.knowledge?.[candidate] !== undefined)) {
+    appliedKnowledge[kind] = knowledge.previous[kind];
+    if (kind === "skills") {
+      appliedKnowledge.skillsFolder = knowledge.previous.skillsFolder;
+    }
+  }
+  for (const [option, rows] of Object.entries(unrevoked) as [SbxOption, Record<string, string>][]) {
+    addProblems(refused, option, rows);
+  }
   await writeSbxConfig(projectPath, applied);
-  return { removed, refused, failures, config: applied };
+  return { removed, orphans, refused, failures, config: applied, knowledge: appliedKnowledge };
 }

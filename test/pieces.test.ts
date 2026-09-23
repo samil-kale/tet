@@ -362,6 +362,8 @@ describe("saving an sbx config", () => {
     secrets?: object[];
     secretsFail?: boolean;
     allowedHosts?: string[];
+    /** More sandboxes `ls` lists, each with the project's folder unless it names another. */
+    others?: { name: string; workspaces?: string[] }[];
   }): { dir: string; projectPath: string } {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
     const projectPath = path.join(dir, "repo");
@@ -379,7 +381,8 @@ const answers = JSON.parse(fs.readFileSync(${JSON.stringify(answerFile)}, "utf8"
 const args = process.argv.slice(2);
 fs.appendFileSync(answers.log, args.join(" ") + "\\n");
 if (args[0] === "ls") {
-  process.stdout.write(JSON.stringify({ sandboxes: [{ name: answers.name, workspaces: answers.workspaces }] }));
+  const others = (answers.others ?? []).map((other) => ({ workspaces: answers.workspaces, ...other }));
+  process.stdout.write(JSON.stringify({ sandboxes: [{ name: answers.name, workspaces: answers.workspaces }, ...others] }));
 } else if (args[0] === "policy" && args[1] === "check") {
   // \`policy check network --json <host>\`: exit 1 with "allowed": false on a denial (sbx.ts).
   const allowed = (answers.allowedHosts ?? []).includes(args[4]);
@@ -451,7 +454,7 @@ if (args[0] === "ls") {
       `ports ${name} --json`,
       `ports ${name} --publish 3000:3000`
     ]);
-    assert.deepEqual(result, { removed: [], refused: {}, failures: [], config: config([port(3000)]) });
+    assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], config: config([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
   });
 
   it("unpublishes what the sandbox has and tet.json dropped, and leaves a port in both alone", async () => {
@@ -536,6 +539,25 @@ if (args[0] === "ls") {
     );
     assert.deepEqual(result, [true, false, true]);
     assert.deepEqual(calls.sort(), ["policy check network --json closed.example.com", "policy check network --json open.example.com"]);
+  });
+
+  it("removes a sandbox an earlier id of the project left, and no other", async () => {
+    const { dir, projectPath } = fakeSbx({
+      published: [],
+      others: [
+        { name: "tet-codex-aaaaaaaaaaaa" },
+        { name: "tet-codex-bbbbbbbbbbbb", workspaces: ["/elsewhere"] },
+        { name: "my-own-sandbox" }
+      ]
+    });
+    const { result, calls } = await withSbx(dir, () =>
+      saveSbxConfig(projectPath, projectId, config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+    );
+    assert.deepEqual(result.orphans, ["codex"]);
+    assert.deepEqual(
+      calls.filter((call) => call.startsWith("rm ")),
+      ["rm tet-codex-aaaaaaaaaaaa --force"]
+    );
   });
 
   it("changes no secret where sbx does not list them, and leaves them out of tet.json", async () => {

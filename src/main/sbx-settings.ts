@@ -79,7 +79,7 @@ export async function saveProjectSbx(
       ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization)
       : {};
     const wanted = withoutProblems(request, knowledge, problems);
-    const { removed, refused, failures, config } = await saveSbxConfig(
+    const { removed, orphans, refused, failures, config, knowledge: applied } = await saveSbxConfig(
       project.path,
       project.id,
       wanted.config,
@@ -88,12 +88,15 @@ export async function saveProjectSbx(
       new Set(Object.keys(local.secrets.values)),
       organization
     );
-    sbxLocal.update(project.id, { secrets: keptValues(config.secrets), variables: keptValues(config.variables), knowledge: wanted.knowledge });
+    sbxLocal.update(project.id, { secrets: keptValues(config.secrets), variables: keptValues(config.variables), knowledge: applied });
     for (const agentId of removed) {
       const message = request.enabled
         ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
         : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
       send("app:notice", { severity: "info", message });
+    }
+    for (const agentId of orphans) {
+      send("app:notice", { severity: "info", message: `An earlier ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.` });
     }
     const left: SbxProblems = { ...problems };
     for (const [option, rows] of Object.entries(refused) as [keyof SbxProblems, Record<string, string>][]) {
