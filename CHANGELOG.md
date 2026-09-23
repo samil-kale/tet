@@ -3,6 +3,16 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.11.3 (2026-09-23)
+
+- **Sandbox knowledge stays on this machine.** Which skills, plugins and instructions a sandbox
+  brings along is no longer written to `tet.json`, since it names this machine's folders. The
+  Knowledge tab lists each installed agent with what it brings, and skills can come from a folder
+  of your choosing instead.
+- **Fixes.** Restarting a saved command clears its old output. An update waits for an install
+  still in use instead of giving up, and quitting no longer hangs when Electron stalls. GameBoy's
+  active tab loses its underline.
+
 ## 0.11.2 (2026-09-22)
 
 - **Shared skills reach every sandbox.** `~/.agents/skills` is brought into the Codex, opencode
