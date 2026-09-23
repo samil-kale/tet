@@ -3,6 +3,18 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.11.4 (2026-09-23)
+
+- **Agents can configure the sandbox.** `tet-ctl sbx-get` and the `sbx-set-*` verbs read and
+  change a project's sandbox configuration: sandboxing itself, ports, paths, hosts, secrets,
+  variables, knowledge and the skills folder.
+- **Saving keeps what can be applied.** A row the policy forbids or this machine lacks is left
+  out, and the rest is saved. A sandboxed tab skips such rows as it starts and says in a notice
+  which ones were skipped.
+- **Fixes.** Changing a path from read-only to read-write, or back, now applies to the sandbox.
+  When sbx refuses something, its reason is shown. Saving removes a sandbox left behind by a
+  project that was closed and opened again.
+
 ## 0.11.3 (2026-09-23)
 
 - **Sandbox knowledge stays on this machine.** Which skills, plugins and instructions a sandbox
