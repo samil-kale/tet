@@ -41,6 +41,8 @@
   --vscode-panel-border: #ebecf0;
 
   --vscode-tab-activeBackground: #f9fef9;
+  /* tet underlines the active tab in the accent, not in the theme's tab.activeBorder. */
+  --vscode-tab-activeBorder: #aeb3c2;
   --vscode-tab-activeForeground: #000000;
   --vscode-tab-inactiveBackground: #f7f8fa;
   --vscode-tab-inactiveForeground: #777777;
