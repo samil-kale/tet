@@ -20,9 +20,18 @@ import type {
   Project,
   ProjectCommand,
   RepositoryState,
+  SbxAccess,
+  SbxKnowledgeConfig,
+  SbxKnowledgeKind,
+  SbxLocalEdits,
+  SbxLocalSave,
+  SbxProjectConfig,
+  SbxStatus,
+  SbxStoredLocal,
   TerminalDescriptor,
   WorktreeRef
 } from "../../shared/types";
+import { SBX_KNOWLEDGE_KINDS, isBadHost, isPort, sbxNeedsRestart } from "../../shared/sbx-rules";
 import { systemPrompt } from "../agents/system-prompt";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
@@ -86,6 +95,15 @@ export interface ControlDeps {
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;
+  /** The SBX Settings dialog's reads and Save (ipc/sbx.ts, sbx-settings.ts). */
+  sbx: {
+    status(project: Project): Promise<SbxStatus>;
+    /** Whether an agent runs on this machine at all: without one, sandboxing cannot be switched off. */
+    anyAgentInstalled(): Promise<boolean>;
+    config(project: Project): Promise<SbxProjectConfig>;
+    stored(projectId: string): SbxStoredLocal;
+    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave): Promise<GitActionResult>;
+  };
 }
 
 export interface ToastTarget {
@@ -319,6 +337,73 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     return { tabs, tabId, found };
   };
 
+  /** A variadic positional's arguments; none is an empty list. */
+  const list = (args: Record<string, unknown>, name: string): string[] => {
+    const value = args[name];
+    return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+  };
+
+  /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
+   *  which only the user can set up there. */
+  const readySbx = async (found: Project): Promise<SbxStatus> => {
+    const status = await deps.sbx.status(found);
+    const missing = !status.installed
+      ? "sbx is not installed"
+      : (status.failure ?? (!status.loggedIn ? "sbx is not signed in" : !status.policyInitialized ? "sbx's network policy is not set up" : undefined));
+    if (missing) {
+      throw new ControlError("bad_args", `${missing}: the user sets it up in ${found.name}'s SBX Settings in TET`);
+    }
+    if (status.blockers.length > 0) {
+      const policy = status.organization ? `${status.organization}'s SBX policy` : "SBX's policy";
+      throw new ControlError("bad_args", `${policy} does not allow ${status.blockers.map((blocker) => `${blocker.allow} (${blocker.what})`).join("; ")}`);
+    }
+    return status;
+  };
+
+  /**
+   * One SBX Settings field changed, then saved as the dialog's Save does, everything else as it
+   * stands. As the dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch
+   * while sandboxing is off. A stored value stays with its row's name; a removed row's goes.
+   */
+  const editSbx = async (
+    args: Record<string, unknown>,
+    caller: ControlRequest["caller"],
+    edit: (loaded: { config: SbxProjectConfig; knowledge: SbxKnowledgeConfig; status: SbxStatus }) => {
+      config?: SbxProjectConfig;
+      knowledge?: SbxKnowledgeConfig;
+    },
+    switching = false
+  ): Promise<Answer> => {
+    const found = project(args, caller);
+    const status = await readySbx(found);
+    const config = await deps.sbx.config(found);
+    const { knowledge } = deps.sbx.stored(found.id);
+    if (!config.enabled && !switching) {
+      throw new ControlError("bad_args", `SBX sandboxing is off for ${found.name}: sbx-set-enabled on first`);
+    }
+    const next = edit({ config, knowledge, status });
+    const request = next.config ?? config;
+    const nextKnowledge = next.knowledge ?? knowledge;
+    const keep = (rows: { env: string }[]): SbxLocalEdits => ({ values: {}, from: Object.fromEntries(rows.map(({ env }) => [env, env])) });
+    const saved = await deps.sbx.save(found, request, {
+      secrets: keep(request.secrets),
+      variables: keep(request.variables),
+      knowledge: nextKnowledge
+    });
+    if (!saved.ok) {
+      throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
+    }
+    return { result: { saved: true, restartRequired: sbxNeedsRestart(config, knowledge, request, nextKnowledge) } };
+  };
+
+  /** An absolute path of this machine, as the dialog's folder picker gives one. */
+  const absolute = (value: string): string => {
+    if (!path.isAbsolute(value)) {
+      throw new ControlError("bad_args", `not an absolute path: ${value}`);
+    }
+    return value;
+  };
+
   return {
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 
@@ -464,6 +549,140 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("not_found", `TET keeps no environment variable named ${name}`);
       }
       return { result: { removed: name } };
+    },
+
+    "sbx-get": async (args, caller) => {
+      const found = project(args, caller);
+      const [status, config] = await Promise.all([deps.sbx.status(found), deps.sbx.config(found)]);
+      return { result: { status, config, stored: deps.sbx.stored(found.id) } };
+    },
+
+    "sbx-set-enabled": async (args, caller) => {
+      const value = text(args, "value", "on or off");
+      if (value !== "on" && value !== "off") {
+        throw new ControlError("bad_args", `not on or off: ${value}`);
+      }
+      // As the dialog's switch, locked where no agent runs on this machine.
+      if (value === "off" && !(await deps.sbx.anyAgentInstalled())) {
+        throw new ControlError("bad_args", "no agent is installed on this machine, so sandboxing cannot be switched off");
+      }
+      return editSbx(args, caller, ({ config }) => ({ config: { ...config, enabled: value === "on" } }), true);
+    },
+
+    "sbx-set-ports": (args, caller) => {
+      const ports = list(args, "ports").map((entry) => {
+        const [host, container, ...rest] = entry.split(":");
+        if (rest.length > 0 || container === undefined || !isPort(host) || !isPort(container)) {
+          throw new ControlError("bad_args", `not <host>:<container>, two whole numbers from 1 to 65535: ${entry}`);
+        }
+        return { host: host.trim(), container: container.trim() };
+      });
+      return editSbx(args, caller, ({ config }) => ({ config: { ...config, ports } }));
+    },
+
+    "sbx-set-paths": (args, caller) => {
+      const paths = list(args, "paths").map((entry) => {
+        // The last colon: a Windows path has one of its own.
+        const at = entry.lastIndexOf(":");
+        const access = entry.slice(at + 1);
+        if (at < 0 || (access !== "ro" && access !== "rw")) {
+          throw new ControlError("bad_args", `not <path>:<ro|rw>: ${entry}`);
+        }
+        return { path: absolute(entry.slice(0, at)), access: access as SbxAccess };
+      });
+      return editSbx(args, caller, ({ config }) => ({ config: { ...config, paths } }));
+    },
+
+    "sbx-set-hosts": (args, caller) => {
+      const hosts = list(args, "hosts")
+        .map((host) => host.trim())
+        .filter(Boolean);
+      return editSbx(args, caller, ({ config, status }) => {
+        // As the dialog's Hosts tab: a local rule does not apply under an organization's governance.
+        if (status.organization) {
+          throw new ControlError("bad_args", `${status.organization} manages sbx's network policy, so hosts set here do not apply`);
+        }
+        return { config: { ...config, hosts } };
+      });
+    },
+
+    "sbx-set-secrets": (args, caller) => {
+      const secrets = list(args, "secrets").map((entry) => {
+        const at = entry.indexOf("=");
+        const env = entry.slice(0, at).trim();
+        const hosts = entry
+          .slice(at + 1)
+          .split(",")
+          .map((host) => host.trim())
+          .filter(Boolean);
+        if (at < 0 || !isEnvName(env) || hosts.length === 0 || hosts.some(isBadHost)) {
+          throw new ControlError("bad_args", `not <NAME>=<host>[,<host>...] with hosts without scheme or port: ${entry}`);
+        }
+        return { env, hosts };
+      });
+      const twice = secrets.find((secret, index) => secrets.findIndex((other) => other.env === secret.env) !== index);
+      if (twice) {
+        throw new ControlError("bad_args", `${twice.env} is there twice`);
+      }
+      return editSbx(args, caller, ({ config }) => {
+        const taken = config.variables.find((variable) => secrets.some((secret) => secret.env === variable.env));
+        if (taken) {
+          throw new ControlError("bad_args", `${taken.env} is a variable already (sbx-set-variables)`);
+        }
+        return { config: { ...config, secrets } };
+      });
+    },
+
+    "sbx-set-variables": (args, caller) => {
+      const variables = list(args, "variables").map((name) => {
+        const env = name.trim();
+        if (!isEnvName(env)) {
+          throw new ControlError("bad_args", `not an environment variable name: ${name}`);
+        }
+        if (isReservedName(env)) {
+          throw new ControlError("bad_args", `${env} is TET's own to set in a tab (PATH, TET_*)`);
+        }
+        return { env };
+      });
+      // `sbx run -e NAME` reads the value from this machine's environment, which on win32 ignores case.
+      const twice = variables.find(
+        (variable, index) => variables.findIndex((other) => machineName(other.env) === machineName(variable.env)) !== index
+      );
+      if (twice) {
+        throw new ControlError("bad_args", `${twice.env} is there twice`);
+      }
+      return editSbx(args, caller, ({ config }) => {
+        const taken = config.secrets.find((secret) => variables.some((variable) => variable.env === secret.env));
+        if (taken) {
+          throw new ControlError("bad_args", `${taken.env} is a secret already (sbx-set-secrets)`);
+        }
+        return { config: { ...config, variables } };
+      });
+    },
+
+    "sbx-set-knowledge": (args, caller) => {
+      const kind = text(args, "kind", "kind");
+      const access = text(args, "access", "off, ro or rw");
+      if (!SBX_KNOWLEDGE_KINDS.some((candidate) => candidate === kind)) {
+        throw new ControlError("bad_args", `unknown kind: ${kind} (one of ${SBX_KNOWLEDGE_KINDS.join(", ")})`);
+      }
+      if (access !== "off" && access !== "ro" && access !== "rw") {
+        throw new ControlError("bad_args", `not off, ro or rw: ${access}`);
+      }
+      return editSbx(args, caller, ({ knowledge }) => ({
+        knowledge: { ...knowledge, [kind as SbxKnowledgeKind]: access === "off" ? false : access }
+      }));
+    },
+
+    "sbx-set-skills-folder": (args, caller) => {
+      const folder = typeof args.path === "string" && args.path !== "" ? absolute(args.path) : undefined;
+      return editSbx(args, caller, ({ knowledge }) => {
+        const next = { ...knowledge, skillsFolder: folder };
+        if (folder === undefined) {
+          delete next.skillsFolder;
+        }
+        return { knowledge: next };
+      });
     },
 
     "tabs-list": (args, caller) => ({ result: terminals(project(args, caller)).inspect() }),

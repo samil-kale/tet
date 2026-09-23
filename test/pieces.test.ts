@@ -398,6 +398,12 @@ if (args[0] === "ls") {
 } else if (args[2] === "--publish" && args[3] === answers.refuse) {
   process.stderr.write(answers.refusal);
   process.exit(1);
+} else if (args[0] === "ports" && (args[2] === "--publish" || args[2] === "--unpublish")) {
+  // Kept, so what a later \`ports --json\` lists is what was published and not taken back.
+  const [host, sandbox] = args[3].split(":").map(Number);
+  const others = answers.published.filter((entry) => entry.host_port !== host || entry.sandbox_port !== sandbox);
+  answers.published = args[2] === "--publish" ? [...others, { host_port: host, sandbox_port: sandbox }] : others;
+  fs.writeFileSync(${JSON.stringify(answerFile)}, JSON.stringify(answers));
 }
 `
     );
@@ -428,7 +434,7 @@ if (args[0] === "ls") {
   async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
     const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxConfig(projectPath, config(setup.before.map(port)));
-    const saved = await withSbx(dir, () => saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set()));
+    const saved = await withSbx(dir, () => saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), NO_KNOWLEDGE, { previous: new Map(), current: new Map() }, new Set()));
     return { ...saved, projectPath };
   }
 
@@ -452,12 +458,21 @@ if (args[0] === "ls") {
     );
   });
 
-  it("reports a refused publish under the agent's name, keeping the port in tet.json", async () => {
-    const { result, projectPath } = await save({ has: [], before: [3000], now: [3000], refuse: "3000:3000" });
+  it("reports a refused publish under the agent's name, and leaves tet.json as it was", async () => {
+    const { result, projectPath } = await save({ has: [], before: [], now: [3000], refuse: "3000:3000" });
     assert.deepEqual(result.failures, [
       "The Claude sandbox could not publish port 3000:3000 (publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published)."
     ]);
-    assert.deepEqual((await readSbxConfig(projectPath)).ports, [port(3000)]);
+    assert.deepEqual((await readSbxConfig(projectPath)).ports, []);
+  });
+
+  it("puts back what it already changed when sbx refuses a later port", async () => {
+    const { calls, projectPath } = await save({ has: [4000], before: [4000], now: [3000], refuse: "3000:3000" });
+    assert.deepEqual(
+      calls.filter((call) => call.includes("publish")),
+      [`ports ${name} --unpublish 4000:4000`, `ports ${name} --publish 3000:3000`, `ports ${name} --publish 4000:4000`]
+    );
+    assert.deepEqual((await readSbxConfig(projectPath)).ports, [port(4000)]);
   });
 
   it("does not start the sandbox where no port is configured and none was", async () => {
@@ -498,7 +513,7 @@ if (args[0] === "ls") {
       ["ADDED", "v-added"]
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]))
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, { previous: new Map(), current: values }, new Set(["CHANGED"]))
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -532,7 +547,7 @@ if (args[0] === "ls") {
     const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
     const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]))
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, { previous: new Map(), current: new Map([["TOKEN", "v"]]) }, new Set(["TOKEN"]))
     );
     assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
     assert.deepEqual(result.failures, ["The Claude sandbox could not list its secrets, so none were changed."]);

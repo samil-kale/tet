@@ -1,7 +1,5 @@
 import { ipcMain } from "electron";
-import { getAgent } from "../agents";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import { errorMessage } from "../../shared/errors";
 import type {
   GitActionResult,
   SbxKnowledgeSource,
@@ -19,9 +17,9 @@ import {
   readHostAllowed,
   readMountsAllowed,
   readSbxStatus,
-  runSbxLogin,
-  saveSbxConfig
+  runSbxLogin
 } from "../sbx";
+import { saveProjectSbx } from "../sbx-settings";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 
 /** The sandbox settings dialog: what sbx says, and what the project stores. */
@@ -53,42 +51,12 @@ export function registerSbxIpc({
   ipcMain.handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
   // The Knowledge tab's agents; asked fresh, as agents are installed outside tet.
   ipcMain.handle("sbx:knowledge-sources", (): Promise<SbxKnowledgeSource[]> => readKnowledgeSources());
-  // Stores the typed values first, so a machine without a keyring changes nothing; then
-  // writes tet.json, a failure putting the values back. Notices for the sandboxes saveSbxConfig
-  // removed, an error for what sbx refused.
+  // The dialog's Save, shared with tet-ctl's sbx-set-* verbs (sbx-settings.ts).
   ipcMain.handle(
     "sbx:save-config",
     async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<GitActionResult> => {
       const project = store.get(projectId);
-      if (!project) {
-        return { ok: false, error: MISSING_REPOSITORY.error };
-      }
-      const stored = sbxLocal.encrypted(project.id);
-      const previous = sbxLocal.knowledge(project.id);
-      try {
-        sbxLocal.update(project.id, local);
-        const { removed, failures } = await saveSbxConfig(
-          project.path,
-          project.id,
-          request,
-          { previous, current: sbxLocal.knowledge(project.id) },
-          sbxLocal.values(project.id, "secrets"),
-          new Set(Object.keys(local.secrets.values))
-        );
-        for (const agentId of removed) {
-          const message = request.enabled
-            ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
-            : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
-          send("app:notice", { severity: "info", message });
-        }
-        if (failures.length > 0) {
-          return { ok: false, error: `Saved, but not applied: ${failures.join(" ")}` };
-        }
-        return { ok: true };
-      } catch (error) {
-        sbxLocal.restore(project.id, stored);
-        return { ok: false, error: errorMessage(error) };
-      }
+      return project ? saveProjectSbx({ sbxLocal, send }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
     }
   );
 }

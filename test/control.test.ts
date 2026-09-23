@@ -10,8 +10,17 @@ import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/con
 import type { EnvAsk } from "../src/main/environment";
 import { tabControlToken } from "../src/main/control/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
-import { EMPTY_REPOSITORY_STATE, withSettings } from "../src/shared/types";
-import type { AppSettings, Project, ProjectCommand, TerminalDescriptor } from "../src/shared/types";
+import { EMPTY_REPOSITORY_STATE, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
+import type {
+  AppSettings,
+  Project,
+  ProjectCommand,
+  SbxKnowledgeConfig,
+  SbxLocalSave,
+  SbxProjectConfig,
+  SbxStatus,
+  TerminalDescriptor
+} from "../src/shared/types";
 import { eventually, tetCtl as runCli } from "./helpers";
 import type { Run } from "./helpers";
 
@@ -62,6 +71,8 @@ interface Calls {
   /** Per `env-request`, what the dialog was asked; the names of those whose caller left. */
   envAsks: EnvAsk[];
   envWithdrawn: string[][];
+  /** Per SBX Settings save, the project, the configuration and what stays on this machine. */
+  sbxSaved: [string, SbxProjectConfig, SbxLocalSave][];
 }
 
 /** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
@@ -89,6 +100,10 @@ let envNames: string[];
  *  up until the caller leaves. */
 let dialogAnswer: string[] | undefined;
 const DIALOG_STAYS_OPEN = ["(stays open)"];
+/** The faked SBX Settings: sbx's status, and what a save leaves behind. */
+let sbxStatus: SbxStatus;
+let sbxConfig: SbxProjectConfig;
+let sbxKnowledge: SbxKnowledgeConfig;
 
 function terminalsOf(projectId: string): ControlTerminals {
   return {
@@ -240,6 +255,18 @@ function deps(): ControlDeps {
           })
         );
       }
+    },
+    sbx: {
+      status: async () => sbxStatus,
+      anyAgentInstalled: async () => true,
+      config: async () => structuredClone(sbxConfig),
+      stored: () => ({ secrets: ["API_KEY"], variables: [], knowledge: structuredClone(sbxKnowledge) }),
+      save: async (project, request, local) => {
+        calls.sbxSaved.push([project.id, request, local]);
+        sbxConfig = request;
+        sbxKnowledge = local.knowledge;
+        return { ok: true };
+      }
     }
   };
 }
@@ -295,7 +322,8 @@ describe("tet-ctl against the control server", () => {
       editorsOpened: [],
       inspected: [],
       envAsks: [],
-      envWithdrawn: []
+      envWithdrawn: [],
+      sbxSaved: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -322,6 +350,9 @@ describe("tet-ctl against the control server", () => {
     refuseRename = undefined;
     envNames = ["GITLAB_TOKEN"];
     dialogAnswer = undefined;
+    sbxStatus = { installed: true, loggedIn: true, policyInitialized: true, blockers: [] };
+    sbxConfig = { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
+    sbxKnowledge = EMPTY_SBX_KNOWLEDGE;
   });
 
   it("answers help by itself, with every verb", async () => {
@@ -683,7 +714,10 @@ describe("tet-ctl against the control server", () => {
       ["restart-app", "--confirm"],
       ["env-request", "GITLAB_TOKEN"],
       ["env-list"],
-      ["env-remove", "GITLAB_TOKEN"]
+      ["env-remove", "GITLAB_TOKEN"],
+      ["sbx-get"],
+      ["sbx-set-enabled", "off"],
+      ["sbx-set-hosts", "example.com"]
     ];
     for (const args of refused) {
       assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
@@ -696,6 +730,72 @@ describe("tet-ctl against the control server", () => {
     );
     assert.equal(settings.darkTheme, "dark-modern");
     assert.equal(settings.prompts.commitMessage, "");
+    assert.deepEqual(calls.sbxSaved, []);
+  });
+
+  it("changes one SBX setting and saves the rest as it stands, a stored value kept with its name", async () => {
+    const hosts = await tetCtl(["sbx-set-hosts", "example.com", "*.example.org:8080"]);
+    assert.deepEqual(hosts.result, { saved: true, restartRequired: false }, "a host applies at once");
+    const [[projectId, request, local]] = calls.sbxSaved;
+    assert.equal(projectId, PROJECT.id);
+    assert.deepEqual(request, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }], hosts: ["example.com", "*.example.org:8080"] });
+    assert.deepEqual(local, {
+      secrets: { values: {}, from: { API_KEY: "API_KEY" } },
+      variables: { values: {}, from: {} },
+      knowledge: EMPTY_SBX_KNOWLEDGE
+    });
+    const folder = path.resolve("/data/one");
+    const paths = await tetCtl(["sbx-set-paths", `${folder}:ro`]);
+    assert.deepEqual(paths.result, { saved: true, restartRequired: true }, "a mount is added at a tab's start");
+    assert.deepEqual(sbxConfig.paths, [{ path: folder, access: "ro" }]);
+    assert.equal((await tetCtl(["sbx-set-ports", "8080:80"])).status, EXIT_CODES.ok);
+    assert.deepEqual(sbxConfig.ports, [{ host: "8080", container: "80" }]);
+    assert.equal((await tetCtl(["sbx-set-variables", "DB_URL"])).status, EXIT_CODES.ok);
+    assert.deepEqual(sbxConfig.variables, [{ env: "DB_URL" }]);
+    assert.equal((await tetCtl(["sbx-set-knowledge", "skills", "ro"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["sbx-set-skills-folder", folder])).status, EXIT_CODES.ok);
+    assert.deepEqual(sbxKnowledge, { ...EMPTY_SBX_KNOWLEDGE, skills: "ro", skillsFolder: folder });
+    assert.equal((await tetCtl(["sbx-set-skills-folder"])).status, EXIT_CODES.ok, "no path: each agent's own");
+    assert.deepEqual(sbxKnowledge, { ...EMPTY_SBX_KNOWLEDGE, skills: "ro" });
+    assert.equal((await tetCtl(["sbx-set-hosts"])).status, EXIT_CODES.ok, "none clears them");
+    assert.deepEqual(sbxConfig.hosts, []);
+    assert.deepEqual((await tetCtl(["sbx-get"])).result, {
+      status: sbxStatus,
+      config: sbxConfig,
+      stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge }
+    });
+  });
+
+  it("refuses an SBX setting the dialog would not save", async () => {
+    const refused = [
+      ["sbx-set-ports", "8080"],
+      ["sbx-set-ports", "8080:0"],
+      ["sbx-set-paths", "relative:ro"],
+      ["sbx-set-paths", `${path.resolve("/data")}:x`],
+      ["sbx-set-secrets", "TOKEN=https://example.com"],
+      ["sbx-set-secrets", "TOKEN="],
+      ["sbx-set-variables", "PATH"],
+      ["sbx-set-variables", "1X"],
+      ["sbx-set-variables", "API_KEY"],
+      ["sbx-set-knowledge", "memory", "ro"],
+      ["sbx-set-enabled", "maybe"]
+    ];
+    for (const args of refused) {
+      assert.equal((await tetCtl(args)).status, EXIT_CODES.usage, args.join(" "));
+    }
+    sbxStatus = { ...sbxStatus, organization: "acme" };
+    const governed = await tetCtl(["sbx-set-hosts", "example.com"]);
+    assert.match(governed.stderr, /acme manages/, "a local host rule does not apply under governance");
+    sbxStatus = { installed: true, loggedIn: false, policyInitialized: false, blockers: [] };
+    assert.match((await tetCtl(["sbx-set-enabled", "on"])).stderr, /not signed in/);
+    assert.deepEqual(calls.sbxSaved, []);
+  });
+
+  it("changes nothing but the switch while sandboxing is off", async () => {
+    sbxConfig = EMPTY_SBX_CONFIG;
+    assert.match((await tetCtl(["sbx-set-hosts", "example.com"])).stderr, /sbx-set-enabled on first/);
+    assert.deepEqual((await tetCtl(["sbx-set-enabled", "on"])).result, { saved: true, restartRequired: false });
+    assert.equal(sbxConfig.enabled, true);
   });
 
   it("answers a sandboxed tab for its own project only", async () => {

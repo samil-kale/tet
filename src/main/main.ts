@@ -20,8 +20,10 @@ import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, type ProjectDeps } from "./projects";
-import { configureSandboxes } from "./sbx";
+import { configureSandboxes, readLiveSbxConfig, readSbxStatus } from "./sbx";
 import { SbxLocalStore } from "./sbx-local";
+import { saveProjectSbx } from "./sbx-settings";
+import { anyAgentInstalled } from "./requirements";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv, setStoredEnv } from "./terminals/pty";
@@ -403,7 +405,14 @@ async function startControl(): Promise<void> {
         notify: showDesktopNotification,
         applyTheme,
         environment,
-        envRequests
+        envRequests,
+        sbx: {
+          status: (project) => readSbxStatus(project.path, project.id),
+          anyAgentInstalled,
+          config: (project) => readLiveSbxConfig(project.path, project.id),
+          stored: (projectId) => sbxLocal.stored(projectId),
+          save: (project, request, local) => saveProjectSbx({ sbxLocal, send }, project, request, local)
+        }
       },
       controlChannel.token,
       controlChannel.port

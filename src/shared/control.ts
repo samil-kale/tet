@@ -1,3 +1,4 @@
+import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
 import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
 
 /**
@@ -195,6 +196,76 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary: "What the git pane shows for a project: branch, upstream, changed files, stashes.",
     positionals: [],
     sandbox: "ownProject"
+  },
+  {
+    verb: "sbx-get",
+    group: "TET itself",
+    usage: "sbx-get [--project <id>]",
+    summary:
+      "A project's SBX Settings: sbx's status, the configuration, and which secrets and variables hold a value here, never the values.",
+    positionals: []
+  },
+  {
+    verb: "sbx-set-enabled",
+    group: "TET itself",
+    usage: "sbx-set-enabled <on|off> [--project <id>]",
+    summary: "Run the project's agent tabs in sbx sandboxes, or not. Off removes its sandboxes.",
+    positionals: ["value"]
+  },
+  {
+    verb: "sbx-set-ports",
+    group: "TET itself",
+    usage: "sbx-set-ports [<host>:<container>...] [--project <id>]",
+    summary: "Replace the ports forwarded from this machine into the sandboxes; none clears them.",
+    positionals: ["ports"],
+    variadic: true
+  },
+  {
+    verb: "sbx-set-paths",
+    group: "TET itself",
+    usage: "sbx-set-paths [<absolute-path>:<ro|rw>...] [--project <id>]",
+    summary: "Replace the folders and files of this machine mounted into the sandboxes; none clears them.",
+    positionals: ["paths"],
+    variadic: true
+  },
+  {
+    verb: "sbx-set-hosts",
+    group: "TET itself",
+    usage: "sbx-set-hosts [<host>...] [--project <id>]",
+    summary: "Replace the hosts the sandboxes may reach beyond sbx's policy (host, *.domain, optional :port); none clears them.",
+    positionals: ["hosts"],
+    variadic: true
+  },
+  {
+    verb: "sbx-set-secrets",
+    group: "TET itself",
+    usage: "sbx-set-secrets [<NAME>=<host>[,<host>...]...] [--project <id>]",
+    summary:
+      "Replace the secrets: a variable the sandbox sees as a placeholder, sent as its value only to those hosts. The user types the values in TET's SBX Settings, never you.",
+    positionals: ["secrets"],
+    variadic: true
+  },
+  {
+    verb: "sbx-set-variables",
+    group: "TET itself",
+    usage: "sbx-set-variables [<NAME>...] [--project <id>]",
+    summary: "Replace the variables set in the sandboxes with their real value. The user types the values in TET's SBX Settings, never you.",
+    positionals: ["variables"],
+    variadic: true
+  },
+  {
+    verb: "sbx-set-knowledge",
+    group: "TET itself",
+    usage: `sbx-set-knowledge <${SBX_KNOWLEDGE_KINDS.join("|")}> <off|ro|rw> [--project <id>]`,
+    summary: "Mount the agents' own skills, plugins or instructions file (CLAUDE.md, AGENTS.md) into the sandboxes, or not.",
+    positionals: ["kind", "access"]
+  },
+  {
+    verb: "sbx-set-skills-folder",
+    group: "TET itself",
+    usage: "sbx-set-skills-folder [absolute-path] [--project <id>]",
+    summary: "Mount one folder as every agent's skills instead of each one's own; no path goes back to their own.",
+    positionals: ["path"]
   },
   {
     verb: "restart-app",

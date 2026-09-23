@@ -13,6 +13,7 @@ import type {
   SbxStoredLocal
 } from "../../shared/types";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
+import { isBadHost, isPort, sbxNeedsRestart } from "../../shared/sbx-rules";
 import { isWindows } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
 import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
@@ -73,12 +74,6 @@ export function fromConfig(config: SbxProjectConfig, stored: SbxStoredLocal): Fi
     ),
     variables: config.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env }))
   };
-}
-
-/** What `sbx ports --publish` and `sbx run -p` take: a whole number from 1 to 65535. */
-function isPort(value: string): boolean {
-  const trimmed = value.trim();
-  return /^\d{1,5}$/.test(trimmed) && Number(trimmed) >= 1 && Number(trimmed) <= 65535;
 }
 
 /** A port row Save refuses: anything but two ports or two empty sides (dropped). */
@@ -144,12 +139,6 @@ function isBadVariableRow(row: VariableRow, state: FieldsState): boolean {
 }
 
 const BAD_VARIABLE = "Needs a variable name no secret or other variable holds, not PATH or TET_*";
-
-/** A scheme or port, which `sbx secret set-custom` rejects (measured), or a leading "-", which sbx
- *  would read as an option of its own. */
-function isBadHost(host: string): boolean {
-  return /^-|[/:]/.test(host);
-}
 
 /** Why Save waits, or `undefined`: every port row two ports or empty, every secret and variable row
  *  complete or empty — the rows mark which is not — and skills from a folder with one picked. */
@@ -224,22 +213,11 @@ function holdsValue(row: { from?: string }, stored: readonly string[]): boolean 
   return row.from !== undefined && stored.includes(row.from);
 }
 
-/**
- * Whether the edits since `loaded` and `loadedKnowledge` reach a running tab only once it restarts:
- * a mount is added at a tab's start (a removed one goes at Save), and `sbx run -e` sets a variable,
- * a new secret's placeholder included, only there (sbx.ts's prepareSbxRun). Ports, hosts and a
- * secret's value or hosts apply at Save.
- */
+/** Whether the edits since opening reach a running tab only once it restarts (sbxNeedsRestart);
+ *  a variable's value is set by `sbx run -e` too. */
 export function needsRestart(loaded: SbxProjectConfig, loadedKnowledge: SbxKnowledgeConfig, state: FieldsState): boolean {
-  const config = toConfig(state);
-  const knowledge = toKnowledge(state.knowledge);
-  const names = (variables: SbxProjectConfig["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
   return (
-    KNOWLEDGE_LABELS.some(({ kind }) => knowledge[kind] !== false && knowledge[kind] !== loadedKnowledge[kind]) ||
-    (knowledge.skills !== false && knowledge.skillsFolder !== loadedKnowledge.skillsFolder) ||
-    config.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
-    config.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
-    names(config.variables) !== names(loaded.variables) ||
+    sbxNeedsRestart(loaded, loadedKnowledge, toConfig(state), toKnowledge(state.knowledge)) ||
     state.variables.some((row) => row.value !== "")
   );
 }
