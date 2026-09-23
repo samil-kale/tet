@@ -797,9 +797,12 @@ const MOUNT_CONCURRENCY = 6;
 /**
  * Applies live bind mounts on *every* start: unlike a file on the sandbox's disk, a bind mount
  * does not survive a stop (measured: the target was empty again), and `sbx stop` can happen
- * outside tet, so "already mounted" cannot be cached. Re-mounting is idempotent; access changes and
- * removals are narrowed at Save (revokeMounts), so this never hits "already mounted read-write;
- * cannot also mount read-only" (verified, 2026-09-08).
+ * outside tet, so "already mounted" cannot be cached. Re-mounting is idempotent. A grant does
+ * survive a stop, though, with its access: one given with the other access before (a change that
+ * never reached this sandbox's Save) refuses the mount — "409 Conflict: host path … is already
+ * mounted read-write in this sandbox; cannot also mount it read-only" — so it is unmounted by
+ * `unmount` and mounted again, which a running sandbox takes (measured, 2026-09-23, 0.42.1: ro
+ * afterwards, writes refused).
  *
  * Concurrent, since each `sbx mount` costs ~0.45s: 6 at once took 1.6s instead of 2.6s, all binds
  * present, ro honoured; 12 at once hit "docker hub refresh lock held by another process" (measured,
@@ -808,17 +811,34 @@ const MOUNT_CONCURRENCY = 6;
  * `started` is a start already underway (`SbxRunRequest.warm`), joined instead of started again —
  * but only its *success* counts: it may have run before the sandbox existed (two tabs of one agent
  * starting together, the second one seeing the first one's), and mounting a sandbox that is not
- * running is what this line is here to prevent.
+ * running is what this line is here to prevent. Returns what sbx refused, by `mount`, with its
+ * reason (sbxRefusal).
  */
-async function mountAll(name: string, specs: string[], onData?: OnData, started?: Promise<boolean>): Promise<string[]> {
+async function mountAll(
+  name: string,
+  specs: { mount: string; unmount?: string }[],
+  onData?: OnData,
+  started?: Promise<boolean>
+): Promise<Map<string, string>> {
   if (specs.length === 0) {
-    return [];
+    return new Map();
   }
   if (!(await started)) {
     await ensureRunning(name, onData);
   }
-  const mounted = await mapLimited(specs, MOUNT_CONCURRENCY, async (spec) => (await runSbx(["mount", name, spec], { onData })).ok);
-  return specs.filter((_, index) => !mounted[index]);
+  const mount = async ({ mount: spec, unmount }: { mount: string; unmount?: string }): Promise<string | undefined> => {
+    const result = await runSbx(["mount", name, spec], { onData });
+    if (result.ok) {
+      return undefined;
+    }
+    if (unmount === undefined || !/already mounted .*cannot also mount/i.test(sbxError(result))) {
+      return sbxRefusal(result);
+    }
+    const again = (await runSbx(["umount", name, unmount], { onData })).ok ? await runSbx(["mount", name, spec], { onData }) : result;
+    return again.ok ? undefined : sbxRefusal(again);
+  };
+  const refused = await mapLimited(specs, MOUNT_CONCURRENCY, mount);
+  return new Map(specs.flatMap((spec, index) => (refused[index] === undefined ? [] : [[spec.mount, refused[index]] as const])));
 }
 
 /**
@@ -1173,23 +1193,26 @@ export async function prepareSbxRun(
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
   const entries = await sandboxKnowledgeFor(agentId, knowledge.skillsFolder);
-  const grants: { option: SbxOption; row: string; mount: string }[] = [
+  const grants: (MountSpec & { option: SbxOption; row: string })[] = [
     ...SBX_KNOWLEDGE_KINDS.flatMap((kind) =>
       knowledgeMountSpecs({ skills: [], plugins: [], instructions: [], [kind]: entries[kind] }, knowledge).map((spec) => ({
+        ...spec,
         option: "knowledge" as const,
-        row: kind,
-        mount: spec.mount
+        row: kind
       }))
     ),
-    ...config.paths.map((entry) => ({ option: "paths" as const, row: entry.path, mount: pathMountSpecs(entry).mount }))
+    ...config.paths.map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path }))
   ];
-  const failed = await mountAll(name, [...own, ...grants.map((grant) => grant.mount)], onData, created ? undefined : request.warm);
-  const ownFailed = failed.filter((spec) => own.includes(spec));
+  const refused = await mountAll(name, [...own.map((mount) => ({ mount })), ...grants], onData, created ? undefined : request.warm);
+  const ownFailed = own.filter((spec) => refused.has(spec));
   if (ownFailed.length > 0) {
     throw new Error(`sbx did not mount tet's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);
   }
-  for (const grant of grants.filter((entry) => failed.includes(entry.mount))) {
-    addProblems(problems, grant.option, { [grant.row]: SBX_PROBLEM.refused });
+  for (const grant of grants) {
+    const reason = refused.get(grant.mount);
+    if (reason !== undefined) {
+      addProblems(problems, grant.option, { [grant.row]: reason });
+    }
   }
   if (created) {
     // Not under governance, where no local rule applies (allowHosts).
