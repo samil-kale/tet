@@ -4,7 +4,7 @@
  * extension's theme file as it ships, renamed. See dark-modern.css for the layer. A color the
  * theme leaves unset takes VS Code's registry fallback — what VS Code draws with this theme — or,
  * for a border, the theme's own border color; each is marked below. Exceptions: the hovered row,
- * the active tab's border and the session marks on it, each marked where it stands.
+ * the tabs' borders and the session marks on the active one, each marked where it stands.
  */
 :root[data-theme="light-gameboy"] {
   color-scheme: light;
@@ -47,7 +47,9 @@
   --tet-sessionMark-activeForeground: #c4bebb;
   --vscode-tab-inactiveBackground: #c4bebb;
   --vscode-tab-inactiveForeground: #494786;
-  --vscode-tab-border: #c4bebb;
+  /* Not the theme's #c4bebb, the inactive tab's own background, which hides the line between
+     tabs: the theme's border color. */
+  --vscode-tab-border: #494786;
 
   /* tet's own, the same as Dark Modern's — see the note there; not the theme's #49478640, the one
      hover grey every tet theme shares. */

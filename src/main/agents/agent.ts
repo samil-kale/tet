@@ -1,5 +1,5 @@
 import type { ThemeDefinition } from "../../shared/themes";
-import type { AgentId, SbxKnowledgeConfig } from "../../shared/types";
+import type { AgentId, SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid; opencode: "ses_..."). */
@@ -102,13 +102,6 @@ export interface SpawnPreparation {
   executable?: string;
 }
 
-/** One piece of the agent's host knowledge, and where the sandboxed CLI reads it. */
-export interface SandboxKnowledgeEntry {
-  host: string;
-  /** Absolute container path, under `SANDBOX_HOME`. */
-  target: string;
-}
-
 /** What an agent hands a sandboxed tab — see AgentDefinition.prepareSandboxSpawn. */
 export interface SandboxPreparation {
   /** Appended after `sbx run`'s own "--". */
@@ -194,11 +187,12 @@ export interface AgentDefinition {
    */
   sandboxEnv?: string[];
   /**
-   * The agent's shareable knowledge on the host, per `SbxKnowledgeConfig` kind — never its config
-   * directory (sbx.ts's fixedMountSpecs). sbx.ts drops paths that do not exist, and all of it while
-   * the agent is not installed on this host. Omitted by the shell.
+   * The agent's shareable knowledge on the host, per `SbxKnowledgeKind` — never its config
+   * directory (sbx.ts's fixedMountSpecs). Targets under `SANDBOX_HOME`; a chosen skills folder
+   * goes at the `skills` targets. sbx.ts drops paths that do not exist, and all of it while the
+   * agent is not installed on this host. Omitted by the shell.
    */
-  sandboxKnowledge?: () => Record<keyof SbxKnowledgeConfig, SandboxKnowledgeEntry[]>;
+  sandboxKnowledge?: () => Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
   /**
    * Absolute container path where the sandboxed CLI reads `~/.agents/skills`, the skills folder no
    * agent owns: mounted whether or not the agent is installed here, unless one of its own skills

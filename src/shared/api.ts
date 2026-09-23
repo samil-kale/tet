@@ -27,6 +27,7 @@ import type {
   ProviderId,
   RepositoryState,
   Requirements,
+  SbxKnowledgeSource,
   SbxLocalSave,
   SbxPath,
   SbxProjectConfig,
@@ -80,7 +81,9 @@ export interface TETApi {
     getConfig(projectId: string): Promise<SbxProjectConfig>;
     /** What the dialog keeps on this machine — never a value. */
     stored(projectId: string): Promise<SbxStoredLocal>;
-    /** Stores `local` (the values typed at this Save) on this machine, then writes
+    /** The agents installed here and what each brings of its own knowledge. */
+    knowledgeSources(): Promise<SbxKnowledgeSource[]>;
+    /** Stores `local` (the values typed at this Save, the knowledge) on this machine, then writes
      *  tet.json; a sandbox whose folders changed is removed. */
     saveConfig(projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<GitActionResult>;
     /** Per entry, whether sbx's filesystem policy lets it be mounted with its access. */

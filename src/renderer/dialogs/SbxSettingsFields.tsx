@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { Fragment, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type {
   SbxAccess,
   SbxKnowledgeConfig,
+  SbxKnowledgeEntry,
+  SbxKnowledgeKind,
+  SbxKnowledgeSource,
   SbxLocalEdits,
   SbxLocalSave,
   SbxPath,
@@ -15,25 +18,36 @@ import { ActionLink } from "../ui/ActionLink";
 import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox } from "../ui/Field";
+import { AgentIcon } from "../ui/agent-icons";
+import { FolderOpenIcon } from "../ui/icons";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
   { value: "ro", label: "Read" },
   { value: "rw", label: "Read+Write" }
 ];
 
-/** One row per `SbxKnowledgeConfig` kind, in display order. Labels only; the per-agent host paths
- *  are `AgentDefinition.sandboxKnowledge`. */
-const KNOWLEDGE_LABELS: { kind: keyof SbxKnowledgeConfig; label: string }[] = [
+/** Where the skills come from: `SbxKnowledgeConfig.skillsFolder` absent, or set. */
+type SkillsSource = "agents" | "folder";
+
+const SKILLS_SOURCE_OPTIONS: { value: SkillsSource; label: string }[] = [
+  { value: "agents", label: "Each agent's own" },
+  { value: "folder", label: "A folder" }
+];
+
+/** One row per `SbxKnowledgeKind`, in display order. Labels only; the per-agent host paths are
+ *  `AgentDefinition.sandboxKnowledge`. */
+const KNOWLEDGE_LABELS: { kind: SbxKnowledgeKind; label: string }[] = [
   { kind: "skills", label: "Skills" },
   { kind: "plugins", label: "Plugins" },
-  { kind: "instructions", label: "Instructions file (CLAUDE.md / AGENTS.md)" }
+  { kind: "instructions", label: "CLAUDE.md / AGENTS.md" }
 ];
 
 /** How long typing in a secret's hosts pauses before they are checked against sbx's policy. */
 const HOST_CHECK_DELAY_MS = 500;
 
 export interface FieldsState {
-  /** tet.json's `knowledge`; what each kind mounts is `AgentDefinition.sandboxKnowledge`. */
+  /** This machine's (`sbx:stored`); what each kind mounts is `AgentDefinition.sandboxKnowledge`.
+   *  `skillsFolder` is "" while "A folder" is chosen and none picked yet. */
   knowledge: SbxKnowledgeConfig;
   ports: Row<SbxPort>[];
   paths: Row<SbxPath>[];
@@ -45,11 +59,12 @@ export interface FieldsState {
   variables: Row<{ env: string; value: string; from?: string }>[];
 }
 
-/** `sbx:get-config`'s answer as rows. Only the user's paths: tet's directories and each agent's
- *  session directory are always mounted (sbx.ts's fixedMountSpecs, sessionMountSpecs), not shown. */
-export function fromConfig(config: SbxProjectConfig): FieldsState {
+/** `sbx:get-config`'s and `sbx:stored`'s answers as rows. Only the user's paths: tet's directories
+ *  and each agent's session directory are always mounted (sbx.ts's fixedMountSpecs,
+ *  sessionMountSpecs), not shown. */
+export function fromConfig(config: SbxProjectConfig, stored: SbxStoredLocal): FieldsState {
   return {
-    knowledge: config.knowledge,
+    knowledge: stored.knowledge,
     ports: config.ports.map(withId),
     paths: config.paths.map(withId),
     hosts: config.hosts.map((host) => withId({ host })),
@@ -137,7 +152,7 @@ function isBadHost(host: string): boolean {
 }
 
 /** Why Save waits, or `undefined`: every port row two ports or empty, every secret and variable row
- *  complete or empty. The rows mark which is not. */
+ *  complete or empty — the rows mark which is not — and skills from a folder with one picked. */
 export function saveBlocked(state: FieldsState): string | undefined {
   if (state.ports.some(isBadPortRow)) {
     return "A port on the Ports tab is not a whole number from 1 to 65535";
@@ -148,13 +163,15 @@ export function saveBlocked(state: FieldsState): string | undefined {
   if (state.variables.some((row) => isBadVariableRow(row, state))) {
     return "A variable on the Variables tab needs a name no secret or other variable holds, not PATH or TET_*";
   }
+  if (state.knowledge.skills !== false && state.knowledge.skillsFolder === "") {
+    return "The skills on the Knowledge tab need a folder";
+  }
   return undefined;
 }
 
 /** The inverse, for Save: ids dropped, as are empty port, host, secret and variable rows. */
 export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> {
   return {
-    knowledge: state.knowledge,
     ports: state.ports
       .map(({ host, container }) => ({ host: host.trim(), container: container.trim() }))
       .filter((port) => port.host && port.container),
@@ -176,9 +193,30 @@ function toLocalEdits(rows: { env: string; value: string; from?: string }[]): Sb
   };
 }
 
-/** The values typed since opening and each row's name when opened, for Save (SbxLocalEdits). */
+/** The knowledge as Save stores it: "A folder" with none picked, while skills are off, is each
+ *  agent's own (saveBlocked refuses it while they are on). */
+function toKnowledge(knowledge: SbxKnowledgeConfig): SbxKnowledgeConfig {
+  const { skillsFolder, ...kinds } = knowledge;
+  return skillsFolder ? knowledge : kinds;
+}
+
+/** The values typed since opening and each row's name when opened (SbxLocalEdits), and the
+ *  knowledge, for Save. */
 export function toLocalSave(state: FieldsState): SbxLocalSave {
-  return { secrets: toLocalEdits(state.secrets), variables: toLocalEdits(state.variables) };
+  return {
+    secrets: toLocalEdits(state.secrets),
+    variables: toLocalEdits(state.variables),
+    knowledge: toKnowledge(state.knowledge)
+  };
+}
+
+/** What `source` mounts for `kind`, for its icon: its own, or for skills the chosen folder. */
+function knowledgeEntries(source: SbxKnowledgeSource, kind: SbxKnowledgeKind, knowledge: SbxKnowledgeConfig): SbxKnowledgeEntry[] {
+  const folder = knowledge.skillsFolder;
+  if (kind !== "skills" || folder === undefined) {
+    return source.own[kind];
+  }
+  return folder ? source.skillsTargets.map((target) => ({ host: folder, target })) : [];
 }
 
 /** Whether the row holds a value on this machine: the one of the name it was opened under. */
@@ -187,16 +225,18 @@ function holdsValue(row: { from?: string }, stored: readonly string[]): boolean 
 }
 
 /**
- * Whether the edits since `loaded` reach a running tab only once it restarts: a mount is added at a
- * tab's start (a removed one goes at Save), and `sbx run -e` sets a variable, a new secret's
- * placeholder included, only there (sbx.ts's prepareSbxRun). Ports, hosts and a secret's value or
- * hosts apply at Save.
+ * Whether the edits since `loaded` and `loadedKnowledge` reach a running tab only once it restarts:
+ * a mount is added at a tab's start (a removed one goes at Save), and `sbx run -e` sets a variable,
+ * a new secret's placeholder included, only there (sbx.ts's prepareSbxRun). Ports, hosts and a
+ * secret's value or hosts apply at Save.
  */
-export function needsRestart(loaded: SbxProjectConfig, state: FieldsState): boolean {
+export function needsRestart(loaded: SbxProjectConfig, loadedKnowledge: SbxKnowledgeConfig, state: FieldsState): boolean {
   const config = toConfig(state);
+  const knowledge = toKnowledge(state.knowledge);
   const names = (variables: SbxProjectConfig["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
   return (
-    KNOWLEDGE_LABELS.some(({ kind }) => config.knowledge[kind] !== false && config.knowledge[kind] !== loaded.knowledge[kind]) ||
+    KNOWLEDGE_LABELS.some(({ kind }) => knowledge[kind] !== false && knowledge[kind] !== loadedKnowledge[kind]) ||
+    (knowledge.skills !== false && knowledge.skillsFolder !== loadedKnowledge.skillsFolder) ||
     config.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
     config.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
     names(config.variables) !== names(loaded.variables) ||
@@ -323,19 +363,37 @@ interface SbxSettingsFieldsProps {
   governed: boolean;
   /** The env names holding a value on this machine (`sbx:stored`); never a value. */
   stored: SbxStoredLocal;
+  /** The agents installed here, for the Knowledge tab's icons (`sbx:knowledge-sources`). */
+  sources: SbxKnowledgeSource[];
   /** Asked by the dialog from its opening (usePolicyAnswers), for the tabs' marks too. */
   answers: PolicyAnswers;
 }
 
 /** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
  *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section, governed, stored, answers }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({ state, setState, section, governed, stored, sources, answers }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
   /** `false` turns a kind off; an `SbxAccess` turns it on with that access. */
-  const setKnowledge = (kind: keyof SbxKnowledgeConfig, value: SbxAccess | false): void =>
+  const setKnowledge = (kind: SbxKnowledgeKind, value: SbxAccess | false): void =>
     update("knowledge", (knowledge) => ({ ...knowledge, [kind]: value }));
+  /** "A folder" shows the picker's row, empty until a folder is picked. */
+  const setSkillsFolder = (folder: string | undefined): void =>
+    update("knowledge", (knowledge) => {
+      const next = { ...knowledge, skillsFolder: folder };
+      if (folder === undefined) {
+        delete next.skillsFolder;
+      }
+      return next;
+    });
+  /** A cancelled pick keeps the folder there was. */
+  const pickSkillsFolder = async (): Promise<void> => {
+    const chosen = await window.tet.projects.pickDirectory("Bring skills from a folder", state.knowledge.skillsFolder || undefined);
+    if (chosen) {
+      setSkillsFolder(chosen);
+    }
+  };
   /** A cancelled pick adds nothing. Folder and file are two buttons: Electron shows both kinds in
    *  one picker only on macOS (see `projects:pick-file`); sbx mounts either the same way. */
   const addPath = async (picked: Promise<string | null>): Promise<void> => {
@@ -352,17 +410,60 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
         <div className="sbx-knowledge-rows">
           {KNOWLEDGE_LABELS.map(({ kind, label }) => {
             const access = state.knowledge[kind];
+            const skills = kind === "skills";
+            const folder = skills ? state.knowledge.skillsFolder : undefined;
             return (
-              <div key={kind} className="sbx-knowledge-row">
-                <Checkbox
-                  label={label}
-                  checked={access !== false}
-                  onChange={(next) => setKnowledge(kind, next ? "ro" : false)}
-                />
-                {access !== false && (
-                  <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value)} />
+              <Fragment key={kind}>
+                {/* Only skills have a source; the other labels take its column too. */}
+                <div className={skills ? "sbx-knowledge-cell" : "sbx-knowledge-cell sbx-knowledge-wide"}>
+                  <Checkbox
+                    label={label}
+                    checked={access !== false}
+                    onChange={(next) => setKnowledge(kind, next ? "ro" : false)}
+                  />
+                </div>
+                {skills && (
+                  <div className="sbx-knowledge-cell">
+                    {access !== false && (
+                      <Dropdown
+                        value={folder === undefined ? "agents" : "folder"}
+                        options={SKILLS_SOURCE_OPTIONS}
+                        onChange={(value) => setSkillsFolder(value === "folder" ? (folder ?? "") : undefined)}
+                      />
+                    )}
+                  </div>
                 )}
-              </div>
+                <div className="sbx-knowledge-cell sbx-knowledge-agents">
+                  {sources.map((source) => {
+                    const entries = knowledgeEntries(source, kind, state.knowledge);
+                    const what = entries.map((entry) => `${entry.host} → ${entry.target}`).join(", ");
+                    return (
+                      <span
+                        key={source.agentId}
+                        className={access !== false && entries.length > 0 ? "sbx-knowledge-agent" : "sbx-knowledge-agent dimmed"}
+                        title={`${source.displayName}: ${what || "nothing on this machine"}`}
+                      >
+                        <AgentIcon agentId={source.agentId} />
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="sbx-knowledge-cell">
+                  {access !== false && (
+                    <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value)} />
+                  )}
+                </div>
+                {access !== false && folder !== undefined && (
+                  // No remove: "Each agent's own" drops the folder.
+                  <div className="dialog-field-row sbx-knowledge-folder">
+                    {/* Disabled: the path is what the picker returned. */}
+                    <input type="text" disabled value={folder} placeholder="No folder chosen" title={folder} />
+                    <button type="button" className="icon-button" title="Choose folder" onClick={() => void pickSkillsFolder()}>
+                      <FolderOpenIcon />
+                    </button>
+                  </div>
+                )}
+              </Fragment>
             );
           })}
         </div>

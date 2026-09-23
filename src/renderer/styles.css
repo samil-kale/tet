@@ -1715,20 +1715,50 @@ textarea:focus,
   background-clip: padding-box;
 }
 
-/* The three knowledge checkboxes: a fixed count, so no scrollbox like .row-section-rows'. */
+/* The three knowledge rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
+   label, the skills' source, the agents, access — so the agents and access line up across rows. */
 .sbx-knowledge-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: max-content 150px minmax(0, 1fr) 120px;
+  column-gap: 16px;
+  row-gap: 2px;
   margin-top: 5px;
 }
 
-.sbx-knowledge-row {
+.sbx-knowledge-cell {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  min-width: 0;
   height: var(--field-height);
+}
+
+/* A label with no source beside it takes that column too. */
+.sbx-knowledge-wide {
+  grid-column: span 2;
+}
+
+.sbx-knowledge-agents {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sbx-knowledge-agent {
+  display: flex;
+}
+
+/* An agent this row brings nothing to, as .icon-button:disabled. */
+.sbx-knowledge-agent.dimmed {
+  opacity: 0.3;
+}
+
+/* The chosen skills folder, one row under the source and the agents. */
+.sbx-knowledge-folder {
+  grid-column: 2 / 4;
+  align-items: center;
+}
+
+.sbx-knowledge-rows .select-field {
+  width: 100%;
 }
 
 .edit-row {

@@ -2,10 +2,19 @@ import { ipcMain } from "electron";
 import { getAgent } from "../agents";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import { errorMessage } from "../../shared/errors";
-import type { GitActionResult, SbxLocalSave, SbxPath, SbxProjectConfig, SbxStatus, SbxStoredLocal } from "../../shared/types";
+import type {
+  GitActionResult,
+  SbxKnowledgeSource,
+  SbxLocalSave,
+  SbxPath,
+  SbxProjectConfig,
+  SbxStatus,
+  SbxStoredLocal
+} from "../../shared/types";
 import {
   cancelSbxSetup,
   initSbxPolicy,
+  readKnowledgeSources,
   readLiveSbxConfig,
   readHostAllowed,
   readMountsAllowed,
@@ -40,8 +49,10 @@ export function registerSbxIpc({
     const project = store.get(projectId);
     return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
   });
-  // The Secrets and Variables rows holding a value on this machine; never the values.
+  // The Secrets and Variables rows holding a value on this machine, never the values; the knowledge.
   ipcMain.handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
+  // The Knowledge tab's agents; asked fresh, as agents are installed outside tet.
+  ipcMain.handle("sbx:knowledge-sources", (): Promise<SbxKnowledgeSource[]> => readKnowledgeSources());
   // Stores the typed values first, so a machine without a keyring changes nothing; then
   // writes tet.json, a failure putting the values back. Notices for the sandboxes saveSbxConfig
   // removed, an error for what sbx refused.
@@ -53,12 +64,14 @@ export function registerSbxIpc({
         return { ok: false, error: MISSING_REPOSITORY.error };
       }
       const stored = sbxLocal.encrypted(project.id);
+      const previous = sbxLocal.knowledge(project.id);
       try {
         sbxLocal.update(project.id, local);
         const { removed, failures } = await saveSbxConfig(
           project.path,
           project.id,
           request,
+          { previous, current: sbxLocal.knowledge(project.id) },
           sbxLocal.values(project.id, "secrets"),
           new Set(Object.keys(local.secrets.values))
         );

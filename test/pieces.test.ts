@@ -47,7 +47,7 @@ import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
 import { THEMES } from "../src/shared/themes";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { ControlRequest } from "../src/shared/control";
-import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG, withSettings } from "../src/shared/types";
+import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
 import type { SbxPort, SbxProjectConfig } from "../src/shared/types";
 import { eventually } from "./helpers";
 
@@ -338,6 +338,8 @@ describe("a sandbox's published ports", () => {
 describe("saving an sbx config", () => {
   const projectId = "a project with one sandbox";
   const name = sandboxName(projectId, "claude");
+  /** No knowledge before or after: nothing of it to revoke. */
+  const NO_KNOWLEDGE = { previous: EMPTY_SBX_KNOWLEDGE, current: EMPTY_SBX_KNOWLEDGE };
   // `sbx ports --publish` of a port another sandbox holds, sbx 0.42.1 (2026-09-17).
   const refusal = "ERROR: publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published\n";
 
@@ -426,7 +428,7 @@ if (args[0] === "ls") {
   async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
     const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxConfig(projectPath, config(setup.before.map(port)));
-    const saved = await withSbx(dir, () => saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), new Map(), new Set()));
+    const saved = await withSbx(dir, () => saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set()));
     return { ...saved, projectPath };
   }
 
@@ -496,7 +498,7 @@ if (args[0] === "ls") {
       ["ADDED", "v-added"]
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, values, new Set(["CHANGED"]))
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]))
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -530,7 +532,7 @@ if (args[0] === "ls") {
     const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
     const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]))
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]))
     );
     assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
     assert.deepEqual(result.failures, ["The Claude sandbox could not list its secrets, so none were changed."]);
@@ -586,7 +588,7 @@ describe("what sbx keeps on this machine", () => {
       secrets: { READABLE: base64("sealed:value"), LOST: base64("under another keychain") },
       variables: { NPM_TOKEN: base64("sealed:npm") }
     });
-    assert.deepEqual(store.stored("p"), { secrets: ["READABLE"], variables: ["NPM_TOKEN"] });
+    assert.deepEqual(store.stored("p"), { secrets: ["READABLE"], variables: ["NPM_TOKEN"], knowledge: EMPTY_SBX_KNOWLEDGE });
     assert.deepEqual([...store.values("p", "secrets")], [["READABLE", "value"]]);
     assert.deepEqual([...store.values("p", "variables")], [["NPM_TOKEN", "npm"]]);
   });
@@ -602,11 +604,15 @@ describe("what sbx keeps on this machine", () => {
     fs.writeFileSync(path.join(root, "sbx-secrets.json"), JSON.stringify({ p: { TOKEN: base64("sealed:old") } }));
     const store = new SbxLocalStore(root);
     assert.deepEqual([...store.values("p", "secrets")], [["TOKEN", "old"]]);
-    store.update("p", { secrets: { values: {}, from: { TOKEN: "TOKEN" } }, variables: { values: { NPM_TOKEN: "npm" }, from: {} } });
+    store.update("p", {
+      secrets: { values: {}, from: { TOKEN: "TOKEN" } },
+      variables: { values: { NPM_TOKEN: "npm" }, from: {} },
+      knowledge: EMPTY_SBX_KNOWLEDGE
+    });
     assert.ok(!fs.existsSync(path.join(root, "sbx-secrets.json")), "the old file is renamed, not copied");
     const reread = new SbxLocalStore(root);
-    assert.deepEqual(reread.stored("p"), { secrets: ["TOKEN"], variables: ["NPM_TOKEN"] });
-    reread.update("p", { secrets: { values: {}, from: {} }, variables: { values: {}, from: {} } });
+    assert.deepEqual(reread.stored("p"), { secrets: ["TOKEN"], variables: ["NPM_TOKEN"], knowledge: EMPTY_SBX_KNOWLEDGE });
+    reread.update("p", { secrets: { values: {}, from: {} }, variables: { values: {}, from: {} }, knowledge: EMPTY_SBX_KNOWLEDGE });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "nothing left, no entry");
   });
 
@@ -618,10 +624,22 @@ describe("what sbx keeps on this machine", () => {
     });
     const store = new SbxLocalStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
     const none = { values: {}, from: {} };
-    store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} } });
+    store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, knowledge: EMPTY_SBX_KNOWLEDGE });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
-    store.update("p", { secrets: none, variables: { values: {}, from: { NEW: "OLD" } } });
+    store.update("p", { secrets: none, variables: { values: {}, from: { NEW: "OLD" } }, knowledge: EMPTY_SBX_KNOWLEDGE });
     assert.deepEqual([...store.values("p", "variables")], [["NEW", "kept"]]);
+  });
+
+  it("keeps the knowledge on this machine, and no entry once it is all off", () => {
+    Object.assign(safeStorage, { isEncryptionAvailable: () => false });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-"));
+    const store = new SbxLocalStore(root);
+    const none = { values: {}, from: {} };
+    const knowledge = { skills: "ro" as const, plugins: false as const, instructions: "rw" as const, skillsFolder: "/skills" };
+    store.update("p", { secrets: none, variables: none, knowledge });
+    assert.deepEqual(new SbxLocalStore(root).knowledge("p"), knowledge, "read back, with no keyring needed");
+    store.update("p", { secrets: none, variables: none, knowledge: EMPTY_SBX_KNOWLEDGE });
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "all off leaves no entry");
   });
 });
 

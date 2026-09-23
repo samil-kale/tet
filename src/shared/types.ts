@@ -123,12 +123,37 @@ export interface SbxPath {
 }
 
 /** Which non-identity host knowledge to mount into the sandbox, with which access; `false` is off.
- *  Agent-agnostic — the paths per agent are `AgentDefinition.sandboxKnowledge`. */
+ *  Agent-agnostic — the paths per agent are `AgentDefinition.sandboxKnowledge`. Kept on this
+ *  machine per project, never in tet.json (sbx-local.ts): it names this machine's folders. */
 export interface SbxKnowledgeConfig {
   skills: SbxAccess | false;
   plugins: SbxAccess | false;
   /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex and pi. */
   instructions: SbxAccess | false;
+  /** A folder every agent's skills come from instead of its own, mounted at each one's own skills
+   *  folder; absent for each agent's own. */
+  skillsFolder?: string;
+}
+
+/** The kinds of knowledge, each switched on with an access. */
+export type SbxKnowledgeKind = Exclude<keyof SbxKnowledgeConfig, "skillsFolder">;
+
+/** One piece of host knowledge, and where the sandboxed CLI reads it. */
+export interface SbxKnowledgeEntry {
+  host: string;
+  /** Absolute container path, under the sandbox's home. */
+  target: string;
+}
+
+/** An agent installed on this machine, and what the Knowledge tab's rows mount for it (sbx.ts's
+ *  readKnowledgeSources). */
+export interface SbxKnowledgeSource {
+  agentId: SbxAgentId;
+  displayName: string;
+  /** Per kind, what exists here of the agent's own. */
+  own: Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
+  /** Where a chosen `skillsFolder` goes in its sandbox. */
+  skillsTargets: string[];
 }
 
 /**
@@ -154,7 +179,6 @@ export interface SbxVariable {
  *  inside the sandbox, pi excepted (a credential from sbx's own store, see sbx.ts). */
 export interface SbxProjectConfig {
   enabled: boolean;
-  knowledge: SbxKnowledgeConfig;
   ports: SbxPort[];
   paths: SbxPath[];
   /** "Allowed hosts" in sbx's grammar — exact host, wildcard (`*.example.com`), optional port.
@@ -169,8 +193,10 @@ export interface SbxProjectConfig {
 export type SbxValueKind = "secrets" | "variables";
 
 /** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Secrets and
- *  Variables rows hold a value here — never a value. */
-export type SbxStoredLocal = Record<SbxValueKind, string[]>;
+ *  Variables rows hold a value here — never a value — and the knowledge. */
+export interface SbxStoredLocal extends Record<SbxValueKind, string[]> {
+  knowledge: SbxKnowledgeConfig;
+}
 
 /**
  * Save's part of one list for this machine, both by the row's env name: the values typed since
@@ -182,7 +208,12 @@ export interface SbxLocalEdits {
   from: Record<string, string>;
 }
 
-export type SbxLocalSave = Record<SbxValueKind, SbxLocalEdits>;
+export interface SbxLocalSave extends Record<SbxValueKind, SbxLocalEdits> {
+  knowledge: SbxKnowledgeConfig;
+}
+
+/** Every kind off, each agent's own skills: no knowledge stored for a project. */
+export const EMPTY_SBX_KNOWLEDGE: SbxKnowledgeConfig = { skills: false, plugins: false, instructions: false };
 
 /** A rule sbx's policy must allow before tet can sandbox a project (sbx.ts's readSbxBlockers). */
 export interface SbxBlocker {
@@ -211,7 +242,6 @@ export interface SbxStatus {
 /** No `sbx` section in tet.json; also the dialog's initial state. */
 export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
   enabled: false,
-  knowledge: { skills: false, plugins: false, instructions: false },
   ports: [],
   paths: [],
   hosts: [],

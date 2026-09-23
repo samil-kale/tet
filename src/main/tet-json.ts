@@ -13,7 +13,6 @@ import type {
   ProjectCommand,
   SbxAccess,
   SbxPath,
-  SbxKnowledgeConfig,
   SbxPort,
   SbxProjectConfig,
   SbxSecret,
@@ -416,17 +415,10 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
   return toSettings(content.sbx);
 }
 
-/** A malformed or missing `knowledge` object reads as every kind off, never partially on. */
-function toSbxKnowledge(value: unknown): SbxKnowledgeConfig {
-  const record = toSettings(value);
-  const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((candidate) => candidate === field) ?? false;
-  return { skills: toAccess(record.skills), plugins: toAccess(record.plugins), instructions: toAccess(record.instructions) };
-}
-
-/** The sbx settings: ports, allowed paths (a folder or a single file), hosts, which of the agent's
- *  skills, plugins and instructions to mount, the secrets' names and hosts and the variables' names.
- *  Never holds a token: each sandboxed agent signs in with its own `/login` inside the sandbox, and
- *  a secret's or variable's value stays on this machine (sbx-local.ts). */
+/** The sbx settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
+ *  hosts and the variables' names. Never holds a token: each sandboxed agent signs in with its own
+ *  `/login` inside the sandbox, and a secret's or variable's value stays on this machine, as does
+ *  the knowledge (sbx-local.ts). */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)
@@ -435,7 +427,6 @@ export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const secrets = toSbxSecrets(sbx.secrets);
   return {
     enabled: sbx.enabled === true,
-    knowledge: toSbxKnowledge(sbx.knowledge),
     ports: toSbxPorts(sbx.ports),
     paths,
     hosts: toSbxHosts(sbx.hosts),
@@ -454,7 +445,6 @@ export function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<
         ["sbx"],
         {
           enabled: config.enabled,
-          knowledge: config.knowledge,
           ports: config.ports,
           paths: [...others, ...mine],
           hosts: config.hosts,

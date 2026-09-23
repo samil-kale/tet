@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import type { Project, SbxBlocker, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
+import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../../shared/types";
+import type { Project, SbxBlocker, SbxKnowledgeSource, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
 import {
   SbxSettingsFields,
   fromConfig,
@@ -34,7 +34,10 @@ type Phase =
 
 type SbxSettingsTab = "general" | keyof FieldsState;
 
-/** Split along the sections stored in tet.json. */
+/** Nothing kept on this machine; also the dialog's initial state. */
+const EMPTY_STORED: SbxStoredLocal = { secrets: [], variables: [], knowledge: EMPTY_SBX_KNOWLEDGE };
+
+/** Split along the sections stored in tet.json, and the knowledge kept on this machine. */
 const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "general", label: "General" },
   { id: "knowledge", label: "Knowledge" },
@@ -86,10 +89,11 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** No agent on this machine, so sandboxing cannot be switched off. Derived on every open, not
    *  stored. */
   const [locked, setLocked] = useState(false);
-  const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG));
+  const [state, setState] = useState<FieldsState>(() => fromConfig(EMPTY_SBX_CONFIG, EMPTY_STORED));
   /** As opened, for whether the edits wait for a restart (needsRestart). */
   const [loaded, setLoaded] = useState<SbxProjectConfig>(EMPTY_SBX_CONFIG);
-  const [stored, setStored] = useState<SbxStoredLocal>({ secrets: [], variables: [] });
+  const [stored, setStored] = useState<SbxStoredLocal>(EMPTY_STORED);
+  const [sources, setSources] = useState<SbxKnowledgeSource[]>([]);
   const [saving, setSaving] = useState(false);
   /** What refused the Save, above the buttons: the rows it is about may be on another tab, and
    *  their own marks say which (`tabMarks`). Cleared on the next try. */
@@ -139,11 +143,16 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       return;
     }
     // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
-    const [config, local] = await Promise.all([window.tet.sbx.getConfig(project.id), window.tet.sbx.stored(project.id)]);
+    const [config, local, knowledgeSources] = await Promise.all([
+      window.tet.sbx.getConfig(project.id),
+      window.tet.sbx.stored(project.id),
+      window.tet.sbx.knowledgeSources()
+    ]);
     setEnabled(isLocked || config.enabled);
-    setState(fromConfig(config));
+    setState(fromConfig(config, local));
     setLoaded(config);
     setStored(local);
+    setSources(knowledgeSources);
     setPhase({ kind: "ready", organization: status.organization });
   };
 
@@ -201,7 +210,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       className={phase.kind === "ready" ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
       error={refused}
-      message={phase.kind === "ready" && needsRestart(loaded, state) && <RestartNote />}
+      message={phase.kind === "ready" && needsRestart(loaded, stored.knowledge, state) && <RestartNote />}
       buttons={
         <>
           <button type="button" className="button secondary" onClick={close}>
@@ -284,6 +293,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             setState={setState}
             governed={organization !== undefined}
             stored={stored}
+            sources={sources}
             answers={answers}
           />
         </div>

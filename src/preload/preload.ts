@@ -33,6 +33,7 @@ const api: TETApi = {
     cancelSetup: () => ipcRenderer.send("sbx:cancel-setup"),
     getConfig: (projectId) => ipcRenderer.invoke("sbx:get-config", projectId),
     stored: (projectId) => ipcRenderer.invoke("sbx:stored", projectId),
+    knowledgeSources: () => ipcRenderer.invoke("sbx:knowledge-sources"),
     saveConfig: (projectId, request, local) => ipcRenderer.invoke("sbx:save-config", projectId, request, local),
     mountsAllowed: (paths) => ipcRenderer.invoke("sbx:mounts-allowed", paths),
     hostAllowed: (host) => ipcRenderer.invoke("sbx:host-allowed", host)

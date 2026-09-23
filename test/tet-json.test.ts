@@ -254,7 +254,6 @@ describe("readSbxConfig", () => {
   it("is disabled and empty for a project with no tet.json at all", async () => {
     assert.deepEqual(await readSbxConfig(root), {
       enabled: false,
-      knowledge: { skills: false, plugins: false, instructions: false },
       ports: [],
       paths: [],
       hosts: [],
@@ -270,11 +269,10 @@ describe("readSbxConfig", () => {
       { path: "~/stale", access: "ro" },
       { path: "/stale/absolute", access: "ro", os: process.platform }
     ];
-    put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, ports: [], paths: [theirs, ...stale] } }));
+    put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, knowledge: { skills: "rw" }, ports: [], paths: [theirs, ...stale] } }));
     const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
     const config = {
       enabled: true,
-      knowledge: { skills: "rw" as const, plugins: false as const, instructions: "ro" as const },
       ports: [{ host: "3000", container: "3000" }],
       paths: [
         { path: "~/data", access: "rw" as const },
@@ -289,11 +287,7 @@ describe("readSbxConfig", () => {
     await writeSbxConfig(root, config);
     assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
     const file = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown; hosts: unknown } };
-    assert.deepEqual(
-      file.sbx.knowledge,
-      { skills: "rw", plugins: false, instructions: "ro" },
-      "knowledge is written alongside enabled, in sbx's own ro/rw words"
-    );
+    assert.equal(file.sbx.knowledge, undefined, "knowledge, kept on this machine, is dropped from tet.json");
     assert.deepEqual(file.commands, ["keep"], "the saved command survives");
     assert.deepEqual(file.sbx.hosts, ["gitlab.example.com", "*.s3.example.net:443"], "hosts are written as typed, with no os");
     assert.deepEqual(
@@ -343,7 +337,6 @@ describe("readSbxConfig", () => {
     );
     assert.deepEqual(await readSbxConfig(root), {
       enabled: true,
-      knowledge: { skills: false, plugins: false, instructions: "ro" },
       ports: [{ host: "3000", container: "3000" }],
       paths: [{ path: "~/data", access: "rw" }],
       hosts: ["ok.example.com", "spaced.example.com"],

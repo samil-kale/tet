@@ -10,6 +10,9 @@ import type {
   SbxAgentId,
   SbxBlocker,
   SbxKnowledgeConfig,
+  SbxKnowledgeEntry,
+  SbxKnowledgeKind,
+  SbxKnowledgeSource,
   SbxPath,
   SbxPort,
   SbxProjectConfig,
@@ -17,7 +20,7 @@ import type {
   SbxStatus
 } from "../shared/types";
 import { getAgent } from "./agents";
-import type { AgentPaths, SandboxKnowledgeEntry } from "./agents/agent";
+import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./tet-json";
 import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
@@ -512,27 +515,59 @@ function worktreeMountSpecs(projectPath: string): string[] {
 }
 
 /** An agent's host knowledge per kind, as sandboxKnowledgeFor resolves it. */
-type KnowledgeEntries = Record<keyof SbxKnowledgeConfig, SandboxKnowledgeEntry[]>;
+type KnowledgeEntries = Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
+
+/** Cached (isAgentInstalled). */
+async function isInstalledHere(agentId: SbxAgentId): Promise<boolean> {
+  const agent = getAgent(agentId);
+  return agent.versionArgs !== undefined && (await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir()));
+}
+
+/** Where the sandboxed CLI reads its own skills, whether or not it is installed here. */
+function skillsTargets(agentId: SbxAgentId): string[] {
+  return (getAgent(agentId).sandboxKnowledge?.().skills ?? []).map((entry) => entry.target);
+}
 
 /**
  * What a sandboxed agent may bring from this host, per kind, only what exists: its own knowledge
  * only while it is installed here — a folder an uninstalled one left is not wanted — and
  * `~/.agents/skills` at its `sharedSkillsTarget` either way, unless its own skills sit there. An
- * agent without a `sharedSkillsTarget` (Claude) never gets it. The install check is cached
- * (isAgentInstalled).
+ * agent without a `sharedSkillsTarget` (Claude) never gets it. A `skillsFolder` replaces both, at
+ * the agent's own skills targets, installed or not: the user chose it.
  */
-async function sandboxKnowledgeFor(agentId: SbxAgentId): Promise<KnowledgeEntries> {
+async function sandboxKnowledgeFor(agentId: SbxAgentId, skillsFolder?: string): Promise<KnowledgeEntries> {
   const agent = getAgent(agentId);
-  const installed = agent.versionArgs !== undefined && (await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir()));
-  const own = installed ? agent.sandboxKnowledge?.() : undefined;
-  const existing = (entries: SandboxKnowledgeEntry[] = []): SandboxKnowledgeEntry[] => entries.filter((entry) => statOf(entry.host));
+  const own = (await isInstalledHere(agentId)) ? agent.sandboxKnowledge?.() : undefined;
+  const existing = (entries: SbxKnowledgeEntry[] = []): SbxKnowledgeEntry[] => entries.filter((entry) => statOf(entry.host));
+  const rest = { plugins: existing(own?.plugins), instructions: existing(own?.instructions) };
+  if (skillsFolder !== undefined) {
+    const skills = statOf(skillsFolder) ? skillsTargets(agentId).map((target) => ({ host: skillsFolder, target })) : [];
+    return { skills, ...rest };
+  }
   const skills = existing(own?.skills);
   const target = agent.sharedSkillsTarget;
   const shared = path.join(os.homedir(), ".agents", "skills");
   if (target !== undefined && !skills.some((entry) => entry.target === target) && statOf(shared)) {
     skills.push({ host: shared, target });
   }
-  return { skills, plugins: existing(own?.plugins), instructions: existing(own?.instructions) };
+  return { skills, ...rest };
+}
+
+/** The Knowledge tab's agents: those installed here, with what each brings of its own. */
+export async function readKnowledgeSources(): Promise<SbxKnowledgeSource[]> {
+  const sources = await Promise.all(
+    SBX_AGENT_IDS.map(async (agentId): Promise<SbxKnowledgeSource | undefined> =>
+      (await isInstalledHere(agentId))
+        ? {
+            agentId,
+            displayName: getAgent(agentId).displayName,
+            own: await sandboxKnowledgeFor(agentId),
+            skillsTargets: skillsTargets(agentId)
+          }
+        : undefined
+    )
+  );
+  return sources.filter((source) => source !== undefined);
 }
 
 /**
@@ -540,7 +575,7 @@ async function sandboxKnowledgeFor(agentId: SbxAgentId): Promise<KnowledgeEntrie
  * cannot follow one out of its workspace. Folders and files both work (measured).
  */
 function knowledgeMountSpecs(entries: KnowledgeEntries, knowledge: SbxKnowledgeConfig): MountSpec[] {
-  return (Object.keys(knowledge) as (keyof SbxKnowledgeConfig)[]).flatMap((kind) => {
+  return (Object.keys(entries) as SbxKnowledgeKind[]).flatMap((kind) => {
     const access = knowledge[kind];
     if (!access) {
       return [];
@@ -552,13 +587,13 @@ function knowledgeMountSpecs(entries: KnowledgeEntries, knowledge: SbxKnowledgeC
 
 /**
  * Every grant the dialog changes (Allowed paths, knowledge), as one list: Save narrows and each
- * spawn re-applies the same set (mountAll, staleMounts). Only what exists here; a missing row is
- * reported by prepareSbxRun (`missing`).
+ * spawn re-applies the same set (mountAll, staleMounts). Only what exists here; a missing row or
+ * skills folder is reported by prepareSbxRun (`missing`).
  */
-function grantedMounts(knowledge: KnowledgeEntries, config: SbxProjectConfig): MountSpec[] {
+async function grantedMounts(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig, paths: SbxPath[]): Promise<MountSpec[]> {
   return [
-    ...knowledgeMountSpecs(knowledge, config.knowledge),
-    ...config.paths.filter((entry) => statOf(normalizeHostPath(entry.path))).map(pathMountSpecs)
+    ...knowledgeMountSpecs(await sandboxKnowledgeFor(agentId, knowledge.skillsFolder), knowledge),
+    ...paths.filter((entry) => statOf(normalizeHostPath(entry.path))).map(pathMountSpecs)
   ];
 }
 
@@ -629,8 +664,8 @@ async function readSandboxHosts(): Promise<Map<string, string[]>> {
  *
  * Only hosts read back (measured, 0.42.1): policy rules answer for a stopped sandbox, but `sbx
  * ports` lists nothing for one (reading would start them all), and mounts have no listing and do
- * not survive a stop. So for paths, knowledge and ports tet.json is the truth, applied whole at
- * every spawn and narrowed by delta at Save. No watch mode: a live read is a snapshot.
+ * not survive a stop. So for paths and ports tet.json is the truth, for knowledge sbx-local.json,
+ * applied whole at every spawn and narrowed by delta at Save. No watch mode: a live read is a snapshot.
  */
 export async function readLiveSbxConfig(projectPath: string, projectId: string): Promise<SbxProjectConfig> {
   const config = await readSbxConfig(projectPath);
@@ -1010,6 +1045,8 @@ export interface SbxRunRequest {
   projectId: string;
   projectPath: string;
   config: SbxProjectConfig;
+  /** This machine's knowledge for the project (SbxLocalStore.knowledge). */
+  knowledge: SbxKnowledgeConfig;
   /** What `checkSbxReady` just listed, so it is not listed again. */
   sandboxes: SandboxList;
   /** The `ensureRunning` the caller began while `checkSbxReady` ran, so the two overlap; mountAll
@@ -1111,7 +1148,7 @@ export function sandboxEnv({
 export async function prepareSbxRun(
   request: SbxRunRequest
 ): Promise<{ args: string[]; env: Record<string, string>; missing: string[]; missingSecrets: string[]; missingVariables: string[] }> {
-  const { agentId, config, onData, secretValues } = request;
+  const { agentId, config, knowledge, onData, secretValues } = request;
   const { env, passed, missingSecrets, missingVariables } = sandboxEnv(request);
   const name = sandboxName(request.projectId, agentId);
   const created = await ensureSandboxExists(agentId, request.projectPath, name, request.sandboxes, onData);
@@ -1121,13 +1158,14 @@ export async function prepareSbxRun(
   // sessions, silently. Everything else is in place by here, so a refusal is sbx's policy, and the
   // tab stops with sbx's reason in its output. Hosts are seeded only into a sandbox this call
   // created; after that its rules are the truth (allowHosts).
-  const missing = config.paths.map((entry) => entry.path).filter((entry) => !statOf(normalizeHostPath(entry)));
+  const skillsFolder = knowledge.skills !== false && knowledge.skillsFolder !== undefined ? [knowledge.skillsFolder] : [];
+  const missing = [...config.paths.map((entry) => entry.path), ...skillsFolder].filter((entry) => !statOf(normalizeHostPath(entry)));
   const own = [
     ...fixedMountSpecs(request.paths),
     ...worktreeMountSpecs(request.projectPath),
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
-  const granted = grantedMounts(await sandboxKnowledgeFor(agentId), config).map((spec) => spec.mount);
+  const granted = (await grantedMounts(agentId, knowledge, config.paths)).map((spec) => spec.mount);
   const failed = await mountAll(name, [...own, ...granted], onData, created ? undefined : request.warm);
   const ownFailed = failed.filter((spec) => own.includes(spec));
   if (ownFailed.length > 0) {
@@ -1184,6 +1222,7 @@ export async function saveSbxConfig(
   projectPath: string,
   projectId: string,
   request: SbxProjectConfig,
+  knowledge: { previous: SbxKnowledgeConfig; current: SbxKnowledgeConfig },
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>
 ): Promise<{ removed: SbxAgentId[]; failures: string[] }> {
@@ -1213,8 +1252,10 @@ export async function saveSbxConfig(
       continue;
     }
     const inSandbox = (failure: string): string => `The ${getAgent(agentId).displayName} sandbox ${failure}.`;
-    const knowledge = await sandboxKnowledgeFor(agentId);
-    const stale = staleMounts(grantedMounts(knowledge, previous), grantedMounts(knowledge, config));
+    const stale = staleMounts(
+      await grantedMounts(agentId, knowledge.previous, previous.paths),
+      await grantedMounts(agentId, knowledge.current, config.paths)
+    );
     // Ports whenever any are configured or were, since what the sandbox published is only readable
     // while it runs: the rows may match tet.json and still be unpublished (a refusal at the last
     // Save, or ports written before the sandbox existed).

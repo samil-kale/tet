@@ -2,11 +2,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { safeStorage } from "electron";
 import writeFileAtomic from "write-file-atomic";
-import type { SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
+import { EMPTY_SBX_KNOWLEDGE } from "../shared/types";
+import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
 
 /** What the file holds per project id: each kind's values by env name, encrypted by the OS and
- *  base64-wrapped. */
-export type StoredSbxLocal = Record<SbxValueKind, Record<string, string>>;
+ *  base64-wrapped, and the knowledge unless it is all off (EMPTY_SBX_KNOWLEDGE). */
+export interface StoredSbxLocal extends Record<SbxValueKind, Record<string, string>> {
+  knowledge?: SbxKnowledgeConfig;
+}
 
 function emptyLocal(): StoredSbxLocal {
   return { secrets: {}, variables: {} };
@@ -22,17 +25,43 @@ function stringsOf(value: unknown): Record<string, string> {
     : {};
 }
 
+/** A malformed kind reads as off, a malformed folder as each agent's own. */
+function toKnowledge(value: unknown): SbxKnowledgeConfig | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const toAccess = (field: unknown): SbxAccess | false => (field === "ro" || field === "rw" ? field : false);
+  const knowledge: SbxKnowledgeConfig = {
+    skills: toAccess(value.skills),
+    plugins: toAccess(value.plugins),
+    instructions: toAccess(value.instructions)
+  };
+  if (typeof value.skillsFolder === "string" && value.skillsFolder !== "") {
+    knowledge.skillsFolder = value.skillsFolder;
+  }
+  return isEmptyKnowledge(knowledge) ? undefined : knowledge;
+}
+
+function isEmptyKnowledge(knowledge: SbxKnowledgeConfig): boolean {
+  return JSON.stringify(knowledge) === JSON.stringify(EMPTY_SBX_KNOWLEDGE);
+}
+
 /** A project's entry as read. One written before the variables was its secrets' values alone. */
 function toLocal(project: Record<string, unknown>): StoredSbxLocal {
-  if (isRecord(project.secrets) || isRecord(project.variables)) {
-    return { secrets: stringsOf(project.secrets), variables: stringsOf(project.variables) };
+  if (isRecord(project.secrets) || isRecord(project.variables) || isRecord(project.knowledge)) {
+    const local: StoredSbxLocal = { secrets: stringsOf(project.secrets), variables: stringsOf(project.variables) };
+    const knowledge = toKnowledge(project.knowledge);
+    if (knowledge) {
+      local.knowledge = knowledge;
+    }
+    return local;
   }
   return { secrets: stringsOf(project), variables: {} };
 }
 
 /**
  * The values of the sbx dialog's Secrets and Variables, which tet.json never holds (its rows are
- * only names and hosts). A secret's is kept because sbx cannot give one back and forgets a
+ * only names and hosts), and its Knowledge, which names this machine's folders. A secret's is kept because sbx cannot give one back and forgets a
  * sandbox's with `sbx rm`, so a rebuilt sandbox is seeded from here (sbx.ts's applySecrets). A value
  * leaves this class only decrypted into `sbx secret set-custom` or a sandboxed tab's `sbx run`
  * (sbx.ts's sandboxEnv); the renderer never sees one.
@@ -63,18 +92,24 @@ export class SbxLocalStore {
   stored(projectId: string): SbxStoredLocal {
     return {
       secrets: [...this.values(projectId, "secrets").keys()],
-      variables: [...this.values(projectId, "variables").keys()]
+      variables: [...this.values(projectId, "variables").keys()],
+      knowledge: this.knowledge(projectId)
     };
+  }
+
+  /** What a sandboxed tab of the project mounts of this machine's knowledge (sbx.ts's prepareSbxRun). */
+  knowledge(projectId: string): SbxKnowledgeConfig {
+    return structuredClone(this.projects[projectId]?.knowledge ?? EMPTY_SBX_KNOWLEDGE);
   }
 
   /**
    * Keeps what the dialog's rows hold: a typed value, else the stored one of the name the row was
-   * opened under (`from`), so it follows a rename; a removed row's goes. Throws before changing
-   * anything when the OS offers no encryption — on Linux without a keyring, where safeStorage would
-   * fall back to a fixed key.
+   * opened under (`from`), so it follows a rename; a removed row's goes. And the knowledge as
+   * given. Throws before changing anything when the OS offers no encryption — on Linux without a
+   * keyring, where safeStorage would fall back to a fixed key.
    */
   update(projectId: string, local: SbxLocalSave): void {
-    const anyValue = Object.values(local).some((edits) => Object.keys(edits.values).length > 0);
+    const anyValue = [local.secrets, local.variables].some((edits) => Object.keys(edits.values).length > 0);
     if (anyValue && !safeStorage.isEncryptionAvailable()) {
       throw new Error("The OS offers no encryption to store a value with (on Linux: no keyring)");
     }
@@ -91,6 +126,10 @@ export class SbxLocalStore {
       for (const [env, value] of Object.entries(values)) {
         next[kind][env] = safeStorage.encryptString(value).toString("base64");
       }
+    }
+    const knowledge = toKnowledge(local.knowledge);
+    if (knowledge) {
+      next.knowledge = knowledge;
     }
     this.setProject(projectId, next);
   }
@@ -128,7 +167,7 @@ export class SbxLocalStore {
     if (JSON.stringify(local) === JSON.stringify(this.projects[projectId] ?? emptyLocal())) {
       return;
     }
-    if (Object.keys(local.secrets).length > 0 || Object.keys(local.variables).length > 0) {
+    if (Object.keys(local.secrets).length > 0 || Object.keys(local.variables).length > 0 || local.knowledge) {
       this.projects[projectId] = local;
     } else {
       delete this.projects[projectId];
