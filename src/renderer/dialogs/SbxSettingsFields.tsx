@@ -9,14 +9,14 @@ import type {
   SbxLocalSave,
   SbxPath,
   SbxPort,
+  SbxProblems,
   SbxProjectConfig,
   SbxStoredLocal
 } from "../../shared/types";
-import { isEnvName, isReservedName } from "../../shared/env-rules";
-import { isBadHost, isPort, sbxNeedsRestart } from "../../shared/sbx-rules";
+import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { isWindows } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
-import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
+import { EditRow, patched, RowMark, RowSection, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
@@ -43,8 +43,8 @@ const KNOWLEDGE_LABELS: { kind: SbxKnowledgeKind; label: string }[] = [
   { kind: "instructions", label: "CLAUDE.md / AGENTS.md" }
 ];
 
-/** How long typing in a secret's hosts pauses before they are checked against sbx's policy. */
-const HOST_CHECK_DELAY_MS = 500;
+/** How long typing pauses before the rows are checked again (useSbxProblems). */
+const CHECK_DELAY_MS = 500;
 
 export interface FieldsState {
   /** This machine's (`sbx:stored`); what each kind mounts is `AgentDefinition.sandboxKnowledge`.
@@ -76,9 +76,9 @@ export function fromConfig(config: SbxProjectConfig, stored: SbxStoredLocal): Fi
   };
 }
 
-/** A port row Save refuses: anything but two ports or two empty sides (dropped). */
-function isBadPortRow({ host, container }: SbxPort): boolean {
-  return !(host.trim() === "" && container.trim() === "") && !(isPort(host) && isPort(container));
+/** Why Save refuses a port row, or `undefined`: two empty sides are dropped instead. */
+function portRefusal(row: SbxPort): string | undefined {
+  return row.host.trim() === "" && row.container.trim() === "" ? undefined : sbxPortRefusal(row);
 }
 
 type SecretRow = FieldsState["secrets"][number];
@@ -94,20 +94,16 @@ function isEmptySecretRow(row: SecretRow): boolean {
   return row.env.trim() === "" && row.hosts.trim() === "" && row.value === "";
 }
 
-/** A secret row Save refuses (an empty one is dropped): it needs a variable name of its own and
- *  hosts, none of them bad (isBadHost). */
-function isBadSecretRow(row: SecretRow, rows: SecretRow[]): boolean {
-  if (isEmptySecretRow(row)) {
-    return false;
-  }
-  const env = row.env.trim();
-  const hosts = secretHosts(row);
-  return (
-    !isEnvName(env) ||
-    rows.some((other) => other.id !== row.id && other.env.trim() === env) ||
-    hosts.length === 0 ||
-    hosts.some(isBadHost)
-  );
+/** A row's name, as Save keeps it, for another row's rules. */
+function named(row: { env: string }): { env: string; hosts: string[] } {
+  return { env: row.env.trim(), hosts: [] };
+}
+
+/** Why Save refuses a secret row (sbxSecretRefusal), or `undefined`: an empty one is dropped. */
+function secretRefusal(row: SecretRow, rows: SecretRow[]): string | undefined {
+  return isEmptySecretRow(row)
+    ? undefined
+    : sbxSecretRefusal({ env: row.env.trim(), hosts: secretHosts(row) }, rows.filter((other) => other.id !== row.id).map(named));
 }
 
 type VariableRow = FieldsState["variables"][number];
@@ -116,40 +112,28 @@ function isEmptyVariableRow(row: VariableRow): boolean {
   return row.env.trim() === "" && row.value === "";
 }
 
-/** A name as the machine compares it: win32 takes `a` and `A` for one variable. */
-function sameName(name: string): string {
-  return isWindows() ? name.toUpperCase() : name;
+/** Why Save refuses a variable row (sbxVariableRefusal), or `undefined`: an empty one is dropped. */
+function variableRefusal(row: VariableRow, state: FieldsState): string | undefined {
+  return isEmptyVariableRow(row)
+    ? undefined
+    : sbxVariableRefusal(
+        named(row),
+        state.variables.filter((other) => other.id !== row.id).map(named),
+        state.secrets.map(named),
+        isWindows()
+      );
 }
-
-/** A variable row Save refuses (an empty one is dropped): it needs a variable name no other row,
- *  secret or variable, holds — the sandbox sees one value per name, and `sbx run -e NAME` reads a
- *  variable's from this machine's environment, which on win32 ignores case — and not one of tet's
- *  own (isReservedName): its value is set on `sbx run` itself (sbx.ts's sandboxEnv). */
-function isBadVariableRow(row: VariableRow, state: FieldsState): boolean {
-  if (isEmptyVariableRow(row)) {
-    return false;
-  }
-  const env = row.env.trim();
-  return (
-    !isEnvName(env) ||
-    isReservedName(env) ||
-    state.variables.some((other) => other.id !== row.id && sameName(other.env.trim()) === sameName(env)) ||
-    state.secrets.some((secret) => secret.env.trim() === env)
-  );
-}
-
-const BAD_VARIABLE = "Needs a variable name no secret or other variable holds, not PATH or TET_*";
 
 /** Why Save waits, or `undefined`: every port row two ports or empty, every secret and variable row
  *  complete or empty — the rows mark which is not — and skills from a folder with one picked. */
 export function saveBlocked(state: FieldsState): string | undefined {
-  if (state.ports.some(isBadPortRow)) {
+  if (state.ports.some((row) => portRefusal(row) !== undefined)) {
     return "A port on the Ports tab is not a whole number from 1 to 65535";
   }
-  if (state.secrets.some((row) => isBadSecretRow(row, state.secrets))) {
+  if (state.secrets.some((row) => secretRefusal(row, state.secrets) !== undefined)) {
     return "A secret on the Secrets tab needs a variable name of its own and hosts without scheme or port";
   }
-  if (state.variables.some((row) => isBadVariableRow(row, state))) {
+  if (state.variables.some((row) => variableRefusal(row, state) !== undefined)) {
     return "A variable on the Variables tab needs a name no secret or other variable holds, not PATH or TET_*";
   }
   if (state.knowledge.skills !== false && state.knowledge.skillsFolder === "") {
@@ -222,113 +206,80 @@ export function needsRestart(loaded: SbxProjectConfig, loadedKnowledge: SbxKnowl
   );
 }
 
-/** sbx's policy on the rows, for their marks (usePolicyAnswers). */
-export interface PolicyAnswers {
-  /** Row ids of Allowed paths sbx's policy would refuse to mount (sbx.ts's readMountsAllowed). */
-  deniedPaths: ReadonlySet<string>;
-  /** Per secret host answered so far, whether a sandbox may reach it (sbx.ts's readHostAllowed). */
-  hostsAllowed: ReadonlyMap<string, boolean>;
+/** The env names of the rows that hold a value: typed now, or stored under the name the row was
+ *  opened under. */
+function valueNames(rows: { env: string; value: string; from?: string }[], stored: readonly string[]): string[] {
+  return rows.filter((row) => row.env.trim() !== "" && (row.value !== "" || holdsValue(row, stored))).map((row) => row.env.trim());
 }
 
 /**
- * Asks sbx's policy about the paths and the secrets' hosts as soon as the dialog has its rows
- * (`ready`), whatever tab shows — so a path or host the policy no longer allows is marked from the
- * start, its tab too — then again on a change. The two run side by side and are never waited on:
- * a mark appears with its answer.
+ * What of the rows cannot be applied here (sbx-settings.ts's readProjectSbxProblems), asked as soon
+ * as the dialog has its rows (`ready`), whatever tab shows — so a row that cannot be applied is
+ * marked from the start, its tab too — then again once typing pauses on a change (~0.5 s an sbx
+ * call). An answer overtaken by an edit is dropped. Save leaves such a row out.
  */
-export function usePolicyAnswers(state: FieldsState, ready: boolean): PolicyAnswers {
-  const [deniedPaths, setDeniedPaths] = useState<ReadonlySet<string>>(() => new Set());
-  // Only a changed path or access asks again; an answer overtaken by an edit is dropped.
-  const pathsKey = JSON.stringify(state.paths.map(({ id, path, access }) => [id, path, access]));
-  useEffect(() => {
-    if (!ready || state.paths.length === 0) {
-      return;
-    }
-    const rows = state.paths;
-    let current = true;
-    void window.tet.sbx.mountsAllowed(rows.map(({ path, access }) => ({ path, access }))).then((allowed) => {
-      if (current) {
-        setDeniedPaths(new Set(rows.filter((_row, index) => !allowed[index]).map((row) => row.id)));
-      }
-    });
-    return () => {
-      current = false;
-    };
-    // `pathsKey` holds every field the rows are read for; the array itself is new each render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, pathsKey]);
-
-  // Kept while the dialog is open: only a host not asked yet is. An answer holds for its host
-  // whatever was edited since, so none is dropped.
-  const [hostsAllowed, setHostsAllowed] = useState<ReadonlyMap<string, boolean>>(() => new Map());
-  /** Asked and not answered yet — not asked a second time meanwhile. */
-  const asking = useRef(new Set<string>());
-  // A host the row already refuses (isBadHost) is not asked: it is marked for that.
-  const unaskedHosts = [...new Set(state.secrets.flatMap(secretHosts))].filter((host) => !isBadHost(host) && !hostsAllowed.has(host));
-  const unaskedKey = JSON.stringify(unaskedHosts);
-  /** The saved hosts go at once; a typed one waits (HOST_CHECK_DELAY_MS). */
+export function useSbxProblems(projectId: string, state: FieldsState, stored: SbxStoredLocal, ready: boolean): SbxProblems {
+  const [problems, setProblems] = useState<SbxProblems>({});
+  const config = { enabled: true, ...toConfig(state) };
+  const knowledge = toKnowledge(state.knowledge);
+  const values = { secrets: valueNames(state.secrets, stored.secrets), variables: valueNames(state.variables, stored.variables) };
+  const key = JSON.stringify([config, knowledge, values]);
+  /** The loaded rows go at once; an edit waits (CHECK_DELAY_MS). */
   const opened = useRef(true);
   useEffect(() => {
     if (!ready) {
       return;
     }
-    const delay = opened.current ? 0 : HOST_CHECK_DELAY_MS;
+    const delay = opened.current ? 0 : CHECK_DELAY_MS;
     opened.current = false;
-    const hosts = unaskedHosts.filter((host) => !asking.current.has(host));
-    if (hosts.length === 0) {
-      return;
-    }
-    // Typed, unlike a picked path: asked once typing pauses, not per keystroke (~0.5 s an sbx call).
-    // Each on its own, all at once (sbx.ts's readHostAllowed), so the first refusal marks at once.
+    let current = true;
     const timer = setTimeout(() => {
-      for (const host of hosts) {
-        asking.current.add(host);
-        void window.tet.sbx
-          .hostAllowed(host)
-          .then((allowed) => setHostsAllowed((known) => new Map(known).set(host, allowed)))
-          .finally(() => asking.current.delete(host));
-      }
+      void window.tet.sbx.problems(projectId, config, knowledge, values).then((answer) => {
+        if (current) {
+          setProblems(answer);
+        }
+      });
     }, delay);
-    return () => clearTimeout(timer);
-    // `unaskedKey` is the serialized list the effect reads, which is new each render.
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+    // `key` holds everything the check is asked with; the objects themselves are new each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, unaskedKey]);
-
-  return { deniedPaths, hostsAllowed };
+  }, [ready, key]);
+  return problems;
 }
 
-/** Who refuses, in the marks and in the dialog's blocked message. */
+/** Who refuses, in the dialog's blocked message. */
 export function policyName(governed: boolean): string {
   return governed ? "Your organization's SBX policy" : "SBX's policy";
 }
 
-/** A path row's mark, or `undefined`. */
-function pathMark(row: FieldsState["paths"][number], answers: PolicyAnswers, governed: boolean): string | undefined {
-  return answers.deniedPaths.has(row.id)
-    ? `${policyName(governed)} does not allow mounting this path${row.access === "rw" ? " with write access" : ""}`
-    : undefined;
+/** A port row's mark, or `undefined`: why Save refuses it before why it cannot be applied here. */
+function portMark(row: FieldsState["ports"][number], problems: SbxProblems): string | undefined {
+  return portRefusal(row) ?? problems.ports?.[sbxPortKey({ host: row.host.trim(), container: row.container.trim() })];
 }
 
-/** A secret row's mark, or `undefined`. One mark: a row Save refuses before one the policy would
- *  leave without effect. */
-function secretMark(row: SecretRow, rows: SecretRow[], answers: PolicyAnswers, governed: boolean): string | undefined {
-  if (isBadSecretRow(row, rows)) {
-    return "Needs a variable name of its own and hosts without scheme or port";
-  }
-  const unreachable = secretHosts(row).filter((host) => answers.hostsAllowed.get(host) === false);
-  return unreachable.length > 0 ? `${policyName(governed)} does not allow the sandbox to reach ${unreachable.join(", ")}` : undefined;
+/** A secret row's mark, or `undefined`, likewise. */
+function secretMark(row: SecretRow, rows: SecretRow[], problems: SbxProblems): string | undefined {
+  return secretRefusal(row, rows) ?? problems.secrets?.[row.env.trim()];
 }
 
-const BAD_PORT = "Both ports must be whole numbers from 1 to 65535";
+/** A variable row's mark, or `undefined`, likewise. */
+function variableMark(row: VariableRow, state: FieldsState, problems: SbxProblems): string | undefined {
+  return variableRefusal(row, state) ?? problems.variables?.[row.env.trim()];
+}
 
 /** Each tab's mark: its first marked row's, repeated on the tab so it shows from any pane. */
-export function tabMarks(state: FieldsState, answers: PolicyAnswers, governed: boolean): Partial<Record<keyof FieldsState, string>> {
+export function tabMarks(state: FieldsState, problems: SbxProblems): Partial<Record<keyof FieldsState, string>> {
   const first = (marks: (string | undefined)[]): string | undefined => marks.find((mark) => mark !== undefined);
   return {
-    ports: state.ports.some(isBadPortRow) ? BAD_PORT : undefined,
-    paths: first(state.paths.map((row) => pathMark(row, answers, governed))),
-    secrets: first(state.secrets.map((row) => secretMark(row, state.secrets, answers, governed))),
-    variables: state.variables.some((row) => isBadVariableRow(row, state)) ? BAD_VARIABLE : undefined
+    knowledge: first(KNOWLEDGE_LABELS.map(({ kind }) => problems.knowledge?.[kind])),
+    ports: first(state.ports.map((row) => portMark(row, problems))),
+    paths: first(state.paths.map((row) => problems.paths?.[row.path])),
+    hosts: first(state.hosts.map((row) => problems.hosts?.[row.host.trim()])),
+    secrets: first(state.secrets.map((row) => secretMark(row, state.secrets, problems))),
+    variables: first(state.variables.map((row) => variableMark(row, state, problems)))
   };
 }
 
@@ -337,19 +288,17 @@ interface SbxSettingsFieldsProps {
   state: FieldsState;
   setState: Dispatch<SetStateAction<FieldsState>>;
   section: keyof FieldsState;
-  /** An organization manages sbx's policy; only words the paths' and secrets' marks. */
-  governed: boolean;
   /** The env names holding a value on this machine (`sbx:stored`); never a value. */
   stored: SbxStoredLocal;
   /** The agents installed here, for the Knowledge tab's icons (`sbx:knowledge-sources`). */
   sources: SbxKnowledgeSource[];
-  /** Asked by the dialog from its opening (usePolicyAnswers), for the tabs' marks too. */
-  answers: PolicyAnswers;
+  /** Asked by the dialog from its opening (useSbxProblems), for the tabs' marks too. */
+  problems: SbxProblems;
 }
 
 /** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
  *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section, governed, stored, sources, answers }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({ state, setState, section, stored, sources, problems }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -399,6 +348,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
                     checked={access !== false}
                     onChange={(next) => setKnowledge(kind, next ? "ro" : false)}
                   />
+                  <RowMark title={problems.knowledge?.[kind]} />
                 </div>
                 {skills && (
                   <div className="sbx-knowledge-cell">
@@ -461,7 +411,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
           return (
             <EditRow
               key={port.id}
-              mark={isBadPortRow(port) ? BAD_PORT : undefined}
+              mark={portMark(port, problems)}
               remove="Remove port"
               onRemove={() => update("ports", (ports) => without(ports, port.id))}
             >
@@ -503,7 +453,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
         renderRow={(row) => (
           <EditRow
             key={row.id}
-            mark={pathMark(row, answers, governed)}
+            mark={problems.paths?.[row.path]}
             remove="Remove path"
             onRemove={() => update("paths", (paths) => without(paths, row.id))}
           >
@@ -545,7 +495,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
           return (
             <EditRow
               key={row.id}
-              mark={secretMark(row, state.secrets, answers, governed)}
+              mark={secretMark(row, state.secrets, problems)}
               remove="Remove secret"
               onRemove={() => update("secrets", (secrets) => without(secrets, row.id))}
             >
@@ -606,7 +556,7 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
           return (
             <EditRow
               key={row.id}
-              mark={isBadVariableRow(row, state) ? BAD_VARIABLE : undefined}
+              mark={variableMark(row, state, problems)}
               remove="Remove variable"
               onRemove={() => update("variables", (variables) => without(variables, row.id))}
             >
@@ -650,7 +600,12 @@ export function SbxSettingsFields({ state, setState, section, governed, stored, 
       empty="No hosts allowed yet"
       rows={state.hosts}
       renderRow={(row) => (
-        <EditRow key={row.id} remove="Remove host" onRemove={() => update("hosts", (hosts) => without(hosts, row.id))}>
+        <EditRow
+          key={row.id}
+          mark={problems.hosts?.[row.host.trim()]}
+          remove="Remove host"
+          onRemove={() => update("hosts", (hosts) => without(hosts, row.id))}
+        >
           <input
             className="row-fill-input"
             type="text"

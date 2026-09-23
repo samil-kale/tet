@@ -202,14 +202,15 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     group: "TET itself",
     usage: "sbx-get [--project <id>]",
     summary:
-      "A project's SBX Settings: sbx's status, the configuration, and which secrets and variables hold a value here, never the values.",
+      "A project's SBX Settings: sbx's status, the configuration, which secrets and variables hold a value here (never the values), and the problems: what cannot be applied here, per option.",
     positionals: []
   },
   {
     verb: "sbx-set-enabled",
     group: "TET itself",
     usage: "sbx-set-enabled <on|off> [--project <id>]",
-    summary: "Run the project's agent tabs in sbx sandboxes, or not. Off removes its sandboxes.",
+    summary:
+      "Run the project's agent tabs in sbx sandboxes, or not. Off removes its sandboxes. Every sbx-set-* saves only what can be applied here; notApplied says what was left out and why.",
     positionals: ["value"]
   },
   {

@@ -1,8 +1,9 @@
 /**
  * sbx's filesystem policy, evaluated in tet: sbx has `policy check network` but no filesystem
- * counterpart (0.42.1, none up to 0.43.0-rc3). This only predicts sbx's own enforcement well enough
- * to tell a user what to ask their organization for; a refused mount still stops the tab
- * (prepareSbxRun). Pure, so testable against measured output.
+ * counterpart (0.42.1, none up to 0.43.0-rc3). This only predicts sbx's own enforcement, for the
+ * dialog's marks and what a Save or a spawn leaves out (sbx.ts's readSbxProblems); a mount sbx
+ * refuses all the same is left out and told too (prepareSbxRun). Pure, so testable against
+ * measured output.
  *
  * Grammar per Docker's docs ("Filesystem rules"): `*` within one segment, `**` any depth, `~` home
  * on every platform, `*:` any Windows drive, a pattern matches only its own path format, no env

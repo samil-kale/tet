@@ -9,6 +9,7 @@ import { CONTROL_ENV } from "../../shared/control";
 import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
 import { isSbxAgent } from "../../shared/types";
+import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type {
   AgentId,
   NoticeSeverity,
@@ -871,13 +872,14 @@ export class ProjectSessionManager {
     const paths = this.pathsFor(runtime);
     const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
-    const { args, env, missing, missingSecrets, missingVariables } = await prepareSbxRun({
+    const { args, env, problems } = await prepareSbxRun({
       agentId: tab.agentId,
       projectId: this.project.id,
       projectPath: this.project.path,
       config,
       knowledge: this.sbxLocal.knowledge(this.project.id),
       sandboxes: ready.sandboxes,
+      organization: ready.organization,
       warm,
       paths,
       agentArgs: [...hooks.args, ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])],
@@ -891,22 +893,9 @@ export class ProjectSessionManager {
       variableValues: this.sbxLocal.values(this.project.id, "variables"),
       onData: (data) => this.reportOutput(tab, data)
     });
-    if (missing.length > 0) {
-      this.callbacks.onNotice(
-        "warning",
-        `${agent.displayName} in ${this.project.name} starts without ${missing.length === 1 ? "a path that does not exist" : "paths that do not exist"} on this machine: ${missing.join(", ")}`
-      );
-    }
-    for (const [kind, names] of [
-      ["secret", missingSecrets],
-      ["variable", missingVariables]
-    ] as const) {
-      if (names.length > 0) {
-        this.callbacks.onNotice(
-          "warning",
-          `${agent.displayName} in ${this.project.name} starts without ${names.length === 1 ? `a ${kind} that has no value` : `${kind}s that have no value`} on this machine: ${names.join(", ")}. Enter ${names.length === 1 ? "it" : "them"} in the project's SBX Settings.`
-        );
-      }
+    // tet.json as it stands was not all applied: one notice per option (sbxProblemNotices).
+    for (const notice of sbxProblemNotices(problems)) {
+      this.callbacks.onNotice("warning", notice);
     }
     return { args, env };
   }

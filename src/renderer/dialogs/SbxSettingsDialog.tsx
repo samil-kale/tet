@@ -10,7 +10,7 @@ import {
   tabMarks,
   toConfig,
   toLocalSave,
-  usePolicyAnswers,
+  useSbxProblems,
   type FieldsState
 } from "./SbxSettingsFields";
 import { DialogFrame } from "../ui/DialogFrame";
@@ -49,22 +49,12 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
 ];
 
 /**
- * Why a tab cannot be chosen, or `undefined`. Nothing but the switch applies while sandboxing is
- * off; under an organization's governance a local host rule is inactive (sbx.ts's
- * readSandboxHosts). A tab is disabled rather than dropped, so the dialog keeps its shape and says
- * what is missing.
+ * Why a tab cannot be chosen, or `undefined`: nothing but the switch applies while sandboxing is
+ * off. A tab is disabled rather than dropped, so the dialog keeps its shape and says what is
+ * missing.
  */
-function tabBlocked(id: SbxSettingsTab, { enabled, organization }: { enabled: boolean; organization?: string }): string | undefined {
-  if (id === "general") {
-    return undefined;
-  }
-  if (!enabled) {
-    return "Enable SBX sandboxing for this project first";
-  }
-  if (id === "hosts" && organization) {
-    return "Disabled by governance";
-  }
-  return undefined;
+function tabBlocked(id: SbxSettingsTab, enabled: boolean): string | undefined {
+  return id !== "general" && !enabled ? "Enable SBX sandboxing for this project first" : undefined;
 }
 
 /**
@@ -162,17 +152,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Stores typed values, writes tet.json; may remove the sandbox (sbx.ts's saveSbxConfig). Under
-   *  governance the hosts, which its tab can no longer edit, are dropped with their rules. */
+  /** Stores typed values, saves and applies the rows without a problem, the marked ones left out
+   *  (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx refuses only then stays
+   *  above the buttons. */
   const save = async (): Promise<void> => {
     setSaving(true);
     setRefused(undefined);
-    const config = toConfig(state);
-    const result = await window.tet.sbx.saveConfig(
-      project.id,
-      { enabled, ...config, hosts: organization ? [] : config.hosts },
-      toLocalSave(state)
-    );
+    const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
     setSaving(false);
     if (!result.ok) {
       setRefused(result.error ?? "Could not save the SBX configuration");
@@ -184,20 +170,21 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
   const blocked = saveBlocked(state);
   const organization = phase.kind === "ready" ? phase.organization : undefined;
-  // Asked from the moment the rows are loaded, not when their tab is opened.
-  const answers = usePolicyAnswers(state, phase.kind === "ready");
-  const marks = tabMarks(state, answers, organization !== undefined);
+  // Asked from the moment the rows are loaded, not when their tab is opened; not while sandboxing
+  // is off, which applies none of them.
+  const problems = useSbxProblems(project.id, state, stored, phase.kind === "ready" && enabled);
+  const marks = tabMarks(state, problems);
   const tabs = useMemo(
     () =>
       TABS.map((entry) => {
-        const disabled = tabBlocked(entry.id, { enabled, organization });
+        const disabled = tabBlocked(entry.id, enabled);
         // A tab that cannot be chosen says why, not what is inside.
         const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
         return { ...entry, disabled, mark };
       }),
-    // `marks` itself is rebuilt every render (tabMarks); its four fields are all of it.
+    // `marks` itself is rebuilt every render (tabMarks); its fields are all of it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [enabled, organization, marks.ports, marks.paths, marks.secrets, marks.variables]
+    [enabled, marks.knowledge, marks.ports, marks.paths, marks.hosts, marks.secrets, marks.variables]
   );
 
   return (
@@ -291,10 +278,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             section={tab}
             state={state}
             setState={setState}
-            governed={organization !== undefined}
             stored={stored}
             sources={sources}
-            answers={answers}
+            problems={problems}
           />
         </div>
       )}

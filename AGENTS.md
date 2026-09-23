@@ -211,6 +211,16 @@ the `sbx` CLI; its comments are the record of what was measured.
 - The sandbox never sees the agent's own config directory; sessions are read through host mounts,
   so the same listing code serves both.
 - Generated setup targets where it runs, not `process.platform` (`HookTarget`).
+- **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
+  `sbx policy check`, paths and knowledge through the rules `sbx-policy.ts` evaluates) and against
+  this machine (a path exists, a port is free, a value is stored). A row that fails, or that sbx
+  refuses while applying, is neither saved nor applied; the rest goes through. One check for the
+  dialog, `sbx-set-*` and a session's start (`readSbxProblems`).
+- **The dialog checks live** whatever can be checked, and marks a failing row with the error mark
+  saying what is wrong — never that it will not be saved.
+- **A session's start applies tet.json as it stands and never writes it.** What the policy forbids
+  or this machine lacks is skipped and told in one notice per dialog tab, its rows listed
+  (`Couldn't set hosts:` … `Forbidden by governance`): how a user learns that governance took over.
 
 ## Startup
 

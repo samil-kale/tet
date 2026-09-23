@@ -31,6 +31,7 @@ import {
   parsePublishedPorts,
   pathMountSpecs,
   readHostAllowed,
+  readSbxProblems,
   sandboxEnv,
   sandboxName,
   saveSbxConfig,
@@ -44,6 +45,7 @@ import { fetchHttpsImage } from "../src/main/ipc/shell";
 import { SettingsStore } from "../src/main/settings";
 import { installUncaughtHandler, UNCAUGHT_MARKER } from "../src/main/uncaught";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../src/shared/prompts";
+import { sbxProblemNotices, withoutProblems } from "../src/shared/sbx-rules";
 import { THEMES } from "../src/shared/themes";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { ControlRequest } from "../src/shared/control";
@@ -434,7 +436,9 @@ if (args[0] === "ls") {
   async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
     const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxConfig(projectPath, config(setup.before.map(port)));
-    const saved = await withSbx(dir, () => saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), NO_KNOWLEDGE, { previous: new Map(), current: new Map() }, new Set()));
+    const saved = await withSbx(dir, () =>
+      saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+    );
     return { ...saved, projectPath };
   }
 
@@ -447,7 +451,7 @@ if (args[0] === "ls") {
       `ports ${name} --json`,
       `ports ${name} --publish 3000:3000`
     ]);
-    assert.deepEqual(result, { removed: [], failures: [] });
+    assert.deepEqual(result, { removed: [], refused: {}, failures: [], config: config([port(3000)]) });
   });
 
   it("unpublishes what the sandbox has and tet.json dropped, and leaves a port in both alone", async () => {
@@ -458,21 +462,13 @@ if (args[0] === "ls") {
     );
   });
 
-  it("reports a refused publish under the agent's name, and leaves tet.json as it was", async () => {
-    const { result, projectPath } = await save({ has: [], before: [], now: [3000], refuse: "3000:3000" });
-    assert.deepEqual(result.failures, [
-      "The Claude sandbox could not publish port 3000:3000 (publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published)."
-    ]);
-    assert.deepEqual((await readSbxConfig(projectPath)).ports, []);
-  });
-
-  it("puts back what it already changed when sbx refuses a later port", async () => {
-    const { calls, projectPath } = await save({ has: [4000], before: [4000], now: [3000], refuse: "3000:3000" });
-    assert.deepEqual(
-      calls.filter((call) => call.includes("publish")),
-      [`ports ${name} --unpublish 4000:4000`, `ports ${name} --publish 3000:3000`, `ports ${name} --publish 4000:4000`]
-    );
-    assert.deepEqual((await readSbxConfig(projectPath)).ports, [port(4000)]);
+  it("leaves a port sbx refuses out of tet.json, with sbx's reason, and saves the rest", async () => {
+    const { result, projectPath } = await save({ has: [], before: [], now: [3000, 5000], refuse: "3000:3000" });
+    assert.deepEqual(result.refused, {
+      ports: { "3000:3000": "publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published" }
+    });
+    assert.deepEqual(result.failures, [], "nothing to take back");
+    assert.deepEqual((await readSbxConfig(projectPath)).ports, [port(5000)]);
   });
 
   it("does not start the sandbox where no port is configured and none was", async () => {
@@ -503,8 +499,7 @@ if (args[0] === "ls") {
       { env: "KEPT", hosts: ["kept.example.com"] },
       { env: "CHANGED", hosts: ["changed.example.com"] },
       { env: "REHOSTED", hosts: ["new.example.com"] },
-      { env: "ADDED", hosts: ["a.example.com", "*.b.example.com"] },
-      { env: "NO_VALUE", hosts: ["none.example.com"] }
+      { env: "ADDED", hosts: ["a.example.com", "*.b.example.com"] }
     ];
     const values = new Map([
       ["KEPT", "v-kept"],
@@ -513,7 +508,7 @@ if (args[0] === "ls") {
       ["ADDED", "v-added"]
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, { previous: new Map(), current: values }, new Set(["CHANGED"]))
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -529,8 +524,8 @@ if (args[0] === "ls") {
       `secret set-custom --sandbox ${name} --placeholder ${placeholder("ADDED")} --host a.example.com --host *.b.example.com`,
       "stdin v-added"
     ]);
-    assert.deepEqual(result.failures, []);
-    assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts, a row without a value too");
+    assert.deepEqual([result.refused, result.failures], [{}, []]);
+    assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts");
     assert.ok(!fs.readFileSync(path.join(projectPath, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
   });
 
@@ -543,14 +538,83 @@ if (args[0] === "ls") {
     assert.deepEqual(calls.sort(), ["policy check network --json closed.example.com", "policy check network --json open.example.com"]);
   });
 
-  it("changes no secret, and says so, where sbx does not list them", async () => {
+  it("changes no secret where sbx does not list them, and leaves them out of tet.json", async () => {
     const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
     const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, { previous: new Map(), current: new Map([["TOKEN", "v"]]) }, new Set(["TOKEN"]))
+      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
     );
     assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
-    assert.deepEqual(result.failures, ["The Claude sandbox could not list its secrets, so none were changed."]);
+    assert.deepEqual(result.refused, { secrets: { TOKEN: "sbx did not list the sandbox's secrets" } });
+    assert.deepEqual((await readSbxConfig(projectPath)).secrets, []);
+  });
+
+  it("finds what cannot be applied here: under governance a host its policy refuses, a missing or refused path, a secret or variable without a value", async () => {
+    const { dir, projectPath } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
+    const missing = path.join(dir, "gone");
+    const problems = await withSbx(dir, () =>
+      readSbxProblems({
+        projectId,
+        config: {
+          ...EMPTY_SBX_CONFIG,
+          enabled: true,
+          hosts: ["open.example.com", "closed.example.com"],
+          // `policy ls` answers no filesystem rules, so nothing may be mounted.
+          paths: [
+            { path: missing, access: "ro" },
+            { path: projectPath, access: "rw" }
+          ],
+          secrets: [{ env: "TOKEN", hosts: ["open.example.com"] }],
+          variables: [{ env: "SET" }, { env: "UNSET" }]
+        },
+        knowledge: EMPTY_SBX_KNOWLEDGE,
+        values: { secrets: new Set(), variables: new Set(["SET"]) },
+        agentIds: ["claude"],
+        organization: "acme",
+        ports: false
+      })
+    );
+    assert.deepEqual(problems.result, {
+      hosts: { "closed.example.com": "Forbidden by governance" },
+      paths: { [missing]: "Does not exist on this machine", [projectPath]: "Forbidden by governance" },
+      secrets: { TOKEN: "No value on this machine" },
+      variables: { UNSET: "No value on this machine" }
+    });
+  });
+
+});
+
+describe("what of the SBX Settings could not be applied", () => {
+  const problems = {
+    hosts: { "a.example.com": "Forbidden by governance", "b.example.com": "Forbidden by governance" },
+    paths: { "/data/one": "Does not exist on this machine", "/data/two": "Forbidden by governance" },
+    knowledge: { plugins: "Forbidden by governance" }
+  };
+
+  it("is told once per option and reason, its rows listed, in the dialog's tab order", () => {
+    assert.deepEqual(sbxProblemNotices(problems), [
+      "Couldn't set knowledge:\n - plugins\nForbidden by governance",
+      "Couldn't set paths:\n - /data/one\nDoes not exist on this machine",
+      "Couldn't set paths:\n - /data/two\nForbidden by governance",
+      "Couldn't set hosts:\n - a.example.com\n - b.example.com\nForbidden by governance"
+    ]);
+  });
+
+  it("is left out of what is saved and applied, a kind of knowledge turned off", () => {
+    const config = {
+      ...EMPTY_SBX_CONFIG,
+      enabled: true,
+      hosts: ["a.example.com", "c.example.com"],
+      paths: [
+        { path: "/data/one", access: "ro" as const },
+        { path: "/data/three", access: "rw" as const }
+      ]
+    };
+    const knowledge = { skills: "ro" as const, plugins: "rw" as const, instructions: false as const };
+    assert.deepEqual(withoutProblems(config, knowledge, problems), {
+      config: { ...config, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
+      knowledge: { skills: "ro", plugins: false, instructions: false }
+    });
   });
 });
 
@@ -579,8 +643,6 @@ describe("a sandboxed tab's variables", () => {
     });
     assert.deepEqual(result.env, ["AGENT_SET=agent", `GITLAB_TOKEN=${secretPlaceholder("p", "GITLAB_TOKEN")}`]);
     assert.deepEqual(result.passed, { NPM_TOKEN: "npm-real" }, "a secret without a value never falls back to a real one");
-    assert.deepEqual(result.missingSecrets, ["NO_VALUE_HERE"]);
-    assert.deepEqual(result.missingVariables, ["MISSING"]);
     assert.doesNotMatch(result.env.join(" "), /real/, "no real value on the command line");
   });
 });

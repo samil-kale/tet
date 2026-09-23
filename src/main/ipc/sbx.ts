@@ -1,11 +1,12 @@
 import { ipcMain } from "electron";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import type {
-  GitActionResult,
+  SbxKnowledgeConfig,
   SbxKnowledgeSource,
   SbxLocalSave,
-  SbxPath,
+  SbxProblems,
   SbxProjectConfig,
+  SbxSaveResult,
   SbxStatus,
   SbxStoredLocal
 } from "../../shared/types";
@@ -13,13 +14,11 @@ import {
   cancelSbxSetup,
   initSbxPolicy,
   readKnowledgeSources,
-  readLiveSbxConfig,
-  readHostAllowed,
-  readMountsAllowed,
   readSbxStatus,
   runSbxLogin
 } from "../sbx";
-import { saveProjectSbx } from "../sbx-settings";
+import { readProjectSbxProblems, saveProjectSbx } from "../sbx-settings";
+import { readSbxConfig } from "../tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 
 /** The sandbox settings dialog: what sbx says, and what the project stores. */
@@ -37,15 +36,25 @@ export function registerSbxIpc({
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 
-  // The Allowed paths rows' marks; asked fresh, as the policy changes outside tet.
-  ipcMain.handle("sbx:mounts-allowed", (_event, paths: SbxPath[]): Promise<boolean[]> => readMountsAllowed(paths));
-  // The Secrets rows' marks, likewise.
-  ipcMain.handle("sbx:host-allowed", (_event, host: string): Promise<boolean> => readHostAllowed(host));
+  // The rows' marks; asked fresh, as the policy and this machine change outside tet.
+  ipcMain.handle(
+    "sbx:problems",
+    async (
+      _event,
+      projectId: string,
+      config: SbxProjectConfig,
+      knowledge: SbxKnowledgeConfig,
+      values: { secrets: string[]; variables: string[] }
+    ): Promise<SbxProblems> => {
+      const project = store.get(projectId);
+      return project ? readProjectSbxProblems(project, config, knowledge, values) : {};
+    }
+  );
 
-  // Read fresh; the hosts from the sandboxes themselves (sbx.ts's readLiveSbxConfig).
+  // Read fresh: tet.json may be edited outside tet.
   ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
-    return project ? readLiveSbxConfig(project.path, project.id) : EMPTY_SBX_CONFIG;
+    return project ? readSbxConfig(project.path) : EMPTY_SBX_CONFIG;
   });
   // The Secrets and Variables rows holding a value on this machine, never the values; the knowledge.
   ipcMain.handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
@@ -54,7 +63,7 @@ export function registerSbxIpc({
   // The dialog's Save, shared with tet-ctl's sbx-set-* verbs (sbx-settings.ts).
   ipcMain.handle(
     "sbx:save-config",
-    async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<GitActionResult> => {
+    async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult> => {
       const project = store.get(projectId);
       return project ? saveProjectSbx({ sbxLocal, send }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
     }

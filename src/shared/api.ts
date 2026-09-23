@@ -27,10 +27,12 @@ import type {
   ProviderId,
   RepositoryState,
   Requirements,
+  SbxKnowledgeConfig,
   SbxKnowledgeSource,
   SbxLocalSave,
-  SbxPath,
+  SbxProblems,
   SbxProjectConfig,
+  SbxSaveResult,
   SbxStatus,
   SbxStoredLocal,
   SettingsEdits,
@@ -77,20 +79,24 @@ export interface TETApi {
     initPolicy(): Promise<boolean>;
     /** Kills a running `login`/`initPolicy` — the Cancel button. */
     cancelSetup(): void;
-    /** From tet.json, the hosts from the sandboxes themselves. */
+    /** From tet.json. */
     getConfig(projectId: string): Promise<SbxProjectConfig>;
     /** What the dialog keeps on this machine — never a value. */
     stored(projectId: string): Promise<SbxStoredLocal>;
     /** The agents installed here and what each brings of its own knowledge. */
     knowledgeSources(): Promise<SbxKnowledgeSource[]>;
-    /** Stores `local` (the values typed at this Save, the knowledge) on this machine, then writes
-     *  tet.json; a sandbox whose folders changed is removed. */
-    saveConfig(projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<GitActionResult>;
-    /** Per entry, whether sbx's filesystem policy lets it be mounted with its access. */
-    mountsAllowed(paths: SbxPath[]): Promise<boolean[]>;
-    /** Whether sbx's network policy lets a sandbox reach the host; true for a wildcard. One host
-     *  per call, so each answer can show as it comes. */
-    hostAllowed(host: string): Promise<boolean>;
+    /** Stores `local` (the values typed at this Save, the knowledge) on this machine, then saves
+     *  and applies the rows without a problem (sbx-settings.ts's saveProjectSbx); a sandbox whose
+     *  folders changed is removed. */
+    saveConfig(projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult>;
+    /** What of the rows cannot be applied here, for their marks; `values` the env names that hold
+     *  a value, as the rows have them. */
+    problems(
+      projectId: string,
+      config: SbxProjectConfig,
+      knowledge: SbxKnowledgeConfig,
+      values: { secrets: string[]; variables: string[] }
+    ): Promise<SbxProblems>;
   };
   /** One set for the whole app. */
   settings: {

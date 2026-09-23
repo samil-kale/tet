@@ -17,6 +17,7 @@ import type {
   ProjectCommand,
   SbxKnowledgeConfig,
   SbxLocalSave,
+  SbxProblems,
   SbxProjectConfig,
   SbxStatus,
   TerminalDescriptor
@@ -104,6 +105,8 @@ const DIALOG_STAYS_OPEN = ["(stays open)"];
 let sbxStatus: SbxStatus;
 let sbxConfig: SbxProjectConfig;
 let sbxKnowledge: SbxKnowledgeConfig;
+/** What the faked check finds, and so what a save leaves out. */
+let sbxProblems: SbxProblems;
 
 function terminalsOf(projectId: string): ControlTerminals {
   return {
@@ -261,11 +264,12 @@ function deps(): ControlDeps {
       anyAgentInstalled: async () => true,
       config: async () => structuredClone(sbxConfig),
       stored: () => ({ secrets: ["API_KEY"], variables: [], knowledge: structuredClone(sbxKnowledge) }),
+      problems: async () => sbxProblems,
       save: async (project, request, local) => {
         calls.sbxSaved.push([project.id, request, local]);
-        sbxConfig = request;
+        sbxConfig = { ...request, hosts: request.hosts.filter((host) => sbxProblems.hosts?.[host] === undefined) };
         sbxKnowledge = local.knowledge;
-        return { ok: true };
+        return { ok: true, problems: sbxProblems };
       }
     }
   };
@@ -353,6 +357,7 @@ describe("tet-ctl against the control server", () => {
     sbxStatus = { installed: true, loggedIn: true, policyInitialized: true, blockers: [] };
     sbxConfig = { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
     sbxKnowledge = EMPTY_SBX_KNOWLEDGE;
+    sbxProblems = {};
   });
 
   it("answers help by itself, with every verb", async () => {
@@ -762,7 +767,8 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       config: sbxConfig,
-      stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge }
+      stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge },
+      problems: {}
     });
   });
 
@@ -783,12 +789,22 @@ describe("tet-ctl against the control server", () => {
     for (const args of refused) {
       assert.equal((await tetCtl(args)).status, EXIT_CODES.usage, args.join(" "));
     }
-    sbxStatus = { ...sbxStatus, organization: "acme" };
-    const governed = await tetCtl(["sbx-set-hosts", "example.com"]);
-    assert.match(governed.stderr, /acme manages/, "a local host rule does not apply under governance");
     sbxStatus = { installed: true, loggedIn: false, policyInitialized: false, blockers: [] };
     assert.match((await tetCtl(["sbx-set-enabled", "on"])).stderr, /not signed in/);
     assert.deepEqual(calls.sbxSaved, []);
+  });
+
+  it("saves what can be applied and answers what was left out, as sbx-get does", async () => {
+    sbxProblems = { hosts: { "closed.example.com": "Forbidden by governance" } };
+    const saved = await tetCtl(["sbx-set-hosts", "open.example.com", "closed.example.com"]);
+    assert.deepEqual(saved.result, { saved: true, restartRequired: false, notApplied: sbxProblems });
+    assert.deepEqual(sbxConfig.hosts, ["open.example.com"]);
+    assert.deepEqual((await tetCtl(["sbx-get"])).result, {
+      status: sbxStatus,
+      config: sbxConfig,
+      stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge },
+      problems: sbxProblems
+    });
   });
 
   it("changes nothing but the switch while sandboxing is off", async () => {

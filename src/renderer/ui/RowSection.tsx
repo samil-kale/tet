@@ -42,8 +42,9 @@ export function EditRow({
   );
 }
 
-/** Nothing without a reason. */
-function RowMark({ title }: { title: string | undefined }) {
+/** Nothing without a reason. Outside an EditRow too, beside a field of a grid (the SBX Settings'
+ *  knowledge). */
+export function RowMark({ title }: { title: string | undefined }) {
   return title === undefined ? null : (
     <span className="row-mark" title={title}>
       <CircleAlertIcon />

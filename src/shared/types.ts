@@ -182,8 +182,7 @@ export interface SbxProjectConfig {
   ports: SbxPort[];
   paths: SbxPath[];
   /** "Allowed hosts" in sbx's grammar — exact host, wildcard (`*.example.com`), optional port.
-   *  Unvalidated: sbx accepts anything (measured, 0.42.1 — `https://example.com` matches nothing).
-   *  The sandbox, not tet.json, is the truth here (sbx.ts's readLiveSbxConfig). */
+   *  Unvalidated: sbx accepts anything (measured, 0.42.1 — `https://example.com` matches nothing). */
   hosts: string[];
   secrets: SbxSecret[];
   variables: SbxVariable[];
@@ -237,6 +236,21 @@ export interface SbxStatus {
   organization?: string;
   /** Shown instead of the dialog's fields while non-empty. */
   blockers: SbxBlocker[];
+}
+
+/** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
+export type SbxOption = "hosts" | "paths" | "knowledge" | "ports" | "secrets" | "variables";
+
+/**
+ * What of the SBX Settings cannot be applied here, per option: each row's key (the host, the path
+ * as configured, the knowledge kind, `host:container`, the env name) with what is wrong with it
+ * (sbx.ts's readSbxProblems). Such a row is neither saved nor applied.
+ */
+export type SbxProblems = Partial<Record<SbxOption, Record<string, string>>>;
+
+/** A Save's answer: what it left out, so the caller can say it. */
+export interface SbxSaveResult extends GitActionResult {
+  problems?: SbxProblems;
 }
 
 /** No `sbx` section in tet.json; also the dialog's initial state. */

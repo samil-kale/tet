@@ -11,7 +11,7 @@ import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import { overridesMachineNote } from "../shared/types";
 import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
-import { readCommands } from "./tet-json";
+import { readCommands, readSbxConfig } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
@@ -20,9 +20,9 @@ import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, type ProjectDeps } from "./projects";
-import { configureSandboxes, readLiveSbxConfig, readSbxStatus } from "./sbx";
+import { configureSandboxes, readSbxStatus } from "./sbx";
 import { SbxLocalStore } from "./sbx-local";
-import { saveProjectSbx } from "./sbx-settings";
+import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";
 import { anyAgentInstalled } from "./requirements";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
@@ -409,8 +409,9 @@ async function startControl(): Promise<void> {
         sbx: {
           status: (project) => readSbxStatus(project.path, project.id),
           anyAgentInstalled,
-          config: (project) => readLiveSbxConfig(project.path, project.id),
+          config: (project) => readSbxConfig(project.path),
           stored: (projectId) => sbxLocal.stored(projectId),
+          problems: readProjectSbxProblems,
           save: (project, request, local) => saveProjectSbx({ sbxLocal, send }, project, request, local)
         }
       },

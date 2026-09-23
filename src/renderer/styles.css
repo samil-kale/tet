@@ -2075,6 +2075,8 @@ textarea:focus,
 .dialog-error {
   margin: 0;
   overflow-wrap: anywhere;
+  /* A failure of several lines keeps them, as a notice does (.notice-message). */
+  white-space: pre-line;
   color: var(--vscode-errorForeground);
 }
 

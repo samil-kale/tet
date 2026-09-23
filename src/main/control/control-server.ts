@@ -1,7 +1,6 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as http from "node:http";
-import * as net from "node:net";
 import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
 import { errorMessage } from "../../shared/errors";
@@ -23,15 +22,26 @@ import type {
   SbxAccess,
   SbxKnowledgeConfig,
   SbxKnowledgeKind,
-  SbxLocalEdits,
   SbxLocalSave,
+  SbxProblems,
   SbxProjectConfig,
+  SbxSaveResult,
+  SbxSecret,
   SbxStatus,
   SbxStoredLocal,
+  SbxVariable,
   TerminalDescriptor,
   WorktreeRef
 } from "../../shared/types";
-import { SBX_KNOWLEDGE_KINDS, isBadHost, isPort, sbxNeedsRestart } from "../../shared/sbx-rules";
+import {
+  SBX_KNOWLEDGE_KINDS,
+  keptValues,
+  sbxNeedsRestart,
+  sbxPortRefusal,
+  sbxSecretRefusal,
+  sbxVariableRefusal,
+  withoutProblems
+} from "../../shared/sbx-rules";
 import { systemPrompt } from "../agents/system-prompt";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
@@ -40,6 +50,7 @@ import { relativeInside, repositoryRelative } from "../path-inside";
 import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
+import { canBind } from "../can-bind";
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
@@ -102,7 +113,14 @@ export interface ControlDeps {
     anyAgentInstalled(): Promise<boolean>;
     config(project: Project): Promise<SbxProjectConfig>;
     stored(projectId: string): SbxStoredLocal;
-    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave): Promise<GitActionResult>;
+    /** sbx-settings.ts's readProjectSbxProblems. */
+    problems(
+      project: Project,
+      config: SbxProjectConfig,
+      knowledge: SbxKnowledgeConfig,
+      values: { secrets: string[]; variables: string[] }
+    ): Promise<SbxProblems>;
+    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult>;
   };
 }
 
@@ -277,14 +295,6 @@ function hashPort(dataRoot: string): number {
   return DYNAMIC_PORT_START + (parseInt(hash.slice(0, 8), 16) % DYNAMIC_PORT_RANGE);
 }
 
-function canBind(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.once("error", () => resolve(false));
-    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve(true)));
-  });
-}
-
 /**
  * Derived from the data folder (data-root.ts), so two accounts, or a test profile beside the tet it
  * runs in, get ports of their own. Probed by binding: Windows excludes dynamic-range pieces for
@@ -345,7 +355,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
    *  which only the user can set up there. */
-  const readySbx = async (found: Project): Promise<SbxStatus> => {
+  const readySbx = async (found: Project): Promise<void> => {
     const status = await deps.sbx.status(found);
     const missing = !status.installed
       ? "sbx is not installed"
@@ -357,43 +367,56 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const policy = status.organization ? `${status.organization}'s SBX policy` : "SBX's policy";
       throw new ControlError("bad_args", `${policy} does not allow ${status.blockers.map((blocker) => `${blocker.allow} (${blocker.what})`).join("; ")}`);
     }
-    return status;
   };
 
   /**
    * One SBX Settings field changed, then saved as the dialog's Save does, everything else as it
-   * stands. As the dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch
-   * while sandboxing is off. A stored value stays with its row's name; a removed row's goes.
+   * stands: a row that cannot be applied here is left out and answered as `notApplied`. As the
+   * dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch while sandboxing
+   * is off. A stored value stays with its row's name; a removed row's goes.
    */
   const editSbx = async (
     args: Record<string, unknown>,
     caller: ControlRequest["caller"],
-    edit: (loaded: { config: SbxProjectConfig; knowledge: SbxKnowledgeConfig; status: SbxStatus }) => {
+    edit: (loaded: { config: SbxProjectConfig; knowledge: SbxKnowledgeConfig }) => {
       config?: SbxProjectConfig;
       knowledge?: SbxKnowledgeConfig;
     },
     switching = false
   ): Promise<Answer> => {
     const found = project(args, caller);
-    const status = await readySbx(found);
+    await readySbx(found);
     const config = await deps.sbx.config(found);
     const { knowledge } = deps.sbx.stored(found.id);
     if (!config.enabled && !switching) {
       throw new ControlError("bad_args", `SBX sandboxing is off for ${found.name}: sbx-set-enabled on first`);
     }
-    const next = edit({ config, knowledge, status });
+    const next = edit({ config, knowledge });
     const request = next.config ?? config;
     const nextKnowledge = next.knowledge ?? knowledge;
-    const keep = (rows: { env: string }[]): SbxLocalEdits => ({ values: {}, from: Object.fromEntries(rows.map(({ env }) => [env, env])) });
     const saved = await deps.sbx.save(found, request, {
-      secrets: keep(request.secrets),
-      variables: keep(request.variables),
+      secrets: keptValues(request.secrets),
+      variables: keptValues(request.variables),
       knowledge: nextKnowledge
     });
     if (!saved.ok) {
       throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
     }
-    return { result: { saved: true, restartRequired: sbxNeedsRestart(config, knowledge, request, nextKnowledge) } };
+    const problems = saved.problems ?? {};
+    const applied = withoutProblems(request, nextKnowledge, problems);
+    const restartRequired = sbxNeedsRestart(config, knowledge, applied.config, applied.knowledge);
+    return { result: { saved: true, restartRequired, ...(Object.keys(problems).length > 0 ? { notApplied: problems } : {}) } };
+  };
+
+  /** Refuses the first variable that cannot be saved beside those before it and the secrets
+   *  (sbxVariableRefusal), names compared as this machine does. */
+  const refuseVariables = (variables: SbxVariable[], secrets: SbxSecret[]): void => {
+    variables.forEach((variable, index) => {
+      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), secrets, process.platform === "win32");
+      if (refusal) {
+        throw new ControlError("bad_args", `${refusal}: ${variable.env}`);
+      }
+    });
   };
 
   /** An absolute path of this machine, as the dialog's folder picker gives one. */
@@ -553,8 +576,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "sbx-get": async (args, caller) => {
       const found = project(args, caller);
+      const stored = deps.sbx.stored(found.id);
       const [status, config] = await Promise.all([deps.sbx.status(found), deps.sbx.config(found)]);
-      return { result: { status, config, stored: deps.sbx.stored(found.id) } };
+      const problems = await deps.sbx.problems(found, config, stored.knowledge, stored);
+      return { result: { status, config, stored, problems } };
     },
 
     "sbx-set-enabled": async (args, caller) => {
@@ -571,11 +596,15 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "sbx-set-ports": (args, caller) => {
       const ports = list(args, "ports").map((entry) => {
-        const [host, container, ...rest] = entry.split(":");
-        if (rest.length > 0 || container === undefined || !isPort(host) || !isPort(container)) {
-          throw new ControlError("bad_args", `not <host>:<container>, two whole numbers from 1 to 65535: ${entry}`);
+        const [host, container, ...rest] = entry.split(":").map((side) => side.trim());
+        if (rest.length > 0 || container === undefined) {
+          throw new ControlError("bad_args", `not <host>:<container>: ${entry}`);
         }
-        return { host: host.trim(), container: container.trim() };
+        const refusal = sbxPortRefusal({ host, container });
+        if (refusal) {
+          throw new ControlError("bad_args", `${refusal}: ${entry}`);
+        }
+        return { host, container };
       });
       return editSbx(args, caller, ({ config }) => ({ config: { ...config, ports } }));
     },
@@ -597,65 +626,38 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const hosts = list(args, "hosts")
         .map((host) => host.trim())
         .filter(Boolean);
-      return editSbx(args, caller, ({ config, status }) => {
-        // As the dialog's Hosts tab: a local rule does not apply under an organization's governance.
-        if (status.organization) {
-          throw new ControlError("bad_args", `${status.organization} manages sbx's network policy, so hosts set here do not apply`);
-        }
-        return { config: { ...config, hosts } };
-      });
+      return editSbx(args, caller, ({ config }) => ({ config: { ...config, hosts } }));
     },
 
     "sbx-set-secrets": (args, caller) => {
       const secrets = list(args, "secrets").map((entry) => {
         const at = entry.indexOf("=");
-        const env = entry.slice(0, at).trim();
+        if (at < 0) {
+          throw new ControlError("bad_args", `not <NAME>=<host>[,<host>...]: ${entry}`);
+        }
         const hosts = entry
           .slice(at + 1)
           .split(",")
           .map((host) => host.trim())
           .filter(Boolean);
-        if (at < 0 || !isEnvName(env) || hosts.length === 0 || hosts.some(isBadHost)) {
-          throw new ControlError("bad_args", `not <NAME>=<host>[,<host>...] with hosts without scheme or port: ${entry}`);
-        }
-        return { env, hosts };
+        return { env: entry.slice(0, at).trim(), hosts };
       });
-      const twice = secrets.find((secret, index) => secrets.findIndex((other) => other.env === secret.env) !== index);
-      if (twice) {
-        throw new ControlError("bad_args", `${twice.env} is there twice`);
-      }
-      return editSbx(args, caller, ({ config }) => {
-        const taken = config.variables.find((variable) => secrets.some((secret) => secret.env === variable.env));
-        if (taken) {
-          throw new ControlError("bad_args", `${taken.env} is a variable already (sbx-set-variables)`);
+      secrets.forEach((secret, index) => {
+        const refusal = sbxSecretRefusal(secret, secrets.slice(0, index));
+        if (refusal) {
+          throw new ControlError("bad_args", `${refusal}: ${secret.env}`);
         }
+      });
+      return editSbx(args, caller, ({ config }) => {
+        refuseVariables(config.variables, secrets);
         return { config: { ...config, secrets } };
       });
     },
 
     "sbx-set-variables": (args, caller) => {
-      const variables = list(args, "variables").map((name) => {
-        const env = name.trim();
-        if (!isEnvName(env)) {
-          throw new ControlError("bad_args", `not an environment variable name: ${name}`);
-        }
-        if (isReservedName(env)) {
-          throw new ControlError("bad_args", `${env} is TET's own to set in a tab (PATH, TET_*)`);
-        }
-        return { env };
-      });
-      // `sbx run -e NAME` reads the value from this machine's environment, which on win32 ignores case.
-      const twice = variables.find(
-        (variable, index) => variables.findIndex((other) => machineName(other.env) === machineName(variable.env)) !== index
-      );
-      if (twice) {
-        throw new ControlError("bad_args", `${twice.env} is there twice`);
-      }
+      const variables = list(args, "variables").map((name) => ({ env: name.trim() }));
       return editSbx(args, caller, ({ config }) => {
-        const taken = config.secrets.find((secret) => variables.some((variable) => variable.env === secret.env));
-        if (taken) {
-          throw new ControlError("bad_args", `${taken.env} is a secret already (sbx-set-secrets)`);
-        }
+        refuseVariables(variables, config.secrets);
         return { config: { ...config, variables } };
       });
     },
