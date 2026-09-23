@@ -8,7 +8,8 @@ changed for the user, not the commit list.
 - **Sandbox knowledge stays on this machine.** Which skills, plugins and instructions a sandbox
   brings along is no longer written to `tet.json`, since it names this machine's folders. The
   Knowledge tab lists each installed agent with what it brings, and skills can come from a folder
-  of your choosing instead.
+  of your choosing instead. What was set before does not carry over: turn it on again in the
+  sandbox configuration.
 - **Fixes.** Restarting a saved command clears its old output. An update waits for an install
   still in use instead of giving up, and quitting no longer hangs when Electron stalls. GameBoy's
   active tab loses its underline.
@@ -246,17 +247,6 @@ changed for the user, not the commit list.
   the terminals to split them.
 - **The branch tree remembers what you folded.** Only local branches are open at first.
 
-## 0.6.2 (2026-09-13)
-
-- **The first start says what it is waiting for.** Before fetching Electron (over 100 MB, once),
-  `tet` now prints what it downloads and where, instead of staying silent until a progress bar
-  appears half a minute later.
-
-## 0.6.1 (2026-09-13)
-
-- **No changes for you.** The release itself is what is new: it reaches npm through trusted
-  publishing, with no token involved.
-
 ## 0.6.0 (2026-09-13)
 
 - **A turn cut short counts as ended.** A Claude Code turn interrupted with Escape no longer
@@ -367,15 +357,3 @@ changed for the user, not the commit list.
   from being published no longer depends on what the build machine's shell prints at startup.
   Otherwise the same as 0.3.6.
 - Release notes come from this changelog.
-
-## 0.3.6 (2026-09-05)
-
-- Split view: drag a tab onto a snap zone at the edge of the terminals to split them into up to
-  four panes. A pane whose last tab is moved out or closed collapses away; the three-column
-  preset is gone.
-- A saved command opens its tab in the pane its last run lay in, restoring that layout where
-  the current one has no pane there.
-- Image diff: changed images show both versions side by side, with an overlay view that blends
-  them onion-skin style.
-- The add-repository dialog remembers the parent folder when the picked folder is itself a
-  repository.
