@@ -6,7 +6,7 @@ import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { refusal } from "../git/run-action";
 import { AgentIcon } from "../ui/agent-icons";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { ContextMenu, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
@@ -117,7 +117,8 @@ export const Pane = memo(function Pane({
   onDragEnd
 }: PaneProps) {
   const [plusMenu, setPlusMenu] = useState<{ x: number; y: number } | null>(null);
-  const [tabMenu, setTabMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
+  const tabMenu = useContextMenu<string>();
+  const closeTabMenu = tabMenu.close;
   const stack = useRef<HTMLDivElement>(null);
   const strip = useRef<HTMLDivElement>(null);
   const tabElements = useRef(new Map<string, HTMLDivElement>());
@@ -130,7 +131,7 @@ export const Pane = memo(function Pane({
     }
     const onWheel = (event: WheelEvent): void => {
       // Scrolling moves the menu's tab out from under it.
-      setTabMenu(null);
+      closeTabMenu();
       if (event.deltaY !== 0) {
         event.preventDefault();
         element.scrollLeft += event.deltaY;
@@ -138,7 +139,7 @@ export const Pane = memo(function Pane({
     };
     element.addEventListener("wheel", onWheel, { passive: false });
     return () => element.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [closeTabMenu]);
 
   // A new or newly activated tab can land past the strip's visible width.
   useEffect(() => {
@@ -230,16 +231,14 @@ export const Pane = memo(function Pane({
     [projectId]
   );
 
-  const closeTabMenu = useCallback(() => setTabMenu(null), []);
-
   // The menu's tab closed or moved away under it (`tet-ctl`, another pane): its close entries,
   // counted from that tab's index, would close the whole pane. Not drawn until the effect closes it.
-  const tabMenuOpen = tabMenu !== null && tabs.some((tab) => tab.tabId === tabMenu.tabId);
+  const tabMenuOpen = tabMenu.target !== undefined && tabs.some((tab) => tab.tabId === tabMenu.target);
   useEffect(() => {
-    if (tabMenu && !tabMenuOpen) {
-      setTabMenu(null);
+    if (tabMenu.target !== undefined && !tabMenuOpen) {
+      closeTabMenu();
     }
-  }, [tabMenu, tabMenuOpen]);
+  }, [tabMenu.target, tabMenuOpen, closeTabMenu]);
 
   const askRename = useCallback(
     async (tab: TerminalDescriptor) => {
@@ -456,10 +455,7 @@ export const Pane = memo(function Pane({
                   event.preventDefault();
                 }
               }}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setTabMenu({ tabId: tab.tabId, x: event.clientX, y: event.clientY });
-              }}
+              onContextMenu={(event) => tabMenu.open(event, tab.tabId)}
               title={tabTooltip(tab)}
             >
               {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
@@ -549,9 +545,7 @@ export const Pane = memo(function Pane({
         {tabs.length === 0 && <div className="placeholder">No sessions open.</div>}
       </div>
 
-      {tabMenu && tabMenuOpen && (
-        <ContextMenu x={tabMenu.x} y={tabMenu.y} entries={tabMenuEntries(tabMenu.tabId)} onClose={closeTabMenu} />
-      )}
+      {tabMenuOpen && tabMenu.render(tabMenuEntries)}
       {plusMenu && (
         <ContextMenu
           x={plusMenu.x}

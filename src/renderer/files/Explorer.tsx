@@ -15,7 +15,7 @@ import {
   type TreeNode
 } from "./explorer-tree";
 import { FileMarkIcon, INDENT_BASE, INDENT_STEP, Twistie } from "./tree-rows";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 
@@ -131,7 +131,7 @@ export const Explorer = memo(function Explorer({
 }: ExplorerProps) {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [menu, setMenu] = useState<{ x: number; y: number; node: TreeNode | null } | null>(null);
+  const menu = useContextMenu<TreeNode | null>();
   const rows = useRef(new Map<string, HTMLButtonElement>());
   /** The project is this view's; the rows say only which file and how. */
   const onOpen = useCallback(
@@ -197,11 +197,6 @@ export const Explorer = memo(function Explorer({
 
   const toggle = (node: TreeNode): void =>
     setExpanded((current) => ({ ...current, [node.id]: !isOpen(node, current) }));
-
-  const onRowContextMenu = useCallback((event: React.MouseEvent, node: TreeNode) => {
-    event.preventDefault();
-    setMenu({ x: event.clientX, y: event.clientY, node });
-  }, []);
 
   /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything
    *  (at once without roots). Walks the uncompacted `tree`, whose ids compacted rows keep. */
@@ -364,8 +359,7 @@ export const Explorer = memo(function Explorer({
         onContextMenu={(event) => {
           // Only the empty space below the rows.
           if (event.target === event.currentTarget) {
-            event.preventDefault();
-            setMenu({ x: event.clientX, y: event.clientY, node: null });
+            menu.open(event, null);
           }
         }}
       >
@@ -380,11 +374,11 @@ export const Explorer = memo(function Explorer({
           forceExpanded={filtering}
           selected={selected}
           onOpen={onOpen}
-          onContextMenu={onRowContextMenu}
+          onContextMenu={menu.open}
           rows={rows.current}
         />
       </div>
-      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.node)} onClose={() => setMenu(null)} />}
+      {menu.render(menuEntries)}
     </div>
   );
 });

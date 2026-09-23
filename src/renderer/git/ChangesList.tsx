@@ -4,7 +4,7 @@ import type { ChangeStatus, FileChange, Project, RepositoryState } from "../../s
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import type { FileAct, FileAsk } from "./run-action";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 import { isMarkdown } from "../diff/diff-highlight";
@@ -162,7 +162,7 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
   const [selected, setSelected] = useState<string[]>([]);
   /** A shift-click range starts here: the last row clicked without shift. */
   const [anchor, setAnchor] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; change: FileChange } | null>(null);
+  const menu = useContextMenu<FileChange>();
 
   const query = filter.trim().toLowerCase();
   const visible = useMemo(
@@ -260,12 +260,11 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
             onClick={(event) => select(event, change.path)}
             onDoubleClick={() => onOpenDiff(change.path)}
             onContextMenu={(event) => {
-              event.preventDefault();
               if (!selected.includes(change.path)) {
                 setSelected([change.path]);
                 setAnchor(change.path);
               }
-              setMenu({ x: event.clientX, y: event.clientY, change });
+              menu.open(event, change);
             }}
             title={`${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`}
           >
@@ -276,9 +275,7 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
         {changes.length === 0 && <div className="placeholder">No local changes.</div>}
       </div>
 
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.change)} onClose={() => setMenu(null)} />
-      )}
+      {menu.render(menuEntries)}
     </div>
   );
 }

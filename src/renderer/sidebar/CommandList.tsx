@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
 import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
-import { ContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
+import { useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { notifying, refusal } from "../git/run-action";
 import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
@@ -93,7 +93,7 @@ interface CommandListProps {
  *  project. Running one opens a terminal tab. One list serves every project: the active one's. */
 export const CommandList = memo(function CommandList({ projectId, height, onOpenTab }: CommandListProps) {
   const [commands, setCommands] = useState<ProjectCommand[]>([]);
-  const [menu, setMenu] = useState<{ x: number; y: number; command: ProjectCommand } | null>(null);
+  const menu = useContextMenu<ProjectCommand>();
   /** The current list, for callbacks created before its last change. */
   const latest = useRef<ProjectCommand[]>([]);
   /** The project currently shown, for the same callbacks. */
@@ -262,10 +262,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
             className={["command-item", ...rowClasses(index)].join(" ")}
             title={describe(command)}
             {...rowProps(index)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setMenu({ x: event.clientX, y: event.clientY, command });
-            }}
+            onContextMenu={(event) => menu.open(event, command)}
           >
             {/* Its name if any; the line is in the tooltip. */}
             <span className="command-main">
@@ -288,9 +285,7 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
         {projectId && commands.length === 0 && <div className="placeholder">No commands yet.</div>}
       </div>
 
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.command)} onClose={() => setMenu(null)} />
-      )}
+      {menu.render(menuEntries)}
     </Section>
   );
 });

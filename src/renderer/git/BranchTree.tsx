@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { refName, syncRemote, upstreamName, worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { GitRun } from "./run-action";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
@@ -49,8 +49,6 @@ type MenuTarget =
   | { kind: "tag"; name: string }
   | { kind: "stash"; stash: StashEntry }
   | { kind: "worktree"; worktree: WorktreeInfo };
-
-type BranchMenu = MenuTarget & { x: number; y: number };
 
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
 const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the main project, or create a new worktree";
@@ -100,7 +98,7 @@ export const BranchTree = memo(function BranchTree({
   const [filter, setFilter] = useState("");
   // Only local branches start open, as in GitHub Desktop; folds persist.
   const [isCollapsed, toggle] = useCollapsedSections("branch-tree.sections", ["remotes", "tags", "stashes"]);
-  const [menu, setMenu] = useState<BranchMenu | null>(null);
+  const menu = useContextMenu<MenuTarget>();
 
   const query = filter.trim().toLowerCase();
   // Memoized so the lists below can name it as their dependency: it reads `query` and nothing else,
@@ -305,8 +303,8 @@ export const BranchTree = memo(function BranchTree({
         : undefined
   });
 
-  const branchEntries = (menu: Extract<BranchMenu, { kind: "branch" }>): ContextMenuEntry[] => {
-    const { name, remote: from } = menu;
+  const branchEntries = (target: Extract<MenuTarget, { kind: "branch" }>): ContextMenuEntry[] => {
+    const { name, remote: from } = target;
     // Prefixed by its remote everywhere but the checkout, which creates the tracking branch.
     const ref = from ? `${from}/${name}` : name;
     const current = from === undefined && isCurrent(name);
@@ -411,7 +409,7 @@ export const BranchTree = memo(function BranchTree({
     ];
   };
 
-  const menuEntries = (open: BranchMenu): ContextMenuEntry[] => {
+  const menuEntries = (open: MenuTarget): ContextMenuEntry[] => {
     switch (open.kind) {
       case "branch":
         return branchEntries(open);
@@ -422,11 +420,6 @@ export const BranchTree = memo(function BranchTree({
       case "worktree":
         return worktreeEntries(open.worktree);
     }
-  };
-
-  const openMenu = (event: React.MouseEvent, target: MenuTarget): void => {
-    event.preventDefault();
-    setMenu({ ...target, x: event.clientX, y: event.clientY });
   };
 
   return (
@@ -448,7 +441,7 @@ export const BranchTree = memo(function BranchTree({
                   className={`tree-item${isCurrent(localBranch) ? " current" : ""}`}
                   title="Double-click to check out"
                   onDoubleClick={() => checkout({ name: localBranch })}
-                  onContextMenu={(event) => openMenu(event, { kind: "branch", name: localBranch })}
+                  onContextMenu={(event) => menu.open(event, { kind: "branch", name: localBranch })}
                 >
                   <BranchIcon className="tree-icon" />
                   <span className="tree-label">{localBranch}</span>
@@ -485,7 +478,7 @@ export const BranchTree = memo(function BranchTree({
                 className={`tree-item${worktree.current ? " current" : ""}`}
                 title={`${worktree.path}${worktree.current ? "" : "\nDouble-click to open"}`}
                 onDoubleClick={() => !worktree.current && onOpenWorktree(worktree.path)}
-                onContextMenu={(event) => openMenu(event, { kind: "worktree", worktree })}
+                onContextMenu={(event) => menu.open(event, { kind: "worktree", worktree })}
               >
                 <WorktreeIcon className="tree-icon" />
                 <span className="tree-label">{worktreeName(worktree)}</span>
@@ -518,7 +511,7 @@ export const BranchTree = memo(function BranchTree({
                       title="Double-click to check out"
                       onDoubleClick={() => checkout({ name: remoteBranch, remote: entry.name })}
                       onContextMenu={(event) =>
-                        openMenu(event, { kind: "branch", name: remoteBranch, remote: entry.name })
+                        menu.open(event, { kind: "branch", name: remoteBranch, remote: entry.name })
                       }
                     >
                       <BranchIcon className="tree-icon" />
@@ -541,7 +534,7 @@ export const BranchTree = memo(function BranchTree({
                 className="tree-item"
                 title="Double-click to check out"
                 onDoubleClick={() => checkoutTag(tag)}
-                onContextMenu={(event) => openMenu(event, { kind: "tag", name: tag })}
+                onContextMenu={(event) => menu.open(event, { kind: "tag", name: tag })}
               >
                 <TagIcon className="tree-icon" />
                 <span className="tree-label">{tag}</span>
@@ -561,7 +554,7 @@ export const BranchTree = memo(function BranchTree({
                 className="tree-item"
                 // No double-click: apply and drop sit one right-click apart, and a drop is final.
                 title={`${stash.ref}: ${stash.message}\nRight-click to apply, pop or drop it`}
-                onContextMenu={(event) => openMenu(event, { kind: "stash", stash })}
+                onContextMenu={(event) => menu.open(event, { kind: "stash", stash })}
               >
                 <StashIcon className="tree-icon" />
                 <span className="tree-label">{stash.message}</span>
@@ -570,7 +563,7 @@ export const BranchTree = memo(function BranchTree({
         />
       </div>
 
-      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu)} onClose={() => setMenu(null)} />}
+      {menu.render(menuEntries)}
     </div>
   );
 });

@@ -1,10 +1,10 @@
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import type { Project, RemoteInfo } from "../../shared/types";
 import { canDiscardProjectEdits } from "../diff/editor-views";
 import type { GitRun } from "../git/run-action";
 import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { prompt } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { Section } from "../ui/Section";
@@ -164,7 +164,7 @@ export const ProjectList = memo(function ProjectList({
   gitBusy,
   worktreesSupported
 }: ProjectListProps) {
-  const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null);
+  const menu = useContextMenu<Project>();
   const rows = useMemo(() => groupWorktrees(projects), [projects]);
   const nested = useMemo(() => nestedIds(rows), [rows]);
 
@@ -278,10 +278,7 @@ export const ProjectList = memo(function ProjectList({
               onClick={() => onSelect(project.id)}
               title={project.path}
               {...rowProps(index)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setMenu({ x: event.clientX, y: event.clientY, project });
-              }}
+              onContextMenu={(event) => menu.open(event, project)}
             >
               <span className="project-main">
                 <span className="project-label">{project.name}</span>
@@ -322,9 +319,7 @@ export const ProjectList = memo(function ProjectList({
         })}
       </div>
 
-      {menu && (
-        <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.project)} onClose={() => setMenu(null)} />
-      )}
+      {menu.render(menuEntries)}
     </Section>
   );
 });

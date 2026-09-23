@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** One entry of a context menu; an action without a `run` renders disabled. */
 export interface ContextMenuAction {
@@ -25,6 +25,23 @@ interface ContextMenuProps {
   width?: number;
   /** Caps the height, which then scrolls; kept within the window, it is never clamped upward. */
   maxHeight?: number;
+}
+
+/**
+ * A menu opened at the pointer on one of a view's rows: `open` from the row's `onContextMenu`, with
+ * what it was opened on; `render` where the menu goes, with the entries for that. `open` and `close`
+ * are stable, for memoized rows.
+ */
+export function useContextMenu<T>() {
+  const [menu, setMenu] = useState<{ x: number; y: number; target: T } | null>(null);
+  const open = useCallback((event: React.MouseEvent, target: T): void => {
+    event.preventDefault();
+    setMenu({ x: event.clientX, y: event.clientY, target });
+  }, []);
+  const close = useCallback(() => setMenu(null), []);
+  const render = (entries: (target: T) => ContextMenuEntry[]): ReactNode =>
+    menu && <ContextMenu x={menu.x} y={menu.y} entries={entries(menu.target)} onClose={close} />;
+  return { open, close, render, target: menu?.target };
 }
 
 export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight }: ContextMenuProps) {
