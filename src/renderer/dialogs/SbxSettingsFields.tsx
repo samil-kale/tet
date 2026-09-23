@@ -16,7 +16,7 @@ import type {
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { isWindows } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
-import { EditRow, patched, RowMark, RowSection, withId, without, type Row } from "../ui/RowSection";
+import { EditRow, patched, RowMark, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
@@ -515,19 +515,12 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
                 value={row.hosts}
                 onChange={(event) => setSecret({ hosts: event.target.value })}
               />
-              <input
-                className="row-fixed-input"
-                type="password"
-                autoComplete="off"
-                // A stored value as a set password shows, never the value itself (the title says so).
-                placeholder={valueStored ? "••••••••" : "Value"}
-                title={
-                  valueStored
-                    ? "Stored on this machine; typing replaces it. The sandbox never sees it."
-                    : "Stored on this machine, never in tet.json. The sandbox never sees it."
-                }
+              <SecretInput
+                stored={valueStored}
+                storedTitle="Stored on this machine; typing replaces it. The sandbox never sees it."
+                emptyTitle="Stored on this machine, never in tet.json. The sandbox never sees it."
                 value={row.value}
-                onChange={(event) => setSecret({ value: event.target.value })}
+                onChange={(value) => setSecret({ value })}
               />
             </EditRow>
           );
@@ -568,19 +561,12 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
                 value={row.env}
                 onChange={(event) => setVariable({ env: event.target.value })}
               />
-              <input
-                className="row-fixed-input"
-                type="password"
-                autoComplete="off"
-                // A stored value as a set password shows, never the value itself (the title says so).
-                placeholder={valueStored ? "••••••••" : "Value"}
-                title={
-                  valueStored
-                    ? "Stored on this machine; typing replaces it. The sandbox sees it."
-                    : "Stored on this machine, never in tet.json. The sandbox sees it."
-                }
+              <SecretInput
+                stored={valueStored}
+                storedTitle="Stored on this machine; typing replaces it. The sandbox sees it."
+                emptyTitle="Stored on this machine, never in tet.json. The sandbox sees it."
                 value={row.value}
-                onChange={(event) => setVariable({ value: event.target.value })}
+                onChange={(value) => setVariable({ value })}
               />
             </EditRow>
           );

@@ -3,15 +3,18 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import {
+  collectSessions,
   forgetMissing,
   nonEmptyString,
   parseLine,
   readHeadLines,
-  readLinesBackwards,
   requireTitle,
+  scanTranscriptHead,
+  scanTranscriptTail,
   timestampOf,
   TRANSCRIPT_SCAN_BYTES,
-  truncateTitle
+  truncateTitle,
+  type ScannedTail
 } from "../transcript";
 import { deleteThread, renameThread } from "./app-server-client";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
@@ -75,16 +78,22 @@ async function parseSessionMeta(filePath: string): Promise<SessionMeta | undefin
 }
 
 /**
- * A listing's needs from a rollout body: the first prompt from its head, and the last turn end —
- * `task_complete` or `turn_aborted` (interrupted), the net under the Stop hook. Cached by path and size.
+ * A listing's needs from a rollout body's end: the last turn end — `task_complete` or
+ * `turn_aborted` (interrupted), the net under the Stop hook. Cached by path and size.
  */
 interface TailInfo {
   turnEndedAt?: number;
-  /** Stands in for a title; Codex assigns none. */
-  firstPrompt?: string;
 }
 
 const tailCache = new Map<string, { size: number; tail: TailInfo }>();
+
+/** And from its head: the first prompt, which stands in for a title (Codex assigns none). Keyed by
+ *  how much of the window the file fills, like the other agents' head caches. */
+interface HeadInfo {
+  firstPrompt?: string;
+}
+
+const headCache = new Map<string, { size: number; head: HeadInfo }>();
 
 const TURN_END_TYPES = ['"task_complete"', '"turn_aborted"'];
 const PROMPT_TYPES = ['"user_message"', '"role":"user"'];
@@ -112,23 +121,23 @@ function readTurnEnd(lines: string[]): number | undefined {
 }
 
 /** The first real prompt, read forwards: it follows Codex's injected context blocks. */
-async function readFirstPrompt(handle: fs.promises.FileHandle, size: number): Promise<string | undefined> {
-  const buffer = Buffer.alloc(Math.min(size, TRANSCRIPT_SCAN_BYTES));
-  await handle.read(buffer, 0, buffer.length, 0);
-  for (const line of buffer.toString("utf8").split("\n")) {
-    if (!PROMPT_TYPES.some((type) => line.includes(type))) {
-      continue;
+function scanHead(filePath: string, fileSize: number): Promise<HeadInfo> {
+  return scanTranscriptHead(filePath, fileSize, headCache, {
+    label: "codex",
+    create: (): HeadInfo => ({}),
+    read: (line, head) => {
+      if (!PROMPT_TYPES.some((type) => line.includes(type))) {
+        return false;
+      }
+      const entry = parseLine(line);
+      const prompt = entry ? extractUserPrompt(entry) : undefined;
+      if (prompt === undefined) {
+        return false;
+      }
+      head.firstPrompt = truncateTitle(prompt);
+      return true;
     }
-    const entry = parseLine(line);
-    if (!entry) {
-      continue;
-    }
-    const prompt = extractUserPrompt(entry);
-    if (prompt !== undefined) {
-      return truncateTitle(prompt);
-    }
-  }
-  return undefined;
+  });
 }
 
 /** A typed prompt, not an injected `<environment_context>`/`<skills_instructions>` block. */
@@ -149,32 +158,19 @@ function extractUserPrompt(entry: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-async function scanTail(filePath: string): Promise<TailInfo> {
-  const tail: TailInfo = {};
-  let handle: fs.promises.FileHandle | undefined;
-  try {
-    handle = await fs.promises.open(filePath, "r");
-    const { size } = await handle.stat();
-    const cached = tailCache.get(filePath);
-    if (cached?.size === size) {
-      return cached.tail;
-    }
-    // A written first prompt never changes; only a session without one looks again.
-    tail.firstPrompt = cached?.tail.firstPrompt ?? (await readFirstPrompt(handle, size));
-    const previous = cached && cached.size < size ? cached : undefined;
-    const floor = previous ? Math.max(0, previous.size - TRANSCRIPT_SCAN_BYTES) : 0;
-    await readLinesBackwards(handle, size, floor, TRANSCRIPT_SCAN_BYTES, (lines) => {
+function scanTail(filePath: string): Promise<ScannedTail<TailInfo>> {
+  return scanTranscriptTail(filePath, tailCache, {
+    byteLimit: TRANSCRIPT_SCAN_BYTES,
+    label: "codex",
+    create: (): TailInfo => ({}),
+    read: (lines, tail) => {
       tail.turnEndedAt = readTurnEnd(lines);
       return tail.turnEndedAt !== undefined;
-    });
-    tail.turnEndedAt ??= previous?.tail.turnEndedAt;
-    tailCache.set(filePath, { size, tail });
-  } catch (error) {
-    console.error("[tet] codex rollout scan failed:", error);
-  } finally {
-    await handle?.close();
-  }
-  return tail;
+    },
+    merge: (tail, previous) => {
+      tail.turnEndedAt ??= previous.turnEndedAt;
+    }
+  });
 }
 
 /** `{id -> name}` from `session_index.jsonl` — small, read whole each time. */
@@ -242,7 +238,7 @@ function samePath(a: string, b: string): boolean {
 }
 
 export const codexSessionProvider: SessionProvider = {
-  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+  list(cwd: string): Promise<AgentSessionInfo[]> {
     return listIn(codexHome(), cwd);
   },
 
@@ -270,9 +266,9 @@ export const codexSessionProvider: SessionProvider = {
       { sub: "sessions", target: `${SANDBOX_HOME}/.codex/sessions` },
       { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
     ],
-    list: (_executable, root, cwd) => listIn(root, cwd),
-    remove: (_executable, root, _cwd, sessionId) => removeInHome(root, sessionId),
-    rename: (_executable, root, _cwd, sessionId, title) => renameInHome(root, sessionId, title)
+    list: (root, cwd) => listIn(root, cwd),
+    remove: (root, _cwd, sessionId) => removeInHome(root, sessionId),
+    rename: (root, _cwd, sessionId, title) => renameInHome(root, sessionId, title)
   },
 
   /**
@@ -280,7 +276,7 @@ export const codexSessionProvider: SessionProvider = {
    * day's folder may not exist yet and `fs.watch` throws on one. Not per repository: `list()`
    * filters by cwd.
    */
-  watch(_executable: string, _cwd: string, onChange: () => void): () => void {
+  watch(_cwd: string, onChange: () => void): () => void {
     let stopped = false;
     const watchers: fs.FSWatcher[] = [];
     const armed = new Set<string>();
@@ -341,34 +337,28 @@ export const codexSessionProvider: SessionProvider = {
   }
 };
 
-async function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
-  try {
+function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
+  return collectSessions("codex", async () => {
     const files = await listRolloutFiles(home);
-    forgetMissing(sessionsRoot(home), files, [metaCache, tailCache]);
+    forgetMissing(sessionsRoot(home), files, [metaCache, tailCache, headCache]);
     const names = await readSessionNames(home);
-    const entries = await mapLimited(files, READ_CONCURRENCY, async (filePath): Promise<AgentSessionInfo | undefined> => {
+    return mapLimited(files, READ_CONCURRENCY, async (filePath): Promise<AgentSessionInfo | undefined> => {
       const meta = await readSessionMeta(filePath);
       // Only `source: "cli"` is interactive, as in Codex's `/resume` picker.
       if (!meta || meta.source !== "cli" || !samePath(meta.cwd, cwd)) {
         return undefined;
       }
-      const [tail, stat] = await Promise.all([scanTail(filePath), fs.promises.stat(filePath)]);
-      const title = names.get(meta.sessionId) ?? tail.firstPrompt ?? "";
+      const { tail, size, mtimeMs } = await scanTail(filePath);
+      const title = names.get(meta.sessionId) ?? (await scanHead(filePath, size)).firstPrompt ?? "";
       return {
         id: meta.sessionId,
         title,
-        updatedAt: stat.mtimeMs,
-        createdAt: meta.createdAt ?? stat.mtimeMs,
+        updatedAt: mtimeMs,
+        createdAt: meta.createdAt ?? mtimeMs,
         turnEndedAt: tail.turnEndedAt
       };
     });
-    const sessions = entries.filter((entry): entry is AgentSessionInfo => entry !== undefined);
-    sessions.sort((a, b) => a.createdAt - b.createdAt);
-    return sessions;
-  } catch (error) {
-    console.error("[tet] codex session listing failed:", error);
-    return [];
-  }
+  });
 }
 
 /** Only the app-server RPC writes a thread's name — no CLI command, no rollout entry. */
@@ -396,6 +386,7 @@ async function removeInHome(home: string, sessionId: string): Promise<void> {
       await fs.promises.rm(filePath, { force: true });
       metaCache.delete(filePath);
       tailCache.delete(filePath);
+      headCache.delete(filePath);
     }
   }
 }

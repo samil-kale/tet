@@ -9,7 +9,7 @@ import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import { overridesMachineNote } from "../shared/types";
-import type { Project, TerminalOutput, TerminalStatus } from "../shared/types";
+import type { NoticeSeverity, Project, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands, readSbxConfig } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
@@ -61,6 +61,11 @@ function send(channel: string, payload: unknown): void {
   if (window && !window.isDestroyed()) {
     window.webContents.send(channel, payload);
   }
+}
+
+/** Everything the user is told from this process (Notices.tsx), held as `send` holds it. */
+function notice(severity: NoticeSeverity, message: string): void {
+  send("app:notice", { severity, message });
 }
 
 ipcMain.on("app:notice-listening", () => {
@@ -199,9 +204,7 @@ const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_UR
 
 // Before anything that could throw asynchronously, so an uncaught exception becomes a notice rather
 // than Electron's modal dialog freezing every terminal (uncaught.ts).
-installUncaughtHandler(path.join(dataRoot, "errors.log"), (severity, message) =>
-  send("app:notice", { severity, message })
-);
+installUncaughtHandler(path.join(dataRoot, "errors.log"), notice);
 
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
@@ -213,7 +216,7 @@ setStoredEnv(() => environment.values());
 // Held until the window listens (send), like any notice this early.
 const overriding = environment.list().filter((variable) => variable.overridesMachine).map((variable) => variable.name);
 if (overriding.length > 0) {
-  send("app:notice", { severity: "info", message: overridesMachineNote(overriding) });
+  notice("info", overridesMachineNote(overriding));
 }
 // Asked only once App listens (noticesHeard), which is also when the dialog can show.
 const envRequests = new EnvRequests(
@@ -226,7 +229,7 @@ const envRequests = new EnvRequests(
     // Out of sight, told as a question is (session-manager's toast): the agent's shell gives up
     // waiting at some point, and the dialog with it.
     if ((!window.isFocused() || window.isMinimized()) && settings.get().notifications.needsYou) {
-      const tab = request.projectId ? sessions.get(request.projectId)?.snapshot().find((entry) => entry.tabId === request.tabId) : undefined;
+      const tab = request.projectId && request.tabId ? findTab(request.projectId, request.tabId) : undefined;
       const agent = AGENTS.find((entry) => entry.id === tab?.agentId)?.displayName ?? "An agent";
       showDesktopNotification(
         `${agent}: Environment variables needed`,
@@ -242,7 +245,7 @@ const envRequests = new EnvRequests(
 const records = new ControlRecords();
 const repositories = new RepositoryManager(
   (projectId, state) => send("repo:state-changed", { projectId, state }),
-  (severity, message) => send("app:notice", { severity, message }),
+  notice,
   (projectId) => {
     send("commands:changed", { projectId });
     // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged).
@@ -274,7 +277,7 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
     send("terminal:status", { projectId, tabId, status });
   },
   onStartupProgress: (projectId, show) => send("terminal:startup-progress", { projectId, show }),
-  onNotice: (severity, message) => send("app:notice", { severity, message })
+  onNotice: notice
 });
 
 function openProject(project: Project): void {
@@ -312,15 +315,18 @@ function openWorkspace(): void {
 let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
+function findTab(projectId: string, tabId: string): TerminalDescriptor | undefined {
+  return sessions.get(projectId)?.snapshot().find((tab) => tab.tabId === tabId);
+}
+
 /**
  * Brings a toast's tab to the front, found by tab id or by session id — the tab id of a restored
  * tab (TerminalDescriptor). Returns whether it was found.
  */
 function showToastTarget(target: { projectId: string; tabId: string; sessionId?: string }): boolean {
-  const tab = sessions
-    .get(target.projectId)
-    ?.snapshot()
-    .find((candidate) => candidate.tabId === target.tabId || (target.sessionId !== undefined && candidate.tabId === target.sessionId));
+  const tab =
+    findTab(target.projectId, target.tabId) ??
+    (target.sessionId !== undefined ? findTab(target.projectId, target.sessionId) : undefined);
   if (tab) {
     send("terminal:show", { projectId: target.projectId, tabId: tab.tabId });
   }
@@ -355,11 +361,7 @@ startNotifications({
   revealWindow,
   attractAttention,
   showTab: showToastTarget,
-  sessionIdOf: (target) =>
-    sessions
-      .get(target.projectId)
-      ?.snapshot()
-      .find((tab) => tab.tabId === target.tabId)?.sessionId
+  sessionIdOf: (target) => findTab(target.projectId, target.tabId)?.sessionId
 });
 
 /**
@@ -412,7 +414,7 @@ async function startControl(): Promise<void> {
           config: (project) => readSbxConfig(project.path),
           stored: (projectId) => sbxLocal.stored(projectId),
           problems: readProjectSbxProblems,
-          save: (project, request, local) => saveProjectSbx({ sbxLocal, send }, project, request, local)
+          save: (project, request, local, status) => saveProjectSbx({ sbxLocal, send }, project, request, local, status)
         }
       },
       controlChannel.token,
@@ -527,10 +529,7 @@ function createWindow(): void {
     rendererRebuiltAt = now;
     // Only once the new renderer has loaded; earlier sends reach the dead process.
     crashed.webContents.once("did-finish-load", () =>
-      send("app:notice", {
-        severity: "warning",
-        message: "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone."
-      })
+      notice("warning", "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone.")
     );
     crashed.webContents.reload();
   });
@@ -629,9 +628,7 @@ if (!app.requestSingleInstanceLock()) {
     // while the renderer loads.
     await pathReady;
     timeStartup("git-process", startGitProcess);
-    timeStartup("auto-update", () =>
-      startAutoUpdate(installed, releasesUrl, dataRoot, (severity, message) => send("app:notice", { severity, message }))
-    );
+    timeStartup("auto-update", () => startAutoUpdate(installed, releasesUrl, dataRoot, notice));
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

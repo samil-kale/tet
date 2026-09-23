@@ -5,15 +5,16 @@ import * as path from "node:path";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import {
   findEncodedDir,
-  forgetMissing,
+  listTranscriptDir,
   nonEmptyString,
   parseLine,
-  readHeadLines,
   requireTitle,
+  scanTranscriptHead,
   scanTranscriptTail,
   timestampOf,
   TRANSCRIPT_SCAN_BYTES,
-  truncateTitle
+  truncateTitle,
+  type ScannedTail
 } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
@@ -32,7 +33,7 @@ import { SANDBOX_HOME } from "../../terminals/hook-target";
  *   one clearing it; without one pi shows the first user message
  */
 export const piSessionProvider: SessionProvider = {
-  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+  list(cwd: string): Promise<AgentSessionInfo[]> {
     return listIn(sessionsRoot(), cwd);
   },
 
@@ -49,7 +50,7 @@ export const piSessionProvider: SessionProvider = {
   },
 
   /** The session directory may not exist yet — watchTranscriptDir handles that. */
-  watch(_executable: string, cwd: string, onChange: () => void): () => void {
+  watch(cwd: string, onChange: () => void): () => void {
     return watchTranscriptDir(
       sessionsRoot,
       () => findSessionDir(sessionsRoot(), cwd),
@@ -64,52 +65,36 @@ export const piSessionProvider: SessionProvider = {
    */
   sandbox: {
     mounts: [{ sub: "sessions", target: `${SANDBOX_HOME}/.pi/agent/sessions` }],
-    list: (_executable, root, cwd) => listIn(path.join(root, "sessions"), cwd, path.posix),
-    remove: (_executable, root, cwd, sessionId) => removeIn(path.join(root, "sessions"), cwd, sessionId, path.posix),
-    rename: (_executable, root, cwd, sessionId, title) =>
+    list: (root, cwd) => listIn(path.join(root, "sessions"), cwd, path.posix),
+    remove: (root, cwd, sessionId) => removeIn(path.join(root, "sessions"), cwd, sessionId, path.posix),
+    rename: (root, cwd, sessionId, title) =>
       renameIn(path.join(root, "sessions"), cwd, sessionId, title, path.posix)
   }
 };
 
-async function listIn(root: string, cwd: string, paths = path): Promise<AgentSessionInfo[]> {
-  try {
-    const dir = await findSessionDir(root, cwd, paths);
-    if (!dir) {
-      return [];
+function listIn(root: string, cwd: string, paths = path): Promise<AgentSessionInfo[]> {
+  return listTranscriptDir(
+    () => findSessionDir(root, cwd, paths),
+    [headCache, scanCache],
+    "pi",
+    async (filePath): Promise<AgentSessionInfo | undefined> => {
+      // The tail first, for the size its fstat gives the head scan.
+      const { tail, size, mtimeMs } = await scanTail(filePath);
+      const head = await scanHead(filePath, size);
+      if (head.id === undefined) {
+        return undefined;
+      }
+      return {
+        id: head.id,
+        title: tail.name ? truncateTitle(tail.name) : (head.firstPrompt ?? ""),
+        // mtime: only compared for change, and a rename bumps it.
+        updatedAt: mtimeMs,
+        createdAt: head.createdAt ?? mtimeMs,
+        turnEndedAt: tail.turnEndedAt
+        // No provisionalTitle: pi never names a session, so reconcile would poll in vain.
+      };
     }
-    const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
-    forgetMissing(
-      dir,
-      files.map((file) => path.join(dir, file)),
-      [headCache, scanCache]
-    );
-    const entries = await Promise.all(
-      files.map(async (file): Promise<AgentSessionInfo | undefined> => {
-        const filePath = path.join(dir, file);
-        const stat = await fs.promises.stat(filePath);
-        const head = await scanHead(filePath, stat.size);
-        if (!head) {
-          return undefined;
-        }
-        const tail = await scanTail(filePath);
-        return {
-          id: head.id,
-          title: tail.name ? truncateTitle(tail.name) : (head.firstPrompt ?? ""),
-          // mtime: only compared for change, and a rename bumps it.
-          updatedAt: stat.mtimeMs,
-          createdAt: head.createdAt ?? stat.mtimeMs,
-          turnEndedAt: tail.turnEndedAt
-          // No provisionalTitle: pi never names a session, so reconcile would poll in vain.
-        };
-      })
-    );
-    const sessions = entries.filter((entry): entry is AgentSessionInfo => entry !== undefined);
-    sessions.sort((a, b) => a.createdAt - b.createdAt);
-    return sessions;
-  } catch (error) {
-    console.error("[tet] pi session listing failed:", error);
-    return [];
-  }
+  );
 }
 
 /** A missing session directory or transcript resolves (SessionProvider.remove): already gone. */
@@ -199,7 +184,7 @@ async function findSessionFile(dir: string, sessionId: string): Promise<string |
   for (const file of files) {
     const filePath = path.join(dir, file);
     const head = await scanHead(filePath, (await fs.promises.stat(filePath)).size);
-    if (head?.id === sessionId) {
+    if (head.id === sessionId) {
       return filePath;
     }
   }
@@ -207,8 +192,8 @@ async function findSessionFile(dir: string, sessionId: string): Promise<string |
 }
 
 interface TranscriptHead {
-  /** What `--session` matches. */
-  id: string;
+  /** What `--session` matches; undefined for a `.jsonl` that is not a pi transcript. */
+  id?: string;
   /** Header timestamp, ms; written at pi's startup, so always after the tab's spawn. */
   createdAt?: number;
   /** Truncated; pi's picker shows the same. */
@@ -219,44 +204,36 @@ interface TranscriptHead {
  *  append-only file are read. */
 const headCache = new Map<string, { size: number; head: TranscriptHead }>();
 
-/** Undefined for a `.jsonl` that is not a pi transcript. */
-async function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead | undefined> {
-  const size = Math.min(fileSize, TRANSCRIPT_SCAN_BYTES);
-  const cached = headCache.get(filePath);
-  if (cached?.size === size) {
-    return cached.head;
-  }
-  let head: TranscriptHead | undefined;
-  const read = await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, "pi", (line) => {
-    const found = head;
-    if (!found) {
-      // Like pi's listing, skip a file whose first line is not a header.
-      const header = parseLine(line);
-      const id = header?.type === "session" ? nonEmptyString(header.id) : undefined;
-      if (id === undefined) {
-        return true;
+function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead> {
+  return scanTranscriptHead(filePath, fileSize, headCache, {
+    label: "pi",
+    create: (): TranscriptHead => ({}),
+    read: (line, head) => {
+      if (head.id === undefined) {
+        // Like pi's listing, skip a file whose first line is not a header.
+        const header = parseLine(line);
+        const id = header?.type === "session" ? nonEmptyString(header.id) : undefined;
+        if (id === undefined) {
+          return true;
+        }
+        head.id = id;
+        head.createdAt = timestampOf(header?.timestamp);
+        return false;
       }
-      head = { id, createdAt: timestampOf(header?.timestamp) };
-      return false;
+      // Only the first user message; other lines go unparsed.
+      if (!line.includes('"user"')) {
+        return false;
+      }
+      const entry = parseLine(line);
+      const message = entry?.type === "message" ? (entry.message as Record<string, unknown> | undefined) : undefined;
+      if (message?.role !== "user") {
+        return false;
+      }
+      const prompt = messageText(message.content);
+      head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
+      return true;
     }
-    // Only the first user message; other lines go unparsed.
-    if (!line.includes('"user"')) {
-      return false;
-    }
-    const entry = parseLine(line);
-    const message = entry?.type === "message" ? (entry.message as Record<string, unknown> | undefined) : undefined;
-    if (message?.role !== "user") {
-      return false;
-    }
-    const prompt = messageText(message.content);
-    found.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
-    return true;
   });
-  // No prompt yet: cache only once the window is full, since the file can still grow one.
-  if (read && head && (head.firstPrompt !== undefined || size >= TRANSCRIPT_SCAN_BYTES)) {
-    headCache.set(filePath, { size, head });
-  }
-  return head;
 }
 
 /** A plain string, or its `text` blocks joined — as pi's picker reads it. */
@@ -292,7 +269,7 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
  * Reads backwards for the two entries whose *last* occurrence counts, to the file's start if needed
  * — a rename 300 KB ago is still the name.
  */
-function scanTail(filePath: string): Promise<TranscriptTail> {
+function scanTail(filePath: string): Promise<ScannedTail<TranscriptTail>> {
   return scanTranscriptTail(filePath, scanCache, {
     byteLimit: TRANSCRIPT_SCAN_BYTES,
     label: "pi",

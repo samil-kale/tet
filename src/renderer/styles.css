@@ -197,9 +197,10 @@ textarea:focus,
   flex-direction: column;
   height: 100%;
   /* Shared measurements, checked against the neighbouring view before inventing one: a bar along
-     an edge is 35px (tab strip, title bar, `.section-header`, the editor tab's bar); the border
-     between panes is 1px --vscode-panel-border; anything that marks or points at something is 1px
-     --vscode-focusBorder. */
+     an edge is --bar-height (tab strip, title bar, `.section-header`, the editor tab's bar); the
+     border between panes is 1px --vscode-panel-border; anything that marks or points at something
+     is 1px --vscode-focusBorder. */
+  --bar-height: 35px;
   /* Pane floors, as MIN_PANE_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
   --pane-min-width: 230px;
@@ -220,7 +221,7 @@ textarea:focus,
   align-items: center;
   gap: 8px;
   /* VS Code's title bar height with the window controls overlay. */
-  height: 35px;
+  height: var(--bar-height);
   flex: none;
   padding-left: 12px;
   /* Stops short of the platform's window controls, whose geometry the overlay publishes as
@@ -377,7 +378,7 @@ textarea:focus,
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  height: 35px;
+  height: var(--bar-height);
   flex: none;
   padding: 0 6px 0 10px;
   border-bottom: 1px solid var(--vscode-panel-border);
@@ -398,8 +399,7 @@ textarea:focus,
 .command-item,
 .tree-header,
 .tree-item,
-.change-item,
-.repository-item {
+.change-item {
   height: var(--list-row-height);
   flex: none;
 }
@@ -411,7 +411,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   padding: 0 6px 0 10px;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
 }
 
 .project-item {
@@ -498,8 +498,8 @@ textarea:focus,
   cursor: progress;
 }
 
-/* Shared by the branch tree's and the Explorer's filter and by the SEARCH pane's box, which adds
-   to it below. */
+/* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH pane's box,
+   which adds to it below. */
 .filter-field {
   position: relative;
   padding: 8px 6px;
@@ -588,20 +588,22 @@ textarea:focus,
   width: 100%;
   padding: 0 6px 0 23px;
   text-align: left;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
 }
 
 .tree-item.nested {
   padding-left: 43px;
 }
 
-.tree-item:hover {
+.tree-item:hover,
+.change-item:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
 /* HEAD gets a background, not a recolored label, which keeps a track badge legible. */
 .tree-item.current,
-.tree-item.selected {
+.tree-item.selected,
+.change-item.selected {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
@@ -718,9 +720,7 @@ textarea:focus,
 }
 
 /* 1px under --icon-size, like the Explorer's. */
-.tree-icon,
-.tree-header svg,
-.tree-item.remote > svg {
+.tree-icon {
   flex: none;
   width: calc(var(--icon-size) - 1px);
   height: calc(var(--icon-size) - 1px);
@@ -843,7 +843,7 @@ textarea:focus,
   display: flex;
   align-items: stretch;
   /* VS Code's editor tab height. */
-  height: 35px;
+  height: var(--bar-height);
   flex: none;
   background: var(--vscode-tab-inactiveBackground);
   border-bottom: 1px solid var(--vscode-panel-border);
@@ -901,7 +901,7 @@ textarea:focus,
   /* Less on the right: the close button carries 4px of its own around the glyph. */
   padding: 0 4px 0 10px;
   max-width: 220px;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   color: var(--vscode-tab-inactiveForeground);
   background: var(--vscode-tab-inactiveBackground);
   border-right: 1px solid var(--vscode-tab-border);
@@ -981,7 +981,7 @@ textarea:focus,
   z-index: 20;
   min-width: 160px;
   padding: 4px 0;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   background: var(--vscode-menu-background);
   color: var(--vscode-menu-foreground);
   border: 1px solid var(--vscode-menu-border);
@@ -1145,10 +1145,6 @@ textarea:focus,
   min-height: 0;
 }
 
-.changes-filter {
-  margin: 6px;
-}
-
 .changes-list-items {
   flex: 1;
   overflow: auto;
@@ -1161,16 +1157,7 @@ textarea:focus,
   width: 100%;
   padding: 0 8px;
   text-align: left;
-  font-size: 13px;
-}
-
-.change-item:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.change-item.selected {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+  font-size: var(--vscode-font-size);
 }
 
 .change-path {
@@ -1320,7 +1307,7 @@ textarea:focus,
   align-items: center;
   gap: 8px;
   flex: none;
-  height: 35px;
+  height: var(--bar-height);
   padding: 0 12px 0 0;
   background: var(--vscode-panel-background);
   border-bottom: 1px solid var(--vscode-panel-border);
@@ -1343,7 +1330,7 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
 }
 
 /* A toggle whose pane is out (the side pane's view buttons). focusBorder, as everything that
@@ -1416,7 +1403,7 @@ textarea:focus,
 }
 
 .image-diff figcaption {
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   color: var(--vscode-descriptionForeground);
 }
 
@@ -1427,7 +1414,7 @@ textarea:focus,
   gap: 4px;
   padding: 6px 16px;
   border-bottom: 1px solid var(--vscode-panel-border);
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
 }
 
 .image-diff-mode {
@@ -1547,7 +1534,7 @@ textarea:focus,
 .placeholder {
   padding: 12px;
   color: var(--vscode-descriptionForeground);
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
 }
 
 .empty-workspace {
@@ -1605,7 +1592,7 @@ textarea:focus,
   width: 500px;
   max-width: calc(100vw - 32px);
   padding: 16px;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   /* The terminal's ground, a step off the header's tab-strip color as the terminal is off the
      tab strip; not the editor widget's. */
   background: var(--vscode-terminal-background);
@@ -1620,7 +1607,7 @@ textarea:focus,
   position: relative;
   display: flex;
   align-items: stretch;
-  height: 35px;
+  height: var(--bar-height);
   margin: -16px -16px 0;
   border-radius: 5px 5px 0 0;
   overflow: hidden;
@@ -1632,7 +1619,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   padding: 0 14px;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   color: var(--vscode-tab-inactiveForeground);
   border-right: 1px solid var(--vscode-tab-border);
 }
@@ -1670,7 +1657,7 @@ textarea:focus,
   align-items: center;
   gap: 8px;
   flex: none;
-  height: 35px;
+  height: var(--bar-height);
   margin: -16px -16px 0;
   padding: 0 6px 0 12px;
   /* The tab strip's (.dialog-tabs), so both shapes of header read alike. */
@@ -1685,7 +1672,7 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   font-weight: 600;
 }
 
@@ -2280,19 +2267,12 @@ textarea:focus,
   overflow-y: auto;
 }
 
-.repository-loading {
-  display: flex;
-  justify-content: center;
-  padding: 24px;
-  color: var(--vscode-descriptionForeground);
-}
-
 .repository-item {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 0 0 0 8px;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   height: var(--field-height);
   border-radius: 2px;
 }
@@ -2376,7 +2356,7 @@ textarea:focus,
   margin: 4px;
   padding: 10px 9px;
   text-align: left;
-  font-size: 13px;
+  font-size: var(--vscode-font-size);
   color: var(--vscode-notifications-foreground);
   background: var(--vscode-notifications-background);
   border: 1px solid var(--vscode-notifications-border);

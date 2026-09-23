@@ -39,7 +39,7 @@ import { readSbxConfig, writeSbxConfig } from "./tet-json";
 import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
 import { relativeInside } from "./path-inside";
-import { isMountAllowed, parseFilesystemRules, parseGovernance, type FilesystemRule, type PathFlavor } from "./sbx-policy";
+import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
 import { agentDataDir, agentDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/hook-target";
@@ -218,34 +218,28 @@ type SandboxList = Map<string, string[]>;
 
 /**
  * Before every sandboxed spawn (`resolveSbxRun`): the first unmet precondition as a notice, or the
- * sandbox listing the sign-in probe's `sbx ls` produced, for `prepareSbxRun`. The policy check
- * (readSbxBlockers) repeats the dialog's: a policy changes outside tet, and an agent whose hooks
- * cannot reach tet or whose folders are unmounted runs with no turn marks and no reason given.
+ * sandbox listing the sign-in probe's `sbx ls` produced and the filesystem rules the policy check
+ * read, for `prepareSbxRun`. The policy check (readSbxBlockers) repeats the dialog's: a policy
+ * changes outside tet, and an agent whose hooks cannot reach tet or whose folders are unmounted
+ * runs with no turn marks and no reason given.
  */
 export async function checkSbxReady(
   projectPath: string,
   projectId: string
-): Promise<{ notReady: string } | { sandboxes: SandboxList; organization?: string }> {
+): Promise<{ notReady: string } | { sandboxes: SandboxList; organization?: string; rules: FilesystemRule[] }> {
   // No PATH re-read on the spawn path: on macOS/Linux that is a login shell per call.
   const { status, sandboxes } = await probeSbx(false);
-  if (!status.installed) {
-    return { notReady: "SBX is not installed (or no longer on PATH)" };
+  const notReady = sbxNotReady(status);
+  // A listing exists whenever signed in (probeSbx); `!sandboxes` only narrows it.
+  if (notReady !== undefined || !sandboxes) {
+    return { notReady: notReady ?? "SBX is not signed in to Docker" };
   }
-  if (status.failure) {
-    return { notReady: `SBX failed: ${status.failure}` };
-  }
-  if (!status.loggedIn || !sandboxes) {
-    return { notReady: "SBX is not signed in to Docker" };
-  }
-  if (!status.policyInitialized) {
-    return { notReady: "SBX's network policy is not set up" };
-  }
-  const blockers = await readSbxBlockers(projectPath, projectId);
+  const { blockers, rules } = await readSbxBlockers(projectPath, projectId);
   if (blockers.length > 0) {
     const policy = status.organization ? "your organization's SBX policy" : "SBX's policy";
     return { notReady: `${policy} does not allow ${blockers.map((blocker) => blocker.allow).join("; ")}` };
   }
-  return { sandboxes, organization: status.organization };
+  return { sandboxes, organization: status.organization, rules };
 }
 
 /**
@@ -255,7 +249,7 @@ export async function checkSbxReady(
 export async function readSbxStatus(projectPath: string, projectId: string): Promise<SbxStatus> {
   const { status } = await probeSbx(true);
   if (status.policyInitialized) {
-    status.blockers = await readSbxBlockers(projectPath, projectId);
+    status.blockers = (await readSbxBlockers(projectPath, projectId)).blockers;
   }
   return status;
 }
@@ -275,9 +269,13 @@ function folderRule(folder: string): string {
  * `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
  * for — a tab starts without them.
  *
- * Both questions are asked at once, for the same reason probeSbx asks its three that way.
+ * Both questions are asked at once, for the same reason probeSbx asks its three that way. The rules
+ * are returned too, for a spawn's readSbxProblems.
  */
-export async function readSbxBlockers(projectPath: string, projectId: string): Promise<SbxBlocker[]> {
+export async function readSbxBlockers(
+  projectPath: string,
+  projectId: string
+): Promise<{ blockers: SbxBlocker[]; rules: FilesystemRule[] }> {
   const [channelAllowed, rules] = await Promise.all([isControlChannelAllowed(), readFilesystemRules()]);
   const blockers: SbxBlocker[] = [];
   if (!channelAllowed) {
@@ -298,7 +296,7 @@ export async function readSbxBlockers(projectPath: string, projectId: string): P
       blockers.push({ what: "tet's agent data", allow: `${folderRule(agentDataDir(root))} (read and write)` });
     }
   }
-  return blockers;
+  return { blockers, rules };
 }
 
 /** This machine's paths, as sbx-policy.ts compares them. */
@@ -469,7 +467,7 @@ function normalizeHostPath(hostPath: string): string {
  * A live bind mount's `sbx mount` and `sbx umount` specs. `mount` carries the access, so equal
  * `mount`s are the same grant (`staleMounts`).
  */
-export interface MountSpec {
+interface MountSpec {
   mount: string;
   unmount: string;
 }
@@ -501,7 +499,7 @@ function statOf(candidate: string): Stats | undefined {
   }
 }
 
-export type SandboxPaths = Pick<AgentPaths, "agentDir">;
+type SandboxPaths = Pick<AgentPaths, "agentDir">;
 
 /**
  * tet's own mount for every sandboxed tab: `agentDir` rw (hook settings, agents' records). A live
@@ -880,9 +878,6 @@ async function revokeStaleHosts(name: string, previous: string[], current: strin
   }
 }
 
-/** See sbxPortKey. */
-const portKey = sbxPortKey;
-
 /**
  * What the sandbox has published, what applyProjectPorts brings in line (as readSandboxHosts is
  * for hosts): a port sbx refused at the last Save is missing here and is tried again. Measured, 2026-09-17, sbx 0.42.1: a *stopped* sandbox answers
@@ -921,8 +916,8 @@ async function applyPortChanges(
   onData?: OnData
 ): Promise<Record<string, string>> {
   const changes = [
-    ...delta.removed.map((port) => ["--unpublish", portKey(port)]),
-    ...delta.added.map((port) => ["--publish", portKey(port)])
+    ...delta.removed.map((port) => ["--unpublish", sbxPortKey(port)]),
+    ...delta.added.map((port) => ["--publish", sbxPortKey(port)])
   ];
   const refused: Record<string, string> = {};
   for (const [flag, key] of changes) {
@@ -1033,13 +1028,13 @@ async function applySecrets(
 }
 
 /** A `SandboxSessionMount` with an absolute host side, for `sessionMountSpecs`. */
-export interface SbxSessionMount {
+interface SbxSessionMount {
   host: string;
   target: string;
   file?: boolean;
 }
 
-export interface SbxRunRequest {
+interface SbxRunRequest {
   agentId: SbxAgentId;
   projectId: string;
   projectPath: string;
@@ -1050,6 +1045,8 @@ export interface SbxRunRequest {
   sandboxes: SandboxList;
   /** The organization managing sbx's policy, as `checkSbxReady` read it (readSbxProblems). */
   organization?: string;
+  /** The filesystem rules `checkSbxReady` just read, so they are not listed again. */
+  rules?: FilesystemRule[];
   /** The `ensureRunning` the caller began while `checkSbxReady` ran, so the two overlap; mountAll
    *  waits on it. Silent, since the tab it would write into may yet turn out to run on this machine
    *  — a start worth reporting is the one mountAll repeats. Dropped when the sandbox turned out to
@@ -1161,6 +1158,7 @@ export async function prepareSbxRun(
     values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
     agentIds: [agentId],
     organization: request.organization,
+    rules: request.rules,
     ports: created,
     published: forwarded
   });
@@ -1200,7 +1198,7 @@ export async function prepareSbxRun(
     }
     // Not `sbx run -p`: the sandbox always exists by here, and `run --name` drops `-p` on an
     // existing one with a warning, even for a free port (measured, 2026-09-17, sbx 0.42.1).
-    const added = config.ports.filter((port) => !forwarded.has(portKey(port)));
+    const added = config.ports.filter((port) => !forwarded.has(sbxPortKey(port)));
     addProblems(problems, "ports", await applyPortChanges(name, { removed: [], added }, onData));
     // The sandbox's secrets went with any earlier one of its name.
     addProblems(problems, "secrets", await applySecrets(name, request.projectId, config.secrets, secretValues, [], new Set(), onData));
@@ -1233,11 +1231,11 @@ export async function prepareSbxRun(
 async function readProjectPorts(projectId: string, listed?: SandboxList): Promise<Set<string>> {
   const sandboxes = listed ?? (await listSandboxes()) ?? new Map();
   const names = SBX_AGENT_IDS.map((agentId) => sandboxName(projectId, agentId)).filter((name) => sandboxes.has(name));
-  return new Set((await Promise.all(names.map(readSandboxPorts))).flat().map(portKey));
+  return new Set((await Promise.all(names.map(readSandboxPorts))).flat().map(sbxPortKey));
 }
 
 /** What readSbxProblems checks: the rows, and what this machine holds for them. */
-export interface SbxCheck {
+interface SbxCheck {
   projectId: string;
   config: SbxProjectConfig;
   knowledge: SbxKnowledgeConfig;
@@ -1247,6 +1245,8 @@ export interface SbxCheck {
   agentIds: readonly SbxAgentId[];
   /** readGovernance's. */
   organization: string | undefined;
+  /** readFilesystemRules', when the caller has them already. */
+  rules?: FilesystemRule[];
   /** Whether the ports are applied now: at Save, and at the spawn creating a sandbox. */
   ports: boolean;
   /** readProjectPorts', when the caller has it already. */
@@ -1274,11 +1274,18 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   const add = (option: SbxOption, row: string, reason: string): void => addProblems(problems, option, { [row]: reason });
   const kinds = SBX_KNOWLEDGE_KINDS.filter((kind) => knowledge[kind] !== false);
   const secretHosts = [...new Set(config.secrets.flatMap((secret) => secret.hosts))];
+  // A host both allowed and a secret's is asked once.
+  const asked = new Map<string, Promise<boolean>>();
+  const allowed = (host: string): Promise<boolean> => {
+    const pending = asked.get(host) ?? readHostAllowed(host);
+    asked.set(host, pending);
+    return pending;
+  };
   const reachable = async (host: string): Promise<boolean> =>
-    (!organization && config.hosts.includes(host)) || (await readHostAllowed(host));
+    (!organization && config.hosts.includes(host)) || (await allowed(host));
   const [rules, hostsAllowed, secretHostsAllowed, published, own] = await Promise.all([
-    config.paths.length > 0 || kinds.length > 0 ? readFilesystemRules() : Promise.resolve([]),
-    organization ? Promise.all(config.hosts.map(readHostAllowed)) : Promise.resolve(config.hosts.map(() => true)),
+    config.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readFilesystemRules()) : Promise.resolve([]),
+    organization ? Promise.all(config.hosts.map(allowed)) : Promise.resolve(config.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
     check.published ?? (check.ports && config.ports.length > 0 ? readProjectPorts(check.projectId) : new Set<string>()),
     Promise.all(check.agentIds.map((agentId) => sandboxKnowledgeFor(agentId, knowledge.skillsFolder)))
@@ -1295,9 +1302,9 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   }
   if (check.ports) {
     const free = await Promise.all(
-      config.ports.map((port) => !isPort(port.host) || published.has(portKey(port)) || canBind(Number(port.host)))
+      config.ports.map((port) => !isPort(port.host) || published.has(sbxPortKey(port)) || canBind(Number(port.host)))
     );
-    config.ports.forEach((port, index) => free[index] || add("ports", portKey(port), SBX_PROBLEM.portInUse));
+    config.ports.forEach((port, index) => free[index] || add("ports", sbxPortKey(port), SBX_PROBLEM.portInUse));
   }
   for (const entry of config.paths) {
     if (!statOf(normalizeHostPath(entry.path))) {
@@ -1334,17 +1341,17 @@ async function applyProjectPorts(names: string[], ports: SbxPort[]): Promise<Rec
   const started = await Promise.all(names.map((name) => ensureRunning(name)));
   const running = names.filter((_, index) => started[index]);
   const published = await Promise.all(running.map(readSandboxPorts));
-  const wanted = new Set(ports.map(portKey));
+  const wanted = new Set(ports.map(sbxPortKey));
   const refused: Record<string, string> = {};
   for (const [index, name] of running.entries()) {
-    Object.assign(refused, await applyPortChanges(name, { removed: published[index].filter((port) => !wanted.has(portKey(port))), added: [] }));
+    Object.assign(refused, await applyPortChanges(name, { removed: published[index].filter((port) => !wanted.has(sbxPortKey(port))), added: [] }));
   }
-  const forwarded = new Set(published.flat().map(portKey));
+  const forwarded = new Set(published.flat().map(sbxPortKey));
   // The first sandbox that takes it; sbx's last refusal otherwise.
   const publish = async (port: SbxPort): Promise<string | undefined> => {
     let reason: string = SBX_PROBLEM.notStarted;
     for (const name of running) {
-      const refusal = (await applyPortChanges(name, { removed: [], added: [port] }))[portKey(port)];
+      const refusal = (await applyPortChanges(name, { removed: [], added: [port] }))[sbxPortKey(port)];
       if (refusal === undefined) {
         return undefined;
       }
@@ -1352,10 +1359,10 @@ async function applyProjectPorts(names: string[], ports: SbxPort[]): Promise<Rec
     }
     return reason;
   };
-  for (const port of ports.filter((entry) => !forwarded.has(portKey(entry)))) {
+  for (const port of ports.filter((entry) => !forwarded.has(sbxPortKey(entry)))) {
     const reason = await publish(port);
     if (reason !== undefined) {
-      refused[portKey(port)] = reason;
+      refused[sbxPortKey(port)] = reason;
     }
   }
   return refused;
@@ -1447,12 +1454,12 @@ export async function saveSbxConfig(
     return refused;
   };
   const refused = await apply(config);
-  const refusedPort = (port: SbxPort): boolean => refused.ports?.[portKey(port)] !== undefined;
+  const refusedPort = (port: SbxPort): boolean => refused.ports?.[sbxPortKey(port)] !== undefined;
   const applied: SbxProjectConfig = {
     ...config,
     ports: [
       ...config.ports.filter((port) => !refusedPort(port)),
-      ...previous.ports.filter((port) => refusedPort(port) && !config.ports.some((next) => portKey(next) === portKey(port)))
+      ...previous.ports.filter((port) => refusedPort(port) && !config.ports.some((next) => sbxPortKey(next) === sbxPortKey(port)))
     ],
     hosts: config.hosts.filter((host) => refused.hosts?.[host] === undefined),
     secrets: config.secrets.filter((secret) => refused.secrets?.[secret.env] === undefined)

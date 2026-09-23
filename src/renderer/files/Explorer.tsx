@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ExplorerListing, FileChange, GitActionResult, Project } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
-import { absolutePath, revealLabel } from "../platform";
 import type { FileAct, FileAsk } from "../git/run-action";
+import { openEntries, pathEntries } from "../git/ChangesList";
 import {
   ancestorsOf,
   buildForest,
   compactTree,
   filterTree,
   hasExpandedRootChild,
+  isOpen,
   parentOf,
   rootIndexFor,
   type TreeNode
@@ -17,7 +18,6 @@ import { FileMarkIcon, INDENT_BASE, INDENT_STEP, Twistie } from "./tree-rows";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
-import { isMarkdown } from "../diff/diff-highlight";
 
 interface RowsProps {
   nodes: TreeNode[];
@@ -36,8 +36,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
     <>
       {nodes.map((node) => {
         const isFolder = node.children !== undefined;
-        // A root starts open, everything else closed.
-        const open = forceExpanded || (expanded[node.id] ?? node.root === true);
+        const open = forceExpanded || isOpen(node, expanded);
         return (
           <div key={node.id}>
             <button
@@ -88,8 +87,8 @@ interface ExplorerProps {
   shown: boolean;
   /** The active editor tab's file — revealed and highlighted. */
   selected: string | null;
-  /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked. */
-  /** The project is named: the same handler serves every view that opens a file. */
+  /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked.
+   *  The project is named: the same handler serves every view that opens a file. */
   onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
   /** What a question runs, shown on the question's own bar and refused at its field. */
   ask: FileAsk;
@@ -118,7 +117,7 @@ export interface ExplorerHandle {
  * applied; `sortOrder`/`compactFolders` are applied here. Its field filters it by name; what a
  * search finds in the files' lines is the pane under it (`FileSearch`).
  */
-export function Explorer({
+export const Explorer = memo(function Explorer({
   project,
   files,
   shown: visible,
@@ -197,7 +196,12 @@ export function Explorer({
   }, [selected, expanded, shown, visible]);
 
   const toggle = (node: TreeNode): void =>
-    setExpanded((current) => ({ ...current, [node.id]: !(current[node.id] ?? node.root === true) }));
+    setExpanded((current) => ({ ...current, [node.id]: !isOpen(node, current) }));
+
+  const onRowContextMenu = useCallback((event: React.MouseEvent, node: TreeNode) => {
+    event.preventDefault();
+    setMenu({ x: event.clientX, y: event.clientY, node });
+  }, []);
 
   /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything
    *  (at once without roots). Walks the uncompacted `tree`, whose ids compacted rows keep. */
@@ -305,11 +309,10 @@ export function Explorer({
     const isFile = node !== null && node.children === undefined;
     const isRoot = node?.root === true;
 
-    const openEntries: ContextMenuEntry[] = isFile
+    const fileEntries: ContextMenuEntry[] = isFile
       ? [
           { label: "Open", run: () => onOpen(node.path) },
-          ...(isMarkdown(node.path) ? [{ label: "Open Preview", run: () => onOpen(node.path, { markdownPreview: true }) }] : []),
-          { label: "Open in external editor", run: () => void window.tet.shell.openFileExternally(project.id, node.path) },
+          ...openEntries(project.id, node.path, true, (how) => onOpen(node.path, how)),
           SEPARATOR
         ]
       : [];
@@ -342,32 +345,14 @@ export function Explorer({
         });
       }
     }
-    const pathEntries: ContextMenuEntry[] = node
-      ? [
-          SEPARATOR,
-          { label: revealLabel(), run: () => void window.tet.shell.revealFile(project.id, node.path) },
-          {
-            label: isFile ? "Copy file path" : "Copy path",
-            run: () => void navigator.clipboard.writeText(absolutePath(project.path, node.path))
-          },
-          ...(node.path
-            ? [
-                {
-                  label: isFile ? "Copy relative file path" : "Copy relative path",
-                  run: () => void navigator.clipboard.writeText(node.path)
-                }
-              ]
-            : [])
-        ]
-      : [];
 
     return [
-      ...openEntries,
+      ...fileEntries,
       { label: "New File...", run: () => void askNewFile(dir) },
       { label: "New Folder...", run: () => void askNewFolder(dir) },
       ...editEntries,
       ...viewEntries,
-      ...pathEntries
+      ...(node ? pathEntries(project, [node.path], isFile ? "file path" : "path") : [])
     ];
   };
 
@@ -395,17 +380,14 @@ export function Explorer({
           forceExpanded={filtering}
           selected={selected}
           onOpen={onOpen}
-          onContextMenu={(event, node) => {
-            event.preventDefault();
-            setMenu({ x: event.clientX, y: event.clientY, node });
-          }}
+          onContextMenu={onRowContextMenu}
           rows={rows.current}
         />
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.node)} onClose={() => setMenu(null)} />}
     </div>
   );
-}
+});
 
 /**
  * The Explorer's listing, carrying the tet.json view settings. Re-read when a non-"modified" entry

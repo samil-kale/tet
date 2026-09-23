@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
+import type { AgentSessionInfo } from "./agent";
 
 /**
  * Shared reading of append-only JSONL transcripts from either end: the chunked read, title rules,
@@ -37,6 +38,50 @@ export async function findEncodedDir(root: string, encoded: string): Promise<str
     }
   }
   return undefined;
+}
+
+/**
+ * A listing's shared frame: the sessions `list` resolves, oldest first, or [] on any failure
+ * (SessionProvider.list), logged under `label`. Undefined entries are files that are no session.
+ */
+export async function collectSessions(
+  label: string,
+  list: () => Promise<(AgentSessionInfo | undefined)[]>
+): Promise<AgentSessionInfo[]> {
+  try {
+    const sessions = (await list()).filter((entry): entry is AgentSessionInfo => entry !== undefined);
+    sessions.sort((a, b) => a.createdAt - b.createdAt);
+    return sessions;
+  } catch (error) {
+    console.error(`[tet] ${label} session listing failed:`, error);
+    return [];
+  }
+}
+
+/**
+ * Lists an agent keeping one directory of `.jsonl` transcripts per repository (Claude Code, pi):
+ * evicts what left the directory from `caches`, then hands `readOne` every transcript. No
+ * directory means no sessions.
+ */
+export function listTranscriptDir(
+  findDir: () => Promise<string | undefined>,
+  caches: Map<string, unknown>[],
+  label: string,
+  readOne: (filePath: string, file: string) => Promise<AgentSessionInfo | undefined>
+): Promise<AgentSessionInfo[]> {
+  return collectSessions(label, async () => {
+    const dir = await findDir();
+    if (!dir) {
+      return [];
+    }
+    const files = (await fs.promises.readdir(dir)).filter((file) => file.endsWith(".jsonl"));
+    forgetMissing(
+      dir,
+      files.map((file) => path.join(dir, file)),
+      caches
+    );
+    return Promise.all(files.map((file) => readOne(path.join(dir, file), file)));
+  });
 }
 
 /**
@@ -121,6 +166,39 @@ export async function readHeadLines(
   }
 }
 
+/** The per-agent, format-specific half of a cached head scan; `scanTranscriptHead` handles the file. */
+export interface HeadScan<T> {
+  /** Names the agent in a failed scan's log. */
+  label: string;
+  create: () => T;
+  /** Takes one line into `head`; true once nothing further is wanted. */
+  read: (line: string, head: T) => boolean;
+}
+
+/**
+ * Reads a transcript's head window for the agent's `read`, answering from `cache` while the file
+ * fills as much of the window as it did: transcripts are append-only, so a full window never
+ * changes. A failed read is not cached. The caller owns and evicts the cache.
+ */
+export async function scanTranscriptHead<T>(
+  filePath: string,
+  fileSize: number,
+  cache: Map<string, { size: number; head: T }>,
+  scan: HeadScan<T>
+): Promise<T> {
+  const size = Math.min(fileSize, TRANSCRIPT_SCAN_BYTES);
+  const cached = cache.get(filePath);
+  if (cached?.size === size) {
+    return cached.head;
+  }
+  const head = scan.create();
+  const read = await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, scan.label, (line) => scan.read(line, head));
+  if (read) {
+    cache.set(filePath, { size, head });
+  }
+  return head;
+}
+
 /** What the tab strip has room for. */
 const TITLE_MAX_LENGTH = 60;
 
@@ -135,7 +213,7 @@ export function truncateTitle(text: string): string {
  * character survives) into the next chunk — except at `floor`, where the partial line is handed
  * over as is; hence a resumed scan overlaps the earlier one by a chunk.
  */
-export async function readLinesBackwards(
+async function readLinesBackwards(
   handle: fs.promises.FileHandle,
   size: number,
   floor: number,
@@ -176,37 +254,48 @@ export interface TailScan<T> {
   merge: (tail: T, previous: T) => void;
 }
 
+/** A tail scan's answer, with the file's size and mtime from its own fstat — a listing stats no further. */
+export interface ScannedTail<T> {
+  tail: T;
+  size: number;
+  mtimeMs: number;
+}
+
 /**
  * Reads a transcript backwards for the agent's `read`, answering an unchanged file from `cache`.
  * A grown file is read only down to a chunk below the previous scan's end, the rest merged from
  * the old answer — the overlap covers a line caught half-written. The caller owns and evicts the cache.
+ *
+ * A file that cannot be opened or stat'ed rejects, failing the listing; a failed read is logged
+ * and answers what it found.
  */
 export async function scanTranscriptTail<T>(
   filePath: string,
   cache: Map<string, { size: number; tail: T }>,
   scan: TailScan<T>
-): Promise<T> {
-  const tail = scan.create();
-  let handle: fs.promises.FileHandle | undefined;
+): Promise<ScannedTail<T>> {
+  const handle = await fs.promises.open(filePath, "r");
   try {
-    handle = await fs.promises.open(filePath, "r");
-    const { size } = await handle.stat();
+    const { size, mtimeMs } = await handle.stat();
     const cached = cache.get(filePath);
     if (cached?.size === size) {
-      return cached.tail;
+      return { tail: cached.tail, size, mtimeMs };
     }
-    const previous = cached && cached.size < size ? cached : undefined;
-    const floor = previous ? Math.max(0, previous.size - scan.byteLimit) : 0;
-    await readLinesBackwards(handle, size, floor, scan.byteLimit, (lines) => scan.read(lines, tail));
-    scan.finish?.(tail);
-    if (previous) {
-      scan.merge(tail, previous.tail);
+    const tail = scan.create();
+    try {
+      const previous = cached && cached.size < size ? cached : undefined;
+      const floor = previous ? Math.max(0, previous.size - scan.byteLimit) : 0;
+      await readLinesBackwards(handle, size, floor, scan.byteLimit, (lines) => scan.read(lines, tail));
+      scan.finish?.(tail);
+      if (previous) {
+        scan.merge(tail, previous.tail);
+      }
+      cache.set(filePath, { size, tail });
+    } catch (error) {
+      console.error(`[tet] ${scan.label} transcript scan failed:`, error);
     }
-    cache.set(filePath, { size, tail });
-  } catch (error) {
-    console.error(`[tet] ${scan.label} transcript scan failed:`, error);
+    return { tail, size, mtimeMs };
   } finally {
-    await handle?.close();
+    await handle.close();
   }
-  return tail;
 }

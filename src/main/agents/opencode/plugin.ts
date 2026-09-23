@@ -33,7 +33,7 @@ export interface OpencodePluginOptions {
 }
 
 /** Tells the plugin which repository its process serves. */
-export const PROJECT_ROOT_ENV = "TET_PROJECT_ROOT";
+const PROJECT_ROOT_ENV = "TET_PROJECT_ROOT";
 
 /** One session's record under sessionsDir — what the listing reads. */
 export interface SessionRecord {
@@ -55,6 +55,20 @@ export function sessionsDir(agentDir: string): string {
 
 export function renameDir(agentDir: string): string {
   return path.join(agentDir, "rename");
+}
+
+/** Writes `contents` renamed into place, and only when they differ from the file's: a running
+ *  opencode may be reading it, and reloads what changed. */
+export function writeIfChanged(file: string, contents: string): void {
+  let existing: string | undefined;
+  try {
+    existing = fs.readFileSync(file, "utf8");
+  } catch {
+    existing = undefined;
+  }
+  if (existing !== contents) {
+    writeFileAtomic.sync(file, contents);
+  }
 }
 
 /** Unique per repository in a shared plugins dir. */
@@ -86,16 +100,7 @@ export function writeOpencodePlugin(
     renameDir: target.embed(renameDir(agentDir)),
     sandbox
   });
-  const file = path.join(pluginsDir, pluginName(cwd));
-  let existing: string | undefined;
-  try {
-    existing = fs.readFileSync(file, "utf8");
-  } catch {
-    existing = undefined;
-  }
-  if (existing !== contents) {
-    writeFileAtomic.sync(file, contents);
-  }
+  writeIfChanged(path.join(pluginsDir, pluginName(cwd)), contents);
   return { OPENCODE_CONFIG_DIR: target.embed(configDir), [PROJECT_ROOT_ENV]: target.embed(cwd) };
 }
 

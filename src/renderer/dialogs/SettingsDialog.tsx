@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { envRowRefusal } from "../../shared/env-rules";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
-import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, overridesMachineNote, withSettings } from "../../shared/types";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types";
 import type {
   AppInfo,
   EnvEdit,
@@ -24,7 +24,7 @@ import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { ActionLink } from "../ui/ActionLink";
 import { isWindows } from "../platform";
-import { EditRow, patched, RowSection, withId, without, type Row } from "../ui/RowSection";
+import { EditRow, OverridesMachine, patched, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 
@@ -219,34 +219,35 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const save = async (): Promise<void> => {
     setSaving(true);
     setRefused(undefined);
-    if (Object.keys(edits.current).length > 0) {
-      await window.tet.settings.patch(edits.current);
-    }
-    if (variablesEdited.current) {
-      const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
-      const refusal = await window.tet.environment.save(rows);
-      if (refusal) {
-        setRefused(refusal);
-        setSaving(false);
-        return;
+    try {
+      if (Object.keys(edits.current).length > 0) {
+        await window.tet.settings.patch(edits.current);
       }
-      variablesEdited.current = false;
-    }
-    const loaded = loadedExplorer.current;
-    if (activeProject && explorerSettings && loaded) {
-      for (const key of EXPLORER_KEYS) {
-        if (explorerSettings[key] === loaded[key]) {
-          continue;
-        }
-        const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
-        if (!result.ok) {
-          setRefused(result.error ?? "Could not update tet.json");
-          setSaving(false);
+      if (variablesEdited.current) {
+        const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
+        const refusal = await window.tet.environment.save(rows);
+        if (refusal) {
+          setRefused(refusal);
           return;
         }
+        variablesEdited.current = false;
       }
+      const loaded = loadedExplorer.current;
+      if (activeProject && explorerSettings && loaded) {
+        for (const key of EXPLORER_KEYS) {
+          if (explorerSettings[key] === loaded[key]) {
+            continue;
+          }
+          const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
+          if (!result.ok) {
+            setRefused(result.error ?? "Could not update tet.json");
+            return;
+          }
+        }
+      }
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
     onClose();
     // Asked after closing: a kind switch is saved either way, Cancel only waits for the next start.
     if (chosenKind !== shownKind) {
@@ -270,6 +271,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   return (
     <DialogFrame
       header={{ tabs, active: tab, onSelect: setTab, onClose }}
+      busy={saving}
       error={refused}
       message={envChanged(variables, loadedVariables) && <RestartNote />}
       className="settings-dialog"
@@ -408,20 +410,13 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   value={row.name}
                   onChange={(event) => editVariables((rows) => patched(rows, row.id, { name: event.target.value }))}
                 />
-                {row.overridesMachine && (
-                  <span className="env-overrides" title={overridesMachineNote([row.name])}>
-                    overrides machine
-                  </span>
-                )}
-                <input
-                  className="row-fixed-input"
-                  type="password"
-                  autoComplete="off"
-                  // A stored value as a set password shows, never the value itself (the title says so).
-                  placeholder={row.from ? "••••••••" : "Value"}
-                  title={row.from ? "Stored on this machine; typing replaces it" : "Stored encrypted on this machine"}
+                {row.overridesMachine && <OverridesMachine name={row.name} />}
+                <SecretInput
+                  stored={Boolean(row.from)}
+                  storedTitle="Stored on this machine; typing replaces it"
+                  emptyTitle="Stored encrypted on this machine"
                   value={row.value}
-                  onChange={(event) => editVariables((rows) => patched(rows, row.id, { value: event.target.value }))}
+                  onChange={(value) => editVariables((rows) => patched(rows, row.id, { value }))}
                 />
               </EditRow>
             )}

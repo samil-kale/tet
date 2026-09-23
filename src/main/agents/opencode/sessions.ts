@@ -3,6 +3,7 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { watchTranscriptDir } from "../../watch-dir";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
+import { requireTitle } from "../transcript";
 import { runOpencode } from "./cli";
 import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
 
@@ -31,18 +32,18 @@ function recordsDir(cwd: string): string | undefined {
 
 /** The sandbox a session's record names; null on the host or without a record (only the host
  *  can hold an unrecorded session). */
-export function sessionSandbox(cwd: string, sessionId: string): string | null {
+export async function sessionSandbox(cwd: string, sessionId: string): Promise<string | null> {
   const dir = recordsDir(cwd);
-  return (dir && readRecord(path.join(dir, `${sessionId}.json`))?.sandbox) ?? null;
+  return (dir && (await readRecord(path.join(dir, `${sessionId}.json`)))?.sandbox) ?? null;
 }
 
 /** How long a rename waits for the tab's opencode to apply it. */
 const RENAME_TIMEOUT_MS = 5000;
 const RENAME_POLL_MS = 250;
 
-function readRecord(file: string): SessionRecord | undefined {
+async function readRecord(file: string): Promise<SessionRecord | undefined> {
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<SessionRecord>;
+    const parsed = JSON.parse(await fs.promises.readFile(file, "utf8")) as Partial<SessionRecord>;
     if (typeof parsed.id !== "string") {
       return undefined;
     }
@@ -59,24 +60,25 @@ function readRecord(file: string): SessionRecord | undefined {
   }
 }
 
-function readRecords(dir: string): SessionRecord[] {
+async function readRecords(dir: string): Promise<SessionRecord[]> {
   let names: string[];
   try {
-    names = fs.readdirSync(dir);
+    names = await fs.promises.readdir(dir);
   } catch {
     return [];
   }
-  return names.filter((name) => name.endsWith(".json")).flatMap((name) => readRecord(path.join(dir, name)) ?? []);
+  const records = await Promise.all(names.filter((name) => name.endsWith(".json")).map((name) => readRecord(path.join(dir, name))));
+  return records.filter((record): record is SessionRecord => record !== undefined);
 }
 
 export const opencodeSessionProvider: SessionProvider = {
   // Records only (see the file header).
-  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+  async list(cwd: string): Promise<AgentSessionInfo[]> {
     const dir = recordsDir(cwd);
     if (!dir) {
-      return Promise.resolve([]);
+      return [];
     }
-    const sessions = readRecords(dir)
+    return (await readRecords(dir))
       .map((record) => ({
         id: record.id,
         title: record.title,
@@ -85,7 +87,6 @@ export const opencodeSessionProvider: SessionProvider = {
         sandbox: record.sandbox ?? undefined
       }))
       .sort((a, b) => a.createdAt - b.createdAt);
-    return Promise.resolve(sessions);
   },
 
   resumeArgs(sessionId: string): string[] {
@@ -102,7 +103,7 @@ export const opencodeSessionProvider: SessionProvider = {
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     const dir = recordsDir(cwd);
     try {
-      await runOpencode(executable, cwd, sessionSandbox(cwd, sessionId), ["session", "delete", sessionId]);
+      await runOpencode(executable, cwd, await sessionSandbox(cwd, sessionId), ["session", "delete", sessionId]);
     } catch (error) {
       if (!/Session not found|sandbox '[^']*' not found/.test(String(error))) {
         throw error;
@@ -120,10 +121,7 @@ export const opencodeSessionProvider: SessionProvider = {
    * exposed rename via the plugin API, not the CLI — revisit if `session rename <id> <title>` ships.
    */
   async rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
-    const trimmed = title.trim();
-    if (!trimmed) {
-      throw new Error("title must be non-empty");
-    }
+    const trimmed = requireTitle(title);
     const agentDir = agentDirs.get(cwd);
     if (!agentDir) {
       throw new Error("opencode has not been prepared for this repository");
@@ -136,7 +134,7 @@ export const opencodeSessionProvider: SessionProvider = {
     const deadline = Date.now() + RENAME_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, RENAME_POLL_MS));
-      if (readRecord(recordFile)?.title === trimmed) {
+      if ((await readRecord(recordFile))?.title === trimmed) {
         return;
       }
     }
@@ -144,7 +142,7 @@ export const opencodeSessionProvider: SessionProvider = {
     throw new Error("the session's opencode is not running — start its tab, then rename it");
   },
 
-  watch(executable: string, cwd: string, onChange: () => void): () => void {
+  watch(cwd: string, onChange: () => void): () => void {
     const dir = recordsDir(cwd);
     if (!dir) {
       return () => undefined;

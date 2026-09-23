@@ -1,4 +1,5 @@
-export type AgentId = "claude" | "opencode" | "codex" | "pi" | "shell";
+export const AGENT_IDS = ["claude", "opencode", "codex", "pi", "shell"] as const;
+export type AgentId = (typeof AGENT_IDS)[number];
 
 export interface AgentInfo {
   id: AgentId;
@@ -489,9 +490,7 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
 export type NoticeSeverity = "error" | "warning" | "info";
 
 /** A notice the window showed, reported for `tet-ctl notices-list`. */
-export interface NoticeReport {
-  severity: NoticeSeverity;
-  message: string;
+export interface NoticeReport extends Notice {
   /** ms since epoch. */
   at: number;
 }
@@ -552,10 +551,8 @@ export interface FileContent {
 }
 
 /** Written, or why not — a stale `mtimeMs` never overwrites silently. */
-export interface FileWriteResult {
-  ok: boolean;
+export interface FileWriteResult extends GitActionResult {
   mtimeMs?: number;
-  error?: string;
 }
 
 /**
@@ -743,6 +740,13 @@ export function worktreeBase(state: RepositoryState): CheckoutTarget | undefined
   return main === undefined ? undefined : { name: main };
 }
 
+/** The remote fetch, pull and push go to, picked as the main process does (`Repository`), and
+ *  whether they can go: not without a remote, nor from a detached HEAD. */
+export function syncRemote(state: RepositoryState): { remote: string | undefined; canSync: boolean } {
+  const remote = state.remotes[0]?.name;
+  return { remote, canSync: remote !== undefined && !state.detached };
+}
+
 /** The ref git and the UI name a target by: `remote/name` for a remote branch. */
 export function refName(target: CheckoutTarget): string {
   return target.remote ? `${target.remote}/${target.name}` : target.name;
@@ -756,7 +760,7 @@ export interface BranchUpstream {
 
 /** The upstream as git names it and a message shows it: "origin/main". */
 export function upstreamName(upstream: BranchUpstream): string {
-  return `${upstream.remote}/${upstream.branch}`;
+  return refName({ name: upstream.branch, remote: upstream.remote });
 }
 
 /** As every spinner shows it: never while waiting on a question, whatever `busy` says. */

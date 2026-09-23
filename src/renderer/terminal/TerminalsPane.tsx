@@ -176,7 +176,7 @@ export const TerminalsPane = memo(function TerminalsPane({
     setRightRowFraction(HALF);
   }, [setColFraction, setLeftRowFraction, setRightRowFraction]);
 
-  // On arriving at "single" — a pane collapsed away (`collapseEmptied`, in `App`).
+  // On arriving at "single" — a pane collapsed away (`collapseEmptied`, through `use-project-layouts.ts`).
   const previousPreset = useRef(layout.preset);
   useEffect(() => {
     if (layout.preset === "single" && previousPreset.current !== "single") {

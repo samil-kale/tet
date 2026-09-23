@@ -106,6 +106,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  /** For callbacks the project list gets, read on a click: see `tabsRef`. */
+  const activeProjectIdRef = useRef(activeProjectId);
+  activeProjectIdRef.current = activeProjectId;
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
   /** Every project's tabs: the project list needs all of them at once. */
   const [tabs, setTabs] = useState<Record<string, TerminalDescriptor[]>>({});
@@ -178,6 +181,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const [sidePaneOpen, setSidePaneOpen] = usePaneToggle("git-pane", false);
   const [filesShown, setFilesShown] = usePaneToggle("side-pane-files", false);
   const sideView: SideView | null = sidePaneOpen ? (filesShown ? "files" : "git") : null;
+  /** Read on a click, so `toggleSideView` — and every view handed it — stays the same across a
+   *  toggle. */
+  const sideViewRef = useRef(sideView);
+  sideViewRef.current = sideView;
   /**
    * `sideMounted` keeps the pane in the DOM through the closing transition; `sideExpanded` drives
    * the width. Two nested rAFs before expanding: one alone often fires before the 0-width paint
@@ -218,14 +225,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** Shows that view, or slides the pane in when that view is already out. */
   const toggleSideView = useCallback(
     (view: SideView) => {
-      if (sideView === view) {
+      if (sideViewRef.current === view) {
         setSidePaneOpen(false);
         return;
       }
       setFilesShown(view === "files");
       setSidePaneOpen(true);
     },
-    [sideView, setFilesShown, setSidePaneOpen]
+    [setFilesShown, setSidePaneOpen]
   );
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */
@@ -238,6 +245,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * otherwise). Any writer of that file (dialog, agent, editor, checkout) arrives as `commands:changed`.
    */
   const [sandboxed, setSandboxed] = useState<Record<string, boolean>>({});
+  /** Projects whose flag was read on arrival — not `sandboxed`, which holds no entry for "off".
+   *  Forgotten with the project, so one added again is read again. */
+  const sandboxedRead = useRef(new Set<string>());
 
   useEffect(() => {
     const unsubscribers = [
@@ -341,6 +351,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     setTabs((current) => forget(current, projectId));
     setStarting((current) => forget(current, projectId));
     setSandboxed((current) => forget(current, projectId));
+    sandboxedRead.current.delete(projectId);
     setEditorTabs((current) => forget(current, projectId));
     setFileWrites((current) => forget(current, projectId));
     disposeProjectEditors(projectId);
@@ -386,13 +397,17 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     );
   }, []);
 
-  // Every tet.json write is one `commands:changed`, shared with the saved commands.
+  // Once per project; after that every tet.json write is one `commands:changed`, shared with the
+  // saved commands.
   useEffect(() => {
     for (const project of projects) {
-      void readSandboxed(project.id);
+      if (!sandboxedRead.current.has(project.id)) {
+        sandboxedRead.current.add(project.id);
+        void readSandboxed(project.id);
+      }
     }
-    return window.tet.commands.onChanged(({ projectId }) => void readSandboxed(projectId));
   }, [projects, readSandboxed]);
+  useEffect(() => window.tet.commands.onChanged(({ projectId }) => void readSandboxed(projectId)), [readSandboxed]);
 
   const reorderProjects = useCallback((ordered: Project[]) => {
     setProjects(ordered);
@@ -558,27 +573,16 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [showTab]
   );
 
-  /** The project row's mark: the oldest finished session first. */
-  const showFinished = useCallback(
-    (projectId: string) => {
-      const next = marksRef.current[projectId]?.finished[0];
+  /** The project row's marks: the oldest finished session first, and the longest-waiting question. */
+  const [showFinished, showWaiting] = useMemo(() => {
+    const showFirst = (mark: "finished" | "waiting") => (projectId: string) => {
+      const next = marksRef.current[projectId]?.[mark][0];
       if (next) {
         showTab(projectId, next);
       }
-    },
-    [showTab]
-  );
-
-  /** The same, for the longest-waiting question. */
-  const showWaiting = useCallback(
-    (projectId: string) => {
-      const next = marksRef.current[projectId]?.waiting[0];
-      if (next) {
-        showTab(projectId, next);
-      }
-    },
-    [showTab]
-  );
+    };
+    return [showFirst("finished"), showFirst("waiting")];
+  }, [showTab]);
 
   /**
    * Tabs in front (`inFront`) count as seen, so their finished mark clears — behind a dialog or
@@ -722,14 +726,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const showChanges = useCallback(
     (projectId: string) => {
       setActiveProjectId(projectId);
-      if (projectId === activeProjectId) {
+      if (projectId === activeProjectIdRef.current) {
         toggleSideView("git");
       } else {
         setFilesShown(false);
         setSidePaneOpen(true);
       }
     },
-    [activeProjectId, toggleSideView, setFilesShown, setSidePaneOpen]
+    [toggleSideView, setFilesShown, setSidePaneOpen]
   );
   /**
    * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), the way `how` asks for
@@ -741,6 +745,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    *
    * A tab already open only ever has its diff switched on, never off, so opening a file again
    * leaves what the user chose there (`showDiff`).
+   *
+   * Handed as is to every way in but the changes list (`openActiveDiff`) — the Explorer, its
+   * search, a path ctrl-clicked in a terminal, a Markdown preview's link: the file itself, in the
+   * project the view names.
    */
   const openEditor = useCallback(
     (projectId: string, path: string, how: OpenEditor = {}) => {
@@ -814,12 +822,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }
     },
     [activeProjectId, openEditor]
-  );
-  /** Every other way in — the Explorer, its search, a path ctrl-clicked in a terminal, a Markdown
-   *  preview's link: the file itself, in the project the view names. */
-  const openProjectFile = useCallback(
-    (projectId: string, path: string, how?: OpenEditor) => openEditor(projectId, path, how),
-    [openEditor]
   );
   /** Disposes the editors; the layout collapses a pane left empty. */
   const closeEditors = useCallback((projectId: string, tabIds: string[]) => {
@@ -1004,7 +1006,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     ? (editorTabs[activeProjectId]?.find((tab) => tab.tabId === activeEditors[activeProjectId])?.path ?? null)
                     : null
                 }
-                onOpenFile={openProjectFile}
+                onOpenFile={openEditor}
                 searchHeight={fileSearchHeight}
                 onSearchHeight={setFileSearchHeight}
               />
@@ -1044,7 +1046,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               onToggleFiles={toggleFiles}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
-              onOpenFile={openProjectFile}
+              onOpenFile={openEditor}
               onCloseEditors={closeEditors}
               layout={layouts[project.id] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}

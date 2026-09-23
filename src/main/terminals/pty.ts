@@ -138,10 +138,10 @@ export function killProcessTree(child: ChildProcess): void {
   }
 }
 
-/** The machine's variables without those `names` replace: on win32 a name in another case would be
- *  a second variable, and of the two the child sees the inherited one (measured through node-pty). */
-function machineEnvWithout(names: string[]): Record<string, string> {
-  const env = { ...(process.env as Record<string, string>) };
+/** Deletes from `env` the variables `names` replace, and returns it: on win32 names ignore case, a
+ *  name in another case would be a second variable, and of the two the child sees the inherited one
+ *  (measured through node-pty) — so a replacement removes its name in any spelling. */
+function withoutNames(env: Record<string, string>, names: string[]): Record<string, string> {
   if (process.platform === "win32") {
     const replaced = new Set(names.map((name) => name.toUpperCase()));
     for (const name of Object.keys(env).filter((key) => replaced.has(key.toUpperCase()))) {
@@ -159,7 +159,7 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
   const stored = options.sandboxed ? {} : storedEnv();
   const env: Record<string, string> = {
     ...options.env,
-    ...machineEnvWithout(Object.keys(stored)),
+    ...withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored)),
     ...stored,
     ...controlEnv,
     ...options.own
@@ -182,15 +182,7 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     const key = pathKey(env);
     env[key] = env[key] ? `${launcherDir}${path.delimiter}${env[key]}` : launcherDir;
   }
-  // win32 names ignore case, and of `Path` and `PATH` together the child sees the inherited one
-  // (measured through node-pty) — so an override replaces its name in any spelling.
-  if (process.platform === "win32") {
-    const names = new Set(Object.keys(options.envOverride ?? {}).map((name) => name.toUpperCase()));
-    for (const name of Object.keys(env).filter((name) => names.has(name.toUpperCase()))) {
-      delete env[name];
-    }
-  }
-  return Object.assign(env, options.envOverride);
+  return Object.assign(withoutNames(env, Object.keys(options.envOverride ?? {})), options.envOverride);
 }
 
 /**

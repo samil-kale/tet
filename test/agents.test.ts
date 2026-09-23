@@ -139,7 +139,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     assert.ok(agent.sessions, `${agent.displayName} has sessions`);
     // opencode's listing is its plugin's records, found through what prepareSpawn registered in the app.
     registerAgentDir(currentProject().path, agentDirFor(userData, agent.id, currentProject().id));
-    return agent.sessions.list(agent.executable(), currentProject().path);
+    return agent.sessions.list(currentProject().path);
   }
 
   before(async () => {

@@ -1,6 +1,6 @@
 import * as http from "node:http";
 import { errorMessage } from "../shared/errors";
-import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_GROUPS, CONTROL_VERBS, EXIT_CODES, HELP_VERB } from "../shared/control";
+import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_GROUPS, CONTROL_VERBS, ERROR_EXIT_CODES, EXIT_CODES, HELP_VERB } from "../shared/control";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
 
 /**
@@ -270,16 +270,8 @@ async function main(): Promise<void> {
       return;
     }
     const { code, message } = response.error;
-    fail(
-      message,
-      code === "unauthorized"
-        ? EXIT_CODES.unauthorized
-        : code === "internal"
-          ? EXIT_CODES.internal
-          : code === "timeout"
-            ? EXIT_CODES.timeout
-            : EXIT_CODES.usage
-    );
+    // A code of a newer TET, unknown to this CLI, is a usage error.
+    fail(message, ERROR_EXIT_CODES[code] ?? EXIT_CODES.usage);
   }
   if (quiet) {
     const answer = (response.result as { stdout?: unknown } | null)?.stdout;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 /** Both versions as data URLs, as `FileContent` carries them. */
-export interface ImageSides {
+interface ImageSides {
   /** HEAD's. */
   before?: string;
   /** The working tree's. */

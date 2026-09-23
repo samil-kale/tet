@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { overridesMachineNote } from "../../shared/types";
 import type { EnvRequest } from "../../shared/types";
 import { DialogFrame } from "../ui/DialogFrame";
-import { EditRow, RowSection } from "../ui/RowSection";
+import { EditRow, OverridesMachine, RowSection, SecretInput } from "../ui/RowSection";
 import { useEscape } from "../ui/use-escape";
 
 interface EnvDialogProps {
@@ -50,14 +49,17 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       return;
     }
     setBusy(true);
-    const error = await window.tet.environment.answer(
-      request.id,
-      rows.map((row) => ({ name: row.name, value: row.value }))
-    );
-    setBusy(false);
-    if (error !== undefined) {
-      setRefused(error);
-      return;
+    try {
+      const error = await window.tet.environment.answer(
+        request.id,
+        rows.map((row) => ({ name: row.name, value: row.value }))
+      );
+      if (error !== undefined) {
+        setRefused(error);
+        return;
+      }
+    } finally {
+      setBusy(false);
     }
     if (tab) {
       void window.tet.terminals.restart(tab.projectId, tab.tabId);
@@ -95,21 +97,14 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
           // The Settings' Environment rows, the name fixed: it is the agent's.
           <EditRow key={row.id}>
             <input className="row-fill-input" type="text" value={row.name} disabled />
-            {row.overridesMachine && (
-              <span className="env-overrides" title={overridesMachineNote([row.name])}>
-                overrides machine
-              </span>
-            )}
-            <input
+            {row.overridesMachine && <OverridesMachine name={row.name} />}
+            <SecretInput
               ref={row === rows[0] ? firstValue : undefined}
-              className="row-fixed-input"
-              type="password"
-              autoComplete="off"
-              // A stored value as a set password shows, never the value itself (the title says so).
-              placeholder={row.stored ? "••••••••" : "Value"}
-              title={row.stored ? "Stored on this machine; typing replaces it" : "Stored encrypted on this machine"}
+              stored={row.stored}
+              storedTitle="Stored on this machine; typing replaces it"
+              emptyTitle="Stored encrypted on this machine"
               value={row.value}
-              onChange={(event) => edit(row.name, event.target.value)}
+              onChange={(value) => edit(row.name, value)}
             />
           </EditRow>
         )}

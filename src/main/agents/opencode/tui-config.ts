@@ -1,6 +1,5 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
-import writeFileAtomic from "write-file-atomic";
+import { writeIfChanged } from "./plugin";
 
 /**
  * `"theme": "system"` is the only way opencode takes the terminal's colours (xterm's `--vscode-*`,
@@ -16,21 +15,11 @@ export function installTuiConfig(dir: string): Record<string, string> {
   const file = path.join(dir, "opencode-tui.json");
   const contents = JSON.stringify({ $schema: "https://opencode.ai/tui.json", theme: "system" }, null, 2);
   try {
-    if (readIfExists(file) !== contents) {
-      writeFileAtomic.sync(file, contents);
-    }
+    writeIfChanged(file, contents);
   } catch (error) {
     // opencode's own colours still work.
     console.error("[tet] could not write the opencode tui config:", error);
     return {};
   }
   return { OPENCODE_TUI_CONFIG: file };
-}
-
-function readIfExists(file: string): string | undefined {
-  try {
-    return fs.readFileSync(file, "utf8");
-  } catch {
-    return undefined;
-  }
 }

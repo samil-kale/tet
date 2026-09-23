@@ -95,55 +95,61 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  answers the first three; signing in or setting the policy asks again. */
   const setup = async (): Promise<void> => {
     setPhase({ kind: "checking" });
-    // In parallel with the status: both re-read PATH, and joining a running call is free
-    // (augmentAgentPath). This run reads the local value; the state lands next render.
-    const [initialStatus, anyAgent] = await Promise.all([
-      window.tet.sbx.status(project.id),
-      window.tet.startup.anyAgentInstalled()
-    ]);
-    const isLocked = !anyAgent;
-    setLocked(isLocked);
-    let status = initialStatus;
-    if (!status.installed) {
-      setPhase({ kind: "not-installed" });
-      return;
-    }
-    if (status.failure) {
-      setPhase({ kind: "failed", message: `SBX failed: ${status.failure}` });
-      return;
-    }
-    if (!status.loggedIn) {
-      setPhase({ kind: "signing-in" });
-      if (!(await window.tet.sbx.login())) {
-        setPhase({ kind: "failed", message: "SBX login failed." });
+    try {
+      // In parallel with the status: both re-read PATH, and joining a running call is free
+      // (augmentAgentPath). This run reads the local value; the state lands next render.
+      const [initialStatus, anyAgent] = await Promise.all([
+        window.tet.sbx.status(project.id),
+        window.tet.startup.anyAgentInstalled()
+      ]);
+      const isLocked = !anyAgent;
+      setLocked(isLocked);
+      let status = initialStatus;
+      if (!status.installed) {
+        setPhase({ kind: "not-installed" });
         return;
       }
-      status = await window.tet.sbx.status(project.id);
-    }
-    if (!status.policyInitialized) {
-      setPhase({ kind: "initializing-policy" });
-      if (!(await window.tet.sbx.initPolicy())) {
-        setPhase({ kind: "failed", message: "Could not set up SBX's network policy." });
+      if (status.failure) {
+        setPhase({ kind: "failed", message: `SBX failed: ${status.failure}` });
         return;
       }
-      status = await window.tet.sbx.status(project.id);
+      if (!status.loggedIn) {
+        setPhase({ kind: "signing-in" });
+        if (!(await window.tet.sbx.login())) {
+          setPhase({ kind: "failed", message: "SBX login failed." });
+          return;
+        }
+        status = await window.tet.sbx.status(project.id);
+      }
+      if (!status.policyInitialized) {
+        setPhase({ kind: "initializing-policy" });
+        if (!(await window.tet.sbx.initPolicy())) {
+          setPhase({ kind: "failed", message: "Could not set up SBX's network policy." });
+          return;
+        }
+        status = await window.tet.sbx.status(project.id);
+      }
+      if (status.blockers.length > 0) {
+        setPhase({ kind: "blocked", organization: status.organization, blockers: status.blockers });
+        return;
+      }
+      // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
+      const [config, local, knowledgeSources] = await Promise.all([
+        window.tet.sbx.getConfig(project.id),
+        window.tet.sbx.stored(project.id),
+        window.tet.sbx.knowledgeSources()
+      ]);
+      setEnabled(isLocked || config.enabled);
+      setState(fromConfig(config, local));
+      setLoaded(config);
+      setStored(local);
+      setSources(knowledgeSources);
+      setPhase({ kind: "ready", organization: status.organization });
+    } catch (error) {
+      // The phase is the busy bar: a call that threw must not leave it running.
+      setPhase({ kind: "failed", message: `SBX failed: ${error instanceof Error ? error.message : String(error)}` });
+      throw error;
     }
-    if (status.blockers.length > 0) {
-      setPhase({ kind: "blocked", organization: status.organization, blockers: status.blockers });
-      return;
-    }
-    // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
-    const [config, local, knowledgeSources] = await Promise.all([
-      window.tet.sbx.getConfig(project.id),
-      window.tet.sbx.stored(project.id),
-      window.tet.sbx.knowledgeSources()
-    ]);
-    setEnabled(isLocked || config.enabled);
-    setState(fromConfig(config, local));
-    setLoaded(config);
-    setStored(local);
-    setSources(knowledgeSources);
-    setPhase({ kind: "ready", organization: status.organization });
   };
 
   useEffect(() => {
@@ -158,11 +164,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const save = async (): Promise<void> => {
     setSaving(true);
     setRefused(undefined);
-    const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
-    setSaving(false);
-    if (!result.ok) {
-      setRefused(result.error ?? "Could not save the SBX configuration");
-      return;
+    try {
+      const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
+      if (!result.ok) {
+        setRefused(result.error ?? "Could not save the SBX configuration");
+        return;
+      }
+    } finally {
+      setSaving(false);
     }
     close();
   };

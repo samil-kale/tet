@@ -41,7 +41,7 @@ const TWISTIE_WIDTH = 12;
 const TWISTIE_GAP = 4;
 /** A match row starts a pixel past its file row's label (`INDENT_BASE` plus the twistie and its
  *  gap): the line it found gets the width the rest of the nesting would have eaten. */
-export const MATCH_INDENT = 26;
+export const MATCH_INDENT = INDENT_BASE + TWISTIE_WIDTH + TWISTIE_GAP + 1;
 
 /** A folder's or a result file's chevron, in the box the labels are measured against. */
 export function Twistie({ open }: { open: boolean }) {

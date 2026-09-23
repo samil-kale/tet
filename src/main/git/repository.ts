@@ -103,6 +103,11 @@ async function attempt(action: () => Promise<unknown>): Promise<GitActionResult>
   }
 }
 
+/** A rejected action as its failure (Repository.runAction). */
+function failure(error: unknown): GitActionResult {
+  return { ok: false, error: errorMessage(error) };
+}
+
 /** Whether two paths name one entry, e.g. differing in case on a case-insensitive filesystem. By
  *  file id, as bigints: a win32 file id overflows a number. */
 function sameEntry(a: string, b: string): boolean {
@@ -203,11 +208,9 @@ export class Repository {
   private async startReading(): Promise<void> {
     // All three at once: each is a git start (the measured cost); in sequence they visibly delay
     // the pane.
-    const [isGit, urls, defaultBranchName, bases, read] = await Promise.all([
+    const [isGit, , read] = await Promise.all([
       git.isRepository(this.project.path).catch(() => false),
-      git.readRemoteUrls(this.project.path).catch(() => ({})),
-      git.readDefaultBranchName(this.project.path).catch(() => "main"),
-      git.readWorktreeBases(this.project.path).catch(() => ({})),
+      this.loadConfig(),
       this.read()
     ]);
     this.isGit = isGit;
@@ -215,11 +218,8 @@ export class Repository {
       this.emit({ ...EMPTY_REPOSITORY_STATE, error: "Not a git repository" });
       return;
     }
-    this.remoteUrls = urls;
-    this.defaultBranchName = defaultBranchName;
-    this.worktreeBases = bases;
     // The first read ran without the remote names; only a name holding a "/" changes it.
-    this.emit(Object.keys(urls).some((name) => name.includes("/")) ? await this.read() : read);
+    this.emit(Object.keys(this.remoteUrls).some((name) => name.includes("/")) ? await this.read() : read);
     // Closed during the first read: a watcher started now would never be closed.
     if (this.disposed) {
       return;
@@ -231,11 +231,13 @@ export class Repository {
   /** Everything read out of the repository's config rather than per refresh. */
   private async loadConfig(): Promise<void> {
     this.configStale = false;
-    [this.remoteUrls, this.defaultBranchName, this.worktreeBases] = await Promise.all([
+    const [urls, branchConfig] = await Promise.all([
       git.readRemoteUrls(this.project.path).catch(() => ({})),
-      git.readDefaultBranchName(this.project.path).catch(() => "main"),
-      git.readWorktreeBases(this.project.path).catch(() => ({}))
+      git.readBranchConfig(this.project.path).catch(() => ({ defaultBranchName: "main", worktreeBases: {} }))
     ]);
+    this.remoteUrls = urls;
+    this.defaultBranchName = branchConfig.defaultBranchName;
+    this.worktreeBases = branchConfig.worktreeBases;
   }
 
   /** The periodic fetch. Silent on failure, or an offline machine gets a notice every ten minutes.
@@ -261,9 +263,9 @@ export class Repository {
 
   private read(): Promise<RepositoryState> {
     // readState reports errors in its result; a rejection is the git process gone.
-    return git.readState(this.project.path, Object.keys(this.remoteUrls)).catch((error: Error) => ({
+    return git.readState(this.project.path, Object.keys(this.remoteUrls)).catch((error: unknown) => ({
       ...EMPTY_REPOSITORY_STATE,
-      error: error.message
+      error: errorMessage(error)
     }));
   }
 
@@ -357,7 +359,7 @@ export class Repository {
   private async runAction(action: () => Promise<GitActionResult>): Promise<GitActionResult> {
     if (this.holding.getStore()) {
       // Within `exclusive`: its hold is this command's, and it refreshes once all have run.
-      return action().catch((error: Error) => ({ ok: false, error: error.message }));
+      return action().catch(failure);
     }
     // The periodic fetch holds the lock too; a click waits for it rather than fails.
     while (this.autoFetching) {
@@ -369,7 +371,7 @@ export class Repository {
     this.actionRunning = true;
     try {
       // A rejection is the git process gone; reported like any failure.
-      this.action = action().catch((error: Error) => ({ ok: false, error: error.message }));
+      this.action = action().catch(failure);
       const result = await this.action;
       await this.refresh();
       return result;
@@ -569,9 +571,8 @@ export class Repository {
   /** Commits only these files, untracked ones included. */
   commitPaths(message: string, paths: string[]): Promise<GitActionResult> {
     return this.runAction(() => {
-      const untracked = paths.filter((filePath) =>
-        this.state.changes.some((change) => change.path === filePath && change.status === "untracked")
-      );
+      const changes = this.changesByPath();
+      const untracked = paths.filter((filePath) => changes.get(filePath)?.status === "untracked");
       return git.commitPaths(this.project.path, message, this.pathspec(paths), untracked);
     });
   }
@@ -583,20 +584,33 @@ export class Repository {
 
   /** These paths plus each rename's old one: a commit given only the new path takes half a rename. */
   pathspec(paths: string[]): string[] {
+    const changes = this.changesByPath();
     const expanded = [...paths];
+    const listed = new Set(paths);
     for (const filePath of paths) {
-      const origPath = this.state.changes.find((change) => change.path === filePath)?.origPath;
-      if (origPath && !expanded.includes(origPath)) {
+      const origPath = changes.get(filePath)?.origPath;
+      if (origPath && !listed.has(origPath)) {
         expanded.push(origPath);
+        listed.add(origPath);
       }
     }
     return expanded;
   }
 
+  /** Each change by its path, the first where one is listed twice. */
+  private changesByPath(): Map<string, FileChange> {
+    const changes = new Map<string, FileChange>();
+    for (const change of this.state.changes) {
+      if (!changes.has(change.path)) {
+        changes.set(change.path, change);
+      }
+    }
+    return changes;
+  }
+
   /** By the stash's commit, which a stash made meanwhile doesn't move. */
   stash(command: StashCommand, sha: string): Promise<GitActionResult> {
-    const commands = { apply: git.stashApply, pop: git.stashPop, drop: git.stashDrop };
-    return this.runAction(() => commands[command](this.project.path, sha));
+    return this.runAction(() => git.stash(this.project.path, command, sha));
   }
 
   /** Throws away changes to these files, each file on disk going to the trash first, as in GitHub
@@ -608,7 +622,8 @@ export class Repository {
     // checkout would leave the files already trashed.
     return this.runAction(async () => {
       const targets: DiscardTargets = { restore: [], drop: [] };
-      const changes = paths.flatMap((filePath) => this.state.changes.find((change) => change.path === filePath) ?? []);
+      const byPath = this.changesByPath();
+      const changes = paths.flatMap((filePath) => byPath.get(filePath) ?? []);
       const unsure = changes.filter((change) => change.status === "untracked" || change.status === "conflicted");
       const inHead = new Set(
         unsure.length > 0 ? await git.readHeadPaths(this.project.path, unsure.map((change) => change.path)) : []
@@ -900,15 +915,15 @@ export class Repository {
   /** The Explorer's tet.json edits ("Add Folder to Workspace", "Remove Folder from Workspace",
    *  "Exclude from Files"); the watcher sees the write and re-lists. */
   addFolder(folderPath: string): Promise<GitActionResult> {
-    return this.editExplorer(() => addFolder(this.project.path, folderPath));
+    return attempt(() => addFolder(this.project.path, folderPath));
   }
 
   removeFolder(folderPath: string): Promise<GitActionResult> {
-    return this.editExplorer(() => removeFolder(this.project.path, folderPath));
+    return attempt(() => removeFolder(this.project.path, folderPath));
   }
 
   excludePath(relPath: string): Promise<GitActionResult> {
-    return this.editExplorer(() => addExclude(this.project.path, relPath));
+    return attempt(() => addExclude(this.project.path, relPath));
   }
 
   /** For the settings dialog's Files tab; folders and exclude globs stay the tree's own. */
@@ -918,11 +933,7 @@ export class Repository {
   }
 
   setExplorerSetting<K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): Promise<GitActionResult> {
-    return this.editExplorer(() => setExplorerSetting(this.project.path, key, value));
-  }
-
-  private editExplorer(edit: () => Promise<void>): Promise<GitActionResult> {
-    return attempt(edit);
+    return attempt(() => setExplorerSetting(this.project.path, key, value));
   }
 
   /** The absolute path, or undefined if it escapes the root. */

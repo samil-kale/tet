@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { IPty } from "node-pty";
 import type { TerminalStatus } from "../../shared/types";
-import { killProcessTree, resolveCommand, spawnAgentProcess } from "./pty";
+import { killProcessTree, resolveCommand, spawnAgentProcess, type SpawnOptions } from "./pty";
 import { timeStartup } from "../event-loop-monitor";
 import { isSimulatedMissing } from "../simulate";
 
@@ -110,17 +110,12 @@ export class TerminalSession {
 
   constructor(
     private readonly executable: string,
-    private readonly cwd: string,
-    private readonly env: Record<string, string> | undefined,
+    /** Every spawn's options but the size, which `ensureStarted` brings. */
+    private readonly spawn: Omit<SpawnOptions, "cols" | "rows">,
     private readonly callbacks: SessionCallbacks,
     /** How many Ctrl+C bytes this agent wants before it is killed; 0 asks for none. */
     private readonly quitPresses: number,
-    private readonly args: string[] = [],
-    /** A saved command's variables, outranking the machine's. */
-    private readonly envOverride?: Record<string, string>,
-    /** What `tet-ctl` in this tab reports as its caller (SpawnOptions.own), and whether the tab
-     *  runs in a sandbox — both go into its control token. */
-    private readonly caller?: { env: Record<string, string>; sandboxed: boolean }
+    private readonly args: string[] = []
   ) {}
 
   private setStatus(status: TerminalStatus): void {
@@ -158,15 +153,7 @@ export class TerminalSession {
     try {
       // Timed: node-pty's spawn is a synchronous CreateProcess/fork.
       this.process = timeStartup(`spawn ${this.executable}`, () =>
-        spawnAgentProcess(this.executable, this.args, {
-          cwd: this.cwd,
-          cols,
-          rows,
-          env: this.env,
-          envOverride: this.envOverride,
-          own: this.caller?.env,
-          sandboxed: this.caller?.sandboxed
-        })
+        spawnAgentProcess(this.executable, this.args, { ...this.spawn, cols, rows })
       );
     } catch (error) {
       console.error(`[tet] failed to spawn ${this.executable}:`, error);

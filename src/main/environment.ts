@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { safeStorage } from "electron";
-import writeFileAtomic from "write-file-atomic";
 import { errorMessage } from "../shared/errors";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
+import { saveJson } from "./json-file";
+import { seal, unseal } from "./sealed";
 
 /** What the file holds: the variable plus its value, encrypted by the OS and base64-wrapped. */
 interface StoredVar {
@@ -65,10 +65,11 @@ export class EnvStore {
   values(): Record<string, string> {
     const values: Record<string, string> = {};
     for (const entry of this.readable()?.variables ?? []) {
-      try {
-        values[entry.name] = safeStorage.decryptString(Buffer.from(entry.value, "base64"));
-      } catch {
+      const value = unseal(entry.value);
+      if (value === undefined) {
         console.error(`[tet] could not decrypt the environment variable ${entry.name}`);
+      } else {
+        values[entry.name] = value;
       }
     }
     return values;
@@ -150,22 +151,9 @@ export class EnvStore {
   }
 
   private write({ variables, others }: Contents): void {
-    try {
-      // Renamed into place: never half a file for `read` to refuse.
-      writeFileAtomic.sync(this.file, JSON.stringify([...others, ...variables], null, 2), "utf8");
-    } catch (error) {
-      console.error("[tet] could not persist the environment variables:", error);
-    }
+    // Renamed into place: never half a file for `read` to refuse.
+    saveJson(this.file, [...others, ...variables], "the environment variables");
   }
-}
-
-/** Throws when the OS offers no encryption — on Linux without a keyring, where safeStorage would
- *  fall back to a fixed key. */
-function seal(value: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("The OS offers no encryption to store a value with (on Linux: no keyring)");
-  }
-  return safeStorage.encryptString(value).toString("base64");
 }
 
 /** What `env-request` passes on: the asking tab and the names. */

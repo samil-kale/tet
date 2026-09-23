@@ -134,11 +134,16 @@ export function buildForest(files: ExplorerListing): TreeNode[] {
   });
 }
 
-/** A root with an open child folder? Defaults match `toggle`'s. */
+/** A folder's fold state: a root starts open, everything else closed. */
+export function isOpen(node: TreeNode, expanded: Record<string, boolean>): boolean {
+  return expanded[node.id] ?? node.root === true;
+}
+
+/** A root with an open child folder? */
 export function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolean>): boolean {
   return roots.some(
     (root) =>
-      (expanded[root.id] ?? root.root === true) &&
+      isOpen(root, expanded) &&
       root.children!.some((child) => child.children && (expanded[child.id] ?? false))
   );
 }

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { safeStorage } from "electron";
-import writeFileAtomic from "write-file-atomic";
 import type { ProviderAccount, ProviderId } from "../../shared/types";
+import { saveJson } from "../json-file";
+import { seal, unseal } from "../sealed";
+import { PROVIDERS } from "./index";
 
 /** What the file holds: the account plus its token, encrypted by the OS and base64-wrapped. */
 interface StoredAccount extends ProviderAccount {
@@ -37,16 +38,13 @@ export class AccountStore {
   }
 
   get(accountId: string): ProviderAccount | undefined {
-    const entry = this.accounts.find((account) => account.id === accountId);
+    const entry = this.find(accountId);
     return entry && toAccount(entry);
   }
 
   /** Adds the account, or replaces the token of the same user on the same host — never two rows. */
   add(provider: ProviderId, host: string, user: string, token: string): ProviderAccount {
-    if (!safeStorage.isEncryptionAvailable()) {
-      throw new Error("The OS offers no encryption to store the token with");
-    }
-    const encrypted = safeStorage.encryptString(token).toString("base64");
+    const encrypted = seal(token);
     const existing = this.accounts.find(
       (account) => account.provider === provider && account.host === host && account.user === user
     );
@@ -63,7 +61,7 @@ export class AccountStore {
 
   /** Remembers the group the remote tab was narrowed to, so it opens there the next time. */
   setNamespace(accountId: string, namespace: string): void {
-    const entry = this.accounts.find((account) => account.id === accountId);
+    const entry = this.find(accountId);
     if (entry) {
       entry.namespace = namespace;
       this.save();
@@ -77,16 +75,12 @@ export class AccountStore {
 
   /** The decrypted token; undefined when it cannot be decrypted. */
   token(accountId: string): string | undefined {
-    const entry = this.accounts.find((account) => account.id === accountId);
-    if (!entry) {
-      return undefined;
-    }
-    try {
-      return safeStorage.decryptString(Buffer.from(entry.token, "base64"));
-    } catch {
-      // Encrypted under a keychain this machine no longer has; the token must be re-entered.
-      return undefined;
-    }
+    const entry = this.find(accountId);
+    return entry && unseal(entry.token);
+  }
+
+  private find(accountId: string): StoredAccount | undefined {
+    return this.accounts.find((account) => account.id === accountId);
   }
 
   private load(): void {
@@ -98,7 +92,7 @@ export class AccountStore {
             typeof entry === "object" &&
             entry !== null &&
             typeof (entry as StoredAccount).id === "string" &&
-            ((entry as StoredAccount).provider === "github" || (entry as StoredAccount).provider === "gitlab") &&
+            Object.hasOwn(PROVIDERS, (entry as StoredAccount).provider) &&
             typeof (entry as StoredAccount).host === "string" &&
             typeof (entry as StoredAccount).user === "string" &&
             typeof (entry as StoredAccount).token === "string" &&
@@ -113,11 +107,7 @@ export class AccountStore {
   }
 
   private save(): void {
-    try {
-      // Renamed into place: `load` reads a half-written file as no accounts, and the next save would keep that.
-      writeFileAtomic.sync(this.file, JSON.stringify(this.accounts, null, 2), "utf8");
-    } catch (error) {
-      console.error("[tet] could not persist accounts:", error);
-    }
+    // Renamed into place: `load` reads a half-written file as no accounts, and the next save would keep that.
+    saveJson(this.file, this.accounts, "accounts");
   }
 }

@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import writeFileAtomic from "write-file-atomic";
 import { worktreeBase, worktreesSupported, WORKTREES_NEED_GIT } from "../shared/types";
 import type { AddRepositoryResult, GitActionResult, Project, WorktreeRef } from "../shared/types";
 import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import { readMainWorktree } from "./git/linked-git-dir";
 import type { Repository, RepositoryManager } from "./git/repository";
+import { saveJson } from "./json-file";
 import { removeProjectSandboxes } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
@@ -373,17 +373,12 @@ export class ProjectStore implements ProjectLookup {
         }));
       }
     } catch {
-      // No file yet, or unreadable.
-      this.projects = [];
+      // No file yet, or unreadable: none.
     }
   }
 
   private save(): void {
-    try {
-      // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
-      writeFileAtomic.sync(this.file, JSON.stringify(this.projects, null, 2), "utf8");
-    } catch (error) {
-      console.error("[tet] could not persist projects:", error);
-    }
+    // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
+    saveJson(this.file, this.projects, "projects");
   }
 }

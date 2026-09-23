@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import writeFileAtomic from "write-file-atomic";
 import { DEFAULT_THEME_IDS, THEMES, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../shared/types";
 import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../shared/types";
+import { saveJson } from "./json-file";
 
 const DEFAULTS: AppSettings = {
   notifications: {
@@ -56,12 +56,8 @@ export class SettingsStore implements SettingsAccess {
 
   save(settings: AppSettings): void {
     this.settings = normalize(settings);
-    try {
-      // Renamed into place: `load` reads a half-written file as the defaults.
-      writeFileAtomic.sync(this.file, JSON.stringify(this.settings, null, 2), "utf8");
-    } catch (error) {
-      console.error("[tet] could not persist settings:", error);
-    }
+    // Renamed into place: `load` reads a half-written file as the defaults.
+    saveJson(this.file, this.settings, "settings");
   }
 
   private load(): void {
@@ -71,8 +67,7 @@ export class SettingsStore implements SettingsAccess {
         this.settings = normalize(parsed as Partial<AppSettings>);
       }
     } catch {
-      // No file yet, or unreadable.
-      this.settings = DEFAULTS;
+      // No file yet, or unreadable: the defaults.
     }
   }
 }

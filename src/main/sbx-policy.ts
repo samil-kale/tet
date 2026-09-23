@@ -11,7 +11,9 @@
  * case is ignored on win32, and `dir/**` covers `dir`.
  */
 
-export type FilesystemAction = "read" | "write";
+import type { SbxStatus } from "../shared/types";
+
+type FilesystemAction = "read" | "write";
 
 /**
  * The organization in `sbx policy ls`'s first line on a governed account: "Governance: Managed by
@@ -21,6 +23,25 @@ export type FilesystemAction = "read" | "write";
  */
 export function parseGovernance(policyList: string): string | undefined {
   return /^Governance:\s*Managed by\s+([^|\r\n]+?)\s*(?:\||$)/im.exec(policyList)?.[1];
+}
+
+/** The first of sbx's setup steps still missing, as the user is told it (a tab's notice, tet-ctl's
+ *  answer: control-server.ts may not import sbx.ts), each caller adding its own suffix; undefined
+ *  once sbx is installed, signed in and has a network policy. */
+export function sbxNotReady(status: SbxStatus): string | undefined {
+  if (!status.installed) {
+    return "SBX is not installed (or no longer on PATH)";
+  }
+  if (status.failure) {
+    return `SBX failed: ${status.failure}`;
+  }
+  if (!status.loggedIn) {
+    return "SBX is not signed in to Docker";
+  }
+  if (!status.policyInitialized) {
+    return "SBX's network policy is not set up";
+  }
+  return undefined;
 }
 
 export interface FilesystemRule {

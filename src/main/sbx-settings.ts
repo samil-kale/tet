@@ -1,7 +1,7 @@
 import { errorMessage } from "../shared/errors";
 import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../shared/sbx-rules";
 import { SBX_AGENT_IDS } from "../shared/types";
-import type { Project, SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult } from "../shared/types";
+import type { Project, SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxStatus } from "../shared/types";
 import { getAgent } from "./agents";
 import { readGovernance, readSbxProblems, saveSbxConfig } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
@@ -31,18 +31,24 @@ function checkProject(
   });
 }
 
+/** The organization managing sbx's policy: as the caller's status read it, else read now. */
+async function organizationOf(status: Pick<SbxStatus, "organization"> | undefined): Promise<string | undefined> {
+  return status ? status.organization : readGovernance();
+}
+
 /**
  * What of a project's SBX Settings a Save would leave out (sbx.ts's readSbxProblems), for the
  * dialog's live marks and `tet-ctl sbx-get`. `values`: the env names holding a value, as the rows
- * have them — stored, or typed and not saved yet.
+ * have them — stored, or typed and not saved yet. `status`: the caller's, when it read one.
  */
 export async function readProjectSbxProblems(
   project: Project,
   config: SbxProjectConfig,
   knowledge: SbxKnowledgeConfig,
-  values: ValueNames
+  values: ValueNames,
+  status?: Pick<SbxStatus, "organization">
 ): Promise<SbxProblems> {
-  return checkProject(project, config, knowledge, values, await readGovernance());
+  return checkProject(project, config, knowledge, values, await organizationOf(status));
 }
 
 /**
@@ -51,13 +57,15 @@ export async function readProjectSbxProblems(
  * cannot be applied here (readSbxProblems) is neither saved nor applied, the rest is; what sbx then
  * refuses is left out too (saveSbxConfig), so tet.json holds what was applied, and only its rows
  * keep a value here. `problems` says what was left out; sbx's refusals are the error as well, as
- * nothing marked them before. Notices for the sandboxes it removed.
+ * nothing marked them before. Notices for the sandboxes it removed. `status`: the caller's, when it
+ * read one.
  */
 export async function saveProjectSbx(
   { sbxLocal, send }: { sbxLocal: SbxLocalStore; send: (channel: string, payload: unknown) => void },
   project: Project,
   request: SbxProjectConfig,
-  local: SbxLocalSave
+  local: SbxLocalSave,
+  status?: Pick<SbxStatus, "organization">
 ): Promise<SbxSaveResult> {
   const stored = sbxLocal.encrypted(project.id);
   const previous = sbxLocal.knowledge(project.id);
@@ -65,7 +73,7 @@ export async function saveProjectSbx(
     sbxLocal.update(project.id, local);
     const secretValues = sbxLocal.values(project.id, "secrets");
     const knowledge = sbxLocal.knowledge(project.id);
-    const organization = await readGovernance();
+    const organization = await organizationOf(status);
     // Off, nothing is applied, so nothing is left out.
     const problems = request.enabled
       ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization)

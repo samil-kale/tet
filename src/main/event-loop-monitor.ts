@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { rotateLog } from "./rotate-log";
 
 /** A keystroke bound for a pty waits in the same queue as this timer, so its lag is typing lag. */
 const SAMPLE_MS = 20;
@@ -13,7 +14,7 @@ const SLOW_MS = 100;
 /** Appended across sessions; rotated to `<file>.1` past this size. */
 const MAX_LOG_BYTES = 1_000_000;
 
-export type Activity = "output" | "input" | "reconcile" | "git" | "emit" | "startup";
+type Activity = "output" | "input" | "reconcile" | "git" | "emit" | "startup";
 
 const counts = new Map<Activity, number>();
 /** A stall is noticed by the next sample, so what ran last is the likeliest culprit. */
@@ -128,15 +129,7 @@ export function logSlow(activity: Activity, ms: number): void {
  */
 export function startEventLoopMonitor(logFile: string): void {
   try {
-    let size = 0;
-    try {
-      size = fs.statSync(logFile).size;
-    } catch {
-      // No log yet.
-    }
-    if (size >= MAX_LOG_BYTES) {
-      fs.renameSync(logFile, `${logFile}.1`);
-    }
+    rotateLog(logFile, MAX_LOG_BYTES);
     fs.appendFileSync(logFile, `# tet event loop, from ${new Date().toISOString()}\n`);
   } catch (error) {
     console.error("[tet] could not open the event loop log:", error);

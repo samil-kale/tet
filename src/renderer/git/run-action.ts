@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { GitActionResult } from "../../shared/types";
 import { notify } from "../ui/Notices";
 
@@ -52,26 +52,33 @@ export function notifying<A extends unknown[]>(
  */
 export function useFileAct(projectId: string): { acting: boolean; act: FileAct; ask: FileAsk } {
   const [actingIn, setActingIn] = useState<ReadonlyMap<string, number>>(() => new Map());
-  const count = (delta: number): void =>
-    setActingIn((current) => {
-      const next = new Map(current);
-      const running = (next.get(projectId) ?? 0) + delta;
-      if (running > 0) {
-        next.set(projectId, running);
-      } else {
-        next.delete(projectId);
-      }
-      return next;
-    });
-  const ask: FileAsk = async (action) => refusal(await action(), "Git command failed");
-  const act: FileAct = notifying(async (action) => {
-    count(1);
-    try {
-      return await ask(action);
-    } finally {
-      count(-1);
-    }
-  });
+  const count = useCallback(
+    (delta: number): void =>
+      setActingIn((current) => {
+        const next = new Map(current);
+        const running = (next.get(projectId) ?? 0) + delta;
+        if (running > 0) {
+          next.set(projectId, running);
+        } else {
+          next.delete(projectId);
+        }
+        return next;
+      }),
+    [projectId]
+  );
+  const ask: FileAsk = useCallback(async (action) => refusal(await action(), "Git command failed"), []);
+  const act: FileAct = useMemo(
+    () =>
+      notifying(async (action: () => Promise<GitActionResult>) => {
+        count(1);
+        try {
+          return await ask(action);
+        } finally {
+          count(-1);
+        }
+      }),
+    [count, ask]
+  );
   return { acting: actingIn.has(projectId), act, ask };
 }
 

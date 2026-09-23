@@ -13,8 +13,11 @@ export function Startup() {
 
   const check = useCallback(async (): Promise<void> => {
     setChecking(true);
-    setRequirements(await window.tet.startup.check());
-    setChecking(false);
+    try {
+      setRequirements(await window.tet.startup.check());
+    } finally {
+      setChecking(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -28,6 +31,9 @@ export function Startup() {
   return requirements.met ? (
     <App worktreesSupported={requirements.worktrees} />
   ) : (
-    <RequirementsDialog requirements={requirements} checking={checking} onRecheck={() => void check()} />
+    // In `.app` for its shared sizes (styles.css); the overlay is fixed, so the box adds no layout.
+    <div className="app">
+      <RequirementsDialog requirements={requirements} checking={checking} onRecheck={() => void check()} />
+    </div>
   );
 }

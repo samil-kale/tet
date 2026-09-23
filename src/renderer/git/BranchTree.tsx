@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { refName, upstreamName, worktreeBase } from "../../shared/types";
+import { refName, syncRemote, upstreamName, worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -80,7 +80,7 @@ function TreeSection({
   return (
     <div className="tree-section">
       <button className="tree-header" onClick={onToggle}>
-        <ChevronIcon expanded={!collapsed} scale={TREE_CHEVRON} />
+        <ChevronIcon expanded={!collapsed} className="tree-icon" scale={TREE_CHEVRON} />
         <span>{label}</span>
         <span className="count-badge">({count})</span>
       </button>
@@ -136,8 +136,8 @@ export const BranchTree = memo(function BranchTree({
     isCurrent(name) ? { ahead: state.ahead, behind: state.behind } : state.branchTrack[name];
 
   const repository = window.tet.repository;
-  /** The remote commands use, picked as the main process does. */
-  const remote = state.remotes[0]?.name;
+  /** The remote commands use (`syncRemote`). */
+  const { remote } = syncRemote(state);
   /** What "Update from" merges, prefixed by its remote where it is a remote branch. */
   const defaultRef = state.defaultBranch && refName(state.defaultBranch);
   /** Where a new worktree starts (worktreeBase), prefixed as `defaultRef`. */
@@ -505,7 +505,7 @@ export const BranchTree = memo(function BranchTree({
             remotes.map((entry) => (
               <div key={entry.name}>
                 <button className="tree-item remote" onClick={() => toggle(`remote:${entry.name}`)}>
-                  <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} scale={TREE_CHEVRON} />
+                  <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} className="tree-icon" scale={TREE_CHEVRON} />
                   <RemoteIcon className="tree-icon" />
                   <span className="tree-label">{entry.name}</span>
                   <span className="count-badge">({entry.branches.length})</span>

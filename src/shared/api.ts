@@ -35,6 +35,7 @@ import type {
   SbxSaveResult,
   SbxStatus,
   SbxStoredLocal,
+  SbxValueKind,
   SettingsEdits,
   StashCommand,
   TerminalDescriptor,
@@ -95,14 +96,14 @@ export interface TETApi {
       projectId: string,
       config: SbxProjectConfig,
       knowledge: SbxKnowledgeConfig,
-      values: { secrets: string[]; variables: string[] }
+      values: Record<SbxValueKind, string[]>
     ): Promise<SbxProblems>;
   };
   /** One set for the whole app. */
   settings: {
     get(): Promise<AppSettings>;
-    /** Writes all of it. A switch applies to agents set up after it. */
-    /** Writes the named keys and leaves the rest as stored (settings.ts's patch). */
+    /** Writes the named keys and leaves the rest as stored (settings.ts's patch). A switch applies
+     *  to agents set up after it. */
     patch(edits: SettingsEdits): Promise<void>;
   };
   projects: {

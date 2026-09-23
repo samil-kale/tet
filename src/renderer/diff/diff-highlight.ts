@@ -218,7 +218,9 @@ export function loadGrammar(shiki: HighlighterCore, language: string): Promise<v
 
 export function languageForPath(filePath: string): string | undefined {
   const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
-  return EXTENSIONS[name.slice(name.lastIndexOf(".") + 1)];
+  const extension = name.slice(name.lastIndexOf(".") + 1);
+  // Own keys only, as `languageForFence`: "a.constructor" is no language.
+  return Object.hasOwn(EXTENSIONS, extension) ? EXTENSIONS[extension] : undefined;
 }
 
 export function isMarkdown(filePath: string): boolean {

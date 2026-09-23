@@ -65,7 +65,7 @@ export interface EditorSnapshot {
 }
 
 /** A placeholder, the image view, or the editor. */
-export type EditorKind = "loading" | "error" | "image" | "binary" | "tooLarge" | "text";
+type EditorKind = "loading" | "error" | "image" | "binary" | "tooLarge" | "text";
 
 /** A Markdown file's preview (`markdown.ts`), made the first time it is shown. */
 interface PreviewView {

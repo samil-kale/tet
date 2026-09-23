@@ -5,6 +5,7 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage } from "../../shared/errors";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
+import { readLinkedGitDir } from "./linked-git-dir";
 import type {
   BranchUpstream,
   CheckoutTarget,
@@ -15,13 +16,14 @@ import type {
   HeadBlob,
   RemoteInfo,
   RepositoryState,
+  StashCommand,
   StashEntry,
   WorktreeInfo
 } from "../../shared/types";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
-export interface GitResult {
+interface GitResult {
   stdout: string;
   stderr: string;
   code: number;
@@ -364,6 +366,9 @@ async function readStatus(cwd: string): Promise<HeadState & { changes: FileChang
 
 function readChanges(entries: string[]): FileChange[] {
   const changes: FileChange[] = [];
+  /** Each tracked entry's index in `changes`, the first where a path is listed twice. */
+  const tracked = new Map<string, number>();
+  const dropped = new Set<number>();
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (entry.length < 4) {
@@ -375,40 +380,45 @@ function readChanges(entries: string[]): FileChange[] {
     if (status === "renamed" || code[0] === "C" || code[1] === "C") {
       // Renames and copies are two records: the new path, then the old one.
       const origPath = entries[++i];
+      if (!tracked.has(filePath)) {
+        tracked.set(filePath, changes.length);
+      }
       changes.push({ path: filePath, status, origPath });
       continue;
     }
     if (status === "untracked") {
       // After `git rm --cached` a path is deleted in the index and untracked too; one row, the
       // untracked one, as in GitHub Desktop. Untracked entries come last, so the deleted one is in.
-      const tracked = changes.findIndex((change) => change.path === filePath);
-      if (tracked !== -1) {
-        changes.splice(tracked, 1);
+      const index = tracked.get(filePath);
+      if (index !== undefined) {
+        dropped.add(index);
+        tracked.delete(filePath);
       }
+    } else if (!tracked.has(filePath)) {
+      tracked.set(filePath, changes.length);
     }
     changes.push({ path: filePath, status });
   }
-  return changes;
+  return dropped.size > 0 ? changes.filter((_change, index) => !dropped.has(index)) : changes;
+}
+
+interface GitDirs {
+  gitDir: string;
+  /** Where the worktrees are kept: a linked worktree's main `.git`, else `gitDir`. */
+  commonDir: string;
 }
 
 /** Where this tree's git data lives: `.git`, or the directory a linked worktree's `.git` file names. */
-async function resolveGitDir(cwd: string): Promise<string> {
-  const dotGit = path.join(cwd, ".git");
-  const stat = await fs.stat(dotGit).catch(() => undefined);
-  if (stat?.isFile()) {
-    const pointer = /^gitdir:\s*(.+)$/m.exec(await fs.readFile(dotGit, "utf8").catch(() => ""));
-    if (pointer) {
-      return path.resolve(cwd, pointer[1].trim());
-    }
-  }
-  return dotGit;
+function resolveGitDirs(cwd: string): GitDirs {
+  const linked = readLinkedGitDir(cwd);
+  const gitDir = linked?.gitDir ?? path.join(cwd, ".git");
+  return { gitDir, commonDir: linked?.commonDir ?? gitDir };
 }
 
 /**
  * A merge or rebase stopped midway, for the "Abort" entry — three stats instead of a git process,
  * as GitHub Desktop reads it. */
-async function readOperation(gitDirOf: Promise<string>): Promise<GitOperation | undefined> {
-  const gitDir = await gitDirOf;
+async function readOperation(gitDir: string): Promise<GitOperation | undefined> {
   const exists = (name: string): Promise<boolean> =>
     fs.stat(path.join(gitDir, name)).then(
       () => true,
@@ -426,12 +436,7 @@ async function readOperation(gitDirOf: Promise<string>): Promise<GitOperation | 
  * refresh: its `HEAD` for the main one, and per linked one under `worktrees/<id>` a `gitdir`
  * naming the worktree's `.git` (relative since `--relative-paths`) and its own `HEAD`.
  */
-export async function readWorktrees(cwd: string, gitDirOf: Promise<string> = resolveGitDir(cwd)): Promise<WorktreeInfo[]> {
-  const gitDir = await gitDirOf;
-  const commonDir = await fs.readFile(path.join(gitDir, "commondir"), "utf8").then(
-    (pointer) => path.resolve(gitDir, pointer.trim()),
-    () => gitDir
-  );
+export async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resolveGitDirs(cwd)): Promise<WorktreeInfo[]> {
   const linkedRoot = path.join(commonDir, "worktrees");
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
   const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
@@ -461,22 +466,35 @@ export async function readWorktrees(cwd: string, gitDirOf: Promise<string> = res
 }
 
 /**
- * Every `branch.<name>.base` tet recorded (worktreeAdd), by branch. Asked of git, not parsed out
- * of the config file: git owns that format. Off the refresh path — Repository reads this on open,
- * after a `.git/config` change, and after the two actions that write the key.
+ * `init.defaultBranch`, else "main": GitHub Desktop's default branch where no remote names one. And
+ * every `branch.<name>.base` tet recorded (worktreeAdd), by branch. One process for both, asked of
+ * git, not parsed out of the config file: git owns that format. Off the refresh path — Repository
+ * reads this on open, after a `.git/config` change, and after the actions that write a base.
  */
-export async function readWorktreeBases(cwd: string): Promise<Record<string, string>> {
-  const bases: Record<string, string> = {};
-  // Exit 1 where nothing matches, which `run` would turn into an error; the empty stdout is right.
-  const result = await git(cwd, ["config", "--get-regexp", "^branch\\..*\\.base$"]).catch(() => undefined);
+export async function readBranchConfig(
+  cwd: string
+): Promise<{ defaultBranchName: string; worktreeBases: Record<string, string> }> {
+  const worktreeBases: Record<string, string> = {};
+  let defaultBranchName = "";
+  // Exit 1 where nothing matches, which `run` would turn into an error; the empty stdout is right,
+  // as it is for a broken config. Keys come lowercased but for the branch name.
+  const result = await git(cwd, ["config", "--get-regexp", "^(init\\.defaultbranch|branch\\..*\\.base)$"]).catch(
+    () => undefined
+  );
   for (const line of result?.stdout.split("\n") ?? []) {
+    // The last one wins, as `--get` has it; a key without a value is an empty one.
+    const initial = /^init\.defaultbranch(?: (.*))?$/.exec(line.trim());
+    if (initial) {
+      defaultBranchName = initial[1]?.trim() ?? "";
+      continue;
+    }
     // Greedy, so a branch named "x.base" keeps its dot: the last `.base` is the key's.
     const entry = /^branch\.(.+)\.base (.*)$/.exec(line.trim());
     if (entry) {
-      bases[entry[1]] = entry[2];
+      worktreeBases[entry[1]] = entry[2];
     }
   }
-  return bases;
+  return { defaultBranchName: defaultBranchName || "main", worktreeBases };
 }
 
 /** Whether `git worktree remove` would refuse the worktree without `--force`: a change or an
@@ -494,15 +512,18 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
     // refresh where starting git is slow. The stash list is the third process, earned by being a
     // list the user acts on; anything added here has to earn its process too. All three run at
     // once, so no extra wall time. Operation and worktrees are file reads.
-    // One resolution of the git directory for both file readers, started with them so it never
-    // delays a git process.
-    const gitDirOf = resolveGitDir(cwd);
+    const statusOf = readStatus(cwd);
+    const refsOf = readRefs(cwd, remoteNames);
+    const stashesOf = readStashes(cwd);
+    // One resolution of the git directory for both file readers, synchronous and so read only once
+    // the three git processes have started: it never delays one.
+    const gitDirs = resolveGitDirs(cwd);
     const [status, refs, stashes, operation, worktrees] = await Promise.all([
-      readStatus(cwd),
-      readRefs(cwd, remoteNames),
-      readStashes(cwd),
-      readOperation(gitDirOf),
-      readWorktrees(cwd, gitDirOf)
+      statusOf,
+      refsOf,
+      stashesOf,
+      readOperation(gitDirs.gitDir),
+      readWorktrees(cwd, gitDirs)
     ]);
     return { ...status, ...refs, stashes, operation, worktrees };
   } catch (error) {
@@ -725,12 +746,6 @@ export async function readRemoteUrls(cwd: string): Promise<Record<string, string
   return urls;
 }
 
-/** `init.defaultBranch`, else "main": GitHub Desktop's default branch where no remote names one. */
-export async function readDefaultBranchName(cwd: string): Promise<string> {
-  const result = await git(cwd, ["config", "--get", "init.defaultBranch"]);
-  return (result.code === 0 && result.stdout.trim()) || "main";
-}
-
 export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<GitActionResult> {
   return run(cwd, ["remote", "set-url", remote, url]);
 }
@@ -906,21 +921,9 @@ export function stashPush(cwd: string, message: string): Promise<GitActionResult
 
 /** A stash command on the entry with this commit, its ref looked up now, as GitHub Desktop does: a
  *  stash made in a terminal since the last refresh renumbers the refs the list shows. */
-async function runOnStash(cwd: string, command: string, sha: string): Promise<GitActionResult> {
-  const stash = (await readStashes(cwd)).find((entry) => entry.sha === sha);
-  return stash ? run(cwd, ["stash", command, stash.ref]) : { ok: false, error: "The stash no longer exists" };
-}
-
-export function stashApply(cwd: string, sha: string): Promise<GitActionResult> {
-  return runOnStash(cwd, "apply", sha);
-}
-
-export function stashPop(cwd: string, sha: string): Promise<GitActionResult> {
-  return runOnStash(cwd, "pop", sha);
-}
-
-export function stashDrop(cwd: string, sha: string): Promise<GitActionResult> {
-  return runOnStash(cwd, "drop", sha);
+export async function stash(cwd: string, command: StashCommand, sha: string): Promise<GitActionResult> {
+  const found = (await readStashes(cwd)).find((entry) => entry.sha === sha);
+  return found ? run(cwd, ["stash", command, found.ref]) : { ok: false, error: "The stash no longer exists" };
 }
 
 export async function checkout(cwd: string, target: CheckoutTarget, localBranches: string[]): Promise<GitActionResult> {
@@ -1087,7 +1090,7 @@ export function toDataUrl(filePath: string, content: Buffer): string | undefined
   return content.length > 0 ? `data:${imageType(filePath)};base64,${content.toString("base64")}` : undefined;
 }
 
-export interface HeadBlobOptions {
+interface HeadBlobOptions {
   /** A rename's source path — the one HEAD has. */
   origPath?: string;
   /** Past this the blob counts as binary: the editor's own cap, since both sides share the editor. */

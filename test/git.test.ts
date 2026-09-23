@@ -28,7 +28,7 @@ import {
   rebaseRewritesPushed,
   renameBranch,
   resolveRoot,
-  stashDrop,
+  stash,
   stashPush,
   updateRemoteHead,
   version
@@ -186,7 +186,7 @@ describe("a repository, from init on", () => {
     assert.equal(state.stashes[0].ref, "stash@{0}");
     assert.equal(state.stashes[0].sha, run("rev-parse", "stash@{0}"));
     assert.match(state.stashes[0].message, /wip/);
-    assert.deepEqual(await stashDrop(cwd, state.stashes[0].sha), { ok: true });
+    assert.deepEqual(await stash(cwd, "drop", state.stashes[0].sha), { ok: true });
     assert.deepEqual((await readState(cwd)).stashes, []);
   });
 
@@ -197,11 +197,11 @@ describe("a repository, from init on", () => {
     // A terminal stashes meanwhile: "first" is stash@{1} now.
     write("b.txt", "second\n");
     run("stash", "push", "-q", "-m", "second");
-    assert.deepEqual(await stashDrop(cwd, shown.sha), { ok: true });
+    assert.deepEqual(await stash(cwd, "drop", shown.sha), { ok: true });
     const left = (await readState(cwd)).stashes;
     assert.equal(left.length, 1);
     assert.match(left[0].message, /second/);
-    assert.deepEqual(await stashDrop(cwd, shown.sha), { ok: false, error: "The stash no longer exists" });
+    assert.deepEqual(await stash(cwd, "drop", shown.sha), { ok: false, error: "The stash no longer exists" });
     run("stash", "drop", "-q");
   });
 

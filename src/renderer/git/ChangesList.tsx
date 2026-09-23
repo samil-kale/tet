@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { syncRemote } from "../../shared/types";
 import type { ChangeStatus, FileChange, Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import type { FileAct, FileAsk } from "./run-action";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, prompt } from "../ui/Dialog";
+import { FilterField } from "../ui/FilterField";
 import { isMarkdown } from "../diff/diff-highlight";
 
 interface ChangesListProps {
@@ -27,6 +29,52 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
   untracked: "?",
   conflicted: "C"
 };
+
+/** What a file's menu offers after its own "Open": the Markdown preview through `open`, then the
+ *  external editor. Shared with the Explorer's; `enabled` is false where the menu covers several
+ *  files. */
+export function openEntries(
+  projectId: string,
+  path: string,
+  enabled: boolean,
+  open: (how: OpenEditor) => void
+): ContextMenuEntry[] {
+  return [
+    ...(isMarkdown(path)
+      ? [{ label: "Open Preview", run: enabled ? () => open({ markdownPreview: true }) : undefined }]
+      : []),
+    {
+      label: "Open in external editor",
+      run: enabled ? () => void window.tet.shell.openFileExternally(projectId, path) : undefined
+    }
+  ];
+}
+
+/** A file menu's closing group, shared with the Explorer's: reveal one path, copy all of them.
+ *  `noun` names what is copied ("file path", or "path" for a folder); the repository root has no
+ *  relative path. */
+export function pathEntries(project: Project, paths: string[], noun: string): ContextMenuEntry[] {
+  const plural = paths.length === 1 ? "" : "s";
+  return [
+    SEPARATOR,
+    {
+      label: revealLabel(),
+      run: paths.length === 1 ? () => void window.tet.shell.revealFile(project.id, paths[0]) : undefined
+    },
+    {
+      label: `Copy ${noun}${plural}`,
+      run: () => void navigator.clipboard.writeText(paths.map((entry) => absolutePath(project.path, entry)).join("\n"))
+    },
+    ...(paths.includes("")
+      ? []
+      : [
+          {
+            label: `Copy relative ${noun}${plural}`,
+            run: () => void navigator.clipboard.writeText(paths.join("\n"))
+          }
+        ])
+  ];
+}
 
 /** The files go to the trash; where the trash fails, a second question offers to delete them. */
 export async function confirmDiscard(projectId: string, paths: string[], act: FileAct): Promise<void> {
@@ -74,8 +122,7 @@ export async function askCommit(
   paths: string[] | undefined,
   ask: FileAsk
 ): Promise<void> {
-  const remote = state.remotes[0]?.name;
-  const canSync = remote !== undefined && !state.detached;
+  const { remote, canSync } = syncRemote(state);
   await prompt({
     title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
     label: "Message",
@@ -131,13 +178,16 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
     setAnchor(null);
   }
 
-  // Drop files no longer changed, or a later change reappears pre-selected.
-  useEffect(() => {
+  // Drop files no longer changed, or a later change reappears pre-selected. In render as well, and
+  // as an updater, so it queues behind the reset above.
+  const [prunedFor, setPrunedFor] = useState(changes);
+  if (prunedFor !== changes) {
+    setPrunedFor(changes);
     setSelected((current) => {
       const kept = current.filter((path) => changes.some((change) => change.path === path));
       return kept.length === current.length ? current : kept;
     });
-  }, [changes]);
+  }
 
   /** VS Code's list selection: plain replaces, ctrl toggles, shift takes the range. */
   const select = (event: React.MouseEvent, path: string): void => {
@@ -175,13 +225,7 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
 
     const entries: ContextMenuEntry[] = [
       { label: "Open diff", run: one ? () => onOpenDiff(change.path) : undefined },
-      ...(isMarkdown(change.path)
-        ? [{ label: "Open Preview", run: one ? () => onOpenDiff(change.path, { markdownPreview: true }) : undefined }]
-        : []),
-      {
-        label: "Open in external editor",
-        run: one ? () => void window.tet.shell.openFileExternally(project.id, change.path) : undefined
-      },
+      ...openEntries(project.id, change.path, one, (how) => onOpenDiff(change.path, how)),
       SEPARATOR,
       {
         label: one ? "Commit changes..." : `Commit ${paths.length} selected changes...`,
@@ -194,19 +238,7 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
         // When the selection is everything, the entry above already does this.
         run: changes.length > paths.length ? discard(changes.map((entry) => entry.path)) : undefined
       },
-      SEPARATOR,
-      {
-        label: revealLabel(),
-        run: one ? () => void window.tet.shell.revealFile(project.id, change.path) : undefined
-      },
-      {
-        label: one ? "Copy file path" : "Copy file paths",
-        run: () => void navigator.clipboard.writeText(paths.map((entry) => absolutePath(project.path, entry)).join("\n"))
-      },
-      {
-        label: one ? "Copy relative file path" : "Copy relative file paths",
-        run: () => void navigator.clipboard.writeText(paths.join("\n"))
-      }
+      ...pathEntries(project, paths, "file path")
     ];
     if (one && change.status === "untracked") {
       entries.push(SEPARATOR, { label: "Ignore file (add to .gitignore)", run: ignore("file") });
@@ -219,13 +251,7 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
 
   return (
     <div className="changes-list">
-      <input
-        className="changes-filter"
-        type="text"
-        placeholder="Filter changes..."
-        value={filter}
-        onChange={(event) => setFilter(event.target.value)}
-      />
+      <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
       <div className="changes-list-items">
         {visible.map((change) => (
           <button

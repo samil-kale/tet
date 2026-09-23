@@ -54,6 +54,14 @@ export function registerShellIpc({
   repositories,
   send
 }: Pick<IpcDeps, "repositories" | "send">): void {
+  /** Opens `target` with the OS's default app; a refusal is a notice naming it as `shown`. */
+  const openWithNotice = async (target: string, kind: "file" | "folder", shown: string): Promise<void> => {
+    const error = await shell.openPath(target);
+    if (error) {
+      send("app:notice", { severity: "error", message: `Could not open ${kind}: ${shown} (${error})` });
+    }
+  };
+
   ipcMain.handle("shell:open-url", async (_event, url: string): Promise<void> => {
     if (!isOpenableUrl(url)) {
       send("app:notice", { severity: "error", message: `Only http, https and mailto links are opened: ${url}` });
@@ -131,10 +139,7 @@ export function registerShellIpc({
       shell.showItemInFolder(resolved);
       return null;
     }
-    const error = await shell.openPath(resolved);
-    if (error) {
-      send("app:notice", { severity: "error", message: `Could not open file: ${rawPath} (${error})` });
-    }
+    await openWithNotice(resolved, "file", rawPath);
     return null;
   });
 
@@ -152,10 +157,7 @@ export function registerShellIpc({
     if (!repository) {
       return;
     }
-    const error = await shell.openPath(path.join(repository.project.path, filePath));
-    if (error) {
-      send("app:notice", { severity: "error", message: `Could not open file: ${filePath} (${error})` });
-    }
+    await openWithNotice(path.join(repository.project.path, filePath), "file", filePath);
   });
 
   ipcMain.handle("shell:open-project", async (_event, projectId: string): Promise<void> => {
@@ -163,9 +165,6 @@ export function registerShellIpc({
     if (!repository) {
       return;
     }
-    const error = await shell.openPath(repository.project.path);
-    if (error) {
-      send("app:notice", { severity: "error", message: `Could not open folder: ${repository.project.path} (${error})` });
-    }
+    await openWithNotice(repository.project.path, "folder", repository.project.path);
   });
 }

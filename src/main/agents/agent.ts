@@ -50,15 +50,15 @@ export interface SandboxSessionMount {
 export interface SandboxSessions {
   mounts: SandboxSessionMount[];
   /** SessionProvider.list against the mounted root; the manager names the sandbox on the result. */
-  list(executable: string, root: string, cwd: string): Promise<AgentSessionInfo[]>;
-  remove(executable: string, root: string, cwd: string, sessionId: string): Promise<void>;
-  rename(executable: string, root: string, cwd: string, sessionId: string, title: string): Promise<void>;
+  list(root: string, cwd: string): Promise<AgentSessionInfo[]>;
+  remove(root: string, cwd: string, sessionId: string): Promise<void>;
+  rename(root: string, cwd: string, sessionId: string, title: string): Promise<void>;
 }
 
 /** Agent-specific session enumeration/resume/deletion. */
 export interface SessionProvider {
   /** All sessions of this repository, oldest first. Must resolve [] on any failure. */
-  list(executable: string, cwd: string): Promise<AgentSessionInfo[]>;
+  list(cwd: string): Promise<AgentSessionInfo[]>;
   resumeArgs(sessionId: string): string[];
   /** Deletes the session; rejects on failure. An already-gone session must resolve: a tab whose
    *  removal rejects is put back (ProjectSessionManager.destroyTab) and could never be closed. */
@@ -67,7 +67,7 @@ export interface SessionProvider {
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;
   /** Calls `onChange` when this repository's sessions change, so the manager re-lists without
    *  waiting for its poll. Returns a stop function. */
-  watch?(executable: string, cwd: string, onChange: () => void): () => void;
+  watch?(cwd: string, onChange: () => void): () => void;
   /** Omitted where sandboxed sessions already come back from `list` (opencode) or there are none. */
   sandbox?: SandboxSessions;
 }

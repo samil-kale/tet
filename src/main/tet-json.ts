@@ -18,6 +18,8 @@ import type {
   SbxSecret,
   SbxVariable
 } from "../shared/types";
+import { machineName } from "./env-names";
+import { isRecord } from "./json-file";
 
 /** A project's saved commands and Explorer view, in its own root so it travels with the repository.
  *  Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
@@ -83,9 +85,7 @@ async function readText(root: string): Promise<string | null> {
 function parse(text: string): ProjectFile {
   const errors: ParseError[] = [];
   const content: unknown = parseJsonc(text, errors, { allowTrailingComma: true });
-  return errors.length > 0 || typeof content !== "object" || content === null || Array.isArray(content)
-    ? UNREADABLE
-    : (content as ProjectFile);
+  return errors.length > 0 || !isRecord(content) ? UNREADABLE : (content as ProjectFile);
 }
 
 /** The file's contents, or **null** when there is none. A write may create a missing file but never
@@ -124,7 +124,7 @@ async function patch(root: string, edit: (content: ProjectFile) => Change[]): Pr
 
 /** Only the string values of an `env`, which outranks the inherited environment. */
 function toEnv(value: unknown): Record<string, string> | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return undefined;
   }
   const env = Object.fromEntries(
@@ -224,9 +224,7 @@ function toFolders(value: unknown, root: string): ExplorerRoot[] {
 
 /** Any nested object of tet.json; anything not a plain object is an empty one. */
 function toSettings(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 /** `files.exclude`: VS Code's map of glob → true; only `true` counts. */
@@ -290,7 +288,7 @@ function patchSetting(root: string, key: string, value: unknown): Promise<void> 
 /** A key inside `settings`; a `settings` that isn't an object is replaced, as an edit can't reach into it. */
 function settingChange(content: ProjectFile, key: string, value: unknown): Change {
   const settings = content.settings;
-  return typeof settings === "object" && settings !== null && !Array.isArray(settings)
+  return isRecord(settings)
     ? [["settings", key], value]
     : [["settings"], { [key]: value }];
 }
@@ -300,7 +298,7 @@ export function addExclude(root: string, relPath: string): Promise<void> {
   return patch(root, (content) => {
     const exclude = toSettings(content.settings)[KEY_EXCLUDE];
     return [
-      typeof exclude === "object" && exclude !== null && !Array.isArray(exclude)
+      isRecord(exclude)
         ? [["settings", KEY_EXCLUDE, relPath], true]
         : settingChange(content, KEY_EXCLUDE, { [relPath]: true })
     ];
@@ -383,8 +381,7 @@ function toSbxVariables(value: unknown, secrets: SbxSecret[]): SbxVariable[] {
     return isEnvName(name) && !isReservedName(name) && !secrets.some((secret) => secret.env === name) ? { env: name } : undefined;
   });
   // A repeated env name keeps the first row only.
-  const same = (name: string): string => (process.platform === "win32" ? name.toUpperCase() : name);
-  return variables.filter((variable, i) => variables.findIndex((other) => same(other.env) === same(variable.env)) === i);
+  return variables.filter((variable, i) => variables.findIndex((other) => machineName(other.env) === machineName(variable.env)) === i);
 }
 
 /** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path

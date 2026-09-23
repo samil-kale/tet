@@ -45,7 +45,7 @@ describe("Claude Code's transcripts", () => {
 
   it("labels a session by its first typed prompt until Claude names it", async () => {
     transcripts({ s1: [toolResult, prompt("Fix the build"), prompt("and the tests")] });
-    const [session] = await claudeSessionProvider.list("claude", cwd);
+    const [session] = await claudeSessionProvider.list(cwd);
     assert.equal(session.id, "s1");
     assert.equal(session.title, "Fix the build");
     assert.equal(session.provisionalTitle, true);
@@ -74,7 +74,7 @@ describe("Claude Code's transcripts", () => {
       ],
       other: [{ type: "custom-title", customTitle: "Not mine", sessionId: "someone-else" }, prompt("p")]
     });
-    const titles = Object.fromEntries((await claudeSessionProvider.list("claude", cwd)).map((s) => [s.id, s]));
+    const titles = Object.fromEntries((await claudeSessionProvider.list(cwd)).map((s) => [s.id, s]));
     assert.equal(titles.named.title, "Agent");
     assert.equal(titles.named.provisionalTitle, false);
     assert.equal(titles.titled.title, "Second", "the later ai-title supersedes");
@@ -85,7 +85,7 @@ describe("Claude Code's transcripts", () => {
 
   it("collapses whitespace and cuts a long title at sixty characters", async () => {
     transcripts({ s: [prompt("  a\n\n   long   " + "x".repeat(80))] });
-    const [session] = await claudeSessionProvider.list("claude", cwd);
+    const [session] = await claudeSessionProvider.list(cwd);
     assert.equal(session.title.length, 60);
     assert.ok(session.title.startsWith("a long xxx") && session.title.endsWith("…"));
   });
@@ -93,7 +93,7 @@ describe("Claude Code's transcripts", () => {
   it("appends a rename the way Claude's own /rename does, and deletes a session with its sidecar", async () => {
     const dir = transcripts({ s: [prompt("p")] });
     await claudeSessionProvider.rename("claude", cwd, "s", "  Renamed  ");
-    assert.equal((await claudeSessionProvider.list("claude", cwd))[0].title, "Renamed");
+    assert.equal((await claudeSessionProvider.list(cwd))[0].title, "Renamed");
     fs.mkdirSync(path.join(dir, "s", "subagents"), { recursive: true });
     await claudeSessionProvider.remove("claude", cwd, "s");
     assert.deepEqual(fs.readdirSync(dir), []);
@@ -151,7 +151,7 @@ describe("Claude Code's transcripts", () => {
       escapedInSidechain: [prompt("p"), interrupt("[Request interrupted by user]", LATER, { isSidechain: true })]
     });
     const ends = Object.fromEntries(
-      (await claudeSessionProvider.list("claude", cwd)).map((s) => [s.id, s.turnEndedAt])
+      (await claudeSessionProvider.list(cwd)).map((s) => [s.id, s.turnEndedAt])
     );
     assert.equal(ends.hooked, undefined, "the hooks ran — the marker is authoritative");
     assert.equal(ends.cut, ms(LATER), "no summary beneath it: interrupted");
@@ -170,14 +170,14 @@ describe("Claude Code's transcripts", () => {
       older: [prompt("first", AT)],
       broken: ["{ not json", prompt("still listed", AT)]
     });
-    const sessions = await claudeSessionProvider.list("claude", cwd);
+    const sessions = await claudeSessionProvider.list(cwd);
     assert.equal(sessions.at(-1)?.id, "newer");
     assert.equal(sessions.find((s) => s.id === "broken")?.title, "still listed");
   });
 
   it("lists nothing where Claude has never run", async () => {
     process.env.CLAUDE_CONFIG_DIR = path.join(os.tmpdir(), "tet-claude-never");
-    assert.deepEqual(await claudeSessionProvider.list("claude", cwd), []);
+    assert.deepEqual(await claudeSessionProvider.list(cwd), []);
   });
 });
 
@@ -224,7 +224,7 @@ describe("Codex's rollouts", () => {
       },
       [{ id: "s1", thread_name: "Named" }, { id: "s2", thread_name: "Cleared" }, { id: "s2", thread_name: "" }]
     );
-    const sessions = await codexSessionProvider.list("codex", cwd);
+    const sessions = await codexSessionProvider.list(cwd);
     assert.deepEqual(
       sessions.map((s) => [s.id, s.title, s.turnEndedAt, s.createdAt]),
       [
@@ -236,12 +236,12 @@ describe("Codex's rollouts", () => {
 
   it("takes an aborted turn as an end too, and the last one", async () => {
     rollouts({ one: [meta("s1"), typed("p"), end("task_complete", AT), end("turn_aborted", LATER)] });
-    assert.equal((await codexSessionProvider.list("codex", cwd))[0].turnEndedAt, ms(LATER));
+    assert.equal((await codexSessionProvider.list(cwd))[0].turnEndedAt, ms(LATER));
   });
 
   it("lists nothing where Codex has never run", async () => {
     process.env.CODEX_HOME = path.join(os.tmpdir(), "tet-codex-never");
-    assert.deepEqual(await codexSessionProvider.list("codex", cwd), []);
+    assert.deepEqual(await codexSessionProvider.list(cwd), []);
   });
 });
 
@@ -286,7 +286,7 @@ describe("pi's transcripts", () => {
       s2: [header("s2", LATER), modelChange, toolResult, user([{ type: "image", data: "…" }, { type: "text", text: "From blocks" }]), assistant("stop")],
       s3: [header("s3", LATER), modelChange, user("Fix the tests"), assistant("stop"), info("Mine", "n1"), info("  ", "n2")]
     });
-    const sessions = await piSessionProvider.list("pi", cwd);
+    const sessions = await piSessionProvider.list(cwd);
     assert.deepEqual(
       sessions.map((s) => [s.id, s.title, s.createdAt, s.provisionalTitle]),
       [
@@ -303,7 +303,7 @@ describe("pi's transcripts", () => {
       s1: [header("s1"), modelChange, user("p"), assistant("stop", AT), user("q", "u2"), assistant("aborted", LATER, "a2")],
       s2: [header("s2", LATER), modelChange, user("p")]
     });
-    const sessions = await piSessionProvider.list("pi", cwd);
+    const sessions = await piSessionProvider.list(cwd);
     assert.deepEqual(sessions.map((s) => [s.id, s.turnEndedAt]), [["s1", ms(LATER)], ["s2", undefined]]);
   });
 
@@ -311,14 +311,14 @@ describe("pi's transcripts", () => {
     transcripts({
       s1: [header("s1"), modelChange, user("p"), assistant("stop", AT), user("q", "u2"), assistant("toolUse", LATER, "a2"), toolResult]
     });
-    const sessions = await piSessionProvider.list("pi", cwd);
+    const sessions = await piSessionProvider.list(cwd);
     assert.deepEqual(sessions.map((s) => [s.id, s.turnEndedAt]), [["s1", ms(AT)]]);
   });
 
   it("renames by appending a session_info parented to the last entry, and removes by deleting the file", async () => {
     const dir = transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] });
     await piSessionProvider.rename("pi", cwd, "s1", "  Renamed  ");
-    assert.equal((await piSessionProvider.list("pi", cwd))[0].title, "Renamed");
+    assert.equal((await piSessionProvider.list(cwd))[0].title, "Renamed");
     const lines = fs.readFileSync(path.join(dir, fileName("s1")), "utf8").trim().split("\n");
     const appended = JSON.parse(lines[lines.length - 1]) as Record<string, unknown>;
     assert.equal(appended.type, "session_info");
@@ -338,18 +338,18 @@ describe("pi's transcripts", () => {
       other: [{ type: "message", id: "x" }],
       s1: [header("s1"), "{ not json", user("Still listed"), assistant("stop")]
     });
-    const sessions = await piSessionProvider.list("pi", cwd);
+    const sessions = await piSessionProvider.list(cwd);
     assert.deepEqual(sessions.map((s) => [s.id, s.title]), [["s1", "Still listed"]]);
   });
 
   it("finds the directory whatever case pi was spawned with", { skip: process.platform !== "win32" && "win32 only" }, async () => {
     transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] }, encodeCwd(cwd).toLowerCase());
-    assert.equal((await piSessionProvider.list("pi", cwd))[0]?.id, "s1");
+    assert.equal((await piSessionProvider.list(cwd))[0]?.id, "s1");
   });
 
   it("lists nothing where pi has never run", async () => {
     process.env.PI_CODING_AGENT_DIR = path.join(os.tmpdir(), "tet-pi-never");
-    assert.deepEqual(await piSessionProvider.list("pi", cwd), []);
+    assert.deepEqual(await piSessionProvider.list(cwd), []);
   });
 });
 
@@ -376,7 +376,7 @@ describe("opencode's session records", () => {
       "ses_c.json.tmp": "{",
       "ses_d.json": "not json"
     });
-    const listed = await opencodeSessionProvider.list("opencode", cwd);
+    const listed = await opencodeSessionProvider.list(cwd);
     assert.deepEqual(
       listed.map((info) => [info.id, info.title, info.createdAt, info.updatedAt, info.sandbox]),
       [
@@ -384,13 +384,13 @@ describe("opencode's session records", () => {
         ["ses_b", "Second", 2, 5, "tet-opencode-abc"]
       ]
     );
-    assert.equal(sessionSandbox(cwd, "ses_b"), "tet-opencode-abc");
-    assert.equal(sessionSandbox(cwd, "ses_a"), null);
-    assert.equal(sessionSandbox(cwd, "ses_none"), null, "an unrecorded session can only be on the host");
+    assert.equal(await sessionSandbox(cwd, "ses_b"), "tet-opencode-abc");
+    assert.equal(await sessionSandbox(cwd, "ses_a"), null);
+    assert.equal(await sessionSandbox(cwd, "ses_none"), null, "an unrecorded session can only be on the host");
   });
 
   it("lists nothing for a repository that was never prepared", async () => {
-    assert.deepEqual(await opencodeSessionProvider.list("opencode", path.join(os.tmpdir(), "never")), []);
+    assert.deepEqual(await opencodeSessionProvider.list(path.join(os.tmpdir(), "never")), []);
   });
 
   it("resumes by id and renames through the session's own process", async () => {
@@ -411,7 +411,7 @@ describe("opencode's session records", () => {
     } finally {
       clearInterval(plugin);
     }
-    assert.equal((await opencodeSessionProvider.list("opencode", cwd))[0].title, "Renamed");
+    assert.equal((await opencodeSessionProvider.list(cwd))[0].title, "Renamed");
     await assert.rejects(opencodeSessionProvider.rename("opencode", cwd, "ses_a", "  "), /non-empty/);
   });
 
@@ -454,13 +454,13 @@ describe("sessions written inside a sandbox", () => {
     );
     const sandbox = claudeSessionProvider.sandbox;
     assert.ok(sandbox);
-    const [session] = await sandbox.list("claude", dir, cwd);
+    const [session] = await sandbox.list(dir, cwd);
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
-    await sandbox.rename("claude", dir, cwd, "s1", "Renamed");
-    assert.equal((await sandbox.list("claude", dir, cwd))[0].title, "Renamed");
-    await sandbox.remove("claude", dir, cwd, "s1");
-    assert.deepEqual(await sandbox.list("claude", dir, cwd), []);
+    await sandbox.rename(dir, cwd, "s1", "Renamed");
+    assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
+    await sandbox.remove(dir, cwd, "s1");
+    assert.deepEqual(await sandbox.list(dir, cwd), []);
   });
 
   it("lists, renames and deletes Codex's sandboxed rollouts on the mounted files", async () => {
@@ -482,23 +482,23 @@ describe("sessions written inside a sandbox", () => {
     fs.writeFileSync(index, line({ id: "s1", thread_name: "Named" }));
     const sandbox = codexSessionProvider.sandbox;
     assert.ok(sandbox);
-    const titles = async (): Promise<string[][]> => (await sandbox.list("codex", dir, cwd)).map((s) => [s.id, s.title]);
+    const titles = async (): Promise<string[][]> => (await sandbox.list(dir, cwd)).map((s) => [s.id, s.title]);
     assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "In the sandbox"]], "the name index beside the rollouts is mounted too");
 
-    await sandbox.rename("codex", dir, cwd, "s2", "  Renamed  ");
+    await sandbox.rename(dir, cwd, "s2", "  Renamed  ");
     assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "Renamed"]]);
     const appended = JSON.parse(fs.readFileSync(index, "utf8").trim().split("\n").at(-1) ?? "") as Record<string, unknown>;
     assert.deepEqual(Object.keys(appended), ["id", "thread_name", "updated_at"]);
     assert.match(String(appended.updated_at), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{7}Z$/, "Codex's seven fractional digits");
-    await assert.rejects(sandbox.rename("codex", dir, cwd, "s2", "  "), /non-empty/);
+    await assert.rejects(sandbox.rename(dir, cwd, "s2", "  "), /non-empty/);
 
     const indexBefore = fs.readFileSync(index, "utf8");
-    await sandbox.remove("codex", dir, cwd, "s1");
+    await sandbox.remove(dir, cwd, "s1");
     assert.deepEqual(fs.readdirSync(day), ["rollout-s2.jsonl"]);
     assert.equal(fs.readFileSync(index, "utf8"), indexBefore, "the index is left as it is");
     assert.deepEqual(await titles(), [["s2", "Renamed"]], "a name without its rollout lists nothing");
     // A session that is already gone resolves — see SessionProvider.remove.
-    await sandbox.remove("codex", dir, cwd, "s1");
+    await sandbox.remove(dir, cwd, "s1");
   });
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {
@@ -519,19 +519,19 @@ describe("sessions written inside a sandbox", () => {
     );
     const sandbox = piSessionProvider.sandbox;
     assert.ok(sandbox);
-    const [session] = await sandbox.list("pi", dir, cwd);
+    const [session] = await sandbox.list(dir, cwd);
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
-    await sandbox.rename("pi", dir, cwd, "s1", "Renamed");
-    assert.equal((await sandbox.list("pi", dir, cwd))[0].title, "Renamed");
-    await sandbox.remove("pi", dir, cwd, "s1");
-    assert.deepEqual(await sandbox.list("pi", dir, cwd), []);
+    await sandbox.rename(dir, cwd, "s1", "Renamed");
+    assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
+    await sandbox.remove(dir, cwd, "s1");
+    assert.deepEqual(await sandbox.list(dir, cwd), []);
   });
 
   it("has nothing to list where the sandbox never wrote anything", async () => {
     const dir = path.join(os.tmpdir(), "tet-sbx-never");
     for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider]) {
-      assert.deepEqual(await provider.sandbox?.list("agent", dir, cwd), []);
+      assert.deepEqual(await provider.sandbox?.list(dir, cwd), []);
     }
   });
 

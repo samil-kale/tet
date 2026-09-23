@@ -127,19 +127,19 @@ const resolvedUrls = new Map<string, string | null>();
 const negativeAnswers = new Map<string, number>();
 const pendingUrlRequests = new Set<string>();
 
+/** Drops every key starting with `prefix` — a gone tab's or project's view key. */
+function deletePrefixed(cache: { keys(): Iterable<string>; delete(key: string): unknown }, prefix: string): void {
+  for (const key of [...cache.keys()]) {
+    if (key.startsWith(prefix)) {
+      cache.delete(key);
+    }
+  }
+}
+
 /** Forgets the url answers of a gone tab or project; keys start with their view key. */
 function forgetUrls(prefix: string): void {
-  const caches: { keys(): Iterable<string>; delete(key: string): unknown }[] = [
-    resolvedUrls,
-    negativeAnswers,
-    pendingUrlRequests
-  ];
-  for (const cache of caches) {
-    for (const key of [...cache.keys()]) {
-      if (key.startsWith(prefix)) {
-        cache.delete(key);
-      }
-    }
+  for (const cache of [resolvedUrls, negativeAnswers, pendingUrlRequests]) {
+    deletePrefixed(cache, prefix);
   }
 }
 
@@ -229,6 +229,17 @@ async function pasteClipboard(term: Terminal): Promise<void> {
   if (!(await pasteClipboardImage(term))) {
     term.paste(await navigator.clipboard.readText());
   }
+}
+
+/** Copies the selection and clears it; false when there is none. */
+function copySelection(term: Terminal): boolean {
+  const selection = term.getSelection();
+  if (!selection) {
+    return false;
+  }
+  void navigator.clipboard.writeText(selection);
+  term.clearSelection();
+  return true;
 }
 
 /**
@@ -405,15 +416,11 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
       return false;
     }
     // Ctrl+C with a selection copies, in every terminal; without one, \x03 is the CLI's business.
+    // A held key copies once: its repeats find the selection cleared.
     if (event.type === "keydown" && event.key.toLowerCase() === "c" && isModifierHeld(event) && !event.shiftKey) {
-      const selection = term.getSelection();
-      if (selection) {
+      if (copySelection(term)) {
         event.preventDefault();
         event.stopPropagation();
-        if (!event.repeat) {
-          void navigator.clipboard.writeText(selection);
-          term.clearSelection();
-        }
         return false;
       }
     }
@@ -483,11 +490,7 @@ export function attachTerminal(projectId: string, tabId: string, agent: AgentInf
     if (!agent.takesRightMouse) {
       // Nothing takes the right click (measured, AgentDefinition.takesRightMouse): copy a
       // selection, else paste.
-      const selection = view.term.getSelection();
-      if (selection) {
-        void navigator.clipboard.writeText(selection);
-        view.term.clearSelection();
-      } else {
+      if (!copySelection(view.term)) {
         void pasteClipboard(view.term);
       }
       return;
@@ -612,11 +615,7 @@ function dropView(key: string, view: TerminalView): void {
 export function disposeProjectTerminals(projectId: string): void {
   // Project ids are uuids: no other key starts with one plus the separator.
   const prefix = viewKey(projectId, "");
-  for (const key of [...earlyOutput.keys()]) {
-    if (key.startsWith(prefix)) {
-      earlyOutput.delete(key);
-    }
-  }
+  deletePrefixed(earlyOutput, prefix);
 
   for (const [key, view] of [...views]) {
     if (key.startsWith(prefix)) {

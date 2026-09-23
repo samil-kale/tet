@@ -51,6 +51,7 @@ import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
 import { canBind } from "../can-bind";
+import { sbxNotReady } from "../sbx-policy";
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
@@ -118,9 +119,10 @@ export interface ControlDeps {
       project: Project,
       config: SbxProjectConfig,
       knowledge: SbxKnowledgeConfig,
-      values: { secrets: string[]; variables: string[] }
+      values: { secrets: string[]; variables: string[] },
+      status?: SbxStatus
     ): Promise<SbxProblems>;
-    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult>;
+    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, status?: SbxStatus): Promise<SbxSaveResult>;
   };
 }
 
@@ -316,16 +318,20 @@ export async function findControlPort(dataRoot: string): Promise<number> {
 function verbs(deps: ControlDeps): Record<string, Handler> {
   const { store, settings, sessions } = deps;
 
-  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => {
-    const id = typeof args.project === "string" && args.project ? args.project : caller.projectId;
-    if (!id) {
-      throw new ControlError("bad_args", "no project: pass --project <id> (see projects-list)");
-    }
+  const projectById = (id: string): Project => {
     const found = store.get(id);
     if (!found) {
       throw new ControlError("not_found", `unknown project: ${id}`);
     }
     return found;
+  };
+
+  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => {
+    const id = typeof args.project === "string" && args.project ? args.project : caller.projectId;
+    if (!id) {
+      throw new ControlError("bad_args", "no project: pass --project <id> (see projects-list)");
+    }
+    return projectById(id);
   };
 
   const terminals = (found: Project): ControlTerminals => {
@@ -334,6 +340,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       throw new ControlError("internal", `project ${found.id} has no terminals`);
     }
     return manager;
+  };
+
+  const repository = (found: Project): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> => {
+    const repo = deps.repositories.get(found.id);
+    if (!repo) {
+      throw new ControlError("internal", `project ${found.id} has no repository`);
+    }
+    return repo;
   };
 
   /** A tab id checked to exist, with its project and terminals. */
@@ -354,12 +368,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
   };
 
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
-   *  which only the user can set up there. */
-  const readySbx = async (found: Project): Promise<void> => {
+   *  which only the user can set up there. Returns the status it read. */
+  const readySbx = async (found: Project): Promise<SbxStatus> => {
     const status = await deps.sbx.status(found);
-    const missing = !status.installed
-      ? "sbx is not installed"
-      : (status.failure ?? (!status.loggedIn ? "sbx is not signed in" : !status.policyInitialized ? "sbx's network policy is not set up" : undefined));
+    const missing = sbxNotReady(status);
     if (missing) {
       throw new ControlError("bad_args", `${missing}: the user sets it up in ${found.name}'s SBX Settings in TET`);
     }
@@ -367,6 +379,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const policy = status.organization ? `${status.organization}'s SBX policy` : "SBX's policy";
       throw new ControlError("bad_args", `${policy} does not allow ${status.blockers.map((blocker) => `${blocker.allow} (${blocker.what})`).join("; ")}`);
     }
+    return status;
   };
 
   /**
@@ -385,7 +398,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     switching = false
   ): Promise<Answer> => {
     const found = project(args, caller);
-    await readySbx(found);
+    const status = await readySbx(found);
     const config = await deps.sbx.config(found);
     const { knowledge } = deps.sbx.stored(found.id);
     if (!config.enabled && !switching) {
@@ -394,11 +407,12 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     const next = edit({ config, knowledge });
     const request = next.config ?? config;
     const nextKnowledge = next.knowledge ?? knowledge;
-    const saved = await deps.sbx.save(found, request, {
-      secrets: keptValues(request.secrets),
-      variables: keptValues(request.variables),
-      knowledge: nextKnowledge
-    });
+    const saved = await deps.sbx.save(
+      found,
+      request,
+      { secrets: keptValues(request.secrets), variables: keptValues(request.variables), knowledge: nextKnowledge },
+      status
+    );
     if (!saved.ok) {
       throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
     }
@@ -476,14 +490,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       result: store.list().filter((entry) => !caller.sandboxed || entry.id === caller.projectId)
     }),
 
-    "repo-state": (args, caller) => {
-      const found = project(args, caller);
-      const repository = deps.repositories.get(found.id);
-      if (!repository) {
-        throw new ControlError("internal", `project ${found.id} has no repository`);
-      }
-      return { result: repository.getState() };
-    },
+    "repo-state": (args, caller) => ({ result: repository(project(args, caller)).getState() }),
 
     "projects-add": async (args) => {
       const added = await deps.addProject(text(args, "path", "path"));
@@ -496,9 +503,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "projects-remove": (args, caller) => {
       const id = text(args, "projectId", "project id");
-      if (!store.get(id)) {
-        throw new ControlError("not_found", `unknown project: ${id}`);
-      }
+      projectById(id);
       const remove = (): void => {
         deps.removeProject(id);
         deps.projectsChanged({ removed: id });
@@ -522,10 +527,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     // Not the caller's own: it would end the caller's tab before the folder can go.
     "worktree-delete": async (args, caller) => {
       const id = text(args, "projectId", "project id");
-      const found = store.get(id);
-      if (!found) {
-        throw new ControlError("not_found", `unknown project: ${id}`);
-      }
+      const found = projectById(id);
       if (!found.mainPath) {
         throw new ControlError("bad_args", `project ${id} is not a worktree`);
       }
@@ -578,7 +580,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const found = project(args, caller);
       const stored = deps.sbx.stored(found.id);
       const [status, config] = await Promise.all([deps.sbx.status(found), deps.sbx.config(found)]);
-      const problems = await deps.sbx.problems(found, config, stored.knowledge, stored);
+      const problems = await deps.sbx.problems(found, config, stored.knowledge, stored, status);
       return { result: { status, config, stored, problems } };
     },
 
@@ -786,14 +788,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "editor-list": (args, caller) => ({ result: deps.records.editors(project(args, caller).id) }),
 
-    "explorer-list": async (args, caller) => {
-      const found = project(args, caller);
-      const repository = deps.repositories.get(found.id);
-      if (!repository) {
-        throw new ControlError("internal", `project ${found.id} has no repository`);
-      }
-      return { result: await repository.listExplorer() };
-    },
+    "explorer-list": async (args, caller) => ({ result: await repository(project(args, caller)).listExplorer() }),
 
     "notices-list": () => ({ result: deps.records.notices() }),
 
@@ -983,9 +978,6 @@ export async function startControlServer(
     let body = "";
     let tooLarge = false;
     req.on("data", (chunk: string) => {
-      if (tooLarge) {
-        return;
-      }
       if (tooLarge) {
         return;
       }

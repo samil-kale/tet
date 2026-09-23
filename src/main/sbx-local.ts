@@ -1,22 +1,18 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { safeStorage } from "electron";
-import writeFileAtomic from "write-file-atomic";
 import { EMPTY_SBX_KNOWLEDGE } from "../shared/types";
 import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
+import { isRecord, saveJson } from "./json-file";
+import { seal, unseal } from "./sealed";
 
 /** What the file holds per project id: each kind's values by env name, encrypted by the OS and
  *  base64-wrapped, and the knowledge unless it is all off (EMPTY_SBX_KNOWLEDGE). */
-export interface StoredSbxLocal extends Record<SbxValueKind, Record<string, string>> {
+interface StoredSbxLocal extends Record<SbxValueKind, Record<string, string>> {
   knowledge?: SbxKnowledgeConfig;
 }
 
 function emptyLocal(): StoredSbxLocal {
   return { secrets: {}, variables: {} };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringsOf(value: unknown): Record<string, string> {
@@ -105,14 +101,9 @@ export class SbxLocalStore {
   /**
    * Keeps what the dialog's rows hold: a typed value, else the stored one of the name the row was
    * opened under (`from`), so it follows a rename; a removed row's goes. And the knowledge as
-   * given. Throws before changing anything when the OS offers no encryption — on Linux without a
-   * keyring, where safeStorage would fall back to a fixed key.
+   * given. Throws before changing anything when the OS offers no encryption (`seal`).
    */
   update(projectId: string, local: SbxLocalSave): void {
-    const anyValue = [local.secrets, local.variables].some((edits) => Object.keys(edits.values).length > 0);
-    if (anyValue && !safeStorage.isEncryptionAvailable()) {
-      throw new Error("The OS offers no encryption to store a value with (on Linux: no keyring)");
-    }
     const current = this.projects[projectId] ?? emptyLocal();
     const next = emptyLocal();
     for (const kind of ["secrets", "variables"] as const) {
@@ -124,7 +115,7 @@ export class SbxLocalStore {
         }
       }
       for (const [env, value] of Object.entries(values)) {
-        next[kind][env] = safeStorage.encryptString(value).toString("base64");
+        next[kind][env] = seal(value);
       }
     }
     const knowledge = toKnowledge(local.knowledge);
@@ -138,10 +129,9 @@ export class SbxLocalStore {
   values(projectId: string, kind: SbxValueKind): Map<string, string> {
     const values = new Map<string, string>();
     for (const [env, encrypted] of Object.entries(this.projects[projectId]?.[kind] ?? {})) {
-      try {
-        values.set(env, safeStorage.decryptString(Buffer.from(encrypted, "base64")));
-      } catch {
-        // Encrypted under a keychain this machine no longer has; the value must be re-entered.
+      const value = unseal(encrypted);
+      if (value !== undefined) {
+        values.set(env, value);
       }
     }
     return values;
@@ -191,11 +181,7 @@ export class SbxLocalStore {
   }
 
   private save(): void {
-    try {
-      // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
-      writeFileAtomic.sync(this.file, JSON.stringify(this.projects, null, 2), "utf8");
-    } catch (error) {
-      console.error("[tet] could not persist sbx-local.json:", error);
-    }
+    // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
+    saveJson(this.file, this.projects, "sbx-local.json");
   }
 }

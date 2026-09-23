@@ -73,9 +73,12 @@ export interface PromptAnswer {
   checked: boolean;
 }
 
-type Pending =
+type Question =
   | ({ kind: "confirm"; answer: (answer: ConfirmAnswer) => void } & ConfirmOptions)
   | ({ kind: "prompt"; answer: (answer: PromptAnswer | null) => void } & PromptOptions);
+
+/** A question as it is up: `cancel` answers what Escape, × and Cancel all mean. */
+type Pending = Question & { cancel: () => void };
 
 /**
  * Asking the user, as `notify` tells them: a function anything can call, and one mounted component
@@ -91,7 +94,7 @@ type Pending =
 const pending = createStore<Pending | null>(null);
 
 /** One at a time: the overlay swallows the clicks that could start a second question. */
-function ask<T>(build: (answer: (value: T) => void) => Pending, cancelled: T): Promise<T> {
+function ask<T>(build: (answer: (value: T) => void) => Question, cancelled: T): Promise<T> {
   if (pending.get()) {
     return Promise.resolve(cancelled);
   }
@@ -99,16 +102,15 @@ function ask<T>(build: (answer: (value: T) => void) => Pending, cancelled: T): P
     // Answered once: a second call (an Escape between the click and the listener's removal) would
     // clear whatever dialog is up by then, possibly the next one.
     let answered = false;
-    pending.set(
-      build((value) => {
-        if (answered) {
-          return;
-        }
-        answered = true;
-        pending.set(null);
-        resolve(value);
-      })
-    );
+    const answer = (value: T): void => {
+      if (answered) {
+        return;
+      }
+      answered = true;
+      pending.set(null);
+      resolve(value);
+    };
+    pending.set({ ...build(answer), cancel: () => answer(cancelled) });
   });
 }
 
@@ -175,7 +177,7 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
       // nothing.
       focusSubmit
       onSubmit={() => dialog.answer({ confirmed: true, checked })}
-      onCancel={() => dialog.answer({ confirmed: false, checked: false })}
+      onCancel={dialog.cancel}
     >
       <p className="dialog-message">{dialog.message}</p>
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
@@ -220,14 +222,18 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     }
     setRunning(true);
     setRefused(undefined);
-    const message = await dialog.submit(answered);
+    let message: string | undefined;
+    try {
+      message = await dialog.submit(answered);
+    } finally {
+      setRunning(false);
+    }
     if (!live.current) {
       if (message !== undefined) {
         notify("error", message);
       }
       return;
     }
-    setRunning(false);
     if (message === undefined) {
       dialog.answer(answered);
     } else {
@@ -313,7 +319,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       disabled={suggesting || running || value.trim().length === 0}
       busy={running}
       onSubmit={() => void submit()}
-      onCancel={() => dialog.answer(null)}
+      onCancel={dialog.cancel}
     >
       {fields}
       {dialog.colors && (
@@ -356,11 +362,7 @@ export function Dialogs() {
         // `stopPropagation` does not stop listeners on the same node.
         event.preventDefault();
         event.stopPropagation();
-        if (dialog.kind === "confirm") {
-          dialog.answer({ confirmed: false, checked: false });
-        } else {
-          dialog.answer(null);
-        }
+        dialog.cancel();
       }
     };
     window.addEventListener("keydown", onKeyDown, true);

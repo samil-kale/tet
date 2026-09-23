@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useState } from "react";
+import { memo, useEffect, useImperativeHandle, useState } from "react";
 import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types";
 import { parentOf } from "./explorer-tree";
 import { FileMarkIcon, INDENT_BASE, MATCH_INDENT, Twistie } from "./tree-rows";
@@ -53,7 +53,7 @@ interface FileSearchProps {
  * and under it a row per match with the match marked; the summary is the pane's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
-export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }: FileSearchProps) {
+export const FileSearch = memo(function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }: FileSearchProps) {
   const [search, setSearch] = useState<FileSearchQuery>(EMPTY_SEARCH);
   // Nothing but whitespace asks for nothing.
   const asked = search.text.trim() ? search : null;
@@ -136,4 +136,4 @@ export function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }:
       </div>
     </div>
   );
-}
+});

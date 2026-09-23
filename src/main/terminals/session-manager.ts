@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AGENTS, getAgent } from "../agents";
 
-import type { AgentDefinition, AgentPaths, AgentSessionInfo, SpawnPreparation } from "../agents/agent";
+import type { AgentDefinition, AgentPaths, AgentSessionInfo, SessionProvider, SpawnPreparation } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_ENV } from "../../shared/control";
@@ -437,11 +437,11 @@ export class ProjectSessionManager {
    * sandbox is listed whatever the switch: its sessions stay resumable there, for one readdir.
    */
   private async listSessions(runtime: AgentRuntime): Promise<AgentSessionInfo[]> {
-    const { agent, executable } = runtime;
+    const { agent } = runtime;
     if (!agent.sessions) {
       return [];
     }
-    const onHost = agent.sessions.list(executable, this.project.path);
+    const onHost = agent.sessions.list(this.project.path);
     const sandbox = agent.sessions.sandbox;
     if (!sandbox || !isSbxAgent(agent.id)) {
       return onHost;
@@ -449,7 +449,7 @@ export class ProjectSessionManager {
     // In parallel: the bootstrap listing, and what `logSlow` times on every reconcile.
     const [host, inSandbox] = await Promise.all([
       onHost,
-      sandbox.list(executable, this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path))
+      sandbox.list(this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path))
     ]);
     const name = sandboxName(this.project.id, agent.id);
     return [...host, ...inSandbox.map((info) => ({ ...info, sandbox: name }))];
@@ -463,17 +463,14 @@ export class ProjectSessionManager {
    * A tab's session operations, bound to wherever that session lives: the sandbox's mounted root
    * and the path the agent sees inside it (SessionProvider.sandbox), or the host's repository.
    * Answered once, so no caller can pair a sandboxed session with the host's arguments — the two
-   * providers take different ones. Undefined for an agent keeping no sessions (the shell).
+   * providers take different ones. `sessions` is the runtime agent's, which the caller has checked.
    */
   private sessionActions(
     tab: TabState,
-    runtime: AgentRuntime
-  ): { remove: (sessionId: string) => Promise<void>; rename: (sessionId: string, title: string) => Promise<void> } | undefined {
+    runtime: AgentRuntime,
+    sessions: SessionProvider
+  ): { remove: (sessionId: string) => Promise<void>; rename: (sessionId: string, title: string) => Promise<void> } {
     const { agent, executable } = runtime;
-    const sessions = agent.sessions;
-    if (!sessions) {
-      return undefined;
-    }
     const sandbox = tab.sandbox ? sessions.sandbox : undefined;
     if (!sandbox) {
       return {
@@ -484,8 +481,8 @@ export class ProjectSessionManager {
     const root = this.sandboxSessionRoot(agent.id);
     const cwd = toContainerPath(this.project.path);
     return {
-      remove: (sessionId) => sandbox.remove(executable, root, cwd, sessionId),
-      rename: (sessionId, title) => sandbox.rename(executable, root, cwd, sessionId, title)
+      remove: (sessionId) => sandbox.remove(root, cwd, sessionId),
+      rename: (sessionId, title) => sandbox.rename(root, cwd, sessionId, title)
     };
   }
 
@@ -674,7 +671,7 @@ export class ProjectSessionManager {
     if (runtime.stopWatching) {
       return;
     }
-    runtime.stopWatching = runtime.agent.sessions?.watch?.(runtime.executable, this.project.path, () =>
+    runtime.stopWatching = runtime.agent.sessions?.watch?.(this.project.path, () =>
       this.scheduleReconcile(runtime, WATCH_DEBOUNCE_MS)
     );
   }
@@ -880,6 +877,7 @@ export class ProjectSessionManager {
       knowledge: this.sbxLocal.knowledge(this.project.id),
       sandboxes: ready.sandboxes,
       organization: ready.organization,
+      rules: ready.rules,
       warm,
       paths,
       agentArgs: [...hooks.args, ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])],
@@ -959,8 +957,16 @@ export class ProjectSessionManager {
 
     const session = new TerminalSession(
       sbxRun ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),
-      tab.cwd ?? this.project.path,
-      sbxRun ? undefined : preparation?.env,
+      {
+        cwd: tab.cwd ?? this.project.path,
+        env: sbxRun ? undefined : preparation?.env,
+        // A saved command's variables, or those `sbx run -e NAME` passes on — never both, as a saved
+        // command never runs in a sandbox. Over the machine's, so the sandbox gets the row's value.
+        envOverride: sbxRun ? sbxRun.env : tab.env,
+        // What `tet-ctl` in this tab reports as its caller — see src/shared/control.ts.
+        own: { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId },
+        sandboxed: sbxRun !== null
+      },
       {
         onOutput: (data) => {
           this.reportOutput(tab, data);
@@ -987,15 +993,7 @@ export class ProjectSessionManager {
         }
       },
       agent.quitPresses ?? 0,
-      args,
-      // A saved command's variables, or those `sbx run -e NAME` passes on — never both, as a saved
-      // command never runs in a sandbox. Over the machine's, so the sandbox gets the row's value.
-      sbxRun ? sbxRun.env : tab.env,
-      // What `tet-ctl` in this tab reports as its caller — see src/shared/control.ts.
-      {
-        env: { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId },
-        sandboxed: sbxRun !== null
-      }
+      args
     );
 
     this.sessions.set(tabId, session);
@@ -1134,7 +1132,7 @@ export class ProjectSessionManager {
       if (session) {
         await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
       }
-      await this.sessionActions(tab, runtime)?.remove(sessionId);
+      await this.sessionActions(tab, runtime, agent.sessions).remove(sessionId);
     } catch (error) {
       this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${errorMessage(error)}`);
       tab.status = "ready";
@@ -1164,7 +1162,7 @@ export class ProjectSessionManager {
     }
     const previousTitle = tab.title;
     try {
-      await this.sessionActions(tab, runtime)?.rename(tab.sessionId, title);
+      await this.sessionActions(tab, runtime, agent.sessions).rename(tab.sessionId, title);
       tab.title = title.trim();
       // A name the user picked is final.
       tab.provisionalTitle = false;

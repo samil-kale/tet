@@ -11,7 +11,7 @@ import { confirm } from "../ui/Dialog";
 import { DialogFrame } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, Field, TextField } from "../ui/Field";
-import { CloseIcon, SpinnerIcon } from "../ui/icons";
+import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
 import { useEscape } from "../ui/use-escape";
 
@@ -238,7 +238,6 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** Loaded lists by account, kept while the dialog is open. */
   const [repos, setRepos] = useState<Record<string, RemoteRepository[]>>({});
-  const [loading, setLoading] = useState(false);
   /** Why the list is empty, in the list's own place. */
   const [listError, setListError] = useState<string | undefined>(undefined);
   const [filter, setFilter] = useState("");
@@ -268,27 +267,37 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    void window.tet.providers.repos(selectedId).then((result) => {
-      if (cancelled) {
-        return;
-      }
-      setLoading(false);
-      const list = result.repos;
-      if (list) {
-        setRepos((current) => ({ ...current, [selectedId]: list }));
-        setListError(undefined);
-      } else {
-        setListError(result.error ?? "The repositories could not be listed");
-      }
-    });
+    let fetching = true;
+    onBusy(true);
+    void window.tet.providers
+      .repos(selectedId)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        const list = result.repos;
+        if (list) {
+          setRepos((current) => ({ ...current, [selectedId]: list }));
+          setListError(undefined);
+        } else {
+          setListError(result.error ?? "The repositories could not be listed");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          fetching = false;
+          onBusy(false);
+        }
+      });
     return () => {
       cancelled = true;
-      // The next run turns it on only when it fetches, so an already-listed account shows no
-      // spinner.
-      setLoading(false);
+      // Only a fetch still running: the bar may be the account form's by now. The next run turns
+      // it on only when it fetches, so an already-listed account shows none.
+      if (fetching) {
+        onBusy(false);
+      }
     };
-  }, [selectedId, repos]);
+  }, [selectedId, repos, onBusy]);
 
   const accountAdded = (account: ProviderAccount): void => {
     // Replace, not append: a fresh token answers with the same account id.
@@ -408,26 +417,20 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
               />
             )}
             <div className="repository-list">
-              {loading && (
-                <div className="repository-loading">
-                  <SpinnerIcon className="spinning" />
+              {filtered.map((repo) => (
+                <div className="repository-item" key={repo.fullName}>
+                  <span className="repository-name">{repo.fullName}</span>
+                  <button
+                    type="button"
+                    className="button secondary repository-clone"
+                    onClick={() => onClone(repo, selectedId)}
+                  >
+                    Clone
+                  </button>
                 </div>
-              )}
-              {!loading &&
-                filtered.map((repo) => (
-                  <div className="repository-item" key={repo.fullName}>
-                    <span className="repository-name">{repo.fullName}</span>
-                    <button
-                      type="button"
-                      className="button secondary repository-clone"
-                      onClick={() => onClone(repo, selectedId)}
-                    >
-                      Clone
-                    </button>
-                  </div>
-                ))}
-              {!loading && <DialogError message={listError} />}
-              {!loading && listError === undefined && list && filtered.length === 0 && (
+              ))}
+              <DialogError message={listError} />
+              {listError === undefined && list && filtered.length === 0 && (
                 <div className="placeholder">No repositories.</div>
               )}
             </div>
@@ -439,6 +442,11 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
 }
 
 type CloneAuthMode = "account" | "token";
+
+const AUTH_MODE_OPTIONS: { value: CloneAuthMode; label: string }[] = [
+  { value: "account", label: "Account" },
+  { value: "token", label: "Token" }
+];
 
 interface CloneAuthProps {
   /** The stored accounts for this url's host. */
@@ -472,39 +480,17 @@ function CloneAuth({
       {accounts.length > 0 && (
         <div className="dialog-field">
           <span>Authenticate with</span>
-          <div className="dialog-field-row">
-            <button
-              type="button"
-              className={mode === "account" ? "button" : "button secondary"}
-              onClick={() => onMode("account")}
-            >
-              Account
-            </button>
-            <button
-              type="button"
-              className={mode === "token" ? "button" : "button secondary"}
-              onClick={() => onMode("token")}
-            >
-              Token
-            </button>
-          </div>
+          <RadioGroup value={mode} options={AUTH_MODE_OPTIONS} onChange={onMode} />
         </div>
       )}
       {mode === "account" ? (
         <div className="dialog-field">
           <span>Account</span>
-          <div className="dialog-field-row">
-            {accounts.map((account) => (
-              <button
-                key={account.id}
-                type="button"
-                className={account.id === accountId ? "button" : "button secondary"}
-                onClick={() => onAccount(account.id)}
-              >
-                {account.user}
-              </button>
-            ))}
-          </div>
+          <RadioGroup
+            value={accountId ?? ""}
+            options={accounts.map((account) => ({ value: account.id, label: account.user }))}
+            onChange={onAccount}
+          />
         </div>
       ) : (
         <>

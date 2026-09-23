@@ -59,7 +59,7 @@ function longestStartingWith(urls: string[], prefix: string): string | undefined
  * per run, fine on hover once per fragment; run where the session's record says it lives.
  */
 async function fetchSessionUrls(executable: string, cwd: string, sessionId: string): Promise<string[]> {
-  const output = await runOpencode(executable, cwd, sessionSandbox(cwd, sessionId), ["export", sessionId]);
+  const output = await runOpencode(executable, cwd, await sessionSandbox(cwd, sessionId),["export", sessionId]);
   // Every string, so opencode's message schema needn't be tracked. Parsed, not scanned raw: json
   // escapes would corrupt urls ("\n" gives "nhttps://...", "\/" cuts one short).
   const strings: string[] = [];

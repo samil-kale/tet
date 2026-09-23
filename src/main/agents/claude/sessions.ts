@@ -4,15 +4,16 @@ import * as path from "node:path";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import {
   findEncodedDir,
-  forgetMissing,
+  listTranscriptDir,
   nonEmptyString,
   parseLine,
-  readHeadLines,
   requireTitle,
+  scanTranscriptHead,
   scanTranscriptTail,
   timestampOf,
   TRANSCRIPT_SCAN_BYTES,
-  truncateTitle
+  truncateTitle,
+  type ScannedTail
 } from "../transcript";
 import { watchTranscriptDir } from "../../watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
@@ -22,7 +23,7 @@ import { SANDBOX_HOME } from "../../terminals/hook-target";
  *  A sandboxed session is the same file, so operations take the root and cwd as parameters
  *  (SessionProvider.sandbox). */
 export const claudeSessionProvider: SessionProvider = {
-  list(_executable: string, cwd: string): Promise<AgentSessionInfo[]> {
+  list(cwd: string): Promise<AgentSessionInfo[]> {
     return listIn(projectsRoot(), cwd);
   },
 
@@ -40,7 +41,7 @@ export const claudeSessionProvider: SessionProvider = {
 
   /** watchTranscriptDir handles a project directory that doesn't exist yet and ignores a
    *  session's `subagents/` subdirectory. */
-  watch(_executable: string, cwd: string, onChange: () => void): () => void {
+  watch(cwd: string, onChange: () => void): () => void {
     return watchTranscriptDir(
       projectsRoot,
       () => findProjectDir(projectsRoot(), cwd),
@@ -53,47 +54,32 @@ export const claudeSessionProvider: SessionProvider = {
    *  (`/dev/vde`); a later `sbx mount` stacks on top and wins, shadowing (not deleting) its content. */
   sandbox: {
     mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
-    list: (_executable, root, cwd) => listIn(path.join(root, "projects"), cwd),
-    remove: (_executable, root, cwd, sessionId) => removeIn(path.join(root, "projects"), cwd, sessionId),
-    rename: (_executable, root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title)
+    list: (root, cwd) => listIn(path.join(root, "projects"), cwd),
+    remove: (root, cwd, sessionId) => removeIn(path.join(root, "projects"), cwd, sessionId),
+    rename: (root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title)
   }
 };
 
-async function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
-  try {
-    const projectDir = await findProjectDir(root, cwd);
-    if (!projectDir) {
-      return [];
+function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
+  return listTranscriptDir(
+    () => findProjectDir(root, cwd),
+    [headCache, scanCache],
+    "claude",
+    async (filePath, file) => {
+      const id = file.slice(0, -".jsonl".length);
+      const { tail, size, mtimeMs } = await scanTail(filePath, id);
+      const head = await scanHead(filePath, size);
+      const { title, provisional } = resolveTitle(head, tail);
+      return {
+        id,
+        title,
+        updatedAt: mtimeMs,
+        provisionalTitle: provisional,
+        createdAt: head.createdAt ?? mtimeMs,
+        turnEndedAt: tail.turnEndedAt
+      };
     }
-    const files = (await fs.promises.readdir(projectDir)).filter((file) => file.endsWith(".jsonl"));
-    forgetMissing(
-      projectDir,
-      files.map((file) => path.join(projectDir, file)),
-      [headCache, scanCache]
-    );
-    const entries = await Promise.all(
-      files.map(async (file) => {
-        const id = file.slice(0, -".jsonl".length);
-        const filePath = path.join(projectDir, file);
-        const [tail, stat] = await Promise.all([scanTail(filePath, id), fs.promises.stat(filePath)]);
-        const head = await scanHead(filePath, stat.size);
-        const { title, provisional } = resolveTitle(head, tail);
-        return {
-          id,
-          title,
-          updatedAt: stat.mtimeMs,
-          provisionalTitle: provisional,
-          createdAt: head.createdAt ?? stat.mtimeMs,
-          turnEndedAt: tail.turnEndedAt
-        };
-      })
-    );
-    entries.sort((a, b) => a.createdAt - b.createdAt);
-    return entries;
-  } catch (error) {
-    console.error("[tet] claude session listing failed:", error);
-    return [];
-  }
+  );
 }
 
 /** A missing project directory or transcript resolves (SessionProvider.remove): the session is
@@ -175,44 +161,38 @@ const HEAD_ENTRY_TYPES = ['"agent-name"', '"ai-title"', '"summary"'];
  * Read for every listed session, whatever `resolveTitle` ends up using: a renamed session still
  * needs its `createdAt`, which is why this is not folded into the title rules.
  */
-async function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead> {
-  const size = Math.min(fileSize, TRANSCRIPT_SCAN_BYTES);
-  const cached = headCache.get(filePath);
-  if (cached?.size === size) {
-    return cached.head;
-  }
-  const head: TranscriptHead = {};
-  const read = await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, "claude", (line) => {
-    // Every line until the first timestamp is found — it can sit on an entry of any type — then
-    // only the few naming a title, and the first `user` entry (later ones are mostly tool results).
-    const wanted =
-      head.createdAt === undefined ||
-      HEAD_ENTRY_TYPES.some((type) => line.includes(type)) ||
-      (head.firstPrompt === undefined && line.includes('"user"'));
-    const entry = wanted ? parseLine(line) : undefined;
-    if (!entry) {
+function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead> {
+  return scanTranscriptHead(filePath, fileSize, headCache, {
+    label: "claude",
+    create: (): TranscriptHead => ({}),
+    read: (line, head) => {
+      // Every line until the first timestamp is found — it can sit on an entry of any type — then
+      // only the few naming a title, and the first `user` entry (later ones are mostly tool results).
+      const wanted =
+        head.createdAt === undefined ||
+        HEAD_ENTRY_TYPES.some((type) => line.includes(type)) ||
+        (head.firstPrompt === undefined && line.includes('"user"'));
+      const entry = wanted ? parseLine(line) : undefined;
+      if (!entry) {
+        return false;
+      }
+      head.createdAt ??= timestampOf(entry.timestamp);
+      // agent-name/ai-title keep the last occurrence, summary and prompt the first; an empty
+      // value never displaces one.
+      if (entry.type === "agent-name") {
+        head.agentName = nonEmptyString(entry.agentName) ?? head.agentName;
+      } else if (entry.type === "ai-title") {
+        head.aiTitle = nonEmptyString(entry.aiTitle) ?? head.aiTitle;
+      } else if (entry.type === "summary") {
+        head.summary ??= nonEmptyString(entry.summary);
+      } else if (head.firstPrompt === undefined && entry.type === "user") {
+        // Truncated right away: a pasted prompt can be long.
+        const prompt = typedPromptText(entry);
+        head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
+      }
       return false;
     }
-    head.createdAt ??= timestampOf(entry.timestamp);
-    // agent-name/ai-title keep the last occurrence, summary and prompt the first; an empty
-    // value never displaces one.
-    if (entry.type === "agent-name") {
-      head.agentName = nonEmptyString(entry.agentName) ?? head.agentName;
-    } else if (entry.type === "ai-title") {
-      head.aiTitle = nonEmptyString(entry.aiTitle) ?? head.aiTitle;
-    } else if (entry.type === "summary") {
-      head.summary ??= nonEmptyString(entry.summary);
-    } else if (head.firstPrompt === undefined && entry.type === "user") {
-      // Truncated right away: a pasted prompt can be long.
-      const prompt = typedPromptText(entry);
-      head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
-    }
-    return false;
   });
-  if (read) {
-    headCache.set(filePath, { size, head });
-  }
-  return head;
 }
 
 /** Most `user` entries are tool results; only `origin.kind === "human"` ones are typed prompts. */
@@ -350,7 +330,7 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
  *  ai-title (re-appended on a resume), and the last turn's end. Runs to the file's start if
  *  needed — a rename 300 KB ago is still the name. A turn ends with `turn_duration` or, for most
  *  turns cut short, an interrupt entry (isInterruptEntry); sidechain entries are subagent turns. */
-function scanTail(filePath: string, sessionId: string): Promise<TranscriptTail> {
+function scanTail(filePath: string, sessionId: string): Promise<ScannedTail<TranscriptTail>> {
   return scanTranscriptTail(filePath, scanCache, {
     byteLimit: TRANSCRIPT_SCAN_BYTES,
     label: "claude",

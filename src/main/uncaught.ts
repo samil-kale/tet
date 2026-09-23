@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import type { NoticeSeverity } from "../shared/types";
+import { rotateLog } from "./rotate-log";
 
 /**
  * Uncaught main-process exceptions. Electron's default modal dialog would freeze every terminal,
@@ -36,11 +37,9 @@ export function logError(line: string): void {
 export function installUncaughtHandler(logFile: string, notify: (severity: NoticeSeverity, message: string) => void): void {
   errorLog = logFile;
   try {
-    if (fs.statSync(logFile).size >= MAX_LOG_BYTES) {
-      fs.renameSync(logFile, `${logFile}.1`);
-    }
+    rotateLog(logFile, MAX_LOG_BYTES);
   } catch {
-    // No log yet, or not rotatable.
+    // Not rotatable.
   }
   // Unhandled rejections arrive here too; `origin` tells them apart.
   process.on("uncaughtException", (error: unknown, origin: string) => {

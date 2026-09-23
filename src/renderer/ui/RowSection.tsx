@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
+import { overridesMachineNote } from "../../shared/types";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 
 /** A row as a dialog's fields hold it: the saved shape plus a local React key, never sent anywhere. */
@@ -39,6 +40,49 @@ export function EditRow({
       <RowMark title={mark} />
       {onRemove && <RemoveRow title={remove} onClick={onRemove} />}
     </div>
+  );
+}
+
+/**
+ * A row's value field for a secret: a stored value shows as a set password, never the value itself
+ * (the title says so).
+ */
+export function SecretInput({
+  stored,
+  storedTitle,
+  emptyTitle,
+  value,
+  onChange,
+  ref
+}: {
+  stored: boolean;
+  storedTitle: string;
+  emptyTitle: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** The field a dialog opens focused. */
+  ref?: Ref<HTMLInputElement>;
+}) {
+  return (
+    <input
+      ref={ref}
+      className="row-fixed-input"
+      type="password"
+      autoComplete="off"
+      placeholder={stored ? "••••••••" : "Value"}
+      title={stored ? storedTitle : emptyTitle}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+/** Beside the name of a variable TET keeps that the machine sets too. */
+export function OverridesMachine({ name }: { name: string }) {
+  return (
+    <span className="env-overrides" title={overridesMachineNote([name])}>
+      overrides machine
+    </span>
   );
 }
 

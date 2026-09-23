@@ -1,4 +1,4 @@
-export interface KeybindingPreset {
+interface KeybindingPreset {
   id: string;
   label: string;
   bindings: Record<string, string>;

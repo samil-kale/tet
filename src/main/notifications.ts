@@ -4,7 +4,7 @@ import type { ToastTarget } from "./control/control-server";
 import { logError } from "./uncaught";
 
 /** What the desktop toasts need of the app around them (main.ts owns all of it). */
-export interface NotificationDeps {
+interface NotificationDeps {
   /** Only an installed tet asks for the notification presenter: in a checkout it would write a
    *  Start menu entry reading "Electron". */
   installed: boolean;

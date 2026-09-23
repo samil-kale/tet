@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { syncRemote } from "../../shared/types";
 import type { Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";
@@ -41,8 +42,7 @@ export const GitPane = memo(function GitPane({
   const { acting, act, ask } = useFileAct(project.id);
 
   // Fetch, pull and push share the one action slot with discard and stash.
-  const remote = state.remotes[0]?.name;
-  const canSync = remote !== undefined && !state.detached;
+  const { remote, canSync } = syncRemote(state);
   const locked = branch.busy || acting;
 
   return (

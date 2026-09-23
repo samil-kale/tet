@@ -14,7 +14,7 @@ export const PANE_IDS: readonly PaneId[] = ["a", "b", "c", "d"];
  */
 export type SplitPreset = "single" | "cols2" | "split-right" | "grid2x2";
 /** Every preset — what a persisted layout is checked against. */
-export const PRESETS: readonly SplitPreset[] = ["single", "cols2", "split-right", "grid2x2"];
+const PRESETS: readonly SplitPreset[] = ["single", "cols2", "split-right", "grid2x2"];
 
 function isPaneId(value: unknown): value is PaneId {
   return PANE_IDS.includes(value as PaneId);
@@ -260,7 +260,7 @@ function occupiedPanes(layout: ProjectLayout, tabs: LayoutTab[]): PaneId[] {
  * with b or d emptied has no "split-left" and stays. A never-filled pane is not emptied, so a
  * snap's empty panes stay. Not by occupied count: moving c into an empty d would collapse b.
  */
-export const COLLAPSE_TRANSITIONS: Record<SplitPreset, Partial<Record<PaneId, { preset: SplitPreset; remap: PaneRemap }>>> = {
+const COLLAPSE_TRANSITIONS: Record<SplitPreset, Partial<Record<PaneId, { preset: SplitPreset; remap: PaneRemap }>>> = {
   single: {},
   cols2: { a: { preset: "single", remap: { b: "a" } }, b: { preset: "single", remap: {} } },
   "split-right": {
@@ -374,7 +374,7 @@ export interface FractionBox {
  * all of b. Tuned by hand against the real drag.
  */
 export type SnapZone = "right" | "top-right" | "bottom-right" | "bottom-left";
-export const SNAP_ZONES: Record<SnapZone, FractionBox> = {
+const SNAP_ZONES: Record<SnapZone, FractionBox> = {
   "top-right": { left: 3 / 4, top: 0, width: 1 / 4, height: 1 / 3 },
   right: { left: 3 / 4, top: 1 / 3, width: 1 / 4, height: 1 / 3 },
   "bottom-right": { left: 3 / 4, top: 2 / 3, width: 1 / 4, height: 1 / 3 },
@@ -545,7 +545,7 @@ export function snapZoneAt(
 }
 
 /**
- * `localStorage` under `Sash.tsx`'s `tet.layout.` namespace: layout describes the window, not the
+ * `localStorage` under `layout-storage.ts`'s `tet.layout.` namespace: layout describes the window, not the
  * repository. Per project, unlike `usePaneSize`/`usePaneToggle`'s fixed keys. `suffix` tells the
  * layout from `TerminalsPane`'s divider positions.
  */

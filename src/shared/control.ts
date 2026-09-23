@@ -1,5 +1,5 @@
 import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
+import { AGENT_IDS, COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
 
 /**
  * The control channel's wire contract, shared by `src/main/control/control-server.ts` and
@@ -44,7 +44,7 @@ export type ControlResponse =
 /** The questions `tet-ctl help` groups its verbs under, in the order it prints them. */
 export const CONTROL_GROUPS = ["TET itself", "The other tabs", "In front of the user"] as const;
 
-export type ControlGroup = (typeof CONTROL_GROUPS)[number];
+type ControlGroup = (typeof CONTROL_GROUPS)[number];
 
 export interface ControlVerb {
   verb: string;
@@ -344,7 +344,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "tabs-create",
     group: "The other tabs",
-    usage: "tabs-create --agent <claude|opencode|codex|pi|shell> [--project <id>]",
+    usage: `tabs-create --agent <${AGENT_IDS.join("|")}> [--project <id>]`,
     summary: "Open a new terminal tab for that agent.",
     positionals: [],
     sandbox: "ownProject"
@@ -460,3 +460,13 @@ export const EXIT_CODES = {
   /** `tabs-wait` gave up. */
   timeout: 4
 } as const;
+
+/** The exit code of each refusal; everything the caller could correct is `usage`. */
+export const ERROR_EXIT_CODES: Record<ControlErrorCode, number> = {
+  unauthorized: EXIT_CODES.unauthorized,
+  internal: EXIT_CODES.internal,
+  timeout: EXIT_CODES.timeout,
+  unknown_verb: EXIT_CODES.usage,
+  bad_args: EXIT_CODES.usage,
+  not_found: EXIT_CODES.usage
+};
