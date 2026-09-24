@@ -416,16 +416,22 @@ describe("opencode's session records", () => {
   it("drops a record only once its session is gone, keeping it when the delete failed", async () => {
     const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null } });
     fs.mkdirSync(cwd);
-    /** A stand-in opencode that fails `session delete` with `message`. */
-    const fakeOpencode = (message: string): string => {
+    /** A stand-in opencode that fails `session delete` and answers `session list` with `listed`. */
+    const fakeOpencode = (listed: string): string => {
       const win32 = process.platform === "win32";
       const file = path.join(path.dirname(dir), win32 ? "opencode.cmd" : "opencode");
-      fs.writeFileSync(file, win32 ? `@echo ${message} 1>&2\r\n@exit /b 1\r\n` : `#!/bin/sh\necho '${message}' >&2\nexit 1\n`, { mode: 0o755 });
+      fs.writeFileSync(
+        file,
+        win32
+          ? `@if "%~2"=="list" (echo ${listed}& exit /b 0)\r\n@echo database is locked 1>&2\r\n@exit /b 1\r\n`
+          : `#!/bin/sh\nif [ "$2" = list ]; then echo '${listed}'; exit 0; fi\necho 'database is locked' >&2\nexit 1\n`,
+        { mode: 0o755 }
+      );
       return file;
     };
-    await assert.rejects(opencodeSessionProvider.remove(fakeOpencode("database is locked"), cwd, "ses_a"), /database is locked/);
+    await assert.rejects(opencodeSessionProvider.remove(fakeOpencode('[{"id":"ses_a"}]'), cwd, "ses_a"), /database is locked/);
     assert.ok(fs.existsSync(path.join(dir, "ses_a.json")), "a failed delete keeps where the session is");
-    await opencodeSessionProvider.remove(fakeOpencode("Session not found: ses_a"), cwd, "ses_a");
+    await opencodeSessionProvider.remove(fakeOpencode('[{"id":"ses_b"}]'), cwd, "ses_a");
     assert.ok(!fs.existsSync(path.join(dir, "ses_a.json")));
   });
 });

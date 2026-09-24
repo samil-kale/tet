@@ -691,6 +691,11 @@ async function listSandboxes(): Promise<SandboxList | undefined> {
   return parseSandboxes(await runSbx(["ls", "--json"]));
 }
 
+/** Undefined when sbx cannot say (listSandboxes). */
+export async function sandboxExists(name: string): Promise<boolean | undefined> {
+  return (await listSandboxes())?.has(name);
+}
+
 /** probeSbx reads the run itself too, for why `ls` failed. */
 function parseSandboxes(result: RunResult): SandboxList | undefined {
   const parsed = jsonOf<{ sandboxes?: { name?: string; workspaces?: string[] }[] }>(result);

@@ -280,7 +280,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     group: "TET itself",
     usage: "env-request <NAME> [NAME...]",
     summary:
-      "Open TET's dialog for the user to type environment variables into, never into the chat; waits for the answer. Every missing one in one request. TET keeps them encrypted and sets them in every tab it starts; its Save restarts this tab, its session resumed, to see them.",
+      "Open TET's dialog for the user to type environment variables into, never into the chat; waits for the answer. Every missing one in one request. TET keeps them and sets them in every tab it starts; its Save restarts this tab, its session resumed, to see them.",
     positionals: ["names"],
     variadic: true
   },

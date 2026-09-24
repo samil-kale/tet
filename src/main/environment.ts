@@ -5,12 +5,11 @@ import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
 import { isRecord, saveJson } from "./json-file";
-import { seal, unseal } from "./sealed";
 
-/** What the file holds: the variable plus its value, encrypted by the OS and base64-wrapped. */
+/** What the file holds: the variable plus its value in the clear, as every tab gets it anyway. */
 interface StoredVar {
   name: string;
-  value: string;
+  text: string;
 }
 
 /** The variable as the renderer and `env-list` may see it — every field but the value. */
@@ -19,6 +18,11 @@ function toInfo(entry: StoredVar): EnvVarInfo {
 }
 
 function isStoredVar(entry: unknown): entry is StoredVar {
+  return isRecord(entry) && typeof entry.name === "string" && typeof entry.text === "string";
+}
+
+/** A row from before the values were kept in the clear: its value encrypted by the OS, dropped. */
+function isSealedVar(entry: unknown): boolean {
   return isRecord(entry) && typeof entry.name === "string" && typeof entry.value === "string";
 }
 
@@ -30,8 +34,8 @@ interface Contents {
 
 /**
  * The environment variables tet sets in the tabs it starts (pty.ts's `setStoredEnv`), global to
- * every project. A value leaves this class only decrypted into a tab's environment; the renderer
- * and `tet-ctl` never see one.
+ * every project. A value leaves this class only into a tab's environment; the renderer and
+ * `tet-ctl` never see one.
  *
  * Read from the file on every call, never held: the file is small, and what changed it from outside
  * is neither hidden nor overwritten. A file that cannot be read is written over by nothing — every
@@ -54,25 +58,14 @@ export class EnvStore {
     return entry && toInfo(entry);
   }
 
-  /** Every value decrypted, for a tab's start; one sealed under a keychain this machine no longer
-   *  has is left out, to be asked for again. */
+  /** Every value, for a tab's start. */
   values(): Record<string, string> {
-    const values: Record<string, string> = {};
-    for (const entry of this.readable()?.variables ?? []) {
-      const value = unseal(entry.value);
-      if (value === undefined) {
-        console.error(`[tet] could not decrypt the environment variable ${entry.name}`);
-      } else {
-        values[entry.name] = value;
-      }
-    }
-    return values;
+    return Object.fromEntries((this.readable()?.variables ?? []).map((entry) => [entry.name, entry.text]));
   }
 
-  /** Adds the variables, or replaces what is stored under their names — never two rows. Throws
-   *  before changing anything, as `seal` does. */
+  /** Adds the variables, or replaces what is stored under their names — never two rows. */
   set(variables: EnvAnswer[]): void {
-    const stored = variables.map((variable): StoredVar => ({ name: variable.name, value: seal(variable.value) }));
+    const stored = variables.map((variable): StoredVar => ({ name: variable.name, text: variable.value }));
     // By the machine's rule: on win32 `gitlab_token` would be a second GITLAB_TOKEN in every tab.
     const names = new Set(stored.map((variable) => machineName(variable.name)));
     const contents = this.read();
@@ -83,7 +76,7 @@ export class EnvStore {
   /**
    * The Settings' Environment tab on Save: every variable there is, as edited — a row without a new
    * value keeps its stored one, even renamed; one left out is deleted. Throws before changing
-   * anything, naming the first row it cannot take (envEditRefusal) or, as `seal` does, the OS.
+   * anything, naming the first row it cannot take (envEditRefusal).
    */
   edit(rows: EnvEdit[]): void {
     const refusal = envEditRefusal(rows, process.platform === "win32");
@@ -96,7 +89,7 @@ export class EnvStore {
       if (row.value === undefined && !stored) {
         throw new Error(`${row.name} has no value: it was deleted meanwhile`);
       }
-      return { name: row.name, value: row.value === undefined ? stored!.value : seal(row.value) };
+      return { name: row.name, text: row.value ?? stored!.text };
     });
     this.write({ ...contents, variables });
   }
@@ -132,7 +125,10 @@ export class EnvStore {
     if (!Array.isArray(parsed)) {
       throw new Error(`${this.file} is not a list of environment variables; fix or delete it`);
     }
-    return { variables: parsed.filter(isStoredVar), others: parsed.filter((entry) => !isStoredVar(entry)) };
+    return {
+      variables: parsed.filter(isStoredVar),
+      others: parsed.filter((entry) => !isStoredVar(entry) && !isSealedVar(entry))
+    };
   }
 
   private readable(): Contents | undefined {

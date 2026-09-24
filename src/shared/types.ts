@@ -311,7 +311,7 @@ export interface ProviderAccount {
 }
 
 /** An environment variable tet sets in every tab it starts, a sandboxed one excepted, over the
- *  machine's own. Its value is kept encrypted, main-side, and reaches only a tab's environment. */
+ *  machine's own. Its value is kept main-side and reaches only a tab's environment. */
 export interface EnvVarInfo {
   name: string;
   /** The environment TET was started with has it too — set on this machine (setx, a shell

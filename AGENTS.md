@@ -189,7 +189,7 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt, never replacing the
   user's instructions.
 - **Environment variables** (`src/main/environment.ts`): tokens and passwords an agent needs, typed
-  only into TET's dialog (`env-request`), never the chat; kept encrypted by `safeStorage`, global, and
+  only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab gets them anyway), global, and
   set in every tab at its start (`buildEnv`), over what the machine sets itself — said in a notice.
   A running tab takes them up only when restarted: the dialog's Save restarts the asking one.
   None in a sandbox, and the verbs refused *and* unmentioned there — not in `help`, not in its

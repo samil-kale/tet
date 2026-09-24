@@ -735,8 +735,7 @@ describe("the environment variables kept in TET", () => {
   const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-environment-"));
   const row = (name: string, value: string): { name: string; value: string } => ({ name, value });
 
-  it("keep one row per name, hand out their values only decrypted, and read the file fresh every time", () => {
-    fakeSafeStorage(true);
+  it("keep one row per name, hand out their values, and read the file fresh every time", () => {
     const root = tempRoot();
     const store = new EnvStore(root);
     store.set([row("GITLAB_TOKEN", "old")]);
@@ -755,7 +754,6 @@ describe("the environment variables kept in TET", () => {
     }
     store.remove("TET_TEST_MACHINE");
     assert.deepEqual(store.values(), { GITLAB_TOKEN: "new", STRIPE_KEY: "sk" });
-    assert.doesNotMatch(fs.readFileSync(path.join(root, "environment.json"), "utf8"), /"new"/, "never in the clear");
     const other = new EnvStore(root);
     assert.equal(other.remove("STRIPE_KEY"), true);
     assert.equal(other.remove("STRIPE_KEY"), false);
@@ -763,7 +761,6 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("take a name in another case for the same variable where the machine does", { skip: process.platform !== "win32" }, () => {
-    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("gitlab_token", "old")]);
     store.set([row("GITLAB_TOKEN", "new")]);
@@ -789,28 +786,17 @@ describe("the environment variables kept in TET", () => {
     }
   });
 
-  it("leave out a value sealed under another keychain", () => {
-    fakeSafeStorage(true);
+  it("drop a row from when the values were encrypted, never reading it as a value", () => {
     const root = tempRoot();
-    fs.writeFileSync(
-      path.join(root, "environment.json"),
-      JSON.stringify([
-        { name: "READABLE", value: Buffer.from("sealed:value").toString("base64") },
-        { name: "LOST", value: Buffer.from("under another keychain").toString("base64") }
-      ])
-    );
-    assert.deepEqual(new EnvStore(root).values(), { READABLE: "value" });
-  });
-
-  it("store nothing where the OS offers no encryption", () => {
-    fakeSafeStorage(false);
-    const store = new EnvStore(tempRoot());
-    assert.throws(() => store.set([row("GITHUB_TOKEN", "token")]), /no keyring/);
-    assert.deepEqual(store.list(), []);
+    const file = path.join(root, "environment.json");
+    fs.writeFileSync(file, JSON.stringify([{ name: "SEALED", value: Buffer.from("sealed:value").toString("base64") }]));
+    const store = new EnvStore(root);
+    assert.deepEqual(store.values(), {});
+    store.set([row("GITHUB_TOKEN", "token")]);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), [{ name: "GITHUB_TOKEN", text: "token" }]);
   });
 
   it("write nothing over a file they cannot read, and drop no row they do not understand", () => {
-    fakeSafeStorage(true);
     const root = tempRoot();
     const file = path.join(root, "environment.json");
     fs.writeFileSync(file, '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ');
@@ -832,7 +818,6 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("take the Settings' tab whole: added, renamed with its value, replaced, and the rest deleted", () => {
-    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("GITLAB_TOKEN", "gl"), row("STRIPE_KEY", "sk"), row("OLD", "o")]);
     store.edit([
@@ -844,7 +829,6 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("refuse the Settings' tab with a row it cannot take, changing nothing", () => {
-    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("GITLAB_TOKEN", "gl")]);
     const refusals: [{ name: string; from?: string; value?: string }[], RegExp][] = [
@@ -860,7 +844,6 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("are asked for one request at a time, several names in one, every one needing a value", async () => {
-    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("AUTOCONTRACT_USER", "old")]);
     const shown: EnvRequest[] = [];
@@ -895,7 +878,6 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("withdraw a request whose caller left, say a late Save saved nothing, and refuse without a window", async () => {
-    fakeSafeStorage(true);
     const withdrawn: number[] = [];
     let listening = true;
     const requests = new EnvRequests(

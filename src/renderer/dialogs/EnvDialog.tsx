@@ -90,7 +90,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
               ref={row === rows[0] ? firstValue : undefined}
               stored={row.stored}
               storedTitle="Stored on this machine; typing replaces it"
-              emptyTitle="Stored encrypted on this machine"
+              emptyTitle="Stored on this machine"
               value={row.value}
               onChange={(value) => edit(row.name, value)}
             />
@@ -98,7 +98,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
         )}
       />
       <p className="dialog-detail">
-        Stored encrypted on this machine and set in every tab TET starts, a sandboxed one excepted.
+        Stored on this machine and set in every tab TET starts, a sandboxed one excepted.
       </p>
     </DialogFrame>
   );

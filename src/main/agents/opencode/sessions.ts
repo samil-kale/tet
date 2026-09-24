@@ -4,6 +4,7 @@ import writeFileAtomic from "write-file-atomic";
 import { watchTranscriptDir } from "../../watch-dir";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
 import { requireTitle } from "../transcript";
+import { sandboxExists } from "../../sbx";
 import { runOpencode } from "./cli";
 import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
 
@@ -71,6 +72,20 @@ async function readRecords(dir: string): Promise<SessionRecord[]> {
   return records.filter((record): record is SessionRecord => record !== undefined);
 }
 
+/** False only when the session is known gone: its sandbox is, or `session list --format json`
+ *  (measured, 1.18.4: an array of `{id, …}`) lacks it. Whatever cannot say counts as there. */
+async function sessionListed(executable: string, cwd: string, sandbox: string | null, sessionId: string): Promise<boolean> {
+  if (sandbox && (await sandboxExists(sandbox)) === false) {
+    return false;
+  }
+  try {
+    const listed = JSON.parse(await runOpencode(executable, cwd, sandbox, ["session", "list", "--format", "json"])) as unknown;
+    return !Array.isArray(listed) || listed.some((session: { id?: unknown }) => session?.id === sessionId);
+  } catch {
+    return true;
+  }
+}
+
 export const opencodeSessionProvider: SessionProvider = {
   // Records only (see the file header).
   async list(cwd: string): Promise<AgentSessionInfo[]> {
@@ -98,14 +113,15 @@ export const opencodeSessionProvider: SessionProvider = {
    *  it. Any other failure keeps it, so a retry still looks where the session is.
    *
    *  An unknown session resolves (SessionProvider.remove). Measured (1.18.4): an unknown id exits 1
-   *  with `Session not found: <id>`, in a sandbox too; a gone sandbox gets sbx's
-   *  `sandbox '<name>' not found`. */
+   *  like any other failure, so a failed delete asks whether the session is still there
+   *  (sessionListed), paying its ~1.5 s only then. */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     const dir = recordsDir(cwd);
+    const sandbox = await sessionSandbox(cwd, sessionId);
     try {
-      await runOpencode(executable, cwd, await sessionSandbox(cwd, sessionId), ["session", "delete", sessionId]);
+      await runOpencode(executable, cwd, sandbox, ["session", "delete", sessionId]);
     } catch (error) {
-      if (!/Session not found|sandbox '[^']*' not found/.test(String(error))) {
+      if (await sessionListed(executable, cwd, sandbox, sessionId)) {
         throw error;
       }
     }

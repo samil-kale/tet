@@ -390,7 +390,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       )}
       {tab === "environment" && (
         <div className="settings-environment">
-          <p className="dialog-detail">Stored encrypted and set in every tab but sandboxed ones, over the machine's own.</p>
+          <p className="dialog-detail">Stored on this machine and set in every tab but sandboxed ones, over the machine's own.</p>
           <RowSection
             label="Environment variables"
             empty="No environment variables yet"
@@ -414,7 +414,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <SecretInput
                   stored={Boolean(row.from)}
                   storedTitle="Stored on this machine; typing replaces it"
-                  emptyTitle="Stored encrypted on this machine"
+                  emptyTitle="Stored on this machine"
                   value={row.value}
                   onChange={(value) => editVariables((rows) => patched(rows, row.id, { value }))}
                 />

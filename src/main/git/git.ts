@@ -632,14 +632,18 @@ interface NetworkOptions {
  * user's own login still comes first. The helpers stay on, so git stores a login that worked in
  * the user's helper and erases one the host refused, as for any login typed at git's prompt.
  */
-async function runNetwork(cwd: string, args: string[], { login, timeoutMs }: NetworkOptions = {}): Promise<GitActionResult> {
+async function loginEnv(cwd: string, login?: NetworkLogin): Promise<NodeJS.ProcessEnv> {
   const askpass = login && {
     GIT_ASKPASS: await ensureAskpass(login.askpassDir),
     TET_ASKPASS_ORIGIN: login.origin,
     TET_ASKPASS_USER: login.username,
     TET_ASKPASS_TOKEN: login.password
   };
-  const result = await run(cwd, args, { ...(await networkEnv(cwd)), ...askpass }, timeoutMs);
+  return { ...(await networkEnv(cwd)), ...askpass };
+}
+
+async function runNetwork(cwd: string, args: string[], { login, timeoutMs }: NetworkOptions = {}): Promise<GitActionResult> {
+  const result = await run(cwd, args, await loginEnv(cwd, login), timeoutMs);
   if (result.ok || !AUTH_FAILURES.some((pattern) => pattern.test(result.error ?? ""))) {
     return result;
   }
@@ -829,7 +833,8 @@ export function deleteBranch(cwd: string, name: string): Promise<GitActionResult
 }
 
 /** A branch already gone from the remote only loses its remote-tracking ref, as in GitHub Desktop.
- *  git's message is read as text, which NETWORK_ENV keeps English. */
+ *  Gone is `ls-remote --exit-code`'s 2 ("no matching refs"), asked only after the delete failed:
+ *  the push's exit code is 1 for any refusal. */
 export async function deleteRemoteBranch(
   cwd: string,
   remote: string,
@@ -837,7 +842,11 @@ export async function deleteRemoteBranch(
   login?: NetworkLogin
 ): Promise<GitActionResult> {
   const deleted = await runNetwork(cwd, ["push", remote, "--delete", name], { login });
-  if (deleted.ok || !/remote ref does not exist/.test(deleted.error ?? "")) {
+  if (deleted.ok || deleted.authRequired) {
+    return deleted;
+  }
+  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], await loginEnv(cwd, login));
+  if (listed.code !== 2) {
     return deleted;
   }
   return run(cwd, ["update-ref", "-d", `refs/remotes/${remote}/${name}`]);

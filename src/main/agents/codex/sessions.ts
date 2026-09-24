@@ -246,8 +246,17 @@ export const codexSessionProvider: SessionProvider = {
     return ["resume", sessionId];
   },
 
-  remove(executable: string, cwd: string, sessionId: string): Promise<void> {
-    return deleteThread(executable, cwd, sessionId);
+  /** A failed `thread/delete` of a thread without a rollout resolves (SessionProvider.remove).
+   *  Measured (codex-cli 0.154.0): an unknown id answers the generic `-32600` "invalid request",
+   *  so the rollout files say whether it is gone, not the answer. */
+  async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
+    try {
+      await deleteThread(executable, cwd, sessionId);
+    } catch (error) {
+      if ((await rolloutFilesOf(codexHome(), sessionId)).length > 0) {
+        throw error;
+      }
+    }
   },
 
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
@@ -379,16 +388,19 @@ async function renameIn(executable: string, cwd: string, sessionId: string, titl
  * lost per rewrite, and some appends landed as NUL runs.
  */
 async function removeInHome(home: string, sessionId: string): Promise<void> {
+  for (const filePath of await rolloutFilesOf(home, sessionId)) {
+    await fs.promises.rm(filePath, { force: true });
+    metaCache.delete(filePath);
+    tailCache.delete(filePath);
+    headCache.delete(filePath);
+  }
+}
+
+/** The rollouts holding one session. */
+async function rolloutFilesOf(home: string, sessionId: string): Promise<string[]> {
   const files = await listRolloutFiles(home);
   const metas = await mapLimited(files, READ_CONCURRENCY, readSessionMeta);
-  for (const [i, filePath] of files.entries()) {
-    if (metas[i]?.sessionId === sessionId) {
-      await fs.promises.rm(filePath, { force: true });
-      metaCache.delete(filePath);
-      tailCache.delete(filePath);
-      headCache.delete(filePath);
-    }
-  }
+  return files.filter((_, i) => metas[i]?.sessionId === sessionId);
 }
 
 /**
