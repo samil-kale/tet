@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
+import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage } from "../shared/errors";
+import { processAlive, runningUpdater, updateLockPath } from "../shared/release";
 import type { UpdateResult } from "../shared/release";
 
 /**
@@ -24,16 +26,6 @@ function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM: alive, just not ours to signal.
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
 function retried(action: () => void): void {
   const deadline = Date.now() + RETRY_WINDOW_MS;
   for (;;) {
@@ -54,17 +46,33 @@ function writeResult(file: string, result: UpdateResult): void {
   writeFileAtomic.sync(file, JSON.stringify(result));
 }
 
-function main(): void {
-  const [pidArg, version, staged, root, resultFile] = process.argv.slice(2);
-  const pid = Number(pidArg);
+function install(pid: number, version: string, staged: string, root: string, resultFile: string): void {
   const deadline = Date.now() + EXIT_WAIT_MS;
-  while (alive(pid) && Date.now() < deadline) {
+  while (processAlive(pid) && Date.now() < deadline) {
     sleep(POLL_MS);
   }
   // Never under a running tet: on macOS a quit can leave a windowless process (measured). The
   // next start finds the version again, and the next quit installs it.
-  if (alive(pid)) {
+  if (processAlive(pid)) {
     writeResult(resultFile, { version, ok: false, output: `tet (pid ${pid}) was still running after ${EXIT_WAIT_MS / 1000}s` });
+    return;
+  }
+
+  // Complete beside the install before the install is touched: moving it aside and this into
+  // place are two renames, and nothing ever removes the install. A tet started meanwhile holds
+  // its TET.exe and app.asar open: removing the install under it once left just those two files.
+  const fresh = `${root}.new`;
+  try {
+    fs.rmSync(fresh, { recursive: true, force: true });
+    try {
+      fs.renameSync(staged, fresh);
+    } catch {
+      // A rename cannot take the folder this process runs from on win32, nor cross a volume.
+      fs.cpSync(staged, fresh, { recursive: true, verbatimSymlinks: true });
+    }
+  } catch (error) {
+    fs.rmSync(fresh, { recursive: true, force: true });
+    writeResult(resultFile, { version, ok: false, output: `could not copy ${version} beside ${root}: ${errorMessage(error)}` });
     return;
   }
 
@@ -74,6 +82,7 @@ function main(): void {
     fs.rmSync(old, { recursive: true, force: true });
     retried(() => fs.renameSync(root, old));
   } catch (error) {
+    fs.rmSync(fresh, { recursive: true, force: true });
     writeResult(resultFile, {
       version,
       ok: false,
@@ -82,17 +91,10 @@ function main(): void {
     return;
   }
   try {
-    try {
-      fs.renameSync(staged, root);
-    } catch {
-      // A rename cannot take the folder this process runs from on win32, nor cross a volume.
-      fs.cpSync(staged, root, { recursive: true, verbatimSymlinks: true });
-    }
+    retried(() => fs.renameSync(fresh, root));
   } catch (error) {
     let output = `could not put ${version} in place: ${errorMessage(error)}`;
-    // Retried, never blocking the result: a scanner holding a copied file must not hide the failure.
     try {
-      retried(() => fs.rmSync(root, { recursive: true, force: true }));
       retried(() => fs.renameSync(old, root));
     } catch (restoreError) {
       output += `\ncould not put ${old} back: ${String(restoreError)}`;
@@ -105,6 +107,18 @@ function main(): void {
     fs.rmSync(old, { recursive: true, force: true, maxRetries: 5 });
   } catch {
     // Left for the next update's rmSync; the new version is in place.
+  }
+}
+
+function main(): void {
+  const [pidArg, version, staged, root, resultFile] = process.argv.slice(2);
+  const lockFile = updateLockPath(path.dirname(resultFile));
+  try {
+    install(Number(pidArg), version, staged, root, resultFile);
+  } finally {
+    if (runningUpdater(lockFile) === process.pid) {
+      fs.rmSync(lockFile, { force: true });
+    }
   }
 }
 

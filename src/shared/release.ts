@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
@@ -59,4 +60,35 @@ export interface UpdateResult {
   version: string;
   ok: boolean;
   output: string;
+}
+
+/**
+ * The pid of the running src/cli/tet-update.ts, in `<update dir>/update.lock`: written by
+ * auto-update.ts as it starts the updater, removed by the updater when done. While that process
+ * lives, a tet started meanwhile leaves the update folder alone — the updater runs from it — and
+ * reports its result only once written.
+ */
+export function updateLockPath(updateDir: string): string {
+  return path.join(updateDir, "update.lock");
+}
+
+export function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: alive, just not ours to signal.
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** The lock's pid while that process lives; a crashed updater's lock counts as none. */
+export function runningUpdater(lockFile: string): number | undefined {
+  let pid: number;
+  try {
+    pid = Number(fs.readFileSync(lockFile, "utf8"));
+  } catch {
+    return undefined;
+  }
+  return Number.isInteger(pid) && pid > 0 && processAlive(pid) ? pid : undefined;
 }

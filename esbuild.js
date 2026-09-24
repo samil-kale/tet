@@ -28,8 +28,9 @@ const mainConfig = {
   ...node,
   entryPoints: [path.join(__dirname, "src", "main", "main.ts")],
   outfile: path.join(dist, "main.js"),
-  // electron is provided by the runtime; node-pty is a native addon and cannot be bundled.
-  external: ["electron", "node-pty"]
+  // electron (and its original-fs) is provided by the runtime; node-pty is a native addon and
+  // cannot be bundled.
+  external: ["electron", "original-fs", "node-pty"]
 };
 
 /** The git CLI wrapper, which runs in a utilityProcess of its own — see AGENTS.md; nothing from

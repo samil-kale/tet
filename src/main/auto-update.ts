@@ -5,8 +5,10 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { app } from "electron";
+import * as originalFs from "original-fs";
 import * as semver from "semver";
-import { assetName, installCommand, installRoot, rootExecutable } from "../shared/release";
+import writeFileAtomic from "write-file-atomic";
+import { assetName, installCommand, installRoot, rootExecutable, runningUpdater, updateLockPath } from "../shared/release";
 import type { UpdateResult } from "../shared/release";
 import type { NoticeSeverity } from "../shared/types";
 
@@ -16,6 +18,8 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
 const CHECK_TIMEOUT_MS = 15_000;
 /** The archive is over 100 MB. */
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
+/** An updater lives for a minute or two at most (tet-update.ts's waits). */
+const UPDATER_POLL_MS = 2000;
 
 type Notify = (severity: NoticeSeverity, message: string) => void;
 
@@ -31,6 +35,16 @@ function updateDir(): string {
 
 function resultPath(): string {
   return path.join(updateDir(), "result.json");
+}
+
+/**
+ * Resolves once no updater runs: until then its unpack folder, which the sweep and `stage` would
+ * remove, is the one it runs from, and its result is not written yet.
+ */
+async function updaterDone(): Promise<void> {
+  while (runningUpdater(updateLockPath(updateDir())) !== undefined) {
+    await new Promise((resolve) => setTimeout(resolve, UPDATER_POLL_MS));
+  }
 }
 
 /** The last update's result, reported once and deleted. */
@@ -54,7 +68,8 @@ function reportLastUpdate(notify: Notify): void {
 /**
  * Removes earlier sessions' unpacked updates. Best effort: on win32 the updater may still hold its
  * executable briefly after writing its result. Awaited before the first check, whose `stage` may
- * unpack into the swept folder.
+ * unpack into the swept folder. Removed with original-fs: electron's fs opens `app.asar` as an
+ * archive and then fails its rm with EBUSY (measured, electron 43, win32).
  */
 async function sweepUpdateDir(): Promise<void> {
   let entries: string[];
@@ -66,7 +81,7 @@ async function sweepUpdateDir(): Promise<void> {
   await Promise.all(
     entries
       .filter((entry) => entry !== path.basename(resultPath()))
-      .map((entry) => fs.promises.rm(path.join(updateDir(), entry), { recursive: true, force: true }).catch(() => undefined))
+      .map((entry) => originalFs.promises.rm(path.join(updateDir(), entry), { recursive: true, force: true }).catch(() => undefined))
   );
 }
 
@@ -121,7 +136,7 @@ function findRoot(dir: string): string | undefined {
  */
 async function stage(releasesUrl: string, asset: string, version: string): Promise<string> {
   const dir = path.join(updateDir(), version);
-  await fs.promises.rm(dir, { recursive: true, force: true });
+  await originalFs.promises.rm(dir, { recursive: true, force: true });
   await fs.promises.mkdir(dir, { recursive: true });
   const archive = path.join(updateDir(), `${version}-${asset}`);
   try {
@@ -189,9 +204,12 @@ export function startAutoUpdate(installed: boolean, releasesUrl: string, tetData
     }
   };
 
-  reportLastUpdate(notify);
-  void sweepUpdateDir().then(check);
-  setInterval(() => void check(), CHECK_INTERVAL_MS);
+  void updaterDone().then(async () => {
+    reportLastUpdate(notify);
+    await sweepUpdateDir();
+    await check();
+    setInterval(() => void check(), CHECK_INTERVAL_MS);
+  });
 }
 
 /**
@@ -217,6 +235,10 @@ export function installPendingUpdate(): void {
     });
     child.on("error", (error) => console.error("[tet] could not start the update:", error));
     child.unref();
+    // Written here, not by the updater: a tet started right after this quit must already see it.
+    if (child.pid !== undefined) {
+      writeFileAtomic.sync(updateLockPath(updateDir()), String(child.pid));
+    }
   } catch (error) {
     console.error("[tet] could not start the update:", error);
   }
