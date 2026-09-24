@@ -84,13 +84,12 @@ function PathField({ label, value, pickTitle, onChange, ref }: PathFieldProps) {
 
 /**
  * What the account form hands the dialog's frame while it is up: the frame's submit button is
- * this form's ("Add account"), Enter in its fields submits it, and the host's refusal goes above
- * the button row — as the other tabs' do. Lifted as the bar's `busy` is (AGENTS.md).
+ * this form's ("Add account") and Enter in its fields submits it. Lifted as the bar's `busy` is
+ * (AGENTS.md); the host's refusal stays with the form, under the token field.
  */
 interface AccountSubmission {
   ready: boolean;
   busy: boolean;
-  refused: string | undefined;
   submit: () => void;
 }
 
@@ -104,7 +103,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   const [provider, setProvider] = useState<ProviderId>("github");
   const [host, setHost] = useState(DEFAULT_HOST.github);
   const [token, setToken] = useState("");
-  /** The token is checked against the host, so neither field alone can be blamed for a refusal. */
+  /** What the host refused, under the token field: that is what it checks ("Bad credentials"). */
   const { busy, refused, submit, clear } = useSubmit(async () => {
     const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
     if (!result.account) {
@@ -129,9 +128,9 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   const submitRef = useRef(submit);
   submitRef.current = submit;
   useEffect(() => {
-    onForm({ ready, busy, refused, submit: () => void submitRef.current() });
+    onForm({ ready, busy, submit: () => void submitRef.current() });
     return () => onForm(null);
-  }, [ready, busy, refused, onForm]);
+  }, [ready, busy, onForm]);
 
   return (
     <div className="account-form">
@@ -152,6 +151,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
           setToken(next);
           clear();
         }}
+        error={refused}
       />
     </div>
   );
@@ -465,7 +465,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       loginUrl === null ? undefined : { username: login.username.trim(), password: login.password }
     );
 
-  /** What refused the add goes above the buttons: which field is to blame depends on the tab — a
+  /** What refused the add goes beside the buttons: which field is to blame depends on the tab — a
    *  url, a path, a folder name — so none of them carries it. */
   const { busy: adding, refused, submit, clear } = useSubmit(async () => {
     const result =
@@ -516,7 +516,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   return (
     <DialogFrame
       header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose }}
-      error={accountForm ? accountForm.refused : refused}
+      error={refused}
       className="add-repository-dialog"
       busy={busy}
       onSubmit={() => {
@@ -569,7 +569,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
           <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={changing(setDirectory)} />
           <TextField label="Folder name" value={folderName} onChange={changing(setName)} />
           {loginUrl !== null && (
-            // Its failure shows above the buttons, as the tab's others do (`refused`).
+            // Its failure shows beside the buttons, as the tab's others do (`refused`).
             <GitLoginFields url={loginUrl} value={login} onChange={changing(setLogin)} busy={busy} field={loginField} />
           )}
         </>

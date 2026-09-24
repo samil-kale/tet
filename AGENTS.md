@@ -119,11 +119,13 @@ or a per-line decision is for an agent.
   `env-request`, answered in `EnvDialog`, one at a time (`environment.ts`).
 - **A dialog on screen says what concerns it; prefer this to a notice.** Words alone, no mark,
   coloured by what it is. A failure belongs where the answer was typed: under that field
-  (`Field`'s `error`), else above the button row (`DialogFrame`'s `error`) where the fields are
-  several or across tabs — what was typed is held so it can be corrected, and it is git's own words
-  for a name it will not take, never tet's guess at them. What the unsaved edits as a whole lead to
-  goes left in the button row (`DialogFrame`'s `message`), e.g. `RestartNote` while they reach
-  running tabs only once restarted. A notice is for what has no dialog up to carry it; a `confirm`
+  (`Field`'s `error`); in a row of a list as the error mark's tooltip beside it (`RowMark`, the
+  one mark); else left in the button row, level with the buttons (`DialogFrame`'s `error`) where
+  the fields are several or across tabs — what was typed is held so it can be corrected, and it
+  is git's own words for a name it will not take, never tet's guess at them.
+  What the unsaved edits as a whole lead to goes in the same place (`DialogFrame`'s `message`),
+  e.g. `RestartNote` while they reach running tabs only once restarted. A notice is for what has
+  no dialog up to carry it; a `confirm`
   has no field, so it notifies.
 - To get this, **a question runs its own answer** (`PromptOptions.submit`): the dialog stays up
   while the action runs, so what runs it hands the failure back instead of notifying it

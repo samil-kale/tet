@@ -70,9 +70,9 @@ interface DialogFrameProps<T extends string> {
   header: DialogHeader<T>;
   /** Draws the header's progress bar, the dialog's one indicator. */
   busy?: boolean;
-  /** What refused the dialog's Save, above the button row (`DialogError`): for a card whose
+  /** What refused the dialog's Save, on the button row's left (`DialogError`): for a card whose
    *  fields — several, or across tabs — no one of them can be blamed. A field that can writes it
-   *  itself (`Field`). */
+   *  itself, under the control (`Field`). Shown in `message`'s place while it stands. */
   error?: string;
   /** Beside the buttons, on the row's left: what the dialog says about its unsaved edits as a whole
    *  (`RestartNote`), never a failure — that is `error`. */
@@ -153,9 +153,14 @@ export function DialogFrame<T extends string>({
         </div>
       )}
       <div className="dialog-body">{children}</div>
-      <DialogError message={error} />
       <div className="dialog-buttons">
-        {message && <div className="dialog-buttons-message">{message}</div>}
+        {error !== undefined ? (
+          <div className="dialog-buttons-message">
+            <DialogError message={error} />
+          </div>
+        ) : (
+          message && <div className="dialog-buttons-message">{message}</div>
+        )}
         {buttons}
       </div>
     </>

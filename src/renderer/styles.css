@@ -2112,7 +2112,8 @@ textarea:focus,
   gap: 8px;
 }
 
-/* DialogFrame's `message`: the row's left, the buttons kept right. */
+/* DialogFrame's `message`, or its `error` while one stands: the row's left, level with the
+   buttons, which keep right. */
 .dialog-buttons-message {
   margin-right: auto;
   align-self: center;
