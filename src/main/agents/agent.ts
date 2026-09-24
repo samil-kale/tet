@@ -156,7 +156,7 @@ export interface AgentDefinition {
   questionOutlivesTurn?: boolean;
   /**
    * Setup before any session spawns: hooks, settings, plugins, and how TET's system prompt
-   * (system-prompt.ts) reaches the model — the only place an agent may write anything. A rejection
+   * (system-prompt.ts) reaches the model — the only place an agent may write configuration. A rejection
    * marks the agent unstartable, so reject only for what truly makes it unusable; a failed optional
    * write (an extension, a theme file) is swallowed.
    */

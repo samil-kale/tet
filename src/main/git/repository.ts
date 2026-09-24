@@ -35,8 +35,8 @@ import { isImage, toDataUrl } from "./image-type";
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;
 /** Least time between two finished refreshes, or continuous change runs them back to back. Measured
- *  with instrumented process creation: the git start is the cost, three per refresh, and that is
- *  main-process time a keystroke on its way to a terminal waits for. */
+ *  with instrumented process creation: the git start is the cost, three per refresh (git.ts's
+ *  `readState`). */
 const REFRESH_MIN_INTERVAL_MS = 2000;
 /** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
  *  from" merges what the last fetch brought, whatever the host. */

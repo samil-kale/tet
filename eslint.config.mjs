@@ -2,6 +2,8 @@ import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
+const PROCESSES = ["main", "renderer", "preload", "cli"];
+
 export default tseslint.config(
   {
     ignores: ["**/dist/**", "**/dist-test/**", "**/node_modules/**"]
@@ -22,19 +24,24 @@ export default tseslint.config(
   // The process borders, as lint rules rather than prose (see "Where things live" in AGENTS.md):
   // each folder under src/ is one process, and `shared/` the only thing they may import from one
   // another.
-  {
-    files: ["src/renderer/**", "src/preload/**", "src/cli/**", "src/shared/**"],
+  ...[...PROCESSES, "shared"].map((folder) => ({
+    files: [`src/${folder}/**`],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
-            { group: ["**/main", "**/main/**"], message: "Main-process code; go through src/shared." }
+            {
+              // Up and into another process's folder; a file of that name nearby (opencode's
+              // `./cli`) is not one.
+              regex: `^(\\.\\./)+(${PROCESSES.filter((other) => other !== folder).join("|")})(/|$)`,
+              message: "Another process's code; go through src/shared."
+            }
           ]
         }
       ]
     }
-  },
+  })),
   {
     // The git utility process (git-host.ts) and the CLI run without electron; `shared/` runs in
     // every process. None of them may import it, and the first two may import nothing from the

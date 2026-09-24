@@ -891,7 +891,7 @@ export class ProjectSessionManager {
       variableValues: this.sbxLocal.values(this.project.id, "variables"),
       onData: (data) => this.reportOutput(tab, data)
     });
-    // tet.json as it stands was not all applied: one notice per option (sbxProblemNotices).
+    // tet.json as it stands was not all applied: one notice per option and reason (sbxProblemNotices).
     for (const notice of sbxProblemNotices(problems)) {
       this.callbacks.onNotice("warning", notice);
     }

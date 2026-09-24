@@ -1,11 +1,12 @@
 import { useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
+import type { SuggestionResult } from "../../shared/types";
 import { SparkleIcon, SpinnerIcon } from "./icons";
-import { notify } from "./Notices";
 
 /**
- * What refused an answer, where the answer was given: under the field to blame (`Field`), above a
- * card's button row (`DialogFrame`), or in place of the list that could not be loaded. Words
+ * What refused an answer, where the answer was given: under the field to blame (`Field`), in a
+ * card's button row level with the buttons (`DialogFrame`), or in place of the list that could not
+ * be loaded. Words
  * alone, since the colour and the place already say what it is; nothing at all while there is
  * nothing to say.
  */
@@ -85,10 +86,11 @@ interface SuggestFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  /** An async way to fill the field, shown as a wand beside it. */
+  /** An async way to fill the field, shown as a wand beside it. Why it had none is said under the
+   *  field, in `error`'s place, until the next suggestion or keystroke. */
   suggestion: {
     title: string;
-    run: () => Promise<string>;
+    run: () => Promise<SuggestionResult>;
   };
   disabled?: boolean;
   /** The field a dialog opens focused; refocused once a suggestion arrives. */
@@ -102,15 +104,18 @@ interface SuggestFieldProps {
 /** A text field with a wand beside it that fills it, e.g. a model's commit message. */
 export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting }: SuggestFieldProps) {
   const [suggesting, setSuggesting] = useState(false);
+  const [refused, setRefused] = useState<string>();
 
   const suggest = async (): Promise<void> => {
     if (suggesting) {
       return;
     }
     setSuggesting(true);
+    setRefused(undefined);
     onSuggesting?.(true);
     try {
-      const suggested = (await suggestion.run()).trim();
+      const result = await suggestion.run();
+      const suggested = result.value?.trim() ?? "";
       if (suggested.length > 0) {
         onChange(suggested);
         requestAnimationFrame(() => {
@@ -118,8 +123,9 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
           ref.current?.select();
         });
       }
+      setRefused(result.error);
     } catch (error) {
-      notify("error", `Could not suggest a value: ${errorMessage(error)}`);
+      setRefused(`Could not suggest a value: ${errorMessage(error)}`);
     } finally {
       setSuggesting(false);
       onSuggesting?.(false);
@@ -127,7 +133,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
   };
 
   return (
-    <Field label={label} error={error}>
+    <Field label={label} error={refused ?? error}>
       {/* Paired like a path field and its Browse button; the spinner replaces the wand while
           suggesting. */}
       <div className="dialog-field-row">
@@ -135,7 +141,10 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
           type="text"
           value={value}
           disabled={disabled || suggesting}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            setRefused(undefined);
+            onChange(event.target.value);
+          }}
           ref={ref}
         />
         <button

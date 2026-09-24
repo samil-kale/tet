@@ -44,7 +44,7 @@ import { canBind } from "../can-bind";
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
- * the server under plain node with these faked. The same singletons ipc.ts holds: a second
+ * the server under plain node with these faked. The same singletons ipc/ holds: a second
  * transport onto that logic, never a second implementation (projects.ts's addProject/removeProject).
  */
 export interface ControlDeps {
@@ -340,7 +340,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!PROMPT_IDS.some((candidate) => candidate === id)) {
         throw new ControlError("bad_args", `unknown prompt: ${id} (one of ${PROMPT_IDS.join(", ")})`);
       }
-      // No text resets: "" means tet's own prompt, read by ipc.ts when asking.
+      // No text resets: "" means tet's own prompt, read by ipc/repository.ts when asking.
       const value = args.text;
       settings.patch({ prompts: { [id]: typeof value === "string" ? value : "" } });
       return { result: { saved: true } };

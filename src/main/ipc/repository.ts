@@ -13,7 +13,8 @@ import type {
   GitActionResult,
   GitLogin,
   RepositoryState,
-  StashCommand
+  StashCommand,
+  SuggestionResult
 } from "../../shared/types";
 import { DEFAULT_EXPLORER_VIEW } from "../tet-json";
 import { suggestCommitMessage } from "../git/commit-message";
@@ -25,9 +26,8 @@ import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 export function registerRepositoryIpc({
   store,
   settings,
-  repositories,
-  notice
-}: Pick<IpcDeps, "store" | "settings" | "repositories" | "notice">): void {
+  repositories
+}: Pick<IpcDeps, "store" | "settings" | "repositories">): void {
   ipcMain.handle("repo:state", (_event, projectId: string): RepositoryState => {
     return repositories.get(projectId)?.getState() ?? MISSING_REPOSITORY;
   });
@@ -82,18 +82,17 @@ export function registerRepositoryIpc({
   onRepository("repo:commit-paths", (repository, message: string, paths: string[]) =>
     repository.commitPaths(message, paths)
   );
-  ipcMain.handle("repo:suggest-commit-message", async (_event, projectId: string, paths?: string[]): Promise<string> => {
+  ipcMain.handle("repo:suggest-commit-message", async (_event, projectId: string, paths?: string[]): Promise<SuggestionResult> => {
     const project = store.get(projectId);
     if (!project) {
-      return "";
+      return {};
     }
     const askable = await findAskableAgent(project.path);
     if (!askable) {
       const candidates = AGENTS.filter((agent) => agent.askArgs)
         .map((agent) => agent.displayName)
         .join(" or ");
-      notice("warning", `${candidates} not found — install one to have it suggest a commit message.`);
-      return "";
+      return { error: `${candidates} not found — install one to have it suggest a commit message.` };
     }
     const { executable, agent } = askable;
     try {
@@ -102,13 +101,9 @@ export function registerRepositoryIpc({
       const context = await git.readCommitContext(project.path, pathspec);
       const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
       const message = await suggestCommitMessage(project.path, executable, agent.askArgs!, prompt, context);
-      if (message.length === 0) {
-        notice("warning", "The agent did not suggest a commit message");
-      }
-      return message;
+      return message.length === 0 ? { error: "The agent did not suggest a commit message" } : { value: message };
     } catch (error) {
-      notice("error", `Could not suggest a commit message: ${errorMessage(error)}`);
-      return "";
+      return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
     } finally {
       await agent.cleanupAsk?.(executable, project.path).catch(() => undefined);
     }

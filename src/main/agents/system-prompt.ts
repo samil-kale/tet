@@ -1,8 +1,8 @@
 /**
- * What every agent tab is told about TET, once per session: appended to its system prompt, never
- * replacing the user's own instructions, not repeated with every message. Claude Code, opencode and
- * pi take it at spawn (prepareSpawn and prepareSandboxSpawn), Codex as its `SessionStart` hook's
- * answer (codex/hooks.ts). It only says when to look; `tet-ctl help` holds the verbs.
+ * What every agent tab is told about TET, once per session: never replacing the user's own
+ * instructions, not repeated with every message. Claude Code, opencode and pi append it to their
+ * system prompt at spawn (prepareSpawn and prepareSandboxSpawn), Codex takes it as added context in
+ * its `SessionStart` hook's answer (codex/hooks.ts). It only says when to look; `tet-ctl help` holds the verbs.
  *
  * One line with no `"`, `\`, backtick or cmd.exe/shell metacharacter (pieces.test.ts): it travels
  * as a plain argument through cmd.exe (pi's npm shim) and through `sbx run`. Measured with this

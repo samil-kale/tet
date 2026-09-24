@@ -21,8 +21,8 @@ import type {
 import { machineName } from "./env-names";
 import { isRecord } from "./json-file";
 
-/** A project's saved commands and Explorer view, in its own root so it travels with the repository.
- *  Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
+/** A project's saved commands, Explorer view and sbx settings, in its own root so it travels with
+ *  the repository. Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
  *  their VS Code name (`readExplorerView`). A file missing, unparseable or oddly shaped is no
  *  commands and the default view. The watcher reports every write of it as `commands:changed`. */
 export const PROJECT_FILE = "tet.json";
@@ -250,7 +250,7 @@ function booleanOr(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-/** `readExplorerView`'s defaults, and ipc.ts's for a missing repository. */
+/** `readExplorerView`'s defaults, and ipc/repository.ts's for a missing repository. */
 export const DEFAULT_EXPLORER_VIEW: ExplorerSettings = {
   excludeGitIgnore: false,
   compactFolders: true,

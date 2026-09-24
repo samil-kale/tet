@@ -156,7 +156,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
 
   /** Stores typed values, saves and applies the rows without a problem, the marked ones left out
    *  (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx refuses only then goes
-   *  above the buttons: the rows it is about may be on another tab, and their own marks say which
+   *  in the button row: the rows it is about may be on another tab, and their own marks say which
    *  (`tabMarks`). */
   const { busy: saving, refused, submit: save, clear } = useSubmit(async () => {
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));

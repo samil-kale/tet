@@ -288,7 +288,7 @@ function openProject(project: Project): void {
   sessions.open(project);
 }
 
-/** For opening and closing projects, shared by the window (ipc.ts) and the control channel. */
+/** For opening and closing projects, shared by the window (ipc/) and the control channel. */
 const projectDeps: ProjectDeps = {
   store,
   repositories,
@@ -577,7 +577,7 @@ if (!app.requestSingleInstanceLock()) {
     startEventLoopMonitor(path.join(dataRoot, "event-loop.log"));
     // Before anything reads PATH, add the agents' install dirs to the OS's bare GUI PATH. Awaited
     // only after the window: on macOS/Linux it asks the login shell, which with nvm takes most of a
-    // second. The requirements re-check (ipc.ts) joins the same run.
+    // second. The requirements re-check (ipc/app.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepTempFiles();
     // Before the first spawn; each terminal gets only a token made from it for its own tab

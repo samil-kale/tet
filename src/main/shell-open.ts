@@ -1,7 +1,7 @@
 import * as path from "node:path";
 
 /**
- * What a ctrl-click may hand the OS (`shell:open-url`, `shell:open-file` in ipc.ts). Both end in
+ * What a ctrl-click may hand the OS (`shell:open-url`, `shell:open-file` in ipc/shell.ts). Both end in
  * ShellExecute, `open` or `xdg-open`, which run a program as readily as they show a page, so terminal
  * output an agent printed must not reach them unchecked.
  */

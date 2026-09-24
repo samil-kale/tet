@@ -207,7 +207,8 @@ export const ProjectList = memo(function ProjectList({
   };
 
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
-   *  pane, where its target is on screen — but for a worktree's own row, which is that tree. */
+   *  pane, where its target is on screen — but for a worktree's own row, which is that tree, and
+   *  its merge into the base, run where the base is checked out. */
   const menuEntries = (project: Project): ContextMenuEntry[] => {
     const { head, detached, upstream, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[project.id] ?? {};
     const web = remoteUrl ? webUrl(remoteUrl) : null;

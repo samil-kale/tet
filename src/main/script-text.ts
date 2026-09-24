@@ -1,13 +1,13 @@
-import * as fs from "node:fs";
+import writeFileAtomic from "write-file-atomic";
 
 /**
- * Encoding, line endings and quoting for files tet generates for other processes to run (control
+ * Line endings and quoting for files tet generates for other processes to run (control
  * launchers).
  */
 
 /** sh chokes on CRLF (`then\r`), whatever the source's line endings. */
 export function writePosixScript(file: string, contents: string): void {
-  fs.writeFileSync(file, contents.replace(/\r\n/g, "\n"));
+  writeFileAtomic.sync(file, contents.replace(/\r\n/g, "\n"));
 }
 
 /** A POSIX sh single-quoted string, safe for any content. */

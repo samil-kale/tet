@@ -179,7 +179,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   useEscape(onClose);
 
   /** One settings.json write, the Environment tab if touched, then one tet.json write per changed
-   *  Explorer key. What refuses it goes above the buttons: it is about tet.json, not about one of
+   *  Explorer key. What refuses it goes in the button row: it is about tet.json, not about one of
    *  the switches on the Files tab. */
   const { busy: saving, refused, submit: save, clear } = useSubmit(
     async () => {

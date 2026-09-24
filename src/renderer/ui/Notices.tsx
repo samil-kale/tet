@@ -12,7 +12,8 @@ interface ShownNotice {
 }
 
 /**
- * The only way to tell the user something; views keep no messages of their own. A plain function,
+ * How the user is told something, unless a dialog on screen says it (`DialogFrame`, `Field`); no
+ * other view keeps a message of its own. A plain function,
  * not a hook or prop, so anything anywhere can report without a threaded callback — modelled on
  * VS Code's `window.showErrorMessage`. The main process says things through `app:notice`.
  */

@@ -138,7 +138,7 @@ function useStartedHere<A extends unknown[], R>(
 /**
  * App's gate for the branch commands: one per project at a time, whoever started it — a second
  * click mid-switch would stack two `git switch`. Mirrors `Repository.runAction`; `BranchActions.run`
- * is the one way in, a view asking its own question first. Hands out the git pane's actions for
+ * is the one way in for them, a view asking its own question first (`ask`). Hands out the git pane's actions for
  * the project on screen (`activeBranch`, its bar showing what it started, `ask` excepted: the
  * question that asked for it shows that one) and the project list's way of running a command in
  * any of its projects (`runInProject`, on the list's bar, `projectListBusy`).

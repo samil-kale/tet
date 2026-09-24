@@ -111,7 +111,7 @@ function escapeCmdArgument(arg: string, shim: boolean): string {
   return shim ? escaped.replace(CMD_META_CHARS, "^$1") : escaped;
 }
 
-/** Where a command line goes, for every spawn: on win32 a native executable directly, a shim or an
+/** Where a command line goes, for every agent, shell and `sbx` spawn: on win32 a native executable directly, a shim or an
  *  unresolved name through cmd.exe; elsewhere unchanged. */
 export function resolveCommand(executable: string, args: string[]): ResolvedCommand {
   if (process.platform === "win32") {

@@ -12,7 +12,7 @@ import { removeProjectSandboxes } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 
-/** What opening and closing a project takes — the same singletons ipc.ts holds. */
+/** What opening and closing a project takes — the same singletons ipc/ holds. */
 export interface ProjectDeps {
   store: ProjectStore;
   repositories: RepositoryManager;

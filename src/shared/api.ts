@@ -39,6 +39,7 @@ import type {
   SbxValueKind,
   SettingsEdits,
   StashCommand,
+  SuggestionResult,
   TerminalDescriptor,
   TerminalOutput,
   TerminalStatus,
@@ -206,7 +207,7 @@ export interface TETApi {
     /** These files alone, untracked included; nothing else staged goes with them. */
     commitPaths(projectId: string, message: string, paths: string[]): Promise<GitActionResult>;
     /** An installed agent suggests one subject for all changes, or only `paths`. */
-    suggestCommitMessage(projectId: string, paths?: string[]): Promise<string>;
+    suggestCommitMessage(projectId: string, paths?: string[]): Promise<SuggestionResult>;
     /** Everything the changes list shows, untracked included. */
     stashPush(projectId: string, message: string): Promise<GitActionResult>;
     /** By `StashEntry.sha`, looked up when it runs. */

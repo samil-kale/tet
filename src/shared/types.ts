@@ -41,7 +41,8 @@ export interface Project {
   /** The directory's base name. */
   name: string;
   /** For a linked worktree, its main worktree's path — read off the disk when the project is
-   *  loaded or added, never trusted from `projects.json`. The sidebar indents it there. */
+   *  added and once the window is up (`refreshMainPaths`); the value in `projects.json` only
+   *  draws the first frame. The sidebar indents it there. */
   mainPath?: string;
 }
 
@@ -280,6 +281,12 @@ export interface AppInfo {
   node: string;
   /** `process.platform` and `process.arch`. */
   os: string;
+}
+
+/** A value an agent suggested for a field, or why there is none — said under that field. */
+export interface SuggestionResult {
+  value?: string;
+  error?: string;
 }
 
 /** Clone/create: the opened project, or git's message. */
