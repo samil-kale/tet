@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.11.5 (2026-09-24)
+
+- **Git asks for logins.** When a fetch, pull, push or clone needs a username and password, tet
+  asks for them and hands them to git, which keeps them in its credential helper. Where there is
+  none, tet keeps them encrypted itself.
+- **Fixes.** Claude Code's turn ends when it stops, even with background tasks still running.
+  Changing a path's access now applies to a sandbox that was stopped. Sandboxes are created
+  without sbx's own skills store, which covered the skills folder. Deleting a Codex or opencode
+  session that is already gone no longer fails. A dialog shows its errors under the field or
+  beside the buttons they concern.
+
 ## 0.11.4 (2026-09-23)
 
 - **Agents can configure the sandbox.** `tet-ctl sbx-get` and the `sbx-set-*` verbs read and
