@@ -709,3 +709,16 @@ app.on("before-quit", (event) => {
 });
 
 app.on("will-quit", () => console.error("[tet] quit: will-quit"));
+
+/**
+ * Keeps electron's own handling of these signals, a quit through before-quit. write-file-atomic
+ * listens on them (signal-exit) during each write, and libuv resets a signal to SIG_DFL when its
+ * last listener goes (libuv#2435): from then on SIGTERM killed tet outright — no sessions ended,
+ * no update installed (install.test.ts on Linux). A listener of our own, added before electron
+ * installs its handler, keeps libuv from ever touching the disposition again. Measured (electron
+ * 43.4.0, Linux, 2026-09-25): with it, SIGTERM/SIGINT/SIGHUP after a write reach before-quit and
+ * this callback is never called; the quit is only its fallback.
+ */
+for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+  process.on(signal, () => app.quit());
+}
