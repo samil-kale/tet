@@ -2037,7 +2037,7 @@ textarea:focus,
 
 .settings-info-row span:first-child,
 .settings-shortcut-row span:first-child {
-  width: 110px;
+  width: 85px;
   flex: none;
   color: var(--vscode-descriptionForeground);
 }
