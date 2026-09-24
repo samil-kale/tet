@@ -58,7 +58,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title={remote ? `Fetch from ${remote}` : "This repository has no remote"}
               disabled={locked || !canSync}
-              onClick={() => branch.run("Fetching...", () => window.tet.repository.fetch(project.id))}
+              onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(project.id, login))}
             >
               <SyncIcon />
             </button>
@@ -66,7 +66,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title={state.upstream ? `Pull from ${state.upstream}` : "No upstream to pull from"}
               disabled={locked || !canSync || state.upstream === undefined}
-              onClick={() => branch.run("Pulling...", () => window.tet.repository.pull(project.id))}
+              onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(project.id, login))}
             >
               <ArrowDownIcon />
             </button>
@@ -79,8 +79,8 @@ export const GitPane = memo(function GitPane({
               }
               disabled={locked || !canSync}
               onClick={() =>
-                branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", () =>
-                  window.tet.repository.push(project.id)
+                branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", (login) =>
+                  window.tet.repository.push(project.id, login)
                 )
               }
             >

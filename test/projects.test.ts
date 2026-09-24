@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import type { ControlRecords } from "../src/main/control/control-records";
+import { GitLoginStore } from "../src/main/git-logins";
 import { RepositoryManager } from "../src/main/git/repository";
 import { addWorktree, deleteWorktree, ProjectStore, renameWorktree, type ProjectDeps } from "../src/main/projects";
 import { SbxLocalStore } from "../src/main/sbx-local";
@@ -58,7 +59,8 @@ async function open(folders: string[], onClose: (project: Project) => void = () 
     () => undefined,
     () => undefined,
     () => undefined,
-    () => undefined
+    () => undefined,
+    new GitLoginStore(dataRoot)
   );
   managers.push(repositories);
   const changes: { added?: string; removed?: string }[] = [];

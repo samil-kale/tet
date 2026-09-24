@@ -228,8 +228,9 @@ export interface SbxBlocker {
 export interface SbxStatus {
   installed: boolean;
   loggedIn: boolean;
-  /** sbx's own error when it failed for a reason other than being signed out (a hung daemon),
-   *  with `loggedIn` false; signing in would not help. */
+  /** sbx's own error when it failed for a reason other than being signed out (a hung daemon), or
+   *  that it is older than tet drives (sbx.ts's sbxVersionSupported), with `loggedIn` false;
+   *  signing in would not help. */
   failure?: string;
   policyInitialized: boolean;
   /** The organization managing the account's policies, when one does; local allow rules then do
@@ -285,8 +286,14 @@ export interface AppInfo {
 export interface AddRepositoryResult {
   project?: Project;
   error?: string;
-  /** The clone wants credentials; the dialog asks for them. */
-  authRequired?: boolean;
+  /** The clone wants a login for this url; the dialog asks for one (GitActionResult). */
+  loginUrl?: string;
+}
+
+/** A username and password (or token) typed into tet for a git host. */
+export interface GitLogin {
+  username: string;
+  password: string;
 }
 
 export type ProviderId = "github" | "gitlab";
@@ -642,8 +649,12 @@ export function searchPattern(query: FileSearchQuery, flags: string): RegExp {
 export interface GitActionResult {
   ok: boolean;
   error?: string;
-  /** git wanted credentials; set only by network commands, acted on only by the clone. */
+  /** git wanted credentials; set only by network commands (git.ts's runNetwork). */
   authRequired?: boolean;
+  /** The http(s) remote that wants a login, set by main from `authRequired`: the view that
+   *  offered the action asks for one and runs it again with it. Never for an ssh remote or a local
+   *  path, where there is nothing to type. */
+  loginUrl?: string;
   /**
    * Nothing was done: the command waits on a question. Which one is the reason named here, and
    * the view that offered the action puts it in its own words and runs the action again

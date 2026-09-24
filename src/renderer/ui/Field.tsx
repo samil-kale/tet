@@ -95,10 +95,12 @@ interface SuggestFieldProps {
   ref?: RefObject<HTMLInputElement | null>;
   /** See `Field`. */
   error?: string;
+  /** Told while a suggestion is fetched, for the dialog to hold its answer back (`PromptFields`). */
+  onSuggesting?: (suggesting: boolean) => void;
 }
 
 /** A text field with a wand beside it that fills it, e.g. a model's commit message. */
-export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error }: SuggestFieldProps) {
+export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting }: SuggestFieldProps) {
   const [suggesting, setSuggesting] = useState(false);
   const own = useRef<HTMLInputElement>(null);
   const input = ref ?? own;
@@ -108,6 +110,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
       return;
     }
     setSuggesting(true);
+    onSuggesting?.(true);
     try {
       const suggested = (await suggestion.run()).trim();
       if (suggested.length > 0) {
@@ -121,6 +124,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
       notify("error", `Could not suggest a value: ${errorMessage(error)}`);
     } finally {
       setSuggesting(false);
+      onSuggesting?.(false);
     }
   };
 

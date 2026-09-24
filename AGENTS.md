@@ -80,7 +80,9 @@ others.
   process (the budget is commented in `repository.ts`).
 - `Repository` is the single source of truth for the git pane and the terminals; every action goes
   through `Repository.runAction` (renderer: `BranchActions.run`).
-- Remote commands run with `NETWORK_ENV`. **TET writes nothing into the credential helper.**
+- Remote commands run with `NETWORK_ENV`. **TET writes into no credential helper itself**: a login
+  typed into tet reaches git through askpass (`GitLoginStore.run`), and git stores it in the
+  user's helper; where there is none, tet keeps it sealed in `~/.tet/git-logins.json`.
 - tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
 - A linked worktree is a project of its own, indented under its main worktree's row
   (`Project.mainPath`) and listed in the branch tree's WORKTREES (`RepositoryState.worktrees`) —

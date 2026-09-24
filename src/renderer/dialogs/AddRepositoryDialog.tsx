@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   AddRepositoryResult,
+  GitLogin,
   Project,
   ProviderAccount,
   ProviderId,
   RemoteRepository
 } from "../../shared/types";
+import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
 import { DialogFrame } from "../ui/DialogFrame";
@@ -38,20 +40,6 @@ const PROVIDER_OPTIONS = (Object.keys(PROVIDER_LABEL) as ProviderId[]).map((valu
 function cloneFolder(url: string): string {
   const segment = url.replace(/[/\\]+$/, "").split(/[/\\:]/).pop() ?? "";
   return segment.replace(/\.git$/, "");
-}
-
-/** An http url's host, or "". */
-function hostOf(url: string): string {
-  try {
-    return new URL(url.trim()).host;
-  } catch {
-    return "";
-  }
-}
-
-/** A guess by name; a self-hosted host gives nothing away. */
-function guessProvider(host: string): ProviderId {
-  return host.includes("gitlab") ? "gitlab" : "github";
 }
 
 /** Which provider a token is for; each validates against its own API. */
@@ -437,67 +425,6 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
   );
 }
 
-type CloneAuthMode = "account" | "token";
-
-const AUTH_MODE_OPTIONS: { value: CloneAuthMode; label: string }[] = [
-  { value: "account", label: "Account" },
-  { value: "token", label: "Token" }
-];
-
-interface CloneAuthProps {
-  /** The stored accounts for this url's host. */
-  accounts: ProviderAccount[];
-  /** Resolved: "token" whenever there is no account to pick. */
-  mode: CloneAuthMode;
-  onMode: (mode: CloneAuthMode) => void;
-  accountId: string | null;
-  onAccount: (accountId: string) => void;
-  provider: ProviderId;
-  onProvider: (provider: ProviderId) => void;
-  token: string;
-  onToken: (token: string) => void;
-}
-
-/** Credentials for a clone that came back `authRequired`: a stored account, or a token typed now
- *  and kept as an account. The switch is drawn only when there is an account to pick. */
-function CloneAuth({
-  accounts,
-  mode,
-  onMode,
-  accountId,
-  onAccount,
-  provider,
-  onProvider,
-  token,
-  onToken
-}: CloneAuthProps) {
-  return (
-    <>
-      {accounts.length > 0 && (
-        <div className="dialog-field">
-          <span>Authenticate with</span>
-          <RadioGroup value={mode} options={AUTH_MODE_OPTIONS} onChange={onMode} />
-        </div>
-      )}
-      {mode === "account" ? (
-        <div className="dialog-field">
-          <span>Account</span>
-          <RadioGroup
-            value={accountId ?? ""}
-            options={accounts.map((account) => ({ value: account.id, label: account.user }))}
-            onChange={onAccount}
-          />
-        </div>
-      ) : (
-        <>
-          <ProviderPicker provider={provider} onPick={onProvider} />
-          <TextField label="Personal access token" type="password" value={token} onChange={onToken} />
-        </>
-      )}
-    </>
-  );
-}
-
 interface AddRepositoryDialogProps {
   onAdded: (project: Project) => void;
   onClose: () => void;
@@ -511,67 +438,52 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   const [directory, setDirectory] = useState("");
   /** null follows the url; a string is the user's and stays. */
   const [name, setName] = useState<string | null>(null);
-  /** The account authenticating the clone: the remote tab's row, or CloneAuth's pick. */
+  /** The account authenticating the clone: the remote tab's row. */
   const [accountId, setAccountId] = useState<string | null>(null);
-  /** null until a clone asked for credentials, then this host's accounts (maybe none). */
-  const [authAccounts, setAuthAccounts] = useState<ProviderAccount[] | null>(null);
-  const [authMode, setAuthMode] = useState<CloneAuthMode>("account");
-  const [token, setToken] = useState("");
-  const [tokenProvider, setTokenProvider] = useState<ProviderId>("github");
+  /** null until a clone wanted a login (`loginUrl`), then the url it wants one for. */
+  const [loginUrl, setLoginUrl] = useState<string | null>(null);
+  const [login, setLogin] = useState<GitLogin>({ username: "", password: "" });
   const [busy, setBusy] = useState(false);
   /** What refused the add, above the buttons: which field is to blame depends on the tab — a url,
    *  a path, a folder name — so none of them carries it. Cleared on the next try and on a tab
    *  switch, both of which make it wrong. */
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const firstField = useRef<HTMLInputElement>(null);
+  const loginField = useRef<HTMLInputElement>(null);
 
   // Focus the current mode's first field.
   useEffect(() => {
     firstField.current?.focus();
   }, [mode]);
 
+  // The login's first field, once the clone asks for it.
+  useEffect(() => {
+    loginField.current?.focus();
+  }, [loginUrl]);
+
   useEscape(onClose);
 
   const folderName = name ?? cloneFolder(url.trim());
-  // With no account for this host, the token applies whatever the switch says.
-  const authWith: CloneAuthMode = authAccounts?.length ? authMode : "token";
-  /** True while no credentials are asked; otherwise the chosen half must be filled in. */
-  const authAnswered =
-    authAccounts === null || (authWith === "token" ? token.trim() !== "" : accountId !== null);
   const ready =
     mode === "clone"
-      ? url.trim() !== "" && directory.trim() !== "" && folderName.trim() !== "" && authAnswered
+      ? url.trim() !== "" &&
+        directory.trim() !== "" &&
+        folderName.trim() !== "" &&
+        (loginUrl === null || loginReady(login))
       : mode === "add"
         ? directory.trim() !== ""
         : mode === "create"
           ? directory.trim() !== "" && folderName.trim() !== ""
           : false;
 
-  /** Shows the credentials block: this host's accounts, and a guessed provider for the token.
-   *  Read on demand, not kept current. */
-  const askForCredentials = async (): Promise<void> => {
-    const host = hostOf(url);
-    const stored = await window.tet.providers.accounts();
-    const matching = stored.filter((account) => account.host === host);
-    setAuthAccounts(matching);
-    setAccountId(matching[0]?.id ?? null);
-    setAuthMode("account");
-    setTokenProvider(guessProvider(host));
-  };
-
-  const cloneRepository = async (): Promise<AddRepositoryResult> => {
-    let id = accountId ?? undefined;
-    if (authAccounts !== null && authWith === "token") {
-      // Validated and stored first: this replaces an expired account's token, and a rejected one
-      // fails here, before git runs again.
-      const added = await window.tet.providers.addAccount(tokenProvider, hostOf(url), token.trim());
-      if (!added.account) {
-        return { error: added.error ?? "The token could not be verified", authRequired: true };
-      }
-      id = added.account.id;
-    }
-    return window.tet.projects.clone(url.trim(), directory.trim(), folderName.trim(), id);
-  };
+  const cloneRepository = (): Promise<AddRepositoryResult> =>
+    window.tet.projects.clone(
+      url.trim(),
+      directory.trim(),
+      folderName.trim(),
+      accountId ?? undefined,
+      loginUrl === null ? undefined : { username: login.username.trim(), password: login.password }
+    );
 
   const submit = async (): Promise<void> => {
     setBusy(true);
@@ -590,8 +502,11 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
       }
       setRefused(result.error ?? "The repository could not be added");
       // Only the first time: a second failure must not discard what was typed.
-      if (result.authRequired && authAccounts === null) {
-        await askForCredentials();
+      if (result.loginUrl !== undefined && loginUrl === null) {
+        setLoginUrl(result.loginUrl);
+        setLogin(emptyLogin(result.loginUrl));
+        // An account's token the host refused: the login typed next goes in its stead.
+        setAccountId(null);
       }
     } finally {
       setBusy(false);
@@ -610,9 +525,8 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
     setUrl(repo.cloneUrl);
     setName(repo.name);
     setAccountId(fromAccountId);
-    // A block left from a previous url would demand a token instead of using the row's account.
-    setAuthAccounts(null);
-    setToken("");
+    // A login asked for a previous url would be sent instead of the row's account.
+    setLoginUrl(null);
     setMode("clone");
   };
 
@@ -649,27 +563,18 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
             placeholder="https://github.com/owner/repository.git"
             onChange={(next) => {
               setUrl(next);
-              // Hand-edited: the remote tab's account must not carry over to a new host.
+              // Hand-edited: the remote tab's account, or a login asked for, must not carry over to a
+              // new host.
               setAccountId(null);
-              setAuthAccounts(null);
-              setToken("");
+              setLoginUrl(null);
             }}
             ref={firstField}
           />
           <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={setDirectory} />
           <TextField label="Folder name" value={folderName} onChange={setName} />
-          {authAccounts !== null && (
-            <CloneAuth
-              accounts={authAccounts}
-              mode={authWith}
-              onMode={setAuthMode}
-              accountId={accountId}
-              onAccount={setAccountId}
-              provider={tokenProvider}
-              onProvider={setTokenProvider}
-              token={token}
-              onToken={setToken}
-            />
+          {loginUrl !== null && (
+            // Its failure shows above the buttons, as the tab's others do (`refused`).
+            <GitLoginFields url={loginUrl} value={login} onChange={setLogin} busy={busy} field={loginField} />
           )}
         </>
       )}

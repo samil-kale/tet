@@ -47,7 +47,8 @@ const api: TETApi = {
     pickFile: (title) => ipcRenderer.invoke("projects:pick-file", title),
     directoryToRemember: (directory) => ipcRenderer.invoke("projects:directory-to-remember", directory),
     open: (directory) => ipcRenderer.invoke("projects:open-path", directory),
-    clone: (url, directory, name, accountId) => ipcRenderer.invoke("projects:clone", url, directory, name, accountId),
+    clone: (url, directory, name, accountId, login) =>
+      ipcRenderer.invoke("projects:clone", url, directory, name, accountId, login),
     create: (directory, name) => ipcRenderer.invoke("projects:create", directory, name),
     remove: (projectId) => ipcRenderer.invoke("projects:remove", projectId),
     addWorktree: (projectId, branch) => ipcRenderer.invoke("projects:worktree-add", projectId, branch),
@@ -74,24 +75,25 @@ const api: TETApi = {
     state: (projectId) => ipcRenderer.invoke("repo:state", projectId),
     refresh: (projectId) => ipcRenderer.invoke("repo:refresh", projectId),
     checkout: (projectId, target) => ipcRenderer.invoke("repo:checkout", projectId, target),
-    fetch: (projectId) => ipcRenderer.invoke("repo:fetch", projectId),
-    pull: (projectId) => ipcRenderer.invoke("repo:pull", projectId),
-    push: (projectId) => ipcRenderer.invoke("repo:push", projectId),
+    fetch: (projectId, login) => ipcRenderer.invoke("repo:fetch", projectId, login),
+    pull: (projectId, login) => ipcRenderer.invoke("repo:pull", projectId, login),
+    push: (projectId, login) => ipcRenderer.invoke("repo:push", projectId, login),
     setRemoteUrl: (projectId, remote, url) => ipcRenderer.invoke("repo:set-remote-url", projectId, remote, url),
     createBranch: (projectId, name, startPoint) =>
       ipcRenderer.invoke("repo:create-branch", projectId, name, startPoint),
     renameBranch: (projectId, from, to) => ipcRenderer.invoke("repo:rename-branch", projectId, from, to),
     deleteBranch: (projectId, name, onRemote) =>
       ipcRenderer.invoke("repo:delete-branch", projectId, name, onRemote),
-    deleteRemoteBranch: (projectId, remote, name) =>
-      ipcRenderer.invoke("repo:delete-remote-branch", projectId, remote, name),
+    deleteRemoteBranch: (projectId, remote, name, login) =>
+      ipcRenderer.invoke("repo:delete-remote-branch", projectId, remote, name, login),
     merge: (projectId, ref) => ipcRenderer.invoke("repo:merge", projectId, ref),
     rebase: (projectId, ref, confirmed) => ipcRenderer.invoke("repo:rebase", projectId, ref, confirmed),
     abort: (projectId) => ipcRenderer.invoke("repo:abort", projectId),
     createTag: (projectId, name, target, message) =>
       ipcRenderer.invoke("repo:create-tag", projectId, name, target, message),
-    pushTag: (projectId, name) => ipcRenderer.invoke("repo:push-tag", projectId, name),
+    pushTag: (projectId, name, login) => ipcRenderer.invoke("repo:push-tag", projectId, name, login),
     deleteTag: (projectId, name, onRemote) => ipcRenderer.invoke("repo:delete-tag", projectId, name, onRemote),
+    deleteRemoteTag: (projectId, name, login) => ipcRenderer.invoke("repo:delete-remote-tag", projectId, name, login),
     checkoutTag: (projectId, name) => ipcRenderer.invoke("repo:checkout-tag", projectId, name),
     commitAll: (projectId, message) => ipcRenderer.invoke("repo:commit-all", projectId, message),
     commitPaths: (projectId, message, paths) => ipcRenderer.invoke("repo:commit-paths", projectId, message, paths),

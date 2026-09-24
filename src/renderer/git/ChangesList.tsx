@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { syncRemote } from "../../shared/types";
-import type { ChangeStatus, FileChange, Project, RepositoryState } from "../../shared/types";
+import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import type { FileAct, FileAsk } from "./run-action";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, filled, prompt } from "../ui/Dialog";
+import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { isMarkdown } from "../diff/diff-highlight";
@@ -130,6 +131,15 @@ export async function askCommit(
       ? `Also push ${state.head} to ${remote} and track it`
       : `Also push to ${state.upstream}`
     : undefined;
+  /** What Commit ran, held to ask for the push's login once the commit's question is gone — only
+   *  one question is up at a time, and Escape may have closed it while the push still ran. */
+  const running: { submitted?: Promise<GitActionResult> } = {};
+  const commitAndPush = async (message: string, push: boolean): Promise<GitActionResult> => {
+    const committed = await (paths
+      ? window.tet.repository.commitPaths(project.id, message, paths)
+      : window.tet.repository.commitAll(project.id, message));
+    return committed.ok && push ? window.tet.repository.push(project.id) : committed;
+  };
   await prompt({
     title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
     detail: !paths
@@ -140,7 +150,7 @@ export async function askCommit(
     value: { message: "", push: false },
     confirmLabel: "Commit",
     ready: ({ message }) => filled(message),
-    render: ({ value, onChange, error, busy, field }) => (
+    render: ({ value, onChange, error, busy, field, hold }) => (
       <>
         <SuggestField
           label="Message"
@@ -153,19 +163,27 @@ export async function askCommit(
           disabled={busy}
           ref={field}
           error={error}
+          onSuggesting={hold}
         />
         {pushLabel && <Checkbox label={pushLabel} checked={value.push} onChange={(push) => onChange({ ...value, push })} />}
       </>
     ),
-    // What git refused — an empty commit, a hook's veto — at the message it was typed for.
-    submit: ({ message, push }) =>
-      ask(async () => {
-        const committed = await (paths
-          ? window.tet.repository.commitPaths(project.id, message.trim(), paths)
-          : window.tet.repository.commitAll(project.id, message.trim()));
-        return committed.ok && push ? window.tet.repository.push(project.id) : committed;
-      })
+    // What git refused — an empty commit, a hook's veto — at the message it was typed for. Not a
+    // push wanting a login: the commit stands, and the login is asked for next.
+    submit: ({ message, push }) => {
+      running.submitted = commitAndPush(message.trim(), push);
+      return ask(async () => {
+        const result = await running.submitted!;
+        return result.loginUrl === undefined ? result : { ok: true };
+      });
+    }
   });
+  const result = await running.submitted;
+  if (result?.loginUrl !== undefined) {
+    await askLogin(result.loginUrl, result.error ?? "Push failed", (login) =>
+      ask(() => window.tet.repository.push(project.id, login))
+    );
+  }
 }
 
 /** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */

@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
+import { GitLoginStore } from "./git-logins";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
@@ -209,6 +210,7 @@ installUncaughtHandler(path.join(dataRoot, "errors.log"), notice);
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
+const logins = new GitLoginStore(dataRoot);
 const sbxLocal = new SbxLocalStore(dataRoot);
 const environment = new EnvStore(dataRoot);
 // Read at every spawn, so a restarted tab sees what was saved meanwhile.
@@ -255,7 +257,8 @@ const repositories = new RepositoryManager(
       .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
   },
   (projectId) => send("repo:files-changed", { projectId }),
-  (projectId, path) => send("repo:file-changed", { projectId, path })
+  (projectId, path) => send("repo:file-changed", { projectId, path }),
+  logins
 );
 const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (projectId, tabs) => {
@@ -603,6 +606,7 @@ if (!app.requestSingleInstanceLock()) {
       store,
       settings,
       accounts,
+      logins,
       sbxLocal,
       environment,
       envRequests,

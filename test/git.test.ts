@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { before, describe, it } from "node:test";
@@ -15,6 +16,7 @@ import {
   ensureAskpass,
   fastForwardBranches,
   fetch,
+  hasCredentialHelper,
   ignorePath,
   isRepository,
   listIgnored,
@@ -579,19 +581,128 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
   });
 });
 
-describe("a clone with an account's token", () => {
-  it("answers git's questions from a script in the folder it is given", async () => {
+describe("the askpass script handing git a login", () => {
+  /** git asking the script for what no helper answers, as a command over https does. */
+  async function fill(question: string, origin: string, config: string[] = []): Promise<ReturnType<typeof spawnSync>> {
     const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-askpass-test-")), "askpass");
     const askpass = await ensureAskpass(dir);
     assert.equal(path.dirname(askpass), dir);
-    // git asks the script for what no helper answers, the way a clone over https does.
-    const fill = spawnSync("git", ["-c", "credential.helper=", "credential", "fill"], {
-      input: "protocol=https\nhost=example.invalid\n\n",
+    return spawnSync("git", ["-c", "credential.helper=", ...config, "credential", "fill"], {
+      input: question,
       encoding: "utf8",
-      env: { ...process.env, GIT_ASKPASS: askpass, GIT_TERMINAL_PROMPT: "0", TET_ASKPASS_USER: "user", TET_ASKPASS_TOKEN: "token" }
+      env: {
+        ...process.env,
+        GIT_ASKPASS: askpass,
+        GIT_TERMINAL_PROMPT: "0",
+        LC_ALL: "C",
+        TET_ASKPASS_ORIGIN: origin,
+        TET_ASKPASS_USER: "user",
+        TET_ASKPASS_TOKEN: "token"
+      }
     });
-    assert.equal(fill.status, 0, fill.stderr);
-    assert.match(fill.stdout, /^username=user$/m);
-    assert.match(fill.stdout, /^password=token$/m);
+  }
+
+  it("answers git's questions for the origin it is given", async () => {
+    const answer = await fill("protocol=https\nhost=example.invalid\n\n", "https://example.invalid");
+    assert.equal(answer.status, 0, String(answer.stderr));
+    assert.match(String(answer.stdout), /^username=user$/m);
+    assert.match(String(answer.stdout), /^password=token$/m);
+  });
+
+  it("answers another host nothing: a submodule, a pushurl or a redirect gets no login", async () => {
+    const answer = await fill("protocol=https\nhost=elsewhere.invalid\n\n", "https://example.invalid");
+    assert.notEqual(answer.status, 0);
+    assert.doesNotMatch(String(answer.stdout), /token/);
+    const port = await fill("protocol=https\nhost=example.invalid:8443\n\n", "https://example.invalid");
+    assert.notEqual(port.status, 0, "another port is another origin");
+  });
+
+  it("answers a host spelt in capitals, or with its default port, in the remote's url", async () => {
+    const capitals = await fill("protocol=https\nhost=Example.Invalid\n\n", "https://example.invalid");
+    assert.equal(capitals.status, 0, String(capitals.stderr));
+    assert.match(String(capitals.stdout), /^username=user$/m);
+    const port = await fill("protocol=https\nhost=example.invalid:443\n\n", "https://example.invalid");
+    assert.equal(port.status, 0, String(port.stderr));
+    assert.match(String(port.stdout), /^username=user$/m);
+  });
+
+  it("answers a question naming the path too, as credential.useHttpPath makes git ask", async () => {
+    const answer = await fill("protocol=https\nhost=example.invalid\npath=team/app.git\n\n", "https://example.invalid", [
+      "-c",
+      "credential.useHttpPath=true"
+    ]);
+    assert.equal(answer.status, 0, String(answer.stderr));
+    assert.match(String(answer.stdout), /^username=user$/m);
+  });
+
+  it("hands the password to a password question, whatever the username holds", async () => {
+    // git asks only for the password of a username it knows: "Password for 'https://jusername@...'".
+    const answer = await fill("protocol=https\nhost=example.invalid\nusername=jusername\n\n", "https://example.invalid");
+    assert.equal(answer.status, 0, String(answer.stderr));
+    assert.match(String(answer.stdout), /^password=token$/m);
+  });
+});
+
+describe("a login for an http remote", () => {
+  /** An http remote refusing every login, which records the ones it was offered. */
+  async function refusingRemote(): Promise<{ url: string; offered: string[]; close: () => void }> {
+    const offered: string[] = [];
+    const server = http.createServer((request, response) => {
+      const auth = request.headers.authorization;
+      if (auth?.startsWith("Basic ")) {
+        offered.push(Buffer.from(auth.slice("Basic ".length), "base64").toString());
+      }
+      response.writeHead(401, { "WWW-Authenticate": 'Basic realm="tet"' });
+      response.end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as { port: number };
+    return { url: `http://127.0.0.1:${port}/repo.git`, offered, close: () => server.close() };
+  }
+
+  function repositoryWithRemote(url: string): string {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-login-test-"));
+    git(cwd, "init", "-q");
+    git(cwd, "remote", "add", "origin", url);
+    return cwd;
+  }
+
+  const askpassDir = (): string => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-askpass-test-")), "askpass");
+
+  it("hands git the login through askpass, and says a refused one wanted a login", async () => {
+    const remote = await refusingRemote();
+    try {
+      const cwd = repositoryWithRemote(remote.url);
+      const login = { username: "user", password: "token", askpassDir: askpassDir(), origin: new URL(remote.url).origin };
+      const fetched = await fetch(cwd, "origin", login);
+      assert.equal(fetched.ok, false);
+      assert.equal(fetched.authRequired, true);
+      assert.deepEqual(remote.offered, ["user:token"]);
+    } finally {
+      remote.close();
+    }
+  });
+
+  it("asks the user's credential helper first, with no helper removed", async () => {
+    const remote = await refusingRemote();
+    try {
+      const cwd = repositoryWithRemote(remote.url);
+      git(cwd, "config", "credential.helper", "!f() { echo username=helper; echo password=kept; }; f");
+      const login = { username: "user", password: "token", askpassDir: askpassDir(), origin: new URL(remote.url).origin };
+      await fetch(cwd, "origin", login);
+      assert.deepEqual(remote.offered, ["helper:kept"], "the helper answered, so askpass was never asked");
+    } finally {
+      remote.close();
+    }
+  });
+
+  it("tells whether git has a credential helper for a url", async () => {
+    const cwd = repositoryWithRemote("https://example.invalid/repo.git");
+    assert.equal(await hasCredentialHelper(cwd, "https://example.invalid/repo.git"), false);
+    git(cwd, "config", "credential.https://other.invalid.helper", "store");
+    assert.equal(await hasCredentialHelper(cwd, "https://example.invalid/repo.git"), false, "another host's");
+    assert.equal(await hasCredentialHelper(cwd, "https://other.invalid/repo.git"), true);
+    git(cwd, "config", "credential.helper", "store");
+    assert.equal(await hasCredentialHelper(cwd, "https://example.invalid/repo.git"), true);
   });
 });

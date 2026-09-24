@@ -16,6 +16,7 @@ import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/exten
 import { systemPrompt } from "../src/main/agents/system-prompt";
 import { machineSets } from "../src/main/env-names";
 import { EnvRequests, EnvStore } from "../src/main/environment";
+import { GitLoginStore } from "../src/main/git-logins";
 import type { EnvRequest } from "../src/shared/types";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
@@ -34,6 +35,7 @@ import {
   sandboxEnv,
   sandboxName,
   saveSbxConfig,
+  sbxVersionSupported,
   secretPlaceholder
 } from "../src/main/sbx";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
@@ -49,7 +51,7 @@ import { THEMES } from "../src/shared/themes";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { ControlRequest } from "../src/shared/control";
 import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
-import type { SbxPort, SbxProjectConfig } from "../src/shared/types";
+import type { SbxPath, SbxPort, SbxProjectConfig } from "../src/shared/types";
 import { eventually } from "./helpers";
 
 /** The small measured pieces, each one edit away from silently wrong. */
@@ -264,26 +266,18 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(toContainerPath("/Users/saka/project"), "/Users/saka/project");
   });
 
-  it("mounts rw bare (sbx maps it to the same path itself), ro with an explicit :ro target", () => {
+  it("mounts at the container path, :ro for read-only, and unmounts without the access", () => {
     const repo = path.join(os.tmpdir(), "repo");
     const target = toContainerPath(repo);
-    assert.deepEqual(pathMountSpecs({ path: repo, access: "rw" }), { mount: repo, unmount: repo, other: `${repo}:${target}:ro` });
-    assert.deepEqual(pathMountSpecs({ path: repo, access: "ro" }), {
-      mount: `${repo}:${target}:ro`,
-      unmount: `${repo}:${target}`,
-      other: repo
-    });
+    assert.deepEqual(pathMountSpecs({ path: repo, access: "rw" }), { mount: `${repo}:${target}`, unmount: `${repo}:${target}` });
+    assert.deepEqual(pathMountSpecs({ path: repo, access: "ro" }), { mount: `${repo}:${target}:ro`, unmount: `${repo}:${target}` });
   });
 
   it("spells a single file exactly like a folder — sbx mounts either in both forms", () => {
     const file = path.join(os.tmpdir(), "repo", ".npmrc");
     const target = toContainerPath(file);
-    assert.deepEqual(pathMountSpecs({ path: file, access: "rw" }), { mount: file, unmount: file, other: `${file}:${target}:ro` });
-    assert.deepEqual(pathMountSpecs({ path: file, access: "ro" }), {
-      mount: `${file}:${target}:ro`,
-      unmount: `${file}:${target}`,
-      other: file
-    });
+    assert.deepEqual(pathMountSpecs({ path: file, access: "rw" }), { mount: `${file}:${target}`, unmount: `${file}:${target}` });
+    assert.deepEqual(pathMountSpecs({ path: file, access: "ro" }), { mount: `${file}:${target}:ro`, unmount: `${file}:${target}` });
   });
 
   it("stores a folder under the home as ~/…, and anything else as typed", () => {
@@ -299,14 +293,17 @@ describe("sbx sandbox naming and mounts", () => {
 
   it("normalizes a typed host path (trimmed, ~ expanded) before building its mount spec", () => {
     const data = path.join(os.tmpdir(), "data");
-    assert.equal(pathMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "rw" }).mount, data);
+    assert.equal(pathMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "rw" }).unmount, `${data}:${toContainerPath(data)}`);
     const home = path.join(os.homedir(), "data");
-    assert.equal(pathMountSpecs({ path: "~/data/", access: "rw" }).mount, home);
+    assert.equal(pathMountSpecs({ path: "~/data/", access: "rw" }).unmount, `${home}:${toContainerPath(home)}`);
   });
 
   it("mounts tet's own dir live — agentDir read-write, nothing else", () => {
     const agentDir = path.join(os.tmpdir(), "agents", "claude", "p");
-    assert.deepEqual(fixedMountSpecs({ agentDir }), [agentDir]);
+    assert.deepEqual(
+      fixedMountSpecs({ agentDir }).map((spec) => spec.mount),
+      [`${agentDir}:${toContainerPath(agentDir)}`]
+    );
   });
 });
 
@@ -365,6 +362,8 @@ describe("saving an sbx config", () => {
     allowedHosts?: string[];
     /** More sandboxes `ls` lists, each with the project's folder unless it names another. */
     others?: { name: string; workspaces?: string[] }[];
+    /** `inspect --json`'s `runtime_mounts`. */
+    mounts?: object[];
   }): { dir: string; projectPath: string } {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
     const projectPath = path.join(dir, "repo");
@@ -391,6 +390,8 @@ if (args[0] === "ls") {
   process.exit(allowed ? 0 : 1);
 } else if (args[0] === "policy") {
   process.stdout.write(JSON.stringify({ rules: [] }));
+} else if (args[0] === "inspect") {
+  process.stdout.write(JSON.stringify({ name: args[1], runtime_mounts: answers.mounts ?? [] }));
 } else if (args[0] === "ports" && args[2] === "--json") {
   process.stdout.write(JSON.stringify(answers.published));
 } else if (args[0] === "secret" && args[1] === "ls") {
@@ -478,6 +479,19 @@ if (args[0] === "ls") {
   it("does not start the sandbox where no port is configured and none was", async () => {
     const { calls } = await save({ has: [], before: [], now: [] });
     assert.deepEqual(calls, ["ls --json", "policy ls --type network --include-inactive --json"]);
+  });
+
+  it("unmounts a dropped path the sandbox holds, without starting it, and leaves one it does not hold alone", async () => {
+    // Two folders that exist: only what exists is a grant.
+    const held: SbxPath = { path: os.tmpdir(), access: "rw" };
+    const unheld: SbxPath = { path: os.homedir(), access: "ro" };
+    const { dir, projectPath } = fakeSbx({ published: [], mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }] });
+    await writeSbxConfig(projectPath, { ...config([]), paths: [held, unheld] });
+    const { result, calls } = await withSbx(dir, () =>
+      saveSbxConfig(projectPath, projectId, config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+    );
+    assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
+    assert.deepEqual([result.refused, result.config.paths], [{}, []]);
   });
 
   it("brings the sandbox's secrets in line, values through stdin, leaving one set by hand alone", async () => {
@@ -1051,6 +1065,19 @@ describe("sbx's governance line", () => {
   });
 });
 
+describe("sbx's version", () => {
+  it("is supported from 0.45 on, where mounts survive a stop", () => {
+    for (const [printed, supported] of [
+      ["0.42.1", false],
+      ["0.45.0", true],
+      ["0.46.0", true],
+      ["1.0.0", true]
+    ] as const) {
+      assert.equal(sbxVersionSupported(printed), supported, printed);
+    }
+  });
+});
+
 describe("stripping escape sequences", () => {
   it("removes CSI with any parameter bytes, OSC ended either way and two-byte escapes", () => {
     const text = "\x1b[1;31mred\x1b[0m \x1b[>4;1mkeys\x1b[<u \x1b]0;title\x07a\x1b]8;;url\x1b\\b \x1bMc\x1b[?25h";
@@ -1061,6 +1088,78 @@ describe("stripping escape sequences", () => {
 describe("the quoting helpers", () => {
   it("make any value one literal word in their shell", () => {
     assert.equal(shellSingleQuote("it's $HOME"), `'it'\\''s $HOME'`);
+  });
+});
+
+describe("the git logins kept in TET", () => {
+  // "sealed:" stands in for the OS's encryption, as for the environment variables above.
+  const sealing = (available: boolean): void => {
+    Object.assign(safeStorage, {
+      isEncryptionAvailable: () => available,
+      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
+      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
+    });
+  };
+  const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-logins-"));
+
+  it("keep one login per origin, never in the clear", () => {
+    sealing(true);
+    const root = tempRoot();
+    const store = new GitLoginStore(root);
+    store.set("https://git.example.com/team/app.git", { username: "old", password: "one" });
+    store.set("https://git.example.com:443/other.git", { username: "saka", password: "two" });
+    assert.deepEqual(store.get("https://git.example.com/elsewhere.git"), { username: "saka", password: "two" });
+    assert.equal(store.get("https://git.example.com:8443/team/app.git"), undefined, "another port is another origin");
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "git-logins.json"), "utf8"), /"two"/);
+    assert.deepEqual(new GitLoginStore(root).get("https://git.example.com/"), { username: "saka", password: "two" });
+    assert.deepEqual(store.get("https://old@git.example.com/team/app.git"), { username: "old", password: "one" }, "the url's user");
+    assert.equal(store.get("https://nobody@git.example.com/"), undefined, "no login of another user for it");
+    store.delete("https://git.example.com/team/app.git", "saka");
+    assert.deepEqual(store.get("https://git.example.com/team/app.git"), { username: "old", password: "one" });
+    store.delete("https://git.example.com/team/app.git", "old");
+    assert.equal(store.get("https://git.example.com/team/app.git"), undefined);
+  });
+
+  it("keep nothing for an ssh remote, or where the OS offers no encryption", () => {
+    sealing(true);
+    const store = new GitLoginStore(tempRoot());
+    store.set("git@git.example.com:team/app.git", { username: "saka", password: "x" });
+    assert.equal(store.get("git@git.example.com:team/app.git"), undefined);
+    sealing(false);
+    store.set("https://git.example.com/app.git", { username: "saka", password: "x" });
+    assert.equal(store.get("https://git.example.com/app.git"), undefined);
+  });
+
+  it("offer a kept login, and forget it once the host refuses it", async () => {
+    sealing(true);
+    const store = new GitLoginStore(tempRoot());
+    store.set("https://git.example.com/app.git", { username: "saka", password: "revoked" });
+    let offered: string | undefined;
+    const refusing = async (login?: { username: string; password: string }) => {
+      offered = login && `${login.username}:${login.password}`;
+      return { ok: false, error: "Authentication failed", authRequired: true };
+    };
+    const result = await store.run("/nowhere", "https://saka@git.example.com/app.git", undefined, refusing);
+    assert.equal(offered, "saka:revoked");
+    assert.equal(result.loginUrl, "https://saka@git.example.com/app.git");
+    assert.equal(store.get("https://git.example.com/app.git"), undefined);
+
+    // A url with a password of its own: git uses that one, so nothing is offered or asked.
+    store.set("https://git.example.com/app.git", { username: "saka", password: "kept" });
+    offered = "untouched";
+    const withPassword = await store.run("/nowhere", "https://saka:wrong@git.example.com/app.git", undefined, refusing);
+    assert.equal(offered, undefined);
+    assert.equal(withPassword.loginUrl, undefined);
+    assert.equal(store.get("https://git.example.com/app.git")?.password, "kept");
+  });
+
+  it("pass an ssh remote's command through untouched", async () => {
+    const store = new GitLoginStore(tempRoot());
+    const result = await store.run("/nowhere", "git@git.example.com:app.git", undefined, async (login) => ({
+      ok: login === undefined,
+      authRequired: true
+    }));
+    assert.deepEqual(result, { ok: true, authRequired: true }, "no login offered, and none asked for");
   });
 });
 

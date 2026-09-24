@@ -1177,8 +1177,9 @@ export class ProjectSessionManager {
 
   /**
    * A saved command respawns in place (`TerminalSession.restart`). An agent tab with no process
-   * (`stopped`, or `error` incl. a start that gave up) takes the whole start path: mounts do not
-   * survive a sandbox stop, so checks, sandbox and mounts are redone and the session resumed. With
+   * (`stopped`, or `error` incl. a start that gave up) takes the whole start path: the sandbox and
+   * its mounts may have changed outside tet, so checks, sandbox and mounts are redone and the
+   * session resumed. With
    * `running`, a running one quits first, then takes the same path — only the window asks that
    * (the tab menu, the environment dialog), never `tabs-restart`, which would let an agent end
    * another's session or its own. A tab not fitted yet waits for its first fit. False where there

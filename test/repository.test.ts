@@ -4,12 +4,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { shell } from "electron";
+import { safeStorage, shell } from "electron";
+import { GitLoginStore } from "../src/main/git-logins";
+import * as git_ from "../src/main/git/git";
 import { Repository } from "../src/main/git/repository";
 import { readMainWorktree } from "../src/main/git/linked-git-dir";
 import { worktreeBase } from "../src/shared/types";
 import type { FileSearchQuery, FileSearchResult } from "../src/shared/types";
-import { forkGitInProcess, git, initRepository, isolateGitConfig } from "./helpers";
+import { forkGitInProcess, git, initBare, initRepository, isolateGitConfig, serveOverHttp, type HttpRemote } from "./helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
@@ -43,14 +45,19 @@ const trashContents = (): string[] =>
 const opened: Repository[] = [];
 
 /** A started Repository on `dir`, disposed after the file. */
-async function open(dir: string): Promise<Repository> {
+async function open(
+  dir: string,
+  // The remotes are mostly folders, which take no login.
+  logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-")))
+): Promise<Repository> {
   const repository = new Repository(
     { id: path.basename(dir), path: dir, name: path.basename(dir) },
     () => undefined,
     () => undefined,
     () => undefined,
     () => undefined,
-    () => undefined
+    () => undefined,
+    logins
   );
   opened.push(repository);
   await repository.start();
@@ -398,5 +405,144 @@ describe("the Explorer's search, VS Code's search in files", () => {
       2000
     );
     assert.deepEqual(result.files.filter((file) => file.matches.length === 0), []);
+  });
+});
+
+
+describe("a remote over http that wants a login", () => {
+  const login = { username: "saka", password: "right" };
+  // "sealed:" stands in for the OS's encryption, as in pieces.test.ts.
+  before(() => {
+    Object.assign(safeStorage, {
+      isEncryptionAvailable: () => true,
+      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
+      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
+    });
+  });
+
+  /** A repository whose origin is served over http, opened with its own login store. git runs
+   *  against the remote only asynchronously here: a sync spawn would stop the server answering it. */
+  async function openWithHttpRemote(): Promise<{
+    dir: string;
+    bare: string;
+    repository: Repository;
+    logins: GitLoginStore;
+    remote: HttpRemote;
+  }> {
+    const bare = initBare("tet-http-remote-");
+    const remote = await serveOverHttp(bare, login);
+    const dir = initRepository("tet-http-work-");
+    git(dir, "remote", "add", "origin", remote.url);
+    const logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-")));
+    const repository = await open(dir, logins);
+    return { dir, bare, repository, logins, remote };
+  }
+
+  it("asks where git has no login, keeps the one that worked, and uses it from then on", async () => {
+    const { dir, repository, logins, remote } = await openWithHttpRemote();
+    try {
+      const asked = await repository.push();
+      assert.equal(asked.ok, false);
+      assert.equal(asked.loginUrl, remote.url);
+
+      const refused = await repository.push({ username: "saka", password: "wrong" });
+      assert.equal(refused.loginUrl, remote.url, "a wrong login is asked for again");
+      assert.equal(logins.get(remote.url), undefined, "and not kept");
+
+      assert.deepEqual(await repository.push(login), { ok: true });
+      assert.deepEqual(logins.get(remote.url), login, "no credential helper: tet keeps it");
+      assert.equal(git(dir, "rev-parse", "origin/main"), git(dir, "rev-parse", "main"));
+
+      fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
+      git(dir, "add", "b.txt");
+      git(dir, "commit", "-q", "-m", "b");
+      await repository.refresh();
+      assert.deepEqual(await repository.push(), { ok: true }, "the kept login, unasked");
+      assert.deepEqual(await repository.fetch(), { ok: true });
+      assert.deepEqual(await repository.pull(), { ok: true });
+    } finally {
+      remote.close();
+    }
+  });
+
+  it("forgets a kept login the host refuses, and asks again", async () => {
+    const { repository, logins, remote } = await openWithHttpRemote();
+    try {
+      logins.set(remote.url, login);
+      assert.deepEqual(await repository.push(), { ok: true });
+      remote.login.password = "rotated";
+      const asked = await repository.fetch();
+      assert.equal(asked.loginUrl, remote.url);
+      assert.equal(logins.get(remote.url), undefined);
+      assert.deepEqual(await repository.fetch({ username: "saka", password: "rotated" }), { ok: true });
+      assert.equal(logins.get(remote.url)?.password, "rotated");
+    } finally {
+      remote.close();
+      remote.login.password = login.password;
+    }
+  });
+
+  it("leaves a login to the credential helper where there is one", async () => {
+    const { dir, repository, logins, remote } = await openWithHttpRemote();
+    const helperFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-helper-")), "credentials");
+    git(dir, "config", "credential.helper", `store --file=${helperFile.replace(/\\/g, "/")}`);
+    try {
+      assert.equal((await repository.push()).loginUrl, remote.url);
+      assert.deepEqual(await repository.push(login), { ok: true });
+      assert.equal(logins.get(remote.url), undefined, "tet keeps nothing");
+      assert.match(fs.readFileSync(helperFile, "utf8"), /saka:right@127\.0\.0\.1/, "git stored it in the helper");
+      assert.deepEqual(await repository.fetch(), { ok: true }, "the helper answers from then on");
+
+      remote.login.password = "rotated";
+      assert.equal((await repository.fetch()).loginUrl, remote.url);
+      assert.doesNotMatch(fs.readFileSync(helperFile, "utf8"), /saka:right/, "git erased the refused one from the helper");
+    } finally {
+      remote.close();
+      remote.login.password = login.password;
+    }
+  });
+
+  it("tries only the remote half again after a delete that wanted a login", async () => {
+    const { dir, bare, repository, logins, remote } = await openWithHttpRemote();
+    try {
+      logins.set(remote.url, login);
+      git(dir, "tag", "-a", "-m", "v", "v1");
+      assert.deepEqual(await repository.createBranch("gone", "main"), { ok: true });
+      assert.deepEqual(await repository.push(), { ok: true }, "publishes gone, tracking it");
+      assert.deepEqual(await repository.checkout({ name: "main" }), { ok: true });
+      assert.deepEqual(await repository.pushTag("v1"), { ok: true });
+      logins.delete(remote.url, login.username);
+
+      const branch = await repository.deleteBranch("gone", true);
+      assert.equal(branch.loginUrl, remote.url, "the local branch went, its upstream wants a login");
+      assert.deepEqual(await repository.deleteRemoteBranch("origin", "gone", login), { ok: true });
+      assert.deepEqual(logins.get(remote.url), login, "kept again once it worked");
+      logins.delete(remote.url, login.username);
+      const tag = await repository.deleteTag("v1", true);
+      assert.equal(tag.loginUrl, remote.url);
+      assert.deepEqual(await repository.deleteRemoteTag("v1", login), { ok: true });
+      assert.doesNotMatch(git(bare, "for-each-ref"), /refs\/heads\/gone|refs\/tags\/v1/);
+    } finally {
+      remote.close();
+    }
+  });
+
+  it("clones with a login, as the add-repository dialog does", async () => {
+    const bare = initBare("tet-http-clone-remote-");
+    const seed = initRepository("tet-http-seed-");
+    git(seed, "push", "-q", bare, "main");
+    const remote = await serveOverHttp(bare, login);
+    const logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-")));
+    const target = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-http-clone-")), "app");
+    const clone = (typed?: typeof login) =>
+      logins.run(os.homedir(), remote.url, typed, (networkLogin) => git_.clone(remote.url, target, networkLogin));
+    try {
+      assert.equal((await clone()).loginUrl, remote.url);
+      assert.deepEqual(await clone(login), { ok: true });
+      assert.equal(fs.readFileSync(path.join(target, "a.txt"), "utf8"), "committed\n");
+      assert.deepEqual(logins.get(remote.url), login);
+    } finally {
+      remote.close();
+    }
   });
 });

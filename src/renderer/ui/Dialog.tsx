@@ -33,6 +33,8 @@ export interface PromptFields<T> {
   busy: boolean;
   /** For the field the dialog opens focused and selected, and returns to on a refusal. */
   field: RefObject<HTMLInputElement | null>;
+  /** A field still fetching its value (`SuggestField`'s wand) holds the answer back meanwhile. */
+  hold: (held: boolean) => void;
 }
 
 export interface PromptOptions<T> {
@@ -75,6 +77,12 @@ type Pending = Question & { cancel: () => void };
  * click.
  */
 const pending = createStore<Pending | null>(null);
+
+/** Whether a question is up, which a new one would then not be: its caller tells its news another
+ *  way (a notice). */
+export function questionUp(): boolean {
+  return pending.get() !== null;
+}
 
 /** One at a time: the overlay swallows the clicks that could start a second question. */
 function ask<T>(build: (answer: (value: T) => void) => Question, cancelled: T): Promise<T> {
@@ -197,6 +205,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   /** What `submit` refused, handed to the fields; cleared by the next change. */
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const [running, setRunning] = useState(false);
+  const [held, setHeld] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   /** Escape closes the question while `submit` runs: the refusal then has no field to sit at and
    *  falls back to a notice, so it is never lost. */
@@ -246,12 +255,12 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     <Frame
       title={dialog.title}
       confirmLabel={dialog.confirmLabel}
-      disabled={running || !dialog.ready(value)}
+      disabled={running || held || !dialog.ready(value)}
       busy={running}
       onSubmit={() => void submit()}
       onCancel={dialog.cancel}
     >
-      {dialog.render({ value, onChange, error: refused, busy: running, field })}
+      {dialog.render({ value, onChange, error: refused, busy: running, field, hold: setHeld })}
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
     </Frame>
   );

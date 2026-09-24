@@ -4,7 +4,7 @@ import type { AgentInfo, EnvRequest, GitActionResult, Project, RepositoryState, 
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { CommandList } from "./sidebar/CommandList";
-import { notifying, refusal, useStartedHere, type GitRun } from "./git/run-action";
+import { gitRun, useStartedHere, type GitRun } from "./git/run-action";
 import type { BranchActions } from "./git/BranchTree";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
@@ -420,14 +420,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * question first.
    */
   const runBranchAction = useCallback(
-    async (projectId: string, label: string, action: () => Promise<GitActionResult>): Promise<string | undefined> => {
+    async (projectId: string, action: () => Promise<GitActionResult>): Promise<GitActionResult> => {
       if (branchActionsRef.current.has(projectId)) {
-        return "Another command is running in this repository";
+        return { ok: false, error: "Another command is running in this repository" };
       }
       branchActionsRef.current.add(projectId);
       setBranchActions(new Set(branchActionsRef.current));
       try {
-        return refusal(await action(), `${label} failed`);
+        return await action();
       } finally {
         branchActionsRef.current.delete(projectId);
         setBranchActions(new Set(branchActionsRef.current));
@@ -912,8 +912,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     }
   }, [editorTabs, states, fileWrites]);
   const runActiveBranchAction = useCallback(
-    (label: string, action: () => Promise<GitActionResult>): Promise<string | undefined> =>
-      activeProjectId ? runBranchAction(activeProjectId, label, action) : Promise.resolve(undefined),
+    (action: () => Promise<GitActionResult>): Promise<GitActionResult> =>
+      activeProjectId ? runBranchAction(activeProjectId, action) : Promise.resolve({ ok: true }),
     [activeProjectId, runBranchAction]
   );
   /** The git pane's actions, for the project on screen; its own bar shows the ones it started,
@@ -923,8 +923,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     () => ({
       busy: activeProjectId !== null && branchActions.has(activeProjectId),
       startedHere: gitPaneActing,
-      run: notifying(runActiveHere),
-      ask: runActiveBranchAction
+      ...gitRun(runActiveHere, runActiveBranchAction)
     }),
     [branchActions, activeProjectId, gitPaneActing, runActiveHere, runActiveBranchAction]
   );
@@ -932,12 +931,11 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const { startedHere: projectListBusy, start: runProjectListHere } = useStartedHere(runBranchAction);
   /** How the list runs a command in one of its projects (`GitRun`). */
   const runInProject = useCallback(
-    (projectId: string): GitRun => ({
-      run: notifying((label: string, action: () => Promise<GitActionResult>) =>
-        runProjectListHere(projectId, label, action)
+    (projectId: string): GitRun =>
+      gitRun(
+        (action) => runProjectListHere(projectId, action),
+        (action) => runBranchAction(projectId, action)
       ),
-      ask: (label, action) => runBranchAction(projectId, label, action)
-    }),
     [runProjectListHere, runBranchAction]
   );
 

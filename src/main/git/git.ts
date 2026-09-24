@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage } from "../../shared/errors";
+import { urlOrigin } from "../../shared/git-url";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
 import { readLinkedGitDir } from "./linked-git-dir";
 import type {
@@ -12,6 +13,7 @@ import type {
   ChangeStatus,
   FileChange,
   GitActionResult,
+  GitLogin,
   GitOperation,
   HeadBlob,
   RemoteInfo,
@@ -552,18 +554,23 @@ async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout
 
 /** The env of every command reaching a remote. git must never ask for a password: there is no
  *  terminal, and a waiting command holds the repository's one action slot forever. Credentials come
- *  from the user's credential helper or a provider token; tet writes nothing into that helper. */
+ *  from the user's credential helper, else a login typed into tet (`NetworkLogin`), which git then
+ *  stores in that helper itself; tet writes nothing into it. */
 const NETWORK_ENV: NodeJS.ProcessEnv = {
   GIT_TERMINAL_PROMPT: "0",
   // Set but empty: unset, git falls back to the terminal.
   GIT_ASKPASS: "",
   SSH_ASKPASS: "",
+  // Git Credential Manager ignores GIT_TERMINAL_PROMPT and waits on a window of its own (measured:
+  // 86 s until killed, Windows, GCM 2.9). Told never to, it gives up at once, git fails for want of
+  // a login and tet asks; a login that then works through askpass it still stores (measured).
+  GCM_INTERACTIVE: "never",
   // A stalled connection is given up: below 1 KB/s for a minute, git's http transport aborts. The
   // ssh equivalent is in networkEnv.
   GIT_HTTP_LOW_SPEED_LIMIT: "1000",
   GIT_HTTP_LOW_SPEED_TIME: "60",
-  // AUTH_FAILURES matches git's messages as text into `authRequired`, the one thing the add-repository
-  // dialog's CloneAuth acts on, and git translates them (LANG=de_DE: "Authentifizierung fehlgeschlagen").
+  // AUTH_FAILURES matches git's messages as text into `authRequired`, on which tet asks for a login,
+  // and git translates them (LANG=de_DE: "Authentifizierung fehlgeschlagen").
   LC_ALL: "C"
 };
 
@@ -605,38 +612,59 @@ async function networkEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
     : { ...NETWORK_ENV, GIT_SSH_COMMAND: "ssh -oBatchMode=yes -oServerAliveInterval=15 -oServerAliveCountMax=4" };
 }
 
-async function runNetwork(
-  cwd: string,
-  args: string[],
-  env?: NodeJS.ProcessEnv,
-  timeoutMs?: number
-): Promise<GitActionResult> {
-  const result = await run(cwd, args, { ...(await networkEnv(cwd)), ...env }, timeoutMs);
+/** A login typed into tet, or kept by it, for a command's http(s) remote; `askpassDir` is where
+ *  the answering script goes (ensureAskpass). */
+export interface NetworkLogin extends GitLogin {
+  askpassDir: string;
+  /** "https://host[:port]", the only origin askpass answers for (ASKPASS_SCRIPT). */
+  origin: string;
+}
+
+interface NetworkOptions {
+  login?: NetworkLogin;
+  /** For a command nobody waits on (see `git`). */
+  timeoutMs?: number;
+}
+
+/**
+ * The login goes through askpass, which git asks only when no credential helper answered: the
+ * user's own login still comes first. The helpers stay on, so git stores a login that worked in
+ * the user's helper and erases one the host refused, as for any login typed at git's prompt.
+ */
+async function runNetwork(cwd: string, args: string[], { login, timeoutMs }: NetworkOptions = {}): Promise<GitActionResult> {
+  const askpass = login && {
+    GIT_ASKPASS: await ensureAskpass(login.askpassDir),
+    TET_ASKPASS_ORIGIN: login.origin,
+    TET_ASKPASS_USER: login.username,
+    TET_ASKPASS_TOKEN: login.password
+  };
+  const result = await run(cwd, args, { ...(await networkEnv(cwd)), ...askpass }, timeoutMs);
   if (result.ok || !AUTH_FAILURES.some((pattern) => pattern.test(result.error ?? ""))) {
     return result;
   }
   return { ...result, authRequired: true };
 }
 
-/** `--prune`, like GitHub Desktop: a branch deleted on the remote leaves the tree. `timeoutMs` is for
- *  a fetch nobody waits on (see `git`). */
-export function fetch(cwd: string, timeoutMs?: number): Promise<GitActionResult> {
-  return runNetwork(cwd, ["fetch", "--prune"], undefined, timeoutMs);
+/** `--prune`, like GitHub Desktop: a branch deleted on the remote leaves the tree. `remote` names
+ *  the one whose login is given, else git's default. `timeoutMs` is for a fetch nobody waits on. */
+export function fetch(cwd: string, remote?: string, login?: NetworkLogin, timeoutMs?: number): Promise<GitActionResult> {
+  const args = remote === undefined ? ["fetch", "--prune"] : ["fetch", "--prune", "--", remote];
+  return runNetwork(cwd, args, { login, timeoutMs });
 }
 
 /** `git pull`, so the user's configured merge or rebase applies — plus `--ff` where `pull.ff` is
  *  unset, as GitHub Desktop does: without it git refuses to pull into a diverged branch until told
  *  how to reconcile. */
-export async function pull(cwd: string): Promise<GitActionResult> {
+export async function pull(cwd: string, login?: NetworkLogin): Promise<GitActionResult> {
   const pullFF = await git(cwd, ["config", "--get", "pull.ff"]);
-  return runNetwork(cwd, pullFF.code === 0 ? ["pull"] : ["pull", "--ff"]);
+  return runNetwork(cwd, pullFF.code === 0 ? ["pull"] : ["pull", "--ff"], { login });
 }
 
 /** Asks the remote for its HEAD branch again after a pull, as GitHub Desktop does: a clone's
  *  `<remote>/HEAD` never follows a changed default, and a remote added by hand has none. A failure
  *  only leaves the old one. */
-export async function updateRemoteHead(cwd: string, remote: string): Promise<void> {
-  await runNetwork(cwd, ["remote", "set-head", "--auto", remote]);
+export async function updateRemoteHead(cwd: string, remote: string, login?: NetworkLogin): Promise<void> {
+  await runNetwork(cwd, ["remote", "set-head", "--auto", remote], { login });
 }
 
 /**
@@ -667,20 +695,29 @@ export function push(
   cwd: string,
   remote: string,
   branch: string,
-  upstreamBranch: string | undefined
+  upstreamBranch: string | undefined,
+  login?: NetworkLogin
 ): Promise<GitActionResult> {
   return runNetwork(
     cwd,
     upstreamBranch === undefined
       ? ["push", "--set-upstream", "--", remote, branch]
-      : ["push", "--", remote, `${branch}:${upstreamBranch}`]
+      : ["push", "--", remote, `${branch}:${upstreamBranch}`],
+    { login }
   );
 }
 
 /** Clones into `directory`, which git creates with its parents, refusing a non-empty one. The cwd
  *  only anchors a relative path. */
-export function clone(url: string, directory: string): Promise<GitActionResult> {
-  return runNetwork(os.homedir(), ["clone", "--", url, directory]);
+export function clone(url: string, directory: string, login?: NetworkLogin): Promise<GitActionResult> {
+  return runNetwork(os.homedir(), ["clone", "--", url, directory], { login });
+}
+
+/** Whether git has a credential helper for this url, which then keeps a login that worked; tet
+ *  keeps it only where there is none (GitLoginStore). An empty value clears the list. */
+export async function hasCredentialHelper(cwd: string, url: string): Promise<boolean> {
+  const helper = await git(cwd, ["config", "--get-urlmatch", "credential.helper", url]);
+  return helper.code === 0 && helper.stdout.trim() !== "";
 }
 
 /** `git init`, which creates the folder with its parents, like clone. */
@@ -689,43 +726,60 @@ export function init(directory: string): Promise<GitActionResult> {
 }
 
 /**
- * A GIT_ASKPASS script answering from two environment variables (VS Code's askpass.sh pattern). One
- * sh script everywhere: Git for Windows runs a non-exe askpass through its own sh. No secret in it.
+ * A GIT_ASKPASS script answering from environment variables (VS Code's askpass.sh pattern). One sh
+ * script everywhere: Git for Windows runs a non-exe askpass through its own sh. No secret in it.
+ * git's question is `$1`: "Username for 'https://host': " or "Password for 'https://user@host': ",
+ * the url with its path under `credential.useHttpPath`, and the host as the remote's url spells
+ * it, while TET_ASKPASS_ORIGIN (urlOrigin) is lowercase without a default port. It answers only
+ * for that origin: a
+ * submodule, a pushurl or a redirect on another host gets nothing, and git fails there for want of
+ * a login rather than being handed one for elsewhere.
  */
 const ASKPASS_SCRIPT = [
   "#!/bin/sh",
-  'case "$1" in',
-  '*sername*) printf \'%s\\n\' "$TET_ASKPASS_USER" ;;',
-  '*) printf \'%s\\n\' "$TET_ASKPASS_TOKEN" ;;',
+  "url=${1#*\"'\"}",
+  "url=${url%\"'\"*}",
+  "host=${url#*://}",
+  "host=${host%%/*}",
+  "host=${host#*@}",
+  "origin=$(printf '%s' \"${url%%://*}://$host\" | tr '[:upper:]' '[:lower:]')",
+  "case \"$origin\" in https://*:443) origin=${origin%:443} ;; http://*:80) origin=${origin%:80} ;; esac",
+  "[ \"$origin\" = \"$TET_ASKPASS_ORIGIN\" ] || exit 1",
+  "case \"$1\" in",
+  "Username*) printf '%s\\n' \"$TET_ASKPASS_USER\" ;;",
+  "Password*) printf '%s\\n' \"$TET_ASKPASS_TOKEN\" ;;",
+  "*) exit 1 ;;",
   "esac",
   ""
 ].join("\n");
 
-/** Written into `dir` (tet's data folder) on every call — a clone is rare. Not the temp directory:
- *  git executes the script itself, which a `noexec` /tmp refuses (measured), and a long-running
- *  tet would find it cleaned away. */
+/** The script in `dir` (tet's data folder), written when missing or from another tet — not on
+ *  every call: on Windows a rename over the script while an sh reads it fails, and two commands
+ *  reaching remotes at once (the periodic fetches) would race. Not the temp directory: git executes
+ *  the script itself, which a `noexec` /tmp refuses (measured), and a long-running tet would find it
+ *  cleaned away. */
 export async function ensureAskpass(dir: string): Promise<string> {
-  await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, "askpass.sh");
-  await writeFileAtomic(file, ASKPASS_SCRIPT, { encoding: "utf8", mode: 0o755 });
+  const current = await fs.readFile(file, "utf8").catch(() => undefined);
+  if (current !== ASKPASS_SCRIPT) {
+    await fs.mkdir(dir, { recursive: true });
+    await writeFileAtomic(file, ASKPASS_SCRIPT, { encoding: "utf8", mode: 0o755 });
+  }
   return file;
 }
 
-/** A clone with a provider account's token. `credential.helper=` empties the helper list for this
- *  command: a stale login on the machine would otherwise answer first and 403. `askpassDir` is
- *  where the answering script goes (ensureAskpass). */
-export async function cloneWithToken(
+/** A clone with a provider account's token, handed to git as a login. `credential.helper=`
+ *  empties the helper list for this command: a stale login on the machine would otherwise answer
+ *  first and 403, and the token is the account's to keep, not the helper's. */
+export function cloneWithToken(
   url: string,
   directory: string,
   user: string,
   token: string,
   askpassDir: string
 ): Promise<GitActionResult> {
-  const askpass = await ensureAskpass(askpassDir);
   return runNetwork(os.homedir(), ["-c", "credential.helper=", "clone", "--", url, directory], {
-    GIT_ASKPASS: askpass,
-    TET_ASKPASS_USER: user,
-    TET_ASKPASS_TOKEN: token
+    login: { username: user, password: token, askpassDir, origin: urlOrigin(url) }
   });
 }
 
@@ -775,8 +829,13 @@ export function deleteBranch(cwd: string, name: string): Promise<GitActionResult
 
 /** A branch already gone from the remote only loses its remote-tracking ref, as in GitHub Desktop.
  *  git's message is read as text, which NETWORK_ENV keeps English. */
-export async function deleteRemoteBranch(cwd: string, remote: string, name: string): Promise<GitActionResult> {
-  const deleted = await runNetwork(cwd, ["push", remote, "--delete", name]);
+export async function deleteRemoteBranch(
+  cwd: string,
+  remote: string,
+  name: string,
+  login?: NetworkLogin
+): Promise<GitActionResult> {
+  const deleted = await runNetwork(cwd, ["push", remote, "--delete", name], { login });
   if (deleted.ok || !/remote ref does not exist/.test(deleted.error ?? "")) {
     return deleted;
   }
@@ -807,16 +866,21 @@ export function createTag(cwd: string, name: string, target: string, message: st
   return run(cwd, ["tag", "--annotate", "--message", message, name, target]);
 }
 
-export function pushTag(cwd: string, remote: string, name: string): Promise<GitActionResult> {
-  return runNetwork(cwd, ["push", remote, `refs/tags/${name}`]);
+export function pushTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
+  return runNetwork(cwd, ["push", remote, `refs/tags/${name}`], { login });
 }
 
 export function deleteTag(cwd: string, name: string): Promise<GitActionResult> {
   return run(cwd, ["tag", "--delete", name]);
 }
 
-export function deleteRemoteTag(cwd: string, remote: string, name: string): Promise<GitActionResult> {
-  return runNetwork(cwd, ["push", remote, "--delete", `refs/tags/${name}`]);
+export function deleteRemoteTag(
+  cwd: string,
+  remote: string,
+  name: string,
+  login?: NetworkLogin
+): Promise<GitActionResult> {
+  return runNetwork(cwd, ["push", remote, "--delete", `refs/tags/${name}`], { login });
 }
 
 export function checkoutTag(cwd: string, name: string): Promise<GitActionResult> {

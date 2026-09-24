@@ -432,6 +432,36 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     assert.notEqual(inSandbox(`cat ${roTarget}/file.txt`).status, 0, "gone once unmounted");
   });
 
+  it("lists its mounts, keeps them over a stop, and starts again once a gone host path is unmounted", () => {
+    // What mountAll relies on: it mounts only what `inspect` lacks and unmounts the rest first.
+    const file = pathMountSpecs({ path: path.join(MOUNTS, "ro", "file.txt"), access: "ro" });
+    const gone = pathMountSpecs({ path: path.join(MOUNTS, "gone"), access: "rw" });
+    fs.mkdirSync(path.join(MOUNTS, "gone"), { recursive: true });
+    for (const spec of [file, gone]) {
+      const mounted = sbx("mount", NAME, spec.mount);
+      assert.equal(mounted.status, 0, mounted.stderr);
+    }
+    const again = sbx("mount", NAME, file.mount);
+    assert.notEqual(again.status, 0, "a read-only file is not mounted twice");
+    assert.match(again.stderr, /read-only file system/);
+    // Listed as tet spells its mounts (readRuntimeMounts).
+    const inspected = JSON.parse(sbx("inspect", NAME, "--json").stdout) as {
+      runtime_mounts: { host_path: string; container_target: string; read_only?: boolean }[];
+    };
+    const listed = inspected.runtime_mounts.map((mount) => `${mount.host_path}:${mount.container_target}${mount.read_only ? ":ro" : ""}`);
+    assert.ok(listed.includes(file.mount) && listed.includes(gone.mount), listed.join("\n"));
+
+    assert.equal(sbx("stop", NAME).status, 0);
+    fs.rmSync(path.join(MOUNTS, "gone"), { recursive: true });
+    const blocked = inSandbox("true");
+    assert.notEqual(blocked.status, 0, "a gone host path keeps it from starting");
+    assert.match(blocked.stderr, /cannot restore mount/);
+    const unmounted = sbx("umount", NAME, gone.unmount);
+    assert.equal(unmounted.status, 0, `unmounted while stopped: ${unmounted.stderr}`);
+    assert.equal(inSandbox(`cat ${toContainerPath(path.join(MOUNTS, "ro", "file.txt"))}`).stdout, "from the host", "bound again at the start");
+    assert.equal(sbx("umount", NAME, file.unmount).status, 0);
+  });
+
   it("publishes and unpublishes a port", async () => {
     const port = "58123:8080";
     const published = sbx("ports", NAME, "--publish", port);

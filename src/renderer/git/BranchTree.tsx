@@ -215,7 +215,12 @@ export const BranchTree = memo(function BranchTree({
       checkboxLabel: upstream ? `Also delete ${upstreamName(upstream)} on the remote` : undefined
     });
     if (answer.confirmed) {
-      branch.run(`Deleting ${name}...`, () => repository.deleteBranch(projectId, name, answer.checked));
+      // With a login, the local branch is gone already: only its upstream is tried again.
+      branch.run(`Deleting ${name}...`, (login) =>
+        login && upstream
+          ? repository.deleteRemoteBranch(projectId, upstream.remote, upstream.branch, login)
+          : repository.deleteBranch(projectId, name, answer.checked)
+      );
     }
   };
 
@@ -227,7 +232,7 @@ export const BranchTree = memo(function BranchTree({
       confirmLabel: "Delete branch"
     });
     if (answer.confirmed) {
-      branch.run(`Deleting ${from}/${name}...`, () => repository.deleteRemoteBranch(projectId, from, name));
+      branch.run(`Deleting ${from}/${name}...`, (login) => repository.deleteRemoteBranch(projectId, from, name, login));
     }
   };
 
@@ -294,7 +299,10 @@ export const BranchTree = memo(function BranchTree({
       checkboxLabel: remote ? `Also delete it on ${remote}` : undefined
     });
     if (answer.confirmed) {
-      branch.run(`Deleting tag ${name}...`, () => repository.deleteTag(projectId, name, answer.checked));
+      // With a login, the local tag is gone already: only the remote one is tried again.
+      branch.run(`Deleting tag ${name}...`, (login) =>
+        login ? repository.deleteRemoteTag(projectId, name, login) : repository.deleteTag(projectId, name, answer.checked)
+      );
     }
   };
 
@@ -374,7 +382,9 @@ export const BranchTree = memo(function BranchTree({
     { label: "Check out", run: inWorktree ? undefined : () => checkoutTag(name) },
     {
       label: remote ? `Push to ${remote}` : "Push",
-      run: remote ? () => branch.run(`Pushing ${name}...`, () => repository.pushTag(projectId, name)) : undefined
+      run: remote
+        ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(projectId, name, login))
+        : undefined
     },
     { label: "Delete...", run: () => void askDeleteTag(name) },
     SEPARATOR,

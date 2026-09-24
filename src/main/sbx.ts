@@ -43,6 +43,7 @@ import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxNotReady, typ
 import { agentDataDir, agentDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/hook-target";
+import { isSimulatedMissing } from "./simulate";
 import { resolveCommand } from "./terminals/pty";
 import { checkAgentInstalled, isAgentInstalled } from "./terminals/terminal-session";
 
@@ -173,6 +174,25 @@ export const SBX_VERIFIED_VERSION = "0.42.1";
 /** `version` is a subcommand; `sbx --version` fails with "unknown flag". */
 export function isSbxInstalled(): Promise<boolean> {
   return checkAgentInstalled("sbx", ["version"], os.tmpdir());
+}
+
+/**
+ * `sbx version`'s answer ("sbx version: v0.45.1 <commit>") as "0.45.1"; undefined when sbx is not
+ * installed (probeSbx's sign of it), "" when it printed no version.
+ */
+async function readSbxVersion(): Promise<string | undefined> {
+  if (isSimulatedMissing("sbx")) {
+    return undefined;
+  }
+  const result = await runSbx(["version"]);
+  return result.ok ? (/\d+\.\d+\.\d+/.exec(result.stdout)?.[0] ?? "") : undefined;
+}
+
+/** Whether that version is 0.45 or later: from there on a sandbox's live mounts survive a stop
+ *  and `sbx inspect` lists them (mountAll). */
+export function sbxVersionSupported(version: string): boolean {
+  const [major = 0, minor = 0] = version.split(".").map((part) => parseInt(part, 10) || 0);
+  return major > 0 || minor >= 45;
 }
 
 /**
@@ -328,7 +348,8 @@ export async function readHostAllowed(host: string): Promise<boolean> {
 }
 
 /**
- * Behind both. Three processes, always: `policy ls`'s exit code says initialized, its output
+ * Behind both. Three processes, always: `version` says installed and whether old enough to be
+ * reported as a failure (sbxVersionSupported), `policy ls`'s exit code says initialized, its output
  * governed, and asking it and `ls` before the answers are read costs nothing but two processes on a
  * machine without sbx. They start together because an sbx invocation is ~0.45 s of CLI startup,
  * which a spawn pays five times over (with readSbxBlockers): 2.26 s in a row against 1.58 s as
@@ -351,9 +372,13 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   if (refreshPath) {
     await augmentAgentPath();
   }
-  const [installed, list, policy] = await Promise.all([isSbxInstalled(), runSbx(["ls", "--json"]), runSbx(["policy", "ls"])]);
-  status.installed = installed;
-  if (!status.installed) {
+  const [version, list, policy] = await Promise.all([readSbxVersion(), runSbx(["ls", "--json"]), runSbx(["policy", "ls"])]);
+  status.installed = version !== undefined;
+  if (version === undefined) {
+    return { status };
+  }
+  if (version && !sbxVersionSupported(version)) {
+    status.failure = `version ${version} is too old, tet needs 0.45 or later`;
     return { status };
   }
   const sandboxes = parseSandboxes(list);
@@ -474,32 +499,30 @@ function normalizeHostPath(hostPath: string): string {
 }
 
 /**
- * A live bind mount's `sbx mount` and `sbx umount` specs. `mount` carries the access, so equal
- * `mount`s are the same grant (saveSbxConfig narrows by it).
+ * A live bind mount's `sbx mount` and `sbx umount` specs: `HOST:CTR_TARGET[:ro]` and
+ * `HOST:CTR_TARGET`. `sbx mount` takes `HOST[:CTR_TARGET[:ro|rw]]`, and `HOST:ro` parses "ro" as
+ * the target ("must be absolute"), so the target is always spelled out — via `toContainerPath`,
+ * since the host path as target breaks on Windows (two drive colons). Read-write is the same
+ * form without a suffix, which lands where the bare host path would (measured, 2026-09-24,
+ * 0.45.1: `sbx inspect` lists a bare mount at that container path). `mount` carries the access,
+ * so equal `mount`s are the same grant (saveSbxConfig narrows by it, mountAll compares by it).
+ *
+ * A single file takes both forms (measured, 0.42.1).
  */
 interface MountSpec {
   mount: string;
   unmount: string;
-  /** The same grant with the other access (mountAll). */
-  other: string;
 }
 
-/**
- * One allowed-path row as a live mount (not a create positional, see fixedMountSpecs). `sbx mount`
- * is `HOST[:CTR_TARGET[:ro|rw]]`, and `HOST:ro` parses "ro" as the target ("must be absolute"). So
- * `rw` is the bare host path (same path inside); `ro` needs three parts, and the host path as
- * target breaks on Windows (two drive colons) — `toContainerPath` works. `sbx umount` takes
- * `HOST[:CTR_TARGET]`, and an explicit-target mount is revoked with that target.
- *
- * A single file takes both forms (measured, 0.42.1).
- */
+function mountSpec(host: string, target: string, readOnly: boolean): MountSpec {
+  const unmount = `${host}:${target}`;
+  return { mount: readOnly ? `${unmount}:ro` : unmount, unmount };
+}
+
+/** One allowed-path row as a live mount (not a create positional, see fixedMountSpecs). */
 export function pathMountSpecs(entry: SbxPath): MountSpec {
   const host = normalizeHostPath(entry.path);
-  const target = toContainerPath(host);
-  if (entry.access === "rw") {
-    return { mount: host, unmount: host, other: `${host}:${target}:ro` };
-  }
-  return { mount: `${host}:${target}:ro`, unmount: `${host}:${target}`, other: host };
+  return mountSpec(host, toContainerPath(host), entry.access === "ro");
 }
 
 /** Undefined for nothing — only what exists is mounted. */
@@ -526,8 +549,8 @@ type SandboxPaths = Pick<AgentPaths, "agentDir">;
  * replace the host's. Knowledge (AgentDefinition.sandboxKnowledge) and sessions (sessionMountSpecs)
  * are curated subpaths, never the directory holding credentials.
  */
-export function fixedMountSpecs(paths: SandboxPaths): string[] {
-  return [pathMountSpecs({ path: paths.agentDir, access: "rw" }).mount];
+export function fixedMountSpecs(paths: SandboxPaths): MountSpec[] {
+  return [pathMountSpecs({ path: paths.agentDir, access: "rw" })];
 }
 
 /**
@@ -536,9 +559,9 @@ export function fixedMountSpecs(paths: SandboxPaths): string[] {
  * links (git.ts's worktreeAdd), which hold at the container paths; with the mount, status, commit and
  * branch work there (measured, sbx 0.42.1, git 2.53 in the kits). Live, like fixedMountSpecs.
  */
-function worktreeMountSpecs(projectPath: string): string[] {
+function worktreeMountSpecs(projectPath: string): MountSpec[] {
   const commonDir = readLinkedGitDir(projectPath)?.commonDir;
-  return commonDir === undefined ? [] : [pathMountSpecs({ path: commonDir, access: "rw" }).mount];
+  return commonDir === undefined ? [] : [pathMountSpecs({ path: commonDir, access: "rw" })];
 }
 
 /** An agent's host knowledge per kind, as sandboxKnowledgeFor resolves it. */
@@ -607,12 +630,7 @@ function knowledgeMountSpecs(entries: KnowledgeEntries, knowledge: SbxKnowledgeC
     if (!access) {
       return [];
     }
-    const [suffix, otherSuffix] = access === "ro" ? [":ro", ""] : ["", ":ro"];
-    return entries[kind].map((entry) => ({
-      mount: `${entry.host}:${entry.target}${suffix}`,
-      unmount: `${entry.host}:${entry.target}`,
-      other: `${entry.host}:${entry.target}${otherSuffix}`
-    }));
+    return entries[kind].map((entry) => mountSpec(entry.host, entry.target, access === "ro"));
   });
 }
 
@@ -647,7 +665,20 @@ async function grantsOf(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig, path
 const launcherWritten = new Set<string>();
 
 /** The `sbx create` (or rebuild) underway per sandbox name — see ensureSandboxExists. */
-const sandboxSetups = new Map<string, Promise<boolean>>();
+const sandboxSetups = new Map<string, Promise<unknown>>();
+
+/** Runs `action` once the one underway under `name` in `queue` is over, however that one ended. */
+function inTurn<T>(queue: Map<string, Promise<unknown>>, name: string, action: () => Promise<T>): Promise<T> {
+  const turn = (queue.get(name) ?? Promise.resolve()).catch(() => undefined).then(action);
+  queue.set(name, turn);
+  const forget = (): void => {
+    if (queue.get(name) === turn) {
+      queue.delete(name);
+    }
+  };
+  turn.then(forget, forget);
+  return turn;
+}
 
 /** Undefined when `sbx ls` fails, as it does signed out (probeSbx). One process for all sandboxes. */
 async function listSandboxes(): Promise<SandboxList | undefined> {
@@ -725,8 +756,9 @@ export async function removeProjectSandboxes(projectId: string): Promise<void> {
 }
 
 /**
- * Starts a stopped sandbox with a cheap `exec`: `sbx mount`, `umount` and `ports` refuse one
- * ("409 Conflict"). False also when it does not exist — the same to its best-effort callers.
+ * Starts a stopped sandbox with a cheap `exec`: `sbx mount` and `ports` refuse one ("409
+ * Conflict"; `umount` takes one since 0.45, see mountAll). False also when it does not exist — the
+ * same to its best-effort callers.
  *
  * A spawn starts it before it knows it may (`SbxRunRequest.warm`), because this is the slowest step
  * of the lot: ~2.5 s for a stopped sandbox against 0.7 s for a running one (measured, 2026-09-16,
@@ -765,34 +797,24 @@ function ensureSandboxExists(
   if (listed !== undefined && sameSet(listed, [projectPath])) {
     return Promise.resolve(false);
   }
-  const setup = (sandboxSetups.get(name) ?? Promise.resolve())
-    .catch(() => undefined)
-    .then(async () => {
-      const existing = ((await listSandboxes()) ?? sandboxes).get(name);
-      if (existing !== undefined && sameSet(existing, [projectPath])) {
-        return false;
-      }
-      if (existing !== undefined) {
-        await removeSandbox(name, onData);
-      }
-      const created = await runSbx(["create", getAgent(agentId).sandboxKit ?? agentId, projectPath, "--name", name], { onData });
-      if (!created.ok) {
-        throw new Error(`sbx could not create the ${agentId} sandbox`);
-      }
-      // A new sandbox holds nothing of the one that had this name — and one removed outside tet
-      // (`sbx rm`, `prune`, `reset`) never passed removeSandbox, which is the other place this is
-      // forgotten. Kept here, the launcher would be skipped and the agent would run without hooks.
-      launcherWritten.delete(name);
-      return true;
-    });
-  sandboxSetups.set(name, setup);
-  const forget = (): void => {
-    if (sandboxSetups.get(name) === setup) {
-      sandboxSetups.delete(name);
+  return inTurn(sandboxSetups, name, async () => {
+    const existing = ((await listSandboxes()) ?? sandboxes).get(name);
+    if (existing !== undefined && sameSet(existing, [projectPath])) {
+      return false;
     }
-  };
-  setup.then(forget, forget);
-  return setup;
+    if (existing !== undefined) {
+      await removeSandbox(name, onData);
+    }
+    const created = await runSbx(["create", getAgent(agentId).sandboxKit ?? agentId, projectPath, "--name", name], { onData });
+    if (!created.ok) {
+      throw new Error(`sbx could not create the ${agentId} sandbox`);
+    }
+    // A new sandbox holds nothing of the one that had this name — and one removed outside tet
+    // (`sbx rm`, `prune`, `reset`) never passed removeSandbox, which is the other place this is
+    // forgotten. Kept here, the launcher would be skipped and the agent would run without hooks.
+    launcherWritten.delete(name);
+    return true;
+  });
 }
 
 /**
@@ -821,65 +843,89 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
 const MOUNT_CONCURRENCY = 6;
 
 /**
- * Applies live bind mounts on *every* start: unlike a file on the sandbox's disk, a bind mount
- * does not survive a stop (measured: the target was empty again), and `sbx stop` can happen
- * outside tet, so "already mounted" cannot be cached. Re-mounting is idempotent. A grant does
- * survive a stop, though, with its access: one given with the other access before (a change that
- * never reached this sandbox's Save) refuses the mount — "409 Conflict: host path … is already
- * mounted read-write in this sandbox; cannot also mount it read-only" — so it is unmounted by
- * `unmount` and mounted again, which a running sandbox takes (measured, 2026-09-23, 0.42.1: ro
- * afterwards, writes refused). After a stop the grant is there but not its bind, and `umount`
- * refuses ("nothing to unmount: … is not bound at …"), so the grant is first bound again as it
- * stands (`other`) — then umount and mount take (measured, 2026-09-24, 0.42.1: ro afterwards).
+ * The live mounts a sandbox holds, from one `sbx inspect --json` (`runtime_mounts[]`: `host_path`
+ * as given, `container_target`, `read_only` only when true), as MountSpecs. Answers for a stopped
+ * sandbox too, in ~0.5 s (measured, 2026-09-24, 0.45.1). Undefined when sbx cannot say, as for a
+ * sandbox that does not exist.
+ */
+async function readRuntimeMounts(name: string): Promise<MountSpec[] | undefined> {
+  const result = await runSbx(["inspect", name, "--json"]);
+  if (!result.ok) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(result.stdout) as {
+      runtime_mounts?: { host_path?: string; container_target?: string; read_only?: boolean }[];
+    };
+    return (parsed.runtime_mounts ?? []).flatMap(({ host_path, container_target, read_only }) =>
+      host_path && container_target ? [mountSpec(host_path, container_target, read_only === true)] : []
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+/** The mountAll underway per sandbox name (inTurn). */
+const mountSetups = new Map<string, Promise<unknown>>();
+
+/**
+ * Brings a sandbox's live mounts to `specs` at every start, against what it holds
+ * (readRuntimeMounts): a mount it lacks is mounted, one it holds that `specs` has not — another
+ * access included — unmounted. Measured, 2026-09-24, sbx 0.45.1:
+ * - mounts survive a stop, access included, and are bound again at the start. `sbx stop` can
+ *   happen outside tet, so the sandbox is asked each time rather than tet remembering.
+ * - mounting what is mounted is not idempotent: a read-only *file* fails ("create target file …
+ *   read-only file system"), a folder is bound a second time over the first. Hence only what is
+ *   missing.
+ * - a mount whose host path is gone keeps the sandbox from starting ("422 … cannot restore
+ *   mount"); `sbx umount` takes it out of a stopped sandbox too. `specs` holds only what exists,
+ *   so it goes with the rest, before the start.
+ * - another access is refused while one is held ("409 … already mounted read-only …; cannot also
+ *   mount it read-write"), so the unmounts run first.
  *
  * Concurrent, since each `sbx mount` costs ~0.45s: 6 at once took 1.6s instead of 2.6s, all binds
  * present, ro honoured; 12 at once hit "docker hub refresh lock held by another process" (measured,
- * 2026-09-16, 0.42.1), hence MOUNT_CONCURRENCY.
+ * 2026-09-16, 0.42.1), hence MOUNT_CONCURRENCY. One sandbox's tabs take turns (`mountSetups`):
+ * two tabs starting together would both mount what is missing, the second failing on a read-only
+ * file; in turn, the second finds it all there.
  *
- * `started` is a start already underway (`SbxRunRequest.warm`), joined instead of started again —
- * but only its *success* counts: it may have run before the sandbox existed (two tabs of one agent
- * starting together, the second one seeing the first one's), and mounting a sandbox that is not
- * running is what this line is here to prevent. Returns what sbx refused, by `mount`, with its
- * reason (sbxRefusal).
+ * `started` is a start already underway (`SbxRunRequest.warm`), waited for before unmounting and
+ * joined instead of started again — but only its *success* counts: it may have run before the
+ * sandbox existed (two tabs of one agent starting together, the second one seeing the first
+ * one's), or failed on a mount whose host path is gone. Returns what sbx refused, by `mount`, with
+ * its reason (sbxRefusal).
  */
-async function mountAll(
-  name: string,
-  specs: ({ mount: string } & Partial<MountSpec>)[],
-  onData?: OnData,
-  started?: Promise<boolean>
-): Promise<Map<string, string>> {
-  if (specs.length === 0) {
-    return new Map();
-  }
-  if (!(await started)) {
-    await ensureRunning(name, onData);
-  }
-  const mount = async ({ mount: spec, unmount, other }: { mount: string } & Partial<MountSpec>): Promise<string | undefined> => {
-    const result = await runSbx(["mount", name, spec], { onData });
-    if (result.ok) {
-      return undefined;
+function mountAll(name: string, specs: MountSpec[], onData?: OnData, started?: Promise<boolean>): Promise<Map<string, string>> {
+  return inTurn(mountSetups, name, async () => {
+    const [live = [], running] = await Promise.all([readRuntimeMounts(name), started]);
+    const wanted = new Set(specs.map((spec) => spec.mount));
+    // One by one: rare (a change since the last start), and concurrent umounts are unmeasured.
+    for (const mount of live.filter((mount) => !wanted.has(mount.mount))) {
+      await runSbx(["umount", name, mount.unmount], { onData });
     }
-    if (unmount === undefined || other === undefined || !/already mounted .*cannot also mount/i.test(sbxError(result))) {
-      return sbxRefusal(result);
+    if (!running) {
+      await ensureRunning(name, onData);
     }
-    const unmounted = async (): Promise<boolean> => (await runSbx(["umount", name, unmount], { onData })).ok;
-    const replaced = (await unmounted()) || ((await runSbx(["mount", name, other], { onData })).ok && (await unmounted()));
-    const again = replaced ? await runSbx(["mount", name, spec], { onData }) : result;
-    return again.ok ? undefined : sbxRefusal(again);
-  };
-  const refused = await mapLimited(specs, MOUNT_CONCURRENCY, mount);
-  return new Map(specs.flatMap((spec, index) => (refused[index] === undefined ? [] : [[spec.mount, refused[index]] as const])));
+    const held = new Set(live.map((mount) => mount.mount));
+    const missing = specs.filter((spec) => !held.has(spec.mount));
+    const refused = await mapLimited(missing, MOUNT_CONCURRENCY, async (spec) => {
+      const result = await runSbx(["mount", name, spec.mount], { onData });
+      return result.ok ? undefined : sbxRefusal(result);
+    });
+    return new Map(missing.flatMap((spec, index) => (refused[index] === undefined ? [] : [[spec.mount, refused[index]] as const])));
+  });
 }
 
 /**
- * Narrows grants at Save, not at the next restart: a dropped or rw→ro path or knowledge kind must
- * stop being accessible *now* in a running sandbox. A stopped one keeps the grant but not its bind
- * (measured, 2026-09-23, 0.42.1: none of them back after a start), and the next spawn mounts only
- * what tet.json holds, a grant of the other access replaced (mountAll). The caller has started the
- * sandbox (`sbx umount` refuses a stopped one). Adds what sbx would not take back to `refused`.
+ * Narrows grants at Save, not at the next start: a dropped or rw→ro path or knowledge kind must
+ * stop being accessible *now* in a running sandbox, and a stopped one would bind it again at its
+ * start. Only a grant the sandbox holds (readRuntimeMounts; every one when sbx cannot say): one it
+ * does not hold is gone already. A stopped sandbox takes the `umount` (measured, 2026-09-24,
+ * 0.45.1). Adds what sbx would not take back to `refused`.
  */
 async function revokeMounts(name: string, grants: Grant[], refused: SbxProblems): Promise<void> {
-  for (const grant of grants) {
+  const live = (await readRuntimeMounts(name))?.map((mount) => mount.mount);
+  for (const grant of grants.filter((grant) => live?.includes(grant.mount) ?? true)) {
     const result = await runSbx(["umount", name, grant.unmount]);
     if (!result.ok) {
       addProblems(refused, grant.option, { [grant.row]: sbxRefusal(result) });
@@ -1129,8 +1175,8 @@ interface SbxRunRequest {
  * (Claude's `~/.claude/projects`). A host side that cannot be created is left out; one sbx refuses
  * stops the tab like tet's own mounts (prepareSbxRun).
  */
-async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
-  const specs: string[] = [];
+async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<MountSpec[]> {
+  const specs: MountSpec[] = [];
   for (const mount of mounts) {
     try {
       if (mount.file) {
@@ -1140,7 +1186,7 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<string[]> {
       } else {
         await fs.mkdir(mount.host, { recursive: true });
       }
-      specs.push(`${mount.host}:${mount.target}`);
+      specs.push(mountSpec(mount.host, mount.target, false));
     } catch (error) {
       console.error("[tet] could not prepare sandbox session mount:", error);
     }
@@ -1227,8 +1273,8 @@ export async function prepareSbxRun(
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
   const grants = await grantsOf(agentId, knowledge, config.paths);
-  const refused = await mountAll(name, [...own.map((mount) => ({ mount })), ...grants], onData, created ? undefined : request.warm);
-  const ownFailed = own.filter((spec) => refused.has(spec));
+  const refused = await mountAll(name, [...own, ...grants], onData, created ? undefined : request.warm);
+  const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
   if (ownFailed.length > 0) {
     throw new Error(`sbx did not mount tet's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);
   }
@@ -1425,8 +1471,8 @@ async function applyProjectPorts(names: string[], ports: SbxPort[]): Promise<Rec
  * `refused`, left out of tet.json and taken back where it went through — a port it would not
  * unpublish stays, as the sandbox still has it: tet.json holds what was applied. Grants are
  * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
- * is `refused` too, its row and knowledge kind kept as they were. Ports and mounts need the
- * sandbox running. A sandbox that cannot be removed rejects, tet.json left as it was. Returns the agents
+ * is `refused` too, its row and knowledge kind kept as they were. Ports need the sandbox running.
+ * A sandbox that cannot be removed rejects, tet.json left as it was. Returns the agents
  * whose sandboxes were removed, for the caller to say so: a running session of theirs just lost its
  * sandbox; those of the earlier ids; what sbx refused; what could not be taken back; and what
  * tet.json and the knowledge now hold.
@@ -1537,7 +1583,7 @@ export async function saveSbxConfig(
   for (const { agentId, name } of kept) {
     const current = new Set((await grantsOf(agentId, knowledge.current, applied.paths)).map((grant) => grant.mount));
     const stale = (await grantsOf(agentId, knowledge.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
-    if (stale.length > 0 && (await ensureRunning(name))) {
+    if (stale.length > 0) {
       await revokeMounts(name, stale, unrevoked);
     }
   }

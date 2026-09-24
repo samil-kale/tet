@@ -11,6 +11,7 @@ import type {
   FileSearchResult,
   FileWriteResult,
   GitActionResult,
+  GitLogin,
   RepositoryState,
   StashCommand
 } from "../../shared/types";
@@ -47,9 +48,9 @@ export function registerRepositoryIpc({
   };
 
   onRepository("repo:checkout", (repository, target: CheckoutTarget) => repository.checkout(target));
-  onRepository("repo:fetch", (repository) => repository.fetch());
-  onRepository("repo:pull", (repository) => repository.pull());
-  onRepository("repo:push", (repository) => repository.push());
+  onRepository("repo:fetch", (repository, login?: GitLogin) => repository.fetch(login));
+  onRepository("repo:pull", (repository, login?: GitLogin) => repository.pull(login));
+  onRepository("repo:push", (repository, login?: GitLogin) => repository.push(login));
   onRepository("repo:set-remote-url", (repository, remote: string, url: string) =>
     repository.setRemoteUrl(remote, url)
   );
@@ -60,8 +61,8 @@ export function registerRepositoryIpc({
   onRepository("repo:delete-branch", (repository, name: string, onRemote: boolean) =>
     repository.deleteBranch(name, onRemote)
   );
-  onRepository("repo:delete-remote-branch", (repository, remote: string, name: string) =>
-    repository.deleteRemoteBranch(remote, name)
+  onRepository("repo:delete-remote-branch", (repository, remote: string, name: string, login?: GitLogin) =>
+    repository.deleteRemoteBranch(remote, name, login)
   );
   onRepository("repo:merge", (repository, ref: string) => repository.merge(ref));
   onRepository("repo:rebase", (repository, ref: string, confirmed: boolean) => repository.rebase(ref, confirmed));
@@ -69,9 +70,12 @@ export function registerRepositoryIpc({
   onRepository("repo:create-tag", (repository, name: string, target: string, message: string) =>
     repository.createTag(name, target, message)
   );
-  onRepository("repo:push-tag", (repository, name: string) => repository.pushTag(name));
+  onRepository("repo:push-tag", (repository, name: string, login?: GitLogin) => repository.pushTag(name, login));
   onRepository("repo:delete-tag", (repository, name: string, onRemote: boolean) =>
     repository.deleteTag(name, onRemote)
+  );
+  onRepository("repo:delete-remote-tag", (repository, name: string, login?: GitLogin) =>
+    repository.deleteRemoteTag(name, login)
   );
   onRepository("repo:checkout-tag", (repository, name: string) => repository.checkoutTag(name));
   onRepository("repo:commit-all", (repository, message: string) => repository.commitAll(message));

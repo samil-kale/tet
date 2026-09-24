@@ -1,3 +1,4 @@
+import * as os from "node:os";
 import * as path from "node:path";
 import { dialog, ipcMain } from "electron";
 import { errorMessage } from "../../shared/errors";
@@ -5,12 +6,14 @@ import type {
   AddAccountResult,
   AddRepositoryResult,
   GitActionResult,
+  GitLogin,
   ListRepositoriesResult,
   Project,
   ProviderAccount,
   ProviderId,
   WorktreeRef
 } from "../../shared/types";
+import { urlOrigin } from "../../shared/git-url";
 import { git } from "../git/git-client";
 import { addProject, addWorktree, deleteWorktree, removeProject, renameWorktree } from "../projects";
 import { PROVIDERS } from "../providers";
@@ -19,12 +22,12 @@ import type { IpcDeps } from "./deps";
 /** Opening, cloning and creating repositories, their worktrees, and the provider accounts a
  *  clone authenticates with. */
 export function registerProjectsIpc({
-  dataRoot,
   store,
   accounts,
+  logins,
   projectDeps,
   openProject
-}: Pick<IpcDeps, "dataRoot" | "store" | "accounts" | "projectDeps" | "openProject">): void {
+}: Pick<IpcDeps, "store" | "accounts" | "logins" | "projectDeps" | "openProject">): void {
   ipcMain.handle("projects:list", (): Project[] => store.list());
 
   ipcMain.handle(
@@ -75,8 +78,8 @@ export function registerProjectsIpc({
     try {
       const result = await action;
       if (!result.ok) {
-        // Kept apart from the message: the dialog asks for an account or token on it.
-        return { error: result.error || `${label} failed`, authRequired: result.authRequired };
+        // Kept apart from the message: the dialog asks for a login on it.
+        return { error: result.error || `${label} failed`, loginUrl: result.loginUrl };
       }
     } catch (error) {
       // The git process died mid-command.
@@ -87,17 +90,25 @@ export function registerProjectsIpc({
     return { project };
   };
 
-  ipcMain.handle("projects:clone", (_event, url: string, directory: string, name: string, accountId?: string) => {
-    const target = path.join(directory, name);
-    // With an account, its token authenticates the clone, independent of any credential helper.
-    const account = accountId !== undefined ? accounts.get(accountId) : undefined;
-    const token = accountId !== undefined ? accounts.token(accountId) : undefined;
-    const action =
-      account && token !== undefined
-        ? git.cloneWithToken(url, target, account.user, token, path.join(dataRoot, "askpass"))
-        : git.clone(url, target);
-    return addRepository(action, target, "Clone");
-  });
+  ipcMain.handle(
+    "projects:clone",
+    (_event, url: string, directory: string, name: string, accountId?: string, login?: GitLogin) => {
+      const target = path.join(directory, name);
+      // With an account, its token authenticates the clone, independent of any credential helper;
+      // refused (revoked, expired), it asks for a login too, typed in the token's stead. Else as
+      // any command reaching a remote — from the home folder, there being no repository yet to
+      // read a credential helper from.
+      const account = accountId !== undefined ? accounts.get(accountId) : undefined;
+      const token = accountId !== undefined ? accounts.token(accountId) : undefined;
+      const action =
+        account && token !== undefined
+          ? git
+              .cloneWithToken(url, target, account.user, token, logins.askpassDir)
+              .then((result) => (result.authRequired && urlOrigin(url) ? { ...result, loginUrl: url } : result))
+          : logins.run(os.homedir(), url, login, (networkLogin) => git.clone(url, target, networkLogin));
+      return addRepository(action, target, "Clone");
+    }
+  );
 
   ipcMain.handle("projects:create", (_event, directory: string, name: string) => {
     const target = path.join(directory, name);

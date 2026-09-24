@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
+import * as http from "node:http";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -195,6 +196,74 @@ export function initBare(prefix: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   git(dir, "init", "-q", "--bare", "--initial-branch=main");
   return dir;
+}
+
+/** A bare repository served over http by `git http-backend`, behind a basic-auth login that can be
+ *  changed while it runs (a revoked token). */
+export interface HttpRemote {
+  url: string;
+  login: { username: string; password: string };
+  close: () => void;
+}
+
+export async function serveOverHttp(bare: string, login: { username: string; password: string }): Promise<HttpRemote> {
+  const remote = { login: { ...login } };
+  const server = http.createServer((request, response) => {
+    const expected = `Basic ${Buffer.from(`${remote.login.username}:${remote.login.password}`).toString("base64")}`;
+    if (request.headers.authorization !== expected) {
+      response.writeHead(401, { "WWW-Authenticate": 'Basic realm="tet"' });
+      response.end();
+      return;
+    }
+    const url = new URL(request.url ?? "/", "http://localhost");
+    // CGI: the request in the environment and on stdin, the response headers and body on stdout.
+    const backend = spawn("git", ["http-backend"], {
+      env: {
+        ...process.env,
+        GIT_PROJECT_ROOT: path.dirname(bare),
+        GIT_HTTP_EXPORT_ALL: "1",
+        // A user makes receive-pack (push) available.
+        REMOTE_USER: remote.login.username,
+        REQUEST_METHOD: request.method ?? "GET",
+        PATH_INFO: url.pathname,
+        QUERY_STRING: url.search.slice(1),
+        CONTENT_TYPE: request.headers["content-type"] ?? "",
+        ...(request.headers["content-length"] ? { CONTENT_LENGTH: request.headers["content-length"] } : {}),
+        HTTP_CONTENT_ENCODING: request.headers["content-encoding"] ?? "",
+        GIT_PROTOCOL: String(request.headers["git-protocol"] ?? "")
+      }
+    });
+    request.pipe(backend.stdin);
+    const chunks: Buffer[] = [];
+    backend.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+    backend.on("close", () => {
+      const output = Buffer.concat(chunks);
+      const crlf = output.indexOf("\r\n\r\n");
+      const end = crlf !== -1 ? crlf : output.indexOf("\n\n");
+      const gap = crlf !== -1 ? 4 : 2;
+      let status = 200;
+      const headers: Record<string, string> = {};
+      for (const line of output.subarray(0, end).toString().split(/\r?\n/)) {
+        const colon = line.indexOf(":");
+        const name = line.slice(0, colon).trim();
+        const value = line.slice(colon + 1).trim();
+        if (name.toLowerCase() === "status") {
+          status = parseInt(value, 10);
+        } else if (name) {
+          headers[name] = value;
+        }
+      }
+      response.writeHead(status, headers);
+      response.end(output.subarray(end + gap));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as { port: number };
+  return {
+    url: `http://127.0.0.1:${port}/${path.basename(bare)}`,
+    login: remote.login,
+    close: () => server.close()
+  };
 }
 
 /** The electron stub's `utilityProcess` running git.ts in this process, as git-host.ts would. */

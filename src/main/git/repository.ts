@@ -16,6 +16,7 @@ import type {
   FileSearchResult,
   FileWriteResult,
   GitActionResult,
+  GitLogin,
   HeadBlob,
   NoticeSeverity,
   Project,
@@ -25,10 +26,11 @@ import type {
 import { addExclude, addFolder, type ExplorerView, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { git } from "./git-client";
+import type { GitLoginStore } from "../git-logins";
 import { readLinkedGitDir } from "./linked-git-dir";
 import { watchedDirectoryGone } from "../watch-dir";
 import { relativeInside } from "../path-inside";
-import type { DiscardTargets } from "./git";
+import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./git";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
@@ -180,7 +182,9 @@ export class Repository {
     private readonly onFilesChanged: () => void,
     /** A `watchFiles` file was written — an edit to an already "modified" file changes nothing a
      *  refresh reports, so the editor tab would go stale. */
-    private readonly onFileChanged: (filePath: string) => void
+    private readonly onFileChanged: (filePath: string) => void,
+    /** The logins for the remotes, typed or kept (`network`). */
+    private readonly logins: GitLoginStore
   ) {}
 
   /** The files the project's editor tabs show. A pending report for a file just closed is
@@ -246,8 +250,11 @@ export class Repository {
     if (this.actionRunning || this.autoFetching || this.state.remotes.length === 0) {
       return;
     }
-    this.autoFetching = git
-      .fetch(this.project.path, AUTO_FETCH_TIMEOUT_MS)
+    // With a kept login, never a typed one: nothing is asked in the background.
+    const remote = this.headRemote;
+    this.autoFetching = this.network(remote, undefined, (login) =>
+      git.fetch(this.project.path, remote, login, AUTO_FETCH_TIMEOUT_MS)
+    )
       .then(() => git.fastForwardBranches(this.project.path))
       .catch(() => undefined)
       .then(() => this.refresh())
@@ -394,9 +401,11 @@ export class Repository {
     return this.runAction(() => git.checkout(this.project.path, target, this.state.localBranches));
   }
 
-  fetch(): Promise<GitActionResult> {
+  fetch(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const fetched = await git.fetch(this.project.path);
+      // The remote whose login is looked up, named: git's default could be another host's.
+      const remote = this.headRemote;
+      const fetched = await this.network(remote, login, (networkLogin) => git.fetch(this.project.path, remote, networkLogin));
       await git.fastForwardBranches(this.project.path);
       return fetched;
     });
@@ -404,20 +413,24 @@ export class Repository {
 
   /** Then, as GitHub Desktop does, the remote's HEAD is asked for again and the other branches only
    *  behind their upstreams are moved up. */
-  pull(): Promise<GitActionResult> {
+  pull(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const pulled = await git.pull(this.project.path);
-      const remote = this.state.branchUpstreams[this.state.head]?.remote ?? this.remote;
-      if (pulled.ok && remote) {
-        await git.updateRemoteHead(this.project.path, remote);
-      }
+      const remote = this.headRemote;
+      // The remote's HEAD with the same login: on a host that wants one, without it it always fails.
+      const pulled = await this.network(remote, login, async (networkLogin) => {
+        const result = await git.pull(this.project.path, networkLogin);
+        if (result.ok && remote) {
+          await git.updateRemoteHead(this.project.path, remote, networkLogin);
+        }
+        return result;
+      });
       await git.fastForwardBranches(this.project.path);
       return pulled;
     });
   }
 
   /** Pushes the current branch to its upstream, or publishes it to `remote` when it has none. */
-  push(): Promise<GitActionResult> {
+  push(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(() => {
       const upstream = this.state.branchUpstreams[this.state.head];
       const remote = upstream?.remote ?? this.remote;
@@ -427,13 +440,32 @@ export class Repository {
       if (this.state.detached) {
         return Promise.resolve({ ok: false, error: "HEAD is detached — check out a branch to push it" });
       }
-      return git.push(this.project.path, remote, this.state.head, upstream?.branch);
+      return this.network(remote, login, (networkLogin) =>
+        git.push(this.project.path, remote, this.state.head, upstream?.branch, networkLogin)
+      );
     });
   }
 
   /** The remote every command uses: the first, which `emit` makes "origin" where there is one. */
   private get remote(): string | undefined {
     return this.state.remotes[0]?.name;
+  }
+
+  /** The remote a fetch, pull or push of the checked-out branch reaches: its upstream's, else
+   *  `remote`. */
+  private get headRemote(): string | undefined {
+    return this.state.branchUpstreams[this.state.head]?.remote ?? this.remote;
+  }
+
+  /** A command reaching `remote`, with the login typed for it or the one kept for its url
+   *  (GitLoginStore.run); with no remote, or none whose url is known, the command as it is. */
+  private network(
+    remote: string | undefined,
+    login: GitLogin | undefined,
+    command: (login?: NetworkLogin) => Promise<GitActionResult>
+  ): Promise<GitActionResult> {
+    const url = remote === undefined ? undefined : this.remoteUrls[remote];
+    return url === undefined ? command() : this.logins.run(this.project.path, url, login, command);
   }
 
   /** Re-reads the config after, since only this changes a url. */
@@ -501,14 +533,19 @@ export class Repository {
         return local;
       }
       return upstream
-        ? git.deleteRemoteBranch(this.project.path, upstream.remote, upstream.branch)
+        ? this.network(upstream.remote, undefined, (login) =>
+            git.deleteRemoteBranch(this.project.path, upstream.remote, upstream.branch, login)
+          )
         : { ok: false, error: `${name} has no upstream to delete on a remote` };
     });
   }
 
-  /** A remote branch alone, from its row under the remote. */
-  deleteRemoteBranch(remote: string, name: string): Promise<GitActionResult> {
-    return this.runAction(() => git.deleteRemoteBranch(this.project.path, remote, name));
+  /** A remote branch alone: from its row under the remote, and the second try of a `deleteBranch`
+   *  whose remote half wanted a login. */
+  deleteRemoteBranch(remote: string, name: string, login?: GitLogin): Promise<GitActionResult> {
+    return this.runAction(() =>
+      this.network(remote, login, (networkLogin) => git.deleteRemoteBranch(this.project.path, remote, name, networkLogin))
+    );
   }
 
   merge(ref: string): Promise<GitActionResult> {
@@ -539,24 +576,32 @@ export class Repository {
     return this.runAction(() => git.createTag(this.project.path, name, target, message));
   }
 
-  pushTag(name: string): Promise<GitActionResult> {
-    return this.runAction(() =>
-      this.remote
-        ? git.pushTag(this.project.path, this.remote, name)
-        : Promise.resolve({ ok: false, error: "This repository has no remote to push the tag to" })
-    );
+  pushTag(name: string, login?: GitLogin): Promise<GitActionResult> {
+    return this.runAction(() => {
+      const remote = this.remote;
+      return remote
+        ? this.network(remote, login, (networkLogin) => git.pushTag(this.project.path, remote, name, networkLogin))
+        : Promise.resolve({ ok: false, error: "This repository has no remote to push the tag to" });
+    });
   }
 
   deleteTag(name: string, onRemote: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
       const local = await git.deleteTag(this.project.path, name);
-      if (!local.ok || !onRemote) {
-        return local;
-      }
-      return this.remote
-        ? git.deleteRemoteTag(this.project.path, this.remote, name)
-        : { ok: false, error: "This repository has no remote to delete the tag from" };
+      return !local.ok || !onRemote ? local : this.deleteTagOnRemote(name, undefined);
     });
+  }
+
+  /** The remote half alone: the second try of a `deleteTag` that wanted a login. */
+  deleteRemoteTag(name: string, login?: GitLogin): Promise<GitActionResult> {
+    return this.runAction(() => this.deleteTagOnRemote(name, login));
+  }
+
+  private deleteTagOnRemote(name: string, login: GitLogin | undefined): Promise<GitActionResult> {
+    const remote = this.remote;
+    return remote
+      ? this.network(remote, login, (networkLogin) => git.deleteRemoteTag(this.project.path, remote, name, networkLogin))
+      : Promise.resolve({ ok: false, error: "This repository has no remote to delete the tag from" });
   }
 
   checkoutTag(name: string): Promise<GitActionResult> {
@@ -1158,7 +1203,8 @@ export class RepositoryManager {
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
     private readonly onCommandsChanged: (projectId: string) => void,
     private readonly onFilesChanged: (projectId: string) => void,
-    private readonly onFileChanged: (projectId: string, filePath: string) => void
+    private readonly onFileChanged: (projectId: string, filePath: string) => void,
+    private readonly logins: GitLoginStore
   ) {}
 
   open(project: Project): Repository {
@@ -1172,7 +1218,8 @@ export class RepositoryManager {
       this.onNotice,
       () => this.onCommandsChanged(project.id),
       () => this.onFilesChanged(project.id),
-      (filePath) => this.onFileChanged(project.id, filePath)
+      (filePath) => this.onFileChanged(project.id, filePath),
+      this.logins
     );
     this.repositories.set(project.id, repository);
     void repository.start();

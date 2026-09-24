@@ -18,6 +18,7 @@ import type {
   FileSearchResult,
   FileWriteResult,
   GitActionResult,
+  GitLogin,
   ListRepositoriesResult,
   Notice,
   NoticeReport,
@@ -116,8 +117,15 @@ export interface TETApi {
     directoryToRemember(directory: string): Promise<string>;
     /** Opens the folder, or its enclosing repository; a missing one is an error. */
     open(directory: string): Promise<AddRepositoryResult>;
-    /** `git clone` into `directory`/`name`; an account's token authenticates it. */
-    clone(url: string, directory: string, name: string, accountId?: string): Promise<AddRepositoryResult>;
+    /** `git clone` into `directory`/`name`; an account's token authenticates it, else `login`
+     *  where the first try answered `loginUrl`. */
+    clone(
+      url: string,
+      directory: string,
+      name: string,
+      accountId?: string,
+      login?: GitLogin
+    ): Promise<AddRepositoryResult>;
     /** `git init` of `directory`/`name`, opened as a project. */
     create(directory: string, name: string): Promise<AddRepositoryResult>;
     remove(projectId: string): Promise<void>;
@@ -162,11 +170,12 @@ export interface TETApi {
     state(projectId: string): Promise<RepositoryState>;
     refresh(projectId: string): Promise<RepositoryState>;
     checkout(projectId: string, target: CheckoutTarget): Promise<GitActionResult>;
-    /** `git fetch --prune`. Also runs quietly every ten minutes. */
-    fetch(projectId: string): Promise<GitActionResult>;
-    pull(projectId: string): Promise<GitActionResult>;
+    /** `git fetch --prune`. Also runs quietly every ten minutes. Each command reaching a remote
+     *  takes the `login` typed after it answered `loginUrl`. */
+    fetch(projectId: string, login?: GitLogin): Promise<GitActionResult>;
+    pull(projectId: string, login?: GitLogin): Promise<GitActionResult>;
     /** Sets the upstream when there is none ("publish"). */
-    push(projectId: string): Promise<GitActionResult>;
+    push(projectId: string, login?: GitLogin): Promise<GitActionResult>;
     /** The new url shows in the next state. */
     setRemoteUrl(projectId: string, remote: string, url: string): Promise<GitActionResult>;
     /** Creates the branch off `startPoint` and switches to it. */
@@ -176,7 +185,7 @@ export interface TETApi {
      *  deletes its upstream. */
     deleteBranch(projectId: string, name: string, onRemote: boolean): Promise<GitActionResult>;
     /** A branch on a remote alone. The caller confirms first. */
-    deleteRemoteBranch(projectId: string, remote: string, name: string): Promise<GitActionResult>;
+    deleteRemoteBranch(projectId: string, remote: string, name: string, login?: GitLogin): Promise<GitActionResult>;
     /** Into the current branch. A conflict is reported and left in the tree. */
     merge(projectId: string, ref: string): Promise<GitActionResult>;
     /** Unless `confirmed`, answers `rewrites-pushed` instead where commits on the upstream would be
@@ -186,8 +195,10 @@ export interface TETApi {
     abort(projectId: string): Promise<GitActionResult>;
     /** Always annotated, as in GitHub Desktop. */
     createTag(projectId: string, name: string, target: string, message: string): Promise<GitActionResult>;
-    pushTag(projectId: string, name: string): Promise<GitActionResult>;
+    pushTag(projectId: string, name: string, login?: GitLogin): Promise<GitActionResult>;
     deleteTag(projectId: string, name: string, onRemote: boolean): Promise<GitActionResult>;
+    /** The tag on the remote alone: a `deleteTag` whose remote half wanted a login, again. */
+    deleteRemoteTag(projectId: string, name: string, login?: GitLogin): Promise<GitActionResult>;
     /** Leaves HEAD detached. */
     checkoutTag(projectId: string, name: string): Promise<GitActionResult>;
     /** Everything the changes list shows, untracked included. */

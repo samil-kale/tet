@@ -2,6 +2,7 @@ import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type { Project, RepositoryState } from "../../shared/types";
 import type { ControlRecords } from "../control/control-records";
 import type { EnvRequests, EnvStore } from "../environment";
+import type { GitLoginStore } from "../git-logins";
 import type { RepositoryManager } from "../git/repository";
 import type { ProjectDeps, ProjectStore } from "../projects";
 import type { AccountStore } from "../providers/accounts";
@@ -16,6 +17,8 @@ export interface IpcDeps {
   store: ProjectStore;
   settings: SettingsStore;
   accounts: AccountStore;
+  /** The logins typed into tet for git hosts without a credential helper. */
+  logins: GitLoginStore;
   sbxLocal: SbxLocalStore;
   environment: EnvStore;
   /** Shared with the control channel's `env-request`. */

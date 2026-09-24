@@ -1,5 +1,5 @@
 import { WORKTREES_NEED_GIT } from "../../shared/types";
-import type { WorktreeRef } from "../../shared/types";
+import type { GitActionResult, WorktreeRef } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, filled, prompt, singleField } from "../ui/Dialog";
@@ -84,8 +84,14 @@ export async function askDeleteWorktree(
     return;
   }
   const options = { force: false, onRemote: answer.checked };
+  /** No login is asked for the upstream: the worktree and its branch are gone by then, and with
+   *  them what names the upstream to try again. git's words are notified. */
+  const deleted = async (force: boolean): Promise<GitActionResult> => {
+    const result = await window.tet.projects.deleteWorktree(worktree, { ...options, force });
+    return result.needsConfirmation === "uncommitted" ? result : { ok: result.ok, error: result.error };
+  };
   run.run(`Deleting ${branch}...`, async () => {
-    const result = await window.tet.projects.deleteWorktree(worktree, options);
+    const result = await deleted(false);
     if (result.needsConfirmation !== "uncommitted") {
       return result;
     }
@@ -95,6 +101,6 @@ export async function askDeleteWorktree(
       detail: "Its changed and untracked files are lost.",
       confirmLabel: "Delete worktree"
     });
-    return forced.confirmed ? window.tet.projects.deleteWorktree(worktree, { ...options, force: true }) : { ok: true };
+    return forced.confirmed ? deleted(true) : { ok: true };
   });
 }
