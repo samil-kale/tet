@@ -1,9 +1,6 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { app } from "electron";
 import * as originalFs from "original-fs";
 import * as semver from "semver";
@@ -11,6 +8,7 @@ import writeFileAtomic from "write-file-atomic";
 import { assetName, installCommand, installRoot, rootExecutable, runningUpdater, updateLockPath } from "../shared/release";
 import type { UpdateResult } from "../shared/release";
 import type { NoticeSeverity } from "../shared/types";
+import { resumableDownload } from "./resumable-download";
 
 /** Not urgent: an update installs only once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
@@ -35,6 +33,11 @@ function updateDir(): string {
 
 function resultPath(): string {
   return path.join(updateDir(), "result.json");
+}
+
+/** Kept until unpacked: a download cut short continues from it (`resumableDownload`). */
+function archivePath(version: string, asset: string): string {
+  return path.join(updateDir(), `${version}-${asset}`);
 }
 
 /**
@@ -69,9 +72,10 @@ function reportLastUpdate(notify: Notify): void {
  * Removes earlier sessions' unpacked updates. Best effort: on win32 the updater may still hold its
  * executable briefly after writing its result. Awaited before the first check, whose `stage` may
  * unpack into the swept folder. Removed with original-fs: electron's fs opens `app.asar` as an
- * archive and then fails its rm with EBUSY (measured, electron 43, win32).
+ * archive and then fails its rm with EBUSY (measured, electron 43, win32). A download cut short
+ * stays for `stage` to continue.
  */
-async function sweepUpdateDir(): Promise<void> {
+async function sweepUpdateDir(asset: string): Promise<void> {
   let entries: string[];
   try {
     entries = await fs.promises.readdir(updateDir());
@@ -80,7 +84,7 @@ async function sweepUpdateDir(): Promise<void> {
   }
   await Promise.all(
     entries
-      .filter((entry) => entry !== path.basename(resultPath()))
+      .filter((entry) => entry !== path.basename(resultPath()) && !entry.endsWith(`-${asset}`))
       .map((entry) => originalFs.promises.rm(path.join(updateDir(), entry), { recursive: true, force: true }).catch(() => undefined))
   );
 }
@@ -132,19 +136,22 @@ function findRoot(dir: string): string | undefined {
 
 /**
  * Fetches and unpacks a version for the quit. Plain fetch, never electron's download manager: on
- * macOS it quarantines the file, and Gatekeeper would refuse the ad-hoc signed bundle.
+ * macOS it quarantines the file, and Gatekeeper would refuse the ad-hoc signed bundle. A failed
+ * download keeps its part for the next try; once unpacked, or refused by tar, the archive goes.
  */
 async function stage(releasesUrl: string, asset: string, version: string): Promise<string> {
   const dir = path.join(updateDir(), version);
   await originalFs.promises.rm(dir, { recursive: true, force: true });
   await fs.promises.mkdir(dir, { recursive: true });
-  const archive = path.join(updateDir(), `${version}-${asset}`);
-  try {
-    const response = await fetch(`${releasesUrl}/download/v${version}/${asset}`, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
-    if (!response.ok || !response.body) {
-      throw new Error(`download answered ${response.status}`);
+  const archive = archivePath(version, asset);
+  // Parts of versions since overtaken.
+  for (const entry of await fs.promises.readdir(updateDir())) {
+    if (entry.endsWith(`-${asset}`) && entry !== path.basename(archive)) {
+      await fs.promises.rm(path.join(updateDir(), entry), { force: true });
     }
-    await pipeline(Readable.fromWeb(response.body as WebReadableStream), fs.createWriteStream(archive));
+  }
+  await resumableDownload(`${releasesUrl}/download/v${version}/${asset}`, archive, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS));
+  try {
     await unpack(archive, dir);
   } finally {
     await fs.promises.rm(archive, { force: true });
@@ -206,7 +213,7 @@ export function startAutoUpdate(installed: boolean, releasesUrl: string, tetData
 
   void updaterDone().then(async () => {
     reportLastUpdate(notify);
-    await sweepUpdateDir();
+    await sweepUpdateDir(asset);
     await check();
     setInterval(() => void check(), CHECK_INTERVAL_MS);
   });
