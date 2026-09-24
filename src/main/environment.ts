@@ -4,7 +4,7 @@ import { errorMessage } from "../shared/errors";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
-import { saveJson } from "./json-file";
+import { isRecord, saveJson } from "./json-file";
 import { seal, unseal } from "./sealed";
 
 /** What the file holds: the variable plus its value, encrypted by the OS and base64-wrapped. */
@@ -19,13 +19,7 @@ function toInfo(entry: StoredVar): EnvVarInfo {
 }
 
 function isStoredVar(entry: unknown): entry is StoredVar {
-  const candidate = entry as StoredVar | null;
-  return (
-    typeof candidate === "object" &&
-    candidate !== null &&
-    typeof candidate.name === "string" &&
-    typeof candidate.value === "string"
-  );
+  return isRecord(entry) && typeof entry.name === "string" && typeof entry.value === "string";
 }
 
 /** The file as read: the rows understood, and the rest kept verbatim for the next write. */

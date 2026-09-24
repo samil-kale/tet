@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
+import { useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
 import { SparkleIcon, SpinnerIcon } from "./icons";
 import { notify } from "./Notices";
@@ -92,7 +92,7 @@ interface SuggestFieldProps {
   };
   disabled?: boolean;
   /** The field a dialog opens focused; refocused once a suggestion arrives. */
-  ref?: RefObject<HTMLInputElement | null>;
+  ref: RefObject<HTMLInputElement | null>;
   /** See `Field`. */
   error?: string;
   /** Told while a suggestion is fetched, for the dialog to hold its answer back (`PromptFields`). */
@@ -102,8 +102,6 @@ interface SuggestFieldProps {
 /** A text field with a wand beside it that fills it, e.g. a model's commit message. */
 export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting }: SuggestFieldProps) {
   const [suggesting, setSuggesting] = useState(false);
-  const own = useRef<HTMLInputElement>(null);
-  const input = ref ?? own;
 
   const suggest = async (): Promise<void> => {
     if (suggesting) {
@@ -116,8 +114,8 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
       if (suggested.length > 0) {
         onChange(suggested);
         requestAnimationFrame(() => {
-          input.current?.focus();
-          input.current?.select();
+          ref.current?.focus();
+          ref.current?.select();
         });
       }
     } catch (error) {
@@ -138,7 +136,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
           value={value}
           disabled={disabled || suggesting}
           onChange={(event) => onChange(event.target.value)}
-          ref={input}
+          ref={ref}
         />
         <button
           type="button"

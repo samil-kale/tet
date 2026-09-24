@@ -8,7 +8,8 @@ import type {
   SbxProjectConfig,
   SbxSaveResult,
   SbxStatus,
-  SbxStoredLocal
+  SbxStoredLocal,
+  SbxValueKind
 } from "../../shared/types";
 import {
   cancelSbxSetup,
@@ -25,12 +26,14 @@ import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 export function registerSbxIpc({
   store,
   sbxLocal,
-  send
-}: Pick<IpcDeps, "store" | "sbxLocal" | "send">): void {
+  notice
+}: Pick<IpcDeps, "store" | "sbxLocal" | "notice">): void {
   // Per project: the policy has to allow the project's folder.
   ipcMain.handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
     const project = store.get(projectId);
-    return readSbxStatus(project?.path ?? "", projectId);
+    return project
+      ? readSbxStatus(project.path, projectId)
+      : { installed: false, loggedIn: false, policyInitialized: false, blockers: [], failure: MISSING_REPOSITORY.error };
   });
   ipcMain.handle("sbx:login", () => runSbxLogin());
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
@@ -44,7 +47,7 @@ export function registerSbxIpc({
       projectId: string,
       config: SbxProjectConfig,
       knowledge: SbxKnowledgeConfig,
-      values: { secrets: string[]; variables: string[] }
+      values: Record<SbxValueKind, string[]>
     ): Promise<SbxProblems> => {
       const project = store.get(projectId);
       return project ? readProjectSbxProblems(project, config, knowledge, values) : {};
@@ -65,7 +68,7 @@ export function registerSbxIpc({
     "sbx:save-config",
     async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult> => {
       const project = store.get(projectId);
-      return project ? saveProjectSbx({ sbxLocal, send }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
+      return project ? saveProjectSbx({ sbxLocal, notice }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
     }
   );
 }

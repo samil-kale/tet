@@ -317,7 +317,7 @@ export class ProjectSessionManager {
   /** `tet-ctl tabs-start`: starts a tab no window has fitted, at the last fit's size if any. False
    *  for a tab not waiting for its first start. */
   start(tabId: string): boolean {
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.tabOf(tabId);
     if (!tab || tab.status !== "ready" || this.sessions.has(tabId)) {
       return false;
     }
@@ -744,7 +744,7 @@ export class ProjectSessionManager {
       existing.ensureStarted(cols, rows);
       return;
     }
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.tabOf(tabId);
     // A failed start (`error`) waits for Restart, which reads the size kept above; retried here,
     // every resize would rerun the whole setup, sbx's checks and notice included.
     if (!tab || tab.status === "error") {
@@ -789,7 +789,7 @@ export class ProjectSessionManager {
         this.startSession(tab, sbxRun).ensureStarted(dims.cols, dims.rows);
       })
       .catch((error: unknown) => {
-        this.callbacks.onNotice("error", `${getAgent(tab.agentId).displayName} could not be started: ${errorMessage(error)}`);
+        this.callbacks.onNotice("error", `${runtime.agent.displayName} could not be started: ${errorMessage(error)}`);
         // Spawned nothing; `error` offers Restart, as above.
         if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
           tab.status = "error";
@@ -1003,7 +1003,7 @@ export class ProjectSessionManager {
 
   write(tabId: string, data: string): void {
     // The only "answered" signal: typing into the asking tab. Cleared before forwarding.
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.tabOf(tabId);
     if (tab?.waitingAt !== undefined && answersQuestion(data)) {
       tab.waitingAt = undefined;
       this.postTabs();
@@ -1019,7 +1019,7 @@ export class ProjectSessionManager {
    * caches as "don't ask again".
    */
   async resolveUrlPrefix(tabId: string, prefix: string): Promise<string | undefined> {
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.tabOf(tabId);
     if (!tab?.sessionId) {
       return undefined;
     }
@@ -1150,7 +1150,7 @@ export class ProjectSessionManager {
    * rename that did not happen.
    */
   async renameTab(tabId: string, title: string): Promise<string | undefined> {
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.tabOf(tabId);
     if (!tab) {
       return undefined;
     }
@@ -1186,7 +1186,7 @@ export class ProjectSessionManager {
    * was nothing to restart.
    */
   restartTab(tabId: string, running = false): boolean {
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.tabOf(tabId);
     if (!tab) {
       return false;
     }
@@ -1238,7 +1238,7 @@ export class ProjectSessionManager {
    * (`setInFront`).
    */
   hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined): HookOutcome {
-    const tab = this.disposed ? undefined : this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.disposed ? undefined : this.tabOf(tabId);
     // A tab closed right after its first prompt still needs its session named, to delete it.
     const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
     const sessionId = bound ? getAgent(bound.agentId).sessionIdOf?.(payload) : undefined;
@@ -1351,7 +1351,7 @@ export class ProjectSessionManager {
    * or the turn (setTurn).
    */
   markSeen(tabId: string): void {
-    const tab = this.tabs.find((candidate) => candidate.tabId === tabId);
+    const tab = this.tabOf(tabId);
     if (!tab || tab.finishedAt === undefined) {
       return;
     }
@@ -1400,6 +1400,10 @@ export class ProjectSessionManager {
         }
       });
     }, cappedDelay);
+  }
+
+  private tabOf(tabId: string): TabState | undefined {
+    return this.tabs.find((candidate) => candidate.tabId === tabId);
   }
 
   private tabsOf(runtime: AgentRuntime): TabState[] {

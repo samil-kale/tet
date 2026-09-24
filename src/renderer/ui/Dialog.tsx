@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { DialogFrame } from "./DialogFrame";
+import type { GitActionResult } from "../../shared/types";
+import { DialogFrame, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
 import { notify } from "./Notices";
 import { createStore, useStore } from "./store";
 
-export interface ConfirmOptions {
+interface ConfirmOptions {
   title: string;
   /** The question, in one line. */
   message: string;
@@ -19,7 +20,7 @@ export interface ConfirmOptions {
   submit?: (checked: boolean) => Promise<void>;
 }
 
-export interface ConfirmAnswer {
+interface ConfirmAnswer {
   confirmed: boolean;
   /** Whether the checkbox was ticked; always false when the question had none. */
   checked: boolean;
@@ -29,8 +30,8 @@ export interface ConfirmAnswer {
 export interface PromptFields<T> {
   value: T;
   onChange: (value: T) => void;
-  /** What `submit` refused, for the field it was typed in (`Field`'s `error`). Cleared by the next
-   *  change, which is about to make it wrong. */
+  /** What `submit` refused, for the field it was typed in (`Field`'s `error`); cleared by the next
+   *  change (`useSubmit`). */
   error: string | undefined;
   /** `submit` is underway: the field it may refuse is disabled meanwhile. */
   busy: boolean;
@@ -128,6 +129,12 @@ export function filled(text: string): boolean {
   return text.trim().length > 0;
 }
 
+/** What a result refused, in its own words, for `submit` to hand back; `fallback` where the main
+ *  process gave none. */
+export function refusal(result: GitActionResult, fallback: string): string | undefined {
+  return result.ok ? undefined : (result.error ?? fallback);
+}
+
 /** `render` for a question asking one line of text, e.g. a name. */
 export function singleField(label: string, maxLength?: number): PromptOptions<string>["render"] {
   return ({ value, onChange, error, busy, field }) => (
@@ -221,9 +228,6 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
 
 function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }> }) {
   const [value, setValue] = useState(dialog.value);
-  /** What `submit` refused, handed to the fields; cleared by the next change. */
-  const [refused, setRefused] = useState<string | undefined>(undefined);
-  const [running, setRunning] = useState(false);
   const [held, setHeld] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   /** Escape closes the question while `submit` runs: the refusal then has no field to sit at and
@@ -238,36 +242,35 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
 
   useEffect(() => () => void (live.current = false), []);
 
-  const submit = async (): Promise<void> => {
-    if (!dialog.submit) {
-      dialog.answer(value);
-      return;
-    }
-    setRunning(true);
-    setRefused(undefined);
-    let message: string | undefined;
-    try {
-      message = await dialog.submit(value);
-    } finally {
-      setRunning(false);
-    }
-    if (!live.current) {
-      if (message !== undefined) {
-        notify("error", message);
+  /** What `submit` refused is handed to the fields (`error`). */
+  const { busy: running, refused, submit, clear } = useSubmit(
+    async () => {
+      if (!dialog.submit) {
+        return undefined;
       }
-      return;
+      const message = await dialog.submit(value);
+      if (!live.current) {
+        if (message !== undefined) {
+          notify("error", message);
+        }
+        return undefined;
+      }
+      if (message !== undefined) {
+        field.current?.focus();
+      }
+      return message;
+    },
+    () => {
+      // Closed meanwhile: cancelled already, nothing to answer.
+      if (live.current) {
+        dialog.answer(value);
+      }
     }
-    if (message === undefined) {
-      dialog.answer(value);
-    } else {
-      setRefused(message);
-      field.current?.focus();
-    }
-  };
+  );
 
   const onChange = (next: unknown): void => {
     setValue(next);
-    setRefused(undefined);
+    clear();
   };
 
   return (

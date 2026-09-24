@@ -6,12 +6,42 @@ import * as http from "node:http";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
-import { utilityProcess } from "electron";
+import { safeStorage, utilityProcess } from "electron";
 import { findControlPort } from "../src/main/control/control-server";
 import { tabControlToken } from "../src/main/control/control-token";
 import * as gitModule from "../src/main/git/git";
 import type { GitRequest, GitResponse } from "../src/main/git/git-host";
 import { CONTROL_ENV } from "../src/shared/control";
+import type { GitLogin } from "../src/shared/types";
+
+/**
+ * Stands in for the OS's encryption (electron-stub.js's `safeStorage`): "sealed:" is the cipher,
+ * and anything else was sealed under another keychain, which decrypting throws on as the real
+ * thing does. `available` false is a machine with no keyring.
+ */
+export function fakeSafeStorage(available = true): void {
+  Object.assign(safeStorage, {
+    isEncryptionAvailable: () => available,
+    encryptString: (text: string) => Buffer.from(`sealed:${text}`),
+    decryptString: (buffer: Buffer) => {
+      const text = buffer.toString();
+      if (!text.startsWith("sealed:")) {
+        throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+      }
+      return text.slice("sealed:".length);
+    }
+  });
+}
+
+/** Whether a process is still there. */
+export function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** The built CLI — the tests run what ships, not the source. */
 export const CLI = path.join(__dirname, "..", "dist", "tet-ctl.js");
@@ -144,13 +174,14 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   return app;
 }
 
-export function killApp(target: number): void {
+/** Ends the app; on win32 always by force, as the signal is not a thing there. */
+export function killApp(target: number, signal: "SIGTERM" | "SIGKILL" = "SIGTERM"): void {
   if (process.platform === "win32") {
     // The whole tree: a shell tab is a process of its own under the app.
     spawnSync("taskkill", ["/pid", String(target), "/t", "/f"], { stdio: "ignore" });
   } else {
     try {
-      process.kill(target, "SIGTERM");
+      process.kill(target, signal);
     } catch {
       // Already gone.
     }
@@ -202,11 +233,11 @@ export function initBare(prefix: string): string {
  *  changed while it runs (a revoked token). */
 export interface HttpRemote {
   url: string;
-  login: { username: string; password: string };
+  login: GitLogin;
   close: () => void;
 }
 
-export async function serveOverHttp(bare: string, login: { username: string; password: string }): Promise<HttpRemote> {
+export async function serveOverHttp(bare: string, login: GitLogin): Promise<HttpRemote> {
   const remote = { login: { ...login } };
   const server = http.createServer((request, response) => {
     const expected = `Basic ${Buffer.from(`${remote.login.username}:${remote.login.password}`).toString("base64")}`;

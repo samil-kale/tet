@@ -280,11 +280,6 @@ export function removeFolder(root: string, folderPath: string): Promise<void> {
   });
 }
 
-/** Writes one key inside `settings`, keeping every other key. */
-function patchSetting(root: string, key: string, value: unknown): Promise<void> {
-  return patch(root, (content) => [settingChange(content, key, value)]);
-}
-
 /** A key inside `settings`; a `settings` that isn't an object is replaced, as an edit can't reach into it. */
 function settingChange(content: ProjectFile, key: string, value: unknown): Change {
   const settings = content.settings;
@@ -311,13 +306,14 @@ const EXPLORER_SETTING_KEYS: Record<keyof ExplorerSettings, string> = {
   sortOrder: KEY_SORT_ORDER
 };
 
-/** The three file-only view settings, set from the settings dialog's Files tab. */
-export async function setExplorerSetting<K extends keyof ExplorerSettings>(
+/** The three file-only view settings, set from the settings dialog's Files tab: one key inside
+ *  `settings`, every other key kept. */
+export function setExplorerSetting<K extends keyof ExplorerSettings>(
   root: string,
   key: K,
   value: ExplorerSettings[K]
 ): Promise<void> {
-  await patchSetting(root, EXPLORER_SETTING_KEYS[key], value);
+  return patch(root, (content) => [settingChange(content, EXPLORER_SETTING_KEYS[key], value)]);
 }
 
 const SBX_ACCESS: readonly SbxAccess[] = ["ro", "rw"];

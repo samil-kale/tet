@@ -1,5 +1,5 @@
 import type { AgentId } from "../../shared/types";
-import { LARGER, fitIcon, fitStroke } from "./icons";
+import { LARGER, Svg, fitIcon } from "./icons";
 
 /**
  * Which icon belongs to which agent — the one agent-specific thing outside `src/main/agents/`: an
@@ -64,22 +64,11 @@ function OpencodeIcon({ className }: { className?: string }) {
  */
 function CodexIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(13.6 / LARGER, 8, 8, 16)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(13.6 / LARGER, 16, 1.6)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Svg className={className} extent={13.6} scale={LARGER} stroke={1.6}>
       <circle cx="8" cy="8" r="6" />
       <path d="M5.8 5.7L8.3 8l-2.5 2.3" />
       <path d="M9 10.5h2.3" />
-    </svg>
+    </Svg>
   );
 }
 
@@ -116,25 +105,15 @@ function PiIcon({ className }: { className?: string }) {
   );
 }
 
-/** The shell has no upstream icon: a plain prompt glyph. */
+/** The shell has no upstream icon: a plain prompt glyph. Measured: extent 13.4, centred 1.29
+ *  above the grid's middle. */
 function ShellIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(13.4, 8, 8 - 1.29, 16)}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={fitStroke(13.4, 16, 1.5)}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
+    <Svg className={className} extent={13.4} cy={8 - 1.29}>
       <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
       <path d="M4.5 6.5L6.9 8l-2.4 1.5" />
       <path d="M8.6 10.5h3" />
-    </svg>
+    </Svg>
   );
 }
 

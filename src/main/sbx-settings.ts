@@ -1,7 +1,16 @@
 import { errorMessage } from "../shared/errors";
 import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../shared/sbx-rules";
 import { SBX_AGENT_IDS } from "../shared/types";
-import type { Project, SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxStatus } from "../shared/types";
+import type {
+  NoticeSeverity,
+  Project,
+  SbxKnowledgeConfig,
+  SbxLocalSave,
+  SbxProblems,
+  SbxProjectConfig,
+  SbxSaveResult,
+  SbxStatus
+} from "../shared/types";
 import { getAgent } from "./agents";
 import { readGovernance, readSbxProblems, saveSbxConfig } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
@@ -61,7 +70,7 @@ export async function readProjectSbxProblems(
  * read one.
  */
 export async function saveProjectSbx(
-  { sbxLocal, send }: { sbxLocal: SbxLocalStore; send: (channel: string, payload: unknown) => void },
+  { sbxLocal, notice }: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
   project: Project,
   request: SbxProjectConfig,
   local: SbxLocalSave,
@@ -93,10 +102,10 @@ export async function saveProjectSbx(
       const message = request.enabled
         ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
         : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
-      send("app:notice", { severity: "info", message });
+      notice("info", message);
     }
     for (const agentId of orphans) {
-      send("app:notice", { severity: "info", message: `An earlier ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.` });
+      notice("info", `An earlier ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`);
     }
     const left: SbxProblems = { ...problems };
     for (const [option, rows] of Object.entries(refused) as [keyof SbxProblems, Record<string, string>][]) {

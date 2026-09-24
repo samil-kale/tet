@@ -52,25 +52,25 @@ export async function fetchHttpsImage(url: string, fetchFn: FetchLike = net.fetc
 /** What tet hands to the OS: links, files and folders. */
 export function registerShellIpc({
   repositories,
-  send
-}: Pick<IpcDeps, "repositories" | "send">): void {
+  notice
+}: Pick<IpcDeps, "repositories" | "notice">): void {
   /** Opens `target` with the OS's default app; a refusal is a notice naming it as `shown`. */
   const openWithNotice = async (target: string, kind: "file" | "folder", shown: string): Promise<void> => {
     const error = await shell.openPath(target);
     if (error) {
-      send("app:notice", { severity: "error", message: `Could not open ${kind}: ${shown} (${error})` });
+      notice("error", `Could not open ${kind}: ${shown} (${error})`);
     }
   };
 
   ipcMain.handle("shell:open-url", async (_event, url: string): Promise<void> => {
     if (!isOpenableUrl(url)) {
-      send("app:notice", { severity: "error", message: `Only http, https and mailto links are opened: ${url}` });
+      notice("error", `Only http, https and mailto links are opened: ${url}`);
       return;
     }
     try {
       await shell.openExternal(url);
     } catch (error) {
-      send("app:notice", { severity: "error", message: `Could not open URL: ${url} (${errorMessage(error)})` });
+      notice("error", `Could not open URL: ${url} (${errorMessage(error)})`);
     }
   });
 
@@ -128,7 +128,7 @@ export function registerShellIpc({
     const resolved = path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
     const stat = await fs.promises.stat(resolved).catch(() => null);
     if (!stat?.isFile()) {
-      send("app:notice", { severity: "error", message: `Could not find file: ${rawPath}` });
+      notice("error", `Could not find file: ${rawPath}`);
       return null;
     }
     const relative = repositoryRelative(root, resolved);

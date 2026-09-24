@@ -4,10 +4,9 @@ import type { AgentId, AgentInfo, TerminalDescriptor } from "../../shared/types"
 import { fitTerminal, focusTerminal, hideTerminal, showTerminal } from "./terminal-views";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
-import { refusal } from "../git/run-action";
 import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { filled, prompt, singleField } from "../ui/Dialog";
+import { filled, prompt, refusal, singleField } from "../ui/Dialog";
 import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
@@ -38,8 +37,7 @@ export type SideView = "git" | "files";
 export interface PaneChrome {
   /** Null while the side pane is in. */
   sideView: SideView | null;
-  onToggleGit: () => void;
-  onToggleFiles: () => void;
+  onToggleSideView: (view: SideView) => void;
   onOpenSettings: () => void;
 }
 
@@ -55,11 +53,12 @@ interface PaneProps {
   visible: boolean;
   /** Where keyboard focus goes on showing the project or changing the active tab; not drawn. */
   focused: boolean;
-  onActivate: (paneId: PaneId, tabId: string) => void;
+  /** Shows a tab; in another pane, moves it there. */
+  onActivate: (tabId: string, paneId: PaneId) => void;
   onFocus: (paneId: PaneId) => void;
   /** Editor tabs are renderer-only, unknown to `terminals.close`. */
   onCloseEditors: (tabIds: string[]) => void;
-  markedTabIds: string[];
+  finishedTabIds: string[];
   waitingTabIds: string[];
   /** Only on pane "a". */
   chrome?: PaneChrome;
@@ -106,7 +105,7 @@ export const Pane = memo(function Pane({
   onActivate,
   onFocus,
   onCloseEditors,
-  markedTabIds,
+  finishedTabIds,
   waitingTabIds,
   chrome,
   showProgress,
@@ -203,7 +202,7 @@ export const Pane = memo(function Pane({
   const createTab = useCallback(
     async (agentId: AgentId) => {
       const descriptor = await window.tet.terminals.create(projectId, agentId);
-      onActivate(paneId, descriptor.tabId);
+      onActivate(descriptor.tabId, paneId);
     },
     [projectId, paneId, onActivate]
   );
@@ -320,7 +319,7 @@ export const Pane = memo(function Pane({
             ...siblingPanes.map(
               (target): ContextMenuEntry => ({
                 label: `Move to ${PANE_LABELS[preset][target]}`,
-                run: () => onActivate(target, tabId)
+                run: () => onActivate(tabId, target)
               })
             )
           ]
@@ -410,14 +409,14 @@ export const Pane = memo(function Pane({
           <div className="tab-strip-actions">
             <button
               className={`icon-button${chrome.sideView === "git" ? " active" : ""}`}
-              onClick={chrome.onToggleGit}
+              onClick={() => chrome.onToggleSideView("git")}
               title={chrome.sideView === "git" ? "Hide the repository" : "Show the repository"}
             >
               <GitIcon />
             </button>
             <button
               className={`icon-button${chrome.sideView === "files" ? " active" : ""}`}
-              onClick={chrome.onToggleFiles}
+              onClick={() => chrome.onToggleSideView("files")}
               title={chrome.sideView === "files" ? "Hide the files" : "Show the files"}
             >
               <FilesIcon />
@@ -446,7 +445,7 @@ export const Pane = memo(function Pane({
                 event.dataTransfer.effectAllowed = "move";
                 onDragStart(paneId);
               }}
-              onClick={() => onActivate(paneId, tab.tabId)}
+              onClick={() => onActivate(tab.tabId, paneId)}
               onDoubleClick={() => !isEditorTab(tab) && tab.sessionId !== undefined && void askRename(tab)}
               // Keeps the terminal focused across a right-click: mousedown would blur xterm's
               // textarea to <body>, leaving no typing once the menu closes.
@@ -470,7 +469,7 @@ export const Pane = memo(function Pane({
                 // A question hidden on the tab in front (left out of `waitingTabIds`) gets no
                 // spinner: a session stopped on a question is not working.
                 <SessionMark kind="working" className="tab-icon" />
-              ) : markedTabIds.includes(tab.tabId) ? (
+              ) : finishedTabIds.includes(tab.tabId) ? (
                 <SessionMark kind="finished" className="tab-icon" />
               ) : (
                 <AgentIcon agentId={tab.agentId} className="tab-icon" />

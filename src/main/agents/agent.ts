@@ -47,7 +47,7 @@ export interface SandboxSessionMount {
  *
  * No `watch`: the sandboxed tab's own output already schedules the reconcile.
  */
-export interface SandboxSessions {
+interface SandboxSessions {
   mounts: SandboxSessionMount[];
   /** SessionProvider.list against the mounted root; the manager names the sandbox on the result. */
   list(root: string, cwd: string): Promise<AgentSessionInfo[]>;
@@ -103,7 +103,7 @@ export interface SpawnPreparation {
 }
 
 /** What an agent hands a sandboxed tab — see AgentDefinition.prepareSandboxSpawn. */
-export interface SandboxPreparation {
+interface SandboxPreparation {
   /** Appended after `sbx run`'s own "--". */
   args: string[];
   /** `sbx run -e KEY=VALUE`, in container paths; per repository only — constants go in `sandboxEnv`. */

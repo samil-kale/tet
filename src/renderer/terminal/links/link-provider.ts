@@ -23,6 +23,8 @@ export interface WrappedUrlResolver {
  * scrollback on every render.
  */
 const MAX_WINDOW_ROWS = 20;
+/** Characters the same walk may gather each way. */
+const MAX_WINDOW_CHARS = 2048;
 
 interface LinkSegment {
   row: number;
@@ -376,12 +378,12 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
   if (terminal.buffer.active.getLine(lineIndex)) {
     const [currentContent, currentOffset] = readLine(terminal, lineIndex);
 
-    // Expand top, stop on whitespace, length > 2048 or MAX_WINDOW_ROWS rows.
+    // Expand top, stop on whitespace, MAX_WINDOW_CHARS or MAX_WINDOW_ROWS.
     if (isContinuation(terminal, lineIndex) && currentContent[0] !== " ") {
       length = 0;
       rows = 0;
       // Caps checked before the step: `topIdx` never names an unread row.
-      while (length < 2048 && rows < MAX_WINDOW_ROWS && terminal.buffer.active.getLine(topIdx - 1)) {
+      while (length < MAX_WINDOW_CHARS && rows < MAX_WINDOW_ROWS && terminal.buffer.active.getLine(topIdx - 1)) {
         topIdx--;
         rows++;
         [content, offset] = readLine(terminal, topIdx);
@@ -399,13 +401,13 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
     lines.push(currentContent);
     offsets.push(currentOffset);
 
-    // Expand bottom, stop on whitespace, length > 2048 or MAX_WINDOW_ROWS rows.
+    // Expand bottom, stop on whitespace, MAX_WINDOW_CHARS or MAX_WINDOW_ROWS.
     length = 0;
     rows = 0;
     while (
       isContinuation(terminal, bottomIdx + 1) &&
       terminal.buffer.active.getLine(++bottomIdx) &&
-      length < 2048 &&
+      length < MAX_WINDOW_CHARS &&
       ++rows <= MAX_WINDOW_ROWS
     ) {
       [content, offset] = readLine(terminal, bottomIdx);

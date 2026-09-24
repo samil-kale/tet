@@ -9,7 +9,7 @@ import { useSyncExternalStore } from "react";
  * `set` replaces the value; `useStore` compares by identity, as `useSyncExternalStore` does, so a
  * list or record is replaced whole rather than edited in place.
  */
-export interface Store<T> {
+interface Store<T> {
   get: () => T;
   set: (next: T) => void;
   subscribe: (listener: () => void) => () => void;

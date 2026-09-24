@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import type { ReactNode } from "react";
 import { refName, syncRemote, upstreamName, worktreeBase } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
@@ -102,28 +102,19 @@ export const BranchTree = memo(function BranchTree({
   const menu = useContextMenu<MenuTarget>();
 
   const query = filter.trim().toLowerCase();
-  // Memoized so the lists below can name it as their dependency: it reads `query` and nothing else,
-  // and naming the query instead would hide a second source added here later.
-  const matches = useCallback((name: string): boolean => name.toLowerCase().includes(query), [query]);
+  const matches = (name: string): boolean => name.toLowerCase().includes(query);
 
+  // Plain computations, not memos: `state` is a new object on every push and `query` changes per
+  // keystroke, so a memo would miss whenever it matters, to filter a few hundred strings.
   // The linked ones alone: the main worktree is the repository itself, not one made from it. A
   // linked worktree and its branch are one (projects.ts), listed under WORKTREES only.
-  const linkedWorktrees = useMemo(() => state.worktrees.filter((worktree) => !worktree.main), [state.worktrees]);
-  const ownBranches = useMemo(
-    () => state.localBranches.filter((name) => !linkedWorktrees.some((worktree) => worktree.branch === name)),
-    [state.localBranches, linkedWorktrees]
-  );
-  const localBranches = useMemo(() => ownBranches.filter(matches), [ownBranches, matches]);
-  const remotes = useMemo(
-    () => state.remotes.map((remote) => ({ ...remote, branches: remote.branches.filter(matches) })),
-    [state.remotes, matches]
-  );
+  const linkedWorktrees = state.worktrees.filter((worktree) => !worktree.main);
+  const ownBranches = state.localBranches.filter((name) => !linkedWorktrees.some((worktree) => worktree.branch === name));
+  const localBranches = ownBranches.filter(matches);
+  const remotes = state.remotes.map((remote) => ({ ...remote, branches: remote.branches.filter(matches) }));
   // The filter reads as "find a ref", so it covers tags and worktrees too.
-  const tags = useMemo(() => state.tags.filter(matches), [state.tags, matches]);
-  const worktrees = useMemo(
-    () => linkedWorktrees.filter((worktree) => matches(worktreeName(worktree))),
-    [linkedWorktrees, matches]
-  );
+  const tags = state.tags.filter(matches);
+  const worktrees = linkedWorktrees.filter((worktree) => matches(worktreeName(worktree)));
   /** A linked worktree keeps its branch: nothing here switches it (projects.ts couples the two). */
   const inWorktree = linkedWorktrees.some((worktree) => worktree.current);
 

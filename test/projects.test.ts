@@ -6,7 +6,7 @@ import { after, before, describe, it } from "node:test";
 import type { ControlRecords } from "../src/main/control/control-records";
 import { GitLoginStore } from "../src/main/git-logins";
 import { RepositoryManager } from "../src/main/git/repository";
-import { addWorktree, deleteWorktree, ProjectStore, renameWorktree, type ProjectDeps } from "../src/main/projects";
+import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, renameWorktree, type ProjectDeps } from "../src/main/projects";
 import { SbxLocalStore } from "../src/main/sbx-local";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import type { Project } from "../src/shared/types";
@@ -91,6 +91,19 @@ async function open(folders: string[], onClose: (project: Project) => void = () 
 }
 
 const remoteHas = (bare: string, branch: string): boolean => git(bare, "branch", "--list", branch) !== "";
+
+describe("a project opened or closed", () => {
+  it("is announced to the window here, the same whichever transport asked", async () => {
+    const repo = repositoryWithWorktrees([]);
+    const { deps, store, changes } = await open([]);
+    const added = await addProject(deps, repo.main);
+    assert.ok(added.project);
+    assert.deepEqual(changes, [{ added: added.project.id }]);
+    await removeProject(deps, added.project.id);
+    assert.deepEqual(changes, [{ added: added.project.id }, { removed: added.project.id }]);
+    assert.deepEqual(store.list(), []);
+  });
+});
 
 describe("a worktree deleted with its main project closed", () => {
   let repo: ReturnType<typeof repositoryWithWorktrees>;

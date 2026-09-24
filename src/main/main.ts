@@ -406,7 +406,6 @@ async function startControl(): Promise<void> {
         openEditor: (projectId, filePath, keep) => send("editor:open", { projectId, path: filePath, keep }),
         editorContent,
         showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
-        projectsChanged: projectDeps.projectsChanged,
         notify: showDesktopNotification,
         applyTheme,
         environment,
@@ -417,7 +416,7 @@ async function startControl(): Promise<void> {
           config: (project) => readSbxConfig(project.path),
           stored: (projectId) => sbxLocal.stored(projectId),
           problems: readProjectSbxProblems,
-          save: (project, request, local, status) => saveProjectSbx({ sbxLocal, send }, project, request, local, status)
+          save: (project, request, local, status) => saveProjectSbx({ sbxLocal, notice }, project, request, local, status)
         }
       },
       controlChannel.token,
@@ -602,7 +601,6 @@ if (!app.requestSingleInstanceLock()) {
     configureSandboxes(cliPath, port, dataRoot);
     controlChannel = { token: controlToken, port };
     registerIpc({
-      dataRoot,
       store,
       settings,
       accounts,
@@ -615,6 +613,7 @@ if (!app.requestSingleInstanceLock()) {
       records,
       projectDeps,
       send,
+      notice,
       openProject,
       openWorkspace,
       applyTheme,

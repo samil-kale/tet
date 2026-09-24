@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, use
 import type { ExplorerListing, FileChange, GitActionResult, Project } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import type { FileAct, FileAsk } from "../git/run-action";
-import { openEntries, pathEntries } from "../git/ChangesList";
+import { openEntries, pathEntries } from "./file-menu";
 import {
   ancestorsOf,
   buildForest,
@@ -239,27 +239,16 @@ export const Explorer = memo(function Explorer({
 
   const under = (dir: string, name: string): string => (dir ? `${dir}/${name}` : name);
 
-  const askNewFile = async (dir: string): Promise<void> => {
+  const askNew = async (kind: "file" | "folder", dir: string): Promise<void> => {
+    const create = kind === "file" ? window.tet.repository.createFile : window.tet.repository.createDirectory;
     await prompt({
-      title: "New File",
+      title: kind === "file" ? "New File" : "New Folder",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
       value: "",
       confirmLabel: "Create",
       ready: filled,
       render: singleField("Name"),
-      submit: (name) => runAsked(() => window.tet.repository.createFile(project.id, under(dir, name.trim())))
-    });
-  };
-
-  const askNewFolder = async (dir: string): Promise<void> => {
-    await prompt({
-      title: "New Folder",
-      detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
-      value: "",
-      confirmLabel: "Create",
-      ready: filled,
-      render: singleField("Name"),
-      submit: (name) => runAsked(() => window.tet.repository.createDirectory(project.id, under(dir, name.trim())))
+      submit: (name) => runAsked(() => create(project.id, under(dir, name.trim())))
     });
   };
 
@@ -279,6 +268,8 @@ export const Explorer = memo(function Explorer({
     });
   };
 
+  // Asked although the trash can give it back: VS Code's Explorer asks too, and a slip on the
+  // menu would otherwise take a folder out from under a running agent.
   const askDelete = async (node: TreeNode): Promise<void> => {
     const isFolder = node.children !== undefined;
     const answer = await confirm({
@@ -294,8 +285,8 @@ export const Explorer = memo(function Explorer({
 
   // The header's buttons act on the repository root.
   useImperativeHandle(ref, () => ({
-    newFile: () => void askNewFile(""),
-    newFolder: () => void askNewFolder(""),
+    newFile: () => void askNew("file", ""),
+    newFolder: () => void askNew("folder", ""),
     collapseAll,
     clearFilter: () => setFilter("")
   }));
@@ -346,8 +337,8 @@ export const Explorer = memo(function Explorer({
 
     return [
       ...fileEntries,
-      { label: "New File...", run: () => void askNewFile(dir) },
-      { label: "New Folder...", run: () => void askNewFolder(dir) },
+      { label: "New File...", run: () => void askNew("file", dir) },
+      { label: "New Folder...", run: () => void askNew("folder", dir) },
       ...editEntries,
       ...viewEntries,
       ...(node ? pathEntries(project, [node.path], isFile ? "file path" : "path") : [])
@@ -433,7 +424,10 @@ export function useExplorerListing(
     setListing(true);
     void window.tet.repository.listExplorer(projectId).then((result) => {
       if (!cancelled) {
-        setHeld({ projectId, listing: result });
+        setHeld((previous) => ({
+          projectId,
+          listing: keepRoots(previous?.projectId === projectId ? previous.listing : undefined, result)
+        }));
         setListing(false);
       }
     });
@@ -442,4 +436,17 @@ export function useExplorerListing(
     };
   }, [projectId, changesKey, explorerVersion, shown]);
   return { explorerListing: held?.projectId === projectId ? held.listing : undefined, listing, refreshExplorer };
+}
+
+/** The listing with the previous `roots` where unchanged: the reveal effect depends on it, and a
+ *  new array per re-read would scroll back to the selection on every change of the tree. */
+function keepRoots(previous: ExplorerListing | undefined, next: ExplorerListing): ExplorerListing {
+  const before = previous?.roots;
+  const after = next.roots;
+  const same =
+    before !== undefined &&
+    after !== undefined &&
+    before.length === after.length &&
+    before.every((root, index) => root.name === after[index].name && root.path === after[index].path);
+  return same ? { ...next, roots: before } : next;
 }

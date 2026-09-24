@@ -5,7 +5,7 @@ import { killProcessTree, resolveCommand, spawnAgentProcess, type SpawnOptions }
 import { timeStartup } from "../event-loop-monitor";
 import { isSimulatedMissing } from "../simulate";
 
-export interface SessionCallbacks {
+interface SessionCallbacks {
   onOutput: (data: string) => void;
   onStatusChange: (status: TerminalStatus) => void;
 }
@@ -87,12 +87,16 @@ export function checkAgentInstalled(executable: string, versionArgs: string[], c
     child.on("error", () => finish(false));
     child.on("exit", (code) => finish(code === 0));
   });
-  installedChecks.set(`${executable}\0${versionArgs.join("\0")}`, check);
+  installedChecks.set(checkKey(executable, versionArgs), check);
   return check;
 }
 
+function checkKey(executable: string, versionArgs: string[]): string {
+  return `${executable}\0${versionArgs.join("\0")}`;
+}
+
 export function isAgentInstalled(executable: string, versionArgs: string[], cwd: string): Promise<boolean> {
-  return installedChecks.get(`${executable}\0${versionArgs.join("\0")}`) ?? checkAgentInstalled(executable, versionArgs, cwd);
+  return installedChecks.get(checkKey(executable, versionArgs)) ?? checkAgentInstalled(executable, versionArgs, cwd);
 }
 
 /** One agent process behind one tab: spawned lazily, at the size the view actually has. */

@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Layout describes the window, not a repository, so it lives in renderer storage. */
 const STORAGE_PREFIX = "tet.layout.";
+
+/** A key in that storage, for what is persisted outside these hooks (pane-layout.ts). */
+export function layoutKey(key: string): string {
+  return STORAGE_PREFIX + key;
+}
 /** How long after the last resize a pane size is written to storage. */
 const PERSIST_MS = 300;
 

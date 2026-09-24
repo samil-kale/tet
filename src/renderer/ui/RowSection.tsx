@@ -116,7 +116,8 @@ export function RowSection<T extends { id: string }>({
   add
 }: {
   label: string;
-  empty: string;
+  /** Said where there are no rows; left out where there always are. */
+  empty?: string;
   rows: T[];
   renderRow: (row: T) => ReactNode;
   add?: ReactNode;
@@ -125,7 +126,7 @@ export function RowSection<T extends { id: string }>({
     <div className="dialog-field">
       <span className="dialog-field-label">{label}</span>
       <div className="row-section-rows">
-        {rows.length === 0 && <p className="dialog-detail">{empty}</p>}
+        {rows.length === 0 && empty !== undefined && <p className="dialog-detail">{empty}</p>}
         {rows.map(renderRow)}
       </div>
       {add}

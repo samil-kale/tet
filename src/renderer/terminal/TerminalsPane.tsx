@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Project } from "../../shared/types";
+import type { AgentInfo, Project } from "../../shared/types";
 import { sameList } from "../identity";
 import type { OpenEditor } from "./editor-tab";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
@@ -9,7 +9,7 @@ import { usePersistedShare } from "../ui/layout-storage";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome, type SideView } from "./Pane";
 import { isEditorTab, type PaneTab } from "./editor-tab";
-import { useAgents } from "../ui/use-agents";
+import { NO_TABS } from "./use-project-layouts";
 
 /**
  * A divider's position as a *share* of its room (`usePersistedShare`): `renderGrid` multiplies it
@@ -37,9 +37,6 @@ function pixelsFor(fraction: number, min: number, minOther: number, containerSiz
 /** Every divider's default share, and what "single" resets to. */
 const HALF = 1 / 2;
 
-/** Shared, so an empty pane's prop is stable. */
-const NO_PANE_TABS: PaneTab[] = [];
-
 /** The pane a dragged tab is over, and the snap zone under the pointer, if any. */
 interface DragTarget {
   paneId: PaneId;
@@ -60,8 +57,8 @@ interface TerminalsPaneProps {
   visible: boolean;
   /** What the side pane shows, if it is out. */
   sideView: SideView | null;
-  onToggleGit: () => void;
-  onToggleFiles: () => void;
+  onToggleSideView: (view: SideView) => void;
+  agents: AgentInfo[];
   /** Bootstrap's session listing: project-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
   /** Opens a path ctrl-clicked in a terminal, or linked from a Markdown preview, in the project's
@@ -74,7 +71,7 @@ interface TerminalsPaneProps {
   onFocusPane: (projectId: string, paneId: PaneId) => void;
   onOpenSettings: () => void;
   /** Tabs whose finished turn is not yet seen — App decides, this draws. */
-  markedTabIds: string[];
+  finishedTabIds: string[];
   /** Tabs stopped on an unanswered question — App decides, this draws. */
   waitingTabIds: string[];
   /** Tabs the progress bar is about, shown on each one's pane. */
@@ -87,8 +84,8 @@ export const TerminalsPane = memo(function TerminalsPane({
   tabs,
   visible,
   sideView,
-  onToggleGit,
-  onToggleFiles,
+  onToggleSideView,
+  agents,
   externalBusy,
   onOpenFile,
   onCloseEditors,
@@ -97,11 +94,10 @@ export const TerminalsPane = memo(function TerminalsPane({
   onSnapTab,
   onFocusPane,
   onOpenSettings,
-  markedTabIds,
+  finishedTabIds,
   waitingTabIds,
   startingTabIds
 }: TerminalsPaneProps) {
-  const agents = useAgents();
   /**
    * Mirrored in a ref for the drop handler, which reads it synchronously without becoming a new
    * callback on each change. The source pane is a ref alone: set on `dragstart`, before any render.
@@ -186,16 +182,11 @@ export const TerminalsPane = memo(function TerminalsPane({
   }, [layout.preset, resetDividerFractions]);
 
   const chrome = useMemo<PaneChrome>(
-    () => ({
-      sideView,
-      onToggleGit,
-      onToggleFiles,
-      onOpenSettings
-    }),
-    [sideView, onToggleGit, onToggleFiles, onOpenSettings]
+    () => ({ sideView, onToggleSideView, onOpenSettings }),
+    [sideView, onToggleSideView, onOpenSettings]
   );
   const onActivate = useCallback(
-    (paneId: PaneId, tabId: string) => onActivateTab(project.id, tabId, paneId),
+    (tabId: string, paneId: PaneId) => onActivateTab(project.id, tabId, paneId),
     [onActivateTab, project.id]
   );
   const onFocus = useCallback((paneId: PaneId) => onFocusPane(project.id, paneId), [onFocusPane, project.id]);
@@ -256,7 +247,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       if (target?.transition) {
         onSnapTab(project.id, tabId, target.transition);
       } else {
-        onActivate(paneId, tabId);
+        onActivate(tabId, paneId);
       }
     },
     [setDragTarget, onSnapTab, project.id, onActivate]
@@ -279,7 +270,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       next[paneId] = sameList(
         paneTabsRef.current[paneId],
         tabs.filter((tab) => (tabPane[tab.tabId] ?? focusedPane) === paneId),
-        NO_PANE_TABS
+        NO_TABS
       );
     }
     paneTabsRef.current = next;
@@ -291,7 +282,7 @@ export const TerminalsPane = memo(function TerminalsPane({
     const ids = new Set(startingTabIds);
     const next: Partial<Record<PaneId, boolean>> = {};
     for (const paneId of PANE_IDS) {
-      next[paneId] = (paneTabs[paneId] ?? NO_PANE_TABS).some((tab) => ids.has(tab.tabId));
+      next[paneId] = (paneTabs[paneId] ?? NO_TABS).some((tab) => ids.has(tab.tabId));
     }
     return next;
   }, [paneTabs, startingTabIds]);
@@ -314,7 +305,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       projectId={project.id}
       paneId={paneId}
       preset={layout.preset}
-      tabs={paneTabs[paneId] ?? NO_PANE_TABS}
+      tabs={paneTabs[paneId] ?? NO_TABS}
       activeTabId={layout.activeTab[paneId] ?? null}
       agents={agents}
       visible={visible}
@@ -324,7 +315,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       onActivate={onActivate}
       onFocus={onFocus}
       onCloseEditors={onCloseEditorsHere}
-      markedTabIds={markedTabIds}
+      finishedTabIds={finishedTabIds}
       waitingTabIds={waitingTabIds}
       chrome={first ? chrome : undefined}
       // Pane "a" also carries the project-wide reason.
@@ -380,6 +371,11 @@ export const TerminalsPane = memo(function TerminalsPane({
         })
       : null;
 
+  // The three lines, once: a preset draws the ones it has.
+  const colDivider = divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction);
+  const leftRowDivider = divider("horizontal", leftRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setLeftRowFraction);
+  const rightRowDivider = divider("horizontal", rightRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction);
+
   const renderGrid = () => {
     switch (layout.preset) {
       case "single":
@@ -388,7 +384,7 @@ export const TerminalsPane = memo(function TerminalsPane({
         return (
           <>
             {renderPane("a", { width: colPixels }, true)}
-            {divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
+            {colDivider}
             {renderPane("b", {}, false)}
           </>
         );
@@ -396,10 +392,10 @@ export const TerminalsPane = memo(function TerminalsPane({
         return (
           <>
             {renderPane("a", { width: colPixels }, true)}
-            {divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
+            {colDivider}
             <div className="panes-column fill">
               {renderPane("b", { height: rightRowPixels }, false)}
-              {divider("horizontal", rightRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
+              {rightRowDivider}
               {renderPane("c", {}, false)}
             </div>
           </>
@@ -409,13 +405,13 @@ export const TerminalsPane = memo(function TerminalsPane({
           <>
             <div className="panes-column" style={{ width: colPixels }}>
               {renderPane("a", { height: leftRowPixels }, true)}
-              {divider("horizontal", leftRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setLeftRowFraction)}
+              {leftRowDivider}
               {renderPane("c", {}, false)}
             </div>
-            {divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction)}
+            {colDivider}
             <div className="panes-column fill">
               {renderPane("b", { height: rightRowPixels }, false)}
-              {divider("horizontal", rightRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction)}
+              {rightRowDivider}
               {renderPane("d", {}, false)}
             </div>
           </>

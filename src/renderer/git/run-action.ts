@@ -1,6 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { GitActionResult, GitLogin } from "../../shared/types";
+import { refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
+import type { BranchActions } from "./BranchTree";
 import { askLogin } from "./GitLogin";
 
 /**
@@ -23,7 +25,7 @@ export type FileAct = (action: () => Promise<GitActionResult>) => void;
 
 /** A git command, handed the login typed for its remote when its first try answered `loginUrl`. A
  *  command reaching no remote ignores it. */
-export type GitAction = (login?: GitLogin) => Promise<GitActionResult>;
+type GitAction = (login?: GitLogin) => Promise<GitActionResult>;
 
 /** The same pair for a git command, labelled while it runs. `run`'s command asks for a login it
  *  wants (`gitRun`); `ask`'s cannot, since a question is already up and only one can be. */
@@ -33,7 +35,7 @@ export interface GitRun {
 }
 
 /** How a view hands a git command to App's runner, which answers with the result as it is. */
-export type GitRunner = (action: () => Promise<GitActionResult>) => Promise<GitActionResult>;
+type GitRunner = (action: () => Promise<GitActionResult>) => Promise<GitActionResult>;
 
 /**
  * A `GitRun` over App's runner. `run` goes through `onBar`, which raises the view's bar, and
@@ -56,11 +58,6 @@ export function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
       }),
     ask: async (label, action) => refusal(await offBar(() => action()), `${label} failed`)
   };
-}
-
-/** What a result refused, in its own words; `fallback` where the main process gave none. */
-export function refusal(result: GitActionResult, fallback: string): string | undefined {
-  return result.ok ? undefined : (result.error ?? fallback);
 }
 
 /** A runner with its failure notified rather than handed back: what `FileAct` and `GitRun.run`
@@ -120,7 +117,7 @@ export function useFileAct(projectId: string): { acting: boolean; act: FileAct; 
  * list each have one. Counted for the same reason as above, and wrapped around `run` alone: what a
  * question asked for runs on the question's bar.
  */
-export function useStartedHere<A extends unknown[], R>(
+function useStartedHere<A extends unknown[], R>(
   run: (...args: A) => Promise<R>
 ): { startedHere: boolean; start: (...args: A) => Promise<R> } {
   const [running, setRunning] = useState(0);
@@ -136,4 +133,63 @@ export function useStartedHere<A extends unknown[], R>(
     [run]
   );
   return { startedHere: running > 0, start };
+}
+
+/**
+ * App's gate for the branch commands: one per project at a time, whoever started it — a second
+ * click mid-switch would stack two `git switch`. Mirrors `Repository.runAction`; `BranchActions.run`
+ * is the one way in, a view asking its own question first. Hands out the git pane's actions for
+ * the project on screen (`activeBranch`, its bar showing what it started, `ask` excepted: the
+ * question that asked for it shows that one) and the project list's way of running a command in
+ * any of its projects (`runInProject`, on the list's bar, `projectListBusy`).
+ */
+export function useBranchActions(activeProjectId: string | null): {
+  activeBranch: BranchActions;
+  projectListBusy: boolean;
+  runInProject: (projectId: string) => GitRun;
+} {
+  /** Projects with a branch command in flight: a fetch ending in A must not free B. */
+  const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
+  /** Read synchronously: a second double-click can land before a re-render. */
+  const branchActionsRef = useRef(new Set<string>());
+  const runBranchAction = useCallback(
+    async (projectId: string, action: () => Promise<GitActionResult>): Promise<GitActionResult> => {
+      if (branchActionsRef.current.has(projectId)) {
+        return { ok: false, error: "Another command is running in this repository" };
+      }
+      branchActionsRef.current.add(projectId);
+      setBranchActions(new Set(branchActionsRef.current));
+      try {
+        return await action();
+      } finally {
+        branchActionsRef.current.delete(projectId);
+        setBranchActions(new Set(branchActionsRef.current));
+      }
+    },
+    []
+  );
+  const runActiveBranchAction = useCallback(
+    (action: () => Promise<GitActionResult>): Promise<GitActionResult> =>
+      activeProjectId ? runBranchAction(activeProjectId, action) : Promise.resolve({ ok: true }),
+    [activeProjectId, runBranchAction]
+  );
+  const { startedHere: gitPaneActing, start: runActiveHere } = useStartedHere(runActiveBranchAction);
+  const activeBranch = useMemo<BranchActions>(
+    () => ({
+      busy: activeProjectId !== null && branchActions.has(activeProjectId),
+      startedHere: gitPaneActing,
+      ...gitRun(runActiveHere, runActiveBranchAction)
+    }),
+    [branchActions, activeProjectId, gitPaneActing, runActiveHere, runActiveBranchAction]
+  );
+  const { startedHere: projectListBusy, start: runProjectListHere } = useStartedHere(runBranchAction);
+  const runInProject = useCallback(
+    (projectId: string): GitRun =>
+      gitRun(
+        (action) => runProjectListHere(projectId, action),
+        (action) => runBranchAction(projectId, action)
+      ),
+    [runProjectListHere, runBranchAction]
+  );
+  return { activeBranch, projectListBusy, runInProject };
 }

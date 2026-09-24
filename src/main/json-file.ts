@@ -1,8 +1,19 @@
+import * as fs from "node:fs";
 import writeFileAtomic from "write-file-atomic";
 
 /** A parsed JSON object; an array or null is not one. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** One of tet's own files, parsed; undefined where there is none yet or it cannot be read — the
+ *  store then starts empty, and its next save writes over it. The shape is the caller's to check. */
+export function readJson(file: string): unknown {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return undefined;
+  }
 }
 
 /** Writes one of tet's own files as indented JSON, renamed into place; a failure is logged as

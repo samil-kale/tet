@@ -7,7 +7,7 @@ import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import { readMainWorktree } from "./git/linked-git-dir";
 import type { Repository, RepositoryManager } from "./git/repository";
-import { saveJson } from "./json-file";
+import { isRecord, readJson, saveJson } from "./json-file";
 import { removeProjectSandboxes } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
@@ -28,25 +28,32 @@ export interface ProjectDeps {
 
 /**
  * Opens a folder as a project, shared by the add-repository dialog (`projects:open-path`) and the
- * control channel. A stored project whose folder is gone watches and spawns nothing, with a notice
- * per action.
+ * control channel, and tells the window (`projectsChanged`), as every change to the list here
+ * does: the window keeps no list of its own, so both transports lead to one behaviour. A stored
+ * project whose folder is gone watches and spawns nothing, with a notice per action.
  */
-export async function addProject({ store, openProject }: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
+export async function addProject({ store, openProject, projectsChanged }: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
   if (!(await fs.promises.stat(directory).then((stat) => stat.isDirectory(), () => false))) {
     return { error: `${directory} is not a folder` };
   }
   // Picking a subdirectory opens the repository itself: git reports paths relative to the root.
   const project = store.add((await git.resolveRoot(directory).catch(() => undefined)) ?? directory);
   openProject(project);
+  projectsChanged({ added: project.id });
   return { project };
 }
 
-/** Resolves once the project's sessions and git commands have ended — a worktree's folder is
- *  removed or moved only then. */
-export function removeProject(
-  { store, repositories, sessions, records, sbxLocal }: ProjectDeps,
-  projectId: string
-): Promise<void> {
+/** Closes the project and tells the window. Resolves once the project's sessions and git commands
+ *  have ended — a worktree's folder is removed or moved only then. */
+export function removeProject(deps: ProjectDeps, projectId: string): Promise<void> {
+  const ended = closeProject(deps, projectId);
+  deps.projectsChanged({ removed: projectId });
+  return ended;
+}
+
+/** removeProject's work, unannounced: withWorktreeClosed tells the window together with the
+ *  reopening, so a renamed worktree reads as one change. */
+function closeProject({ store, repositories, sessions, records, sbxLocal }: ProjectDeps, projectId: string): Promise<void> {
   // The project leaves the window at once; its sessions still end by themselves
   // (TerminalSession.stop). Its records go once they have: a stopping tab still prints.
   const sessionsEnded = sessions.close(projectId).finally(() => records.forgetProject(projectId));
@@ -153,7 +160,7 @@ async function withWorktreeClosed(
   const project = deps.store.list().find((entry) => onDisk(entry.path) === folder);
   const local = project && deps.sbxLocal.encrypted(project.id);
   if (project) {
-    await removeProject(deps, project.id);
+    await closeProject(deps, project.id);
     void removeProjectSandboxes(project.id);
   }
   const result = await command();
@@ -354,27 +361,17 @@ export class ProjectStore implements ProjectLookup {
   }
 
   private load(): void {
-    try {
-      const raw = fs.readFileSync(this.file, "utf8");
-      const parsed: unknown = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        this.projects = parsed.filter(
-          (entry): entry is Project =>
-            typeof entry === "object" &&
-            entry !== null &&
-            typeof (entry as Project).id === "string" &&
-            typeof (entry as Project).path === "string" &&
-            typeof (entry as Project).name === "string"
-        );
-        // The stored `mainPath` draws the window; `refreshMainPaths` reads the disk once it is up.
-        this.projects = this.projects.map((project) => ({
-          ...project,
-          mainPath: typeof project.mainPath === "string" ? project.mainPath : undefined
-        }));
-      }
-    } catch {
-      // No file yet, or unreadable: none.
+    const parsed = readJson(this.file);
+    if (!Array.isArray(parsed)) {
+      return;
     }
+    this.projects = parsed
+      .filter(
+        (entry): entry is Project =>
+          isRecord(entry) && typeof entry.id === "string" && typeof entry.path === "string" && typeof entry.name === "string"
+      )
+      // The stored `mainPath` draws the window; `refreshMainPaths` reads the disk once it is up.
+      .map((project) => ({ ...project, mainPath: typeof project.mainPath === "string" ? project.mainPath : undefined }));
   }
 
   private save(): void {

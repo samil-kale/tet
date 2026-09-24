@@ -3,7 +3,7 @@ import { useState, type DragEvent, type HTMLAttributes } from "react";
 /** Drag-reordering, shared by both sidebar lists. Each list supplies its own drag type (a row
  *  dragged over a terminal must not be pasted into it, and no other list may take the drop), its
  *  payload (an id, or the position where an entry can appear twice), and the move itself. */
-export interface DragReorderOptions {
+interface DragReorderOptions {
   /** This list's own MIME type, e.g. "application/x-tet-project". */
   dragType: string;
   /** The row count; index `count` stands for the end of the list. */
@@ -18,7 +18,7 @@ export interface DragReorderOptions {
 
 type RowElement = HTMLDivElement;
 
-export interface DragReorder {
+interface DragReorder {
   /** Spread onto each row, with its index. */
   rowProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
   /** Spread onto the rows' container: the empty space below the last row is "the end". */

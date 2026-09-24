@@ -27,7 +27,7 @@ function layoutOf(layouts: Record<string, ProjectLayout>, projectId: string): Pr
 }
 
 /** Every project's split state, and the callbacks `App` hands the panes. */
-export interface ProjectLayouts {
+interface ProjectLayouts {
   layouts: Record<string, ProjectLayout>;
   activateTab: (projectId: string, tabId: string, paneId?: PaneId) => void;
   snapTab: (projectId: string, tabId: string, transition: SnapTransition) => void;

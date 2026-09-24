@@ -1,5 +1,6 @@
 import type { TerminalDescriptor } from "../../shared/types";
 import { sameRecord } from "../identity";
+import { layoutKey } from "../ui/layout-storage";
 
 /**
  * A terminal split view: fixed presets, not a nestable tree (AGENTS.md, "Split view"). At most
@@ -70,7 +71,7 @@ export interface ProjectLayout {
 }
 
 /** A pane of a preset — the two together name a position on screen. */
-export interface CommandPlace {
+interface CommandPlace {
   preset: SplitPreset;
   pane: PaneId;
 }
@@ -422,7 +423,7 @@ export const SNAP_TRANSITIONS: Record<SplitPreset, Partial<Record<SnapZone, Snap
  * The three divider lines as shares of `.panes-grid`. Per *line*, not per preset, so a preset
  * switch moves no line.
  */
-export interface DividerShares {
+interface DividerShares {
   col: number;
   rowLeft: number;
   rowRight: number;
@@ -545,12 +546,12 @@ export function snapZoneAt(
 }
 
 /**
- * `localStorage` under `layout-storage.ts`'s `tet.layout.` namespace: layout describes the window, not the
+ * `localStorage` under `layout-storage.ts`'s namespace: layout describes the window, not the
  * repository. Per project, unlike `usePaneSize`/`usePaneToggle`'s fixed keys. `suffix` tells the
  * layout from `TerminalsPane`'s divider positions.
  */
 export function layoutStorageKey(projectId: string, suffix: string): string {
-  return `tet.layout.terminals.${projectId}.${suffix}`;
+  return layoutKey(`terminals.${projectId}.${suffix}`);
 }
 
 /**

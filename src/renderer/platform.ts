@@ -19,6 +19,11 @@ export function isModifierKey(event: KeyboardEvent): boolean {
   return isMac() ? event.key === "Meta" : event.key === "Control";
 }
 
+/** The modifier as a shortcut label spells it. */
+export function modifierLabel(): string {
+  return isMac() ? "⌘" : "Ctrl";
+}
+
 export function revealLabel(): string {
   if (isMac()) {
     return "Reveal in Finder";

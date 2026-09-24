@@ -1,4 +1,4 @@
-import { isMac, isModifierHeld } from "./platform";
+import { isModifierHeld, modifierLabel } from "./platform";
 
 /**
  * The window's shortcuts, all on combinations xterm's `Keyboard.ts` never turns into bytes
@@ -11,7 +11,7 @@ import { isMac, isModifierHeld } from "./platform";
  * keyCode 9 ignores `ctrlKey`, so they equal Tab/Shift+Tab — the latter Claude Code's mode toggle.
  * `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` appear in no branch. None of these close a tab.
  */
-export type ShortcutId =
+type ShortcutId =
   | "settings"
   | "toggleGit"
   | "toggleFiles"
@@ -70,7 +70,7 @@ export function shortcutLabel(id: ShortcutId): string {
   if (!def) {
     return "";
   }
-  const mod = isMac() ? "⌘" : "Ctrl";
+  const mod = modifierLabel();
   return def.shift ? `${mod}+Shift+${def.label}` : `${mod}+${def.label}`;
 }
 

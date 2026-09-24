@@ -2,14 +2,13 @@ import { useMemo, useState } from "react";
 import { syncRemote } from "../../shared/types";
 import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
-import { absolutePath, revealLabel } from "../platform";
 import type { FileAct, FileAsk } from "./run-action";
+import { openEntries, pathEntries } from "../files/file-menu";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, filled, prompt } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
-import { isMarkdown } from "../diff/diff-highlight";
 
 interface ChangesListProps {
   project: Project;
@@ -32,53 +31,9 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
   conflicted: "C"
 };
 
-/** What a file's menu offers after its own "Open": the Markdown preview through `open`, then the
- *  external editor. Shared with the Explorer's; `enabled` is false where the menu covers several
- *  files. */
-export function openEntries(
-  projectId: string,
-  path: string,
-  enabled: boolean,
-  open: (how: OpenEditor) => void
-): ContextMenuEntry[] {
-  return [
-    ...(isMarkdown(path)
-      ? [{ label: "Open Preview", run: enabled ? () => open({ markdownPreview: true }) : undefined }]
-      : []),
-    {
-      label: "Open in external editor",
-      run: enabled ? () => void window.tet.shell.openFileExternally(projectId, path) : undefined
-    }
-  ];
-}
-
-/** A file menu's closing group, shared with the Explorer's: reveal one path, copy all of them.
- *  `noun` names what is copied ("file path", or "path" for a folder); the repository root has no
- *  relative path. */
-export function pathEntries(project: Project, paths: string[], noun: string): ContextMenuEntry[] {
-  const plural = paths.length === 1 ? "" : "s";
-  return [
-    SEPARATOR,
-    {
-      label: revealLabel(),
-      run: paths.length === 1 ? () => void window.tet.shell.revealFile(project.id, paths[0]) : undefined
-    },
-    {
-      label: `Copy ${noun}${plural}`,
-      run: () => void navigator.clipboard.writeText(paths.map((entry) => absolutePath(project.path, entry)).join("\n"))
-    },
-    ...(paths.includes("")
-      ? []
-      : [
-          {
-            label: `Copy relative ${noun}${plural}`,
-            run: () => void navigator.clipboard.writeText(paths.join("\n"))
-          }
-        ])
-  ];
-}
-
-/** The files go to the trash; where the trash fails, a second question offers to delete them. */
+/** The files go to the trash; where the trash fails, a second question offers to delete them.
+ *  Asked although the trash can give them back: a discard is GitHub Desktop's one confirmed
+ *  action, and a click on a row's × would otherwise empty the list. */
 export async function confirmDiscard(projectId: string, paths: string[], act: FileAct): Promise<void> {
   const what = paths.length === 1 ? paths[0] : `${paths.length} files`;
   const answer = await confirm({

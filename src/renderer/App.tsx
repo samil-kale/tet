@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
-import type { AgentInfo, EnvRequest, GitActionResult, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import type { AgentInfo, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { CommandList } from "./sidebar/CommandList";
-import { gitRun, useStartedHere, type GitRun } from "./git/run-action";
-import type { BranchActions } from "./git/BranchTree";
+import { useBranchActions } from "./git/run-action";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesPane } from "./files/FilesPane";
@@ -23,10 +22,10 @@ import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-view
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
-import { forget, sameList, sameRecord, stableRecord } from "./identity";
+import { forget, sameList, stableRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import { reportSlow } from "./slow-report";
-import { activeEditorTab, defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
+import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./terminal/editor-tab";
 import {
@@ -34,42 +33,14 @@ import {
   canDiscardProjectEdits,
   disposeEditor,
   disposeProjectEditors,
-  editorContent,
   keepEditor,
   openEditorFile,
   previewEditorTab,
   revealEditorMatch,
-  setEditorVersion,
   showDiff,
   showMarkdownPreview
 } from "./diff/editor-views";
-
-/** A little over `.side-pane.sliding`'s 0.15s, so the class outlives the transition. */
-const SIDE_PANE_SLIDE_MS = 180;
-
-/** What an open file is re-read for: HEAD's branch and commit (so a pull or reset counts), the
- *  file's status, and a write on disk (`writes`), which leaves a modified file's status unchanged. */
-function diffVersion(state: RepositoryState | undefined, filePath: string, writes: number | undefined): string {
-  return `${state?.head}:${state?.headCommit}:${state?.changes.find((change) => change.path === filePath)?.status}:${writes ?? 0}`;
-}
-
-/**
- * Two rows the same. Every field but the remote is a value; `states` is rebuilt on every push,
- * so the remote is compared by what the row shows of it.
- */
-function sameHead(previous: ProjectHead, entry: ProjectHead): boolean {
-  return (
-    previous.head === entry.head &&
-    previous.detached === entry.detached &&
-    previous.upstream === entry.upstream &&
-    previous.base === entry.base &&
-    previous.baseAt === entry.baseAt &&
-    previous.defaultBranch === entry.defaultBranch &&
-    previous.dirty === entry.dirty &&
-    previous.remote?.name === entry.remote?.name &&
-    previous.remote?.url === entry.remote?.url
-  );
-}
+import { useEditorSync } from "./diff/use-editor-sync";
 
 /** Who asks for environment variables, as the window names that tab: "Claude (fix login) in
  *  autocontract". */
@@ -125,8 +96,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab[]>>({});
   const editorTabsRef = useRef(editorTabs);
   editorTabsRef.current = editorTabs;
-  /** Per project, per watched path: writes on disk — see diffVersion. */
-  const [fileWrites, setFileWrites] = useState<Record<string, Record<string, number>>>({});
   /**
    * Each project's tab strip: its terminals, then its editor tabs. The layout reconciles against
    * it, panes draw it, next/previous step through it; marks and `seen` stay on `tabs` (the editor
@@ -156,11 +125,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     stripTabs,
     starting
   );
-  /** Projects with a branch command in flight, per project: a fetch ending in A must not free B.
-   *  Which view started it is that view's own business (useStartedHere). */
-  const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
-  /** Read synchronously: a second double-click can land before a re-render. */
-  const branchActionsRef = useRef(new Set<string>());
+  /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
+  const { activeEditors, forgetProject: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
+  /** The branch commands' gate, and the git pane's and project list's ways in (run-action.ts). */
+  const { activeBranch, projectListBusy, runInProject } = useBranchActions(activeProjectId);
   // Pane defaults and limits; both side-pane views share the two below ("git-panels" predates the
   // files view).
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
@@ -186,53 +154,33 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const sideViewRef = useRef(sideView);
   sideViewRef.current = sideView;
   /**
-   * `sideMounted` keeps the pane in the DOM through the closing transition; `sideExpanded` drives
-   * the width. Two nested rAFs before expanding: one alone often fires before the 0-width paint
-   * (observed), skipping the slide. Switching views while out slides nothing.
-   */
-  const [sideMounted, setSideMounted] = useState(sidePaneOpen);
-  const [sideExpanded, setSideExpanded] = useState(sidePaneOpen);
-  /**
-   * Gates `.side-pane.sliding`'s transition to the slide alone: the sash sets the same width, and an
-   * animated one would lag the pointer.
+   * Gates `.side-pane.sliding`'s width transition to the slide alone — the pane stays in the DOM
+   * at width 0 while in, so opening and closing both transition — and the sash sets the same
+   * width, where an animated one would lag the pointer. Set by what opens or closes the pane,
+   * cleared once the transition ends; switching views while out slides nothing. Not without a
+   * project: no pane is drawn then, and nothing would end the transition.
    */
   const [sideSliding, setSideSliding] = useState(false);
-  useEffect(() => {
-    setSideSliding(true);
-    let stop: ReturnType<typeof setTimeout> | undefined;
-    if (sidePaneOpen) {
-      setSideMounted(true);
-      let inner = 0;
-      const outer = requestAnimationFrame(() => {
-        inner = requestAnimationFrame(() => {
-          setSideExpanded(true);
-          stop = setTimeout(() => setSideSliding(false), SIDE_PANE_SLIDE_MS);
-        });
-      });
-      return () => {
-        cancelAnimationFrame(outer);
-        cancelAnimationFrame(inner);
-        clearTimeout(stop);
-      };
+  const stopSliding = useCallback(() => setSideSliding(false), []);
+  const slidePane = useCallback((open: boolean) => {
+    setSidePaneOpen(open);
+    if (activeProjectIdRef.current !== null) {
+      setSideSliding(true);
     }
-    setSideExpanded(false);
-    stop = setTimeout(() => {
-      setSideMounted(false);
-      setSideSliding(false);
-    }, SIDE_PANE_SLIDE_MS);
-    return () => clearTimeout(stop);
-  }, [sidePaneOpen]);
+  }, [setSidePaneOpen]);
   /** Shows that view, or slides the pane in when that view is already out. */
   const toggleSideView = useCallback(
     (view: SideView) => {
       if (sideViewRef.current === view) {
-        setSidePaneOpen(false);
+        slidePane(false);
         return;
       }
       setFilesShown(view === "files");
-      setSidePaneOpen(true);
+      if (sideViewRef.current === null) {
+        slidePane(true);
+      }
     },
-    [setFilesShown, setSidePaneOpen]
+    [setFilesShown, slidePane]
   );
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */
@@ -309,35 +257,19 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     []
   );
 
-  /** The add-repository dialog's result. With no agent installed the project can only run
-   *  sandboxed, so its sbx settings open at once — locked (see SbxSettingsDialog). */
-  const projectAdded = useCallback((project: Project) => {
-    setProjects((current) => (current.some((entry) => entry.id === project.id) ? current : [...current, project]));
-    setActiveProjectId(project.id);
-    void window.tet.startup.anyAgentInstalled().then((installed) => {
-      if (!installed) {
-        setSbxSettingsProject(project);
-      }
-    });
+  /** A branch's worktree from the git pane: its project, else the folder opened as one (which
+   *  `projects:changed` then shows). */
+  const openWorktree = useCallback(async (worktreePath: string) => {
+    const open = projectsRef.current.find((project) => project.path === worktreePath);
+    if (open) {
+      setActiveProjectId(open.id);
+      return;
+    }
+    const result = await window.tet.projects.open(worktreePath);
+    if (!result.project) {
+      notify("error", result.error ?? `Could not open ${worktreePath}`);
+    }
   }, []);
-
-  /** A branch's worktree from the git pane: its project, else the folder opened as one. */
-  const openWorktree = useCallback(
-    async (worktreePath: string) => {
-      const open = projectsRef.current.find((project) => project.path === worktreePath);
-      if (open) {
-        setActiveProjectId(open.id);
-        return;
-      }
-      const result = await window.tet.projects.open(worktreePath);
-      if (result.project) {
-        projectAdded(result.project);
-      } else {
-        notify("error", result.error ?? `Could not open ${worktreePath}`);
-      }
-    },
-    [projectAdded]
-  );
 
   /** A worktree's own project, if it is one, before its terminals close. */
   const canCloseWorktree = useCallback(async (worktreePath: string) => {
@@ -353,30 +285,26 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     setSandboxed((current) => forget(current, projectId));
     sandboxedRead.current.delete(projectId);
     setEditorTabs((current) => forget(current, projectId));
-    setFileWrites((current) => forget(current, projectId));
+    forgetEditorSync(projectId);
     disposeProjectEditors(projectId);
     forgetLayout(projectId);
     busyCursor.current = forget(busyCursor.current, projectId);
     // The xterms live outside React; this is where a project ends for good.
     disposeProjectTerminals(projectId);
-  }, [forgetLayout]);
+  }, [forgetLayout, forgetEditorSync]);
 
-  const closeProject = useCallback(
-    async (projectId: string) => {
-      if (!(await canDiscardProjectEdits(projectId))) {
-        return;
-      }
+  /** The project row's close; the list follows through `projects:changed`. */
+  const closeProject = useCallback(async (projectId: string) => {
+    if (await canDiscardProjectEdits(projectId)) {
       await window.tet.projects.remove(projectId);
-      const remaining = projectsRef.current.filter((project) => project.id !== projectId);
-      setProjects(remaining);
-      setActiveProjectId((current) => (current === projectId ? (remaining[0]?.id ?? null) : current));
-      forgetProject(projectId);
-    },
-    [forgetProject]
-  );
+    }
+  }, []);
 
-  // The control channel opened or closed a project: the same paths as the dialog's add and the
-  // row's close.
+  // The one way the list changes, whoever asked — the dialog, a row's close, the git pane's
+  // worktrees or the control channel (projects.ts): main announces, this follows. A project
+  // opened where no agent is installed can only run sandboxed, so its sbx settings open at once,
+  // locked (SbxSettingsDialog); not one reopened under a new id (a renamed worktree: removed and
+  // added at once), whose settings came along with its folder.
   useEffect(
     () =>
       window.tet.projects.onChanged(({ projects: list, added, removed }) => {
@@ -385,6 +313,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         setActiveProjectId((current) => activeAfterChange(current, before, list, added, removed));
         if (removed !== undefined) {
           forgetProject(removed);
+        }
+        const opened = added !== undefined && removed === undefined ? list.find((project) => project.id === added) : undefined;
+        if (opened) {
+          void window.tet.startup.anyAgentInstalled().then((installed) => {
+            if (!installed) {
+              setSbxSettingsProject(opened);
+            }
+          });
         }
       }),
     [forgetProject]
@@ -413,28 +349,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     setProjects(ordered);
     void window.tet.projects.reorder(ordered.map((project) => project.id));
   }, []);
-
-  /**
-   * One branch command per project at a time: a second click mid-switch would stack two `git switch`.
-   * Mirrors `Repository.runAction`; `BranchActions.run` is the one way in, a view asking its own
-   * question first.
-   */
-  const runBranchAction = useCallback(
-    async (projectId: string, action: () => Promise<GitActionResult>): Promise<GitActionResult> => {
-      if (branchActionsRef.current.has(projectId)) {
-        return { ok: false, error: "Another command is running in this repository" };
-      }
-      branchActionsRef.current.add(projectId);
-      setBranchActions(new Set(branchActionsRef.current));
-      try {
-        return await action();
-      } finally {
-        branchActionsRef.current.delete(projectId);
-        setBranchActions(new Set(branchActionsRef.current));
-      }
-    },
-    []
-  );
 
   /**
    * Shows a tab opened from outside the terminals pane, bringing its project to front — a one-off
@@ -528,7 +442,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   /**
    * The project row's HEAD, first remote and dirty flag, identity-stable where unchanged (`states`
-   * is fresh on every push). No git call of its own: `changes` comes with every refresh.
+   * is fresh on every push, so every field is a value — the remote by what the row shows of it).
+   * No git call of its own: `changes` comes with every refresh.
    */
   const headsRef = useRef<Record<string, ProjectHead>>({});
   const heads = useMemo(() => {
@@ -543,11 +458,12 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         base,
         baseAt: base === undefined ? undefined : state.worktrees.find((worktree) => worktree.branch === base)?.path,
         defaultBranch: target && refName(target),
-        remote: state.remotes[0],
+        remoteName: state.remotes[0]?.name,
+        remoteUrl: state.remotes[0]?.url,
         dirty: state.changes.length > 0
       };
     }
-    return stableRecord(headsRef, next, sameHead);
+    return stableRecord(headsRef, next);
   }, [states]);
 
   /**
@@ -707,7 +623,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const activeState = (activeProjectId ? states[activeProjectId] : undefined) ?? EMPTY_REPOSITORY_STATE;
 
   // Stable handles, so memoized views re-render only for what they show.
-  const closeProjectSync = useCallback((projectId: string) => void closeProject(projectId), [closeProject]);
   const openAdd = useCallback(() => setAddOpen(true), []);
   const closeAdd = useCallback(() => setAddOpen(false), []);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
@@ -717,8 +632,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [projects]
   );
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
-  const toggleGit = useCallback(() => toggleSideView("git"), [toggleSideView]);
-  const toggleFiles = useCallback(() => toggleSideView("files"), [toggleSideView]);
   /**
    * The project row's git mark: switches to the project and slides git out; on the shown project,
    * the strip's toggle.
@@ -730,10 +643,12 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         toggleSideView("git");
       } else {
         setFilesShown(false);
-        setSidePaneOpen(true);
+        if (sideViewRef.current === null) {
+          slidePane(true);
+        }
       }
     },
-    [toggleSideView, setFilesShown, setSidePaneOpen]
+    [toggleSideView, setFilesShown, slidePane]
   );
   /**
    * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), the way `how` asks for
@@ -806,14 +721,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
   const closeEnvRequest = useCallback(() => setEnvRequest(null), []);
   const agents = useAgents();
-  useEffect(
-    () =>
-      window.tet.repository.onEditorContentRequest((projectId) => {
-        const tabId = activeEditorsRef.current[projectId];
-        return tabId === undefined ? undefined : editorContent(tabId);
-      }),
-    []
-  );
   /** The changes list's, the one view that opens a file against HEAD. */
   const openActiveDiff = useCallback(
     (path: string, how?: OpenEditor) => {
@@ -838,106 +745,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }
     });
   }, []);
-  /**
-   * Each project's active editor tab (`activeEditorTab`) — the file the Explorer reveals and
-   * `tet-ctl editor-state` answers. Derived, not tracked: a tab is activated from many places (a
-   * click, next/previous, a drop, a snap). Identity-stable where unchanged.
-   */
-  const activeEditorsRef = useRef<Record<string, string>>({});
-  const activeEditors = useMemo(() => {
-    const next: Record<string, string> = {};
-    for (const [projectId, editors] of Object.entries(editorTabs)) {
-      const tabId = activeEditorTab(
-        layouts[projectId] ?? DEFAULT_LAYOUT,
-        editors.map((tab) => tab.tabId),
-        activeEditorsRef.current[projectId]
-      );
-      if (tabId !== undefined) {
-        next[projectId] = tabId;
-      }
-    }
-    activeEditorsRef.current = sameRecord(activeEditorsRef.current, next);
-    return activeEditorsRef.current;
-  }, [editorTabs, layouts]);
-  // Reported to main as `inFront` is: only App knows. A project whose last editor tab closed
-  // reports nothing; main finds no report under the old id.
-  const reportedActive = useRef<Record<string, string>>({});
-  useEffect(() => {
-    for (const [projectId, tabId] of Object.entries(activeEditors)) {
-      if (reportedActive.current[projectId] !== tabId) {
-        window.tet.repository.reportActiveEditor(projectId, tabId);
-      }
-    }
-    reportedActive.current = activeEditors;
-  }, [activeEditors]);
-  // Each editor tab's file, whose writes the watcher reports (onFileChanged): a project's open
-  // paths, sent when they change.
-  const watchedFiles = useRef<Record<string, string[]>>({});
-  useEffect(() => {
-    const previous = watchedFiles.current;
-    const next: Record<string, string[]> = {};
-    for (const [projectId, editors] of Object.entries(editorTabs)) {
-      next[projectId] = sameList(previous[projectId], editors.map((tab) => tab.path).sort(), NO_IDS);
-    }
-    for (const [projectId, paths] of Object.entries(next)) {
-      if (previous[projectId] !== paths) {
-        void window.tet.repository.watchFiles(projectId, paths);
-      }
-    }
-    for (const projectId of Object.keys(previous)) {
-      if (!(projectId in next)) {
-        void window.tet.repository.watchFiles(projectId, NO_IDS);
-      }
-    }
-    watchedFiles.current = next;
-  }, [editorTabs]);
-  useEffect(
-    () =>
-      // Only watched paths are reported; a count left by a closed tab is inert.
-      window.tet.repository.onFileChanged(({ projectId, path }) => {
-        setFileWrites((current) => ({
-          ...current,
-          [projectId]: { ...current[projectId], [path]: (current[projectId]?.[path] ?? 0) + 1 }
-        }));
-      }),
-    []
-  );
-  // Reloads an open file only when its diffVersion changes, not on every push: a reload re-reads
-  // and recolours the whole diff, hundreds of ms for a long file.
-  useEffect(() => {
-    for (const [projectId, editors] of Object.entries(editorTabs)) {
-      for (const { tabId, path } of editors) {
-        setEditorVersion(tabId, diffVersion(states[projectId], path, fileWrites[projectId]?.[path]));
-      }
-    }
-  }, [editorTabs, states, fileWrites]);
-  const runActiveBranchAction = useCallback(
-    (action: () => Promise<GitActionResult>): Promise<GitActionResult> =>
-      activeProjectId ? runBranchAction(activeProjectId, action) : Promise.resolve({ ok: true }),
-    [activeProjectId, runBranchAction]
-  );
-  /** The git pane's actions, for the project on screen; its own bar shows the ones it started,
-   *  `ask` excepted — the question that asked for it shows that one (run-action.ts). */
-  const { startedHere: gitPaneActing, start: runActiveHere } = useStartedHere(runActiveBranchAction);
-  const activeBranch = useMemo<BranchActions>(
-    () => ({
-      busy: activeProjectId !== null && branchActions.has(activeProjectId),
-      startedHere: gitPaneActing,
-      ...gitRun(runActiveHere, runActiveBranchAction)
-    }),
-    [branchActions, activeProjectId, gitPaneActing, runActiveHere, runActiveBranchAction]
-  );
-  /** The project list's, likewise: its bar shows a command it started, in any project. */
-  const { startedHere: projectListBusy, start: runProjectListHere } = useStartedHere(runBranchAction);
-  /** How the list runs a command in one of its projects (`GitRun`). */
-  const runInProject = useCallback(
-    (projectId: string): GitRun =>
-      gitRun(
-        (action) => runProjectListHere(projectId, action),
-        (action) => runBranchAction(projectId, action)
-      ),
-    [runProjectListHere, runBranchAction]
-  );
 
   return (
     <div className="app">
@@ -953,7 +760,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             projects={projects}
             activeProjectId={activeProjectId}
             onSelect={setActiveProjectId}
-            onClose={closeProjectSync}
+            onClose={closeProject}
             onReorder={reorderProjects}
             onAdd={openAdd}
             heads={heads}
@@ -987,18 +794,20 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           onResize={setSidebarWidth}
         />
 
-        {/* One side pane for all projects. Both views stay mounted while it is out, one hidden, so
-            a switch keeps selection, filter, open folders and a running action's bar. */}
-        {sideMounted && activeProject && (
+        {/* One side pane for all projects, in the DOM at width 0 while in (so a slide has a box to
+            transition). Both views stay mounted, hidden while not shown, so a switch keeps
+            selection, filter, open folders and a running action's bar. */}
+        {activeProject && (
           <>
             <div
               className={`side-pane${sideSliding ? " sliding" : ""}`}
-              style={{ width: sideExpanded ? sidePaneWidth : 0 }}
+              style={{ width: sideView ? sidePaneWidth : 0 }}
+              onTransitionEnd={stopSliding}
             >
               <FilesPane
                 project={activeProject}
                 state={activeState}
-                shown={filesShown}
+                shown={sideView === "files"}
                 openPath={
                   activeProjectId
                     ? (editorTabs[activeProjectId]?.find((tab) => tab.tabId === activeEditors[activeProjectId])?.path ?? null)
@@ -1011,7 +820,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               <GitPane
                 project={activeProject}
                 state={activeState}
-                shown={!filesShown}
+                shown={sideView === "git"}
                 branch={activeBranch}
                 treeHeight={branchTreeHeight}
                 onTreeHeight={setBranchTreeHeight}
@@ -1021,13 +830,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                 worktreesSupported={worktreesSupported}
               />
             </div>
-            <Sash
-              orientation="vertical"
-              size={sidePaneWidth}
-              min={MIN_PANE_WIDTH}
-              minOther={MIN_CONTENT_WIDTH}
-              onResize={setSidePaneWidth}
-            />
+            {sideView && (
+              <Sash
+                orientation="vertical"
+                size={sidePaneWidth}
+                min={MIN_PANE_WIDTH}
+                minOther={MIN_CONTENT_WIDTH}
+                onResize={setSidePaneWidth}
+              />
+            )}
           </>
         )}
 
@@ -1040,8 +851,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               tabs={stripTabs[project.id] ?? NO_TABS}
               visible={project.id === activeProjectId}
               sideView={sideView}
-              onToggleGit={toggleGit}
-              onToggleFiles={toggleFiles}
+              onToggleSideView={toggleSideView}
+              agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
               onOpenFile={openEditor}
@@ -1051,7 +862,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               onSnapTab={snapTab}
               onFocusPane={focusPane}
               onOpenSettings={openSettings}
-              markedTabIds={marks[project.id]?.finished ?? NO_IDS}
+              finishedTabIds={marks[project.id]?.finished ?? NO_IDS}
               waitingTabIds={marks[project.id]?.waiting ?? NO_IDS}
               startingTabIds={marks[project.id]?.starting ?? NO_IDS}
             />
@@ -1068,7 +879,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         </main>
       </div>
 
-      {addOpen && <AddRepositoryDialog onAdded={projectAdded} onClose={closeAdd} />}
+      {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 
       {settingsOpen && <SettingsDialog activeProject={activeProject} onClose={closeSettings} />}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}

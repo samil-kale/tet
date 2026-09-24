@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /** One entry of a context menu; an action without a `run` renders disabled. */
-export interface ContextMenuAction {
+interface ContextMenuAction {
   label: string;
   /** Leads the label, e.g. an agent's icon in the new-session menu. */
   icon?: ReactNode;

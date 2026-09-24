@@ -3,15 +3,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage } from "../../shared/errors";
-import { EMPTY_REPOSITORY_STATE, searchPattern } from "../../shared/types";
+import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type {
   CheckoutTarget,
   ExplorerListing,
   ExplorerSettings,
   FileChange,
   FileContent,
-  FileSearchFile,
-  FileSearchMatch,
   FileSearchQuery,
   FileSearchResult,
   FileWriteResult,
@@ -23,15 +21,16 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { addExclude, addFolder, type ExplorerView, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
+import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
 import { countActivity, logSlow } from "../event-loop-monitor";
+import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
 import { git } from "./git-client";
 import type { GitLoginStore } from "../git-logins";
 import { readLinkedGitDir } from "./linked-git-dir";
 import { watchedDirectoryGone } from "../watch-dir";
 import { relativeInside } from "../path-inside";
 import type { DiscardTargets, NetworkLogin } from "./git";
-import { isImage, toDataUrl } from "./git";
+import { isImage, toDataUrl } from "./image-type";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;
@@ -51,27 +50,6 @@ const AUTO_FETCH_TIMEOUT_MS = 2 * 60_000;
  *  recursively (a network share) fails every time, and a fixed one-second retry is a busy loop. */
 const WATCH_RETRY_MS = 1000;
 const WATCH_RETRY_MAX_MS = 60_000;
-/** Above this, the editor shows "too large" instead of reading the file into the renderer; a file
- *  the tab cannot show is no use as a search result either. */
-const MAX_EDIT_BYTES = 4 * 1024 * 1024;
-
-/** A search's cap, counted in matches, since every one of them is a row the renderer draws. A
- *  one-character query in a large repository stops here instead of filling the pane. */
-const MAX_SEARCH_MATCHES = 2000;
-/** Files read at once; beyond a handful only file handles are spent. */
-const SEARCH_READERS = 8;
-/** The longest result row, and how much of the line is kept before a match far to the right. */
-const MAX_MATCH_TEXT = 400;
-const MATCH_LEAD = 40;
-
-/** What a result row shows: the line without its indent, cut to a window holding the match — which
- *  may itself start inside the indent, and then keeps it. */
-function matchText(line: string, index: number): { text: string; textColumn: number } {
-  const indent = line.length - line.trimStart().length;
-  const start = Math.min(index, Math.max(indent, index - MATCH_LEAD));
-  return { text: line.slice(start, start + MAX_MATCH_TEXT), textColumn: index - start };
-}
-
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
  *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus). */
 function isIgnoredEvent(relativePath: string): boolean {
@@ -96,13 +74,8 @@ const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" 
  * the words the OS used. For the Explorer's own edits, which run off `runAction` — they take no
  * index lock (Repository.listExplorer).
  */
-async function attempt(action: () => Promise<unknown>): Promise<GitActionResult> {
-  try {
-    await action();
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: errorMessage(error) };
-  }
+function attempt(action: () => Promise<unknown>): Promise<GitActionResult> {
+  return action().then(() => ({ ok: true }), failure);
 }
 
 /** A rejected action as its failure (Repository.runAction). */
@@ -714,187 +687,15 @@ export class Repository {
     return this.runAction(() => git.ignorePath(this.project.path, filePath, scope));
   }
 
-  /** Every file, plus empty directories — see `ExplorerListing`. The walk's own doc is
-   *  `walkExplorer`; mtimes cost a `stat` per entry, so only `modified` asks for them. */
-  async listExplorer(): Promise<ExplorerListing> {
-    const view = await readExplorerView(this.project.path);
-    const wantMtimes = view.sortOrder === "modified";
-    const walked = await this.walkExplorer(view, wantMtimes);
-    return {
-      files: walked.files.sort(),
-      emptyDirs: walked.emptyDirs.sort(),
-      roots: view.folders.length > 0 ? view.folders : undefined,
-      compactFolders: view.compactFolders,
-      sortOrder: view.sortOrder,
-      mtimes: walked.mtimes
-    };
+  /** The Explorer's listing (explorer.ts): a filesystem walk off the index lock `runAction` holds. */
+  listExplorer(): Promise<ExplorerListing> {
+    return listExplorer(this.project.path);
   }
 
-  /**
-   * The Explorer's entries under one view. A filesystem walk, not a git process: off the index lock
-   * `runAction` serialises, and `fs.promises` so a large `node_modules` doesn't hold the main event
-   * loop. Skips `exclude` globs and, if the view says so, git's ignore list (one `ls-files` per
-   * walk, never on the refresh path); walks only the outermost `folders`.
-   */
-  private async walkExplorer(
-    view: ExplorerView,
-    wantMtimes: boolean
-  ): Promise<{ files: string[]; emptyDirs: string[]; mtimes: Record<string, number> | undefined }> {
-    const ignored = view.excludeGitIgnore ? await git.listIgnored(this.project.path).catch(() => []) : [];
-    const ignoredFiles = new Set(ignored.filter((entry) => !entry.endsWith("/")));
-    const ignoredDirs = new Set(ignored.filter((entry) => entry.endsWith("/")).map((entry) => entry.slice(0, -1)));
-    const skip = (relativePath: string, isDirectory: boolean): boolean =>
-      (isDirectory ? ignoredDirs : ignoredFiles).has(relativePath) ||
-      view.exclude.some((pattern) => path.matchesGlob(relativePath, pattern));
-
-    const files: string[] = [];
-    const emptyDirs: string[] = [];
-    const mtimes: Record<string, number> = {};
-    const stat = async (absolutePath: string, relativePath: string): Promise<void> => {
-      try {
-        mtimes[relativePath] = (await fs.promises.stat(absolutePath)).mtimeMs;
-      } catch {
-        // Vanished: sorts with the oldest until the next listing.
-      }
-    };
-    const walk = async (absoluteDir: string, relativeDir: string): Promise<void> => {
-      let entries: fs.Dirent[];
-      try {
-        entries = await fs.promises.readdir(absoluteDir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      if (entries.length === 0) {
-        if (relativeDir) {
-          emptyDirs.push(relativeDir);
-        }
-        return;
-      }
-      const pending: Promise<void>[] = [];
-      for (const entry of entries) {
-        // Hidden regardless of `files.exclude`.
-        if (entry.name === ".git") {
-          continue;
-        }
-        const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
-        const absolutePath = path.join(absoluteDir, entry.name);
-        const isDirectory = entry.isDirectory();
-        if (!isDirectory && !entry.isFile() && !entry.isSymbolicLink()) {
-          continue;
-        }
-        if (skip(relativePath, isDirectory)) {
-          continue;
-        }
-        if (isDirectory) {
-          pending.push(walk(absolutePath, relativePath));
-        } else {
-          // A symlink is a file row, never descended into, so a link cycle is harmless.
-          files.push(relativePath);
-        }
-        if (wantMtimes) {
-          pending.push(stat(absolutePath, relativePath));
-        }
-      }
-      // In parallel; the caller's sort keeps the listing deterministic.
-      await Promise.all(pending);
-    };
-    const roots = view.folders;
-    const outermost = roots.filter(
-      (root) => !roots.some((other) => other !== root && (other.path === "" || root.path.startsWith(`${other.path}/`)))
-    );
-    if (outermost.length === 0) {
-      await walk(this.project.path, "");
-    } else {
-      await Promise.all(outermost.map((root) => walk(path.join(this.project.path, root.path), root.path)));
-    }
-    return { files, emptyDirs, mtimes: wantMtimes ? mtimes : undefined };
-  }
-
-  /**
-   * The Explorer search field's matches, VS Code's "search in files": every line of every listed
-   * file the query matches. The Explorer's own file set, always without what git ignores — VS
-   * Code's `search.useIgnoreFiles`, which the tree's `excludeGitIgnore` does not decide, and a
-   * search must not read `node_modules`. The files are read a few at a time (more only costs file
-   * handles) until the match cap.
-   *
-   * The cap bounds what is listed, not the reading: a query matching nothing still costs the whole
-   * repository. So a search started here gives up as soon as the next one is asked for — typing in
-   * a large repository would otherwise have several full scans running at once, all but the last
-   * one already discarded by the renderer.
-   */
-  async searchFiles(query: FileSearchQuery): Promise<FileSearchResult> {
-    let matcher: RegExp;
-    try {
-      matcher = searchPattern(query, "g");
-    } catch (error) {
-      return { files: [], truncated: false, error: errorMessage(error) };
-    }
+  /** The SEARCH pane's matches (explorer.ts); a search is given up once the next one is asked for. */
+  searchFiles(query: FileSearchQuery): Promise<FileSearchResult> {
     const seq = ++this.searchSeq;
-    const view = await readExplorerView(this.project.path);
-    const { files } = await this.walkExplorer({ ...view, excludeGitIgnore: true }, false);
-    const wanted = [...files].sort();
-
-    const found: (FileSearchFile | undefined)[] = new Array(wanted.length);
-    let next = 0;
-    let matches = 0;
-    let truncated = false;
-    const read = async (): Promise<void> => {
-      while (next < wanted.length && !truncated && seq === this.searchSeq) {
-        const index = next++;
-        const filePath = wanted[index];
-        const lines = await this.matchesIn(filePath, matcher);
-        if (matches + lines.length > MAX_SEARCH_MATCHES) {
-          lines.length = MAX_SEARCH_MATCHES - matches;
-          truncated = true;
-        }
-        // Empty, or emptied by the cap another reader reached while this file was being read.
-        if (lines.length === 0) {
-          continue;
-        }
-        matches += lines.length;
-        found[index] = { path: filePath, matches: lines };
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(SEARCH_READERS, wanted.length) }, read));
-    // The cap is only ever reached mid-file, so it always left matches out.
-    return { files: found.filter((file) => file !== undefined), truncated };
-  }
-
-  /**
-   * One file's matches, empty for a file too large, binary or unreadable — none of which the editor
-   * would show either. The readers share `matcher`, whose `lastIndex` the loop below carries from
-   * one match to the next: nothing in that loop awaits, so no second reader can reach it meanwhile.
-   */
-  private async matchesIn(filePath: string, matcher: RegExp): Promise<FileSearchMatch[]> {
-    const absolute = path.join(this.project.path, filePath);
-    let content: string;
-    try {
-      const stat = await fs.promises.stat(absolute);
-      if (!stat.isFile() || stat.size > MAX_EDIT_BYTES) {
-        return [];
-      }
-      const buffer = await fs.promises.readFile(absolute);
-      if (buffer.includes(0)) {
-        return [];
-      }
-      content = buffer.toString("utf8");
-    } catch {
-      // Vanished or unreadable between the walk and the read.
-      return [];
-    }
-    const matches: FileSearchMatch[] = [];
-    content.split(/\r?\n/).forEach((line, index) => {
-      matcher.lastIndex = 0;
-      for (let match = matcher.exec(line); match; match = matcher.exec(line)) {
-        if (match[0].length === 0) {
-          // A pattern that can match nothing (`a*`) would never advance on its own.
-          matcher.lastIndex++;
-          continue;
-        }
-        matches.push({ line: index + 1, column: match.index + 1, length: match[0].length, ...matchText(line, match.index) });
-      }
-    });
-    return matches;
+    return searchFiles(this.project.path, query, () => seq !== this.searchSeq);
   }
 
   /** A repository-relative path for a new entry, resolved, or an error if outside or taken.

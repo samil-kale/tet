@@ -17,28 +17,28 @@ const common = {
   tsconfig
 };
 
+/** Everything electron's node runs: main, the git host, preload, the CLIs, the tests. */
+const node = { ...common, platform: "node", target: "node22", format: "cjs" };
+
+/** The window's two bundles. */
+const browser = { ...common, platform: "browser", format: "iife", target: "chrome130" };
+
 /** @type {import('esbuild').BuildOptions} */
 const mainConfig = {
-  ...common,
+  ...node,
   entryPoints: [path.join(__dirname, "src", "main", "main.ts")],
   outfile: path.join(dist, "main.js"),
-  platform: "node",
-  target: "node22",
-  format: "cjs",
   // electron is provided by the runtime; node-pty is a native addon and cannot be bundled.
-  external: ["electron", "node-pty", "esbuild"]
+  external: ["electron", "node-pty"]
 };
 
-/** The git CLI wrapper, which runs in a utilityProcess of its own — see AGENTS.md. */
+/** The git CLI wrapper, which runs in a utilityProcess of its own — see AGENTS.md; nothing from
+ *  electron in it (eslint.config.mjs). */
 /** @type {import('esbuild').BuildOptions} */
 const gitHostConfig = {
-  ...common,
+  ...node,
   entryPoints: [path.join(__dirname, "src", "main", "git", "git-host.ts")],
-  outfile: path.join(dist, "git-host.js"),
-  platform: "node",
-  target: "node22",
-  format: "cjs",
-  external: ["electron"]
+  outfile: path.join(dist, "git-host.js")
 };
 
 /** The scripts under src/cli, each bundled on its own for plain node, nothing from electron in
@@ -48,34 +48,25 @@ const gitHostConfig = {
 /** @returns {import('esbuild').BuildOptions} */
 function cliConfig(name) {
   return {
-    ...common,
+    ...node,
     entryPoints: [path.join(__dirname, "src", "cli", `${name}.ts`)],
-    outfile: path.join(dist, `${name}.js`),
-    platform: "node",
-    target: "node22",
-    format: "cjs"
+    outfile: path.join(dist, `${name}.js`)
   };
 }
 
 /** @type {import('esbuild').BuildOptions} */
 const preloadConfig = {
-  ...common,
+  ...node,
   entryPoints: [path.join(__dirname, "src", "preload", "preload.ts")],
   outfile: path.join(dist, "preload.js"),
-  platform: "node",
-  target: "node22",
-  format: "cjs",
   external: ["electron"]
 };
 
 /** @type {import('esbuild').BuildOptions} */
 const rendererConfig = {
-  ...common,
+  ...browser,
   entryPoints: [path.join(__dirname, "src", "renderer", "main.tsx")],
   outfile: path.join(dist, "renderer.js"),
-  platform: "browser",
-  format: "iife",
-  target: "chrome130",
   // monaco's CSS pulls in codicon.ttf, and styles.css the Explorer's seti.woff; without a loader
   // for them the build fails outright.
   loader: { ".ttf": "file", ".woff": "file" },
@@ -88,24 +79,18 @@ const rendererConfig = {
 /** The editor's own web worker (tokenization, etc. off the main thread) — see editor.ts. */
 /** @type {import('esbuild').BuildOptions} */
 const editorWorkerConfig = {
-  ...common,
+  ...browser,
   entryPoints: [require.resolve("monaco-editor/editor/editor.worker.js")],
-  outfile: path.join(dist, "editor.worker.js"),
-  platform: "browser",
-  format: "iife",
-  target: "chrome130"
+  outfile: path.join(dist, "editor.worker.js")
 };
 
 /** The tests, for node's own runner (`npm test`). Bundled like the CLI, so a test imports the
  *  source the way the app does, without a loader of its own. */
 /** @type {import('esbuild').BuildOptions} */
 const testConfig = {
-  ...common,
+  ...node,
   entryPoints: [path.join(__dirname, "test", "*.test.ts")],
   outdir: distTest,
-  platform: "node",
-  target: "node22",
-  format: "cjs",
   // node-pty (native) cannot be bundled; esbuild finds its own binary relative to its package, and
   // pieces.test.ts compiles pi's generated extension with it. electron is a stub: node's runner has
   // none (helpers.ts finds the binary through its own require).

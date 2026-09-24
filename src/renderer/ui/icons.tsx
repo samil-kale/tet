@@ -24,8 +24,8 @@ const GRID = 16;
  * half a stroke.
  *
  * The box is `--icon-size` (13px), stated in CSS. A new icon comes from Lucide first (lucide.dev,
- * ISC), vendored on its 24-unit grid (`fitIcon`/`fitStroke`); a hand drawing is for what Lucide
- * has no match for.
+ * ISC), vendored on its 24-unit grid (`Svg`, or `fitIcon` for a fill-only drawing); a hand drawing
+ * is for what Lucide has no match for.
  */
 function geometry(extent: number, cx: number, cy: number, grid: number, stroke: number) {
   const side = (extent * grid) / ((TARGET_EXTENT / GRID) * grid);
@@ -35,20 +35,17 @@ function geometry(extent: number, cx: number, cy: number, grid: number, stroke: 
   };
 }
 
-/** The same fitting for an icon on its own grid (Lucide's 24, agent-icons.tsx). */
-export function fitIcon(extent: number, cx: number, cy: number, grid: number, stroke = 0): string {
-  return geometry(extent, cx, cy, grid, stroke).viewBox;
-}
-
-export function fitStroke(extent: number, grid: number, stroke: number): number {
-  return geometry(extent, 0, 0, grid, stroke).strokeWidth;
+/** The same fitting for a fill-only icon on its own grid (agent-icons.tsx); a stroked one is drawn
+ *  with `Svg`. */
+export function fitIcon(extent: number, cx: number, cy: number, grid: number): string {
+  return geometry(extent, cx, cy, grid, 0).viewBox;
 }
 
 /**
  * Draws an icon two pixels under the shared `--icon-size`, as a ratio so it holds for any size.
  * The box stays; only the drawing shrinks.
  */
-export const SMALLER = 11 / 13;
+const SMALLER = 11 / 13;
 
 /** Two pixels over, for an icon that should read larger. */
 export const LARGER = 15 / 13;
@@ -60,8 +57,9 @@ export const TREE_CHEVRON = 10 / 10.4;
 /**
  * `extent` (stroke included) and the centre `cx`/`cy` on the 16 grid are measured. `scale` is a
  * *choice* — read smaller than the neighbours — kept apart so the extent stays re-measurable.
+ * Also the stroked agent icons' box (agent-icons.tsx).
  */
-function Svg({
+export function Svg({
   children,
   className,
   extent = TARGET_EXTENT,

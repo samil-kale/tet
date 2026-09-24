@@ -19,7 +19,7 @@ import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
 import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
 import { usePaneShare } from "../ui/layout-storage";
 import { MIN_PANE_WIDTH, Sash } from "../ui/Sash";
-import { isMac, isModifierHeld } from "../platform";
+import { isModifierHeld, modifierLabel } from "../platform";
 
 function useEditorStore<T>(tabId: string, select: (snapshot: EditorSnapshot) => T): T {
   const subscribe = useCallback((listener: () => void) => subscribeEditor(tabId, listener), [tabId]);
@@ -128,7 +128,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
         <div className="editor-bar-actions">
           <button
             className="icon-button"
-            title={`Save (${isMac() ? "⌘" : "Ctrl"}+S)`}
+            title={`Save (${modifierLabel()}+S)`}
             disabled={isReadOnly(file) || !dirty || saving}
             onClick={() => void saveEditorFile(tabId)}
           >
@@ -146,7 +146,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
           {isMarkdown(path) && (
             <button
               className={`icon-button${markdownPreview ? " active" : ""}`}
-              title={`${markdownPreview ? "Hide" : "Show"} Preview (${isMac() ? "⌘" : "Ctrl"}+Shift+V)`}
+              title={`${markdownPreview ? "Hide" : "Show"} Preview (${modifierLabel()}+Shift+V)`}
               onClick={() => showMarkdownPreview(tabId, !markdownPreview)}
             >
               <EyeIcon />

@@ -77,7 +77,6 @@
   --vscode-radio-activeBackground: #aeb3c233;
   --vscode-radio-activeBorder: #007acc;
   --vscode-radio-inactiveForeground: #616161;
-  --vscode-radio-inactiveBackground: #00000000;
   --vscode-radio-inactiveHoverBackground: #b8b8b850;
 
   /* Unset; the registry's: hover the background darkened by 0.2, the secondary button the list

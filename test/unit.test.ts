@@ -19,7 +19,8 @@ import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
 import { CLI, eventually } from "./helpers";
 
-/** Pieces around the control channel needing no app and no server. */
+/** Pieces of the main process needing no app and no server: the session manager's turns and
+ *  reports, the control records and launchers, the agent PATH, and what the shell may open. */
 
 describe("a turn's toast", () => {
   // A shell tab stands in for an agent: no version check and no sessions, so the manager starts
@@ -27,7 +28,7 @@ describe("a turn's toast", () => {
   it("is left out for a tab in front of the user, and only while it is", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-toast-"));
     const settings = new SettingsStore(root);
-    settings.save({ ...settings.get(), notifications: { finished: true, needsYou: true, idleReminder: true } });
+    settings.patch({ notifications: { finished: true, needsYou: true, idleReminder: true } });
     let pushed: TerminalDescriptor[] = [];
     const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, settings, new SbxLocalStore(root), {
       onTabs: (_projectId, tabs) => (pushed = tabs),

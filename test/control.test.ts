@@ -57,7 +57,6 @@ interface Calls {
   /** `[projectId, branch]` per worktree-add, `[path, force]` per worktree-delete. */
   worktreesAdded: [string, string][];
   worktreesDeleted: [string, boolean][];
-  changed: { added?: string; removed?: string }[];
   shutdown: boolean[];
   notified: [string, string, ToastTarget | undefined][];
   hooks: [string, string, string][];
@@ -228,9 +227,6 @@ function deps(): ControlDeps {
     showTab: (projectId, tabId) => {
       calls.shown.push([projectId, tabId]);
     },
-    projectsChanged: (change) => {
-      calls.changed.push(change);
-    },
     notify: (title, body, target) => {
       calls.notified.push([title, body, target]);
     },
@@ -315,7 +311,6 @@ describe("tet-ctl against the control server", () => {
       removed: [],
       worktreesAdded: [],
       worktreesDeleted: [],
-      changed: [],
       shutdown: [],
       notified: [],
       hooks: [],
@@ -894,24 +889,22 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["tabs-rename", "tab-2", "a", "b"])).status, EXIT_CODES.usage);
   });
 
-  it("adds a project and tells the window which", async () => {
+  // Telling the window is projects.ts's own doing (projects.test.ts), the same for both transports.
+  it("adds a project", async () => {
     const run = await tetCtl(["projects-add", tempDir]);
     assert.equal((run.result as Project).id, "p3");
     assert.deepEqual(calls.added, [tempDir]);
-    assert.deepEqual(calls.changed, [{ added: "p3" }]);
   });
 
   it("passes on what adding a project had to say", async () => {
     const run = await tetCtl(["projects-add", "/nowhere"]);
     assert.equal(run.status, EXIT_CODES.usage);
     assert.match(run.stderr, /not a folder/);
-    assert.deepEqual(calls.changed, []);
   });
 
   it("removes another project at once", async () => {
     assert.deepEqual((await tetCtl(["projects-remove", OTHER.id])).result, { removed: OTHER.id });
     assert.deepEqual(calls.removed, [OTHER.id]);
-    assert.deepEqual(calls.changed, [{ removed: OTHER.id }]);
   });
 
   it("creates a worktree of the caller's project, named by its new branch", async () => {

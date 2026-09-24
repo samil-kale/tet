@@ -76,7 +76,7 @@ function resolveWin32Executable(executable: string): { path: string; batch: bool
   return undefined;
 }
 
-export interface ResolvedCommand {
+interface ResolvedCommand {
   command: string;
   args: string[];
   /** The args are one escaped cmd.exe line: pass as `windowsVerbatimArguments` to child_process,

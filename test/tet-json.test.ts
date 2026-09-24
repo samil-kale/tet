@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, it } from "node:test";
+import { EMPTY_SBX_CONFIG } from "../src/shared/types";
 import {
   addExclude,
   addFolder,
@@ -252,14 +253,7 @@ describe("a hand-written tet.json", () => {
 
 describe("readSbxConfig", () => {
   it("is disabled and empty for a project with no tet.json at all", async () => {
-    assert.deepEqual(await readSbxConfig(root), {
-      enabled: false,
-      ports: [],
-      paths: [],
-      hosts: [],
-      secrets: [],
-      variables: []
-    });
+    assert.deepEqual(await readSbxConfig(root), EMPTY_SBX_CONFIG);
   });
 
   it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's paths alongside it", async () => {

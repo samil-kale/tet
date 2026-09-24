@@ -26,8 +26,8 @@ export function registerRepositoryIpc({
   store,
   settings,
   repositories,
-  send
-}: Pick<IpcDeps, "store" | "settings" | "repositories" | "send">): void {
+  notice
+}: Pick<IpcDeps, "store" | "settings" | "repositories" | "notice">): void {
   ipcMain.handle("repo:state", (_event, projectId: string): RepositoryState => {
     return repositories.get(projectId)?.getState() ?? MISSING_REPOSITORY;
   });
@@ -92,10 +92,7 @@ export function registerRepositoryIpc({
       const candidates = AGENTS.filter((agent) => agent.askArgs)
         .map((agent) => agent.displayName)
         .join(" or ");
-      send("app:notice", {
-        severity: "warning",
-        message: `${candidates} not found — install one to have it suggest a commit message.`
-      });
+      notice("warning", `${candidates} not found — install one to have it suggest a commit message.`);
       return "";
     }
     const { executable, agent } = askable;
@@ -106,11 +103,11 @@ export function registerRepositoryIpc({
       const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
       const message = await suggestCommitMessage(project.path, executable, agent.askArgs!, prompt, context);
       if (message.length === 0) {
-        send("app:notice", { severity: "warning", message: "The agent did not suggest a commit message" });
+        notice("warning", "The agent did not suggest a commit message");
       }
       return message;
     } catch (error) {
-      send("app:notice", { severity: "error", message: `Could not suggest a commit message: ${errorMessage(error)}` });
+      notice("error", `Could not suggest a commit message: ${errorMessage(error)}`);
       return "";
     } finally {
       await agent.cleanupAsk?.(executable, project.path).catch(() => undefined);

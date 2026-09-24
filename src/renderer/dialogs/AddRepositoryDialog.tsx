@@ -1,16 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import type {
-  AddRepositoryResult,
-  GitLogin,
-  Project,
-  ProviderAccount,
-  ProviderId,
-  RemoteRepository
-} from "../../shared/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { AddRepositoryResult, GitLogin, ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types";
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
-import { DialogFrame } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, Field, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
@@ -59,14 +52,14 @@ interface PathFieldProps {
   pickTitle: string;
   onChange: (value: string) => void;
   /** For the dialog's focus effect, when this is a mode's first field. */
-  inputRef?: React.Ref<HTMLInputElement>;
+  ref?: React.Ref<HTMLInputElement>;
 }
 
 /** Where the picker opens for an empty field. Renderer storage, shared by every such field: it
  *  describes this window's use, not a project. */
 const LAST_DIRECTORY_KEY = "tet.dialog.lastDirectory";
 
-function PathField({ label, value, pickTitle, onChange, inputRef }: PathFieldProps) {
+function PathField({ label, value, pickTitle, onChange, ref }: PathFieldProps) {
   const browse = async (): Promise<void> => {
     // The field's own value is more specific, so it wins.
     const start = value.trim() || localStorage.getItem(LAST_DIRECTORY_KEY) || undefined;
@@ -80,7 +73,7 @@ function PathField({ label, value, pickTitle, onChange, inputRef }: PathFieldPro
   return (
     <Field label={label}>
       <div className="dialog-field-row">
-        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} ref={inputRef} />
+        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} ref={ref} />
         <button type="button" className="button secondary" onClick={() => void browse()}>
           Browse...
         </button>
@@ -89,21 +82,37 @@ function PathField({ label, value, pickTitle, onChange, inputRef }: PathFieldPro
   );
 }
 
+/**
+ * What the account form hands the dialog's frame while it is up: the frame's submit button is
+ * this form's ("Add account"), Enter in its fields submits it, and the host's refusal goes above
+ * the button row — as the other tabs' do. Lifted as the bar's `busy` is (AGENTS.md).
+ */
+interface AccountSubmission {
+  ready: boolean;
+  busy: boolean;
+  refused: string | undefined;
+  submit: () => void;
+}
+
 interface AccountFormProps {
   onAdded: (account: ProviderAccount) => void;
-  /** Held by the dialog: the header's progress bar is the only one. */
-  busy: boolean;
-  onBusy: (busy: boolean) => void;
+  onForm: (form: AccountSubmission | null) => void;
 }
 
 /** Provider, host and token; the token is validated on entry and never shown again. */
-function AccountForm({ onAdded, busy, onBusy }: AccountFormProps) {
+function AccountForm({ onAdded, onForm }: AccountFormProps) {
   const [provider, setProvider] = useState<ProviderId>("github");
   const [host, setHost] = useState(DEFAULT_HOST.github);
   const [token, setToken] = useState("");
-  /** What the host refused, above this form's own buttons: the token is checked against the host,
-   *  so neither field alone can be blamed. Cleared by the next edit of either. */
-  const [refused, setRefused] = useState<string | undefined>(undefined);
+  /** The token is checked against the host, so neither field alone can be blamed for a refusal. */
+  const { busy, refused, submit, clear } = useSubmit(async () => {
+    const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
+    if (!result.account) {
+      return result.error ?? "The account could not be added";
+    }
+    onAdded(result.account);
+    return undefined;
+  });
 
   /** Replaces the host only while it is empty or a provider default. */
   const pick = (next: ProviderId): void => {
@@ -115,22 +124,14 @@ function AccountForm({ onAdded, busy, onBusy }: AccountFormProps) {
     );
   };
 
-  const canSubmit = host.trim() !== "" && token.trim() !== "" && !busy;
-
-  const submit = async (): Promise<void> => {
-    onBusy(true);
-    setRefused(undefined);
-    try {
-      const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
-      if (result.account) {
-        onAdded(result.account);
-      } else {
-        setRefused(result.error ?? "The account could not be added");
-      }
-    } finally {
-      onBusy(false);
-    }
-  };
+  const ready = host.trim() !== "" && token.trim() !== "";
+  // The latest, for a submit the frame holds from an earlier render.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useEffect(() => {
+    onForm({ ready, busy, refused, submit: () => void submitRef.current() });
+    return () => onForm(null);
+  }, [ready, busy, refused, onForm]);
 
   return (
     <div className="account-form">
@@ -140,7 +141,7 @@ function AccountForm({ onAdded, busy, onBusy }: AccountFormProps) {
         value={host}
         onChange={(next) => {
           setHost(next);
-          setRefused(undefined);
+          clear();
         }}
       />
       <TextField
@@ -149,30 +150,9 @@ function AccountForm({ onAdded, busy, onBusy }: AccountFormProps) {
         value={token}
         onChange={(next) => {
           setToken(next);
-          setRefused(undefined);
-        }}
-        // Enter here means this form, not the dialog's.
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            if (canSubmit) {
-              void submit();
-            }
-          }
+          clear();
         }}
       />
-      <DialogError message={refused} />
-      {/* Its own row: the dialog's Cancel closes the whole dialog. */}
-      <div className="dialog-buttons">
-        <button
-          type="button"
-          className="button"
-          disabled={!canSubmit}
-          onClick={() => void submit()}
-        >
-          Add account
-        </button>
-      </div>
     </div>
   );
 }
@@ -216,12 +196,13 @@ function inNamespace(fullName: string, namespace: string): boolean {
 interface RemoteTabProps {
   /** Opens the clone tab with url, name and account filled in. */
   onClone: (repo: RemoteRepository, accountId: string) => void;
-  /** See AccountFormProps. */
-  busy: boolean;
+  /** The listing's, held by the dialog: the header's progress bar is the only one. */
   onBusy: (busy: boolean) => void;
+  /** See AccountSubmission. */
+  onForm: (form: AccountSubmission | null) => void;
 }
 
-function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
+function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
   /** null while loading. */
   const [accounts, setAccounts] = useState<ProviderAccount[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -280,8 +261,8 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
       });
     return () => {
       cancelled = true;
-      // Only a fetch still running: the bar may be the account form's by now. The next run turns
-      // it on only when it fetches, so an already-listed account shows none.
+      // Only a fetch still running: the next run turns the bar on only when it fetches, so an
+      // already-listed account shows none.
       if (fetching) {
         onBusy(false);
       }
@@ -333,7 +314,7 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
 
   const list = selectedId !== null ? repos[selectedId] : undefined;
   const query = filter.trim().toLowerCase();
-  const groups = namespacesOf(list ?? []);
+  const groups = useMemo(() => namespacesOf(list ?? []), [list]);
   /** The dropdown's value: this dialog's pick, else the stored group, else the first row's (the
    *  list is sorted by recent activity). "All" only when that group is gone from the list. */
   const stored = (accounts ?? []).find((entry) => entry.id === selectedId)?.namespace;
@@ -379,7 +360,7 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
       </div>
       <div className="remote-main">
         {adding ? (
-          <AccountForm onAdded={accountAdded} busy={busy} onBusy={onBusy} />
+          <AccountForm onAdded={accountAdded} onForm={onForm} />
         ) : selectedId === null ? (
           <div className="placeholder">No account yet — add one to browse its repositories.</div>
         ) : (
@@ -426,12 +407,12 @@ function RemoteTab({ onClone, busy, onBusy }: RemoteTabProps) {
 }
 
 interface AddRepositoryDialogProps {
-  onAdded: (project: Project) => void;
+  /** The project added shows through `projects:changed`, as one opened any other way. */
   onClose: () => void;
 }
 
 /** The one place tet talks to a host rather than a repository, so provider accounts live here. */
-export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogProps) {
+export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");
   /** The parent of the new folder (clone, create), or the existing folder (add). */
@@ -443,11 +424,10 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   /** null until a clone wanted a login (`loginUrl`), then the url it wants one for. */
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [login, setLogin] = useState<GitLogin>({ username: "", password: "" });
-  const [busy, setBusy] = useState(false);
-  /** What refused the add, above the buttons: which field is to blame depends on the tab — a url,
-   *  a path, a folder name — so none of them carries it. Cleared on the next try and on a tab
-   *  switch, both of which make it wrong. */
-  const [refused, setRefused] = useState<string | undefined>(undefined);
+  /** The remote tab's listing underway, on the header's bar. */
+  const [listing, setListing] = useState(false);
+  /** The account form while it is up: the frame's button and Enter are its (AccountSubmission). */
+  const [accountForm, setAccountForm] = useState<AccountSubmission | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
   const loginField = useRef<HTMLInputElement>(null);
 
@@ -485,40 +465,43 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
       loginUrl === null ? undefined : { username: login.username.trim(), password: login.password }
     );
 
-  const submit = async (): Promise<void> => {
-    setBusy(true);
-    setRefused(undefined);
-    try {
-      const result =
-        mode === "add"
-          ? await window.tet.projects.open(directory.trim())
-          : mode === "clone"
-            ? await cloneRepository()
-            : await window.tet.projects.create(directory.trim(), folderName.trim());
-      if (result.project) {
-        onAdded(result.project);
-        onClose();
-        return;
-      }
-      setRefused(result.error ?? "The repository could not be added");
-      // Only the first time: a second failure must not discard what was typed.
-      if (result.loginUrl !== undefined && loginUrl === null) {
-        setLoginUrl(result.loginUrl);
-        setLogin(emptyLogin(result.loginUrl));
-        // An account's token the host refused: the login typed next goes in its stead.
-        setAccountId(null);
-      }
-    } finally {
-      setBusy(false);
+  /** What refused the add goes above the buttons: which field is to blame depends on the tab — a
+   *  url, a path, a folder name — so none of them carries it. */
+  const { busy: adding, refused, submit, clear } = useSubmit(async () => {
+    const result =
+      mode === "add"
+        ? await window.tet.projects.open(directory.trim())
+        : mode === "clone"
+          ? await cloneRepository()
+          : await window.tet.projects.create(directory.trim(), folderName.trim());
+    if (result.project) {
+      return undefined;
     }
-  };
+    // Only the first time: a second failure must not discard what was typed.
+    if (result.loginUrl !== undefined && loginUrl === null) {
+      setLoginUrl(result.loginUrl);
+      setLogin(emptyLogin(result.loginUrl));
+      // An account's token the host refused: the login typed next goes in its stead.
+      setAccountId(null);
+    }
+    return result.error ?? "The repository could not be added";
+  }, onClose);
+  /** A field's change clears the refusal, which it is about to make wrong. */
+  const changing =
+    <T,>(set: (next: T) => void) =>
+    (next: T): void => {
+      set(next);
+      clear();
+    };
 
   // Fields survive a tab switch; only the name resets, since only clone derives it.
   const switchMode = (next: Mode): void => {
     setMode(next);
     setName(null);
-    setRefused(undefined);
+    clear();
   };
+
+  const busy = adding || listing || accountForm?.busy === true;
 
   /** A remote row's Clone: the clone tab filled in, with the row's account. */
   const cloneFromRemote = (repo: RemoteRepository, fromAccountId: string): void => {
@@ -533,11 +516,18 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
   return (
     <DialogFrame
       header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose }}
-      error={refused}
+      error={accountForm ? accountForm.refused : refused}
       className="add-repository-dialog"
       busy={busy}
       onSubmit={() => {
-        if (ready && !busy) {
+        if (busy) {
+          return;
+        }
+        if (accountForm) {
+          if (accountForm.ready) {
+            accountForm.submit();
+          }
+        } else if (ready) {
           void submit();
         }
       }}
@@ -546,35 +536,41 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          {mode !== "remote" && (
-            <button type="submit" className="button" disabled={!ready || busy}>
-              {MODES.find((entry) => entry.id === mode)?.label}
+          {accountForm ? (
+            <button type="submit" className="button" disabled={!accountForm.ready || busy}>
+              Add account
             </button>
+          ) : (
+            mode !== "remote" && (
+              <button type="submit" className="button" disabled={!ready || busy}>
+                {MODES.find((entry) => entry.id === mode)?.label}
+              </button>
+            )
           )}
         </>
       }
     >
-      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} busy={busy} onBusy={setBusy} />}
+      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} onBusy={setListing} onForm={setAccountForm} />}
       {mode === "clone" && (
         <>
           <TextField
             label="Repository URL"
             value={url}
             placeholder="https://github.com/owner/repository.git"
-            onChange={(next) => {
+            onChange={changing((next: string) => {
               setUrl(next);
               // Hand-edited: the remote tab's account, or a login asked for, must not carry over to a
               // new host.
               setAccountId(null);
               setLoginUrl(null);
-            }}
+            })}
             ref={firstField}
           />
-          <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={setDirectory} />
-          <TextField label="Folder name" value={folderName} onChange={setName} />
+          <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={changing(setDirectory)} />
+          <TextField label="Folder name" value={folderName} onChange={changing(setName)} />
           {loginUrl !== null && (
             // Its failure shows above the buttons, as the tab's others do (`refused`).
-            <GitLoginFields url={loginUrl} value={login} onChange={setLogin} busy={busy} field={loginField} />
+            <GitLoginFields url={loginUrl} value={login} onChange={changing(setLogin)} busy={busy} field={loginField} />
           )}
         </>
       )}
@@ -583,8 +579,8 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
           label="Repository path"
           value={directory}
           pickTitle="Add repository"
-          onChange={setDirectory}
-          inputRef={firstField}
+          onChange={changing(setDirectory)}
+          ref={firstField}
         />
       )}
       {mode === "create" && (
@@ -593,10 +589,10 @@ export function AddRepositoryDialog({ onAdded, onClose }: AddRepositoryDialogPro
             label="Destination"
             value={directory}
             pickTitle="Create in"
-            onChange={setDirectory}
-            inputRef={firstField}
+            onChange={changing(setDirectory)}
+            ref={firstField}
           />
-          <TextField label="Folder name" value={folderName} onChange={setName} />
+          <TextField label="Folder name" value={folderName} onChange={changing(setName)} />
         </>
       )}
     </DialogFrame>

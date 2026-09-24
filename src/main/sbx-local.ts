@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { EMPTY_SBX_KNOWLEDGE } from "../shared/types";
 import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
-import { isRecord, saveJson } from "./json-file";
+import { isRecord, readJson, saveJson } from "./json-file";
 import { seal, unseal } from "./sealed";
 
 /** What the file holds per project id: each kind's values by env name, encrypted by the OS and
@@ -166,17 +166,13 @@ export class SbxLocalStore {
   }
 
   private load(file: string): void {
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
-      if (isRecord(parsed)) {
-        for (const [projectId, project] of Object.entries(parsed)) {
-          if (isRecord(project)) {
-            this.projects[projectId] = toLocal(project);
-          }
+    const parsed = readJson(file);
+    if (isRecord(parsed)) {
+      for (const [projectId, project] of Object.entries(parsed)) {
+        if (isRecord(project)) {
+          this.projects[projectId] = toLocal(project);
         }
       }
-    } catch {
-      // No file yet, or unreadable — no values.
     }
   }
 

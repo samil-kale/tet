@@ -1,5 +1,5 @@
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
-import type { Project, RepositoryState } from "../../shared/types";
+import type { NoticeSeverity, Project, RepositoryState } from "../../shared/types";
 import type { ControlRecords } from "../control/control-records";
 import type { EnvRequests, EnvStore } from "../environment";
 import type { GitLoginStore } from "../git-logins";
@@ -12,8 +12,6 @@ import type { SessionManagerRegistry } from "../terminals/session-manager";
 
 /** The singletons main.ts builds, for the renderer-facing IPC surface. */
 export interface IpcDeps {
-  /** TET's data folder (data-root.ts). */
-  dataRoot: string;
   store: ProjectStore;
   settings: SettingsStore;
   accounts: AccountStore;
@@ -31,6 +29,8 @@ export interface IpcDeps {
   projectDeps: ProjectDeps;
   /** Posts to the window, or nowhere while none is open. */
   send: (channel: string, payload: unknown) => void;
+  /** Tells the user (Notices.tsx), as main.ts does; a handler with a dialog up answers it instead. */
+  notice: (severity: NoticeSeverity, message: string) => void;
   /** Shared with the bootstrap's restore. */
   openProject: (project: Project) => void;
   /** Opens the stored projects, once, when the requirements are met. */

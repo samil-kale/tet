@@ -1,10 +1,9 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { urlOrigin, urlUsername } from "../shared/git-url";
 import type { GitActionResult, GitLogin } from "../shared/types";
 import { git } from "./git/git-client";
 import type { NetworkLogin } from "./git/git";
-import { saveJson } from "./json-file";
+import { isRecord, readJson, saveJson } from "./json-file";
 import { seal, unseal } from "./sealed";
 
 /** What the file holds: one login per origin and username, its password encrypted by the OS and
@@ -110,21 +109,15 @@ export class GitLoginStore {
   }
 
   private load(): void {
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(this.file, "utf8"));
-      if (Array.isArray(parsed)) {
-        this.logins = parsed.filter(
-          (entry): entry is StoredLogin =>
-            typeof entry === "object" &&
-            entry !== null &&
-            typeof (entry as StoredLogin).origin === "string" &&
-            typeof (entry as StoredLogin).username === "string" &&
-            typeof (entry as StoredLogin).password === "string"
-        );
-      }
-    } catch {
-      // No file yet, or unreadable — no logins.
-      this.logins = [];
+    const parsed = readJson(this.file);
+    if (Array.isArray(parsed)) {
+      this.logins = parsed.filter(
+        (entry): entry is StoredLogin =>
+          isRecord(entry) &&
+          typeof entry.origin === "string" &&
+          typeof entry.username === "string" &&
+          typeof entry.password === "string"
+      );
     }
   }
 

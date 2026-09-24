@@ -1,10 +1,9 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { DEFAULT_THEME_IDS, THEMES, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../shared/types";
 import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../shared/types";
-import { saveJson } from "./json-file";
+import { isRecord, readJson, saveJson } from "./json-file";
 
 const DEFAULTS: AppSettings = {
   notifications: {
@@ -54,20 +53,16 @@ export class SettingsStore implements SettingsAccess {
     this.save(withSettings(this.settings, edits));
   }
 
-  save(settings: AppSettings): void {
+  private save(settings: AppSettings): void {
     this.settings = normalize(settings);
     // Renamed into place: `load` reads a half-written file as the defaults.
     saveJson(this.file, this.settings, "settings");
   }
 
   private load(): void {
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(this.file, "utf8"));
-      if (typeof parsed === "object" && parsed !== null) {
-        this.settings = normalize(parsed as Partial<AppSettings>);
-      }
-    } catch {
-      // No file yet, or unreadable: the defaults.
+    const parsed = readJson(this.file);
+    if (isRecord(parsed)) {
+      this.settings = normalize(parsed as Partial<AppSettings>);
     }
   }
 }

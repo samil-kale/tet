@@ -16,7 +16,7 @@ import type {
   SettingsEdits
 } from "../../shared/types";
 import { confirm } from "../ui/Dialog";
-import { DialogFrame } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
@@ -136,10 +136,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
-  const [saving, setSaving] = useState(false);
-  /** What refused the Save, above the buttons: it is about tet.json, not about one of the switches
-   *  on the Files tab. Cleared on the next try. */
-  const [refused, setRefused] = useState<string | undefined>(undefined);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
   /** What Save writes: the keys the dialog touched, and no others. tet-ctl may set another one
    *  while the dialog stands open, and Save must not take it back (settings.ts's patch). */
@@ -182,10 +178,60 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   useEscape(onClose);
 
+  /** One settings.json write, the Environment tab if touched, then one tet.json write per changed
+   *  Explorer key. What refuses it goes above the buttons: it is about tet.json, not about one of
+   *  the switches on the Files tab. */
+  const { busy: saving, refused, submit: save, clear } = useSubmit(
+    async () => {
+      if (Object.keys(edits.current).length > 0) {
+        await window.tet.settings.patch(edits.current);
+      }
+      if (variablesEdited.current) {
+        const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
+        const refusal = await window.tet.environment.save(rows);
+        if (refusal) {
+          return refusal;
+        }
+        variablesEdited.current = false;
+      }
+      const loaded = loadedExplorer.current;
+      if (activeProject && explorerSettings && loaded) {
+        for (const key of EXPLORER_KEYS) {
+          if (explorerSettings[key] === loaded[key]) {
+            continue;
+          }
+          const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
+          if (!result.ok) {
+            return result.error ?? "Could not update tet.json";
+          }
+        }
+      }
+      return undefined;
+    },
+    () => {
+      onClose();
+      // Asked after closing: a kind switch is saved either way, Cancel only waits for the next start.
+      if (chosenKind !== shownKind) {
+        void confirm({
+          title: "Restart TET",
+          message: `Restart TET now to switch to the ${chosenKind} theme?`,
+          detail: "This ends every terminal in every project. Otherwise it applies at the next start.",
+          confirmLabel: "Restart",
+          // Never settles: the question stays up, its bar running, until the restart ends the window.
+          submit: () => {
+            window.tet.app.restart();
+            return new Promise(() => {});
+          }
+        });
+      }
+    }
+  );
+
   /** Edits the shown copy and records the change for Save. */
   const edit = (change: SettingsEdits): void => {
     edits.current = withSettings(edits.current, change);
     setSettings((current) => (current ? withSettings(current, change) : current));
+    clear();
   };
 
   const flip = (key: keyof NotificationSettings, value: boolean): void => edit({ notifications: { [key]: value } });
@@ -206,63 +252,15 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } });
 
-  const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void =>
+  const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void => {
     setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
+    clear();
+  };
 
   const editVariables = (change: (rows: typeof variables) => typeof variables): void => {
     variablesEdited.current = true;
     setVariables(change);
-  };
-
-  /** One settings.json write, the Environment tab if touched, then one tet.json write per changed
-   *  Explorer key. */
-  const save = async (): Promise<void> => {
-    setSaving(true);
-    setRefused(undefined);
-    try {
-      if (Object.keys(edits.current).length > 0) {
-        await window.tet.settings.patch(edits.current);
-      }
-      if (variablesEdited.current) {
-        const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
-        const refusal = await window.tet.environment.save(rows);
-        if (refusal) {
-          setRefused(refusal);
-          return;
-        }
-        variablesEdited.current = false;
-      }
-      const loaded = loadedExplorer.current;
-      if (activeProject && explorerSettings && loaded) {
-        for (const key of EXPLORER_KEYS) {
-          if (explorerSettings[key] === loaded[key]) {
-            continue;
-          }
-          const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
-          if (!result.ok) {
-            setRefused(result.error ?? "Could not update tet.json");
-            return;
-          }
-        }
-      }
-    } finally {
-      setSaving(false);
-    }
-    onClose();
-    // Asked after closing: a kind switch is saved either way, Cancel only waits for the next start.
-    if (chosenKind !== shownKind) {
-      await confirm({
-        title: "Restart TET",
-        message: `Restart TET now to switch to the ${chosenKind} theme?`,
-        detail: "This ends every terminal in every project. Otherwise it applies at the next start.",
-        confirmLabel: "Restart",
-        // Never settles: the question stays up, its bar running, until the restart ends the window.
-        submit: () => {
-          window.tet.app.restart();
-          return new Promise(() => {});
-        }
-      });
-    }
+    clear();
   };
 
   const envRowMarks = useMemo(() => envMarks(variables), [variables]);

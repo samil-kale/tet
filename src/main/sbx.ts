@@ -158,6 +158,25 @@ export async function execInSandbox(name: string, cwd: string, command: string[]
   return result.stdout;
 }
 
+/** A `--json` run's stdout parsed: undefined when sbx failed or printed no JSON, so a reader
+ *  answers "sbx cannot say" rather than an empty list. The shape is the caller's claim, read
+ *  defensively at its site. */
+function jsonOf<T>(result: RunResult): T | undefined {
+  if (!result.ok) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(result.stdout) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/** One `sbx … --json` read (jsonOf). */
+async function sbxJson<T>(args: string[]): Promise<T | undefined> {
+  return jsonOf<T>(await runSbx(args));
+}
+
 /** For the dialog's Cancel. Plain `kill()` suffices: `sbx.exe` is native, no cmd.exe shim (unlike
  *  `ask.ts`). */
 export function cancelSbxSetup(): void {
@@ -292,7 +311,7 @@ function folderRule(folder: string): string {
  * Both questions are asked at once, for the same reason probeSbx asks its three that way. The rules
  * are returned too, for a spawn's readSbxProblems.
  */
-export async function readSbxBlockers(
+async function readSbxBlockers(
   projectPath: string,
   projectId: string
 ): Promise<{ blockers: SbxBlocker[]; rules: FilesystemRule[] }> {
@@ -405,15 +424,11 @@ let controlAllowed: Promise<boolean> | undefined;
 
 /**
  * `sbx policy check` asks the same authorizer the sandbox's proxy does, so no matching is
- * reproduced. A denial exits 1 with `"allowed": false`; JSON on stdout either way (measured, 0.42.1).
+ * reproduced. A denial exits 1 with `"allowed": false`; JSON on stdout either way (measured,
+ * 0.42.1) — so a failed run reads as denied.
  */
 async function isNetworkAllowed(target: string): Promise<boolean> {
-  const result = await runSbx(["policy", "check", "network", "--json", target]);
-  try {
-    return (JSON.parse(result.stdout) as { allowed?: boolean }).allowed === true;
-  } catch {
-    return false;
-  }
+  return (await sbxJson<{ allowed?: boolean }>(["policy", "check", "network", "--json", target]))?.allowed === true;
 }
 
 /**
@@ -620,20 +635,6 @@ export async function readKnowledgeSources(): Promise<SbxKnowledgeSource[]> {
   return sources.filter((source) => source !== undefined);
 }
 
-/**
- * Mounts (`HOST:TARGET[:ro]`) for the enabled knowledge kinds. A bind mount, not a symlink: sbx
- * cannot follow one out of its workspace. Folders and files both work (measured).
- */
-function knowledgeMountSpecs(entries: KnowledgeEntries, knowledge: SbxKnowledgeConfig): MountSpec[] {
-  return (Object.keys(entries) as SbxKnowledgeKind[]).flatMap((kind) => {
-    const access = knowledge[kind];
-    if (!access) {
-      return [];
-    }
-    return entries[kind].map((entry) => mountSpec(entry.host, entry.target, access === "ro"));
-  });
-}
-
 /** A grant the dialog changes, with the row it is for (SbxProblems' option and row). */
 interface Grant extends MountSpec {
   option: "paths" | "knowledge";
@@ -644,17 +645,22 @@ interface Grant extends MountSpec {
  * Every grant the dialog changes (Allowed paths, knowledge), as one list: Save narrows and each
  * spawn re-applies the same set (mountAll, revokeMounts). Only what exists here; a missing row or
  * skills folder is a problem (readSbxProblems). A different access is a different grant (`mount`).
+ * Knowledge is bind-mounted (`HOST:TARGET[:ro]`), not symlinked: sbx cannot follow a link out of
+ * its workspace. Folders and files both work (measured).
  */
 async function grantsOf(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig, paths: SbxPath[]): Promise<Grant[]> {
   const entries = await sandboxKnowledgeFor(agentId, knowledge.skillsFolder);
   return [
-    ...SBX_KNOWLEDGE_KINDS.flatMap((kind) =>
-      knowledgeMountSpecs({ skills: [], plugins: [], instructions: [], [kind]: entries[kind] }, knowledge).map((spec) => ({
-        ...spec,
-        option: "knowledge" as const,
-        row: kind
-      }))
-    ),
+    ...SBX_KNOWLEDGE_KINDS.flatMap((kind) => {
+      const access = knowledge[kind];
+      return access
+        ? entries[kind].map((entry) => ({
+            ...mountSpec(entry.host, entry.target, access === "ro"),
+            option: "knowledge" as const,
+            row: kind
+          }))
+        : [];
+    }),
     ...paths
       .filter((entry) => statOf(normalizeHostPath(entry.path)))
       .map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path }))
@@ -685,20 +691,17 @@ async function listSandboxes(): Promise<SandboxList | undefined> {
   return parseSandboxes(await runSbx(["ls", "--json"]));
 }
 
+/** probeSbx reads the run itself too, for why `ls` failed. */
 function parseSandboxes(result: RunResult): SandboxList | undefined {
-  if (!result.ok) {
+  const parsed = jsonOf<{ sandboxes?: { name?: string; workspaces?: string[] }[] }>(result);
+  if (!parsed) {
     return undefined;
   }
   const sandboxes: SandboxList = new Map();
-  try {
-    const parsed = JSON.parse(result.stdout) as { sandboxes?: { name?: string; workspaces?: string[] }[] };
-    for (const sandbox of parsed.sandboxes ?? []) {
-      if (sandbox.name) {
-        sandboxes.set(sandbox.name, sandbox.workspaces ?? []);
-      }
+  for (const sandbox of parsed.sandboxes ?? []) {
+    if (sandbox.name) {
+      sandboxes.set(sandbox.name, sandbox.workspaces ?? []);
     }
-  } catch {
-    // Unreadable reads as none.
   }
   return sandboxes;
 }
@@ -712,20 +715,17 @@ function parseSandboxes(result: RunResult): SandboxList | undefined {
  * and a Save without governance would then add them a second time.
  */
 async function readSandboxHosts(): Promise<Map<string, string[]>> {
+  // Unreadable reads as no rules.
+  const parsed = await sbxJson<{ rules?: { scope?: string; decision?: string; editable?: boolean; resources?: string[] }[] }>([
+    "policy", "ls", "--type", "network", "--include-inactive", "--json"
+  ]);
   const hosts = new Map<string, string[]>();
-  try {
-    const parsed = JSON.parse((await runSbx(["policy", "ls", "--type", "network", "--include-inactive", "--json"])).stdout) as {
-      rules?: { scope?: string; decision?: string; editable?: boolean; resources?: string[] }[];
-    };
-    for (const rule of parsed.rules ?? []) {
-      if (rule.decision !== "allow" || !rule.editable || !rule.scope?.startsWith("sandbox:")) {
-        continue;
-      }
-      const name = rule.scope.slice("sandbox:".length);
-      hosts.set(name, [...(hosts.get(name) ?? []), ...(rule.resources ?? [])]);
+  for (const rule of parsed?.rules ?? []) {
+    if (rule.decision !== "allow" || !rule.editable || !rule.scope?.startsWith("sandbox:")) {
+      continue;
     }
-  } catch {
-    // Unreadable reads as no rules.
+    const name = rule.scope.slice("sandbox:".length);
+    hosts.set(name, [...(hosts.get(name) ?? []), ...(rule.resources ?? [])]);
   }
   return hosts;
 }
@@ -849,20 +849,12 @@ const MOUNT_CONCURRENCY = 6;
  * sandbox that does not exist.
  */
 async function readRuntimeMounts(name: string): Promise<MountSpec[] | undefined> {
-  const result = await runSbx(["inspect", name, "--json"]);
-  if (!result.ok) {
-    return undefined;
-  }
-  try {
-    const parsed = JSON.parse(result.stdout) as {
-      runtime_mounts?: { host_path?: string; container_target?: string; read_only?: boolean }[];
-    };
-    return (parsed.runtime_mounts ?? []).flatMap(({ host_path, container_target, read_only }) =>
-      host_path && container_target ? [mountSpec(host_path, container_target, read_only === true)] : []
-    );
-  } catch {
-    return undefined;
-  }
+  const parsed = await sbxJson<{ runtime_mounts?: { host_path?: string; container_target?: string; read_only?: boolean }[] }>([
+    "inspect", name, "--json"
+  ]);
+  return parsed?.runtime_mounts?.flatMap(({ host_path, container_target, read_only }) =>
+    host_path && container_target ? [mountSpec(host_path, container_target, read_only === true)] : []
+  );
 }
 
 /** The mountAll underway per sandbox name (inTurn). */
@@ -1056,25 +1048,20 @@ interface LiveSecret {
  * would fail as "already exists", and a changed one would never arrive.
  */
 async function readSandboxSecrets(): Promise<Map<string, LiveSecret[]> | undefined> {
-  const result = await runSbx(["secret", "ls", "--json"]);
-  if (!result.ok) {
+  const parsed = await sbxJson<{ custom_secrets?: { scope?: string; targets?: string[]; placeholder?: string }[] }>([
+    "secret", "ls", "--json"
+  ]);
+  if (!parsed) {
     return undefined;
   }
-  try {
-    const parsed = JSON.parse(result.stdout) as {
-      custom_secrets?: { scope?: string; targets?: string[]; placeholder?: string }[];
-    };
-    const secrets = new Map<string, LiveSecret[]>();
-    for (const secret of parsed.custom_secrets ?? []) {
-      if (secret.scope && secret.placeholder) {
-        const live = { placeholder: secret.placeholder, hosts: secret.targets ?? [] };
-        secrets.set(secret.scope, [...(secrets.get(secret.scope) ?? []), live]);
-      }
+  const secrets = new Map<string, LiveSecret[]>();
+  for (const secret of parsed.custom_secrets ?? []) {
+    if (secret.scope && secret.placeholder) {
+      const live = { placeholder: secret.placeholder, hosts: secret.targets ?? [] };
+      secrets.set(secret.scope, [...(secrets.get(secret.scope) ?? []), live]);
     }
-    return secrets;
-  } catch {
-    return undefined;
   }
+  return secrets;
 }
 
 /**

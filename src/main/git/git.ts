@@ -6,6 +6,7 @@ import writeFileAtomic from "write-file-atomic";
 import { errorMessage } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
+import { isImage, toDataUrl } from "./image-type";
 import { readLinkedGitDir } from "./linked-git-dir";
 import type {
   BranchUpstream,
@@ -1125,33 +1126,6 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
-}
-
-/** Shown as images instead of "binary file". SVG stays text on purpose. */
-const IMAGE_TYPES: Record<string, string> = {
-  avif: "image/avif",
-  bmp: "image/bmp",
-  gif: "image/gif",
-  ico: "image/x-icon",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp"
-};
-
-function imageType(filePath: string): string | undefined {
-  return IMAGE_TYPES[path.extname(filePath).slice(1).toLowerCase()];
-}
-
-/** Also used by `Repository.readFile` to tell an image from any other binary. */
-export function isImage(filePath: string): boolean {
-  return imageType(filePath) !== undefined;
-}
-
-/** One version of an image, or undefined for an empty file. No size cap of its own: both callers
- *  already apply the editor's, and a second number would go stale. */
-export function toDataUrl(filePath: string, content: Buffer): string | undefined {
-  return content.length > 0 ? `data:${imageType(filePath)};base64,${content.toString("base64")}` : undefined;
 }
 
 interface HeadBlobOptions {

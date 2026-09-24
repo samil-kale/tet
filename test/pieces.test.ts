@@ -6,7 +6,6 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { safeStorage } from "electron";
 import * as esbuild from "esbuild";
 import { holdEscape } from "../src/renderer/ui/use-escape";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
@@ -17,7 +16,7 @@ import { systemPrompt } from "../src/main/agents/system-prompt";
 import { machineSets } from "../src/main/env-names";
 import { EnvRequests, EnvStore } from "../src/main/environment";
 import { GitLoginStore } from "../src/main/git-logins";
-import type { EnvRequest } from "../src/shared/types";
+import type { EnvRequest, GitLogin } from "../src/shared/types";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
@@ -52,7 +51,7 @@ import { CONTROL_ENV } from "../src/shared/control";
 import type { ControlRequest } from "../src/shared/control";
 import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
 import type { SbxPath, SbxPort, SbxProjectConfig } from "../src/shared/types";
-import { eventually } from "./helpers";
+import { eventually, fakeSafeStorage, processAlive } from "./helpers";
 
 /** The small measured pieces, each one edit away from silently wrong. */
 
@@ -192,18 +191,10 @@ describe("resolveCommand", () => {
     fs.writeFileSync(shim, `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
     const resolved = resolveCommand(shim, []);
     const child = spawn(resolved.command, resolved.args, { windowsHide: true, windowsVerbatimArguments: resolved.windowsVerbatimArguments, stdio: "ignore" });
-    const alive = (pid: number): boolean => {
-      try {
-        process.kill(pid, 0);
-        return true;
-      } catch {
-        return false;
-      }
-    };
     await eventually("the program started", () => fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8") !== "", 10_000);
     const pid = Number(fs.readFileSync(pidFile, "utf8"));
     killProcessTree(child);
-    await eventually("the program behind the shim exited", () => !alive(pid), 10_000);
+    await eventually("the program behind the shim exited", () => !processAlive(pid), 10_000);
   });
 
   it("takes a name's first folder on PATH, its extension second", { skip: process.platform !== "win32" && "win32 only" }, () => {
@@ -686,16 +677,7 @@ describe("a sandboxed tab's variables", () => {
 
 describe("what sbx keeps on this machine", () => {
   it("counts a value as stored only where it can still be decrypted", () => {
-    // "sealed:" stands in for the OS's encryption; anything else was sealed under another keychain.
-    Object.assign(safeStorage, {
-      decryptString: (buffer: Buffer) => {
-        const text = buffer.toString();
-        if (!text.startsWith("sealed:")) {
-          throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
-        }
-        return text.slice("sealed:".length);
-      }
-    });
+    fakeSafeStorage();
     const store = new SbxLocalStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
@@ -708,11 +690,7 @@ describe("what sbx keeps on this machine", () => {
   });
 
   it("takes over sbx-secrets.json, read as secrets alone, and drops a project left with none", () => {
-    Object.assign(safeStorage, {
-      isEncryptionAvailable: () => true,
-      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
-      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
-    });
+    fakeSafeStorage();
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-"));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     fs.writeFileSync(path.join(root, "sbx-secrets.json"), JSON.stringify({ p: { TOKEN: base64("sealed:old") } }));
@@ -731,11 +709,7 @@ describe("what sbx keeps on this machine", () => {
   });
 
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
-    Object.assign(safeStorage, {
-      isEncryptionAvailable: () => true,
-      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
-      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
-    });
+    fakeSafeStorage();
     const store = new SbxLocalStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
     const none = { values: {}, from: {} };
     store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, knowledge: EMPTY_SBX_KNOWLEDGE });
@@ -745,7 +719,7 @@ describe("what sbx keeps on this machine", () => {
   });
 
   it("keeps the knowledge on this machine, and no entry once it is all off", () => {
-    Object.assign(safeStorage, { isEncryptionAvailable: () => false });
+    fakeSafeStorage(false);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-"));
     const store = new SbxLocalStore(root);
     const none = { values: {}, from: {} };
@@ -758,25 +732,11 @@ describe("what sbx keeps on this machine", () => {
 });
 
 describe("the environment variables kept in TET", () => {
-  // "sealed:" stands in for the OS's encryption, as for the sbx secrets above.
-  const sealing = (available: boolean): void => {
-    Object.assign(safeStorage, {
-      isEncryptionAvailable: () => available,
-      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
-      decryptString: (buffer: Buffer) => {
-        const text = buffer.toString();
-        if (!text.startsWith("sealed:")) {
-          throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
-        }
-        return text.slice("sealed:".length);
-      }
-    });
-  };
   const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-environment-"));
   const row = (name: string, value: string): { name: string; value: string } => ({ name, value });
 
   it("keep one row per name, hand out their values only decrypted, and read the file fresh every time", () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const root = tempRoot();
     const store = new EnvStore(root);
     store.set([row("GITLAB_TOKEN", "old")]);
@@ -803,7 +763,7 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("take a name in another case for the same variable where the machine does", { skip: process.platform !== "win32" }, () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("gitlab_token", "old")]);
     store.set([row("GITLAB_TOKEN", "new")]);
@@ -830,7 +790,7 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("leave out a value sealed under another keychain", () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const root = tempRoot();
     fs.writeFileSync(
       path.join(root, "environment.json"),
@@ -843,14 +803,14 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("store nothing where the OS offers no encryption", () => {
-    sealing(false);
+    fakeSafeStorage(false);
     const store = new EnvStore(tempRoot());
     assert.throws(() => store.set([row("GITHUB_TOKEN", "token")]), /no keyring/);
     assert.deepEqual(store.list(), []);
   });
 
   it("write nothing over a file they cannot read, and drop no row they do not understand", () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const root = tempRoot();
     const file = path.join(root, "environment.json");
     fs.writeFileSync(file, '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ');
@@ -872,7 +832,7 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("take the Settings' tab whole: added, renamed with its value, replaced, and the rest deleted", () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("GITLAB_TOKEN", "gl"), row("STRIPE_KEY", "sk"), row("OLD", "o")]);
     store.edit([
@@ -884,7 +844,7 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("refuse the Settings' tab with a row it cannot take, changing nothing", () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("GITLAB_TOKEN", "gl")]);
     const refusals: [{ name: string; from?: string; value?: string }[], RegExp][] = [
@@ -900,7 +860,7 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("are asked for one request at a time, several names in one, every one needing a value", async () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const store = new EnvStore(tempRoot());
     store.set([row("AUTOCONTRACT_USER", "old")]);
     const shown: EnvRequest[] = [];
@@ -935,7 +895,7 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("withdraw a request whose caller left, say a late Save saved nothing, and refuse without a window", async () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const withdrawn: number[] = [];
     let listening = true;
     const requests = new EnvRequests(
@@ -1092,18 +1052,10 @@ describe("the quoting helpers", () => {
 });
 
 describe("the git logins kept in TET", () => {
-  // "sealed:" stands in for the OS's encryption, as for the environment variables above.
-  const sealing = (available: boolean): void => {
-    Object.assign(safeStorage, {
-      isEncryptionAvailable: () => available,
-      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
-      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
-    });
-  };
   const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-logins-"));
 
   it("keep one login per origin, never in the clear", () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const root = tempRoot();
     const store = new GitLoginStore(root);
     store.set("https://git.example.com/team/app.git", { username: "old", password: "one" });
@@ -1121,21 +1073,21 @@ describe("the git logins kept in TET", () => {
   });
 
   it("keep nothing for an ssh remote, or where the OS offers no encryption", () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const store = new GitLoginStore(tempRoot());
     store.set("git@git.example.com:team/app.git", { username: "saka", password: "x" });
     assert.equal(store.get("git@git.example.com:team/app.git"), undefined);
-    sealing(false);
+    fakeSafeStorage(false);
     store.set("https://git.example.com/app.git", { username: "saka", password: "x" });
     assert.equal(store.get("https://git.example.com/app.git"), undefined);
   });
 
   it("offer a kept login, and forget it once the host refuses it", async () => {
-    sealing(true);
+    fakeSafeStorage(true);
     const store = new GitLoginStore(tempRoot());
     store.set("https://git.example.com/app.git", { username: "saka", password: "revoked" });
     let offered: string | undefined;
-    const refusing = async (login?: { username: string; password: string }) => {
+    const refusing = async (login?: GitLogin) => {
       offered = login && `${login.username}:${login.password}`;
       return { ok: false, error: "Authentication failed", authRequired: true };
     };
@@ -1189,8 +1141,8 @@ describe("the stores", () => {
     assert.equal(effectivePrompt(settings.prompts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
     assert.equal(effectivePrompt({ commitMessage: "write a subject" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
-    store.save({ ...settings, colorScheme: "light" });
-    assert.equal(new SettingsStore(dir).get().colorScheme, "light", "written whole and read back");
+    store.patch({ colorScheme: "light" });
+    assert.equal(new SettingsStore(dir).get().colorScheme, "light", "written and read back");
   });
 
   it("read the one theme of an older settings file as its kind and that kind's theme", () => {

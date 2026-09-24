@@ -19,17 +19,9 @@ export default tseslint.config(
       "react-hooks/exhaustive-deps": "error"
     }
   },
-  {
-    languageOptions: {
-      parserOptions: {
-        ecmaVersion: 2022,
-        sourceType: "module"
-      }
-    }
-  },
-  // The process borders, as lint rules rather than prose (see "Agent-specific vs shared code" in
-  // AGENTS.md): each folder under src/ is one process, and `shared/` the only thing they may
-  // import from one another.
+  // The process borders, as lint rules rather than prose (see "Where things live" in AGENTS.md):
+  // each folder under src/ is one process, and `shared/` the only thing they may import from one
+  // another.
   {
     files: ["src/renderer/**", "src/preload/**", "src/cli/**", "src/shared/**"],
     rules: {

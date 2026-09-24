@@ -4,14 +4,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { safeStorage, shell } from "electron";
+import { shell } from "electron";
 import { GitLoginStore } from "../src/main/git-logins";
 import * as git_ from "../src/main/git/git";
 import { Repository } from "../src/main/git/repository";
 import { readMainWorktree } from "../src/main/git/linked-git-dir";
 import { worktreeBase } from "../src/shared/types";
 import type { FileSearchQuery, FileSearchResult } from "../src/shared/types";
-import { forkGitInProcess, git, initBare, initRepository, isolateGitConfig, serveOverHttp, type HttpRemote } from "./helpers";
+import { fakeSafeStorage, forkGitInProcess, git, initBare, initRepository, isolateGitConfig, serveOverHttp, type HttpRemote } from "./helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
@@ -411,14 +411,7 @@ describe("the Explorer's search, VS Code's search in files", () => {
 
 describe("a remote over http that wants a login", () => {
   const login = { username: "saka", password: "right" };
-  // "sealed:" stands in for the OS's encryption, as in pieces.test.ts.
-  before(() => {
-    Object.assign(safeStorage, {
-      isEncryptionAvailable: () => true,
-      encryptString: (text: string) => Buffer.from(`sealed:${text}`),
-      decryptString: (buffer: Buffer) => buffer.toString().slice("sealed:".length)
-    });
-  });
+  before(() => fakeSafeStorage());
 
   /** A repository whose origin is served over http, opened with its own login store. git runs
    *  against the remote only asynchronously here: a sync spawn would stop the server answering it. */

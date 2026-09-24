@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProviderAccount, ProviderId } from "../../shared/types";
-import { saveJson } from "../json-file";
+import { isRecord, readJson, saveJson } from "../json-file";
 import { seal, unseal } from "../sealed";
 import { PROVIDERS } from "./index";
 
@@ -84,25 +83,19 @@ export class AccountStore {
   }
 
   private load(): void {
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(this.file, "utf8"));
-      if (Array.isArray(parsed)) {
-        this.accounts = parsed.filter(
-          (entry): entry is StoredAccount =>
-            typeof entry === "object" &&
-            entry !== null &&
-            typeof (entry as StoredAccount).id === "string" &&
-            Object.hasOwn(PROVIDERS, (entry as StoredAccount).provider) &&
-            typeof (entry as StoredAccount).host === "string" &&
-            typeof (entry as StoredAccount).user === "string" &&
-            typeof (entry as StoredAccount).token === "string" &&
-            ((entry as StoredAccount).namespace === undefined ||
-              typeof (entry as StoredAccount).namespace === "string")
-        );
-      }
-    } catch {
-      // No file yet, or unreadable — no accounts.
-      this.accounts = [];
+    const parsed = readJson(this.file);
+    if (Array.isArray(parsed)) {
+      this.accounts = parsed.filter(
+        (entry): entry is StoredAccount =>
+          isRecord(entry) &&
+          typeof entry.id === "string" &&
+          typeof entry.provider === "string" &&
+          Object.hasOwn(PROVIDERS, entry.provider) &&
+          typeof entry.host === "string" &&
+          typeof entry.user === "string" &&
+          typeof entry.token === "string" &&
+          (entry.namespace === undefined || typeof entry.namespace === "string")
+      );
     }
   }
 

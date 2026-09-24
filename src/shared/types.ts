@@ -597,8 +597,8 @@ export interface ExplorerSettings {
 
 /**
  * What the SEARCH pane's field asks for: VS Code's search box with its three toggles, over the
- * files' lines (`searchPattern`, `Repository.searchFiles`). The Explorer's own field filters the
- * tree by name and asks for nothing here.
+ * files' lines (`Repository.searchFiles`). The Explorer's own field filters the tree by name and
+ * asks for nothing here.
  */
 export interface FileSearchQuery {
   /** What was typed; a regex when `regex` is on. */
@@ -633,17 +633,6 @@ export interface FileSearchResult {
   truncated: boolean;
   /** An invalid regex; nothing was searched. */
   error?: string;
-}
-
-/**
- * The query as a regex, `flags` on top of the case flag — "g" for the search, which walks a line's
- * matches. Throws on an invalid regex, which the SEARCH pane reports.
- */
-export function searchPattern(query: FileSearchQuery, flags: string): RegExp {
-  const escaped = query.regex ? query.text : query.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // As ripgrep's `-w`, which VS Code searches with: the whole expression between word boundaries.
-  const source = query.wholeWord ? `\\b(?:${escaped})\\b` : escaped;
-  return new RegExp(source, query.matchCase ? flags : `${flags}i`);
 }
 
 export interface GitActionResult {

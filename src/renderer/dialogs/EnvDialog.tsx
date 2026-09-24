@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { EnvRequest } from "../../shared/types";
-import { DialogFrame } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { EditRow, OverridesMachine, RowSection, SecretInput } from "../ui/RowSection";
 import { useEscape } from "../ui/use-escape";
 
@@ -23,16 +23,9 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   const [rows, setRows] = useState(() =>
     request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" }))
   );
-  const [busy, setBusy] = useState(false);
-  const [refused, setRefused] = useState<string | undefined>(undefined);
   const firstValue = useRef<HTMLInputElement>(null);
 
   useEffect(() => firstValue.current?.focus(), []);
-
-  const edit = (name: string, value: string): void => {
-    setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)));
-    setRefused(undefined);
-  };
 
   const cancel = (): void => {
     void window.tet.environment.answer(request.id, null);
@@ -44,27 +37,19 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   const tab = request.projectId && request.tabId ? { projectId: request.projectId, tabId: request.tabId } : undefined;
 
   // The asking tab restarts once saved, so it takes up the values (pty.ts).
-  const save = async (): Promise<void> => {
-    if (!complete || busy) {
-      return;
-    }
-    setBusy(true);
-    try {
-      const error = await window.tet.environment.answer(
-        request.id,
-        rows.map((row) => ({ name: row.name, value: row.value }))
-      );
-      if (error !== undefined) {
-        setRefused(error);
-        return;
+  const { busy, refused, submit: save, clear } = useSubmit(
+    () => window.tet.environment.answer(request.id, rows.map((row) => ({ name: row.name, value: row.value }))),
+    () => {
+      if (tab) {
+        void window.tet.terminals.restart(tab.projectId, tab.tabId);
       }
-    } finally {
-      setBusy(false);
+      onClose();
     }
-    if (tab) {
-      void window.tet.terminals.restart(tab.projectId, tab.tabId);
-    }
-    onClose();
+  );
+
+  const edit = (name: string, value: string): void => {
+    setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)));
+    clear();
   };
 
   return (
@@ -76,7 +61,11 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       }}
       busy={busy}
       error={refused}
-      onSubmit={() => void save()}
+      onSubmit={() => {
+        if (complete) {
+          void save();
+        }
+      }}
       buttons={
         <>
           <button type="button" className="button secondary" onClick={cancel}>
@@ -91,7 +80,6 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       <p className="dialog-message">{requester} asks for environment variables.</p>
       <RowSection
         label="Environment variables"
-        empty=""
         rows={rows}
         renderRow={(row) => (
           // The Settings' Environment rows, the name fixed: it is the agent's.

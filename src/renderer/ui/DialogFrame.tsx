@@ -1,9 +1,45 @@
+import { useCallback, useState } from "react";
 import { DialogError } from "./Field";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
 import { useCoversWindow } from "./window-covered";
 
-export interface DialogTab<T extends string> {
+/**
+ * A dialog's answer as it runs (`PromptOptions.submit`): `run` answers what refused it, or nothing
+ * once it went through, and `onDone` follows (closing the dialog). `busy` is the frame's bar
+ * meanwhile; `refused` is the frame's `error` (or a field's), held so what was typed can be
+ * corrected, and cleared by `clear` on the next change — which is about to make it wrong. The one
+ * rule for every dialog, question and card alike.
+ */
+export function useSubmit(
+  run: () => Promise<string | undefined>,
+  onDone?: () => void
+): { busy: boolean; refused: string | undefined; submit: () => Promise<void>; clear: () => void } {
+  const [busy, setBusy] = useState(false);
+  const [refused, setRefused] = useState<string | undefined>(undefined);
+  const submit = async (): Promise<void> => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    setRefused(undefined);
+    let message: string | undefined;
+    try {
+      message = await run();
+    } finally {
+      setBusy(false);
+    }
+    if (message === undefined) {
+      onDone?.();
+    } else {
+      setRefused(message);
+    }
+  };
+  const clear = useCallback(() => setRefused(undefined), []);
+  return { busy, refused, submit, clear };
+}
+
+interface DialogTab<T extends string> {
   id: T;
   label: string;
   /** Given, the tab cannot be chosen and says why on hover. */
@@ -16,7 +52,7 @@ export interface DialogTab<T extends string> {
  * What heads the dialog, one of two shapes: a title bar, optionally with a close button, or a tab
  * strip in place of the title for a dialog with several panes.
  */
-export type DialogHeader<T extends string> =
+type DialogHeader<T extends string> =
   | {
       title: string;
       /** Left out for a dialog that must stay up (RequirementsDialog). */

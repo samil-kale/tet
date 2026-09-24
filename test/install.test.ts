@@ -12,7 +12,7 @@ import { findControlPort } from "../src/main/control/control-server";
 import { CONTROL_ENV } from "../src/shared/control";
 import { assetName, rootExecutable } from "../src/shared/release";
 import type { UpdateResult } from "../src/shared/release";
-import { eventually, tetCtl } from "./helpers";
+import { eventually, killApp, processAlive, tetCtl } from "./helpers";
 
 /**
  * Install with the script, start, find a newer version, quit, start the update. Releases are
@@ -129,15 +129,6 @@ async function version(): Promise<{ version: string; pid: number } | undefined> 
   return answer.status === 0 ? (answer.result as { version: string; pid: number }) : undefined;
 }
 
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** A user's quit per platform: closing the window, SIGTERM, Cmd+Q's Apple Event. */
 function quit(pid: number): void {
   if (process.platform === "win32") {
@@ -146,18 +137,6 @@ function quit(pid: number): void {
     spawnSync("osascript", ["-e", 'tell application id "com.samilkale.tet" to quit'], { stdio: "ignore" });
   } else {
     process.kill(pid, "SIGTERM");
-  }
-}
-
-function kill(pid: number): void {
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore" });
-  } else {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // Already gone.
-    }
   }
 }
 
@@ -233,8 +212,8 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
   after(async () => {
     const running = await version().catch(() => undefined);
     if (running) {
-      kill(running.pid);
-      await eventually("tet gone", () => !alive(running.pid), 30_000).catch(() => undefined);
+      killApp(running.pid, "SIGKILL");
+      await eventually("tet gone", () => !processAlive(running.pid), 30_000).catch(() => undefined);
     }
     server?.close();
     // On win32 a killed tet's processes and a pty's console host hold files a while longer.
@@ -283,7 +262,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
     assert.ok(running, "tet running");
     await eventually(withLog("the update unpacked"), updateUnpacked, 5 * 60_000);
     quit(running.pid);
-    await eventually(withLog("tet gone"), () => !alive(running.pid), 60_000);
+    await eventually(withLog("tet gone"), () => !processAlive(running.pid), 60_000);
     const resultFile = path.join(userData, "update", "result.json");
     await eventually(withLog("the update's result"), () => fs.existsSync(resultFile), 5 * 60_000);
     const result = JSON.parse(fs.readFileSync(resultFile, "utf8")) as UpdateResult;

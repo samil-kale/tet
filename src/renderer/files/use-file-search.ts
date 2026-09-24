@@ -33,8 +33,9 @@ export function useFileSearch(projectId: string): {
         setSearching(false);
         return;
       }
-      setSearching(true);
       timer.current = setTimeout(() => {
+        // Busy once the search runs, not while the typing is still awaited.
+        setSearching(true);
         void window.tet.repository.searchFiles(projectId, query).then((result) => {
           if (asked.current === seq) {
             setHeld({ projectId, result });

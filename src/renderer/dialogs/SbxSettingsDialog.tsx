@@ -13,7 +13,7 @@ import {
   useSbxProblems,
   type FieldsState
 } from "./SbxSettingsFields";
-import { DialogFrame } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox } from "../ui/Field";
 import { useEscape } from "../ui/use-escape";
@@ -84,10 +84,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const [loaded, setLoaded] = useState<SbxProjectConfig>(EMPTY_SBX_CONFIG);
   const [stored, setStored] = useState<SbxStoredLocal>(EMPTY_STORED);
   const [sources, setSources] = useState<SbxKnowledgeSource[]>([]);
-  const [saving, setSaving] = useState(false);
-  /** What refused the Save, above the buttons: the rows it is about may be on another tab, and
-   *  their own marks say which (`tabMarks`). Cleared on the next try. */
-  const [refused, setRefused] = useState<string | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
 
@@ -159,21 +155,20 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   }, []);
 
   /** Stores typed values, saves and applies the rows without a problem, the marked ones left out
-   *  (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx refuses only then stays
-   *  above the buttons. */
-  const save = async (): Promise<void> => {
-    setSaving(true);
-    setRefused(undefined);
-    try {
-      const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
-      if (!result.ok) {
-        setRefused(result.error ?? "Could not save the SBX configuration");
-        return;
-      }
-    } finally {
-      setSaving(false);
-    }
-    close();
+   *  (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx refuses only then goes
+   *  above the buttons: the rows it is about may be on another tab, and their own marks say which
+   *  (`tabMarks`). */
+  const { busy: saving, refused, submit: save, clear } = useSubmit(async () => {
+    const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
+    return result.ok ? undefined : (result.error ?? "Could not save the SBX configuration");
+  }, close);
+  const editState: typeof setState = (update) => {
+    setState(update);
+    clear();
+  };
+  const editEnabled = (next: boolean): void => {
+    setEnabled(next);
+    clear();
   };
 
   const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
@@ -182,7 +177,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   // Asked from the moment the rows are loaded, not when their tab is opened; not while sandboxing
   // is off, which applies none of them.
   const problems = useSbxProblems(project.id, state, stored, phase.kind === "ready" && enabled);
-  const marks = tabMarks(state, problems);
+  const marks = useMemo(() => tabMarks(state, problems), [state, problems]);
   const tabs = useMemo(
     () =>
       TABS.map((entry) => {
@@ -191,9 +186,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
         return { ...entry, disabled, mark };
       }),
-    // `marks` itself is rebuilt every render (tabMarks); its fields are all of it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [enabled, marks.knowledge, marks.ports, marks.paths, marks.hosts, marks.secrets, marks.variables]
+    [enabled, marks]
   );
 
   return (
@@ -260,7 +253,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         <Checkbox
           checked={enabled}
           disabled={locked}
-          onChange={setEnabled}
+          onChange={editEnabled}
           label={
             <>
               <strong>Enable SBX sandboxing for this project</strong>
@@ -286,7 +279,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           <SbxSettingsFields
             section={tab}
             state={state}
-            setState={setState}
+            setState={editState}
             stored={stored}
             sources={sources}
             problems={problems}

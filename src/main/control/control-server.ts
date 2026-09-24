@@ -19,29 +19,17 @@ import type {
   Project,
   ProjectCommand,
   RepositoryState,
-  SbxAccess,
   SbxKnowledgeConfig,
-  SbxKnowledgeKind,
   SbxLocalSave,
   SbxProblems,
   SbxProjectConfig,
   SbxSaveResult,
-  SbxSecret,
   SbxStatus,
   SbxStoredLocal,
-  SbxVariable,
+  SbxValueKind,
   TerminalDescriptor,
   WorktreeRef
 } from "../../shared/types";
-import {
-  SBX_KNOWLEDGE_KINDS,
-  keptValues,
-  sbxNeedsRestart,
-  sbxPortRefusal,
-  sbxSecretRefusal,
-  sbxVariableRefusal,
-  withoutProblems
-} from "../../shared/sbx-rules";
 import { systemPrompt } from "../agents/system-prompt";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
@@ -50,8 +38,9 @@ import { relativeInside, repositoryRelative } from "../path-inside";
 import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
+import { sbxVerbs } from "./control-sbx-verbs";
+import { ControlError, count, text, type Handler } from "./control-verb";
 import { canBind } from "../can-bind";
-import { sbxNotReady } from "../sbx-policy";
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
@@ -86,9 +75,9 @@ export interface ControlDeps {
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
   /** `AGENTS`' ids, so a new agent needs nothing here. */
   agentIds: readonly string[];
+  /** projects.ts's, which tell the window their outcome themselves (projectsChanged). */
   addProject(directory: string): Promise<AddRepositoryResult>;
   removeProject(projectId: string): void;
-  /** projects.ts's, which announce their outcome themselves (projectsChanged). */
   addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
   deleteWorktree(worktree: WorktreeRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
@@ -96,8 +85,6 @@ export interface ControlDeps {
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
   showTab(projectId: string, tabId: string): void;
-  /** Tells the window which project to activate or forget. */
-  projectsChanged(change: { added?: string; removed?: string }): void;
   /** A desktop toast from this process, which holds the desktop session (a sandboxed hook has
    *  none). Must never throw: `hook` toasts on the way to answering a turn. A click brings
    *  `target` to the front. */
@@ -119,7 +106,7 @@ export interface ControlDeps {
       project: Project,
       config: SbxProjectConfig,
       knowledge: SbxKnowledgeConfig,
-      values: { secrets: string[]; variables: string[] },
+      values: Record<SbxValueKind, string[]>,
       status?: SbxStatus
     ): Promise<SbxProblems>;
     save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, status?: SbxStatus): Promise<SbxSaveResult>;
@@ -171,25 +158,6 @@ export interface ControlTerminals {
   hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined): HookOutcome;
 }
 
-class ControlError extends Error {
-  constructor(
-    readonly code: ControlErrorCode,
-    message: string
-  ) {
-    super(message);
-  }
-}
-
-/** `after` runs once the response reached the CLI: a verb ending the caller's process must reply
- *  first, or the CLI dies with an empty stdout. */
-interface Answer {
-  result: unknown;
-  after?: () => void;
-}
-
-/** The request's caller, and whether its tab runs in a sandbox (ControlVerb.sandbox). */
-type Caller = ControlRequest["caller"] & { sandboxed: boolean };
-
 /**
  * The file an answer names (`ControlVerb.sandboxFile`), refused where it is missing or resolves,
  * links followed, outside the repository: a link committed or made in the mounted repository would
@@ -211,35 +179,6 @@ async function assertSandboxFile(root: string | undefined, result: unknown, key:
   if (!resolved || relativeInside(resolved[0], resolved[1]) === undefined) {
     throw new ControlError("unauthorized", `${String(named)} is missing or leads outside the repository`);
   }
-}
-
-type Handler = (
-  args: Record<string, unknown>,
-  caller: Caller,
-  /** See ControlRequest.at. */
-  at: number | undefined,
-  /** Aborted once the CLI is gone (Ctrl+C) before its answer: nothing waits for it any more. */
-  gone: AbortSignal
-) => Promise<Answer> | Answer;
-
-function text(args: Record<string, unknown>, name: string, what: string): string {
-  const value = args[name];
-  if (typeof value !== "string" || value === "") {
-    throw new ControlError("bad_args", `missing ${what}`);
-  }
-  return value;
-}
-
-/** A positive integer flag, or `fallback` when absent. */
-function count(args: Record<string, unknown>, name: string, fallback: number): number {
-  if (args[name] === undefined) {
-    return fallback;
-  }
-  const value = Number(args[name]);
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new ControlError("bad_args", `--${name} takes a positive whole number`);
-  }
-  return value;
 }
 
 /** Strips escape sequences; CRLF to LF. */
@@ -361,87 +300,9 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     return { tabs, tabId, found };
   };
 
-  /** A variadic positional's arguments; none is an empty list. */
-  const list = (args: Record<string, unknown>, name: string): string[] => {
-    const value = args[name];
-    return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
-  };
-
-  /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
-   *  which only the user can set up there. Returns the status it read. */
-  const readySbx = async (found: Project): Promise<SbxStatus> => {
-    const status = await deps.sbx.status(found);
-    const missing = sbxNotReady(status);
-    if (missing) {
-      throw new ControlError("bad_args", `${missing}: the user sets it up in ${found.name}'s SBX Settings in TET`);
-    }
-    if (status.blockers.length > 0) {
-      const policy = status.organization ? `${status.organization}'s SBX policy` : "SBX's policy";
-      throw new ControlError("bad_args", `${policy} does not allow ${status.blockers.map((blocker) => `${blocker.allow} (${blocker.what})`).join("; ")}`);
-    }
-    return status;
-  };
-
-  /**
-   * One SBX Settings field changed, then saved as the dialog's Save does, everything else as it
-   * stands: a row that cannot be applied here is left out and answered as `notApplied`. As the
-   * dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch while sandboxing
-   * is off. A stored value stays with its row's name; a removed row's goes.
-   */
-  const editSbx = async (
-    args: Record<string, unknown>,
-    caller: ControlRequest["caller"],
-    edit: (loaded: { config: SbxProjectConfig; knowledge: SbxKnowledgeConfig }) => {
-      config?: SbxProjectConfig;
-      knowledge?: SbxKnowledgeConfig;
-    },
-    switching = false
-  ): Promise<Answer> => {
-    const found = project(args, caller);
-    const status = await readySbx(found);
-    const config = await deps.sbx.config(found);
-    const { knowledge } = deps.sbx.stored(found.id);
-    if (!config.enabled && !switching) {
-      throw new ControlError("bad_args", `SBX sandboxing is off for ${found.name}: sbx-set-enabled on first`);
-    }
-    const next = edit({ config, knowledge });
-    const request = next.config ?? config;
-    const nextKnowledge = next.knowledge ?? knowledge;
-    const saved = await deps.sbx.save(
-      found,
-      request,
-      { secrets: keptValues(request.secrets), variables: keptValues(request.variables), knowledge: nextKnowledge },
-      status
-    );
-    if (!saved.ok) {
-      throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
-    }
-    const problems = saved.problems ?? {};
-    const applied = withoutProblems(request, nextKnowledge, problems);
-    const restartRequired = sbxNeedsRestart(config, knowledge, applied.config, applied.knowledge);
-    return { result: { saved: true, restartRequired, ...(Object.keys(problems).length > 0 ? { notApplied: problems } : {}) } };
-  };
-
-  /** Refuses the first variable that cannot be saved beside those before it and the secrets
-   *  (sbxVariableRefusal), names compared as this machine does. */
-  const refuseVariables = (variables: SbxVariable[], secrets: SbxSecret[]): void => {
-    variables.forEach((variable, index) => {
-      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), secrets, process.platform === "win32");
-      if (refusal) {
-        throw new ControlError("bad_args", `${refusal}: ${variable.env}`);
-      }
-    });
-  };
-
-  /** An absolute path of this machine, as the dialog's folder picker gives one. */
-  const absolute = (value: string): string => {
-    if (!path.isAbsolute(value)) {
-      throw new ControlError("bad_args", `not an absolute path: ${value}`);
-    }
-    return value;
-  };
-
   return {
+    ...sbxVerbs(deps, project),
+
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 
     "list-themes": () => ({ result: THEMES.map(({ id, label, kind }) => ({ id, label, kind })) }),
@@ -497,22 +358,17 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (!added.project) {
         throw new ControlError("bad_args", added.error ?? "could not open the folder");
       }
-      deps.projectsChanged({ added: added.project.id });
       return { result: added.project };
     },
 
     "projects-remove": (args, caller) => {
       const id = text(args, "projectId", "project id");
       projectById(id);
-      const remove = (): void => {
-        deps.removeProject(id);
-        deps.projectsChanged({ removed: id });
-      };
       // The caller's own project takes the caller's tab with it — answer first.
       if (id === caller.projectId) {
-        return { result: { removed: id }, after: remove };
+        return { result: { removed: id }, after: () => deps.removeProject(id) };
       }
-      remove();
+      deps.removeProject(id);
       return { result: { removed: id } };
     },
 
@@ -574,119 +430,6 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("not_found", `TET keeps no environment variable named ${name}`);
       }
       return { result: { removed: name } };
-    },
-
-    "sbx-get": async (args, caller) => {
-      const found = project(args, caller);
-      const stored = deps.sbx.stored(found.id);
-      const [status, config] = await Promise.all([deps.sbx.status(found), deps.sbx.config(found)]);
-      const problems = await deps.sbx.problems(found, config, stored.knowledge, stored, status);
-      return { result: { status, config, stored, problems } };
-    },
-
-    "sbx-set-enabled": async (args, caller) => {
-      const value = text(args, "value", "on or off");
-      if (value !== "on" && value !== "off") {
-        throw new ControlError("bad_args", `not on or off: ${value}`);
-      }
-      // As the dialog's switch, locked where no agent runs on this machine.
-      if (value === "off" && !(await deps.sbx.anyAgentInstalled())) {
-        throw new ControlError("bad_args", "no agent is installed on this machine, so sandboxing cannot be switched off");
-      }
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, enabled: value === "on" } }), true);
-    },
-
-    "sbx-set-ports": (args, caller) => {
-      const ports = list(args, "ports").map((entry) => {
-        const [host, container, ...rest] = entry.split(":").map((side) => side.trim());
-        if (rest.length > 0 || container === undefined) {
-          throw new ControlError("bad_args", `not <host>:<container>: ${entry}`);
-        }
-        const refusal = sbxPortRefusal({ host, container });
-        if (refusal) {
-          throw new ControlError("bad_args", `${refusal}: ${entry}`);
-        }
-        return { host, container };
-      });
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, ports } }));
-    },
-
-    "sbx-set-paths": (args, caller) => {
-      const paths = list(args, "paths").map((entry) => {
-        // The last colon: a Windows path has one of its own.
-        const at = entry.lastIndexOf(":");
-        const access = entry.slice(at + 1);
-        if (at < 0 || (access !== "ro" && access !== "rw")) {
-          throw new ControlError("bad_args", `not <path>:<ro|rw>: ${entry}`);
-        }
-        return { path: absolute(entry.slice(0, at)), access: access as SbxAccess };
-      });
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, paths } }));
-    },
-
-    "sbx-set-hosts": (args, caller) => {
-      const hosts = list(args, "hosts")
-        .map((host) => host.trim())
-        .filter(Boolean);
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, hosts } }));
-    },
-
-    "sbx-set-secrets": (args, caller) => {
-      const secrets = list(args, "secrets").map((entry) => {
-        const at = entry.indexOf("=");
-        if (at < 0) {
-          throw new ControlError("bad_args", `not <NAME>=<host>[,<host>...]: ${entry}`);
-        }
-        const hosts = entry
-          .slice(at + 1)
-          .split(",")
-          .map((host) => host.trim())
-          .filter(Boolean);
-        return { env: entry.slice(0, at).trim(), hosts };
-      });
-      secrets.forEach((secret, index) => {
-        const refusal = sbxSecretRefusal(secret, secrets.slice(0, index));
-        if (refusal) {
-          throw new ControlError("bad_args", `${refusal}: ${secret.env}`);
-        }
-      });
-      return editSbx(args, caller, ({ config }) => {
-        refuseVariables(config.variables, secrets);
-        return { config: { ...config, secrets } };
-      });
-    },
-
-    "sbx-set-variables": (args, caller) => {
-      const variables = list(args, "variables").map((name) => ({ env: name.trim() }));
-      return editSbx(args, caller, ({ config }) => {
-        refuseVariables(variables, config.secrets);
-        return { config: { ...config, variables } };
-      });
-    },
-
-    "sbx-set-knowledge": (args, caller) => {
-      const kind = text(args, "kind", "kind");
-      const access = text(args, "access", "off, ro or rw");
-      if (!SBX_KNOWLEDGE_KINDS.some((candidate) => candidate === kind)) {
-        throw new ControlError("bad_args", `unknown kind: ${kind} (one of ${SBX_KNOWLEDGE_KINDS.join(", ")})`);
-      }
-      if (access !== "off" && access !== "ro" && access !== "rw") {
-        throw new ControlError("bad_args", `not off, ro or rw: ${access}`);
-      }
-      return editSbx(args, caller, ({ knowledge }) => ({
-        knowledge: { ...knowledge, [kind as SbxKnowledgeKind]: access === "off" ? false : access }
-      }));
-    },
-
-    "sbx-set-skills-folder": (args, caller) => {
-      const folder = typeof args.path === "string" && args.path !== "" ? absolute(args.path) : undefined;
-      return editSbx(args, caller, ({ knowledge }) => {
-        const next = { ...knowledge, skillsFolder: folder };
-        if (folder === undefined) {
-          delete next.skillsFolder;
-        }
-        return { knowledge: next };
-      });
     },
 
     "tabs-list": (args, caller) => ({ result: terminals(project(args, caller)).inspect() }),

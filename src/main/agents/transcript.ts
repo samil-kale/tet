@@ -167,7 +167,7 @@ export async function readHeadLines(
 }
 
 /** The per-agent, format-specific half of a cached head scan; `scanTranscriptHead` handles the file. */
-export interface HeadScan<T> {
+interface HeadScan<T> {
   /** Names the agent in a failed scan's log. */
   label: string;
   create: () => T;
@@ -240,7 +240,7 @@ async function readLinesBackwards(
 }
 
 /** The per-agent, format-specific half of a cached tail scan; `scanTranscriptTail` handles the file. */
-export interface TailScan<T> {
+interface TailScan<T> {
   /** Bytes per chunk, and how far below an earlier scan the next one restarts. */
   byteLimit: number;
   /** Names the agent in a failed scan's log. */

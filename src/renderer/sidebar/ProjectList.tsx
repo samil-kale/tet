@@ -1,5 +1,5 @@
 import { memo, useMemo, type ReactNode } from "react";
-import type { Project, RemoteInfo } from "../../shared/types";
+import type { Project } from "../../shared/types";
 import { canDiscardProjectEdits } from "../diff/editor-views";
 import type { GitRun } from "../git/run-action";
 import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "../git/worktree-questions";
@@ -54,7 +54,9 @@ export interface ProjectHead {
   baseAt?: string;
   /** Where a new worktree starts, e.g. "origin/main". */
   defaultBranch?: string;
-  remote?: RemoteInfo;
+  /** The first remote, by what the row shows of it. */
+  remoteName?: string;
+  remoteUrl?: string;
   dirty?: boolean;
 }
 
@@ -188,18 +190,18 @@ export const ProjectList = memo(function ProjectList({
     return classes.join(" ");
   };
 
-  const askRemoteUrl = async (project: Project, remote: RemoteInfo): Promise<void> => {
+  const askRemoteUrl = async (project: Project, remote: string, current: string | undefined): Promise<void> => {
     await prompt({
       title: "Change remote URL",
-      value: remote.url ?? "",
+      value: current ?? "",
       confirmLabel: "Change URL",
       ready: filled,
-      render: singleField(`URL of ${remote.name}`),
+      render: singleField(`URL of ${remote}`),
       submit: async (url) =>
-        url.trim() === remote.url
+        url.trim() === current
           ? undefined
-          : runIn(project.id).ask(`Changing the URL of ${remote.name}...`, () =>
-              window.tet.repository.setRemoteUrl(project.id, remote.name, url.trim())
+          : runIn(project.id).ask(`Changing the URL of ${remote}...`, () =>
+              window.tet.repository.setRemoteUrl(project.id, remote, url.trim())
             )
     });
   };
@@ -207,8 +209,8 @@ export const ProjectList = memo(function ProjectList({
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
    *  pane, where its target is on screen — but for a worktree's own row, which is that tree. */
   const menuEntries = (project: Project): ContextMenuEntry[] => {
-    const { head, detached, upstream, base, baseAt, defaultBranch, remote } = heads[project.id] ?? {};
-    const web = remote?.url ? webUrl(remote.url) : null;
+    const { head, detached, upstream, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[project.id] ?? {};
+    const web = remoteUrl ? webUrl(remoteUrl) : null;
     const run = runIn(project.id);
     // Named by its branch, which is its name; by its folder while detached.
     const name = head && !detached ? head : project.name;
@@ -246,7 +248,7 @@ export const ProjectList = memo(function ProjectList({
       },
       {
         label: "Change remote URL...",
-        run: remote ? () => void askRemoteUrl(project, remote) : undefined
+        run: remoteName ? () => void askRemoteUrl(project, remoteName, remoteUrl) : undefined
       },
       SEPARATOR,
       worktreeEntry("New worktree", worktreesSupported, defaultBranch ? () => void askNewWorktree(project.id, run, defaultBranch) : undefined),
