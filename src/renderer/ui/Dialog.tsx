@@ -1,10 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { DialogFrame } from "./DialogFrame";
-import { Checkbox, Field, TextField } from "./Field";
-import { SparkleIcon, SpinnerIcon } from "./icons";
+import { Checkbox, TextField } from "./Field";
 import { notify } from "./Notices";
 import { createStore, useStore } from "./store";
-import { errorMessage } from "../../shared/errors";
 
 export interface ConfirmOptions {
   title: string;
@@ -24,58 +22,42 @@ export interface ConfirmAnswer {
   checked: boolean;
 }
 
-export interface PromptOptions {
+/** What a question's fields are drawn from (`PromptOptions.render`). */
+export interface PromptFields<T> {
+  value: T;
+  onChange: (value: T) => void;
+  /** What `submit` refused, for the field it was typed in (`Field`'s `error`). Cleared by the next
+   *  change, which is about to make it wrong. */
+  error: string | undefined;
+  /** `submit` is underway: the field it may refuse is disabled meanwhile. */
+  busy: boolean;
+  /** For the field the dialog opens focused and selected, and returns to on a refusal. */
+  field: RefObject<HTMLInputElement | null>;
+}
+
+export interface PromptOptions<T> {
   title: string;
-  /** The field's label. */
-  label: string;
-  /** What it is for, when the label does not say — e.g. the branch a new one starts from. */
+  /** What it is for, when the fields do not say — e.g. the branch a new one starts from. */
   detail?: string;
-  /** The initial value, selected so typing replaces it. */
-  value: string;
   confirmLabel: string;
-  maxLength?: number;
-  /** Further fields; each may be empty, unlike the answer's own field. */
-  extras?: { label: string; placeholder?: string; value?: string }[];
-  /** Where the answer's field sits among the extras, first by default. */
-  valueIndex?: number;
-  /** A color picked from swatches under the fields, e.g. a command row's. A "no color" swatch is
-   *  always offered first: like the extras, it may be left empty. */
-  colors?: {
-    label: string;
-    /** Each choice's answer and the color it is drawn in — an ANSI name and its
-     *  `--vscode-terminal-ansi*` variable, so the swatches follow the theme. */
-    choices: { value: string; color: string; title: string }[];
-    value?: string;
-  };
-  /** A yes/no under the fields, e.g. the push after a commit. See ConfirmOptions. */
-  checkboxLabel?: string;
-  /** An async way to fill the answer's field, shown as a wand beside it. */
-  suggestion?: {
-    title: string;
-    run: () => Promise<string>;
-  };
+  /** The answer as the dialog opens. */
+  value: T;
+  /** Whether it can be given yet, e.g. a name left empty cannot. */
+  ready: (value: T) => boolean;
+  /** The fields, from `Field.tsx`'s components. */
+  render: (fields: PromptFields<T>) => ReactNode;
   /**
    * Runs the answer while the question still stands, so what refuses it is shown at the field it
    * was typed in rather than as a notice once the dialog is gone — git's own words for a name it
    * will not take. A message means refused: the dialog stays up, holding what was typed. Nothing
    * means done, and it closes. Left out, the answer is simply handed back.
    */
-  submit?: (answer: PromptAnswer) => Promise<string | undefined>;
-}
-
-export interface PromptAnswer {
-  value: string;
-  /** The extra fields' values in declared order, "" where blank. */
-  extras: string[];
-  /** The picked color's value; "" for none, and for a question that offered no colors. */
-  color: string;
-  /** Whether the checkbox was ticked; always false when the question had none. */
-  checked: boolean;
+  submit?: (value: T) => Promise<string | undefined>;
 }
 
 type Question =
   | ({ kind: "confirm"; answer: (answer: ConfirmAnswer) => void } & ConfirmOptions)
-  | ({ kind: "prompt"; answer: (answer: PromptAnswer | null) => void } & PromptOptions);
+  | ({ kind: "prompt"; answer: (answer: unknown) => void } & PromptOptions<unknown>);
 
 /** A question as it is up: `cancel` answers what Escape, × and Cancel all mean. */
 type Pending = Question & { cancel: () => void };
@@ -87,7 +69,8 @@ type Pending = Question & { cancel: () => void };
  * `env-request` (`EnvDialog`). Questions only — a form with two buttons;
  * `SettingsDialog` and the rest of `dialogs/` are not part of this.
  *
- * `confirm` is for the irreversible only. `prompt` is for a name, and is where every rename
+ * `confirm` is for the irreversible only. `prompt` is for what is typed — a name, a message, a set
+ * of fields drawn by the caller from `Field.tsx`'s components — and is where every rename
  * happens: a tab is too narrow to name inline, and a commit-on-blur field loses typing to a stray
  * click.
  */
@@ -121,9 +104,32 @@ export function confirm(options: ConfirmOptions): Promise<ConfirmAnswer> {
   );
 }
 
-/** Resolves to what the user typed, or null when they cancelled. */
-export function prompt(options: PromptOptions): Promise<PromptAnswer | null> {
-  return ask<PromptAnswer | null>((answer) => ({ kind: "prompt", ...options, answer }), null);
+/** Resolves to what the user entered, or null when they cancelled. */
+export function prompt<T>(options: PromptOptions<T>): Promise<T | null> {
+  // Held untyped while up: `PromptDialog` only ever hands `render` and `submit` the value `options`
+  // started it with.
+  const held = options as unknown as PromptOptions<unknown>;
+  return ask<T | null>((answer) => ({ kind: "prompt", ...held, answer: answer as (value: unknown) => void }), null);
+}
+
+/** Whether a line of text was typed, spaces aside: `ready` for a required one. */
+export function filled(text: string): boolean {
+  return text.trim().length > 0;
+}
+
+/** `render` for a question asking one line of text, e.g. a name. */
+export function singleField(label: string, maxLength?: number): PromptOptions<string>["render"] {
+  return ({ value, onChange, error, busy, field }) => (
+    <TextField
+      label={label}
+      value={value}
+      onChange={onChange}
+      maxLength={maxLength}
+      disabled={busy}
+      ref={field}
+      error={error}
+    />
+  );
 }
 
 interface FrameProps {
@@ -188,12 +194,7 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
 
 function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }> }) {
   const [value, setValue] = useState(dialog.value);
-  const [extras, setExtras] = useState<string[]>(() => (dialog.extras ?? []).map((field) => field.value ?? ""));
-  const [color, setColor] = useState(dialog.colors?.value ?? "");
-  const [checked, setChecked] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
-  /** What `submit` refused, under the answer's field; cleared by the next keystroke, which is
-   *  about to make it wrong. */
+  /** What `submit` refused, handed to the fields; cleared by the next change. */
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const [running, setRunning] = useState(false);
   const field = useRef<HTMLInputElement>(null);
@@ -210,21 +211,15 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   useEffect(() => () => void (live.current = false), []);
 
   const submit = async (): Promise<void> => {
-    const answered: PromptAnswer = {
-      value: value.trim(),
-      extras: extras.map((entry) => entry.trim()),
-      color,
-      checked
-    };
     if (!dialog.submit) {
-      dialog.answer(answered);
+      dialog.answer(value);
       return;
     }
     setRunning(true);
     setRefused(undefined);
     let message: string | undefined;
     try {
-      message = await dialog.submit(answered);
+      message = await dialog.submit(value);
     } finally {
       setRunning(false);
     }
@@ -235,113 +230,28 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       return;
     }
     if (message === undefined) {
-      dialog.answer(answered);
+      dialog.answer(value);
     } else {
       setRefused(message);
       field.current?.focus();
     }
   };
 
-  const suggest = async (): Promise<void> => {
-    if (!dialog.suggestion || suggesting) {
-      return;
-    }
-    setSuggesting(true);
-    try {
-      const suggested = (await dialog.suggestion.run()).trim();
-      if (suggested.length > 0) {
-        setValue(suggested);
-        requestAnimationFrame(() => {
-          field.current?.focus();
-          field.current?.select();
-        });
-      }
-    } catch (error) {
-      notify("error", `Could not suggest a value: ${errorMessage(error)}`);
-    } finally {
-      setSuggesting(false);
-    }
+  const onChange = (next: unknown): void => {
+    setValue(next);
+    setRefused(undefined);
   };
-
-  // Optional: only the answer's own field can hold the dialog back.
-  const fields = (dialog.extras ?? []).map((entry, index) => (
-    <TextField
-      key={entry.label}
-      label={entry.label}
-      value={extras[index] ?? ""}
-      placeholder={entry.placeholder}
-      onChange={(next) => setExtras((current) => current.map((held, position) => (position === index ? next : held)))}
-    />
-  ));
-  const input = (
-    <input
-      type="text"
-      value={value}
-      maxLength={dialog.maxLength}
-      disabled={suggesting || running}
-      onChange={(event) => {
-        setValue(event.target.value);
-        setRefused(undefined);
-      }}
-      ref={field}
-    />
-  );
-  fields.splice(
-    dialog.valueIndex ?? 0,
-    0,
-    <Field key="value" label={dialog.label} error={refused}>
-      {dialog.suggestion ? (
-        // Paired like a path field and its Browse button; the spinner replaces the wand while
-        // suggesting.
-        <div className="dialog-field-row">
-          {input}
-          <button
-            type="button"
-            className="button secondary dialog-suggest"
-            title={dialog.suggestion.title}
-            disabled={suggesting}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void suggest()}
-          >
-            {suggesting ? <SpinnerIcon className="spinning" /> : <SparkleIcon />}
-          </button>
-        </div>
-      ) : (
-        input
-      )}
-    </Field>
-  );
 
   return (
     <Frame
       title={dialog.title}
       confirmLabel={dialog.confirmLabel}
-      disabled={suggesting || running || value.trim().length === 0}
+      disabled={running || !dialog.ready(value)}
       busy={running}
       onSubmit={() => void submit()}
       onCancel={dialog.cancel}
     >
-      {fields}
-      {dialog.colors && (
-        // A div, not the fields' label: a label wrapping buttons would forward its clicks to the
-        // first swatch.
-        <div className="dialog-field">
-          <span>{dialog.colors.label}</span>
-          <div className="dialog-colors">
-            {[{ value: "", color: "", title: "No color" }, ...dialog.colors.choices].map((choice) => (
-              <button
-                key={choice.value}
-                type="button"
-                className={`dialog-color${choice.value ? "" : " none"}${choice.value === color ? " selected" : ""}`}
-                title={choice.title}
-                style={choice.color ? { background: choice.color } : undefined}
-                onClick={() => setColor(choice.value)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-      {dialog.checkboxLabel && <Checkbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />}
+      {dialog.render({ value, onChange, error: refused, busy: running, field })}
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
     </Frame>
   );

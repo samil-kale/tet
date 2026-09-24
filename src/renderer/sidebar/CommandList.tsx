@@ -3,20 +3,14 @@ import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
 import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
 import { useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { notifying, refusal } from "../git/run-action";
-import { confirm, prompt, type PromptAnswer } from "../ui/Dialog";
+import { confirm, filled, prompt, type PromptOptions } from "../ui/Dialog";
+import { ColorField, TextField } from "../ui/Field";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { PlayIcon, PlusIcon } from "../ui/icons";
 import { Section } from "../ui/Section";
 
 /** Our own type, so a row dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-command";
-
-/** The optional fields, shared by the add and edit dialogs. */
-const EXTRA_FIELDS = [
-  { label: "Name (optional)", placeholder: "what the row calls it, e.g. Start the backend" },
-  { label: "Folder (optional)", placeholder: "relative to the project, e.g. web" },
-  { label: "Environment (optional)", placeholder: "PROFILE=DEVELOPMENT PORT=8080" }
-];
 
 const COMMAND_DETAIL = "Saved to tet.json in the project. The command is started without a shell.";
 
@@ -36,14 +30,61 @@ const COLOR_CHOICES = COMMAND_COLORS.map((color) => ({
   title: capitalized(color)
 }));
 
-const COLOR_FIELD = { label: "Color (optional)", choices: COLOR_CHOICES };
+/** What the add and edit dialogs hold, as typed; the color "" for none. */
+interface CommandAnswer {
+  command: string;
+  name: string;
+  cwd: string;
+  env: string;
+  color: string;
+}
+
+/** The add and edit dialogs' fields: the command is the one required. */
+const renderCommandFields: PromptOptions<CommandAnswer>["render"] = ({ value, onChange, error, busy, field }) => (
+  <>
+    <TextField
+      label="Name (optional)"
+      value={value.name}
+      placeholder="what the row calls it, e.g. Start the backend"
+      onChange={(name) => onChange({ ...value, name })}
+    />
+    <TextField
+      label="Command"
+      value={value.command}
+      onChange={(command) => onChange({ ...value, command })}
+      disabled={busy}
+      ref={field}
+      error={error}
+    />
+    <TextField
+      label="Folder (optional)"
+      value={value.cwd}
+      placeholder="relative to the project, e.g. web"
+      onChange={(cwd) => onChange({ ...value, cwd })}
+    />
+    <TextField
+      label="Environment (optional)"
+      value={value.env}
+      placeholder="PROFILE=DEVELOPMENT PORT=8080"
+      onChange={(env) => onChange({ ...value, env })}
+    />
+    <ColorField
+      label="Color (optional)"
+      choices={COLOR_CHOICES}
+      value={value.color}
+      onChange={(color) => onChange({ ...value, color })}
+    />
+  </>
+);
 
 /** The dialog's answer as an entry with only what was filled in, so a bare command stays a plain
  *  string in tet.json. `shell` carries over from the edited command: editing must not change how
  *  it starts. */
-function toCommand(answer: PromptAnswer, edited?: ProjectCommand): ProjectCommand {
-  const [name, cwd, env] = answer.extras;
-  const command: ProjectCommand = { command: answer.value };
+function toCommand(answer: CommandAnswer, edited?: ProjectCommand): ProjectCommand {
+  const name = answer.name.trim();
+  const cwd = answer.cwd.trim();
+  const env = answer.env.trim();
+  const command: ProjectCommand = { command: answer.command.trim() };
   if (name) {
     command.name = name;
   }
@@ -160,13 +201,11 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
   const askAdd = async (): Promise<void> => {
     await prompt({
       title: "New command",
-      label: "Command",
       detail: COMMAND_DETAIL,
-      value: "",
+      value: { command: "", name: "", cwd: "", env: "", color: "" },
       confirmLabel: "Save",
-      extras: EXTRA_FIELDS,
-      valueIndex: 1,
-      colors: COLOR_FIELD,
+      ready: ({ command }) => filled(command),
+      render: renderCommandFields,
       submit: async (answer) => {
         const command = toCommand(answer);
         const current = latest.current;
@@ -187,17 +226,17 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
   const askEdit = async (command: ProjectCommand): Promise<void> => {
     await prompt({
       title: "Edit command",
-      label: "Command",
       detail: COMMAND_DETAIL,
-      value: command.command,
+      value: {
+        command: command.command,
+        name: command.name ?? "",
+        cwd: command.cwd ?? "",
+        env: formatEnv(command.env),
+        color: command.color ?? ""
+      },
       confirmLabel: "Save",
-      extras: [
-        { ...EXTRA_FIELDS[0], value: command.name },
-        { ...EXTRA_FIELDS[1], value: command.cwd },
-        { ...EXTRA_FIELDS[2], value: formatEnv(command.env) }
-      ],
-      valueIndex: 1,
-      colors: { ...COLOR_FIELD, value: command.color },
+      ready: ({ command: typed }) => filled(typed),
+      render: renderCommandFields,
       submit: async (answer) => {
         const current = latest.current;
         const index = indexOf(command);

@@ -266,21 +266,23 @@ describe("sbx sandbox naming and mounts", () => {
 
   it("mounts rw bare (sbx maps it to the same path itself), ro with an explicit :ro target", () => {
     const repo = path.join(os.tmpdir(), "repo");
-    assert.deepEqual(pathMountSpecs({ path: repo, access: "rw" }), { mount: repo, unmount: repo });
     const target = toContainerPath(repo);
+    assert.deepEqual(pathMountSpecs({ path: repo, access: "rw" }), { mount: repo, unmount: repo, other: `${repo}:${target}:ro` });
     assert.deepEqual(pathMountSpecs({ path: repo, access: "ro" }), {
       mount: `${repo}:${target}:ro`,
-      unmount: `${repo}:${target}`
+      unmount: `${repo}:${target}`,
+      other: repo
     });
   });
 
   it("spells a single file exactly like a folder — sbx mounts either in both forms", () => {
     const file = path.join(os.tmpdir(), "repo", ".npmrc");
-    assert.deepEqual(pathMountSpecs({ path: file, access: "rw" }), { mount: file, unmount: file });
     const target = toContainerPath(file);
+    assert.deepEqual(pathMountSpecs({ path: file, access: "rw" }), { mount: file, unmount: file, other: `${file}:${target}:ro` });
     assert.deepEqual(pathMountSpecs({ path: file, access: "ro" }), {
       mount: `${file}:${target}:ro`,
-      unmount: `${file}:${target}`
+      unmount: `${file}:${target}`,
+      other: file
     });
   });
 

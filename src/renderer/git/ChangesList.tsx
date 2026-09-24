@@ -5,7 +5,8 @@ import type { OpenEditor } from "../terminal/editor-tab";
 import { absolutePath, revealLabel } from "../platform";
 import type { FileAct, FileAsk } from "./run-action";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, prompt } from "../ui/Dialog";
+import { confirm, filled, prompt } from "../ui/Dialog";
+import { Checkbox, SuggestField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { isMarkdown } from "../diff/diff-highlight";
 
@@ -123,33 +124,46 @@ export async function askCommit(
   ask: FileAsk
 ): Promise<void> {
   const { remote, canSync } = syncRemote(state);
+  // No checkbox without a remote or on a detached HEAD.
+  const pushLabel = canSync
+    ? state.upstream === undefined
+      ? `Also push ${state.head} to ${remote} and track it`
+      : `Also push to ${state.upstream}`
+    : undefined;
   await prompt({
     title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
-    label: "Message",
     detail: !paths
       ? `Stages and commits all ${state.changes.length} changed files, untracked ones included.`
       : paths.length === 1
         ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
         : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
-    value: "",
+    value: { message: "", push: false },
     confirmLabel: "Commit",
-    suggestion: {
-      title: "Suggest a commit message",
-      run: () => window.tet.repository.suggestCommitMessage(project.id, paths)
-    },
-    // No checkbox without a remote or on a detached HEAD.
-    checkboxLabel: canSync
-      ? state.upstream === undefined
-        ? `Also push ${state.head} to ${remote} and track it`
-        : `Also push to ${state.upstream}`
-      : undefined,
+    ready: ({ message }) => filled(message),
+    render: ({ value, onChange, error, busy, field }) => (
+      <>
+        <SuggestField
+          label="Message"
+          value={value.message}
+          onChange={(message) => onChange({ ...value, message })}
+          suggestion={{
+            title: "Suggest a commit message",
+            run: () => window.tet.repository.suggestCommitMessage(project.id, paths)
+          }}
+          disabled={busy}
+          ref={field}
+          error={error}
+        />
+        {pushLabel && <Checkbox label={pushLabel} checked={value.push} onChange={(push) => onChange({ ...value, push })} />}
+      </>
+    ),
     // What git refused — an empty commit, a hook's veto — at the message it was typed for.
-    submit: ({ value, checked }) =>
+    submit: ({ message, push }) =>
       ask(async () => {
         const committed = await (paths
-          ? window.tet.repository.commitPaths(project.id, value, paths)
-          : window.tet.repository.commitAll(project.id, value));
-        return committed.ok && checked ? window.tet.repository.push(project.id) : committed;
+          ? window.tet.repository.commitPaths(project.id, message.trim(), paths)
+          : window.tet.repository.commitAll(project.id, message.trim()));
+        return committed.ok && push ? window.tet.repository.push(project.id) : committed;
       })
   });
 }

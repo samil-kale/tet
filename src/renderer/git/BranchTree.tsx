@@ -4,7 +4,8 @@ import { refName, syncRemote, upstreamName, worktreeBase } from "../../shared/ty
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, prompt } from "../ui/Dialog";
+import { confirm, filled, prompt, singleField } from "../ui/Dialog";
+import { TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
 import { useCollapsedSections } from "../ui/layout-storage";
@@ -175,24 +176,30 @@ export const BranchTree = memo(function BranchTree({
   const askCreateBranch = async (startPoint: string): Promise<void> => {
     await prompt({
       title: "Create branch",
-      label: "Name",
       detail: `The new branch starts at ${startPoint} and is checked out.`,
       value: "",
       confirmLabel: "Create branch",
+      ready: filled,
+      render: singleField("Name"),
       // git's own words for a name it will not take, at the field (`prompt`'s `submit`).
-      submit: ({ value }) =>
-        branch.ask(`Creating ${value}...`, () => repository.createBranch(projectId, value, startPoint))
+      submit: (typed) => {
+        const name = typed.trim();
+        return branch.ask(`Creating ${name}...`, () => repository.createBranch(projectId, name, startPoint));
+      }
     });
   };
 
   const askRenameBranch = async (name: string): Promise<void> => {
     await prompt({
       title: "Rename branch",
-      label: "Name",
       value: name,
       confirmLabel: "Rename",
-      submit: async ({ value }) =>
-        value === name ? undefined : branch.ask(`Renaming ${name}...`, () => repository.renameBranch(projectId, name, value))
+      ready: filled,
+      render: singleField("Name"),
+      submit: async (typed) =>
+        typed.trim() === name
+          ? undefined
+          : branch.ask(`Renaming ${name}...`, () => repository.renameBranch(projectId, name, typed.trim()))
     });
   };
 
@@ -250,13 +257,32 @@ export const BranchTree = memo(function BranchTree({
   const askCreateTag = async (target: string): Promise<void> => {
     await prompt({
       title: "Create tag",
-      label: "Name",
       detail: `The tag points at ${target}.`,
-      value: "",
+      value: { name: "", message: "" },
       confirmLabel: "Create tag",
-      extras: [{ label: "Message", placeholder: "Optional" }],
-      submit: ({ value, extras }) =>
-        branch.ask(`Creating tag ${value}...`, () => repository.createTag(projectId, value, target, extras[0]))
+      ready: ({ name }) => filled(name),
+      render: ({ value, onChange, error, busy, field }) => (
+        <>
+          <TextField
+            label="Name"
+            value={value.name}
+            onChange={(name) => onChange({ ...value, name })}
+            disabled={busy}
+            ref={field}
+            error={error}
+          />
+          <TextField
+            label="Message"
+            value={value.message}
+            placeholder="Optional"
+            onChange={(message) => onChange({ ...value, message })}
+          />
+        </>
+      ),
+      submit: ({ name, message }) =>
+        branch.ask(`Creating tag ${name.trim()}...`, () =>
+          repository.createTag(projectId, name.trim(), target, message.trim())
+        )
     });
   };
 

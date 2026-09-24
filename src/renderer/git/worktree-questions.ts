@@ -2,7 +2,7 @@ import { WORKTREES_NEED_GIT } from "../../shared/types";
 import type { WorktreeRef } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, prompt } from "../ui/Dialog";
+import { confirm, filled, prompt, singleField } from "../ui/Dialog";
 
 /**
  * The worktree questions, asked alike from a project row and from the branch tree's WORKTREES:
@@ -23,16 +23,19 @@ export function worktreeEntry(label: string, supported: boolean, run: (() => voi
 export async function askNewWorktree(projectId: string, run: GitRun, base: string): Promise<void> {
   await prompt({
     title: "New worktree",
-    label: "Name",
     detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/worktrees and opened as a project.`,
     value: "",
     confirmLabel: "Create worktree",
+    ready: filled,
+    render: singleField("Name"),
     // The name is the branch's, so git refuses the same names here; shown at the field.
-    submit: ({ value }) =>
-      run.ask(`Creating worktree ${value}...`, async () => {
-        const added = await window.tet.projects.addWorktree(projectId, value);
+    submit: (typed) => {
+      const name = typed.trim();
+      return run.ask(`Creating worktree ${name}...`, async () => {
+        const added = await window.tet.projects.addWorktree(projectId, name);
         return added.project ? { ok: true } : { ok: false, error: added.error };
-      })
+      });
+    }
   });
 }
 
@@ -45,15 +48,16 @@ export async function askRenameWorktree(
 ): Promise<void> {
   await prompt({
     title: "Rename worktree",
-    label: "Name",
     detail: "Renames the worktree and its folder. Its terminals are closed first, and agent sessions started there can no longer be resumed.",
     value: branch,
     confirmLabel: "Rename",
+    ready: filled,
+    render: singleField("Name"),
     // Unchanged, or its unsaved edits kept it: nothing to say, and the question is done.
-    submit: async ({ value }) =>
-      value === branch || !(await canClose())
+    submit: async (name) =>
+      name.trim() === branch || !(await canClose())
         ? undefined
-        : run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, value))
+        : run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, name.trim()))
   });
 }
 

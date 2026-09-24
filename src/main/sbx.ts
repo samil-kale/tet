@@ -480,6 +480,8 @@ function normalizeHostPath(hostPath: string): string {
 interface MountSpec {
   mount: string;
   unmount: string;
+  /** The same grant with the other access (mountAll). */
+  other: string;
 }
 
 /**
@@ -493,11 +495,11 @@ interface MountSpec {
  */
 export function pathMountSpecs(entry: SbxPath): MountSpec {
   const host = normalizeHostPath(entry.path);
-  if (entry.access === "rw") {
-    return { mount: host, unmount: host };
-  }
   const target = toContainerPath(host);
-  return { mount: `${host}:${target}:ro`, unmount: `${host}:${target}` };
+  if (entry.access === "rw") {
+    return { mount: host, unmount: host, other: `${host}:${target}:ro` };
+  }
+  return { mount: `${host}:${target}:ro`, unmount: `${host}:${target}`, other: host };
 }
 
 /** Undefined for nothing — only what exists is mounted. */
@@ -605,8 +607,12 @@ function knowledgeMountSpecs(entries: KnowledgeEntries, knowledge: SbxKnowledgeC
     if (!access) {
       return [];
     }
-    const suffix = access === "ro" ? ":ro" : "";
-    return entries[kind].map((entry) => ({ mount: `${entry.host}:${entry.target}${suffix}`, unmount: `${entry.host}:${entry.target}` }));
+    const [suffix, otherSuffix] = access === "ro" ? [":ro", ""] : ["", ":ro"];
+    return entries[kind].map((entry) => ({
+      mount: `${entry.host}:${entry.target}${suffix}`,
+      unmount: `${entry.host}:${entry.target}`,
+      other: `${entry.host}:${entry.target}${otherSuffix}`
+    }));
   });
 }
 
@@ -822,7 +828,9 @@ const MOUNT_CONCURRENCY = 6;
  * never reached this sandbox's Save) refuses the mount — "409 Conflict: host path … is already
  * mounted read-write in this sandbox; cannot also mount it read-only" — so it is unmounted by
  * `unmount` and mounted again, which a running sandbox takes (measured, 2026-09-23, 0.42.1: ro
- * afterwards, writes refused).
+ * afterwards, writes refused). After a stop the grant is there but not its bind, and `umount`
+ * refuses ("nothing to unmount: … is not bound at …"), so the grant is first bound again as it
+ * stands (`other`) — then umount and mount take (measured, 2026-09-24, 0.42.1: ro afterwards).
  *
  * Concurrent, since each `sbx mount` costs ~0.45s: 6 at once took 1.6s instead of 2.6s, all binds
  * present, ro honoured; 12 at once hit "docker hub refresh lock held by another process" (measured,
@@ -836,7 +844,7 @@ const MOUNT_CONCURRENCY = 6;
  */
 async function mountAll(
   name: string,
-  specs: { mount: string; unmount?: string }[],
+  specs: ({ mount: string } & Partial<MountSpec>)[],
   onData?: OnData,
   started?: Promise<boolean>
 ): Promise<Map<string, string>> {
@@ -846,15 +854,17 @@ async function mountAll(
   if (!(await started)) {
     await ensureRunning(name, onData);
   }
-  const mount = async ({ mount: spec, unmount }: { mount: string; unmount?: string }): Promise<string | undefined> => {
+  const mount = async ({ mount: spec, unmount, other }: { mount: string } & Partial<MountSpec>): Promise<string | undefined> => {
     const result = await runSbx(["mount", name, spec], { onData });
     if (result.ok) {
       return undefined;
     }
-    if (unmount === undefined || !/already mounted .*cannot also mount/i.test(sbxError(result))) {
+    if (unmount === undefined || other === undefined || !/already mounted .*cannot also mount/i.test(sbxError(result))) {
       return sbxRefusal(result);
     }
-    const again = (await runSbx(["umount", name, unmount], { onData })).ok ? await runSbx(["mount", name, spec], { onData }) : result;
+    const unmounted = async (): Promise<boolean> => (await runSbx(["umount", name, unmount], { onData })).ok;
+    const replaced = (await unmounted()) || ((await runSbx(["mount", name, other], { onData })).ok && (await unmounted()));
+    const again = replaced ? await runSbx(["mount", name, spec], { onData }) : result;
     return again.ok ? undefined : sbxRefusal(again);
   };
   const refused = await mapLimited(specs, MOUNT_CONCURRENCY, mount);

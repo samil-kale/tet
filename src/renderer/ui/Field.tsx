@@ -1,4 +1,7 @@
-import type { KeyboardEvent, ReactNode, Ref } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
+import { errorMessage } from "../../shared/errors";
+import { SparkleIcon, SpinnerIcon } from "./icons";
+import { notify } from "./Notices";
 
 /**
  * What refused an answer, where the answer was given: under the field to blame (`Field`), above a
@@ -75,6 +78,109 @@ export function TextField({
         ref={ref}
       />
     </Field>
+  );
+}
+
+interface SuggestFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** An async way to fill the field, shown as a wand beside it. */
+  suggestion: {
+    title: string;
+    run: () => Promise<string>;
+  };
+  disabled?: boolean;
+  /** The field a dialog opens focused; refocused once a suggestion arrives. */
+  ref?: RefObject<HTMLInputElement | null>;
+  /** See `Field`. */
+  error?: string;
+}
+
+/** A text field with a wand beside it that fills it, e.g. a model's commit message. */
+export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error }: SuggestFieldProps) {
+  const [suggesting, setSuggesting] = useState(false);
+  const own = useRef<HTMLInputElement>(null);
+  const input = ref ?? own;
+
+  const suggest = async (): Promise<void> => {
+    if (suggesting) {
+      return;
+    }
+    setSuggesting(true);
+    try {
+      const suggested = (await suggestion.run()).trim();
+      if (suggested.length > 0) {
+        onChange(suggested);
+        requestAnimationFrame(() => {
+          input.current?.focus();
+          input.current?.select();
+        });
+      }
+    } catch (error) {
+      notify("error", `Could not suggest a value: ${errorMessage(error)}`);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  return (
+    <Field label={label} error={error}>
+      {/* Paired like a path field and its Browse button; the spinner replaces the wand while
+          suggesting. */}
+      <div className="dialog-field-row">
+        <input
+          type="text"
+          value={value}
+          disabled={disabled || suggesting}
+          onChange={(event) => onChange(event.target.value)}
+          ref={input}
+        />
+        <button
+          type="button"
+          className="button secondary dialog-suggest"
+          title={suggestion.title}
+          disabled={suggesting}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => void suggest()}
+        >
+          {suggesting ? <SpinnerIcon className="spinning" /> : <SparkleIcon />}
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+interface ColorFieldProps {
+  label: string;
+  /** Each choice's answer and the color it is drawn in — an ANSI name and its
+   *  `--vscode-terminal-ansi*` variable, so the swatches follow the theme. */
+  choices: { value: string; color: string; title: string }[];
+  /** The picked choice's value; "" for none. */
+  value: string;
+  onChange: (value: string) => void;
+}
+
+/** A color picked from swatches, e.g. a command row's. A "no color" swatch is always offered
+ *  first: a color is optional. */
+export function ColorField({ label, choices, value, onChange }: ColorFieldProps) {
+  return (
+    // A div, not a label: a label wrapping buttons would forward its clicks to the first swatch.
+    <div className="dialog-field">
+      <span>{label}</span>
+      <div className="dialog-colors">
+        {[{ value: "", color: "", title: "No color" }, ...choices].map((choice) => (
+          <button
+            key={choice.value}
+            type="button"
+            className={`dialog-color${choice.value ? "" : " none"}${choice.value === value ? " selected" : ""}`}
+            title={choice.title}
+            style={choice.color ? { background: choice.color } : undefined}
+            onClick={() => onChange(choice.value)}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 

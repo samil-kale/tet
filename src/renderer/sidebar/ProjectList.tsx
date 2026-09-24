@@ -5,7 +5,7 @@ import type { GitRun } from "../git/run-action";
 import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { prompt } from "../ui/Dialog";
+import { filled, prompt, singleField } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { Section } from "../ui/Section";
 import { SessionMark } from "../ui/SessionMark";
@@ -191,14 +191,15 @@ export const ProjectList = memo(function ProjectList({
   const askRemoteUrl = async (project: Project, remote: RemoteInfo): Promise<void> => {
     await prompt({
       title: "Change remote URL",
-      label: `URL of ${remote.name}`,
       value: remote.url ?? "",
       confirmLabel: "Change URL",
-      submit: async ({ value }) =>
-        value === remote.url
+      ready: filled,
+      render: singleField(`URL of ${remote.name}`),
+      submit: async (url) =>
+        url.trim() === remote.url
           ? undefined
           : runIn(project.id).ask(`Changing the URL of ${remote.name}...`, () =>
-              window.tet.repository.setRemoteUrl(project.id, remote.name, value)
+              window.tet.repository.setRemoteUrl(project.id, remote.name, url.trim())
             )
     });
   };

@@ -16,7 +16,7 @@ import {
 } from "./explorer-tree";
 import { FileMarkIcon, INDENT_BASE, INDENT_STEP, Twistie } from "./tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, prompt } from "../ui/Dialog";
+import { confirm, filled, prompt, singleField } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 
 interface RowsProps {
@@ -242,22 +242,24 @@ export const Explorer = memo(function Explorer({
   const askNewFile = async (dir: string): Promise<void> => {
     await prompt({
       title: "New File",
-      label: "Name",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
       value: "",
       confirmLabel: "Create",
-      submit: ({ value }) => runAsked(() => window.tet.repository.createFile(project.id, under(dir, value)))
+      ready: filled,
+      render: singleField("Name"),
+      submit: (name) => runAsked(() => window.tet.repository.createFile(project.id, under(dir, name.trim())))
     });
   };
 
   const askNewFolder = async (dir: string): Promise<void> => {
     await prompt({
       title: "New Folder",
-      label: "Name",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
       value: "",
       confirmLabel: "Create",
-      submit: ({ value }) => runAsked(() => window.tet.repository.createDirectory(project.id, under(dir, value)))
+      ready: filled,
+      render: singleField("Name"),
+      submit: (name) => runAsked(() => window.tet.repository.createDirectory(project.id, under(dir, name.trim())))
     });
   };
 
@@ -266,13 +268,14 @@ export const Explorer = memo(function Explorer({
     const dir = node.path.split("/").slice(0, -node.name.split("/").length).join("/");
     await prompt({
       title: "Rename",
-      label: "Name",
       value: node.name,
       confirmLabel: "Rename",
-      submit: async ({ value }) =>
-        value === node.name
+      ready: filled,
+      render: singleField("Name"),
+      submit: async (name) =>
+        name.trim() === node.name
           ? undefined
-          : runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(dir, value)))
+          : runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(dir, name.trim())))
     });
   };
 
