@@ -251,15 +251,17 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     onClose();
     // Asked after closing: a kind switch is saved either way, Cancel only waits for the next start.
     if (chosenKind !== shownKind) {
-      const answer = await confirm({
+      await confirm({
         title: "Restart TET",
         message: `Restart TET now to switch to the ${chosenKind} theme?`,
         detail: "This ends every terminal in every project. Otherwise it applies at the next start.",
-        confirmLabel: "Restart"
+        confirmLabel: "Restart",
+        // Never settles: the question stays up, its bar running, until the restart ends the window.
+        submit: () => {
+          window.tet.app.restart();
+          return new Promise(() => {});
+        }
       });
-      if (answer.confirmed) {
-        window.tet.app.restart();
-      }
     }
   };
 

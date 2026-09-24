@@ -14,6 +14,9 @@ export interface ConfirmOptions {
   confirmLabel: string;
   /** An option carried along, e.g. "delete it on the remote too". */
   checkboxLabel?: string;
+  /** Runs the answer while the question still stands, with the header's bar, as `PromptOptions.submit`
+   *  does; it closes once this settles. For an answer that takes the window with it (a restart). */
+  submit?: (checked: boolean) => Promise<void>;
 }
 
 export interface ConfirmAnswer {
@@ -183,14 +186,30 @@ function Frame({ title, confirmLabel, disabled, busy, focusSubmit, onSubmit, onC
 
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
   const [checked, setChecked] = useState(false);
+  const [running, setRunning] = useState(false);
+
+  const submit = async (): Promise<void> => {
+    if (dialog.submit) {
+      setRunning(true);
+      try {
+        await dialog.submit(checked);
+      } finally {
+        setRunning(false);
+      }
+    }
+    dialog.answer({ confirmed: true, checked });
+  };
+
   return (
     <Frame
       title={dialog.title}
       confirmLabel={dialog.confirmLabel}
+      disabled={running}
+      busy={running}
       // Opened from a context menu, focus would otherwise stay in the terminal and Enter answer
       // nothing.
       focusSubmit
-      onSubmit={() => dialog.answer({ confirmed: true, checked })}
+      onSubmit={() => void submit()}
       onCancel={dialog.cancel}
     >
       <p className="dialog-message">{dialog.message}</p>
