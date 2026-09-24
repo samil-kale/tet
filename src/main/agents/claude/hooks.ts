@@ -5,32 +5,6 @@ import { hookCommand } from "../../terminals/hook-command";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
 
 /**
- * The `background_tasks` guard: Stop fires on every turn boundary, including one that merely
- * launched a background subagent or shell command; the payload lists each pending job with `id`,
- * `type` (`subagent`, `shell`) and `status`. Only a running job of those two types holds the turn,
- * so an unknown status or type reports rather than silencing every future turn: a `monitor` (an
- * artifact's live updates, measured 2026-09-21) runs for the whole session and would hold them all.
- *
- * A non-JSON payload (empty stdin, a changed shape) is an ended turn: a withheld mark could not
- * be noticed by the user waiting for it.
- */
-export function claudeHoldsTurnEnd(payload: string): boolean {
-  let tasks: unknown;
-  try {
-    tasks = (JSON.parse(payload) as { background_tasks?: unknown }).background_tasks;
-  } catch {
-    return false;
-  }
-  return (
-    Array.isArray(tasks) &&
-    tasks.some((task) => {
-      const job = task as { type?: unknown; status?: unknown } | null;
-      return (job?.type === "subagent" || job?.type === "shell") && job.status === "running";
-    })
-  );
-}
-
-/**
  * Writes the per-repository settings file registering Claude Code's hooks; returns the
  * `--settings` args. Layered over the user's config; `~/.claude/settings.json` is never touched.
  *

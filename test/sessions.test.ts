@@ -132,7 +132,6 @@ describe("Claude Code's transcripts", () => {
         { type: "custom-title", customTitle: "x", sessionId: "renamedBetween" },
         turn("h1")
       ],
-      background: [prompt("p"), turn("none", { pendingBackgroundAgentCount: 1 })],
       sidechain: [prompt("p"), turn("none", { isSidechain: true })],
       escaped: [
         prompt("p"),
@@ -157,7 +156,6 @@ describe("Claude Code's transcripts", () => {
     assert.equal(ends.cut, ms(LATER), "no summary beneath it: interrupted");
     assert.equal(ends.cutAfterEarlier, ms(LATER), "an earlier turn's own summary is not this one's");
     assert.equal(ends.renamedBetween, undefined, "a rename between the two says nothing");
-    assert.equal(ends.background, undefined, "subagents still running — the Stop hook holds back too");
     assert.equal(ends.sidechain, undefined, "a subagent's turn is not the session's");
     assert.equal(ends.escaped, ms(LATER), "Escape outside a tool writes no turn_duration, only the interrupt");
     assert.equal(ends.escapedInTool, ms(LATER), "Escape during a tool writes both; the turn_duration dates it");

@@ -1267,14 +1267,10 @@ export class ProjectSessionManager {
         // No context for the model: TET's system prompt went in once per session (system-prompt.ts).
         return {};
       case "stop": {
-        const agent = getAgent(tab.agentId);
-        // Only the agent's payload knows whether the turn is really over.
-        if (agent.holdsTurnEnd?.(payload)) {
-          return {};
-        }
         if (!fresh) {
           return {};
         }
+        const agent = getAgent(tab.agentId);
         // Read before setTurn, which may clear it.
         const asked = endLeavesQuestion(tab, agent);
         setTurn(tab, false, at, asked);

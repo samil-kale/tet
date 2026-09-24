@@ -212,8 +212,7 @@ interface TranscriptTail {
   agentName?: string;
   aiTitle?: string;
   /** When the last turn ended *without* its Stop hooks running — the one case hooks cannot
-   *  report. A turn whose Stop hooks ran is left out even if they left no mark
-   *  (claudeHoldsTurnEnd's `background_tasks` guard): the hook is authoritative there. */
+   *  report. A turn whose Stop hooks ran is left out: the hook is authoritative there. */
   turnEndedAt?: number;
   /** The last turn's end has been checked (readTailEntries); an undefined `turnEndedAt` alone
    * does not say so. */
@@ -299,10 +298,7 @@ function readTailEntries(lines: string[], sessionId: string, tail: TranscriptTai
       tail.pendingTurnEnd === undefined &&
       entry.type === "system" &&
       entry.subtype === "turn_duration" &&
-      entry.isSidechain !== true &&
-      // Also written when background subagents still run — the case the Stop hook holds back
-      // for, so this must not end the turn either.
-      !(typeof entry.pendingBackgroundAgentCount === "number" && entry.pendingBackgroundAgentCount > 0)
+      entry.isSidechain !== true
     ) {
       const ms = timestampOf(entry.timestamp);
       const parentUuid = nonEmptyString(entry.parentUuid);

@@ -8,7 +8,6 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { safeStorage } from "electron";
 import * as esbuild from "esbuild";
-import { claudeHoldsTurnEnd } from "../src/main/agents/claude/hooks";
 import { holdEscape } from "../src/renderer/ui/use-escape";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { hookSessionId } from "../src/main/agents/hook-payload";
@@ -1304,24 +1303,6 @@ describe("which of two turn reports counts", () => {
     assert.equal(reportApplies(now, now + 5), true, "newer than the last one");
     assert.equal(reportApplies(now, now - 200), false, "still in flight when the newer one landed");
     assert.equal(reportApplies(now, now - SIGNAL_STALE_MS - 1), true, "a clock that moved, not a race");
-  });
-});
-
-describe("Claude Code's end of a turn", () => {
-  const stop = (tasks: unknown[]): string => JSON.stringify({ hook_event_name: "Stop", background_tasks: tasks });
-
-  it("is held while a background subagent or shell still runs", () => {
-    assert.equal(claudeHoldsTurnEnd(stop([{ id: "a", type: "subagent", status: "running" }])), true);
-    assert.equal(claudeHoldsTurnEnd(stop([{ id: "b", type: "shell", status: "running" }])), true);
-    assert.equal(claudeHoldsTurnEnd(stop([{ id: "a", type: "subagent", status: "completed" }])), false);
-  });
-
-  it("is not held by a monitor, which runs for the whole session", () => {
-    // Measured 2026-09-21: an artifact's live updates, listed on every Stop.
-    const monitor = { id: "s1", type: "monitor", status: "running", description: "live updates for artifact" };
-    assert.equal(claudeHoldsTurnEnd(stop([monitor])), false);
-    assert.equal(claudeHoldsTurnEnd(stop([])), false);
-    assert.equal(claudeHoldsTurnEnd(""), false);
   });
 });
 

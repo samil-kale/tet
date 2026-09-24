@@ -142,13 +142,6 @@ export interface AgentDefinition {
   /** Listing, resume args, rename, delete, optional watch. Missing means "this agent has no sessions". */
   sessions?: SessionProvider;
   /**
-   * Whether the raw end-of-turn payload says the turn is not over, so `stop` leaves no mark: Claude
-   * Code runs Stop for a turn that merely launched a background job (`background_tasks`). Omitted
-   * where an end is always an end (Codex reports subagents via unhooked `SubagentStop`; opencode
-   * and pi have no such event).
-   */
-  holdsTurnEnd?: (payload: string) => boolean;
-  /**
    * The session a hook report is about — the only thing binding a new tab to its session. A
    * listing carries no pid or tab, and a CLI persists its session at the first prompt, so of two
    * new tabs the one typed into first would hand its session to the other. Omitted without sessions.
