@@ -188,7 +188,7 @@ export function cancelSbxSetup(): void {
  * The sbx version test/agents.test.ts last passed against (TET_SBX_TEST=1): every measured value in
  * this file held there. As `AgentDefinition.verifiedVersion`, read by nothing in the app.
  */
-export const SBX_VERIFIED_VERSION = "0.42.1";
+export const SBX_VERIFIED_VERSION = "0.45.1";
 
 /** `version` is a subcommand; `sbx --version` fails with "unknown flag". */
 export function isSbxInstalled(): Promise<boolean> {
@@ -778,6 +778,12 @@ export async function ensureRunning(name: string, onData?: OnData): Promise<bool
  * is removed outright. Returns whether it created one, which needs seeding from tet.json
  * (prepareSbxRun's allowHosts).
  *
+ * `--skills=off`, since sbx (0.43 on) otherwise binds its own skills store read-only at the
+ * agent's skills directory (`~/.claude/skills`), the very target of tet's knowledge mount: that
+ * stacks over the store and leaves it showing once unmounted. Off, the directory is not there,
+ * tet's mount takes it read-write, and a later `sbx run` adds no store — create-time, so a
+ * sandbox keeps what it was made with (measured, 2026-09-24, 0.45.1).
+ *
  * A failed `create` is not best-effort: `sbx run --name` would create the sandbox without the
  * workspace, and the agent would start in an empty directory unannounced (e.g. pi's kit unpulled
  * without network). Rejects, leaving the tab in error; sbx's message reached it via `onData`.
@@ -805,7 +811,7 @@ function ensureSandboxExists(
     if (existing !== undefined) {
       await removeSandbox(name, onData);
     }
-    const created = await runSbx(["create", getAgent(agentId).sandboxKit ?? agentId, projectPath, "--name", name], { onData });
+    const created = await runSbx(["create", getAgent(agentId).sandboxKit ?? agentId, projectPath, "--name", name, "--skills=off"], { onData });
     if (!created.ok) {
       throw new Error(`sbx could not create the ${agentId} sandbox`);
     }
@@ -938,7 +944,8 @@ async function revokeMounts(name: string, grants: Grant[], refused: SbxProblems)
  * - a change reaches a *running* sandbox at once (403 → 200), so saveSbxConfig applies it too.
  * - on a governed account every local `policy allow` exits 1 (measured, 0.42.1), so it is never
  *   asked there (readSbxProblems asks the organization's policy instead).
- * sbx validates nothing (see SbxProjectConfig.hosts). Returns what sbx refused, by host: the list
+ * sbx refuses a URL or a space inside a name ("invalid network pattern …", measured, 2026-09-24,
+ * 0.45.1), which lands in `refused` like any refusal. Returns what sbx refused, by host: the list
  * in one go, and one by one only once that failed, to tell which.
  */
 async function allowHosts(name: string, hosts: string[], onData?: OnData): Promise<Record<string, string>> {
@@ -962,11 +969,13 @@ async function allowHosts(name: string, hosts: string[], onData?: OnData): Promi
 /**
  * Removes dropped hosts at Save, ending the allowance *now* (as revokeMounts). One `rm` per host:
  * the comma-list form removes nothing if any entry is missing (measured), and one removed by hand
- * answers "rule not found", exit 1, while the others still go.
+ * answers "rule not found", exit 1, while the others still go. `--force`: from 0.45 on `rm` asks
+ * first, and with stdin closed (runSbx) fails "stdin is not a terminal; use --force to skip
+ * confirmation" (measured, 2026-09-24, 0.45.1).
  */
 async function revokeStaleHosts(name: string, previous: string[], current: string[]): Promise<void> {
   for (const host of previous.filter((old) => !current.includes(old))) {
-    await runSbx(["policy", "rm", "network", "--sandbox", name, "--resource", host]);
+    await runSbx(["policy", "rm", "network", "--sandbox", name, "--resource", host, "--force"]);
   }
 }
 

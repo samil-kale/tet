@@ -348,7 +348,8 @@ function toSbxPorts(value: unknown): SbxPort[] {
   );
 }
 
-/** Trimmed: sbx validates nothing, so a stray space becomes a rule that matches no request. */
+/** Trimmed as sbx trims them itself (measured, 2026-09-24, 0.45.1: " example.com" is taken as
+ *  "example.com"), so a row equals the rule sbx lists for it (sbx.ts's readSandboxHosts). */
 function toSbxHosts(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];

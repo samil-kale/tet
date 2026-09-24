@@ -382,14 +382,17 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     assert.equal(typeof (JSON.parse(checked.stdout) as { allowed?: unknown }).allowed, "boolean", `allowed in ${checked.stdout}`);
   });
 
-  it("creates a sandbox for one workspace, once", { timeout: CREATE_MS }, () => {
-    const created = sbx("create", "claude", WORKSPACE, "--name", NAME);
+  it("creates a sandbox for one workspace, once, without sbx's skills store", { timeout: CREATE_MS }, () => {
+    // As ensureSandboxExists creates one.
+    const created = sbx("create", "claude", WORKSPACE, "--name", NAME, "--skills=off");
     assert.equal(created.status, 0, created.stdout + created.stderr);
     const listed = JSON.parse(sbx("ls", "--json").stdout) as { sandboxes: { name?: string; workspaces?: string[] }[] };
     assert.deepEqual(listed.sandboxes.find((sandbox) => sandbox.name === NAME)?.workspaces, [WORKSPACE]);
-    const again = sbx("create", "claude", WORKSPACE, "--name", NAME);
+    const again = sbx("create", "claude", WORKSPACE, "--name", NAME, "--skills=off");
     assert.notEqual(again.status, 0, "a second create fails");
     assert.match(again.stderr, /already exists/);
+    // The store would sit read-only where tet mounts the agent's skills.
+    assert.notEqual(inSandbox("test -e ~/.claude/skills").status, 0, "no skills directory bound by sbx");
   });
 
   it("runs a command in the workspace's container path, and says when there is no sandbox", async () => {
@@ -482,9 +485,10 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
         }
       ).rules.filter((rule) => rule.scope === `sandbox:${NAME}` && rule.editable === true && rule.decision === "allow");
     assert.deepEqual(ownRules().flatMap((rule) => rule.resources ?? []).sort(), ["example.com", "example.org"]);
-    assert.equal(sbx("policy", "rm", "network", "--sandbox", NAME, "--resource", "example.com").status, 0);
+    // As revokeStaleHosts removes one.
+    assert.equal(sbx("policy", "rm", "network", "--sandbox", NAME, "--resource", "example.com", "--force").status, 0);
     assert.deepEqual(ownRules().flatMap((rule) => rule.resources ?? []), ["example.org"]);
-    const again = sbx("policy", "rm", "network", "--sandbox", NAME, "--resource", "example.com");
+    const again = sbx("policy", "rm", "network", "--sandbox", NAME, "--resource", "example.com", "--force");
     assert.notEqual(again.status, 0);
     assert.match(again.stderr, /rule not found/);
   });
