@@ -4,7 +4,8 @@
  * extension's theme file as it ships, renamed. See dark-modern.css for the layer. A color the
  * theme leaves unset takes VS Code's registry fallback — what VS Code draws with this theme — or,
  * for a border, the theme's own border color; each is marked below. Exceptions: the hovered row,
- * the tabs' borders and the session marks on the active one, each marked where it stands.
+ * the tabs' borders, the session marks on the active one and the progress bar, each marked where
+ * it stands.
  */
 :root[data-theme="light-gameboy"] {
   color-scheme: light;
@@ -105,8 +106,9 @@
   --vscode-menu-selectionForeground: #c4bebb;
   --vscode-menu-separatorBackground: #49478633;
 
-  /* Unset; the registry's. */
-  --vscode-progressBar-background: #0e70c0;
+  /* Not the registry's blue, which the theme leaves unset: the theme's accent, as Dark Modern's
+     bar is its own. */
+  --vscode-progressBar-background: #9a2257;
 
   --vscode-notifications-background: #494786;
   --vscode-notifications-foreground: #c4bebb;
