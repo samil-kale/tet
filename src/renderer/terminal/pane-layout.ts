@@ -113,8 +113,9 @@ function pickActive(
   if (wanted && list.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
-  // Never in the list: a tab just activated whose push has not arrived. Kept, or the neighbour rule
-  // steals its selection. Always an id of this run — `activeTab` is not persisted.
+  // Never in the list: a tab just activated whose push has not arrived, or a restored one whose
+  // session is not listed yet. Kept, or the neighbour rule steals its selection; a restored one
+  // that never comes is dropped once the project settles (`collapseEmpty`).
   if (wanted && !previousList.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
@@ -329,13 +330,20 @@ export function collapseClosed(
 
 /**
  * The collapse once a project's bootstrap has listed every session: every empty pane counts as
- * emptied, a snap's included. What the transitions cannot take (the grid's b or d) stays.
+ * emptied, a snap's included. What the transitions cannot take (the grid's b or d) stays. First a
+ * restored active tab that never came gives way to the pane's most recently used one.
  */
 export function collapseEmpty(layout: ProjectLayout, tabs: LayoutTab[]): ProjectLayout {
-  const occupied = occupiedPanes(layout, tabs);
+  const open = new Set(tabs.map((tab) => tab.tabId));
+  const activeTab = sameRecord(
+    layout.activeTab,
+    Object.fromEntries(Object.entries(layout.activeTab).filter(([, tabId]) => tabId == null || open.has(tabId)))
+  );
+  const settled = activeTab === layout.activeTab ? layout : normalizeLayout({ ...layout, activeTab }, tabs, tabs);
+  const occupied = occupiedPanes(settled, tabs);
   return collapsePanes(
-    layout,
-    PRESET_PANES[layout.preset].filter((paneId) => !occupied.includes(paneId)),
+    settled,
+    PRESET_PANES[settled.preset].filter((paneId) => !occupied.includes(paneId)),
     tabs
   );
 }
@@ -559,14 +567,16 @@ export function layoutStorageKey(projectId: string, suffix: string): string {
  * tab's `new-N` id restarts from zero each run and returns, if at all, under its session id. So
  * both are one entry, and what cannot return (a shell tab, no session persisted) is dropped.
  * The divider shares are persisted beside it (`useDividerFraction`).
- *
- * Not each pane's active tab: a stale one (session deleted between runs) would leave its pane
- * waiting for a tab that never comes.
  */
 interface PersistedLayout {
   preset: SplitPreset;
   focusedPane: PaneId;
   tabPane: Record<string, PaneId>;
+  /**
+   * Each pane's active tab, by session id. Its pane waits for it while the sessions are listed; a
+   * stale one (session deleted between runs) gives way once they are (`collapseEmpty`).
+   */
+  activeTab: Partial<Record<PaneId, string>>;
   /** Where each saved command last lay — the closed ones as recorded, the open ones as they are. */
   commandPane: Record<string, CommandPlace>;
 }
@@ -586,7 +596,7 @@ export function loadLayout(projectId: string): ProjectLayout {
     if (typeof parsed !== "object" || parsed === null) {
       return fallback;
     }
-    const { preset, focusedPane, tabPane, commandPane } = parsed as Record<string, unknown>;
+    const { preset, focusedPane, tabPane, activeTab, commandPane } = parsed as Record<string, unknown>;
     if (!isSplitPreset(preset) || !isPaneId(focusedPane)) {
       return fallback;
     }
@@ -595,6 +605,14 @@ export function loadLayout(projectId: string): ProjectLayout {
       for (const [sessionId, paneId] of Object.entries(tabPane)) {
         if (isPaneId(paneId)) {
           restored[sessionId] = paneId;
+        }
+      }
+    }
+    const active: Partial<Record<PaneId, string>> = {};
+    if (activeTab !== null && typeof activeTab === "object") {
+      for (const [paneId, sessionId] of Object.entries(activeTab)) {
+        if (isPaneId(paneId) && PRESET_PANES[preset].includes(paneId) && typeof sessionId === "string") {
+          active[paneId] = sessionId;
         }
       }
     }
@@ -612,7 +630,7 @@ export function loadLayout(projectId: string): ProjectLayout {
       // Read before any tab list normalizes it (`paneOf`).
       focusedPane: PRESET_PANES[preset].includes(focusedPane) ? focusedPane : PRESET_PANES[preset][0],
       tabPane: restored,
-      activeTab: {},
+      activeTab: active,
       commandPane: places
     };
   } catch {
@@ -628,16 +646,26 @@ export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): strin
   const tabPane: Record<string, PaneId> = {};
   // The open command tabs' panes over the recorded ones.
   const commandPane = { ...layout.commandPane };
+  const activeTab: Partial<Record<PaneId, string>> = {};
   for (const tab of tabs) {
     const paneId = layout.tabPane[tab.tabId];
     if (tab.sessionId !== undefined && paneId !== undefined) {
       tabPane[tab.sessionId] = paneId;
+      if (layout.activeTab[paneId] === tab.tabId) {
+        activeTab[paneId] = tab.sessionId;
+      }
     }
     if (tab.command !== undefined) {
       commandPane[tab.command] = { preset: layout.preset, pane: paneOf(layout, tab.tabId) };
     }
   }
-  const persisted: PersistedLayout = { preset: layout.preset, focusedPane: layout.focusedPane, tabPane, commandPane };
+  const persisted: PersistedLayout = {
+    preset: layout.preset,
+    focusedPane: layout.focusedPane,
+    tabPane,
+    activeTab,
+    commandPane
+  };
   return JSON.stringify(persisted);
 }
 

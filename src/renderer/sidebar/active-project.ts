@@ -1,4 +1,21 @@
 import type { Project } from "../../shared/types";
+import { layoutKey } from "../ui/layout-storage";
+
+/** The project in front, in layout storage: which one is in front describes the window. */
+const ACTIVE_PROJECT_KEY = layoutKey("active-project");
+
+/** The project in front at startup: the one in front when tet last closed, while still open, else the first. */
+export function activeAtStart(projects: readonly Project[]): string | null {
+  const remembered = localStorage.getItem(ACTIVE_PROJECT_KEY);
+  return (projects.find((project) => project.id === remembered) ?? projects[0])?.id ?? null;
+}
+
+/** Remembers the project in front for the next start; none leaves the last one standing. */
+export function rememberActive(projectId: string | null): void {
+  if (projectId !== null) {
+    localStorage.setItem(ACTIVE_PROJECT_KEY, projectId);
+  }
+}
 
 /**
  * The project in front after `projects:changed`, from the one in front before (`current`) and the

@@ -12,7 +12,7 @@ import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
 import type { ProjectHead, ProjectMarks } from "./sidebar/ProjectList";
-import { activeAfterChange } from "./sidebar/active-project";
+import { activeAfterChange, activeAtStart, rememberActive } from "./sidebar/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize, usePaneToggle } from "./ui/layout-storage";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
@@ -80,6 +80,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** For callbacks the project list gets, read on a click: see `tabsRef`. */
   const activeProjectIdRef = useRef(activeProjectId);
   activeProjectIdRef.current = activeProjectId;
+  useEffect(() => rememberActive(activeProjectId), [activeProjectId]);
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
   /** Every project's tabs: the project list needs all of them at once. */
   const [tabs, setTabs] = useState<Record<string, TerminalDescriptor[]>>({});
@@ -226,7 +227,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     void (async () => {
       const stored = await window.tet.projects.list();
       setProjects(stored);
-      setActiveProjectId((current) => current ?? stored[0]?.id ?? null);
+      setActiveProjectId((current) => current ?? activeAtStart(stored));
       const loaded = await Promise.all(
         stored.map(async (project) => {
           const [state, list, isStarting] = await Promise.all([

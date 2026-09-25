@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { activeAfterChange } from "../src/renderer/sidebar/active-project";
+import { activeAfterChange, activeAtStart, rememberActive } from "../src/renderer/sidebar/active-project";
 import type { Project } from "../src/shared/types";
 
 const main: Project = { id: "main", path: "/repo", name: "repo" };
@@ -36,5 +36,23 @@ describe("the project in front after the list changed", () => {
 
   it("leaves the front alone when a project out of sight is removed", () => {
     assert.equal(activeAfterChange("main", before, [other, main], undefined, "wt"), "main");
+  });
+});
+
+describe("the project in front at startup", () => {
+  const storage = new Map<string, string>();
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => void storage.set(key, value)
+  };
+
+  it("is the one in front when tet last closed, while it is still open", () => {
+    assert.equal(activeAtStart([other, main]), "other", "none remembered: the first");
+    rememberActive("main");
+    assert.equal(activeAtStart([other, main]), "main");
+    rememberActive(null);
+    assert.equal(activeAtStart([other, main]), "main", "no project in front forgets nothing");
+    assert.equal(activeAtStart([other]), "other", "closed since: the first");
+    assert.equal(activeAtStart([]), null);
   });
 });

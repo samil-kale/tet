@@ -485,18 +485,19 @@ describe("what is persisted", () => {
     setItem: (key: string, value: string) => void storage.set(key, value)
   };
 
-  it("is keyed by session id, without the active tabs or tabs that have no session", () => {
+  it("is keyed by session id, without tabs that have no session", () => {
     const layout: ProjectLayout = {
       preset: "cols2",
       focusedPane: "b",
       tabPane: { "new-1": "a", "new-2": "b", "new-3": "b" },
-      activeTab: { a: "new-1", b: "new-2" }, commandPane: {}
+      activeTab: { a: "new-1", b: "new-3" }, commandPane: {}
     };
     const serialized = serializeLayout(layout, [tab("new-1", 0, "s1"), tab("new-2", 0, "s2"), tab("new-3")]);
     assert.deepEqual(JSON.parse(serialized), {
       preset: "cols2",
       focusedPane: "b",
       tabPane: { s1: "a", s2: "b" },
+      activeTab: { a: "s1" },
       commandPane: {}
     });
     storage.set("tet.layout.terminals.p.layout", serialized);
@@ -504,9 +505,31 @@ describe("what is persisted", () => {
       preset: "cols2",
       focusedPane: "b",
       tabPane: { s1: "a", s2: "b" },
-      activeTab: {},
+      activeTab: { a: "s1" },
       commandPane: {}
     });
+  });
+
+  it("keeps a pane on its restored active tab while the sessions are listed, and lets a stale one go", () => {
+    storage.set(
+      "tet.layout.terminals.a.layout",
+      JSON.stringify({ preset: "single", focusedPane: "a", tabPane: {}, activeTab: { a: "s1" }, commandPane: {} })
+    );
+    const restored = loadLayout("a");
+    const first = [tab("s2", 20, "s2")];
+    const waiting = normalizeLayout(restored, first, NONE);
+    assert.equal(waiting.activeTab.a, "s1", "not listed yet, not taken over by the one that is");
+    const both = [tab("s2", 20, "s2"), tab("s1", 10, "s1")];
+    assert.equal(normalizeLayout(waiting, both, first).activeTab.a, "s1");
+    assert.equal(collapseEmpty(waiting, first).activeTab.a, "s2", "never listed: the most recently used one");
+  });
+
+  it("drops a restored active tab of a pane the preset does not have, or not a session id", () => {
+    storage.set(
+      "tet.layout.terminals.b.layout",
+      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, activeTab: { a: 3, b: "s1", c: "s2", z: "s3" } })
+    );
+    assert.deepEqual(loadLayout("b").activeTab, { b: "s1" });
   });
 
   it("writes where each saved command lies, the open ones over the recorded ones", () => {

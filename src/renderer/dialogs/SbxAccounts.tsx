@@ -62,7 +62,7 @@ export function SbxAccounts({
             "Not signed in to Docker"
           ) : signedInUser !== undefined ? (
             <>
-              Signed in to Docker as <strong>{signedInUser}</strong>
+              Signed in (<strong>{signedInUser}</strong>)
             </>
           ) : (
             "Signed in to Docker"
