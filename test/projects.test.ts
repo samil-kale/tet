@@ -9,6 +9,7 @@ import { RepositoryManager } from "../src/main/git/repository";
 import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, renameWorktree, type ProjectDeps } from "../src/main/projects";
 import { SbxLocalStore } from "../src/main/sbx-local";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
+import { readCommands, readSbxConfig, writeCommands } from "../src/main/tet-json";
 import type { Project } from "../src/shared/types";
 import { eventually, forkGitInProcess, git, initBare, isolateGitConfig } from "./helpers";
 
@@ -157,6 +158,48 @@ describe("worktrees of two repositories with one folder name", () => {
     const [a, b] = added.map((result) => result.project!.path);
     assert.notEqual(path.dirname(a), path.dirname(b));
     assert.deepEqual([path.basename(a), path.basename(b)], ["feature", "feature"], "each named by its branch");
+  });
+});
+
+describe("a worktree's tet.json", () => {
+  it("is its main worktree's, read without the ports and never written from the worktree", async () => {
+    const repo = repositoryWithWorktrees(["inherits"]);
+    const worktree = repo.at("inherits");
+    const ports = [{ host: "3000", container: "3000" }];
+    fs.writeFileSync(
+      path.join(repo.main, "tet.json"),
+      JSON.stringify({ commands: ["npm test"], sbx: { enabled: true, hosts: ["example.com"], ports } })
+    );
+    fs.writeFileSync(path.join(worktree, "tet.json"), JSON.stringify({ commands: ["its own copy"] }));
+    assert.deepEqual(await readCommands(worktree), [{ command: "npm test" }]);
+    const config = await readSbxConfig(worktree);
+    assert.equal(config.enabled, true);
+    assert.deepEqual(config.hosts, ["example.com"]);
+    assert.deepEqual(config.ports, [], "a port reaches the main worktree's sandbox alone");
+    assert.deepEqual((await readSbxConfig(repo.main)).ports, ports);
+    await assert.rejects(writeCommands(worktree, []), /takes its settings from/);
+    assert.deepEqual(await readCommands(repo.main), [{ command: "npm test" }], "left as it was");
+  });
+
+  it("tells every open project of the repository when the main worktree's changes", async () => {
+    const repo = repositoryWithWorktrees(["told"]);
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-data-"));
+    const store = new ProjectStore(dataRoot);
+    const told: string[] = [];
+    const repositories = new RepositoryManager(
+      () => undefined,
+      () => undefined,
+      (projectId) => told.push(projectId),
+      () => undefined,
+      () => undefined,
+      new GitLoginStore(dataRoot)
+    );
+    managers.push(repositories);
+    const main = store.add(repo.main);
+    const worktree = store.add(repo.at("told"));
+    await Promise.all([repositories.open(main).refresh(), repositories.open(worktree).refresh()]);
+    fs.writeFileSync(path.join(repo.main, "tet.json"), JSON.stringify({ commands: ["npm test"] }));
+    await eventually("both told", () => told.includes(main.id) && told.includes(worktree.id));
   });
 });
 

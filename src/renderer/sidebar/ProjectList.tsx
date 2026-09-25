@@ -238,26 +238,33 @@ export const ProjectList = memo(function ProjectList({
           { label: "Delete worktree...", run: () => void askDeleteWorktree(ref, name, upstream, run, canClose) }
         ]
       : [];
+    // The repository's, offered on its main worktree's row only.
+    const repository: ContextMenuEntry[] = ref
+      ? []
+      : [
+          {
+            label: web ? `View on ${hostName(web)}` : "View in browser",
+            run: web ? () => void window.tet.shell.openUrl(web) : undefined
+          },
+          {
+            label: "Change remote URL...",
+            run: remoteName ? () => void askRemoteUrl(project, remoteName, remoteUrl) : undefined
+          },
+          SEPARATOR,
+          worktreeEntry("New worktree", worktreesSupported, defaultBranch ? () => void askNewWorktree(project.id, run, defaultBranch) : undefined)
+        ];
+    // A worktree takes its main worktree's (tet-json.ts's configRoot).
+    const sbx: ContextMenuEntry[] = project.mainPath ? [] : [{ label: "SBX Settings", run: () => onSbxSettings(project.id) }, SEPARATOR];
     return [
       { label: "Open in terminal", run: () => onOpenTerminal(project.id) },
       { label: revealLabel(), run: () => void window.tet.shell.openProject(project.id) },
       { label: "Copy repository path", run: () => void navigator.clipboard.writeText(project.path) },
       SEPARATOR,
-      {
-        label: web ? `View on ${hostName(web)}` : "View in browser",
-        run: web ? () => void window.tet.shell.openUrl(web) : undefined
-      },
-      {
-        label: "Change remote URL...",
-        run: remoteName ? () => void askRemoteUrl(project, remoteName, remoteUrl) : undefined
-      },
-      SEPARATOR,
-      worktreeEntry("New worktree", worktreesSupported, defaultBranch ? () => void askNewWorktree(project.id, run, defaultBranch) : undefined),
+      ...repository,
       ...worktree,
       SEPARATOR,
-      { label: "SBX Settings", run: () => onSbxSettings(project.id) },
-      SEPARATOR,
-      { label: "Close repository", run: () => onClose(project.id) }
+      ...sbx,
+      { label: ref ? "Close worktree" : "Close repository", run: () => onClose(project.id) }
     ];
   };
 
@@ -316,8 +323,16 @@ export const ProjectList = memo(function ProjectList({
                 rowButton("Uncommitted changes", () => onShowChanges(project.id), <ChangesIcon />)}
               {/* The switch is on, not that a tab got a sandbox: when sbx is unavailable a tab stays in
                   error rather than running on the host (resolveSbxRun). */}
-              {sandboxed[project.id] && rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)}
-              {rowButton("Close repository", () => onClose(project.id), <CloseIcon />)}
+              {sandboxed[project.id] &&
+                (project.mainPath ? (
+                  // A worktree's are its main worktree's, set there.
+                  <button className="icon-button" title="SBX enabled" disabled>
+                    <ShieldIcon />
+                  </button>
+                ) : (
+                  rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)
+                ))}
+              {rowButton(project.mainPath ? "Close worktree" : "Close repository", () => onClose(project.id), <CloseIcon />)}
             </div>
           );
         })}

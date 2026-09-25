@@ -14,6 +14,7 @@ import type {
 import { getAgent } from "./agents";
 import { readGovernance, readSbxProblems, saveSbxConfig } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
+import { assertOwnConfig, configRoot } from "./tet-json";
 
 /** The env names holding a value, per list. */
 interface ValueNames {
@@ -67,18 +68,26 @@ export async function readProjectSbxProblems(
  * refuses is left out too (saveSbxConfig), so tet.json holds what was applied, and only its rows
  * keep a value here. `problems` says what was left out; sbx's refusals are the error as well, as
  * nothing marked them before. Notices for the sandboxes it removed. `status`: the caller's, when it
- * read one.
+ * read one. Refused for a worktree, which takes its main worktree's (tet-json.ts's configRoot), before
+ * any sandbox changes; the open worktrees of the project's repository are saved along.
  */
 export async function saveProjectSbx(
-  { sbxLocal, notice }: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
+  {
+    sbxLocal,
+    store,
+    notice
+  }: { sbxLocal: SbxLocalStore; store: { list(): Project[] }; notice: (severity: NoticeSeverity, message: string) => void },
   project: Project,
   request: SbxProjectConfig,
   local: SbxLocalSave,
   status?: Pick<SbxStatus, "organization">
 ): Promise<SbxSaveResult> {
+  const worktrees = store.list().filter((other) => other.id !== project.id && configRoot(other.path) === project.path);
+  const nameOf = (projectId: string): string => worktrees.find((other) => other.id === projectId)?.name ?? project.name;
   const stored = sbxLocal.encrypted(project.id);
   const previous = sbxLocal.knowledge(project.id);
   try {
+    assertOwnConfig(project.path);
     sbxLocal.update(project.id, local);
     const secretValues = sbxLocal.values(project.id, "secrets");
     const knowledge = sbxLocal.knowledge(project.id);
@@ -89,8 +98,8 @@ export async function saveProjectSbx(
       : {};
     const wanted = withoutProblems(request, knowledge, problems);
     const { removed, orphans, refused, failures, config, knowledge: applied } = await saveSbxConfig(
-      project.path,
-      project.id,
+      project,
+      worktrees,
       wanted.config,
       { previous, current: wanted.knowledge },
       secretValues,
@@ -98,14 +107,14 @@ export async function saveProjectSbx(
       organization
     );
     sbxLocal.update(project.id, { secrets: keptValues(config.secrets), variables: keptValues(config.variables), knowledge: applied });
-    for (const agentId of removed) {
+    for (const { projectId, agentId } of removed) {
       const message = request.enabled
-        ? `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed and is rebuilt when its next tab starts.`
-        : `The ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`;
+        ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(projectId)} was removed and is rebuilt when its next tab starts.`
+        : `The ${getAgent(agentId).displayName} sandbox of ${nameOf(projectId)} was removed.`;
       notice("info", message);
     }
-    for (const agentId of orphans) {
-      notice("info", `An earlier ${getAgent(agentId).displayName} sandbox of ${project.name} was removed.`);
+    for (const { projectId, agentId } of orphans) {
+      notice("info", `An earlier ${getAgent(agentId).displayName} sandbox of ${nameOf(projectId)} was removed.`);
     }
     const left: SbxProblems = { ...problems };
     for (const [option, rows] of Object.entries(refused) as [keyof SbxProblems, Record<string, string>][]) {

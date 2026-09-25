@@ -179,15 +179,17 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "worktree-add <branch> [--project <id>]",
     summary:
       "Create a git worktree of the project under ~/.tet/worktrees with a new branch <branch> at the default branch, and open it as a project.",
-    positionals: ["branch"]
+    positionals: ["branch"],
+    sandbox: "ownProject"
   },
   {
     verb: "worktree-delete",
     group: "TET itself",
-    usage: "worktree-delete <project-id> [--force]",
+    usage: "worktree-delete <branch> [--project <id>] [--force]",
     summary:
-      "Close a worktree's project and delete its folder and its branch. --force also deletes uncommitted changes. Never the caller's own project.",
-    positionals: ["projectId"]
+      "Close the project's worktree of branch <branch> and delete its folder and the branch. --force also deletes uncommitted changes. Never the caller's own worktree.",
+    positionals: ["branch"],
+    sandbox: "ownProject"
   },
   {
     verb: "repo-state",

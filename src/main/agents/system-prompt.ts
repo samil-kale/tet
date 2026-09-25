@@ -19,6 +19,10 @@ const ENVIRONMENT_SENTENCE =
   " When an environment variable you need, a token or password, is not set, never ask for its value in the chat: " +
   "offer the user to type it into TET or to set it themselves, as tet-ctl help describes.";
 
+/** A bare git worktree lands outside TET's worktrees and never opens as a project. */
+const WORKTREE_SENTENCE =
+  " To create or delete a git worktree, use tet-ctl rather than git, so TET places it and opens it as a project.";
+
 export function systemPrompt(sandboxed: boolean): string {
-  return sandboxed ? TET_SYSTEM_PROMPT : TET_SYSTEM_PROMPT + ENVIRONMENT_SENTENCE;
+  return TET_SYSTEM_PROMPT + WORKTREE_SENTENCE + (sandboxed ? "" : ENVIRONMENT_SENTENCE);
 }

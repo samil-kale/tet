@@ -19,7 +19,7 @@ import type {
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
-import { readSbxConfig } from "../tet-json";
+import { configRoot, readSbxConfig } from "../tet-json";
 import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
@@ -268,11 +268,14 @@ export class ProjectSessionManager {
   private inFront: ReadonlySet<string> = new Set();
 
   constructor(
-    private readonly project: Project,
+    readonly project: Project,
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
-    private readonly callbacks: SessionManagerCallbacks
+    private readonly callbacks: SessionManagerCallbacks,
+    /** The project whose sbx values (sbx-local.ts) its sandboxes take: a worktree's main worktree's
+     *  while that is open, as it takes its tet.json (tet-json.ts's configRoot); else its own. */
+    private readonly sbxValuesId: () => string = () => project.id
   ) {}
 
   private agentDirOf(agentId: AgentId): string {
@@ -874,7 +877,7 @@ export class ProjectSessionManager {
       projectId: this.project.id,
       projectPath: this.project.path,
       config,
-      knowledge: this.sbxLocal.knowledge(this.project.id),
+      knowledge: this.sbxLocal.knowledge(this.sbxValuesId()),
       sandboxes: ready.sandboxes,
       organization: ready.organization,
       rules: ready.rules,
@@ -887,8 +890,8 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
-      secretValues: this.sbxLocal.values(this.project.id, "secrets"),
-      variableValues: this.sbxLocal.values(this.project.id, "variables"),
+      secretValues: this.sbxLocal.values(this.sbxValuesId(), "secrets"),
+      variableValues: this.sbxLocal.values(this.sbxValuesId(), "variables"),
       onData: (data) => this.reportOutput(tab, data)
     });
     // tet.json as it stands was not all applied: one notice per option and reason (sbxProblemNotices).
@@ -1530,7 +1533,10 @@ export class SessionManagerRegistry {
     if (existing) {
       return existing;
     }
-    const manager = new ProjectSessionManager(project, this.storageRoot, this.settings, this.sbxLocal, this.callbacks);
+    const manager = new ProjectSessionManager(project, this.storageRoot, this.settings, this.sbxLocal, this.callbacks, () => {
+      const root = configRoot(project.path);
+      return [...this.managers.values()].find((other) => other.project.path === root)?.project.id ?? project.id;
+    });
     manager.setInFront(project.id === this.inFront.projectId ? this.inFront.tabIds : []);
     this.managers.set(project.id, manager);
     manager.bootstrap().catch((error: unknown) => {

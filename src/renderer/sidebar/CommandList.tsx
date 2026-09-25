@@ -125,6 +125,9 @@ interface CommandListProps {
   projectId: string | null;
   /** Set by the sash above the list. */
   height: number;
+  /** False for a worktree, which runs its main worktree's commands but never changes them
+   *  (tet-json.ts's configRoot). */
+  editable: boolean;
   /** Brings a started command's tab to front in the pane the command last ran in — hence the
       command line. */
   onOpenTab: (projectId: string, tabId: string, command?: string) => void;
@@ -132,7 +135,7 @@ interface CommandListProps {
 
 /** A project's saved commands, from tet.json in the repository root, so they travel with the
  *  project. Running one opens a terminal tab. One list serves every project: the active one's. */
-export const CommandList = memo(function CommandList({ projectId, height, onOpenTab }: CommandListProps) {
+export const CommandList = memo(function CommandList({ projectId, height, editable, onOpenTab }: CommandListProps) {
   const [commands, setCommands] = useState<ProjectCommand[]>([]);
   const menu = useContextMenu<ProjectCommand>();
   /** The current list, for callbacks created before its last change. */
@@ -278,8 +281,12 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
 
   const menuEntries = (command: ProjectCommand): ContextMenuEntry[] => [
     { label: "Run", run: () => run(command) },
-    { label: "Edit...", run: () => void askEdit(command) },
-    { label: "Delete...", run: () => void askRemove(command) }
+    ...(editable
+      ? [
+          { label: "Edit...", run: () => void askEdit(command) },
+          { label: "Delete...", run: () => void askRemove(command) }
+        ]
+      : [])
   ];
 
   return (
@@ -288,19 +295,21 @@ export const CommandList = memo(function CommandList({ projectId, height, onOpen
       count={commands.length}
       height={height}
       actions={
-        <button className="icon-button" title="New command" disabled={!projectId} onClick={() => void askAdd()}>
-          <PlusIcon />
-        </button>
+        editable && (
+          <button className="icon-button" title="New command" disabled={!projectId} onClick={() => void askAdd()}>
+            <PlusIcon />
+          </button>
+        )
       }
     >
-      <div className="command-list" {...listProps}>
+      <div className="command-list" {...(editable ? listProps : {})}>
         {commands.map((command, index) => (
           <div
             // The position, as in the hook's payload above.
             key={index}
             className={["command-item", ...rowClasses(index)].join(" ")}
             title={describe(command)}
-            {...rowProps(index)}
+            {...(editable ? rowProps(index) : {})}
             onContextMenu={(event) => menu.open(event, command)}
           >
             {/* Its name if any; the line is in the tooltip. */}

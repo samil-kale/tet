@@ -388,24 +388,29 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: added.project };
     },
 
-    // Not the caller's own: it would end the caller's tab before the folder can go.
+    // Named by its branch within the project's repository, as worktree-add names it, so a worktree
+    // of another repository cannot be reached. Not the caller's own: it would end the caller's tab
+    // before the folder can go.
     "worktree-delete": async (args, caller) => {
-      const id = text(args, "projectId", "project id");
-      const found = projectById(id);
-      if (!found.mainPath) {
-        throw new ControlError("bad_args", `project ${id} is not a worktree`);
+      const found = project(args, caller);
+      const branch = text(args, "branch", "branch");
+      const { worktrees } = repository(found).getState();
+      const main = worktrees.find((entry) => entry.main);
+      const worktree = worktrees.find((entry) => !entry.main && entry.branch === branch);
+      if (!main || !worktree) {
+        throw new ControlError("not_found", `${found.name} has no worktree of branch ${branch}`);
       }
-      if (id === caller.projectId) {
+      if (worktree.path === store.get(caller.projectId ?? "")?.path) {
         throw new ControlError("bad_args", "a worktree cannot delete itself: run this from another project's tab");
       }
-      const deleted = await deps.deleteWorktree({ path: found.path, mainPath: found.mainPath }, args.force === true);
+      const deleted = await deps.deleteWorktree({ path: worktree.path, mainPath: main.path }, args.force === true);
       if (deleted.needsConfirmation === "uncommitted") {
-        throw new ControlError("bad_args", `${found.name} has uncommitted changes: pass --force to delete them too`);
+        throw new ControlError("bad_args", `${branch} has uncommitted changes: pass --force to delete them too`);
       }
       if (!deleted.ok) {
         throw new ControlError("bad_args", deleted.error ?? "could not delete the worktree");
       }
-      return { result: { deleted: id } };
+      return { result: { deleted: branch } };
     },
 
     "env-request": async (args, caller, _at, gone) => {

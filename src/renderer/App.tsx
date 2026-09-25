@@ -305,7 +305,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
   // opened where no agent is installed can only run sandboxed, so its sbx settings open at once,
   // locked (SbxSettingsDialog); not one reopened under a new id (a renamed worktree: removed and
-  // added at once), whose settings came along with its folder.
+  // added at once), whose settings came along with its folder, nor a worktree, which has none.
   useEffect(
     () =>
       window.tet.projects.onChanged(({ projects: list, added, removed }) => {
@@ -316,7 +316,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           forgetProject(removed);
         }
         const opened = added !== undefined && removed === undefined ? list.find((project) => project.id === added) : undefined;
-        if (opened) {
+        if (opened && !opened.mainPath) {
           void window.tet.startup.anyAgentInstalled().then((installed) => {
             if (!installed) {
               setSbxSettingsProject(opened);
@@ -785,7 +785,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             reverse
             onResize={setCommandsHeight}
           />
-          <CommandList projectId={activeProjectId} height={commandsHeight} onOpenTab={showTab} />
+          <CommandList projectId={activeProjectId} height={commandsHeight} editable={!activeProject?.mainPath} onOpenTab={showTab} />
         </div>
         <Sash
           orientation="vertical"
@@ -882,7 +882,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 
-      {settingsOpen && <SettingsDialog activeProject={activeProject} onClose={closeSettings} />}
+      {settingsOpen && <SettingsDialog activeProject={activeProject?.mainPath ? null : activeProject} onClose={closeSettings} />}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
       {envRequest && (
         <EnvDialog

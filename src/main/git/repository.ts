@@ -21,7 +21,7 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
+import { addExclude, addFolder, configRoot, isWorktree, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
 import { git } from "./git-client";
@@ -1017,7 +1017,7 @@ export class RepositoryManager {
       project,
       (state) => this.onState(project.id, state),
       this.onNotice,
-      () => this.onCommandsChanged(project.id),
+      () => this.configChanged(project),
       () => this.onFilesChanged(project.id),
       (filePath) => this.onFileChanged(project.id, filePath),
       this.logins
@@ -1029,6 +1029,19 @@ export class RepositoryManager {
 
   get(projectId: string): Repository | undefined {
     return this.repositories.get(projectId);
+  }
+
+  /** tet.json changed in the project's folder: a worktree's own copy counts for nothing, its main
+   *  worktree's for every open project of the repository (tet-json.ts's configRoot). */
+  private configChanged(project: Project): void {
+    if (isWorktree(project.path)) {
+      return;
+    }
+    for (const [projectId, repository] of this.repositories) {
+      if (configRoot(repository.project.path) === project.path) {
+        this.onCommandsChanged(projectId);
+      }
+    }
   }
 
   /** Resolves once its git commands have ended (Repository.dispose); it is gone at once. */

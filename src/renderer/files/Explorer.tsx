@@ -314,7 +314,8 @@ export const Explorer = memo(function Explorer({
           ]
         : [];
     const viewEntries: ContextMenuEntry[] = [];
-    if (node) {
+    // A worktree shows its main worktree's view and never changes it (tet-json.ts's configRoot).
+    if (node && !project.mainPath) {
       viewEntries.push(SEPARATOR);
       if (isRoot) {
         viewEntries.push({

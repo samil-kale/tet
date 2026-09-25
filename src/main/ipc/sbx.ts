@@ -95,7 +95,7 @@ export function registerSbxIpc({
     "sbx:save-config",
     async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult> => {
       const project = store.get(projectId);
-      return project ? saveProjectSbx({ sbxLocal, notice }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
+      return project ? saveProjectSbx({ sbxLocal, store, notice }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
     }
   );
 }

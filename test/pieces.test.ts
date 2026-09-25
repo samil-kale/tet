@@ -435,7 +435,7 @@ if (args[0] === "ls") {
     const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxConfig(projectPath, config(setup.before.map(port)));
     const saved = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveSbxConfig({ id: projectId, path: projectPath }, [], config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     return { ...saved, projectPath };
   }
@@ -450,6 +450,46 @@ if (args[0] === "ls") {
       `ports ${name} --publish 3000:3000`
     ]);
     assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], config: config([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
+  });
+
+  it("brings an open worktree's sandbox in line along with the project's, all but the ports", async () => {
+    const worktree = { id: "a worktree", path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
+    const worktreeName = sandboxName(worktree.id, "claude");
+    const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
+    const { result, calls } = await withSbx(dir, () =>
+      saveSbxConfig(
+        { id: projectId, path: projectPath },
+        [worktree],
+        { ...config([port(3000)]), hosts: ["example.com"] },
+        NO_KNOWLEDGE,
+        new Map(),
+        new Set(),
+        undefined
+      )
+    );
+    assert.deepEqual(result.removed, []);
+    assert.deepEqual(
+      calls.filter((call) => call.startsWith("ports ")),
+      [`ports ${name} --json`, `ports ${name} --publish 3000:3000`],
+      "the project's sandbox alone forwards the port"
+    );
+    for (const sandbox of [name, worktreeName]) {
+      assert.ok(calls.includes(`policy allow network --sandbox ${sandbox} example.com`), `the hosts of ${sandbox}`);
+    }
+  });
+
+  it("removes an open worktree's sandbox along with the project's when sandboxing goes off", async () => {
+    const worktree = { id: "a worktree", path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
+    const worktreeName = sandboxName(worktree.id, "claude");
+    const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
+    const { result, calls } = await withSbx(dir, () =>
+      saveSbxConfig({ id: projectId, path: projectPath }, [worktree], EMPTY_SBX_CONFIG, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+    );
+    assert.deepEqual(result.removed, [
+      { projectId, agentId: "claude" },
+      { projectId: worktree.id, agentId: "claude" }
+    ]);
+    assert.ok(calls.includes(`rm ${worktreeName} --force`));
   });
 
   it("unpublishes what the sandbox has and tet.json dropped, and leaves a port in both alone", async () => {
@@ -481,7 +521,7 @@ if (args[0] === "ls") {
     const { dir, projectPath } = fakeSbx({ published: [], mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }] });
     await writeSbxConfig(projectPath, { ...config([]), paths: [held, unheld] });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveSbxConfig({ id: projectId, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
     assert.deepEqual([result.refused, result.config.paths], [{}, []]);
@@ -519,7 +559,7 @@ if (args[0] === "ls") {
       ["ADDED", "v-added"]
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
+      saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -559,9 +599,9 @@ if (args[0] === "ls") {
       ]
     });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveSbxConfig({ id: projectId, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
-    assert.deepEqual(result.orphans, ["codex"]);
+    assert.deepEqual(result.orphans, [{ projectId, agentId: "codex" }]);
     assert.deepEqual(
       calls.filter((call) => call.startsWith("rm ")),
       ["rm tet-codex-aaaaaaaaaaaa --force"]
@@ -572,7 +612,7 @@ if (args[0] === "ls") {
     const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
     const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(projectPath, projectId, { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
+      saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
     );
     assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
     assert.deepEqual(result.refused, { secrets: { TOKEN: "sbx did not list the sandbox's secrets" } });

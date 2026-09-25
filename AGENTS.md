@@ -39,7 +39,9 @@ project's terminals.
   `agents/`).
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
   the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing or malformed
-  means nothing configured.
+  means nothing configured. A linked worktree has none of its own: it takes its main worktree's
+  (`configRoot`) and its sbx values, forwards none of the ports, and changes nothing of it — its
+  row, Explorer and COMMANDS offer no settings, `tet-ctl` refuses them.
 
 ## Never assume the agents behave alike
 

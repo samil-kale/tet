@@ -262,7 +262,13 @@ ${stderr.slice(uncaught)}`);
       async () => ((await ctl("repo-state", "--project", worktree.id)).result as RepositoryState).head === "from/ctl",
       STARTUP_MS
     );
-    const deleted = await ctl("worktree-delete", worktree.id);
+    await eventually(
+      "the worktree read by its repository",
+      async () =>
+        ((await ctl("repo-state", "--project", main.id)).result as RepositoryState).worktrees.some((entry) => entry.branch === "from/ctl"),
+      STARTUP_MS
+    );
+    const deleted = await ctl("worktree-delete", "from/ctl", "--project", main.id);
     assert.equal(deleted.status, 0, deleted.stderr);
     assert.ok(!fs.existsSync(worktree.path));
     assert.ok(!((await ctl("projects-list")).result as Project[]).some((project) => project.id === worktree.id));

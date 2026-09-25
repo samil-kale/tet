@@ -1502,6 +1502,18 @@ async function applyProjectPorts(names: string[], ports: SbxPort[]): Promise<Rec
   return refused;
 }
 
+/** A project whose sandboxes a Save brings in line (saveSbxConfig). */
+export interface SbxSaveTarget {
+  id: string;
+  path: string;
+}
+
+/** A sandbox a Save removed, by the project it was of. */
+export interface SbxRemoved {
+  projectId: string;
+  agentId: SbxAgentId;
+}
+
 /**
  * The dialog's Save of the rows readSbxProblems passed (saveProjectSbx): every sandbox goes if
  * sandboxing is off, one with another workspace too (see ensureSandboxExists; rebuilt at its next
@@ -1513,55 +1525,63 @@ async function applyProjectPorts(names: string[], ports: SbxPort[]): Promise<Rec
  * unpublish stays, as the sandbox still has it: tet.json holds what was applied. Grants are
  * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
  * is `refused` too, its row and knowledge kind kept as they were. Ports need the sandbox running.
- * A sandbox that cannot be removed rejects, tet.json left as it was. Returns the agents
- * whose sandboxes were removed, for the caller to say so: a running session of theirs just lost its
- * sandbox; those of the earlier ids; what sbx refused; what could not be taken back; and what
- * tet.json and the knowledge now hold.
+ * A sandbox that cannot be removed rejects, tet.json left as it was. The open `worktrees` of the
+ * project's repository take its tet.json (tet-json.ts's configRoot), so their sandboxes are brought
+ * in line too, all but the ports, which only the project's own forward. Returns the sandboxes
+ * removed, for the caller to say so: a running session of theirs just lost its sandbox; those of
+ * the earlier ids; what sbx refused; what could not be taken back; and what tet.json and the
+ * knowledge now hold.
  */
 export async function saveSbxConfig(
-  projectPath: string,
-  projectId: string,
+  project: SbxSaveTarget,
+  worktrees: readonly SbxSaveTarget[],
   request: SbxProjectConfig,
   knowledge: { previous: SbxKnowledgeConfig; current: SbxKnowledgeConfig },
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>,
   organization: string | undefined
 ): Promise<{
-  removed: SbxAgentId[];
-  orphans: SbxAgentId[];
+  removed: SbxRemoved[];
+  orphans: SbxRemoved[];
   refused: SbxProblems;
   failures: string[];
   config: SbxProjectConfig;
   knowledge: SbxKnowledgeConfig;
 }> {
-  const previous = await readSbxConfig(projectPath);
+  const previous = await readSbxConfig(project.path);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   const sandboxes = (await listSandboxes()) ?? new Map();
-  const removed: SbxAgentId[] = [];
-  const orphans: SbxAgentId[] = [];
+  const targets = [project, ...worktrees];
+  const removed: SbxRemoved[] = [];
+  const orphans: SbxRemoved[] = [];
   for (const [name, workspaces] of sandboxes) {
-    const agentId = orphanAgent(name, workspaces, projectId, projectPath);
-    if (agentId === undefined) {
-      continue;
+    for (const target of targets) {
+      const agentId = orphanAgent(name, workspaces, target.id, target.path);
+      if (agentId === undefined) {
+        continue;
+      }
+      if (!(await removeSandbox(name))) {
+        throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
+      }
+      orphans.push({ projectId: target.id, agentId });
+      break;
     }
-    if (!(await removeSandbox(name))) {
-      throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
-    }
-    orphans.push(agentId);
   }
-  const kept: { agentId: SbxAgentId; name: string }[] = [];
-  for (const agentId of SBX_AGENT_IDS) {
-    const name = sandboxName(projectId, agentId);
-    const existing = sandboxes.get(name);
-    if (existing === undefined) {
-      continue;
-    }
-    if (config.enabled && sameSet(existing, [projectPath])) {
-      kept.push({ agentId, name });
-    } else if (await removeSandbox(name)) {
-      removed.push(agentId);
-    } else {
-      throw new Error(`The ${getAgent(agentId).displayName} sandbox could not be removed.`);
+  const kept: { agentId: SbxAgentId; name: string; projectId: string; ports: boolean }[] = [];
+  for (const target of targets) {
+    for (const agentId of SBX_AGENT_IDS) {
+      const name = sandboxName(target.id, agentId);
+      const existing = sandboxes.get(name);
+      if (existing === undefined) {
+        continue;
+      }
+      if (config.enabled && sameSet(existing, [target.path])) {
+        kept.push({ agentId, name, projectId: target.id, ports: target === project });
+      } else if (await removeSandbox(name)) {
+        removed.push({ projectId: target.id, agentId });
+      } else {
+        throw new Error(`The ${getAgent(agentId).displayName} sandbox could not be removed.`);
+      }
     }
   }
   // Brings every kept sandbox to `target`. The listings answer for every sandbox at once, so they
@@ -1580,9 +1600,9 @@ export async function saveSbxConfig(
     // runs: the rows may match tet.json and still be unpublished (ports written before the sandbox
     // existed).
     if (target.ports.length > 0 || previous.ports.length > 0) {
-      addProblems(refused, "ports", await applyProjectPorts(kept.map(({ name }) => name), target.ports));
+      addProblems(refused, "ports", await applyProjectPorts(kept.filter(({ ports }) => ports).map(({ name }) => name), target.ports));
     }
-    for (const { name } of kept) {
+    for (const { name, projectId } of kept) {
       if (!organization) {
         const live = liveHosts.get(name) ?? [];
         await revokeStaleHosts(name, live, target.hosts);
@@ -1644,6 +1664,6 @@ export async function saveSbxConfig(
   for (const [option, rows] of Object.entries(unrevoked) as [SbxOption, Record<string, string>][]) {
     addProblems(refused, option, rows);
   }
-  await writeSbxConfig(projectPath, applied);
+  await writeSbxConfig(project.path, applied);
   return { removed, orphans, refused, failures, config: applied, knowledge: appliedKnowledge };
 }

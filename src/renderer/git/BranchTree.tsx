@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
-import { refName, syncRemote, upstreamName, worktreeBase } from "../../shared/types";
+import { refName, syncRemote, upstreamName } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -20,7 +20,7 @@ import {
   TREE_CHEVRON,
   WorktreeIcon
 } from "../ui/icons";
-import { askDeleteWorktree, askNewWorktree, askRenameWorktree, worktreeEntry } from "./worktree-questions";
+import { askDeleteWorktree, askRenameWorktree, worktreeEntry } from "./worktree-questions";
 
 /** One git command at a time per project, labelled while it runs (`GitRun`). The tree asks its
  *  questions itself, knowing which remote holds a branch and where HEAD is. */
@@ -130,9 +130,6 @@ export const BranchTree = memo(function BranchTree({
   const { remote } = syncRemote(state);
   /** What "Update from" merges, prefixed by its remote where it is a remote branch. */
   const defaultRef = state.defaultBranch && refName(state.defaultBranch);
-  /** Where a new worktree starts (worktreeBase), prefixed as `defaultRef`. */
-  const worktreeStart = worktreeBase(state);
-  const newWorktreeBase = worktreeStart && refName(worktreeStart);
 
   /** Where the local branch a checkout would switch to is checked out in another worktree. */
   const worktreeOf = (target: CheckoutTarget): string | undefined =>
@@ -421,11 +418,6 @@ export const BranchTree = memo(function BranchTree({
                 : undefined
           },
       SEPARATOR,
-      worktreeEntry(
-        "New worktree",
-        worktreesSupported,
-        newWorktreeBase ? () => void askNewWorktree(projectId, branch, newWorktreeBase) : undefined
-      ),
       worktreeEntry("Rename worktree", worktreesSupported, linked ? () => void askRenameWorktree(linked, name, branch, canClose) : undefined),
       {
         label: "Delete worktree...",
