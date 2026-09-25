@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { errorMessage } from "../../shared/errors";
 import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../../shared/types";
 import type { Project, SbxBlocker, SbxKnowledgeSource, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
 import {
@@ -15,9 +16,9 @@ import {
 } from "./SbxSettingsFields";
 import { SbxAccounts, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
-import { confirm } from "../ui/Dialog";
+import { confirm, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
-import { Checkbox } from "../ui/Field";
+import { Checkbox, DialogError } from "../ui/Field";
 import { LandmarkIcon } from "../ui/icons";
 import { patched } from "../ui/RowSection";
 import { useEscape } from "../ui/use-escape";
@@ -171,7 +172,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       setPhase({ kind: "ready", organization: status.organization });
     } catch (error) {
       // The phase is the busy bar: a call that threw must not leave it running.
-      setPhase({ kind: "failed", message: `SBX failed: ${error instanceof Error ? error.message : String(error)}` });
+      setPhase({ kind: "failed", message: `SBX failed: ${errorMessage(error)}` });
       throw error;
     }
   };
@@ -195,7 +196,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       return undefined;
     }
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
-    return result.ok ? undefined : (result.error ?? "Could not save the SBX configuration");
+    return refusal(result, "Could not save the SBX configuration");
   }, close);
   const editState: typeof setState = (update) => {
     setState(update);
@@ -321,12 +322,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             </button>
           )}
           {showsAccount && (
+            // Blocked by class: its tooltip is the reason (.button.disabled).
             <button
               type="button"
-              className="button"
-              disabled={busy || blocked !== undefined}
+              className={blocked === undefined ? "button" : "button disabled"}
+              disabled={busy}
               title={blocked}
-              onClick={() => void save()}
+              onClick={() => blocked === undefined && void save()}
             >
               Save
             </button>
@@ -339,7 +341,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         <p className="dialog-detail">Docker Sandboxes (SBX) is not installed. Install it, then check again.</p>
       )}
       {phase.kind === "initializing-policy" && <p className="dialog-detail">Setting up SBX's network policy…</p>}
-      {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
+      {/* In place of the settings that could not be loaded (DialogError). */}
+      {phase.kind === "failed" && <DialogError message={phase.message} />}
       {phase.kind === "blocked" && (
         <>
           <p className="dialog-message">

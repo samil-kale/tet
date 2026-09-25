@@ -1,3 +1,5 @@
+import type { GitActionResult } from "./types";
+
 /**
  * What a caught value says, for anything the user is shown — a notice, a dialog's error, a
  * `GitActionResult`. `String(error)` on an `Error` prefixes it with the class name ("Error: the
@@ -9,4 +11,9 @@
  */
 export function errorMessage(error: unknown): string {
   return (error instanceof Error && error.message) || String(error);
+}
+
+/** A caught value as a failed action (Repository.runAction, git.ts's own file writes). */
+export function failure(error: unknown): GitActionResult {
+  return { ok: false, error: errorMessage(error) };
 }

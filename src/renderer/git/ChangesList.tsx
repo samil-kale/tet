@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { syncRemote } from "../../shared/types";
 import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import type { FileAct, FileAsk } from "./run-action";
+import { baseName } from "../files/explorer-tree";
 import { openEntries, pathEntries } from "../files/file-menu";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirm, filled, prompt } from "../ui/Dialog";
@@ -120,7 +121,9 @@ export async function askCommit(
           error={error}
           onSuggesting={hold}
         />
-        {pushLabel && <Checkbox label={pushLabel} checked={value.push} onChange={(push) => onChange({ ...value, push })} />}
+        {pushLabel && (
+          <Checkbox label={pushLabel} checked={value.push} disabled={busy} onChange={(push) => onChange({ ...value, push })} />
+        )}
       </>
     ),
     // What git refused — an empty commit, a hook's veto — at the message it was typed for. Not a
@@ -142,7 +145,7 @@ export async function askCommit(
 }
 
 /** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */
-export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesListProps) {
+export const ChangesList = memo(function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
   /** Ctrl- and shift-click extend it, so one action can cover several files. */
@@ -205,7 +208,9 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
       ? selected.filter((path) => visible.some((entry) => entry.path === path))
       : [change.path];
     const one = paths.length === 1;
-    const extension = /\.[^./]+$/.exec(change.path)?.[0];
+    // path.extname's rule, as git.ts's ignorePath applies it: a dotfile has none.
+    const name = baseName(change.path);
+    const extension = name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : undefined;
     const discard = (targets: string[]) => () => void confirmDiscard(project.id, targets, act);
     const ignore = (scope: "file" | "extension") => () =>
       act(() => window.tet.repository.ignore(project.id, change.path, scope));
@@ -243,7 +248,7 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
         {visible.map((change) => (
           <button
             key={change.path}
-            className={`change-item${selected.includes(change.path) ? " selected" : ""}`}
+            className={`tree-item change-item${selected.includes(change.path) ? " selected" : ""}`}
             onClick={(event) => select(event, change.path)}
             onDoubleClick={() => onOpenDiff(change.path)}
             onContextMenu={(event) => {
@@ -256,7 +261,7 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
             title={`${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`}
           >
             <span className={`change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>
-            <span className="change-path">{change.path}</span>
+            <span className="tree-label">{change.path}</span>
           </button>
         ))}
         {changes.length === 0 && <div className="placeholder">No local changes.</div>}
@@ -265,4 +270,4 @@ export function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesLis
       {menu.render(menuEntries)}
     </div>
   );
-}
+});

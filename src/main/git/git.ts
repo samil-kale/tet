@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import { errorMessage } from "../../shared/errors";
+import { errorMessage, failure } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
 import { isImage, toDataUrl } from "./image-type";
@@ -549,7 +549,7 @@ async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeout
       .trim();
     return { ok: false, error: message };
   } catch (error) {
-    return { ok: false, error: errorMessage(error) };
+    return failure(error);
   }
 }
 
@@ -1005,7 +1005,7 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
   if (target.remote === undefined || localBranches.includes(target.name)) {
     return run(cwd, ["switch", target.name]);
   }
-  const tracked = await run(cwd, ["switch", "--track", `${target.remote}/${target.name}`]);
+  const tracked = await run(cwd, ["switch", "--track", refName(target)]);
   // The local branch may have appeared since the last refresh.
   return tracked.ok ? tracked : run(cwd, ["switch", target.name]);
 }
@@ -1133,7 +1133,7 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
     await fs.appendFile(file, `${separator}${rule}${newline}`, "utf8");
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: errorMessage(error) };
+    return failure(error);
   }
 }
 

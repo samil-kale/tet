@@ -2,8 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
-import { errorMessage } from "../../shared/errors";
-import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
+import { errorMessage, failure } from "../../shared/errors";
+import { EMPTY_REPOSITORY_STATE, defaultRemote, headRemote } from "../../shared/types";
 import type {
   CheckoutTarget,
   ExplorerListing,
@@ -76,11 +76,6 @@ const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" 
  */
 function attempt(action: () => Promise<unknown>): Promise<GitActionResult> {
   return action().then(() => ({ ok: true }), failure);
-}
-
-/** A rejected action as its failure (Repository.runAction). */
-function failure(error: unknown): GitActionResult {
-  return { ok: false, error: errorMessage(error) };
 }
 
 /** Whether two paths name one entry, e.g. differing in case on a case-insensitive filesystem. By
@@ -252,6 +247,9 @@ export class Repository {
   /** Refreshes now — *after* any refresh underway, which may have read a tree still changing: a
    *  commit's `add --all` wakes the watcher while `commit` runs, reporting the staged state. */
   async refresh(): Promise<RepositoryState> {
+    // Until the first read is in, `isGit` says nothing yet and a refresh would answer the empty
+    // state. A failed start leaves `isGit` as it was, which the refresh below answers by.
+    await this.starting?.catch(() => undefined);
     while (this.inflight) {
       await this.inflight;
     }
@@ -406,7 +404,7 @@ export class Repository {
   push(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(() => {
       const upstream = this.state.branchUpstreams[this.state.head];
-      const remote = upstream?.remote ?? this.remote;
+      const remote = headRemote(this.state);
       if (!remote) {
         return Promise.resolve({ ok: false, error: "This repository has no remote to push to" });
       }
@@ -419,15 +417,14 @@ export class Repository {
     });
   }
 
-  /** The remote every command uses: the first, which `emit` makes "origin" where there is one. */
+  /** shared/types.ts's `defaultRemote`, as the git pane names it. */
   private get remote(): string | undefined {
-    return this.state.remotes[0]?.name;
+    return defaultRemote(this.state);
   }
 
-  /** The remote a fetch, pull or push of the checked-out branch reaches: its upstream's, else
-   *  `remote`. */
+  /** shared/types.ts's `headRemote`, as the git pane names it. */
   private get headRemote(): string | undefined {
-    return this.state.branchUpstreams[this.state.head]?.remote ?? this.remote;
+    return headRemote(this.state);
   }
 
   /** A command reaching `remote`, with the login typed for it or the one kept for its url

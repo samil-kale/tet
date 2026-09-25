@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
+import { isRecord } from "../json-file";
 import type { AgentSessionInfo } from "./agent";
 
 /**
@@ -113,7 +114,7 @@ export function nonEmptyString(value: unknown): string | undefined {
 export function parseLine(line: string): Record<string, unknown> | undefined {
   try {
     const parsed: unknown = JSON.parse(line);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : undefined;
+    return isRecord(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }

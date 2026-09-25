@@ -1,5 +1,5 @@
 import type { AgentId } from "../../shared/types";
-import { LARGER, Svg, fitIcon } from "./icons";
+import { FillSvg, LARGER, Svg } from "./icons";
 
 /**
  * Which icon belongs to which agent — the one agent-specific thing outside `src/main/agents/`: an
@@ -17,34 +17,21 @@ interface AgentIconProps {
  */
 function ClaudeIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(22.15 / LARGER, 12, 12.14 - 1.85, 24)}
-      aria-hidden="true"
-    >
+    <FillSvg className={className} extent={22.15 / LARGER} cx={12} cy={12.14 - 1.85} grid={24}>
       <path
         fill="currentColor"
         fillRule="evenodd"
         clipRule="evenodd"
         d="M 20.998,9.8869806 H 24 V 13.0718 h -3 v 4.563866 h -1.487001 v 3.506747 h -1.513 v -3.506747 h -1.486998 v 3.506747 H 15 V 17.635666 H 9.0000006 v 3.506747 H 7.488 V 17.635666 H 6 v 3.506747 H 4.487 V 17.635666 H 2.9999999 V 13.070599 H 0 V 9.8881806 H 2.9999999 V 3.1344694 H 20.998 Z m -14.998,0 H 7.488 V 6.4690722 H 6 Z m 10.51,0 h 1.489999 V 6.4690722 H 16.51 Z"
       />
-    </svg>
+    </FillSvg>
   );
 }
 
 /** opencode's own extension icon (sbc-open-code/media/icon.svg). */
 function OpencodeIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(256.27, 255.15, 255.72, 320)}
-      fill="none"
-      aria-hidden="true"
-    >
+    <FillSvg className={className} extent={256.27} cx={255.15} cy={255.72} grid={320}>
       <path d="M320 224V352H192V224H320Z" fill="currentColor" opacity="0.6" />
       <path
         fillRule="evenodd"
@@ -52,7 +39,7 @@ function OpencodeIcon({ className }: { className?: string }) {
         d="M 365.35922,394.53486 H 144.94616 V 116.90026 H 365.35922 Z M 320,160 H 192 v 192 h 128 z"
         fill="currentColor"
       />
-    </svg>
+    </FillSvg>
   );
 }
 
@@ -86,13 +73,13 @@ const PI_PIXEL_CELLS = 10 / 10.4;
  */
 function PiIcon({ className }: { className?: string }) {
   return (
-    <svg
+    <FillSvg
       className={className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(469.43 / PI_PIXEL_CELLS, 400, 400, 800)}
+      extent={469.43 / PI_PIXEL_CELLS}
+      cx={400}
+      cy={400}
+      grid={800}
       shapeRendering="crispEdges"
-      aria-hidden="true"
     >
       <path
         fill="currentColor"
@@ -101,7 +88,7 @@ function PiIcon({ className }: { className?: string }) {
         d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
       />
       <path fill="currentColor" d="M517.36 400H634.72V634.72H517.36Z" />
-    </svg>
+    </FillSvg>
   );
 }
 

@@ -27,7 +27,7 @@ export interface ProjectDeps {
 }
 
 /**
- * Opens a folder as a project, shared by the add-repository dialog (`projects:open-path`) and the
+ * Opens a folder as a project, shared by the add-repository dialog (`projects:open`) and the
  * control channel, and tells the window (`projectsChanged`), as every change to the list here
  * does: the window keeps no list of its own, so both transports lead to one behaviour. A stored
  * project whose folder is gone watches and spawns nothing, with a notice per action.

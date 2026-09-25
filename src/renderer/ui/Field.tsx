@@ -23,8 +23,8 @@ interface FieldProps {
 
 /**
  * A dialog row: its label above one control. A `<label>`, so clicking the text reaches the control
- * — a row holding a set of them (buttons, a radio group) writes its own `div.dialog-field`, which
- * no single label can point at.
+ * — a row holding a set of them (buttons, a radio group) is a `FieldGroup`, which no single label
+ * can point at.
  */
 export function Field({ label, children, error }: FieldProps) {
   return (
@@ -33,6 +33,72 @@ export function Field({ label, children, error }: FieldProps) {
       {children}
       <DialogError message={error} />
     </label>
+  );
+}
+
+/** `Field`'s row for a set of controls: a div, as a label wrapping buttons would forward its
+ *  clicks to the first. */
+export function FieldGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="dialog-field">
+      <span>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** Where the picker opens for an empty path field. Renderer storage, shared by every such field:
+ *  it describes this window's use, not a project. */
+const LAST_DIRECTORY_KEY = "tet.dialog.lastDirectory";
+
+interface PathInputProps {
+  value: string;
+  /** The native picker's window title. */
+  pickTitle: string;
+  onChange: (value: string) => void;
+  /** Only what the picker returned, never typed (the SBX skills folder). */
+  pickedOnly?: boolean;
+  placeholder?: string;
+  /** For the dialog's focus effect, when this is a mode's first field. */
+  ref?: Ref<HTMLInputElement>;
+}
+
+/** A folder's path with a Browse button beside it; a cancelled pick keeps the path there was. */
+export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder, ref }: PathInputProps) {
+  const browse = async (): Promise<void> => {
+    // The field's own value is more specific, so it wins.
+    const start = value.trim() || localStorage.getItem(LAST_DIRECTORY_KEY) || undefined;
+    const picked = await window.tet.projects.pickDirectory(pickTitle, start);
+    if (picked) {
+      // A picked repository's parent is where the picker opens next.
+      localStorage.setItem(LAST_DIRECTORY_KEY, await window.tet.projects.directoryToRemember(picked));
+      onChange(picked);
+    }
+  };
+  return (
+    <div className="dialog-field-row">
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        disabled={pickedOnly}
+        title={pickedOnly ? value : undefined}
+        onChange={(event) => onChange(event.target.value)}
+        ref={ref}
+      />
+      <button type="button" className="button secondary" onClick={() => void browse()}>
+        Browse...
+      </button>
+    </div>
+  );
+}
+
+/** A `Field` holding a `PathInput`. */
+export function PathField({ label, ...input }: PathInputProps & { label: string }) {
+  return (
+    <Field label={label}>
+      <PathInput {...input} />
+    </Field>
   );
 }
 
@@ -176,9 +242,7 @@ interface ColorFieldProps {
  *  first: a color is optional. */
 export function ColorField({ label, choices, value, onChange }: ColorFieldProps) {
   return (
-    // A div, not a label: a label wrapping buttons would forward its clicks to the first swatch.
-    <div className="dialog-field">
-      <span>{label}</span>
+    <FieldGroup label={label}>
       <div className="dialog-colors">
         {[{ value: "", color: "", title: "No color" }, ...choices].map((choice) => (
           <button
@@ -191,7 +255,7 @@ export function ColorField({ label, choices, value, onChange }: ColorFieldProps)
           />
         ))}
       </div>
-    </div>
+    </FieldGroup>
   );
 }
 

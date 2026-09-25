@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentInfo, Project } from "../../shared/types";
 import { sameList } from "../identity";
 import type { OpenEditor } from "./editor-tab";
@@ -6,6 +6,7 @@ import { disposeTerminal, setRevealHandler } from "./terminal-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { usePersistedShare } from "../ui/layout-storage";
+import { useElementSize } from "../ui/use-element-size";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome, type SideView } from "./Pane";
 import { isEditorTab, type PaneTab } from "./editor-tab";
@@ -134,35 +135,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   const [rightRowFraction, setRightRowFraction] = useDividerFraction(project.id, "row-right", HALF);
 
   const gridRef = useRef<HTMLDivElement>(null);
-  /**
-   * `.panes-grid`'s last measured size, what the divider fractions multiply.
-   *
-   * A layout effect seeded with a synchronous `getBoundingClientRect()`, since the observer's first
-   * callback is async: a restored split is right on the first paint, not flashed wrong first.
-   */
-  const [gridSize, setGridSize] = useState<{ width: number; height: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const element = gridRef.current;
-    if (!element) {
-      return;
-    }
-    const seed = element.getBoundingClientRect();
-    if (seed.width > 0 && seed.height > 0) {
-      setGridSize({ width: seed.width, height: seed.height });
-    }
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      // Zero while this project's tab is hidden (`display: none`) — not a real size.
-      if (width > 0 && height > 0) {
-        setGridSize({ width, height });
-      }
-    });
-    observer.observe(element);
-    return () => observer.disconnect();
-    // Re-seeded on coming on screen: hidden it measured zero, and the observer fires after the
-    // paint, which would draw a restored split at minimum widths.
-  }, [visible]);
+  /** `.panes-grid`'s last measured size, what the divider fractions multiply. Re-seeded on coming
+   *  on screen, or a restored split would draw at minimum widths. */
+  const gridSize = useElementSize(gridRef, visible);
 
   // Every `Pane` prop stays stable, or its memo is off: focus, spinners and resizes re-render this.
   /** "single" resets every divider; a switch between two *split* presets does not. */

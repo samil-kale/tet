@@ -4,6 +4,7 @@ import { statSync, type Stats } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
 import { CONTROL_ENV } from "../shared/control";
 import {
   SBX_KNOWLEDGE_KINDS,
@@ -38,7 +39,7 @@ import type { AgentPaths } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./tet-json";
 import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
-import { relativeInside } from "./path-inside";
+import { expandHome, relativeInside } from "./path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
 import { agentDataDir, agentDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
@@ -237,7 +238,7 @@ async function suppressSbxFirstRunWizard(): Promise<void> {
   }
   try {
     await fs.mkdir(path.dirname(markerFile), { recursive: true });
-    await fs.writeFile(markerFile, "{}");
+    await writeFileAtomic(markerFile, "{}");
   } catch {
     // Worst case the wizard shows once.
   }
@@ -515,15 +516,6 @@ function orphanAgent(name: string, workspaces: string[], projectId: string, proj
 /** The project's share of a sandbox name and of a secret placeholder: one identity, one place. */
 function projectHash(projectId: string): string {
   return crypto.createHash("sha1").update(projectId).digest("hex").slice(0, 12);
-}
-
-/** Expands tet.json's `~` and `~/…` (contractHome) — `sbx` is no shell. On win32 `~\…` too. */
-function expandHome(hostPath: string): string {
-  if (hostPath === "~") {
-    return os.homedir();
-  }
-  const homeRelative = hostPath.startsWith("~/") || (path.sep === "\\" && hostPath.startsWith("~\\"));
-  return homeRelative ? path.join(os.homedir(), hostPath.slice(2)) : hostPath;
 }
 
 /**

@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
+import { isRecord } from "../../json-file";
 import { execInSandbox } from "../../sbx";
-import { killProcessTree, resolveCommand } from "../../terminals/pty";
+import { runAgent } from "../ask";
 
 /**
  * How long a host run may take: ten times its measured boot, as generous as Codex's app-server
@@ -19,45 +19,18 @@ export function runOpencode(executable: string, cwd: string, sandbox: string | n
   if (sandbox) {
     return execInSandbox(sandbox, cwd, ["opencode", ...args]);
   }
-  return new Promise((resolve, reject) => {
-    const resolved = resolveCommand(executable, args);
-    const child = spawn(resolved.command, resolved.args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      windowsVerbatimArguments: resolved.windowsVerbatimArguments
-    });
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-    const finish = (fn: () => void): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      fn();
-    };
-    // Not `spawn`'s `timeout`: on win32 it kills only the cmd.exe in front of an npm shim (ask.ts).
-    const timer = setTimeout(() => {
-      killProcessTree(child);
-      finish(() => reject(new Error(`opencode ${args[0]} timed out after ${RUN_TIMEOUT_MS}ms`)));
-    }, RUN_TIMEOUT_MS);
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", (error) => finish(() => reject(error)));
-    child.on("exit", (code) => {
-      finish(() => {
-        if (code === 0) {
-          resolve(stdout);
-        } else {
-          reject(new Error(`opencode ${args[0]} exited with code ${code}${stderr.trim() ? `: ${stderr.trim().slice(-300)}` : ""}`));
-        }
-      });
-    });
-  });
+  return runAgent("opencode", executable, cwd, args, RUN_TIMEOUT_MS);
+}
+
+/** `session list --format json` (measured, 1.18.4: an array of `{id, title, …}`); undefined when
+ *  it prints nothing or something else, which says nothing about a session. Rejects as runOpencode
+ *  does. */
+export async function listOpencodeSessions(
+  executable: string,
+  cwd: string,
+  sandbox: string | null
+): Promise<Record<string, unknown>[] | undefined> {
+  const output = await runOpencode(executable, cwd, sandbox, ["session", "list", "--format", "json"]);
+  const listed: unknown = output.trim() ? JSON.parse(output) : undefined;
+  return Array.isArray(listed) ? listed.filter(isRecord) : undefined;
 }

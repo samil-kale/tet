@@ -1,11 +1,10 @@
-import * as os from "node:os";
 import * as path from "node:path";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { SANDBOX_HOME, sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
-import { claudeSessionProvider } from "./sessions";
+import { claudeConfigDir, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 
 /** Appended to Claude Code's own system prompt for this process (measured, see system-prompt.ts). */
@@ -49,11 +48,12 @@ export const claudeAgent: AgentDefinition = {
   },
   // See AgentDefinition.sandboxEnv.
   sandboxEnv: ["CLAUDE_CODE_NO_FLICKER=1"],
-  // Measured: `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/CLAUDE.md`.
+  // Measured: `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/CLAUDE.md` — under the config
+  // root the sessions are read from.
   sandboxKnowledge: () => ({
-    skills: [{ host: path.join(os.homedir(), ".claude", "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
-    plugins: [{ host: path.join(os.homedir(), ".claude", "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
-    instructions: [{ host: path.join(os.homedir(), ".claude", "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }]
+    skills: [{ host: path.join(claudeConfigDir(), "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
+    plugins: [{ host: path.join(claudeConfigDir(), "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
+    instructions: [{ host: path.join(claudeConfigDir(), "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }]
   }),
   // No `sharedSkillsTarget`: Claude Code reads only its own skills folder, and putting
   // `~/.agents/skills` there would stand in for it.

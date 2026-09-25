@@ -1,10 +1,9 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { net, shell } from "electron";
 import { ipcMain } from "electron";
 import { errorMessage } from "../../shared/errors";
-import { repositoryRelative } from "../path-inside";
+import { expandHome, repositoryRelative } from "../path-inside";
 import { isExecutableFile, isOpenableUrl } from "../shell-open";
 import type { IpcDeps } from "./deps";
 
@@ -120,10 +119,7 @@ export function registerShellIpc({
     if (!repository) {
       return null;
     }
-    const expanded =
-      rawPath === "~" || rawPath.startsWith("~/") || rawPath.startsWith("~\\")
-        ? path.join(os.homedir(), rawPath.slice(1))
-        : rawPath;
+    const expanded = expandHome(rawPath);
     const root = repository.project.path;
     const resolved = path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
     const stat = await fs.promises.stat(resolved).catch(() => null);

@@ -97,7 +97,7 @@ function install(pid: number, version: string, staged: string, root: string, res
     try {
       retried(() => fs.renameSync(old, root));
     } catch (restoreError) {
-      output += `\ncould not put ${old} back: ${String(restoreError)}`;
+      output += `\ncould not put ${old} back: ${errorMessage(restoreError)}`;
     }
     writeResult(resultFile, { version, ok: false, output });
     return;

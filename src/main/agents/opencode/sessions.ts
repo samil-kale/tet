@@ -3,9 +3,9 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { watchTranscriptDir } from "../../watch-dir";
 import type { AgentSessionInfo, SessionProvider } from "../agent";
-import { requireTitle } from "../transcript";
+import { collectSessions, requireTitle } from "../transcript";
 import { sandboxExists } from "../../sbx";
-import { runOpencode } from "./cli";
+import { listOpencodeSessions, runOpencode } from "./cli";
 import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
 
 /**
@@ -72,15 +72,15 @@ async function readRecords(dir: string): Promise<SessionRecord[]> {
   return records.filter((record): record is SessionRecord => record !== undefined);
 }
 
-/** False only when the session is known gone: its sandbox is, or `session list --format json`
- *  (measured, 1.18.4: an array of `{id, …}`) lacks it. Whatever cannot say counts as there. */
+/** False only when the session is known gone: its sandbox is, or opencode's listing lacks it.
+ *  Whatever cannot say counts as there. */
 async function sessionListed(executable: string, cwd: string, sandbox: string | null, sessionId: string): Promise<boolean> {
   if (sandbox && (await sandboxExists(sandbox)) === false) {
     return false;
   }
   try {
-    const listed = JSON.parse(await runOpencode(executable, cwd, sandbox, ["session", "list", "--format", "json"])) as unknown;
-    return !Array.isArray(listed) || listed.some((session: { id?: unknown }) => session?.id === sessionId);
+    const listed = await listOpencodeSessions(executable, cwd, sandbox);
+    return listed === undefined || listed.some((session) => session.id === sessionId);
   } catch {
     return true;
   }
@@ -93,15 +93,15 @@ export const opencodeSessionProvider: SessionProvider = {
     if (!dir) {
       return [];
     }
-    return (await readRecords(dir))
-      .map((record) => ({
+    return collectSessions("opencode", async () =>
+      (await readRecords(dir)).map((record) => ({
         id: record.id,
         title: record.title,
         updatedAt: record.updated,
         createdAt: record.created,
         sandbox: record.sandbox ?? undefined
       }))
-      .sort((a, b) => a.createdAt - b.createdAt);
+    );
   },
 
   resumeArgs(sessionId: string): string[] {

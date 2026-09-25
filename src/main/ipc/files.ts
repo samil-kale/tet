@@ -48,7 +48,7 @@ export function registerFilesIpc(): void {
   });
 
   /** The clipboard image as a file, so its path can be typed into a CLI. */
-  ipcMain.handle("clipboard:image-file", (): Promise<string> | null => {
+  ipcMain.handle("files:clipboard-image", (): Promise<string> | null => {
     const image = clipboard.readImage();
     return image.isEmpty() ? null : writeTempFile(`pasted-image-${Date.now()}.png`, image.toPNG());
   });

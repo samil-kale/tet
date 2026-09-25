@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { killProcessTree, resolveCommand } from "../terminals/pty";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
@@ -44,5 +44,54 @@ export function askAgent(root: string, executable: string, args: string[], quest
     }, ASK_TIMEOUT_MS);
     child.stdin?.on("error", () => undefined);
     child.stdin?.end(question);
+  });
+}
+
+/**
+ * Runs `<name> <args>` to completion on the host, for an agent's one-offs (codex/cli.ts,
+ * opencode/cli.ts). Resolves with stdout on exit 0, rejects with stderr otherwise, or on the
+ * timeout.
+ */
+export function runAgent(name: string, executable: string, cwd: string, args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const resolved = resolveCommand(executable, args);
+    const child = spawn(resolved.command, resolved.args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      windowsVerbatimArguments: resolved.windowsVerbatimArguments
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (fn: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    // Not `spawn`'s `timeout`, as for askAgent.
+    const timer = setTimeout(() => {
+      killProcessTree(child);
+      finish(() => reject(new Error(`${name} ${args[0]} timed out after ${timeoutMs}ms`)));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => finish(() => reject(error)));
+    child.on("exit", (code) => {
+      finish(() => {
+        if (code === 0) {
+          resolve(stdout);
+        } else {
+          reject(new Error(`${name} ${args[0]} exited with code ${code}${stderr.trim() ? `: ${stderr.trim().slice(-300)}` : ""}`));
+        }
+      });
+    });
   });
 }

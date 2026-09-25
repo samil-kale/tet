@@ -1,6 +1,6 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
 import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types";
-import { parentOf } from "./explorer-tree";
+import { baseName, parentOf } from "./explorer-tree";
 import { FileMarkIcon, INDENT_BASE, MATCH_INDENT, Twistie } from "./tree-rows";
 import { FilterField } from "../ui/FilterField";
 import { CaseSensitiveIcon, type IconProps, RegexIcon, WholeWordIcon } from "../ui/icons";
@@ -98,7 +98,7 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onAllFol
       <div className="tree">
         {files.map((file) => {
           const open = opened[file.path] ?? false;
-          const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+          const name = baseName(file.path);
           const dir = parentOf(file.path);
           return (
             <div key={file.path}>

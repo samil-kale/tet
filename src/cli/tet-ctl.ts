@@ -1,6 +1,6 @@
 import * as http from "node:http";
 import { errorMessage } from "../shared/errors";
-import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_GROUPS, CONTROL_VERBS, ERROR_EXIT_CODES, EXIT_CODES, HELP_VERB } from "../shared/control";
+import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_HOST, CONTROL_GROUPS, CONTROL_VERBS, ERROR_EXIT_CODES, EXIT_CODES, HELP_VERB } from "../shared/control";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
 
 /**
@@ -254,7 +254,7 @@ async function main(): Promise<void> {
   let response: ControlResponse;
   try {
     response = await sendWhenUp(
-      process.env[CONTROL_ENV.host] || "127.0.0.1",
+      process.env[CONTROL_ENV.host] || CONTROL_HOST,
       Number(portVar),
       request,
       quiet ? HOOK_IDLE_MS : undefined

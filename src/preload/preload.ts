@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { TETApi, Unsubscribe } from "../shared/api";
+import { WINDOW_ARGS, type TETApi, type Unsubscribe } from "../shared/api";
 import { DEFAULT_THEME_IDS } from "../shared/themes";
 
 function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscribe {
@@ -8,10 +8,9 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscr
   return () => ipcRenderer.off(channel, handler);
 }
 
-/** From main.ts's createWindow, through webPreferences.additionalArguments. */
-const THEME_ARG = "--tet-theme=";
-const initialTheme = process.argv.find((arg) => arg.startsWith(THEME_ARG))?.slice(THEME_ARG.length) || DEFAULT_THEME_IDS.dark;
-const waylandSession = process.argv.includes("--tet-wayland");
+const initialTheme =
+  process.argv.find((arg) => arg.startsWith(WINDOW_ARGS.theme))?.slice(WINDOW_ARGS.theme.length) || DEFAULT_THEME_IDS.dark;
+const waylandSession = process.argv.includes(WINDOW_ARGS.wayland);
 
 const api: TETApi = {
   startup: {
@@ -51,14 +50,14 @@ const api: TETApi = {
     pickDirectory: (title, defaultPath) => ipcRenderer.invoke("projects:pick-directory", title, defaultPath),
     pickFile: (title) => ipcRenderer.invoke("projects:pick-file", title),
     directoryToRemember: (directory) => ipcRenderer.invoke("projects:directory-to-remember", directory),
-    open: (directory) => ipcRenderer.invoke("projects:open-path", directory),
+    open: (directory) => ipcRenderer.invoke("projects:open", directory),
     clone: (url, directory, name, accountId, login) =>
       ipcRenderer.invoke("projects:clone", url, directory, name, accountId, login),
     create: (directory, name) => ipcRenderer.invoke("projects:create", directory, name),
     remove: (projectId) => ipcRenderer.invoke("projects:remove", projectId),
-    addWorktree: (projectId, branch) => ipcRenderer.invoke("projects:worktree-add", projectId, branch),
-    deleteWorktree: (worktree, options) => ipcRenderer.invoke("projects:worktree-delete", worktree, options),
-    renameWorktree: (worktree, branch) => ipcRenderer.invoke("projects:worktree-rename", worktree, branch),
+    addWorktree: (projectId, branch) => ipcRenderer.invoke("projects:add-worktree", projectId, branch),
+    deleteWorktree: (worktree, options) => ipcRenderer.invoke("projects:delete-worktree", worktree, options),
+    renameWorktree: (worktree, branch) => ipcRenderer.invoke("projects:rename-worktree", worktree, branch),
     reorder: (projectIds) => ipcRenderer.invoke("projects:reorder", projectIds),
     onChanged: (listener) => subscribe("projects:changed", listener)
   },
@@ -77,55 +76,55 @@ const api: TETApi = {
     onWithdrawn: (listener) => subscribe("environment:withdrawn", listener)
   },
   repository: {
-    state: (projectId) => ipcRenderer.invoke("repo:state", projectId),
-    refresh: (projectId) => ipcRenderer.invoke("repo:refresh", projectId),
-    checkout: (projectId, target) => ipcRenderer.invoke("repo:checkout", projectId, target),
-    fetch: (projectId, login) => ipcRenderer.invoke("repo:fetch", projectId, login),
-    pull: (projectId, login) => ipcRenderer.invoke("repo:pull", projectId, login),
-    push: (projectId, login) => ipcRenderer.invoke("repo:push", projectId, login),
-    setRemoteUrl: (projectId, remote, url) => ipcRenderer.invoke("repo:set-remote-url", projectId, remote, url),
+    state: (projectId) => ipcRenderer.invoke("repository:state", projectId),
+    refresh: (projectId) => ipcRenderer.invoke("repository:refresh", projectId),
+    checkout: (projectId, target) => ipcRenderer.invoke("repository:checkout", projectId, target),
+    fetch: (projectId, login) => ipcRenderer.invoke("repository:fetch", projectId, login),
+    pull: (projectId, login) => ipcRenderer.invoke("repository:pull", projectId, login),
+    push: (projectId, login) => ipcRenderer.invoke("repository:push", projectId, login),
+    setRemoteUrl: (projectId, remote, url) => ipcRenderer.invoke("repository:set-remote-url", projectId, remote, url),
     createBranch: (projectId, name, startPoint) =>
-      ipcRenderer.invoke("repo:create-branch", projectId, name, startPoint),
-    renameBranch: (projectId, from, to) => ipcRenderer.invoke("repo:rename-branch", projectId, from, to),
+      ipcRenderer.invoke("repository:create-branch", projectId, name, startPoint),
+    renameBranch: (projectId, from, to) => ipcRenderer.invoke("repository:rename-branch", projectId, from, to),
     deleteBranch: (projectId, name, onRemote) =>
-      ipcRenderer.invoke("repo:delete-branch", projectId, name, onRemote),
+      ipcRenderer.invoke("repository:delete-branch", projectId, name, onRemote),
     deleteRemoteBranch: (projectId, remote, name, login) =>
-      ipcRenderer.invoke("repo:delete-remote-branch", projectId, remote, name, login),
-    merge: (projectId, ref) => ipcRenderer.invoke("repo:merge", projectId, ref),
-    rebase: (projectId, ref, confirmed) => ipcRenderer.invoke("repo:rebase", projectId, ref, confirmed),
-    abort: (projectId) => ipcRenderer.invoke("repo:abort", projectId),
+      ipcRenderer.invoke("repository:delete-remote-branch", projectId, remote, name, login),
+    merge: (projectId, ref) => ipcRenderer.invoke("repository:merge", projectId, ref),
+    rebase: (projectId, ref, confirmed) => ipcRenderer.invoke("repository:rebase", projectId, ref, confirmed),
+    abort: (projectId) => ipcRenderer.invoke("repository:abort", projectId),
     createTag: (projectId, name, target, message) =>
-      ipcRenderer.invoke("repo:create-tag", projectId, name, target, message),
-    pushTag: (projectId, name, login) => ipcRenderer.invoke("repo:push-tag", projectId, name, login),
-    deleteTag: (projectId, name, onRemote) => ipcRenderer.invoke("repo:delete-tag", projectId, name, onRemote),
-    deleteRemoteTag: (projectId, name, login) => ipcRenderer.invoke("repo:delete-remote-tag", projectId, name, login),
-    checkoutTag: (projectId, name) => ipcRenderer.invoke("repo:checkout-tag", projectId, name),
-    commitAll: (projectId, message) => ipcRenderer.invoke("repo:commit-all", projectId, message),
-    commitPaths: (projectId, message, paths) => ipcRenderer.invoke("repo:commit-paths", projectId, message, paths),
-    suggestCommitMessage: (projectId, paths) => ipcRenderer.invoke("repo:suggest-commit-message", projectId, paths),
-    stashPush: (projectId, message) => ipcRenderer.invoke("repo:stash-push", projectId, message),
-    stash: (projectId, command, sha) => ipcRenderer.invoke("repo:stash", projectId, command, sha),
-    discard: (projectId, paths, permanently) => ipcRenderer.invoke("repo:discard", projectId, paths, permanently),
-    ignore: (projectId, filePath, scope) => ipcRenderer.invoke("repo:ignore", projectId, filePath, scope),
-    createFile: (projectId, filePath) => ipcRenderer.invoke("repo:create-file", projectId, filePath),
-    createDirectory: (projectId, dirPath) => ipcRenderer.invoke("repo:create-directory", projectId, dirPath),
-    deletePath: (projectId, filePath) => ipcRenderer.invoke("repo:delete-path", projectId, filePath),
-    renamePath: (projectId, fromPath, toPath) => ipcRenderer.invoke("repo:rename-path", projectId, fromPath, toPath),
-    addFolder: (projectId, folderPath) => ipcRenderer.invoke("repo:add-folder", projectId, folderPath),
-    removeFolder: (projectId, folderPath) => ipcRenderer.invoke("repo:remove-folder", projectId, folderPath),
-    excludePath: (projectId, relPath) => ipcRenderer.invoke("repo:exclude-path", projectId, relPath),
+      ipcRenderer.invoke("repository:create-tag", projectId, name, target, message),
+    pushTag: (projectId, name, login) => ipcRenderer.invoke("repository:push-tag", projectId, name, login),
+    deleteTag: (projectId, name, onRemote) => ipcRenderer.invoke("repository:delete-tag", projectId, name, onRemote),
+    deleteRemoteTag: (projectId, name, login) => ipcRenderer.invoke("repository:delete-remote-tag", projectId, name, login),
+    checkoutTag: (projectId, name) => ipcRenderer.invoke("repository:checkout-tag", projectId, name),
+    commitAll: (projectId, message) => ipcRenderer.invoke("repository:commit-all", projectId, message),
+    commitPaths: (projectId, message, paths) => ipcRenderer.invoke("repository:commit-paths", projectId, message, paths),
+    suggestCommitMessage: (projectId, paths) => ipcRenderer.invoke("repository:suggest-commit-message", projectId, paths),
+    stashPush: (projectId, message) => ipcRenderer.invoke("repository:stash-push", projectId, message),
+    stash: (projectId, command, sha) => ipcRenderer.invoke("repository:stash", projectId, command, sha),
+    discard: (projectId, paths, permanently) => ipcRenderer.invoke("repository:discard", projectId, paths, permanently),
+    ignore: (projectId, filePath, scope) => ipcRenderer.invoke("repository:ignore", projectId, filePath, scope),
+    createFile: (projectId, filePath) => ipcRenderer.invoke("repository:create-file", projectId, filePath),
+    createDirectory: (projectId, dirPath) => ipcRenderer.invoke("repository:create-directory", projectId, dirPath),
+    deletePath: (projectId, filePath) => ipcRenderer.invoke("repository:delete-path", projectId, filePath),
+    renamePath: (projectId, fromPath, toPath) => ipcRenderer.invoke("repository:rename-path", projectId, fromPath, toPath),
+    addFolder: (projectId, folderPath) => ipcRenderer.invoke("repository:add-folder", projectId, folderPath),
+    removeFolder: (projectId, folderPath) => ipcRenderer.invoke("repository:remove-folder", projectId, folderPath),
+    excludePath: (projectId, relPath) => ipcRenderer.invoke("repository:exclude-path", projectId, relPath),
     setExplorerSetting: (projectId, key, value) =>
-      ipcRenderer.invoke("repo:set-explorer-setting", projectId, key, value),
-    listExplorer: (projectId) => ipcRenderer.invoke("repo:explorer", projectId),
-    searchFiles: (projectId, query) => ipcRenderer.invoke("repo:search", projectId, query),
-    explorerSettings: (projectId) => ipcRenderer.invoke("repo:explorer-settings", projectId),
-    readFile: (projectId, filePath) => ipcRenderer.invoke("repo:file-read", projectId, filePath),
+      ipcRenderer.invoke("repository:set-explorer-setting", projectId, key, value),
+    listExplorer: (projectId) => ipcRenderer.invoke("repository:list-explorer", projectId),
+    searchFiles: (projectId, query) => ipcRenderer.invoke("repository:search-files", projectId, query),
+    explorerSettings: (projectId) => ipcRenderer.invoke("repository:explorer-settings", projectId),
+    readFile: (projectId, filePath) => ipcRenderer.invoke("repository:read-file", projectId, filePath),
     writeFile: (projectId, filePath, content, expectedMtimeMs) =>
-      ipcRenderer.invoke("repo:file-write", projectId, filePath, content, expectedMtimeMs),
-    onState: (listener) => subscribe("repo:state-changed", listener),
-    onFilesChanged: (listener) => subscribe("repo:files-changed", listener),
-    watchFiles: (projectId, paths) => ipcRenderer.invoke("repo:watch-files", projectId, paths),
-    onFileChanged: (listener) => subscribe("repo:file-changed", listener),
+      ipcRenderer.invoke("repository:write-file", projectId, filePath, content, expectedMtimeMs),
+    onState: (listener) => subscribe("repository:state-changed", listener),
+    onFilesChanged: (listener) => subscribe("repository:files-changed", listener),
+    watchFiles: (projectId, paths) => ipcRenderer.invoke("repository:watch-files", projectId, paths),
+    onFileChanged: (listener) => subscribe("repository:file-changed", listener),
     reportEditor: (projectId, tabId, report) => ipcRenderer.send("editor:report", projectId, tabId, report),
     reportActiveEditor: (projectId, tabId) => ipcRenderer.send("editor:active", projectId, tabId),
     onEditorContentRequest: (listener) =>
@@ -141,23 +140,23 @@ const api: TETApi = {
     onChanged: (listener) => subscribe("commands:changed", listener)
   },
   terminals: {
-    list: (projectId) => ipcRenderer.invoke("terminal:list", projectId),
-    create: (projectId, agentId) => ipcRenderer.invoke("terminal:create", projectId, agentId),
-    close: (projectId, tabIds) => ipcRenderer.invoke("terminal:close", projectId, tabIds),
-    rename: (projectId, tabId, title) => ipcRenderer.invoke("terminal:rename", projectId, tabId, title),
-    restart: (projectId, tabId) => ipcRenderer.invoke("terminal:restart", projectId, tabId),
-    seen: (projectId, tabId) => ipcRenderer.send("terminal:seen", projectId, tabId),
-    inFront: (projectId, tabIds) => ipcRenderer.send("terminal:in-front", projectId, tabIds),
-    input: (projectId, tabId, data) => ipcRenderer.send("terminal:input", projectId, tabId, data),
-    resize: (projectId, tabId, cols, rows) => ipcRenderer.send("terminal:resize", projectId, tabId, cols, rows),
+    list: (projectId) => ipcRenderer.invoke("terminals:list", projectId),
+    create: (projectId, agentId) => ipcRenderer.invoke("terminals:create", projectId, agentId),
+    close: (projectId, tabIds) => ipcRenderer.invoke("terminals:close", projectId, tabIds),
+    rename: (projectId, tabId, title) => ipcRenderer.invoke("terminals:rename", projectId, tabId, title),
+    restart: (projectId, tabId) => ipcRenderer.invoke("terminals:restart", projectId, tabId),
+    seen: (projectId, tabId) => ipcRenderer.send("terminals:seen", projectId, tabId),
+    inFront: (projectId, tabIds) => ipcRenderer.send("terminals:in-front", projectId, tabIds),
+    input: (projectId, tabId, data) => ipcRenderer.send("terminals:input", projectId, tabId, data),
+    resize: (projectId, tabId, cols, rows) => ipcRenderer.send("terminals:resize", projectId, tabId, cols, rows),
     resolveUrl: (projectId, tabId, fragment) =>
-      ipcRenderer.invoke("terminal:resolve-url", projectId, tabId, fragment),
-    onTabs: (listener) => subscribe("terminal:tabs", listener),
-    onOutput: (listener) => subscribe("terminal:output", listener),
-    onStatus: (listener) => subscribe("terminal:status", listener),
-    onStartupProgress: (listener) => subscribe("terminal:startup-progress", listener),
-    onShow: (listener) => subscribe("terminal:show", listener),
-    starting: (projectId) => ipcRenderer.invoke("terminal:starting", projectId)
+      ipcRenderer.invoke("terminals:resolve-url", projectId, tabId, fragment),
+    onTabs: (listener) => subscribe("terminals:tabs", listener),
+    onOutput: (listener) => subscribe("terminals:output", listener),
+    onStatus: (listener) => subscribe("terminals:status", listener),
+    onStartupProgress: (listener) => subscribe("terminals:startup-progress", listener),
+    onShow: (listener) => subscribe("terminals:show", listener),
+    starting: (projectId) => ipcRenderer.invoke("terminals:starting", projectId)
   },
   agents: {
     list: () => ipcRenderer.invoke("agents:list")
@@ -166,7 +165,7 @@ const api: TETApi = {
     // Replaces File.path (gone since Electron 32); preload-only under contextIsolation.
     pathOf: (file) => webUtils.getPathForFile(file),
     writeTemp: (name, dataBase64) => ipcRenderer.invoke("files:write-temp", name, dataBase64),
-    clipboardImage: () => ipcRenderer.invoke("clipboard:image-file")
+    clipboardImage: () => ipcRenderer.invoke("files:clipboard-image")
   },
   shell: {
     openUrl: (url) => ipcRenderer.invoke("shell:open-url", url),

@@ -15,10 +15,10 @@ import type {
   PromptId,
   SettingsEdits
 } from "../../shared/types";
-import { confirm } from "../ui/Dialog";
+import { confirm, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { Checkbox, Field } from "../ui/Field";
+import { Checkbox, Field, FieldGroup } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
@@ -203,9 +203,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           if (explorerSettings[key] === loaded[key]) {
             continue;
           }
-          const result = await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]);
-          if (!result.ok) {
-            return result.error ?? "Could not update tet.json";
+          const refused = refusal(
+            await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]),
+            "Could not update tet.json"
+          );
+          if (refused !== undefined) {
+            return refused;
           }
         }
       }
@@ -283,7 +286,14 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <button type="button" className="button secondary" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="button" disabled={saving || blocked !== undefined} title={blocked} onClick={() => void save()}>
+          {/* Blocked by class: its tooltip is the reason (.button.disabled). */}
+          <button
+            type="button"
+            className={blocked === undefined ? "button" : "button disabled"}
+            disabled={saving}
+            title={blocked}
+            onClick={() => blocked === undefined && void save()}
+          >
             Save
           </button>
         </>
@@ -291,12 +301,13 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     >
       {tab === "appearance" && (
         <>
-          <p className="dialog-detail">Color scheme</p>
-          <RadioGroup
-            value={scheme}
-            onChange={applyColorScheme}
-            options={COLOR_SCHEMES.map((option) => ({ value: option, label: COLOR_SCHEME_LABELS[option] }))}
-          />
+          <FieldGroup label="Color scheme">
+            <RadioGroup
+              value={scheme}
+              onChange={applyColorScheme}
+              options={COLOR_SCHEMES.map((option) => ({ value: option, label: COLOR_SCHEME_LABELS[option] }))}
+            />
+          </FieldGroup>
           <Field label={chosenKind === "dark" ? "Dark theme" : "Light theme"}>
             <Dropdown
               value={resolveTheme(settings?.[themeKey(chosenKind)], chosenKind).id}
@@ -415,8 +426,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 {row.overridesMachine && <OverridesMachine name={row.name} />}
                 <SecretInput
                   stored={Boolean(row.from)}
-                  storedTitle="Stored on this machine; typing replaces it"
-                  emptyTitle="Stored on this machine"
                   value={row.value}
                   onChange={(value) => editVariables((rows) => patched(rows, row.id, { value }))}
                 />

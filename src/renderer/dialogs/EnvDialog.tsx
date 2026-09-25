@@ -89,8 +89,6 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
             <SecretInput
               ref={row === rows[0] ? firstValue : undefined}
               stored={row.stored}
-              storedTitle="Stored on this machine; typing replaces it"
-              emptyTitle="Stored on this machine"
               value={row.value}
               onChange={(value) => edit(row.name, value)}
             />

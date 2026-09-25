@@ -73,8 +73,9 @@ export interface AppSettings {
   prompts: PromptSettings;
 }
 
-/** A question tet asks an agent in the background. */
-export type PromptId = "commitMessage";
+/** A question tet asks an agent in the background, in the Prompts tab's picker. */
+export const PROMPT_IDS = ["commitMessage"] as const;
+export type PromptId = (typeof PROMPT_IDS)[number];
 
 export type PromptSettings = Record<PromptId, string>;
 
@@ -100,9 +101,8 @@ export function withSettings<T extends SettingsEdits>(base: T, edits: SettingsEd
 
 /** Agents that run in an sbx sandbox: three with Docker's built-in kit, pi through a community kit
  *  (`AgentDefinition.sandboxKit`). Not the shell. */
-export type SbxAgentId = "claude" | "codex" | "opencode" | "pi";
-
-export const SBX_AGENT_IDS: readonly SbxAgentId[] = ["claude", "codex", "opencode", "pi"];
+export const SBX_AGENT_IDS = ["claude", "codex", "opencode", "pi"] as const satisfies readonly AgentId[];
+export type SbxAgentId = (typeof SBX_AGENT_IDS)[number];
 
 export function isSbxAgent(agentId: string): agentId is SbxAgentId {
   return (SBX_AGENT_IDS as readonly string[]).includes(agentId);
@@ -115,7 +115,8 @@ export interface SbxPort {
 }
 
 /** `sbx mount`'s modes (`HOST:TARGET:ro|rw`), labelled Read / Read+Write. */
-export type SbxAccess = "ro" | "rw";
+export const SBX_ACCESS = ["ro", "rw"] as const;
+export type SbxAccess = (typeof SBX_ACCESS)[number];
 
 /** An "Allowed paths" row: a host folder or a single file. */
 export interface SbxPath {
@@ -288,9 +289,6 @@ export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
   secrets: [],
   variables: []
 };
-
-/** The Prompts tab's picker. */
-export const PROMPT_IDS: PromptId[] = ["commitMessage"];
 
 /** Shared so main and renderer cannot drift apart. */
 export const DEFAULT_KEYBINDING_PRESET_ID = "vscode";
@@ -616,12 +614,16 @@ export interface ExplorerRoot {
 }
 
 /** VS Code's `explorer.sortOrder`. `foldersNestsFiles` is `default` without file nesting. */
-export type ExplorerSortOrder = "default" | "mixed" | "filesFirst" | "type" | "modified" | "foldersNestsFiles";
+export const EXPLORER_SORT_ORDERS = ["default", "mixed", "filesFirst", "type", "modified", "foldersNestsFiles"] as const;
+export type ExplorerSortOrder = (typeof EXPLORER_SORT_ORDERS)[number];
 
 /** What the settings dialog's Files tab edits, read on its own. */
 export interface ExplorerSettings {
+  /** `explorer.excludeGitIgnore`: hide what git ignores too. */
   excludeGitIgnore: boolean;
+  /** `explorer.compactFolders`: fold `src/main/java` into one row. */
   compactFolders: boolean;
+  /** `explorer.sortOrder`. */
   sortOrder: ExplorerSortOrder;
 }
 
@@ -770,10 +772,22 @@ export function worktreeBase(state: RepositoryState): CheckoutTarget | undefined
   return main === undefined ? undefined : { name: main };
 }
 
-/** The remote fetch, pull and push go to, picked as the main process does (`Repository`), and
- *  whether they can go: not without a remote, nor from a detached HEAD. */
+/** The remote a command uses where no branch names one (tags, publishing a branch): the first,
+ *  which `Repository.emit` makes "origin" where there is one. */
+export function defaultRemote(state: RepositoryState): string | undefined {
+  return state.remotes[0]?.name;
+}
+
+/** The remote a fetch, pull or push of the checked-out branch reaches: its upstream's, else
+ *  `defaultRemote`. */
+export function headRemote(state: RepositoryState): string | undefined {
+  return state.branchUpstreams[state.head]?.remote ?? defaultRemote(state);
+}
+
+/** `headRemote`, and whether fetch, pull and push can go: not without a remote, nor from a
+ *  detached HEAD. */
 export function syncRemote(state: RepositoryState): { remote: string | undefined; canSync: boolean } {
-  const remote = state.remotes[0]?.name;
+  const remote = headRemote(state);
   return { remote, canSync: remote !== undefined && !state.detached };
 }
 

@@ -95,7 +95,7 @@ textarea:focus,
   align-self: flex-start;
   margin-top: 4px;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   color: var(--vscode-textLink-foreground);
 }
 
@@ -213,6 +213,11 @@ textarea:focus,
   --field-height: 29px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
   --icon-size: 13px;
+  /* An action button's box (.icon-button), and what sits in its place or level with it. */
+  --action-size: 24px;
+  /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
+  --small-font-size: 12px;
+  --tiny-font-size: 11px;
   /* The tabbed dialogs (settings, sbx): seven tabs no longer fit in `.dialog`'s 500. */
   --dialog-wide-width: 580px;
 }
@@ -244,7 +249,7 @@ textarea:focus,
 /* The one thing in the bar that may be cut; the icon beside it keeps its box. */
 .titlebar-name {
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   font-weight: 600;
   letter-spacing: 1.5px;
   color: var(--vscode-titleBar-activeForeground);
@@ -252,13 +257,13 @@ textarea:focus,
   white-space: nowrap;
 }
 
-/* 24px: just enough room around the icon for the hover background. */
+/* Just enough room around the icon for the hover background. */
 .icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: var(--action-size);
+  height: var(--action-size);
   flex: none;
   /* The reset above keeps Chrome's default `1px 6px` padding, which with border-box leaves 12px
      of content and squeezes every icon to 12 by 18 (measured). */
@@ -359,16 +364,7 @@ textarea:focus,
   overflow-y: auto;
 }
 
-.command-item:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
 .command-label {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-family: var(--vscode-editor-font-family);
 }
 
@@ -385,7 +381,7 @@ textarea:focus,
   flex: none;
   padding: 0 6px 0 10px;
   border-bottom: 1px solid var(--vscode-panel-border);
-  font-size: 12px;
+  font-size: var(--small-font-size);
   font-weight: 600;
   letter-spacing: 0.3px;
   color: var(--vscode-sideBarSectionHeader-foreground);
@@ -401,8 +397,7 @@ textarea:focus,
 .project-item,
 .command-item,
 .tree-header,
-.tree-item,
-.change-item {
+.tree-item {
   height: var(--list-row-height);
   flex: none;
 }
@@ -424,16 +419,6 @@ textarea:focus,
 /* A worktree under its main worktree's row, indented as `.tree-item.nested`. */
 .project-item.worktree {
   padding-left: 30px;
-}
-
-.project-item:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-/* After the hover rule: a selected row keeps its selection colour while hovered. */
-.project-item.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
 }
 
 /* Being dragged; it stays in place until the drop. */
@@ -463,7 +448,8 @@ textarea:focus,
   min-width: 0;
 }
 
-.project-label {
+.project-label,
+.command-label {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -479,7 +465,7 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--tiny-font-size);
   color: var(--vscode-descriptionForeground);
 }
 
@@ -577,14 +563,10 @@ textarea:focus,
   width: 100%;
   /* The chevron's centre at 15px, as LOCAL CHANGES' status letter and the Explorer's marks. */
   padding: 0 6px 0 9px;
-  font-size: 12px;
+  font-size: var(--small-font-size);
   font-weight: 400;
   letter-spacing: 0.3px;
   color: var(--vscode-sideBarSectionHeader-foreground);
-}
-
-.tree-header:hover {
-  background: var(--vscode-list-hoverBackground);
 }
 
 .tree-item {
@@ -601,15 +583,22 @@ textarea:focus,
   padding-left: 43px;
 }
 
+/* Every list's rows, one hover and one selection. */
+.command-item:hover,
+.project-item:hover,
+.tree-header:hover,
 .tree-item:hover,
-.change-item:hover {
+.account-item:hover,
+.repository-item:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
-/* HEAD gets a background, not a recolored label, which keeps a track badge legible. */
+/* After the hover rule: a selected row keeps its selection colour while hovered. HEAD gets a
+   background, not a recolored label, which keeps a track badge legible. */
+.project-item.active,
 .tree-item.current,
 .tree-item.selected,
-.change-item.selected {
+.account-item.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
@@ -705,7 +694,7 @@ textarea:focus,
   white-space: nowrap;
   margin-left: 6px;
   color: var(--vscode-descriptionForeground);
-  font-size: 12px;
+  font-size: var(--small-font-size);
 }
 
 /* Pushed to the right edge, where a branch row's counts sit. */
@@ -718,7 +707,7 @@ textarea:focus,
 /* A match row carries the line it found, in the editor's font as VS Code shows it. */
 .search-match {
   font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
+  font-size: var(--small-font-size);
 }
 
 .search-hit {
@@ -761,7 +750,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 2px;
-  font-size: 11px;
+  font-size: var(--tiny-font-size);
   border: 1px solid var(--vscode-foreground);
   border-radius: 999px;
   padding: 1px 6px;
@@ -1159,20 +1148,10 @@ textarea:focus,
   overflow: auto;
 }
 
-.change-item {
-  display: flex;
-  align-items: center;
+/* A `.tree-item`, spaced as a flat list. */
+.tree-item.change-item {
   gap: 6px;
-  width: 100%;
   padding: 0 8px;
-  text-align: left;
-  font-size: var(--vscode-font-size);
-}
-
-.change-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* git's letter for the change, in the theme's SCM colour. `renamed` has none: git treats it as a
@@ -1182,7 +1161,7 @@ textarea:focus,
   width: 14px;
   text-align: center;
   font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
+  font-size: var(--small-font-size);
 }
 
 .change-status.modified {
@@ -1287,8 +1266,8 @@ textarea:focus,
    `button` too, and a rule matching them beats the color they would inherit from the widget. */
 .editor-host .find-widget .button {
   color: var(--vscode-editorWidget-foreground);
-  width: 24px !important;
-  height: 24px !important;
+  width: var(--action-size) !important;
+  height: var(--action-size) !important;
   border-radius: 3px !important;
   background-color: transparent !important;
   opacity: 0.8;
@@ -1562,7 +1541,7 @@ textarea:focus,
   background: var(--vscode-button-background);
 }
 
-.button:hover:not(:disabled) {
+.button:hover:not(:disabled):not(.disabled) {
   background: var(--vscode-button-hoverBackground);
 }
 
@@ -1571,7 +1550,7 @@ textarea:focus,
   background: var(--vscode-button-secondaryBackground);
 }
 
-.button.secondary:hover:not(:disabled) {
+.button.secondary:hover:not(:disabled):not(.disabled) {
   background: var(--vscode-button-secondaryHoverBackground);
 }
 
@@ -1739,7 +1718,6 @@ textarea:focus,
 /* The chosen skills folder, one row under the source and the agents. */
 .sbx-knowledge-folder {
   grid-column: 2 / 4;
-  align-items: center;
 }
 
 .sbx-knowledge-rows .select-field {
@@ -1884,8 +1862,8 @@ textarea:focus,
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: var(--action-size);
+  height: var(--action-size);
   opacity: 0.8;
 }
 
@@ -2145,8 +2123,8 @@ textarea:focus,
 }
 
 .dialog-color {
-  width: 24px;
-  height: 24px;
+  width: var(--action-size);
+  height: var(--action-size);
   border: 1px solid var(--vscode-panel-border);
   border-radius: 2px;
 }
@@ -2167,7 +2145,8 @@ textarea:focus,
   outline-offset: 1px;
 }
 
-.button:disabled {
+.button:disabled,
+.button.disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -2279,15 +2258,6 @@ textarea:focus,
   border-radius: 2px;
 }
 
-.account-item:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.account-item.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
-}
-
 .account-label {
   display: flex;
   flex-direction: column;
@@ -2303,7 +2273,7 @@ textarea:focus,
 }
 
 .account-host {
-  font-size: 12px;
+  font-size: var(--small-font-size);
   color: var(--vscode-descriptionForeground);
 }
 
@@ -2338,10 +2308,6 @@ textarea:focus,
   border-radius: 2px;
 }
 
-.repository-item:hover {
-  background: var(--vscode-list-hoverBackground);
-}
-
 .repository-name {
   flex: 1;
   min-width: 0;
@@ -2354,7 +2320,7 @@ textarea:focus,
 .repository-clone {
   visibility: hidden;
   padding: 1px 8px;
-  font-size: 12px;
+  font-size: var(--small-font-size);
 }
 
 .repository-item:hover .repository-clone {

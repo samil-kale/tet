@@ -1,4 +1,4 @@
-import { CONTROL_ENV } from "../../shared/control";
+import { CONTROL_ENV, CONTROL_HOST } from "../../shared/control";
 
 /**
  * Source of `report(event, sessionId)` for agents reporting turns from inside their own process
@@ -33,7 +33,7 @@ function report(event: string, sessionId: string | undefined): void {
   try {
     const request = http.request(
       {
-        host: process.env[CONTROL.host] || "127.0.0.1",
+        host: process.env[CONTROL.host] || ${JSON.stringify(CONTROL_HOST)},
         port: Number(port),
         method: "POST",
         path: "/",

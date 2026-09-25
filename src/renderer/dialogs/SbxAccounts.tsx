@@ -103,7 +103,6 @@ export function SbxAccounts({
               />
               <SecretInput
                 stored={row.account !== undefined}
-                storedTitle="Stored on this machine; typing replaces it."
                 emptyTitle="A Docker personal access token, stored on this machine."
                 placeholder="Token"
                 value={row.token}

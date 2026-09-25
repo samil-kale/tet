@@ -6,7 +6,8 @@ import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { filled, prompt, refusal, singleField } from "../ui/Dialog";
+import { askName, refusal } from "../ui/Dialog";
+import { baseName } from "../files/explorer-tree";
 import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
@@ -241,16 +242,13 @@ export const Pane = memo(function Pane({
 
   const askRename = useCallback(
     async (tab: TerminalDescriptor) => {
-      await prompt({
+      await askName({
         title: "Rename session",
-        value: tab.title,
+        current: tab.title,
         confirmLabel: "Rename",
-        ready: filled,
-        render: singleField("Name", MAX_TITLE_LENGTH),
+        maxLength: MAX_TITLE_LENGTH,
         submit: async (name) =>
-          name.trim() === tab.title
-            ? undefined
-            : refusal(await window.tet.terminals.rename(projectId, tab.tabId, name.trim()), "Could not rename the session")
+          refusal(await window.tet.terminals.rename(projectId, tab.tabId, name), "Could not rename the session")
       });
     },
     [projectId]
@@ -262,7 +260,7 @@ export const Pane = memo(function Pane({
   /** The session title; a session-less agent's name; the editor tab's file name. */
   const tabLabel = (tab: PaneTab): string => {
     if (isEditorTab(tab)) {
-      return tab.path.split("/").at(-1) ?? tab.path;
+      return baseName(tab.path);
     }
     if (tab.title) {
       return tab.title;

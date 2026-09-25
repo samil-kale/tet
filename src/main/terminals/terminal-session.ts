@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { IPty } from "node-pty";
+import { errorMessage } from "../../shared/errors";
 import type { TerminalStatus } from "../../shared/types";
 import { killProcessTree, resolveCommand, spawnAgentProcess, type SpawnOptions } from "./pty";
 import { timeStartup } from "../event-loop-monitor";
@@ -161,7 +162,7 @@ export class TerminalSession {
       );
     } catch (error) {
       console.error(`[tet] failed to spawn ${this.executable}:`, error);
-      this.callbacks.onOutput(`\r\n[tet] failed to spawn ${this.executable}:\r\n${String(error)}\r\n`);
+      this.callbacks.onOutput(`\r\n[tet] failed to spawn ${this.executable}:\r\n${errorMessage(error)}\r\n`);
       this.setStatus("error");
       return;
     }

@@ -1,12 +1,11 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { SANDBOX_HOME, sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { writePiExtension } from "./extension";
-import { piSessionProvider } from "./sessions";
+import { piAgentDir, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 
 /** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32
@@ -76,13 +75,13 @@ export const piAgent: AgentDefinition = {
   },
   // Per pi's bundled docs (0.85.1): skills in `~/.pi/agent/skills` and `~/.agents/skills`,
   // extensions in `~/.pi/agent/extensions`, `~/.pi/agent/AGENTS.md` (`AGENTS.override.md`
-  // preferred) — at their defaults, as `PI_CODING_AGENT_DIR` is never set.
+  // preferred) — under the agent dir the sessions are read from.
   sandboxKnowledge: () => {
-    const home = os.homedir();
-    const instructionsHost = [path.join(home, ".pi", "agent", "AGENTS.override.md"), path.join(home, ".pi", "agent", "AGENTS.md")].find((file) => fs.existsSync(file));
+    const agentDir = piAgentDir();
+    const instructionsHost = [path.join(agentDir, "AGENTS.override.md"), path.join(agentDir, "AGENTS.md")].find((file) => fs.existsSync(file));
     return {
-      skills: [{ host: path.join(home, ".pi", "agent", "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` }],
-      plugins: [{ host: path.join(home, ".pi", "agent", "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
+      skills: [{ host: path.join(agentDir, "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` }],
+      plugins: [{ host: path.join(agentDir, "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
       instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : []
     };
   },

@@ -151,8 +151,12 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
  * and settings.json's `sessionDir` are not honoured: the latter means reading the user's config.
  */
 function sessionsRoot(): string {
-  const agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
-  return path.join(agentDir, "sessions");
+  return path.join(piAgentDir(), "sessions");
+}
+
+/** pi's agent dir, where its sessions and knowledge live; tet never sets it. */
+export function piAgentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
 }
 
 /**

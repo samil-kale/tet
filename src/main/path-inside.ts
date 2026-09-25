@@ -1,3 +1,4 @@
+import * as os from "node:os";
 import * as path from "node:path";
 
 /**
@@ -17,4 +18,13 @@ export function relativeInside(root: string, target: string): string | undefined
  */
 export function repositoryRelative(root: string, target: string): string | undefined {
   return relativeInside(root, target)?.replace(/\\/g, "/");
+}
+
+/** Expands a leading `~` or `~/…` to the home folder, as a shell would; on win32 `~\…` too. */
+export function expandHome(hostPath: string): string {
+  if (hostPath === "~") {
+    return os.homedir();
+  }
+  const homeRelative = hostPath.startsWith("~/") || (path.sep === "\\" && hostPath.startsWith("~\\"));
+  return homeRelative ? path.join(os.homedir(), hostPath.slice(2)) : hostPath;
 }

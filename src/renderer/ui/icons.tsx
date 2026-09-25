@@ -24,7 +24,7 @@ const GRID = 16;
  * half a stroke.
  *
  * The box is `--icon-size` (13px), stated in CSS. A new icon comes from Lucide first (lucide.dev,
- * ISC), vendored on its 24-unit grid (`Svg`, or `fitIcon` for a fill-only drawing); a hand drawing
+ * ISC), vendored on its 24-unit grid (`Svg`, or `FillSvg` for a fill-only drawing); a hand drawing
  * is for what Lucide has no match for.
  */
 function geometry(extent: number, cx: number, cy: number, grid: number, stroke: number) {
@@ -35,10 +35,37 @@ function geometry(extent: number, cx: number, cy: number, grid: number, stroke: 
   };
 }
 
-/** The same fitting for a fill-only icon on its own grid (agent-icons.tsx); a stroked one is drawn
- *  with `Svg`. */
-export function fitIcon(extent: number, cx: number, cy: number, grid: number): string {
-  return geometry(extent, cx, cy, grid, 0).viewBox;
+/** `Svg`'s box for a fill-only icon on its own grid (git's mark, agent-icons.tsx): the same
+ *  fitting, nothing stroked. `extent` is measured, a `scale` already divided in. */
+export function FillSvg({
+  className,
+  extent,
+  cx,
+  cy,
+  grid,
+  shapeRendering,
+  children
+}: IconProps & {
+  extent: number;
+  cx: number;
+  cy: number;
+  grid: number;
+  shapeRendering?: "crispEdges";
+  children: React.ReactNode;
+}) {
+  return (
+    <svg
+      className={className}
+      // Fallback only, as `Svg`'s.
+      width="13"
+      height="13"
+      viewBox={geometry(extent, cx, cy, grid, 0).viewBox}
+      shapeRendering={shapeRendering}
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
 }
 
 /**
@@ -242,18 +269,12 @@ const GIT_SCALE = 16 / 13;
 
 export function GitIcon(props: IconProps) {
   return (
-    <svg
-      className={props.className}
-      width="13"
-      height="13"
-      viewBox={fitIcon(28 / GIT_SCALE, 16, 16, 32)}
-      aria-hidden="true"
-    >
+    <FillSvg className={props.className} extent={28 / GIT_SCALE} cx={16} cy={16} grid={32}>
       <path
         fill="currentColor"
         d="M16 2c-.504 0-.996.184-1.375.563l-2.813 2.843c-.152.082-.28.2-.374.344l-8.876 8.875a1.947 1.947 0 0 0 0 2.75l12.063 12.063a1.955 1.955 0 0 0 2.75 0l12.063-12.063a1.947 1.947 0 0 0 0-2.75L17.374 2.562A1.92 1.92 0 0 0 16 2m0 2.031L27.969 16L16 27.969L4.031 16l8.282-8.281l1.75 1.75A2 2 0 0 0 14 10c0 .738.402 1.371 1 1.719v8.562c-.598.348-1 .98-1 1.719a1.999 1.999 0 1 0 4 0c0-.738-.402-1.371-1-1.719v-7.843l3.063 3.062A2 2 0 0 0 22 18a2 2 0 0 0 1.999-2a2 2 0 0 0-2.5-1.938L17.937 10.5A2 2 0 0 0 16 8a2 2 0 0 0-.53.063l-1.75-1.75z"
       />
-    </svg>
+    </FillSvg>
   );
 }
 
@@ -512,7 +533,7 @@ export function FilesIcon(props: IconProps) {
 }
 
 /** The EXPLORER header's "New File...": Lucide's `file-plus` (lucide.dev, ISC), on its native
- *  24-unit grid (`fitIcon`/`fitStroke` take the grid). Measured, stroke included: 18 by 22; the
+ *  24-unit grid (`FillSvg`/`Svg` take the grid). Measured, stroke included: 18 by 22; the
  *  geometric mean would clip the bottom, so the long-axis cap: extent 20.23, centered at (12, 12). */
 export function NewFileIcon(props: IconProps) {
   return (
@@ -534,16 +555,6 @@ export function NewFolderIcon(props: IconProps) {
       <path d="M12 10v6" />
       <path d="M9 13h6" />
       <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-    </Lucide>
-  );
-}
-
-/** The sbx Knowledge tab's "Choose folder": Lucide's `folder-open`, vendored the same way.
- *  Measured: 22 by 19, as `folder-plus`: extent 20.45, centered at (12, 11.5). */
-export function FolderOpenIcon(props: IconProps) {
-  return (
-    <Lucide {...props} extent={20.45} cy={11.5}>
-      <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
     </Lucide>
   );
 }

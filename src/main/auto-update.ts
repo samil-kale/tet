@@ -8,6 +8,7 @@ import writeFileAtomic from "write-file-atomic";
 import { assetName, installCommand, installRoot, rootExecutable, runningUpdater, updateLockPath } from "../shared/release";
 import type { UpdateResult } from "../shared/release";
 import type { NoticeSeverity } from "../shared/types";
+import { readJson } from "./json-file";
 import { resumableDownload } from "./resumable-download";
 
 /** Not urgent: an update installs only once tet quits. */
@@ -53,10 +54,8 @@ async function updaterDone(): Promise<void> {
 /** The last update's result, reported once and deleted. */
 function reportLastUpdate(notify: Notify): void {
   const file = resultPath();
-  let result: UpdateResult;
-  try {
-    result = JSON.parse(fs.readFileSync(file, "utf8")) as UpdateResult;
-  } catch {
+  const result = readJson(file) as UpdateResult | undefined;
+  if (result === undefined) {
     return;
   }
   fs.rmSync(file, { force: true });

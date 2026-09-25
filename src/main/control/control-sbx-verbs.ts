@@ -2,7 +2,6 @@ import * as path from "node:path";
 import type { ControlRequest } from "../../shared/control";
 import type {
   Project,
-  SbxAccess,
   SbxKnowledgeConfig,
   SbxKnowledgeKind,
   SbxProjectConfig,
@@ -10,6 +9,7 @@ import type {
   SbxStatus,
   SbxVariable
 } from "../../shared/types";
+import { SBX_ACCESS } from "../../shared/types";
 import {
   SBX_KNOWLEDGE_KINDS,
   keptValues,
@@ -185,11 +185,11 @@ export function sbxVerbs(
       const paths = list(args, "paths").map((entry) => {
         // The last colon: a Windows path has one of its own.
         const at = entry.lastIndexOf(":");
-        const access = entry.slice(at + 1);
-        if (at < 0 || (access !== "ro" && access !== "rw")) {
+        const access = SBX_ACCESS.find((candidate) => candidate === entry.slice(at + 1));
+        if (at < 0 || access === undefined) {
           throw new ControlError("bad_args", `not <path>:<ro|rw>: ${entry}`);
         }
-        return { path: absolute(entry.slice(0, at)), access: access as SbxAccess };
+        return { path: absolute(entry.slice(0, at)), access };
       });
       return editSbx(args, caller, ({ config }) => ({ config: { ...config, paths } }));
     },

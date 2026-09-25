@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { EMPTY_SBX_KNOWLEDGE } from "../shared/types";
+import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../shared/types";
 import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
 import { isRecord, readJson, saveJson } from "./json-file";
 import { seal, unseal } from "./sealed";
@@ -26,7 +26,7 @@ function toKnowledge(value: unknown): SbxKnowledgeConfig | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
-  const toAccess = (field: unknown): SbxAccess | false => (field === "ro" || field === "rw" ? field : false);
+  const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((access) => access === field) ?? false;
   const knowledge: SbxKnowledgeConfig = {
     skills: toAccess(value.skills),
     plugins: toAccess(value.plugins),

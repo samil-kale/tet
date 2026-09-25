@@ -160,6 +160,11 @@ export function rootIndexFor(roots: ExplorerRoot[], filePath: string): number | 
   return best;
 }
 
+/** The last segment of a repository-relative path. */
+export function baseName(entryPath: string): string {
+  return entryPath.slice(entryPath.lastIndexOf("/") + 1);
+}
+
 /** "" at the root. */
 export function parentOf(entryPath: string): string {
   const index = entryPath.lastIndexOf("/");

@@ -150,6 +150,34 @@ export function singleField(label: string, maxLength?: number): PromptOptions<st
   );
 }
 
+interface NameOptions {
+  title: string;
+  detail?: string;
+  confirmLabel: string;
+  /** The name as it stands, for a rename: handed back unchanged it is done, nothing run. Left out
+   *  for a new one. */
+  current?: string;
+  maxLength?: number;
+  /** Runs the name typed, trimmed (`PromptOptions.submit`). */
+  submit: (name: string) => Promise<string | undefined>;
+}
+
+/** The question every create and rename asks: one name, required and trimmed. */
+export async function askName({ title, detail, confirmLabel, current, maxLength, submit }: NameOptions): Promise<void> {
+  await prompt({
+    title,
+    detail,
+    confirmLabel,
+    value: current ?? "",
+    ready: filled,
+    render: singleField("Name", maxLength),
+    submit: (typed) => {
+      const name = typed.trim();
+      return name === current ? Promise.resolve(undefined) : submit(name);
+    }
+  });
+}
+
 interface FrameProps {
   title: string;
   confirmLabel: string;
@@ -193,19 +221,13 @@ function Frame({ title, confirmLabel, disabled, busy, focusSubmit, onSubmit, onC
 
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
   const [checked, setChecked] = useState(false);
-  const [running, setRunning] = useState(false);
-
-  const submit = async (): Promise<void> => {
-    if (dialog.submit) {
-      setRunning(true);
-      try {
-        await dialog.submit(checked);
-      } finally {
-        setRunning(false);
-      }
-    }
-    dialog.answer({ confirmed: true, checked });
-  };
+  const { busy: running, submit } = useSubmit(
+    async () => {
+      await dialog.submit?.(checked);
+      return undefined;
+    },
+    () => dialog.answer({ confirmed: true, checked })
+  );
 
   return (
     <Frame

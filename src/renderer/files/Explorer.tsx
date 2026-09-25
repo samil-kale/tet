@@ -16,7 +16,7 @@ import {
 } from "./explorer-tree";
 import { FileMarkIcon, INDENT_BASE, INDENT_STEP, Twistie } from "./tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, filled, prompt, singleField } from "../ui/Dialog";
+import { askName, confirm } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 
 interface RowsProps {
@@ -241,30 +241,22 @@ export const Explorer = memo(function Explorer({
 
   const askNew = async (kind: "file" | "folder", dir: string): Promise<void> => {
     const create = kind === "file" ? window.tet.repository.createFile : window.tet.repository.createDirectory;
-    await prompt({
+    await askName({
       title: kind === "file" ? "New File" : "New Folder",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
-      value: "",
       confirmLabel: "Create",
-      ready: filled,
-      render: singleField("Name"),
-      submit: (name) => runAsked(() => create(project.id, under(dir, name.trim())))
+      submit: (name) => runAsked(() => create(project.id, under(dir, name)))
     });
   };
 
   const askRename = async (node: TreeNode): Promise<void> => {
     // A compacted row's answer replaces the whole chain, so it goes where the outermost folder is.
     const dir = node.path.split("/").slice(0, -node.name.split("/").length).join("/");
-    await prompt({
+    await askName({
       title: "Rename",
-      value: node.name,
+      current: node.name,
       confirmLabel: "Rename",
-      ready: filled,
-      render: singleField("Name"),
-      submit: async (name) =>
-        name.trim() === node.name
-          ? undefined
-          : runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(dir, name.trim())))
+      submit: (name) => runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(dir, name)))
     });
   };
 

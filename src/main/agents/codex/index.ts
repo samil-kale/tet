@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
@@ -8,7 +7,7 @@ import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { setupCodexHooks } from "./hooks";
-import { codexSessionProvider } from "./sessions";
+import { codexHome, codexSessionProvider } from "./sessions";
 
 /**
  * On win32 Codex reads its colors from the *console* (`GetConsoleScreenBufferInfoEx` on ConPTY,
@@ -79,13 +78,14 @@ export const codexAgent: AgentDefinition = {
   },
   // Measured: skills in `~/.codex/skills` and `~/.agents/skills` (its "failed to load skill" log
   // names both); all of `~/.codex/plugins` (code under `plugins/cache/…`); `~/.codex/AGENTS.md`,
-  // `AGENTS.override.md` preferred per its load order.
+  // `AGENTS.override.md` preferred per its load order. Under the config root the sessions are read
+  // from.
   sandboxKnowledge: () => {
-    const home = os.homedir();
-    const instructionsHost = [path.join(home, ".codex", "AGENTS.override.md"), path.join(home, ".codex", "AGENTS.md")].find((file) => fs.existsSync(file));
+    const home = codexHome();
+    const instructionsHost = [path.join(home, "AGENTS.override.md"), path.join(home, "AGENTS.md")].find((file) => fs.existsSync(file));
     return {
-      skills: [{ host: path.join(home, ".codex", "skills"), target: `${SANDBOX_HOME}/.codex/skills` }],
-      plugins: [{ host: path.join(home, ".codex", "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
+      skills: [{ host: path.join(home, "skills"), target: `${SANDBOX_HOME}/.codex/skills` }],
+      plugins: [{ host: path.join(home, "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
       instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
     };
   },

@@ -6,6 +6,7 @@ import {
 } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
+import { baseName } from "../files/explorer-tree";
 import { buildShikiColors } from "../terminal/theme";
 
 /** The shiki theme coloring the editor (monaco has no grammars, see monaco-core.ts). Token colors
@@ -217,7 +218,7 @@ export function loadGrammar(shiki: HighlighterCore, language: string): Promise<v
 }
 
 export function languageForPath(filePath: string): string | undefined {
-  const name = filePath.slice(filePath.lastIndexOf("/") + 1).toLowerCase();
+  const name = baseName(filePath).toLowerCase();
   const extension = name.slice(name.lastIndexOf(".") + 1);
   // Own keys only, as `languageForFence`: "a.constructor" is no language.
   return Object.hasOwn(EXTENSIONS, extension) ? EXTENSIONS[extension] : undefined;

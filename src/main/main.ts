@@ -6,6 +6,7 @@ import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
 import { AGENTS } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { GitLoginStore } from "./git-logins";
+import { WINDOW_ARGS } from "../shared/api";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
@@ -115,7 +116,7 @@ function flushOutput(): void {
   const live = [...pendingOutput.values()].filter((pending) => sessions.get(pending.projectId)?.hasTab(pending.tabId));
   pendingOutput.clear();
   if (live.length > 0) {
-    send("terminal:output", live);
+    send("terminals:output", live);
   }
 }
 
@@ -248,7 +249,7 @@ const envRequests = new EnvRequests(
 /** What control verbs answer beyond the stores. */
 const records = new ControlRecords();
 const repositories = new RepositoryManager(
-  (projectId, state) => send("repo:state-changed", { projectId, state }),
+  (projectId, state) => send("repository:state-changed", { projectId, state }),
   notice,
   (projectId) => {
     send("commands:changed", { projectId });
@@ -258,13 +259,13 @@ const repositories = new RepositoryManager(
       ?.sbxConfigChanged()
       .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
   },
-  (projectId) => send("repo:files-changed", { projectId }),
-  (projectId, path) => send("repo:file-changed", { projectId, path }),
+  (projectId) => send("repository:files-changed", { projectId }),
+  (projectId, path) => send("repository:file-changed", { projectId, path }),
   logins
 );
 const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (projectId, tabs) => {
-    send("terminal:tabs", { projectId, tabs });
+    send("terminals:tabs", { projectId, tabs });
     awaitedToastTab(projectId);
     records.keepOutputs(projectId, new Set(tabs.map((tab) => tab.tabId)));
   },
@@ -279,9 +280,9 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
       clearTimeout(flushTimer);
       flushOutput();
     }
-    send("terminal:status", { projectId, tabId, status });
+    send("terminals:status", { projectId, tabId, status });
   },
-  onStartupProgress: (projectId, show) => send("terminal:startup-progress", { projectId, show }),
+  onStartupProgress: (projectId, show) => send("terminals:startup-progress", { projectId, show }),
   onNotice: notice
 });
 
@@ -333,7 +334,7 @@ function showToastTarget(target: { projectId: string; tabId: string; sessionId?:
     findTab(target.projectId, target.tabId) ??
     (target.sessionId !== undefined ? findTab(target.projectId, target.sessionId) : undefined);
   if (tab) {
-    send("terminal:show", { projectId: target.projectId, tabId: tab.tabId });
+    send("terminals:show", { projectId: target.projectId, tabId: tab.tabId });
   }
   return tab !== undefined;
 }
@@ -407,7 +408,7 @@ async function startControl(): Promise<void> {
         records,
         openEditor: (projectId, filePath, keep) => send("editor:open", { projectId, path: filePath, keep }),
         editorContent,
-        showTab: (projectId, tabId) => send("terminal:show", { projectId, tabId }),
+        showTab: (projectId, tabId) => send("terminals:show", { projectId, tabId }),
         notify: showDesktopNotification,
         applyTheme,
         environment,
@@ -495,7 +496,7 @@ function createWindow(): void {
       spellcheck: false,
       // The preload reads the theme off process.argv synchronously, so the first frame is right;
       // an IPC round trip would paint it in the defaults.
-      additionalArguments: [`--tet-theme=${theme.id}`, ...(isWaylandSession() ? ["--tet-wayland"] : [])]
+      additionalArguments: [`${WINDOW_ARGS.theme}${theme.id}`, ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : [])]
     }
   });
 

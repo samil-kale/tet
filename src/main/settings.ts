@@ -117,7 +117,7 @@ function themeId(value: unknown, kind: ThemeKind): string {
  * still reaches the user (`effectivePrompt` fills it in).
  */
 function promptTexts(value: unknown): PromptSettings {
-  const texts = (typeof value === "object" && value !== null ? value : {}) as Partial<Record<string, unknown>>;
+  const texts: Partial<Record<string, unknown>> = isRecord(value) ? value : {};
   return Object.fromEntries(
     PROMPT_IDS.map((id) => {
       const text = texts[id];

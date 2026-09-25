@@ -20,6 +20,11 @@ const ANSI_CSS_VARS: Record<string, string> = {
   brightWhite: "--vscode-terminal-ansiBrightWhite"
 };
 
+/** The theme's editor font, resolved for xterm and monaco alike, which take no var(). */
+export function editorFontFamily(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim() || "monospace";
+}
+
 /**
  * xterm draws on canvas and needs resolved colors, not var() references. Built per terminal: the
  * blue/magenta swap below depends on the agent.

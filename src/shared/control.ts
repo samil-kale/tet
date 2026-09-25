@@ -16,9 +16,12 @@ export const CONTROL_ENV = {
   projectId: "TET_PROJECT_ID",
   tabId: "TET_TAB_ID",
   /** Only sbx sessions set it ("host.docker.internal" — the sandbox has its own loopback); unset
-   *  means "127.0.0.1". Also needs the policy allow in sbx.ts's isControlChannelAllowed. */
+   *  means CONTROL_HOST. Also needs the policy allow in sbx.ts's isControlChannelAllowed. */
   host: "TET_CONTROL_HOST"
 } as const;
+
+/** Where the server listens, and where a caller outside a sandbox reaches it. */
+export const CONTROL_HOST = "127.0.0.1";
 
 export type ControlErrorCode = "unauthorized" | "unknown_verb" | "bad_args" | "not_found" | "internal" | "timeout";
 
@@ -347,7 +350,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     group: "The other tabs",
     usage: `tabs-wait <tab-id> [--session] [--busy] [--idle] [--status <${TERMINAL_STATUSES.join("|")}>] [--timeout <seconds>] [--project <id>]`,
     summary:
-      "Wait until every condition given holds: a session (--session), working a turn (--busy), not working one (--idle), a status. Exits 4 after the timeout (30 s).",
+      "Wait until every condition given holds: a session (--session), working a turn (--busy), not working one (--idle; waiting on a question counts as that, as the spinner shows it), a status. Exits 4 after the timeout (30 s).",
     positionals: ["tabId"],
     sandbox: "ownProject"
   },

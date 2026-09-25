@@ -18,9 +18,8 @@ import { isWindows } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
 import { atLeastOne, EditRow, patched, RowMark, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
-import { Checkbox } from "../ui/Field";
+import { Checkbox, FieldGroup, PathInput } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
-import { FolderOpenIcon } from "../ui/icons";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
   { value: "ro", label: "Read" },
@@ -330,13 +329,6 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
       }
       return next;
     });
-  /** A cancelled pick keeps the folder there was. */
-  const pickSkillsFolder = async (): Promise<void> => {
-    const chosen = await window.tet.projects.pickDirectory("Bring skills from a folder", state.knowledge.skillsFolder || undefined);
-    if (chosen) {
-      setSkillsFolder(chosen);
-    }
-  };
   /** A cancelled pick adds nothing. Folder and file are two buttons: Electron shows both kinds in
    *  one picker only on macOS (see `projects:pick-file`); sbx mounts either the same way. */
   const addPath = async (picked: Promise<string | null>): Promise<void> => {
@@ -348,8 +340,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
 
   if (section === "knowledge") {
     return (
-      <div className="dialog-field">
-        <span className="dialog-field-label">Bring from this machine</span>
+      <FieldGroup label="Bring from this machine">
         <div className="sbx-knowledge-rows">
           {KNOWLEDGE_LABELS.map(({ kind, label }) => {
             const access = state.knowledge[kind];
@@ -399,19 +390,21 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
                 </div>
                 {access !== false && folder !== undefined && (
                   // No remove: "Each agent's own" drops the folder.
-                  <div className="dialog-field-row sbx-knowledge-folder">
-                    {/* Disabled: the path is what the picker returned. */}
-                    <input type="text" disabled value={folder} placeholder="No folder chosen" title={folder} />
-                    <button type="button" className="icon-button" title="Choose folder" onClick={() => void pickSkillsFolder()}>
-                      <FolderOpenIcon />
-                    </button>
+                  <div className="sbx-knowledge-folder">
+                    <PathInput
+                      value={folder}
+                      pickTitle="Bring skills from a folder"
+                      onChange={setSkillsFolder}
+                      pickedOnly
+                      placeholder="No folder chosen"
+                    />
                   </div>
                 )}
               </Fragment>
             );
           })}
         </div>
-      </div>
+      </FieldGroup>
     );
   }
 

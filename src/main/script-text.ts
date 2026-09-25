@@ -5,9 +5,10 @@ import writeFileAtomic from "write-file-atomic";
  * launchers).
  */
 
-/** sh chokes on CRLF (`then\r`), whatever the source's line endings. */
+/** sh chokes on CRLF (`then\r`), whatever the source's line endings. Executable: run directly
+ *  from PATH. */
 export function writePosixScript(file: string, contents: string): void {
-  writeFileAtomic.sync(file, contents.replace(/\r\n/g, "\n"));
+  writeFileAtomic.sync(file, contents.replace(/\r\n/g, "\n"), { mode: 0o755 });
 }
 
 /** A POSIX sh single-quoted string, safe for any content. */

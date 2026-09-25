@@ -9,7 +9,7 @@ import { endLinkHover, type WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isLinux, isMac, isModifierHeld } from "../platform";
 import { reportSlow } from "../slow-report";
-import { buildXtermTheme } from "./theme";
+import { buildXtermTheme, editorFontFamily } from "./theme";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
 interface TerminalView {
@@ -357,11 +357,8 @@ function acquireWebgl(projectId: string, tabId: string, view: TerminalView): voi
 }
 
 function createView(projectId: string, tabId: string, agent: AgentInfo): TerminalView {
-  const fontFamily =
-    getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim() || "monospace";
-
   const term = new Terminal({
-    fontFamily,
+    fontFamily: editorFontFamily(),
     fontSize: defaultFontSize(),
     theme: buildXtermTheme(agent),
     scrollback: 4000,

@@ -22,7 +22,7 @@ import { SANDBOX_HOME } from "../../terminals/hook-target";
 import { mapLimited } from "../../map-limited";
 
 /** Codex's config root; tet never overrides it. */
-function codexHome(): string {
+export function codexHome(): string {
   return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
 }
 

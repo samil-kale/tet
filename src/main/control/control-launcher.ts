@@ -30,7 +30,5 @@ export function writeLaunchers(dataRoot: string, cliPath: string): string {
     posix,
     `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shellSingleQuote(process.execPath)} ${shellSingleQuote(cliPath)} "$@"\n`
   );
-  // Run directly from PATH, so it needs the executable bit.
-  fs.chmodSync(posix, 0o755);
   return binDir;
 }

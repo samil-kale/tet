@@ -5,7 +5,7 @@ import { HOST_TARGET, SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-
 import { createNonAsciiThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
-import { runOpencode } from "./cli";
+import { listOpencodeSessions, runOpencode } from "./cli";
 import { sandboxConfigDir, writeOpencodePlugin } from "./plugin";
 import { resolveOpencodeUrlPrefix } from "./session-urls";
 import { opencodeSessionProvider, registerAgentDir } from "./sessions";
@@ -39,9 +39,7 @@ export const opencodeAgent: AgentDefinition = {
   // The question runs without the plugin (askAgent uses the machine's environment), so no record:
   // opencode's own listing must find it, one process each.
   cleanupAsk: async (executable, cwd) => {
-    const output = await runOpencode(executable, cwd, null, ["session", "list", "--format", "json"]);
-    const entries = (output.trim() ? JSON.parse(output) : []) as { id?: unknown; title?: unknown }[];
-    for (const entry of entries) {
+    for (const entry of (await listOpencodeSessions(executable, cwd, null)) ?? []) {
       if (typeof entry.id === "string" && String(entry.title) === ASK_TITLE) {
         await runOpencode(executable, cwd, null, ["session", "delete", entry.id]).catch(() => undefined);
       }
@@ -67,6 +65,10 @@ export const opencodeAgent: AgentDefinition = {
     });
   },
   prepareSandboxSpawn: (cwd, paths, sandbox) => {
+    // The sandbox is the safety boundary, as with Claude Code's kit
+    // (--dangerously-skip-permissions). sbx's opencode kit does not set this itself (measured,
+    // 0.42.1) — drop it once a kit does.
+    const args = ["--auto"];
     try {
       // Its own config dir (a Linux bun install); records and rename requests stay agentDir's,
       // shared with host tabs.
@@ -76,13 +78,10 @@ export const opencodeAgent: AgentDefinition = {
       for (const [key, file] of Object.entries(installTuiConfig(configDir))) {
         env[key] = SANDBOX_TARGET.embed(file);
       }
-      // The sandbox is the safety boundary, as with Claude Code's kit
-      // (--dangerously-skip-permissions). sbx's opencode kit does not set this itself (measured,
-      // 0.42.1) — drop it once a kit does.
-      return { args: ["--auto"], env };
+      return { args, env };
     } catch (error) {
       console.error("[tet] could not write opencode's sandbox plugin:", error);
-      return { args: [] };
+      return { args };
     }
   },
   // Documented, not verified: skills in `~/.config/opencode/skills`, `~/.claude/skills`,

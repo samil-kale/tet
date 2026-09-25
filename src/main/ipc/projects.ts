@@ -65,7 +65,7 @@ export function registerProjectsIpc({
     }
   );
 
-  ipcMain.handle("projects:open-path", (_event, directory: string): Promise<AddRepositoryResult> =>
+  ipcMain.handle("projects:open", (_event, directory: string): Promise<AddRepositoryResult> =>
     addProject(projectDeps, directory)
   );
 
@@ -159,17 +159,17 @@ export function registerProjectsIpc({
 
   // Each announces its outcome as `projects:changed`, as the control channel's verbs do.
   ipcMain.handle(
-    "projects:worktree-add",
+    "projects:add-worktree",
     (_event, projectId: string, branch: string): Promise<AddRepositoryResult> =>
       addWorktree(projectDeps, projectId, branch)
   );
   ipcMain.handle(
-    "projects:worktree-delete",
+    "projects:delete-worktree",
     (_event, worktree: WorktreeRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult> =>
       deleteWorktree(projectDeps, worktree, options)
   );
   ipcMain.handle(
-    "projects:worktree-rename",
+    "projects:rename-worktree",
     (_event, worktree: WorktreeRef, branch: string): Promise<GitActionResult> =>
       renameWorktree(projectDeps, worktree, branch)
   );

@@ -2,7 +2,7 @@ import { WORKTREES_NEED_GIT } from "../../shared/types";
 import type { GitActionResult, WorktreeRef } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, filled, prompt, singleField } from "../ui/Dialog";
+import { askName, confirm } from "../ui/Dialog";
 
 /**
  * The worktree questions, asked alike from a project row and from the branch tree's WORKTREES:
@@ -21,21 +21,16 @@ export function worktreeEntry(label: string, supported: boolean, run: (() => voi
 
 /** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
 export async function askNewWorktree(projectId: string, run: GitRun, base: string): Promise<void> {
-  await prompt({
+  await askName({
     title: "New worktree",
     detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/worktrees.`,
-    value: "",
     confirmLabel: "Create worktree",
-    ready: filled,
-    render: singleField("Name"),
     // The name is the branch's, so git refuses the same names here; shown at the field.
-    submit: (typed) => {
-      const name = typed.trim();
-      return run.ask(`Creating worktree ${name}...`, async () => {
+    submit: (name) =>
+      run.ask(`Creating worktree ${name}...`, async () => {
         const added = await window.tet.projects.addWorktree(projectId, name);
         return added.project ? { ok: true } : { ok: false, error: added.error };
-      });
-    }
+      })
   });
 }
 
@@ -46,18 +41,14 @@ export async function askRenameWorktree(
   run: GitRun,
   canClose: () => Promise<boolean>
 ): Promise<void> {
-  await prompt({
+  await askName({
     title: "Rename worktree",
     detail: "Renames the worktree and its folder. Its terminals are closed first, and agent sessions started there can no longer be resumed.",
-    value: branch,
+    current: branch,
     confirmLabel: "Rename",
-    ready: filled,
-    render: singleField("Name"),
-    // Unchanged, or its unsaved edits kept it: nothing to say, and the question is done.
+    // Its unsaved edits kept it: nothing to say, and the question is done.
     submit: async (name) =>
-      name.trim() === branch || !(await canClose())
-        ? undefined
-        : run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, name.trim()))
+      (await canClose()) ? run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, name)) : undefined
   });
 }
 

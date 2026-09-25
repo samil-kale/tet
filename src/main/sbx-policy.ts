@@ -11,7 +11,8 @@
  * case is ignored on win32, and `dir/**` covers `dir`.
  */
 
-import type { SbxStatus } from "../shared/types";
+import type { SbxAccess, SbxStatus } from "../shared/types";
+import { isRecord } from "./json-file";
 
 type FilesystemAction = "read" | "write";
 
@@ -62,7 +63,7 @@ export function parseFilesystemRules(json: string): FilesystemRule[] {
   } catch {
     return [];
   }
-  const rules = (parsed as { rules?: unknown }).rules;
+  const rules = isRecord(parsed) ? parsed.rules : undefined;
   if (!Array.isArray(rules)) {
     return [];
   }
@@ -134,7 +135,7 @@ function patternRegExp(pattern: string, flavor: PathFlavor): RegExp {
  * ask for read plus write and read respectively, but a write-only grant (`C:\**`, `/**`) was
  * measured to allow both (sbx 0.42.1) — the binary decides.
  */
-export function isMountAllowed(rules: FilesystemRule[], hostPath: string, access: "ro" | "rw", flavor: PathFlavor): boolean {
+export function isMountAllowed(rules: FilesystemRule[], hostPath: string, access: SbxAccess, flavor: PathFlavor): boolean {
   const target = normalize(hostPath, flavor);
   const matching = rules.filter((rule) => rule.resources.some((resource) => patternRegExp(resource, flavor).test(target)));
   const deniedBy: FilesystemAction[] = access === "rw" ? ["read", "write"] : ["read"];

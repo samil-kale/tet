@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { ImageView } from "./ImageView";
 import { isMarkdown } from "./diff-highlight";
 import {
@@ -18,6 +18,7 @@ import {
 import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
 import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
 import { usePaneShare } from "../ui/layout-storage";
+import { useElementSize } from "../ui/use-element-size";
 import { MIN_PANE_WIDTH, Sash } from "../ui/Sash";
 import { isModifierHeld, modifierLabel } from "../platform";
 
@@ -88,29 +89,17 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     }
   }, [visible, active, focused, ready, tabId, path]);
 
-  // One share for every tab's preview, as for the panes; half until dragged. Measured only while
-  // shown, the one time the share becomes pixels.
+  // One share for every tab's preview, as for the panes; half until dragged.
   const [previewShare, setPreviewShare] = usePaneShare("markdown-preview", 1 / 2);
-  const [splitWidth, setSplitWidth] = useState(0);
-  useLayoutEffect(() => {
-    const element = split.current;
-    if (!markdownPreview || !element) {
-      return;
-    }
-    setSplitWidth(element.clientWidth);
-    const observer = new ResizeObserver(() => setSplitWidth(element.clientWidth));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [markdownPreview]);
+  const splitWidth = useElementSize(split, markdownPreview)?.width ?? 0;
   const previewWidth = Math.round(splitWidth * previewShare);
   const resizePreview = useCallback(
     (width: number) => {
-      const total = split.current?.clientWidth;
-      if (total) {
-        setPreviewShare(width / total);
+      if (splitWidth > 0) {
+        setPreviewShare(width / splitWidth);
       }
     },
-    [setPreviewShare]
+    [setPreviewShare, splitWidth]
   );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -157,7 +146,8 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
         <span className="editor-path">{path}</span>
       </div>
       <div className="editor-body">
-        {kind === "error" && <div className="placeholder">{file?.error}</div>}
+        {/* Why is the notice's (editor-views.ts); the tab says only what it is, like the rest. */}
+        {kind === "error" && <div className="placeholder">Could not read the file.</div>}
         {kind === "image" && <ImageView image={{ before: file?.head?.image, after: file?.image }} />}
         {kind === "binary" && <div className="placeholder">Binary file.</div>}
         {kind === "tooLarge" && <div className="placeholder">File too large to edit.</div>}

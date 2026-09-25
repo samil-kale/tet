@@ -4,14 +4,12 @@ import * as path from "node:path";
 import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
 import writeFileAtomic from "write-file-atomic";
 import { isEnvName, isReservedName } from "../shared/env-rules";
-import { COMMAND_COLORS } from "../shared/types";
+import { COMMAND_COLORS, EXPLORER_SORT_ORDERS, SBX_ACCESS } from "../shared/types";
 import type {
   CommandColor,
   ExplorerRoot,
   ExplorerSettings,
-  ExplorerSortOrder,
   ProjectCommand,
-  SbxAccess,
   SbxPath,
   SbxPort,
   SbxProjectConfig,
@@ -50,21 +48,13 @@ const KEY_COMPACT_FOLDERS = "explorer.compactFolders";
 const KEY_SORT_ORDER = "explorer.sortOrder";
 
 /** How the Explorer shows this project; anything of the wrong shape is its default. */
-export interface ExplorerView {
+export interface ExplorerView extends ExplorerSettings {
   /** Top-level nodes; empty means the whole repository as one tree. They may overlap, each file is
    *  still listed once. A `name` is file-only: the tree's menu writes paths alone. */
   folders: ExplorerRoot[];
   /** `files.exclude`'s globs, matched against repository-relative paths. */
   exclude: string[];
-  /** `explorer.excludeGitIgnore`: hide what git ignores too. */
-  excludeGitIgnore: boolean;
-  /** `explorer.compactFolders`: fold `src/main/java` into one row. */
-  compactFolders: boolean;
-  /** `explorer.sortOrder`. */
-  sortOrder: ExplorerSortOrder;
 }
-
-const SORT_ORDERS: readonly ExplorerSortOrder[] = ["default", "mixed", "filesFirst", "type", "modified", "foldersNestsFiles"];
 
 /** `read`'s answer for a file that doesn't parse; `patch` must never write over it. */
 const UNREADABLE: ProjectFile = {};
@@ -234,7 +224,7 @@ function toFolders(value: unknown, root: string): ExplorerRoot[] {
     if (folderPath === undefined || folders.some((folder) => folder.path === folderPath)) {
       continue;
     }
-    const stored = typeof entry === "object" && entry !== null ? (entry as { name?: unknown }).name : undefined;
+    const stored = isRecord(entry) ? entry.name : undefined;
     const name = typeof stored === "string" ? stored.trim() : "";
     folders.push({ path: folderPath, name: name || path.basename(folderPath || path.resolve(root)) });
   }
@@ -261,7 +251,7 @@ export async function readExplorerView(root: string): Promise<ExplorerView> {
     exclude: toExclude(settings[KEY_EXCLUDE]),
     excludeGitIgnore: booleanOr(settings[KEY_EXCLUDE_GIT_IGNORE], DEFAULT_EXPLORER_VIEW.excludeGitIgnore),
     compactFolders: booleanOr(settings[KEY_COMPACT_FOLDERS], DEFAULT_EXPLORER_VIEW.compactFolders),
-    sortOrder: SORT_ORDERS.find((order) => order === settings[KEY_SORT_ORDER]) ?? DEFAULT_EXPLORER_VIEW.sortOrder
+    sortOrder: EXPLORER_SORT_ORDERS.find((order) => order === settings[KEY_SORT_ORDER]) ?? DEFAULT_EXPLORER_VIEW.sortOrder
   };
 }
 
@@ -335,8 +325,6 @@ export function setExplorerSetting<K extends keyof ExplorerSettings>(
   return patch(root, (content) => [settingChange(content, EXPLORER_SETTING_KEYS[key], value)]);
 }
 
-const SBX_ACCESS: readonly SbxAccess[] = ["ro", "rw"];
-
 /**
  * The object entries of a stored array, each handed to `row`; a non-array, and an entry that is
  * not an object, is nothing. `row` answers undefined for a row it will not take — every list in
@@ -348,10 +336,10 @@ function objectRows<T>(value: unknown, row: (entry: Record<string, unknown>) => 
   }
   const rows: T[] = [];
   for (const entry of value) {
-    if (typeof entry !== "object" || entry === null) {
+    if (!isRecord(entry)) {
       continue;
     }
-    const taken = row(entry as Record<string, unknown>);
+    const taken = row(entry);
     if (taken !== undefined) {
       rows.push(taken);
     }

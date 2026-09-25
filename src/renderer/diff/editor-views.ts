@@ -2,6 +2,7 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import type { FileContent } from "../../shared/types";
 import { isMac } from "../platform";
 import { confirm } from "../ui/Dialog";
+import { layoutKey } from "../ui/layout-storage";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
@@ -9,6 +10,7 @@ import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine } from "./markdown";
 import type { EditorReveal, OpenEditor } from "../terminal/editor-tab";
 import { openFile } from "../terminal/terminal-views";
+import { editorFontFamily } from "../terminal/theme";
 
 /**
  * Each editor tab's editor, outside React like the xterms (`terminal-views.ts`): monaco's
@@ -34,10 +36,10 @@ const PREVIEW_IMAGE_DELAY_MS = 1000;
 
 /**
  * Whether a Markdown file opens with its preview beside it: the last answer the user gave, for
- * every tab and the next start. `localStorage` under `Sash.tsx`'s `tet.layout.` namespace, like the
- * preview's width: where the preview shows describes the window, not a repository.
+ * every tab and the next start. A layout key, like the preview's width (`markdown-preview`, a key
+ * of its own): where the preview shows describes the window, not a repository.
  */
-const PREVIEW_DEFAULT_KEY = "tet.layout.markdown-preview";
+const PREVIEW_DEFAULT_KEY = layoutKey("markdown-preview.shown");
 let previewByDefault = localStorage.getItem(PREVIEW_DEFAULT_KEY) === "true";
 
 function setPreviewDefault(shown: boolean): void {
@@ -802,8 +804,7 @@ async function editorSetup(view: EditorView): Promise<EditorSetup | null> {
   if (views.get(view.tabId) !== view) {
     return null;
   }
-  const fontFamily = getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim();
-  return { monaco, options: editorOptions(fontFamily), keybindings: resolveKeybindings(editorKeybindingPreset) };
+  return { monaco, options: editorOptions(editorFontFamily()), keybindings: resolveKeybindings(editorKeybindingPreset) };
 }
 
 /**

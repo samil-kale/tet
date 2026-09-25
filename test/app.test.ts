@@ -89,7 +89,7 @@ ${stderr.slice(uncaught)}`);
     const tab = created.result as TerminalDescriptor;
     const tabs = async (): Promise<TerminalDescriptor[]> =>
       (await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[];
-    // "running" is the whole chain: terminal:show reached the window, which drew the tab, whose
+    // "running" is the whole chain: terminals:show reached the window, which drew the tab, whose
     // first resize spawned the process.
     await eventually(
       "the shell tab running",

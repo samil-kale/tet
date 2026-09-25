@@ -108,9 +108,13 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   await fs.promises.appendFile(path.join(projectDir, `${sessionId}.jsonl`), line);
 }
 
+/** Claude Code's config root, where its sessions and knowledge live; tet never overrides it. */
+export function claudeConfigDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
+}
+
 function projectsRoot(): string {
-  const configDir = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
-  return path.join(configDir, "projects");
+  return path.join(claudeConfigDir(), "projects");
 }
 
 function findProjectDir(root: string, cwd: string): Promise<string | undefined> {

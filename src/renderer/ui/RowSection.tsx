@@ -1,5 +1,6 @@
 import type { ReactNode, Ref } from "react";
 import { overridesMachineNote } from "../../shared/types";
+import { FieldGroup } from "./Field";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 
 /** A row as a dialog's fields hold it: the saved shape plus a local React key, never sent anywhere. */
@@ -56,16 +57,16 @@ export function EditRow({
  */
 export function SecretInput({
   stored,
-  storedTitle,
-  emptyTitle,
+  storedTitle = "Stored on this machine; typing replaces it.",
+  emptyTitle = "Stored on this machine.",
   placeholder = "Value",
   value,
   onChange,
   ref
 }: {
   stored: boolean;
-  storedTitle: string;
-  emptyTitle: string;
+  storedTitle?: string;
+  emptyTitle?: string;
   /** What an empty field without a stored value says it takes. */
   placeholder?: string;
   value: string;
@@ -108,7 +109,7 @@ export function RowMark({ title }: { title: string | undefined }) {
 
 function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
   return (
-    <button className="icon-button" title={title} onClick={onClick}>
+    <button type="button" className="icon-button" title={title} onClick={onClick}>
       <CloseIcon />
     </button>
   );
@@ -135,13 +136,12 @@ export function RowSection<T extends { id: string }>({
   add?: ReactNode;
 }) {
   return (
-    <div className="dialog-field">
-      <span className="dialog-field-label">{label}</span>
+    <FieldGroup label={label}>
       <div className="row-section-rows">
         {rows.length === 0 && empty !== undefined && <p className="dialog-detail">{empty}</p>}
         {rows.map(renderRow)}
       </div>
       {add}
-    </div>
+    </FieldGroup>
   );
 }

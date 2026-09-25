@@ -4,10 +4,10 @@ import * as http from "node:http";
 import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
 import { errorMessage } from "../../shared/errors";
-import { CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
+import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, isSbxAgent } from "../../shared/types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, isSbxAgent, isWorking } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -43,6 +43,7 @@ import { tabControlToken } from "./control-token";
 import { sbxVerbs } from "./control-sbx-verbs";
 import { ControlError, count, text, type Handler } from "./control-verb";
 import { canBind } from "../can-bind";
+import { isRecord } from "../json-file";
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
@@ -471,10 +472,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         conditions.push(["bound to a session", (tab) => tab.sessionId !== undefined]);
       }
       if (args.busy === true) {
-        conditions.push(["working a turn", (tab) => tab.busy === true]);
+        conditions.push(["working a turn", isWorking]);
       }
       if (args.idle === true) {
-        conditions.push(["idle", (tab) => tab.busy !== true]);
+        conditions.push(["idle", (tab) => !isWorking(tab)]);
       }
       if (typeof status === "string") {
         if (!TERMINAL_STATUSES.some((candidate) => candidate === status)) {
@@ -763,7 +764,7 @@ export async function startControlServer(
         return;
       }
       // A non-object would throw inside `handle`, leaving the connection unanswered.
-      if (typeof request !== "object" || request === null || Array.isArray(request)) {
+      if (!isRecord(request)) {
         respond(res, reject("bad_args", "not a JSON request"));
         return;
       }
@@ -798,7 +799,7 @@ export async function startControlServer(
 function bind(server: http.Server, port: number): Promise<void> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => {
+    server.listen(port, CONTROL_HOST, () => {
       server.off("error", reject);
       resolve();
     });

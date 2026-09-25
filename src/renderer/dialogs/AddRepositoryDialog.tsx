@@ -5,7 +5,7 @@ import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { DialogError, Field, TextField } from "../ui/Field";
+import { DialogError, FieldGroup, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
@@ -38,47 +38,9 @@ function cloneFolder(url: string): string {
 /** Which provider a token is for; each validates against its own API. */
 function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (provider: ProviderId) => void }) {
   return (
-    <div className="dialog-field">
-      <span>Provider</span>
+    <FieldGroup label="Provider">
       <RadioGroup value={provider} options={PROVIDER_OPTIONS} onChange={onPick} />
-    </div>
-  );
-}
-
-interface PathFieldProps {
-  label: string;
-  value: string;
-  /** The native picker's window title. */
-  pickTitle: string;
-  onChange: (value: string) => void;
-  /** For the dialog's focus effect, when this is a mode's first field. */
-  ref?: React.Ref<HTMLInputElement>;
-}
-
-/** Where the picker opens for an empty field. Renderer storage, shared by every such field: it
- *  describes this window's use, not a project. */
-const LAST_DIRECTORY_KEY = "tet.dialog.lastDirectory";
-
-function PathField({ label, value, pickTitle, onChange, ref }: PathFieldProps) {
-  const browse = async (): Promise<void> => {
-    // The field's own value is more specific, so it wins.
-    const start = value.trim() || localStorage.getItem(LAST_DIRECTORY_KEY) || undefined;
-    const picked = await window.tet.projects.pickDirectory(pickTitle, start);
-    if (picked) {
-      // A picked repository's parent is where the picker opens next.
-      localStorage.setItem(LAST_DIRECTORY_KEY, await window.tet.projects.directoryToRemember(picked));
-      onChange(picked);
-    }
-  };
-  return (
-    <Field label={label}>
-      <div className="dialog-field-row">
-        <input type="text" value={value} onChange={(event) => onChange(event.target.value)} ref={ref} />
-        <button type="button" className="button secondary" onClick={() => void browse()}>
-          Browse...
-        </button>
-      </div>
-    </Field>
+    </FieldGroup>
   );
 }
 
@@ -343,6 +305,7 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
               </span>
             </div>
             <button
+              type="button"
               className="icon-button"
               title="Remove account"
               onClick={(event) => {
