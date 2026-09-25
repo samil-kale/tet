@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../../shared/types";
 import type { Project, SbxBlocker, SbxKnowledgeSource, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
 import {
@@ -13,9 +13,12 @@ import {
   useSbxProblems,
   type FieldsState
 } from "./SbxSettingsFields";
+import { SbxAccounts, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
+import { confirm } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox } from "../ui/Field";
+import { patched } from "../ui/RowSection";
 import { useEscape } from "../ui/use-escape";
 
 interface SbxSettingsDialogProps {
@@ -26,7 +29,7 @@ interface SbxSettingsDialogProps {
 type Phase =
   | { kind: "checking" }
   | { kind: "not-installed" }
-  | { kind: "signing-in" }
+  | { kind: "signed-out" }
   | { kind: "initializing-policy" }
   | { kind: "ready"; organization?: string }
   | { kind: "blocked"; organization?: string; blockers: SbxBlocker[] }
@@ -49,21 +52,29 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
 ];
 
 /**
- * Why a tab cannot be chosen, or `undefined`: nothing but the switch applies while sandboxing is
- * off. A tab is disabled rather than dropped, so the dialog keeps its shape and says what is
- * missing.
+ * Why a tab cannot be chosen, or `undefined`: nothing but General applies while signed out, and
+ * nothing but the switch while sandboxing is off. A tab is disabled rather than dropped, so the
+ * dialog keeps its shape and says what is missing.
  */
-function tabBlocked(id: SbxSettingsTab, enabled: boolean): string | undefined {
-  return id !== "general" && !enabled ? "Enable SBX sandboxing for this project first" : undefined;
+function tabBlocked(id: SbxSettingsTab, signedIn: boolean, enabled: boolean): string | undefined {
+  if (id === "general") {
+    return undefined;
+  }
+  if (!signedIn) {
+    return "Sign in to Docker first";
+  }
+  return enabled ? undefined : "Enable SBX sandboxing for this project first";
 }
 
 /**
- * The one dialog for sbx setup and configuration. On mount it checks: installed, signed in
- * (signing in if needed), machine-wide network policy set to "balanced" if needed (sbx.ts's
- * initSbxPolicy), then loads the saved config; each step shows in the `busy` bar. Installs
+ * The one dialog for sbx setup and configuration. On mount it checks: installed, then loads the
+ * saved config and the access tokens, then signed in — if not, General waits for a sign-in, with a
+ * token or the browser, the other tabs disabled — then the machine-wide network policy, set to
+ * "balanced" if needed (sbx.ts's initSbxPolicy); each step shows in the `busy` bar. Installs
  * nothing: no command works on all three platforms. A policy not allowing what a sandboxed tab
  * needs (sbx.ts's readSbxBlockers) gets a wall instead of the fields — under an organization's
- * governance only the organization can change that.
+ * governance only the organization can change that — with the account under it, as another
+ * account may be allowed.
  *
  * The fields' state lives here, since Save builds `sbx:save-config` from it. Each sandboxed agent
  * authenticates inside the sandbox.
@@ -84,13 +95,25 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const [loaded, setLoaded] = useState<SbxProjectConfig>(EMPTY_SBX_CONFIG);
   const [stored, setStored] = useState<SbxStoredLocal>(EMPTY_STORED);
   const [sources, setSources] = useState<SbxKnowledgeSource[]>([]);
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
+  /** Who sbx says is signed in, however it happened. */
+  const [signedInUser, setSignedInUser] = useState<string | undefined>(undefined);
+  /** A sign-in, sign-out or "Check again" running, and the check after it (`recheck`). */
+  const [rechecking, setRechecking] = useState(false);
+  /** Why the browser's sign-in or the sign-out failed: no row to mark, so the button row says it. */
+  const [accountError, setAccountError] = useState<string | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
+  /** The saved config and tokens are read once: a check after signing in keeps the edits. */
+  const loadedOnce = useRef(false);
 
-  /** Installed → signed in → policy → saved config, on mount and "Check again". One status call
-   *  answers the first three; signing in or setting the policy asks again. */
+  /** Installed → saved config → signed in → policy, on mount and "Check again"; again after a
+   *  sign-in or sign-out, as the policy and its blockers are the account's. One status call answers
+   *  the first three; setting the policy asks again. */
   const setup = async (): Promise<void> => {
-    setPhase({ kind: "checking" });
+    if (!loadedOnce.current) {
+      setPhase({ kind: "checking" });
+    }
     try {
       // In parallel with the status: both re-read PATH, and joining a running call is free
       // (augmentAgentPath). This run reads the local value; the state lands next render.
@@ -109,14 +132,29 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         setPhase({ kind: "failed", message: `SBX failed: ${status.failure}` });
         return;
       }
-      if (!status.loggedIn) {
-        setPhase({ kind: "signing-in" });
-        if (!(await window.tet.sbx.login())) {
-          setPhase({ kind: "failed", message: "SBX login failed." });
-          return;
-        }
-        status = await window.tet.sbx.status(project.id);
+      if (!loadedOnce.current) {
+        // Read after the check, so Save writes over what is on disk, not the mount-time defaults.
+        const [config, local, knowledgeSources, kept] = await Promise.all([
+          window.tet.sbx.getConfig(project.id),
+          window.tet.sbx.stored(project.id),
+          window.tet.sbx.knowledgeSources(),
+          window.tet.sbx.accounts()
+        ]);
+        setEnabled(isLocked || config.enabled);
+        setState(fromConfig(config, local));
+        setLoaded(config);
+        setStored(local);
+        setSources(knowledgeSources);
+        setAccounts(fromAccounts(kept));
+        loadedOnce.current = true;
       }
+      if (!status.loggedIn) {
+        setSignedInUser(undefined);
+        setPhase({ kind: "signed-out" });
+        setTab("general");
+        return;
+      }
+      setSignedInUser(await window.tet.sbx.signedInUser());
       if (!status.policyInitialized) {
         setPhase({ kind: "initializing-policy" });
         if (!(await window.tet.sbx.initPolicy())) {
@@ -129,17 +167,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         setPhase({ kind: "blocked", organization: status.organization, blockers: status.blockers });
         return;
       }
-      // Read after setup, so Save writes over what is on disk, not the mount-time defaults.
-      const [config, local, knowledgeSources] = await Promise.all([
-        window.tet.sbx.getConfig(project.id),
-        window.tet.sbx.stored(project.id),
-        window.tet.sbx.knowledgeSources()
-      ]);
-      setEnabled(isLocked || config.enabled);
-      setState(fromConfig(config, local));
-      setLoaded(config);
-      setStored(local);
-      setSources(knowledgeSources);
       setPhase({ kind: "ready", organization: status.organization });
     } catch (error) {
       // The phase is the busy bar: a call that threw must not leave it running.
@@ -154,11 +181,18 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Stores typed values, saves and applies the rows without a problem, the marked ones left out
-   *  (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx refuses only then goes
-   *  in the button row: the rows it is about may be on another tab, and their own marks say which
-   *  (`tabMarks`). */
+  /** Stores the access tokens, then typed values, saves and applies the rows without a problem,
+   *  the marked ones left out (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx
+   *  refuses only then goes in the button row: the rows it is about may be on another tab, and
+   *  their own marks say which (`tabMarks`). Not signed in, or blocked, only the tokens are saved. */
   const { busy: saving, refused, submit: save, clear } = useSubmit(async () => {
+    const tokensRefused = await window.tet.sbx.saveAccounts(toAccountEdits(accounts));
+    if (tokensRefused !== undefined) {
+      return tokensRefused;
+    }
+    if (phase.kind !== "ready") {
+      return undefined;
+    }
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
     return result.ok ? undefined : (result.error ?? "Could not save the SBX configuration");
   }, close);
@@ -170,9 +204,71 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     setEnabled(next);
     clear();
   };
+  const editAccounts: typeof setAccounts = (update) => {
+    setAccounts(update);
+    setAccountError(undefined);
+    clear();
+  };
 
-  const busy = phase.kind === "checking" || phase.kind === "signing-in" || phase.kind === "initializing-policy" || saving;
-  const blocked = saveBlocked(state);
+  /** "Check again", or after a sign-in or sign-out (`run`), whatever its outcome: the policy and
+   *  its blockers are the account's, and a sign-in whose token could not be kept went through. */
+  const recheck = async (run?: () => Promise<void>): Promise<void> => {
+    setRechecking(true);
+    setAccountError(undefined);
+    try {
+      await run?.();
+      await setup();
+    } finally {
+      setRechecking(false);
+    }
+  };
+  /** At once, not on Save: sbx has taken the token, so the row is kept (sbx:sign-in). What sbx
+   *  said on refusing marks the row. */
+  const signIn = (row: AccountRow): void =>
+    void recheck(async () => {
+      const result = await window.tet.sbx.signIn(row.user, row.token, row.account);
+      const kept = result.account;
+      setAccounts((rows) =>
+        kept
+          ? // A row of the same user already kept is this one now (SbxAccountStore.add).
+            patched(
+              rows.filter((other) => other.id === row.id || other.account !== kept.id),
+              row.id,
+              { account: kept.id, user: kept.user, token: "", mark: undefined }
+            )
+          : patched(rows, row.id, { mark: result.error })
+      );
+    });
+  const browserSignIn = (): void =>
+    void recheck(async () => {
+      if (!(await window.tet.sbx.login())) {
+        setAccountError("SBX login failed.");
+      }
+    });
+  const signOut = async (): Promise<void> => {
+    const answer = await confirm({
+      title: "Sign out of Docker",
+      message: "Sign out of Docker?",
+      detail: "Every running sandbox stops, in every project.",
+      confirmLabel: "Sign out"
+    });
+    if (!answer.confirmed) {
+      return;
+    }
+    await recheck(async () => {
+      const failed = await window.tet.sbx.logout();
+      if (failed !== undefined) {
+        setAccountError(`Could not sign out of Docker: ${failed}`);
+      }
+    });
+  };
+
+  const signedIn = phase.kind === "ready" || phase.kind === "blocked";
+  const showsAccount = signedIn || phase.kind === "signed-out";
+  /** The tabs are up: the fields, or General waiting for a sign-in. */
+  const tabbed = phase.kind === "ready" || phase.kind === "signed-out";
+  const busy = phase.kind === "checking" || phase.kind === "initializing-policy" || saving || rechecking;
+  const blocked = phase.kind === "ready" ? saveBlocked(state) : undefined;
   const organization = phase.kind === "ready" ? phase.organization : undefined;
   // Asked from the moment the rows are loaded, not when their tab is opened; not while sandboxing
   // is off, which applies none of them.
@@ -181,24 +277,37 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const tabs = useMemo(
     () =>
       TABS.map((entry) => {
-        const disabled = tabBlocked(entry.id, enabled);
+        const disabled = tabBlocked(entry.id, signedIn, enabled);
         // A tab that cannot be chosen says why, not what is inside.
         const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
         return { ...entry, disabled, mark };
       }),
-    [enabled, marks]
+    [signedIn, enabled, marks]
+  );
+
+  const accountSection = (
+    <SbxAccounts
+      rows={accounts}
+      setRows={editAccounts}
+      signedIn={signedIn}
+      signedInUser={signedInUser}
+      busy={busy}
+      onSignIn={signIn}
+      onBrowserSignIn={browserSignIn}
+      onSignOut={() => void signOut()}
+    />
   );
 
   return (
     <DialogFrame
       header={
-        phase.kind === "ready"
+        tabbed
           ? { tabs, active: tab, onSelect: setTab, onClose: close }
           : { title: `SBX Settings - ${project.name}`, onClose: close }
       }
-      className={phase.kind === "ready" ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
+      className={showsAccount ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
-      error={refused}
+      error={refused ?? accountError}
       message={phase.kind === "ready" && needsRestart(loaded, stored.knowledge, state) && <RestartNote />}
       buttons={
         <>
@@ -206,15 +315,15 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             Cancel
           </button>
           {(phase.kind === "not-installed" || phase.kind === "blocked") && (
-            <button type="button" className="button" onClick={() => void setup()}>
+            <button type="button" className="button" disabled={busy} onClick={() => void recheck()}>
               Check again
             </button>
           )}
-          {phase.kind === "ready" && (
+          {showsAccount && (
             <button
               type="button"
               className="button"
-              disabled={saving || blocked !== undefined}
+              disabled={busy || blocked !== undefined}
               title={blocked}
               onClick={() => void save()}
             >
@@ -228,7 +337,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       {phase.kind === "not-installed" && (
         <p className="dialog-detail">Docker Sandboxes (SBX) is not installed. Install it, then check again.</p>
       )}
-      {phase.kind === "signing-in" && <p className="dialog-detail">Signing in to SBX…</p>}
       {phase.kind === "initializing-policy" && <p className="dialog-detail">Setting up SBX's network policy…</p>}
       {phase.kind === "failed" && <p className="dialog-detail">{phase.message}</p>}
       {phase.kind === "blocked" && (
@@ -247,32 +355,36 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           {phase.organization && (
             <p className="dialog-detail">Only your organization can add these rules. Check again once it has.</p>
           )}
+          {accountSection}
         </>
       )}
-      {phase.kind === "ready" && tab === "general" && (
-        <Checkbox
-          checked={enabled}
-          disabled={locked}
-          onChange={editEnabled}
-          label={
-            <>
-              <strong>Enable SBX sandboxing for this project</strong>
+      {tabbed && tab === "general" && (
+        <>
+          <Checkbox
+            checked={enabled}
+            disabled={locked || !signedIn}
+            onChange={editEnabled}
+            label={
+              <>
+                <strong>Enable SBX sandboxing for this project</strong>
+                <p className="dialog-detail">
+                  Claude, Codex, OpenCode and Pi tabs in {project.name} run in their own isolated Docker
+                  sandbox instead of directly on this machine.
+                  {locked && " No agent is installed on this machine, so this is the only way to run one here."}
+                </p>
+              </>
+            }
+          />
+          {organization && (
+            <div className="sbx-governance">
+              <strong>Organization governance is active</strong>
               <p className="dialog-detail">
-                Claude, Codex, OpenCode and Pi tabs in {project.name} run in their own isolated Docker
-                sandbox instead of directly on this machine.
-                {locked && " No agent is installed on this machine, so this is the only way to run one here."}
+                SBX's policy is managed by <strong>{organization}</strong>.
               </p>
-            </>
-          }
-        />
-      )}
-      {tab === "general" && organization && (
-        <div className="sbx-governance">
-          <strong>Organization governance is active</strong>
-          <p className="dialog-detail">
-            SBX's policy is managed by <strong>{organization}</strong>.
-          </p>
-        </div>
+            </div>
+          )}
+          {accountSection}
+        </>
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <div className="sbx-settings-pane">

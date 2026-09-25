@@ -21,7 +21,8 @@ import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, type ProjectDeps } from "./projects";
-import { configureSandboxes, readSbxStatus } from "./sbx";
+import { configureSandboxes, readSbxStatus, readSbxUser } from "./sbx";
+import { SbxAccountStore, signInToSbx } from "./sbx-accounts";
 import { SbxLocalStore } from "./sbx-local";
 import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";
 import { anyAgentInstalled } from "./requirements";
@@ -212,6 +213,7 @@ const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
 const logins = new GitLoginStore(dataRoot);
 const sbxLocal = new SbxLocalStore(dataRoot);
+const sbxAccounts = new SbxAccountStore(dataRoot);
 const environment = new EnvStore(dataRoot);
 // Read at every spawn, so a restarted tab sees what was saved meanwhile.
 setStoredEnv(() => environment.values());
@@ -416,7 +418,10 @@ async function startControl(): Promise<void> {
           config: (project) => readSbxConfig(project.path),
           stored: (projectId) => sbxLocal.stored(projectId),
           problems: readProjectSbxProblems,
-          save: (project, request, local, status) => saveProjectSbx({ sbxLocal, notice }, project, request, local, status)
+          save: (project, request, local, status) => saveProjectSbx({ sbxLocal, notice }, project, request, local, status),
+          accounts: () => sbxAccounts.list(),
+          signedInUser: () => readSbxUser(false),
+          signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id, false)
         }
       },
       controlChannel.token,
@@ -606,6 +611,7 @@ if (!app.requestSingleInstanceLock()) {
       accounts,
       logins,
       sbxLocal,
+      sbxAccounts,
       environment,
       envRequests,
       repositories,

@@ -28,6 +28,7 @@ import {
   contractHome,
   fixedMountSpecs,
   parsePublishedPorts,
+  parseSignedInUser,
   pathMountSpecs,
   readHostAllowed,
   readSbxProblems,
@@ -38,6 +39,7 @@ import {
   secretPlaceholder
 } from "../src/main/sbx";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
+import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
@@ -731,6 +733,37 @@ describe("what sbx keeps on this machine", () => {
   });
 });
 
+describe("the Docker access tokens of the SBX Settings", () => {
+  it("keep one row per user and carry a stored token along Save", () => {
+    fakeSafeStorage();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-accounts-"));
+    const store = new SbxAccountStore(root);
+    const first = store.add("skale", "old");
+    assert.equal(store.add("skale", "new").id, first.id, "the same user's token is replaced, not added");
+    assert.equal(store.token(first.id), "new");
+    // Kept as opened, a new one typed, one without a token dropped, the later of two users winning.
+    store.update([
+      { id: first.id, user: "skale", token: "" },
+      { user: "other", token: "typed" },
+      { user: "empty", token: "" },
+      { user: "other", token: "later" }
+    ]);
+    const reread = new SbxAccountStore(root);
+    assert.deepEqual(reread.list().map((account) => account.user), ["skale", "other"]);
+    assert.equal(reread.token(first.id), "new");
+    assert.equal(reread.token(reread.list()[1].id), "later");
+    // Signed in from the row "other" under the name sbx gives: that row is renamed, never doubled.
+    const other = reread.list()[1];
+    assert.equal(reread.add("Other", "renamed", other.id).id, other.id);
+    assert.deepEqual(reread.list().map((account) => account.user), ["skale", "Other"]);
+    // A row of another spelling beside a kept one of sbx's name: merged into the kept one.
+    const typed = reread.add("SKALE", "typed");
+    assert.equal(reread.add("skale", "merged", typed.id).id, first.id);
+    assert.deepEqual(reread.list().map((account) => account.user), ["skale", "Other"]);
+    assert.equal(reread.token(first.id), "merged");
+  });
+});
+
 describe("the environment variables kept in TET", () => {
   const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-environment-"));
   const row = (name: string, value: string): { name: string; value: string } => ({ name, value });
@@ -919,6 +952,14 @@ describe("Escape over the window's dialogs", () => {
     } finally {
       delete globals.document;
     }
+  });
+});
+
+describe("who sbx says is signed in", () => {
+  it("is read off `sbx login`'s line, and nothing else", () => {
+    assert.equal(parseSignedInUser("You are signed in [username: yaskor]\n"), "yaskor");
+    assert.equal(parseSignedInUser("Not authenticated to Docker\n"), undefined);
+    assert.equal(parseSignedInUser(""), undefined);
   });
 });
 

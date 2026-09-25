@@ -28,12 +28,15 @@ import type {
   ProviderId,
   RepositoryState,
   Requirements,
+  SbxAccount,
+  SbxAccountEdit,
   SbxKnowledgeConfig,
   SbxKnowledgeSource,
   SbxLocalSave,
   SbxProblems,
   SbxProjectConfig,
   SbxSaveResult,
+  SbxSignInResult,
   SbxStatus,
   SbxStoredLocal,
   SbxValueKind,
@@ -78,9 +81,20 @@ export interface TETApi {
     status(projectId: string): Promise<SbxStatus>;
     /** Opens the OAuth page in the browser and waits; no terminal. */
     login(): Promise<boolean>;
+    /** Who sbx says is signed in; only once `status` said someone is. */
+    signedInUser(): Promise<string | undefined>;
+    /** The access tokens kept for every project — never a token. */
+    accounts(): Promise<SbxAccount[]>;
+    /** `sbx login` with `token`, or with the one kept for `accountId` when `token` is ""; the
+     *  account is kept (or its token replaced) only once sbx took it. */
+    signIn(user: string, token: string, accountId?: string): Promise<SbxSignInResult>;
+    /** `sbx logout`, which stops every running sandbox; what sbx said on failing. */
+    logout(): Promise<string | undefined>;
+    /** The General tab's access token rows at Save; what refused them, else undefined. */
+    saveAccounts(edits: SbxAccountEdit[]): Promise<string | undefined>;
     /** Sets the machine-wide network policy to "balanced", Docker's recommended default. */
     initPolicy(): Promise<boolean>;
-    /** Kills a running `login`/`initPolicy` — the Cancel button. */
+    /** Kills a running `login`/`signedInUser`/`signIn`/`initPolicy` — the Cancel button. */
     cancelSetup(): void;
     /** From tet.json. */
     getConfig(projectId: string): Promise<SbxProjectConfig>;

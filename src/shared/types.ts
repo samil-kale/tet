@@ -240,6 +240,30 @@ export interface SbxStatus {
   blockers: SbxBlocker[];
 }
 
+/** A Docker access token kept for the SBX Settings' General tab (sbx-accounts.ts), for every
+ *  project; the token itself never reaches the renderer. */
+export interface SbxAccount {
+  id: string;
+  /** The Docker username `sbx login --username` takes with the token. */
+  user: string;
+}
+
+/** One access token row at Save: `id` the account it was opened as, `token` what was typed since
+ *  ("" keeps the stored one). */
+export interface SbxAccountEdit {
+  id?: string;
+  user: string;
+  token: string;
+}
+
+/** A sign-in's answer: whether sbx took the token, the account kept for it, and else why not —
+ *  what sbx said on refusing, or, signed in all the same, why the token could not be kept. */
+export interface SbxSignInResult {
+  signedIn: boolean;
+  account?: SbxAccount;
+  error?: string;
+}
+
 /** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
 export type SbxOption = "hosts" | "paths" | "knowledge" | "ports" | "secrets" | "variables";
 

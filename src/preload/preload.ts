@@ -29,6 +29,11 @@ const api: TETApi = {
   sbx: {
     status: (projectId: string) => ipcRenderer.invoke("sbx:status", projectId),
     login: () => ipcRenderer.invoke("sbx:login"),
+    signedInUser: () => ipcRenderer.invoke("sbx:signed-in-user"),
+    accounts: () => ipcRenderer.invoke("sbx:accounts"),
+    signIn: (user, token, accountId) => ipcRenderer.invoke("sbx:sign-in", user, token, accountId),
+    logout: () => ipcRenderer.invoke("sbx:logout"),
+    saveAccounts: (edits) => ipcRenderer.invoke("sbx:save-accounts", edits),
     initPolicy: () => ipcRenderer.invoke("sbx:init-policy"),
     cancelSetup: () => ipcRenderer.send("sbx:cancel-setup"),
     getConfig: (projectId) => ipcRenderer.invoke("sbx:get-config", projectId),

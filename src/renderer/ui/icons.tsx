@@ -131,6 +131,28 @@ export function CloseIcon(props: IconProps) {
   );
 }
 
+/** Lucide's `log-in`, vendored the same way — sign in with an SBX access token. Measured: 20 by 20,
+ *  extent 20, centered at (12, 12). */
+export function LogInIcon(props: IconProps) {
+  return (
+    <Lucide {...props} extent={20}>
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      <path d="m10 17 5-5-5-5" />
+      <path d="M15 12H3" />
+    </Lucide>
+  );
+}
+
+/** Lucide's `check`, vendored the same way — the SBX access token signed in with. Measured: 18 by
+ *  13, extent 15.3, centered at (12, 11.5). */
+export function CheckIcon(props: IconProps) {
+  return (
+    <Lucide {...props} extent={15.3} cy={11.5}>
+      <path d="M20 6 9 17l-5-5" />
+    </Lucide>
+  );
+}
+
 /** Lucide's `shield`, vendored the same way — a project sandboxed by sbx. Tall, so the long-side
  *  cap: measured 18 by 22 (stroke included), extent 20.23, centered at (12, 12). Full size: it
  *  stands beside the session marks in the project row. */

@@ -140,6 +140,9 @@ or a per-line decision is for an agent.
   `app:notice`.
 - **Nothing is written until Save**; Cancel and Escape drop edits. A setting reaches an agent at
   its setup (`AgentPaths`), so it applies to projects opened afterwards.
+- **A section of typed rows never says it is empty** (`RowSection`): it shows one blank row to
+  type into, on opening and once the last is removed (`atLeastOne`), and Save drops a blank row.
+  Only rows a picker adds (the SBX paths) get a line saying there are none.
 - **One progress indicator per section** (`ProgressBar.tsx`, `Section`'s `busy`): a new slow
   reason feeds the existing bar. In a dialog that bar is `DialogFrame`'s `busy`, so a busy state
   held by a nested view is lifted to the view owning the frame.

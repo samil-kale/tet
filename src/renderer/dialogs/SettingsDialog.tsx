@@ -24,7 +24,7 @@ import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { ActionLink } from "../ui/ActionLink";
 import { isWindows } from "../platform";
-import { EditRow, OverridesMachine, patched, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
+import { atLeastOne, EditRow, OverridesMachine, patched, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { useEscape } from "../ui/use-escape";
 
@@ -47,6 +47,9 @@ const TABS: { id: SettingsTab; label: string }[] = [
 ];
 
 type EnvRow = Row<{ name: string; from?: string; value: string; overridesMachine: boolean }>;
+
+/** A row as "+ Add" makes it, and as one stands in where there are none (`atLeastOne`). */
+const BLANK_ENV_ROW = { name: "", value: "", overridesMachine: false };
 
 /** A row as Save sends it; undefined for one added and left empty, which is no row. A stored one
  *  left empty keeps its value. */
@@ -155,7 +158,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     // Cannot change while the process runs.
     void window.tet.app.info().then(setInfo);
     void window.tet.environment.list().then((list) => {
-      setVariables(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })));
+      setVariables(atLeastOne(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })), BLANK_ENV_ROW));
       setLoadedVariables(list.map((variable) => variable.name));
     });
   }, []);
@@ -393,14 +396,13 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <p className="dialog-detail">Stored on this machine and set in every tab but sandboxed ones, over the machine's own.</p>
           <RowSection
             label="Environment variables"
-            empty="No environment variables yet"
             rows={variables}
             renderRow={(row) => (
               <EditRow
                 key={row.id}
                 mark={envRowMarks.get(row.id)}
                 remove="Remove variable"
-                onRemove={() => editVariables((rows) => without(rows, row.id))}
+                onRemove={() => editVariables((rows) => atLeastOne(without(rows, row.id), BLANK_ENV_ROW))}
               >
                 <input
                   className="row-fill-input"
@@ -422,7 +424,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             )}
             add={
               <ActionLink
-                onClick={() => editVariables((rows) => [...rows, withId({ name: "", value: "", overridesMachine: false })])}
+                onClick={() => editVariables((rows) => [...rows, withId(BLANK_ENV_ROW)])}
               >
                 + Add variable
               </ActionLink>

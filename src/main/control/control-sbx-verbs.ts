@@ -106,6 +106,38 @@ export function sbxVerbs(
   };
 
   return {
+    // Not a project's, but asked of one: its status carries the sign-in.
+    "sbx-accounts": async (args, caller) => {
+      const { loggedIn } = await deps.sbx.status(project(args, caller));
+      const account = loggedIn ? await deps.sbx.signedInUser() : undefined;
+      return {
+        result: {
+          signedIn: loggedIn,
+          ...(account !== undefined ? { account } : {}),
+          accounts: deps.sbx.accounts().map((kept) => kept.user)
+        }
+      };
+    },
+
+    "sbx-sign-in": async (args) => {
+      const user = text(args, "user", "a Docker username");
+      const account = deps.sbx.accounts().find((candidate) => candidate.user === user);
+      if (!account) {
+        throw new ControlError("bad_args", `no access token kept for ${user}: the user adds it in TET's SBX Settings`);
+      }
+      const result = await deps.sbx.signIn(account);
+      if (!result.signedIn) {
+        throw new ControlError("internal", result.error ?? "sbx login failed");
+      }
+      return {
+        result: {
+          signedIn: true,
+          account: result.account?.user ?? user,
+          ...(result.account ? {} : { notKept: result.error ?? "the access token could not be kept" })
+        }
+      };
+    },
+
     "sbx-get": async (args, caller) => {
       const found = project(args, caller);
       const stored = deps.sbx.stored(found.id);

@@ -69,6 +69,8 @@ interface RunOptions {
   stdin?: string;
   /** Whether `cancelSbxSetup` may kill this one. */
   cancellable?: boolean;
+  /** Killed after this long, answering as failed. */
+  timeoutMs?: number;
   /**
    * Forwards stdout and stderr live, in arrival order, to the tab about to run in the sandbox
    * (its `onOutput` channel), `\n` as `\r\n`: sbx never prints a bare `\r` (measured), and xterm
@@ -124,9 +126,11 @@ function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
       forward(chunk);
     });
     let settled = false;
+    const timer = options.timeoutMs === undefined ? undefined : setTimeout(() => child.kill(), options.timeoutMs);
     const finish = (result: RunResult) => {
       if (!settled) {
         settled = true;
+        clearTimeout(timer);
         if (currentChild === child) {
           currentChild = undefined;
         }
@@ -242,6 +246,42 @@ async function suppressSbxFirstRunWizard(): Promise<void> {
 /** `sbx login` opens the browser and waits on its own callback; no console needed. */
 export async function runSbxLogin(): Promise<boolean> {
   return (await runSbx(["login"], { cancellable: true })).ok;
+}
+
+/** The user `sbx login` names while signed in: "You are signed in [username: yaskor]" on stdout,
+ *  exit 0, no browser (measured, 0.45.1, Windows, 2 s). */
+export function parseSignedInUser(stdout: string): string | undefined {
+  return /\[username: ([^\]]+)\]/.exec(stdout)?.[1].trim() || undefined;
+}
+
+/** Five times the 2 s measured (parseSignedInUser). */
+const SBX_USER_TIMEOUT_MS = 10_000;
+
+/** Who is signed in, which nothing but `sbx login` tells (parseSignedInUser) — asked only once the
+ *  status said signed in, since signed out it opens the browser and waits: signed out in between,
+ *  it is killed after SBX_USER_TIMEOUT_MS and the user is unknown. `cancellable` only for the
+ *  dialog: `cancelSbxSetup` kills one child, never a control request's. */
+export async function readSbxUser(cancellable: boolean): Promise<string | undefined> {
+  return parseSignedInUser((await runSbx(["login"], { cancellable, timeoutMs: SBX_USER_TIMEOUT_MS })).stdout);
+}
+
+/**
+ * `sbx login` with a Docker access token on stdin; what sbx said on refusing, else undefined. sbx
+ * reads no token from the environment (DOCKER_ACCESS_TOKEN, DOCKER_TOKEN: still "Not authenticated
+ * to Docker", daemon restarted too). Signed in already, it switches: another account's login keeps
+ * running sandboxes running and listed, a refused one keeps the sign-in there was (measured,
+ * 0.45.1, Windows); governance follows the account at once.
+ */
+export async function runSbxTokenLogin(user: string, token: string, cancellable: boolean): Promise<string | undefined> {
+  const result = await runSbx(["login", "--username", user, "--password-stdin"], { stdin: token, cancellable });
+  return result.ok ? undefined : sbxError(result) || "sbx login failed";
+}
+
+/** `sbx logout` stops every running local sandbox; `--yes` skips its "Proceed y/N?", which stdin
+ *  closed answers with "operation cancelled by user" (measured, 0.45.1). */
+export async function runSbxLogout(): Promise<string | undefined> {
+  const result = await runSbx(["logout", "--yes"]);
+  return result.ok ? undefined : sbxError(result) || "sbx logout failed";
 }
 
 /**

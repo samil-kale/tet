@@ -73,6 +73,8 @@ interface Calls {
   envWithdrawn: string[][];
   /** Per SBX Settings save, the project, the configuration and what stays on this machine. */
   sbxSaved: [string, SbxProjectConfig, SbxLocalSave][];
+  /** The users sbx was signed in as with a kept access token. */
+  sbxSignedIn: string[];
 }
 
 /** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
@@ -106,6 +108,13 @@ let sbxConfig: SbxProjectConfig;
 let sbxKnowledge: SbxKnowledgeConfig;
 /** What the faked check finds, and so what a save leaves out. */
 let sbxProblems: SbxProblems;
+/** The users whose access tokens the faked store keeps; what the faked `sbx login` says on refusing,
+ *  and whom it names while signed in. */
+let sbxAccounts: string[];
+let sbxRefusal: string | undefined;
+let sbxUser: string | undefined;
+/** Why the faked store could not keep a token sbx took. */
+let sbxNotKept: string | undefined;
 
 function terminalsOf(projectId: string): ControlTerminals {
   return {
@@ -266,6 +275,17 @@ function deps(): ControlDeps {
         sbxConfig = { ...request, hosts: request.hosts.filter((host) => sbxProblems.hosts?.[host] === undefined) };
         sbxKnowledge = local.knowledge;
         return { ok: true, problems: sbxProblems };
+      },
+      accounts: () => sbxAccounts.map((user) => ({ id: `id-${user}`, user })),
+      signedInUser: async () => sbxUser,
+      signIn: async (account) => {
+        if (sbxRefusal !== undefined) {
+          return { signedIn: false, error: sbxRefusal };
+        }
+        calls.sbxSignedIn.push(account.user);
+        sbxStatus = { ...sbxStatus, loggedIn: true };
+        sbxUser = account.user;
+        return sbxNotKept === undefined ? { signedIn: true, account } : { signedIn: true, error: sbxNotKept };
       }
     }
   };
@@ -322,7 +342,8 @@ describe("tet-ctl against the control server", () => {
       inspected: [],
       envAsks: [],
       envWithdrawn: [],
-      sbxSaved: []
+      sbxSaved: [],
+      sbxSignedIn: []
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -353,6 +374,10 @@ describe("tet-ctl against the control server", () => {
     sbxConfig = { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
     sbxKnowledge = EMPTY_SBX_KNOWLEDGE;
     sbxProblems = {};
+    sbxAccounts = ["skale", "work"];
+    sbxRefusal = undefined;
+    sbxUser = undefined;
+    sbxNotKept = undefined;
   });
 
   it("answers help by itself, with every verb", async () => {
@@ -716,6 +741,8 @@ describe("tet-ctl against the control server", () => {
       ["env-list"],
       ["env-remove", "GITLAB_TOKEN"],
       ["sbx-get"],
+      ["sbx-accounts"],
+      ["sbx-sign-in", "work"],
       ["sbx-set-enabled", "off"],
       ["sbx-set-hosts", "example.com"]
     ];
@@ -731,6 +758,22 @@ describe("tet-ctl against the control server", () => {
     assert.equal(settings.darkTheme, "dark-modern");
     assert.equal(settings.prompts.commitMessage, "");
     assert.deepEqual(calls.sbxSaved, []);
+    assert.deepEqual(calls.sbxSignedIn, []);
+  });
+
+  it("signs sbx in with a kept access token only, and says who is signed in", async () => {
+    sbxStatus = { ...sbxStatus, loggedIn: false };
+    assert.deepEqual((await tetCtl(["sbx-accounts"])).result, { signedIn: false, accounts: ["skale", "work"] });
+    assert.equal((await tetCtl(["sbx-sign-in", "stranger"])).status, EXIT_CODES.usage, "no token kept for that user");
+    sbxRefusal = "auth login failed: docker access-token request failed with status 400";
+    assert.match((await tetCtl(["sbx-sign-in", "work"])).stderr, /status 400/);
+    assert.deepEqual(calls.sbxSignedIn, []);
+    sbxRefusal = undefined;
+    assert.deepEqual((await tetCtl(["sbx-sign-in", "work"])).result, { signedIn: true, account: "work" });
+    assert.deepEqual(calls.sbxSignedIn, ["work"]);
+    assert.deepEqual((await tetCtl(["sbx-accounts"])).result, { signedIn: true, account: "work", accounts: ["skale", "work"] });
+    sbxNotKept = "no keyring";
+    assert.deepEqual((await tetCtl(["sbx-sign-in", "skale"])).result, { signedIn: true, account: "skale", notKept: "no keyring" });
   });
 
   it("changes one SBX setting and saves the rest as it stands, a stored value kept with its name", async () => {

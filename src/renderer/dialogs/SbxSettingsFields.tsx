@@ -16,7 +16,7 @@ import type {
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { isWindows } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
-import { EditRow, patched, RowMark, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
+import { atLeastOne, EditRow, patched, RowMark, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
@@ -60,19 +60,35 @@ export interface FieldsState {
   variables: Row<{ env: string; value: string; from?: string }>[];
 }
 
+/** A typed section's row as "+ Add" makes it, and as one stands in where the section has none
+ *  (`atLeastOne`); the paths come from a picker and have none. */
+const BLANK_PORT = { host: "", container: "" };
+const BLANK_HOST = { host: "" };
+const BLANK_SECRET = { env: "", hosts: "", value: "" };
+const BLANK_VARIABLE = { env: "", value: "" };
+
 /** `sbx:get-config`'s and `sbx:stored`'s answers as rows. Only the user's paths: tet's directories
  *  and each agent's session directory are always mounted (sbx.ts's fixedMountSpecs,
  *  sessionMountSpecs), not shown. */
 export function fromConfig(config: SbxProjectConfig, stored: SbxStoredLocal): FieldsState {
   return {
     knowledge: stored.knowledge,
-    ports: config.ports.map(withId),
+    ports: atLeastOne(config.ports.map(withId), BLANK_PORT),
     paths: config.paths.map(withId),
-    hosts: config.hosts.map((host) => withId({ host })),
-    secrets: config.secrets.map((secret) =>
-      withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "", from: secret.env })
+    hosts: atLeastOne(
+      config.hosts.map((host) => withId({ host })),
+      BLANK_HOST
     ),
-    variables: config.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env }))
+    secrets: atLeastOne(
+      config.secrets.map((secret) =>
+        withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "", from: secret.env })
+      ),
+      BLANK_SECRET
+    ),
+    variables: atLeastOne(
+      config.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
+      BLANK_VARIABLE
+    )
   };
 }
 
@@ -403,7 +419,6 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
     return (
       <RowSection
         label="Port forwarding"
-        empty="No ports forwarded yet"
         rows={state.ports}
         renderRow={(port) => {
           const setPort = (change: Partial<typeof port>): void =>
@@ -413,7 +428,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
               key={port.id}
               mark={portMark(port, problems)}
               remove="Remove port"
-              onRemove={() => update("ports", (ports) => without(ports, port.id))}
+              onRemove={() => update("ports", (ports) => atLeastOne(without(ports, port.id), BLANK_PORT))}
             >
               <input
                 className="sbx-port-input"
@@ -436,7 +451,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
           );
         }}
         add={
-          <ActionLink onClick={() => update("ports", (ports) => [...ports, withId({ host: "", container: "" })])}>
+          <ActionLink onClick={() => update("ports", (ports) => [...ports, withId(BLANK_PORT)])}>
             + Add port
           </ActionLink>
         }
@@ -486,7 +501,6 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
     return (
       <RowSection
         label="Secrets"
-        empty="No secrets yet"
         rows={state.secrets}
         renderRow={(row) => {
           const setSecret = (change: Partial<typeof row>): void =>
@@ -497,7 +511,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
               key={row.id}
               mark={secretMark(row, state.secrets, problems)}
               remove="Remove secret"
-              onRemove={() => update("secrets", (secrets) => without(secrets, row.id))}
+              onRemove={() => update("secrets", (secrets) => atLeastOne(without(secrets, row.id), BLANK_SECRET))}
             >
               <input
                 className="row-fixed-input"
@@ -527,7 +541,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
         }}
         add={
           <ActionLink
-            onClick={() => update("secrets", (secrets) => [...secrets, withId({ env: "", hosts: "", value: "" })])}
+            onClick={() => update("secrets", (secrets) => [...secrets, withId(BLANK_SECRET)])}
           >
             + Add secret
           </ActionLink>
@@ -540,7 +554,6 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
     return (
       <RowSection
         label="Variables"
-        empty="No variables yet"
         rows={state.variables}
         renderRow={(row) => {
           const setVariable = (change: Partial<typeof row>): void =>
@@ -551,7 +564,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
               key={row.id}
               mark={variableMark(row, state, problems)}
               remove="Remove variable"
-              onRemove={() => update("variables", (variables) => without(variables, row.id))}
+              onRemove={() => update("variables", (variables) => atLeastOne(without(variables, row.id), BLANK_VARIABLE))}
             >
               <input
                 className="row-fill-input"
@@ -572,7 +585,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
           );
         }}
         add={
-          <ActionLink onClick={() => update("variables", (variables) => [...variables, withId({ env: "", value: "" })])}>
+          <ActionLink onClick={() => update("variables", (variables) => [...variables, withId(BLANK_VARIABLE)])}>
             + Add variable
           </ActionLink>
         }
@@ -583,14 +596,13 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
   return (
     <RowSection
       label="Allowed hosts"
-      empty="No hosts allowed yet"
       rows={state.hosts}
       renderRow={(row) => (
         <EditRow
           key={row.id}
           mark={problems.hosts?.[row.host.trim()]}
           remove="Remove host"
-          onRemove={() => update("hosts", (hosts) => without(hosts, row.id))}
+          onRemove={() => update("hosts", (hosts) => atLeastOne(without(hosts, row.id), BLANK_HOST))}
         >
           <input
             className="row-fill-input"
@@ -603,7 +615,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
         </EditRow>
       )}
       add={
-        <ActionLink onClick={() => update("hosts", (hosts) => [...hosts, withId({ host: "" })])}>+ Add host</ActionLink>
+        <ActionLink onClick={() => update("hosts", (hosts) => [...hosts, withId(BLANK_HOST)])}>+ Add host</ActionLink>
       }
     />
   );

@@ -11,6 +11,13 @@ import { systemPrompt } from "../system-prompt";
 /** Appended to Claude Code's own system prompt for this process (measured, see system-prompt.ts). */
 const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
 
+/**
+ * Fullscreen, always: Claude Code turns it off machine-wide after launches that died while it
+ * booted (terminal-session.ts), and this variable overrides that (its own message, 2.1.282:
+ * "fullscreen disabled: ... /tui fullscreen or CLAUDE_CODE_NO_FLICKER=1 to override").
+ */
+const FULLSCREEN_ENV = { CLAUDE_CODE_NO_FLICKER: "1" };
+
 export const claudeAgent: AgentDefinition = {
   id: "claude",
   displayName: "Claude",
@@ -30,7 +37,7 @@ export const claudeAgent: AgentDefinition = {
       // Swallowed, never rejected — see AgentDefinition.prepareSpawn.
       console.error("[tet] could not write Claude hook settings:", error);
     }
-    return Promise.resolve({ args: [...args, ...systemPromptArgs(false)] });
+    return Promise.resolve({ args: [...args, ...systemPromptArgs(false)], env: FULLSCREEN_ENV });
   },
   prepareSandboxSpawn: (_cwd, paths) => {
     try {

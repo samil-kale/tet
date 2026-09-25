@@ -1,12 +1,16 @@
 import { ipcMain } from "electron";
+import { errorMessage } from "../../shared/errors";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import type {
+  SbxAccount,
+  SbxAccountEdit,
   SbxKnowledgeConfig,
   SbxKnowledgeSource,
   SbxLocalSave,
   SbxProblems,
   SbxProjectConfig,
   SbxSaveResult,
+  SbxSignInResult,
   SbxStatus,
   SbxStoredLocal,
   SbxValueKind
@@ -16,8 +20,11 @@ import {
   initSbxPolicy,
   readKnowledgeSources,
   readSbxStatus,
-  runSbxLogin
+  readSbxUser,
+  runSbxLogin,
+  runSbxLogout
 } from "../sbx";
+import { signInToSbx } from "../sbx-accounts";
 import { readProjectSbxProblems, saveProjectSbx } from "../sbx-settings";
 import { readSbxConfig } from "../tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
@@ -26,8 +33,9 @@ import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 export function registerSbxIpc({
   store,
   sbxLocal,
+  sbxAccounts,
   notice
-}: Pick<IpcDeps, "store" | "sbxLocal" | "notice">): void {
+}: Pick<IpcDeps, "store" | "sbxLocal" | "sbxAccounts" | "notice">): void {
   // Per project: the policy has to allow the project's folder.
   ipcMain.handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
     const project = store.get(projectId);
@@ -35,7 +43,26 @@ export function registerSbxIpc({
       ? readSbxStatus(project.path, projectId)
       : { installed: false, loggedIn: false, policyInitialized: false, blockers: [], failure: MISSING_REPOSITORY.error };
   });
+
+  // The General tab's Docker account (sbx-accounts.ts); its access tokens are one list for every
+  // project.
   ipcMain.handle("sbx:login", () => runSbxLogin());
+  ipcMain.handle("sbx:signed-in-user", () => readSbxUser(true));
+  ipcMain.handle(
+    "sbx:sign-in",
+    (_event, user: string, token: string, accountId?: string): Promise<SbxSignInResult> =>
+      signInToSbx(sbxAccounts, user, token, accountId, true)
+  );
+  ipcMain.handle("sbx:logout", () => runSbxLogout());
+  ipcMain.handle("sbx:accounts", (): SbxAccount[] => sbxAccounts.list());
+  ipcMain.handle("sbx:save-accounts", (_event, edits: SbxAccountEdit[]): string | undefined => {
+    try {
+      sbxAccounts.update(edits);
+      return undefined;
+    } catch (error) {
+      return errorMessage(error);
+    }
+  });
   ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
   ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
 

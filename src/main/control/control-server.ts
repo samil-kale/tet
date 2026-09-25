@@ -19,11 +19,13 @@ import type {
   Project,
   ProjectCommand,
   RepositoryState,
+  SbxAccount,
   SbxKnowledgeConfig,
   SbxLocalSave,
   SbxProblems,
   SbxProjectConfig,
   SbxSaveResult,
+  SbxSignInResult,
   SbxStatus,
   SbxStoredLocal,
   SbxValueKind,
@@ -110,6 +112,12 @@ export interface ControlDeps {
       status?: SbxStatus
     ): Promise<SbxProblems>;
     save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, status?: SbxStatus): Promise<SbxSaveResult>;
+    /** The access tokens kept for every project (sbx-accounts.ts), never a token. */
+    accounts(): SbxAccount[];
+    /** sbx.ts's readSbxUser: only once the status said signed in. */
+    signedInUser(): Promise<string | undefined>;
+    /** sbx-accounts.ts's signInToSbx with the token kept for that account. */
+    signIn(account: SbxAccount): Promise<SbxSignInResult>;
   };
 }
 

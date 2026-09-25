@@ -1844,13 +1844,52 @@ textarea:focus,
   margin-top: 8px;
 }
 
+/* The Docker account (SbxAccounts.tsx), below the project's switch or a blocked wall: set off by a
+   divider with twice the body's gap on both sides. */
+.sbx-account {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.sbx-account-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sbx-account-status > span {
+  flex: 1;
+  min-width: 0;
+}
+
+/* In the place of the row's sign-in button, the same box. */
+.sbx-account-current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  opacity: 0.8;
+}
+
+.sbx-account-current svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
 /* Stable across tabs with different amounts of content, capped to the window. */
 .sbx-settings-dialog {
   min-width: var(--dialog-wide-width);
   min-height: 405px;
 }
 
-/* Only with the fields up (SbxSettingsDialog's "ready"); the checks before them are short. */
+/* Only with the fields or the account up (SbxSettingsDialog's `showsAccount`); the checks before
+   them are short. */
 .sbx-settings-dialog.ready {
   max-height: calc(100vh - 32px);
 }

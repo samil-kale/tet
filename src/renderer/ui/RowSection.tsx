@@ -20,6 +20,13 @@ export function without<T extends { id: string }>(rows: T[], id: string): T[] {
   return rows.filter((entry) => entry.id !== id);
 }
 
+/** The rows, or a `blank` one where there are none: a section whose rows are typed always shows
+ *  one to type into, on opening and once the last is removed, never a line saying there are none.
+ *  A blank row saves as no row (each section's Save drops it). */
+export function atLeastOne<T>(rows: Row<T>[], blank: T): Row<T>[] {
+  return rows.length === 0 ? [withId(blank)] : rows;
+}
+
 /**
  * A section's row: its fields, then the mark saying what is wrong with it, then its remove button —
  * none for a row that is asked for rather than kept (EnvDialog). The mark takes its room from the
@@ -51,6 +58,7 @@ export function SecretInput({
   stored,
   storedTitle,
   emptyTitle,
+  placeholder = "Value",
   value,
   onChange,
   ref
@@ -58,6 +66,8 @@ export function SecretInput({
   stored: boolean;
   storedTitle: string;
   emptyTitle: string;
+  /** What an empty field without a stored value says it takes. */
+  placeholder?: string;
   value: string;
   onChange: (value: string) => void;
   /** The field a dialog opens focused. */
@@ -69,7 +79,7 @@ export function SecretInput({
       className="row-fixed-input"
       type="password"
       autoComplete="off"
-      placeholder={stored ? "••••••••" : "Value"}
+      placeholder={stored ? "••••••••" : placeholder}
       title={stored ? storedTitle : emptyTitle}
       value={value}
       onChange={(event) => onChange(event.target.value)}
@@ -105,8 +115,9 @@ function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
 }
 
 /**
- * The box a section's rows sit in: its label, the rows or a line saying there are none, and what
- * adds one underneath — nothing for rows that come from elsewhere.
+ * The box a section's rows sit in: its label, the rows, and what adds one underneath — nothing for
+ * rows that come from elsewhere. A section has rows to type into or none (`atLeastOne`); only one
+ * whose rows a picker adds says when there are none.
  */
 export function RowSection<T extends { id: string }>({
   label,
@@ -116,7 +127,8 @@ export function RowSection<T extends { id: string }>({
   add
 }: {
   label: string;
-  /** Said where there are no rows; left out where there always are. */
+  /** Said where there are no rows, for a section a picker adds them to (the SBX paths); left out
+   *  where a blank row stands in for none (`atLeastOne`), or rows always are. */
   empty?: string;
   rows: T[];
   renderRow: (row: T) => ReactNode;

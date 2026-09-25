@@ -206,6 +206,22 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     positionals: []
   },
   {
+    verb: "sbx-accounts",
+    group: "TET itself",
+    usage: "sbx-accounts [--project <id>]",
+    summary:
+      "Whether sbx is signed in to Docker and as whom, and the users whose access tokens TET keeps (never a token).",
+    positionals: []
+  },
+  {
+    verb: "sbx-sign-in",
+    group: "TET itself",
+    usage: "sbx-sign-in <user>",
+    summary:
+      "Sign sbx in to Docker with the access token TET keeps for that user; running sandboxes keep running, and the account's policy applies at once; notKept says why the token could not be kept afterwards. The user adds tokens in TET's SBX Settings, never you.",
+    positionals: ["user"]
+  },
+  {
     verb: "sbx-set-enabled",
     group: "TET itself",
     usage: "sbx-set-enabled <on|off> [--project <id>]",
