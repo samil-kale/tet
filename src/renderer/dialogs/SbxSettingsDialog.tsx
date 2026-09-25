@@ -18,6 +18,7 @@ import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { confirm } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox } from "../ui/Field";
+import { LandmarkIcon } from "../ui/icons";
 import { patched } from "../ui/RowSection";
 import { useEscape } from "../ui/use-escape";
 
@@ -368,21 +369,18 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               <>
                 <strong>Enable SBX sandboxing for this project</strong>
                 <p className="dialog-detail">
-                  Claude, Codex, OpenCode and Pi tabs in {project.name} run in their own isolated Docker
-                  sandbox instead of directly on this machine.
+                  Claude, Codex, OpenCode and Pi tabs run in their own isolated Docker sandbox.
                   {locked && " No agent is installed on this machine, so this is the only way to run one here."}
                 </p>
               </>
             }
           />
-          {organization && (
-            <div className="sbx-governance">
-              <strong>Organization governance is active</strong>
-              <p className="dialog-detail">
-                SBX's policy is managed by <strong>{organization}</strong>.
-              </p>
-            </div>
-          )}
+          <div className={`sbx-governance${organization ? "" : " hidden"}`}>
+            <span className="sbx-governance-icon">
+              <LandmarkIcon />
+            </span>
+            <strong>Organization governance is active ({organization})</strong>
+          </div>
           {accountSection}
         </>
       )}

@@ -1834,14 +1834,24 @@ textarea:focus,
   width: calc(var(--field-width) - var(--icon-size) - 4px);
 }
 
-.sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail,
-.sbx-governance .dialog-detail {
+.sbx-settings-dialog > .dialog-body > .dialog-checkbox .dialog-detail {
   margin-top: 3px;
 }
 
-/* Twice the body's gap, so it reads as its own section below the checkbox. */
+/* Twice the body's gap, so it reads as its own section below the checkbox; laid out as one
+   (`.dialog-checkbox`). */
 .sbx-governance {
   margin-top: 8px;
+}
+
+/* visibility, not display: kept laid out, so an organization turning up doesn't move the rows below. */
+.sbx-governance.hidden {
+  visibility: hidden;
+}
+
+.sbx-governance-icon svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
 }
 
 /* The Docker account (SbxAccounts.tsx), below the project's switch or a blocked wall: set off by a
@@ -1850,6 +1860,8 @@ textarea:focus,
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
   margin-top: 8px;
   padding-top: 16px;
   border-top: 1px solid var(--vscode-panel-border);
@@ -1882,10 +1894,11 @@ textarea:focus,
   height: var(--icon-size);
 }
 
-/* Stable across tabs with different amounts of content, capped to the window. */
+/* Fixed height, as the settings dialog's: switching tabs must not resize it, and rows that outgrow
+   it scroll in their own box (below) rather than growing it. Capped to the window. */
 .sbx-settings-dialog {
   min-width: var(--dialog-wide-width);
-  min-height: 405px;
+  height: 425px;
 }
 
 /* Only with the fields or the account up (SbxSettingsDialog's `showsAccount`); the checks before
@@ -1934,27 +1947,37 @@ textarea:focus,
   color: var(--vscode-descriptionForeground);
 }
 
-/* Aligned to the top: a label that wraps would leave a centred box between its lines. */
-.dialog-checkbox {
+/* Aligned to the top: a label that wraps would leave a centred box between its lines. The SBX
+   governance line is laid out the same, its icon in the checkbox's place. */
+.dialog-checkbox,
+.sbx-governance {
   display: flex;
   align-items: flex-start;
   gap: 6px;
+}
+
+.dialog-checkbox {
   cursor: pointer;
+}
+
+.dialog-checkbox input,
+.sbx-governance-icon {
+  display: grid;
+  place-content: center;
+  /* Stated so the offset is arithmetic. The 15 is not the box: centring the real 18 sits high,
+     the line box holding descender space, 3px by measurement at Chrome's own 13. Re-check if the
+     font changes. The sides are Chromium's own for a checkbox, stated so the icon takes the same
+     column. */
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin: calc((1lh - 15px) / 2) 3px 3px 4px;
 }
 
 /* Drawn by tet, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
    dark, never a theme's colors. */
 .dialog-checkbox input {
   appearance: none;
-  display: grid;
-  place-content: center;
-  /* Stated so the offset is arithmetic. The 15 is not the box: centring the real 18 sits high,
-     the line box holding descender space, 3px by measurement at Chrome's own 13. Re-check if the
-     font changes. */
-  width: 18px;
-  height: 18px;
-  flex: none;
-  margin-top: calc((1lh - 15px) / 2);
   padding: 0;
   background: var(--vscode-settings-checkboxBackground);
   border: 1px solid var(--vscode-settings-checkboxBorder);
@@ -2015,12 +2038,17 @@ textarea:focus,
   min-height: 0;
 }
 
-.settings-environment .dialog-field {
+/* The same for the sbx dialog's rows: a tab's one section, and the Docker account's tokens. */
+.settings-environment .dialog-field,
+.sbx-settings-pane > .dialog-field,
+.sbx-account .dialog-field {
   flex: 1;
   min-height: 0;
 }
 
-.settings-environment .row-section-rows {
+.settings-environment .row-section-rows,
+.sbx-settings-pane .row-section-rows,
+.sbx-account .row-section-rows {
   flex: 0 1 auto;
   min-height: 0;
   max-height: none;
