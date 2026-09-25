@@ -11,8 +11,7 @@ changed for the user, not the commit list.
 - **Sturdier updates.** An update installs beside the running version, and a download that was
   cut short continues where it stopped. Starting tet while an update is being put in place waits
   for it.
-- **Fixes.** Deleting Codex sessions is more reliable. The Light Gameboy theme's progress bar
-  takes the theme's accent.
+- **Fixes.** The Light Gameboy theme's progress bar takes the theme's accent.
 
 ## 0.11.6 (2026-09-25)
 
