@@ -460,8 +460,12 @@ export async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs 
       return pointer === undefined ? undefined : worktree(path.dirname(path.resolve(adminDir, pointer.trim())), adminDir, false);
     })
   );
+  // The main worktree holds the common directory — unless `cwd` is not a linked worktree: a
+  // submodule's or a `--separate-git-dir` repository's lives elsewhere (`<super>/.git/modules/…`,
+  // which `git worktree list` itself names, measured on 2.55), and its folder is `cwd`.
+  const mainPath = gitDir === commonDir ? cwd : path.dirname(commonDir);
   return [
-    await worktree(path.dirname(commonDir), commonDir, true),
+    await worktree(mainPath, commonDir, true),
     ...linked
       .filter((entry): entry is WorktreeInfo => entry !== undefined)
       .sort((a, b) => path.basename(a.path).localeCompare(path.basename(b.path)))
@@ -796,8 +800,9 @@ export async function readRemoteUrls(cwd: string): Promise<Record<string, string
     return urls;
   }
   for (const line of result.stdout.split("\n")) {
-    // "origin\tgit@github.com:owner/repo.git (fetch)", and again for (push).
-    const match = /^(\S+)\t(.+) \(fetch\)$/.exec(line.trim());
+    // "origin\tgit@github.com:owner/repo.git (fetch)", and again for (push). A partial clone adds
+    // its filter after the fetch line: " [blob:none]" (measured).
+    const match = /^(\S+)\t(.+) \(fetch\)(?: \[[^\]]*\])?$/.exec(line.trim());
     if (match) {
       urls[match[1]] = match[2];
     }
@@ -806,7 +811,7 @@ export async function readRemoteUrls(cwd: string): Promise<Record<string, string
 }
 
 export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<GitActionResult> {
-  return run(cwd, ["remote", "set-url", remote, url]);
+  return run(cwd, ["remote", "set-url", "--", remote, url]);
 }
 
 /** Creates the branch and switches to it, as GitHub Desktop does: tracking nothing, since git would
@@ -818,13 +823,14 @@ export function createBranch(cwd: string, name: string, startPoint: string): Pro
 /** A rename changing only case fails where refs are files on a case-insensitive filesystem: the old
  *  one "already exists". GitHub Desktop then forces it, unless a branch of exactly that name exists. */
 export async function renameBranch(cwd: string, from: string, to: string): Promise<GitActionResult> {
-  const moved = await run(cwd, ["branch", "--move", from, to]);
+  // `--`: a name starting with "-" is git's to refuse, not an option (`-f` would force the move).
+  const moved = await run(cwd, ["branch", "--move", "--", from, to]);
   if (moved.ok || from === to || from.toLowerCase() !== to.toLowerCase()) {
     return moved;
   }
   const names = await git(cwd, ["for-each-ref", "--format=%(refname)", "refs/heads"]);
   const taken = names.stdout.split("\n").some((line) => line.trim() === `refs/heads/${to}`);
-  return names.code !== 0 || taken ? moved : run(cwd, ["branch", "-M", from, to]);
+  return names.code !== 0 || taken ? moved : run(cwd, ["branch", "-M", "--", from, to]);
 }
 
 /** `--force`, like GitHub Desktop; the confirmation states the risk. */
@@ -873,7 +879,7 @@ export function abortOperation(cwd: string, operation: GitOperation): Promise<Gi
 
 /** Always annotated, with an empty message too, as in GitHub Desktop. */
 export function createTag(cwd: string, name: string, target: string, message: string): Promise<GitActionResult> {
-  return run(cwd, ["tag", "--annotate", "--message", message, name, target]);
+  return run(cwd, ["tag", "--annotate", "--message", message, "--", name, target]);
 }
 
 export function pushTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {

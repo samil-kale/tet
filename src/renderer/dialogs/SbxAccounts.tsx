@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { SbxAccount, SbxAccountEdit } from "../../shared/types";
 import { ActionLink } from "../ui/ActionLink";
@@ -22,6 +23,35 @@ export function fromAccounts(accounts: SbxAccount[]): AccountRow[] {
 /** The rows as Save keeps them (SbxAccountStore.update). */
 export function toAccountEdits(rows: AccountRow[]): SbxAccountEdit[] {
   return rows.map((row) => ({ id: row.account, user: row.user, token: row.token }));
+}
+
+/** Each row's mark by id: what SbxAccountStore.update would drop — a row with a user or a token
+ *  but not both, or a second row of one user, whose token the first would lose. A blank row is no
+ *  row and has none. */
+export function accountMarks(rows: AccountRow[]): Map<string, string> {
+  const marks = new Map<string, string>();
+  const users = new Set<string>();
+  for (const row of rows) {
+    const user = row.user.trim();
+    const hasToken = row.token !== "" || row.account !== undefined;
+    if (user === "" && !hasToken) {
+      continue;
+    }
+    if (user === "") {
+      marks.set(row.id, "A token needs its Docker username");
+    } else if (users.has(user)) {
+      marks.set(row.id, `${user} is there twice`);
+    } else if (!hasToken) {
+      marks.set(row.id, `${user} needs a token`);
+    }
+    users.add(user);
+  }
+  return marks;
+}
+
+/** The first row's mark, which Save waits for, as the Environment rows do (SettingsDialog). */
+export function accountsBlocked(rows: AccountRow[]): string | undefined {
+  return accountMarks(rows).values().next().value;
 }
 
 interface SbxAccountsProps {
@@ -54,6 +84,7 @@ export function SbxAccounts({
 }: SbxAccountsProps) {
   const setRow = (row: AccountRow, change: Partial<AccountRow>): void =>
     setRows((current) => patched(current, row.id, { ...change, mark: undefined }));
+  const marks = useMemo(() => accountMarks(rows), [rows]);
   return (
     <div className="sbx-account">
       <div className="sbx-account-status">
@@ -62,7 +93,7 @@ export function SbxAccounts({
             "Not signed in to Docker"
           ) : signedInUser !== undefined ? (
             <>
-              Signed in (<strong>{signedInUser}</strong>)
+              Signed in (<strong className="sbx-name">{signedInUser}</strong>)
             </>
           ) : (
             "Signed in to Docker"
@@ -87,7 +118,7 @@ export function SbxAccounts({
           return (
             <EditRow
               key={row.id}
-              mark={row.mark}
+              mark={marks.get(row.id) ?? row.mark}
               remove="Remove access token"
               onRemove={() => setRows((list) => atLeastOne(without(list, row.id), BLANK_ACCOUNT))}
             >

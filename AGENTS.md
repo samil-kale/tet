@@ -211,8 +211,9 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 - A caller's project and tab ids count only with the token made for them
   (`control-token.ts`): a terminal gets its tab's token, never the run's.
 - `tabs-send` and `tabs-output` answer only for a tab of the caller's own project
-  (`ownProjectOnly`). `tabs-send` never from inside a sandbox; `tabs-output` does, host tabs of
-  that project included — by design.
+  (`ownProjectOnly`). `tabs-send` never from inside a sandbox. `tabs-output`, `tabs-close` and
+  `tabs-rename` from a sandbox reach only tabs running there: a host tab is the machine's, and its
+  output may print the host's control token.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.
@@ -233,7 +234,8 @@ the `sbx` CLI; its comments are the record of what was measured.
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`
   evaluates) and against this machine (a path exists, a port is free, a value is stored). A row
   that fails, or that sbx refuses while applying, is neither saved nor applied; the rest goes
-  through. One check for the dialog, `sbx-set-*` and a session's start (`readSbxProblems`).
+  through. A Save sbx cannot answer for (a listing fails, a sandbox will not start) stops before
+  changing anything — could-not-say is no refusal. One check for the dialog, `sbx-set-*` and a session's start (`readSbxProblems`).
 - **The dialog checks live** whatever can be checked, and marks a failing row with the error mark
   saying what is wrong — never that it will not be saved.
 - **A session's start applies tet.json as it stands and never writes it.** What the policy forbids

@@ -209,6 +209,23 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
   });
 });
 
+describe("a command clicked during the periodic fetch", () => {
+  it("does not run once the repository closed meanwhile", async () => {
+    const dir = initRepository("tet-repository-closed-");
+    const repository = await open(dir);
+    let fetched = (): void => undefined;
+    // The fetch underway, held and cleared as autoFetch does.
+    Object.assign(repository, { autoFetching: new Promise<void>((resolve) => (fetched = resolve)) });
+    const clicked = repository.createBranch("late", "main");
+    const closed = repository.dispose();
+    fetched();
+    Object.assign(repository, { autoFetching: undefined });
+    await closed;
+    assert.equal((await clicked).ok, false);
+    assert.equal(git(dir, "branch", "--list", "late"), "", "no git started in the closed folder");
+  });
+});
+
 describe("worktrees, each with a branch of its own", () => {
   let dir: string;
   let worktrees: string;

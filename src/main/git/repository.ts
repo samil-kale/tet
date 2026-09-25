@@ -343,6 +343,11 @@ export class Repository {
     while (this.autoFetching) {
       await this.autoFetching;
     }
+    // Closed meanwhile: dispose() resolved once the fetch ended, and a worktree's folder may now be
+    // being moved or removed — git started in it would fail it on win32 ("Permission denied").
+    if (this.disposed) {
+      return { ok: false, error: "The repository was closed" };
+    }
     if (this.actionRunning) {
       return { ok: false, error: "A git command is already running for this repository" };
     }
@@ -851,7 +856,7 @@ export class Repository {
     try {
       const before = await fs.promises.stat(absolute);
       if (before.mtimeMs !== expectedMtimeMs) {
-        return { ok: false, error: "The file changed on disk since it was opened" };
+        return { ok: false, error: "The file changed on disk since it was opened", diskMtimeMs: before.mtimeMs };
       }
       await fs.promises.writeFile(absolute, content, "utf8");
       const after = await fs.promises.stat(absolute);

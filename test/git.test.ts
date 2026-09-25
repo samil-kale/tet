@@ -36,7 +36,7 @@ import {
   version
 } from "../src/main/git/git";
 import { worktreesSupported } from "../src/shared/types";
-import { git, initBare, isolateGitConfig } from "./helpers";
+import { git, initBare, initRepository, isolateGitConfig } from "./helpers";
 
 /**
  * git.ts against the real git, in a repository built up step by step. It imports nothing from
@@ -466,6 +466,20 @@ describe("remotes the tree has to read carefully", () => {
     assert.deepEqual(state.defaultBranch, { name: "main" });
     assert.equal(state.upstream, "team/fork/main");
     assert.deepEqual(state.branchUpstreams, { main: { remote: "team/fork", branch: "main" } });
+  });
+});
+
+describe("a submodule opened as a project", () => {
+  it("is its own main worktree, not the folder its git directory lies in", async () => {
+    const child = initRepository("tet-git-child-");
+    const parent = initRepository("tet-git-super-");
+    git(parent, "-c", "protocol.file.allow=always", "submodule", "add", "-q", child, "sub");
+    const sub = fs.realpathSync.native(path.join(parent, "sub"));
+    const { worktrees } = await readState(sub);
+    assert.deepEqual(
+      worktrees.map((worktree) => [worktree.path, worktree.main, worktree.current]),
+      [[sub, true, true]]
+    );
   });
 });
 

@@ -5,6 +5,7 @@ import type { FileAct, FileAsk } from "../git/run-action";
 import { openEntries, pathEntries } from "./file-menu";
 import {
   ancestorsOf,
+  baseName,
   buildForest,
   compactTree,
   filterTree,
@@ -250,13 +251,14 @@ export const Explorer = memo(function Explorer({
   };
 
   const askRename = async (node: TreeNode): Promise<void> => {
-    // A compacted row's answer replaces the whole chain, so it goes where the outermost folder is.
-    const dir = node.path.split("/").slice(0, -node.name.split("/").length).join("/");
+    // A compacted row (`a/b/c`) renames its innermost folder, as F2 does in VS Code: renaming the
+    // chain would move only that folder and leave the outer ones behind, empty.
     await askName({
       title: "Rename",
-      current: node.name,
+      current: baseName(node.path),
       confirmLabel: "Rename",
-      submit: (name) => runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(dir, name)))
+      submit: (name) =>
+        runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(parentOf(node.path), name)))
     });
   };
 

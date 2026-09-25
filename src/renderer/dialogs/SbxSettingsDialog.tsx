@@ -14,7 +14,7 @@ import {
   useSbxProblems,
   type FieldsState
 } from "./SbxSettingsFields";
-import { SbxAccounts, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
+import { SbxAccounts, accountsBlocked, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { confirm, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
@@ -270,7 +270,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** The tabs are up: the fields, or General waiting for a sign-in. */
   const tabbed = phase.kind === "ready" || phase.kind === "signed-out";
   const busy = phase.kind === "checking" || phase.kind === "initializing-policy" || saving || rechecking;
-  const blocked = phase.kind === "ready" ? saveBlocked(state) : undefined;
+  // The access token rows count in every phase showing Save, signed out too.
+  const blocked = accountsBlocked(accounts) ?? (phase.kind === "ready" ? saveBlocked(state) : undefined);
   const organization = phase.kind === "ready" ? phase.organization : undefined;
   // Asked from the moment the rows are loaded, not when their tab is opened; not while sandboxing
   // is off, which applies none of them.
@@ -382,7 +383,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             <span className="sbx-governance-icon">
               <LandmarkIcon />
             </span>
-            <strong>Organization governance is active ({organization})</strong>
+            <strong>Organization governance is active (<span className="sbx-name">{organization}</span>)</strong>
           </div>
           {accountSection}
         </>

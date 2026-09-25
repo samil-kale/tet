@@ -6,10 +6,11 @@ import type { FileAct, FileAsk } from "./run-action";
 import { baseName } from "../files/explorer-tree";
 import { openEntries, pathEntries } from "../files/file-menu";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, filled, prompt } from "../ui/Dialog";
+import { confirm, filled, prompt, questionUp } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
+import { notify } from "../ui/Notices";
 
 interface ChangesListProps {
   project: Project;
@@ -61,6 +62,11 @@ async function confirmDiscardPermanently(
   reason: string | undefined,
   act: FileAct
 ): Promise<void> {
+  // Not asked while another question is up (`askLogin`): the trash's refusal is told instead.
+  if (questionUp()) {
+    notify("error", reason ?? "The files could not be moved to the trash");
+    return;
+  }
   const answer = await confirm({
     title: "Discard changes permanently",
     message: "The files could not be moved to the trash. Discard the changes permanently?",
@@ -87,14 +93,15 @@ export async function askCommit(
       ? `Also push ${state.head} to ${remote} and track it`
       : `Also push to ${state.upstream}`
     : undefined;
-  /** What Commit ran, held to ask for the push's login once the commit's question is gone — only
-   *  one question is up at a time, and Escape may have closed it while the push still ran. */
-  const running: { submitted?: Promise<GitActionResult> } = {};
-  const commitAndPush = async (message: string, push: boolean): Promise<GitActionResult> => {
+  /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
+   *  question is gone — only one question is up at a time, and Escape may have closed it while the
+   *  push still ran. */
+  const running: { submitted?: Promise<{ committed: GitActionResult; pushed?: GitActionResult }> } = {};
+  const commitAndPush = async (message: string, push: boolean) => {
     const committed = await (paths
       ? window.tet.repository.commitPaths(project.id, message, paths)
       : window.tet.repository.commitAll(project.id, message));
-    return committed.ok && push ? window.tet.repository.push(project.id) : committed;
+    return { committed, pushed: committed.ok && push ? await window.tet.repository.push(project.id) : undefined };
   };
   await prompt({
     title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
@@ -126,21 +133,20 @@ export async function askCommit(
         )}
       </>
     ),
-    // What git refused — an empty commit, a hook's veto — at the message it was typed for. Not a
-    // push wanting a login: the commit stands, and the login is asked for next.
+    // What git refused — an empty commit, a hook's veto — at the message it was typed for. Not the
+    // push: the commit stands, so the question is done, and a Commit again would commit twice.
     submit: ({ message, push }) => {
       running.submitted = commitAndPush(message.trim(), push);
-      return ask(async () => {
-        const result = await running.submitted!;
-        return result.loginUrl === undefined ? result : { ok: true };
-      });
+      return ask(async () => (await running.submitted!).committed);
     }
   });
-  const result = await running.submitted;
-  if (result?.loginUrl !== undefined) {
-    await askLogin(result.loginUrl, result.error ?? "Push failed", (login) =>
+  const pushed = (await running.submitted)?.pushed;
+  if (pushed?.loginUrl !== undefined) {
+    await askLogin(pushed.loginUrl, pushed.error ?? "Push failed", (login) =>
       ask(() => window.tet.repository.push(project.id, login))
     );
+  } else if (pushed && !pushed.ok) {
+    notify("error", pushed.error ?? "Push failed");
   }
 }
 

@@ -117,8 +117,24 @@ function projectsRoot(): string {
   return path.join(claudeConfigDir(), "projects");
 }
 
+/** Read off the 2.1.283 binary (`Kx`): every non-alphanumeric as `-`; past 200 characters the first
+ *  200, a `-` and the path's 32-bit string hash (`(h << 5) - h + c | 0`), absolute, in base 36. */
+const PROJECT_DIR_MAX = 200;
+
+function projectDirName(cwd: string): string {
+  const encoded = cwd.replace(/[^a-zA-Z0-9]/g, "-");
+  if (encoded.length <= PROJECT_DIR_MAX) {
+    return encoded;
+  }
+  let hash = 0;
+  for (let i = 0; i < cwd.length; i++) {
+    hash = ((hash << 5) - hash + cwd.charCodeAt(i)) | 0;
+  }
+  return `${encoded.slice(0, PROJECT_DIR_MAX)}-${Math.abs(hash).toString(36)}`;
+}
+
 function findProjectDir(root: string, cwd: string): Promise<string | undefined> {
-  return findEncodedDir(root, cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+  return findEncodedDir(root, projectDirName(cwd));
 }
 
 interface ResolvedTitle {

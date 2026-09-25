@@ -303,7 +303,8 @@ export class ProjectSessionManager {
     return this.tabs.map((tab) => ({
       ...toDescriptor(tab, this.tabIndicators.has(tab.tabId)),
       reportedSessionId: tab.reportedSessionId,
-      sandbox: tab.sandbox
+      sandbox: tab.sandbox,
+      sandboxOnly: tab.sandboxOnly
     }));
   }
 
@@ -1194,6 +1195,10 @@ export class ProjectSessionManager {
       return false;
     }
     if (isSavedCommandTab(tab)) {
+      // Its process ends in `restart()`: a running one only when the window asks.
+      if (!running && tab.status === "running") {
+        return false;
+      }
       const session = this.sessions.get(tabId);
       session?.restart();
       return session !== undefined;
@@ -1258,13 +1263,16 @@ export class ProjectSessionManager {
     // A stale report gets no mark and no toast, which would contradict the marks — "Finished" over
     // a tab working again (turn-order.ts).
     const fresh = reportApplies(tab.signalAt, at);
+    // A report sent before the exit can arrive after it (Codex's aborted hook, a plugin's post, a
+    // sandbox's latency) and would mark a tab whose process is gone until the next stop.
+    const exited = tab.status === "stopped" || tab.status === "error";
     switch (event) {
       case "session-start":
         // Only names the session (above). Codex fires it with the first prompt (measured), whose
         // turn prompt-submit marks.
         return {};
       case "prompt-submit":
-        if (fresh) {
+        if (fresh && !exited) {
           setTurn(tab, true, at);
           this.postTabs();
         }
@@ -1287,7 +1295,7 @@ export class ProjectSessionManager {
       }
       case "permission":
       case "question":
-        if (!fresh) {
+        if (!fresh || exited) {
           return {};
         }
         // Not through setTurn: the turn is still open, `busy` is untouched.

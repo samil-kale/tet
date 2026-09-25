@@ -1832,6 +1832,11 @@ textarea:focus,
   height: var(--icon-size);
 }
 
+/* The organization and the signed-in user, set off from the words around them. */
+.sbx-name {
+  color: var(--vscode-textLink-foreground);
+}
+
 /* The Docker account (SbxAccounts.tsx), below the project's switch or a blocked wall: set off by a
    divider with twice the body's gap on both sides. */
 .sbx-account {

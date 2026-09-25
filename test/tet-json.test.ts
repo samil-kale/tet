@@ -189,6 +189,20 @@ describe("the tree's own edits", () => {
       settings: { "files.exclude": { dist: true, "build/out": true }, "explorer.sortOrder": "type" }
     });
   });
+
+  it("keeps every change of edits made at once, each reading what the last one wrote", async () => {
+    await Promise.all([
+      writeCommands(root, [{ command: "a" }]),
+      addFolder(root, "src"),
+      addExclude(root, "dist"),
+      addExclude(root, "out")
+    ]);
+    assert.deepEqual(stored(), {
+      commands: ["a"],
+      folders: [{ path: "." }, { path: "src" }],
+      settings: { "files.exclude": { dist: true, out: true } }
+    });
+  });
 });
 
 describe("a hand-written tet.json", () => {

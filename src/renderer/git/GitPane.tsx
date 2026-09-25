@@ -89,7 +89,9 @@ export const GitPane = memo(function GitPane({
           </>
         }
       >
+        {/* Keyed: a menu left open across a project switch would act on the next one. */}
         <BranchTree
+          key={project.id}
           projectId={project.id}
           state={state}
           branch={branch}
@@ -141,7 +143,7 @@ export const GitPane = memo(function GitPane({
           </>
         }
       >
-        <ChangesList project={project} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
+        <ChangesList key={project.id} project={project} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
       </Section>
     </div>
   );

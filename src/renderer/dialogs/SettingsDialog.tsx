@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { envRowRefusal } from "../../shared/env-rules";
+import { errorMessage } from "../../shared/errors";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types";
@@ -181,38 +182,44 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   useEscape(onClose);
 
-  /** One settings.json write, the Environment tab if touched, then one tet.json write per changed
-   *  Explorer key. What refuses it goes in the button row: it is about tet.json, not about one of
-   *  the switches on the Files tab. */
+  /** The Environment tab if touched, one tet.json write per changed Explorer key, then one
+   *  settings.json write — last, since it applies at once (the theme among it) and Cancel could not
+   *  take it back after a later write refused. What refuses it goes in the button row: it is about
+   *  tet.json, not about one of the switches on the Files tab. */
   const { busy: saving, refused, submit: save, clear } = useSubmit(
     async () => {
-      if (Object.keys(edits.current).length > 0) {
-        await window.tet.settings.patch(edits.current);
-      }
-      if (variablesEdited.current) {
-        const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
-        const refusal = await window.tet.environment.save(rows);
-        if (refusal) {
-          return refusal;
-        }
-        variablesEdited.current = false;
-      }
-      const loaded = loadedExplorer.current;
-      if (activeProject && explorerSettings && loaded) {
-        for (const key of EXPLORER_KEYS) {
-          if (explorerSettings[key] === loaded[key]) {
-            continue;
+      try {
+        if (variablesEdited.current) {
+          const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
+          const refusal = await window.tet.environment.save(rows);
+          if (refusal) {
+            return refusal;
           }
-          const refused = refusal(
-            await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]),
-            "Could not update tet.json"
-          );
-          if (refused !== undefined) {
-            return refused;
+          variablesEdited.current = false;
+        }
+        const loaded = loadedExplorer.current;
+        if (activeProject && explorerSettings && loaded) {
+          for (const key of EXPLORER_KEYS) {
+            if (explorerSettings[key] === loaded[key]) {
+              continue;
+            }
+            const refused = refusal(
+              await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]),
+              "Could not update tet.json"
+            );
+            if (refused !== undefined) {
+              return refused;
+            }
           }
         }
+        if (Object.keys(edits.current).length > 0) {
+          await window.tet.settings.patch(edits.current);
+        }
+        return undefined;
+      } catch (error) {
+        // A throw would only clear the bar (useSubmit): said where a refusal is.
+        return errorMessage(error);
       }
-      return undefined;
     },
     () => {
       onClose();

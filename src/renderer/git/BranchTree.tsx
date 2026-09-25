@@ -4,7 +4,7 @@ import { defaultRemote, refName, upstreamName } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirm, filled, prompt } from "../ui/Dialog";
+import { askName, confirm, filled, prompt, questionUp } from "../ui/Dialog";
 import { TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
@@ -225,9 +225,15 @@ export const BranchTree = memo(function BranchTree({
     });
 
   const askRebasePushed = async (ref: string): Promise<void> => {
+    const message = `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream}.`;
+    // Not asked while another question is up (`askLogin`): the rebase's refusal is told instead.
+    if (questionUp()) {
+      notify("error", message);
+      return;
+    }
     const answer = await confirm({
       title: "Rebase",
-      message: `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream}.`,
+      message,
       detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
       confirmLabel: "Rebase"
     });

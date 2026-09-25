@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createStore, useStore } from "./store";
 
 /** Layout describes the window, not a repository, so it lives in renderer storage. */
 const STORAGE_PREFIX = "tet.layout.";
@@ -97,9 +98,7 @@ export function usePaneSize(key: string, initial: number, min: number): [number,
  * the user can edit it, and written, since a container too small for two panes has no share.
  */
 export function usePersistedShare(storageKey: string, initial: number): [number, (share: number) => void] {
-  const [share, setShare] = usePersistedNumber(storageKey, (stored) =>
-    Number.isFinite(stored) && stored > 0 && stored < 1 ? stored : initial
-  );
+  const [share, setShare] = usePersistedNumber(storageKey, (stored) => restoredShare(stored, initial));
   const set = useCallback(
     (next: number) => {
       if (next > 0 && next < 1) {
@@ -111,7 +110,44 @@ export function usePersistedShare(storageKey: string, initial: number): [number,
   return [share, set];
 }
 
-/** `usePersistedShare` under a fixed layout key, like `usePaneSize`. */
+/** What storage holds as a share, `initial` when outside (0, 1) — see `usePersistedShare`. */
+function restoredShare(stored: number, initial: number): number {
+  return Number.isFinite(stored) && stored > 0 && stored < 1 ? stored : initial;
+}
+
+/** One value per fixed key, read by every mounted `usePaneShare` of it, and its pending write. */
+const fixedShares = new Map<string, ReturnType<typeof createStore<number>>>();
+const fixedSharePersists = new Map<string, ReturnType<typeof setTimeout>>();
+
+function fixedShare(storageKey: string, initial: number): ReturnType<typeof createStore<number>> {
+  let store = fixedShares.get(storageKey);
+  if (!store) {
+    store = createStore(restoredShare(Number(localStorage.getItem(storageKey)), initial));
+    fixedShares.set(storageKey, store);
+  }
+  return store;
+}
+
+/**
+ * `usePersistedShare` under a fixed layout key, like `usePaneSize` — but one value for every view
+ * using the key at once (each editor tab's preview): a drag in one resizes them all. The write
+ * still waits for the drag to settle; one pending when a view unmounts is kept, the others show it.
+ */
 export function usePaneShare(key: string, initial: number): [number, (share: number) => void] {
-  return usePersistedShare(STORAGE_PREFIX + key, initial);
+  const storageKey = STORAGE_PREFIX + key;
+  const share = useStore(fixedShare(storageKey, initial));
+  const set = useCallback(
+    (next: number) => {
+      if (next > 0 && next < 1) {
+        fixedShare(storageKey, initial).set(next);
+        clearTimeout(fixedSharePersists.get(storageKey));
+        fixedSharePersists.set(
+          storageKey,
+          setTimeout(() => localStorage.setItem(storageKey, String(next)), PERSIST_MS)
+        );
+      }
+    },
+    [storageKey, initial]
+  );
+  return [share, set];
 }

@@ -173,7 +173,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "projects-remove",
     group: "TET itself",
     usage: "projects-remove <project-id>",
-    summary: "Close a project (the folder stays).",
+    summary: "Close a project (the folder stays). Refused while one of its editor tabs has unsaved changes.",
     positionals: ["projectId"]
   },
   {
@@ -332,7 +332,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     group: "The other tabs",
     usage: "tabs-output <tab-id> [--kb <n>]",
     summary:
-      "The last n KB a tab printed (16, at most 256), escape sequences out and a redrawn line kept as last shown; an agent's TUI redraws in place, so its text comes in pieces.",
+      "The last n KB a tab printed (16, at most 256), escape sequences out and a redrawn line kept as last shown; an agent's TUI redraws in place, so its text comes in pieces. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
     ownProjectOnly: true,
     sandbox: "ownProject"
@@ -395,7 +395,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "tabs-rename",
     group: "The other tabs",
     usage: "tabs-rename <tab-id> <title> [--project <id>]",
-    summary: "Rename a tab.",
+    summary: "Rename a tab. From a sandbox, only a tab running there.",
     positionals: ["tabId", "title"],
     sandbox: "ownProject"
   },
@@ -403,7 +403,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "tabs-close",
     group: "The other tabs",
     usage: "tabs-close <tab-id> [--project <id>]",
-    summary: "Close a tab and end its session.",
+    summary: "Close a tab and end its session. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
     sandbox: "ownProject"
   },

@@ -89,6 +89,8 @@ const EDITOR_LISTING = [
   { path: "b.txt", loading: false, dirty: false, readOnly: false, preview: false, active: false },
   { ...ACTIVE_EDITOR, active: true }
 ];
+/** What `editor-list` answers for PROJECT; a.txt holds unsaved changes. */
+let editorListing = EDITOR_LISTING;
 
 /** The session "tab-2" reports once set — what tabs-wait waits on. */
 let tab2Session: string | undefined;
@@ -180,7 +182,7 @@ function deps(): ControlDeps {
   return {
     records: {
       editor: (id) => (id === PROJECT.id ? ACTIVE_EDITOR : undefined),
-      editors: (id) => (id === PROJECT.id ? EDITOR_LISTING : []),
+      editors: (id) => (id === PROJECT.id ? editorListing : []),
       notices: () => [{ severity: "error", message: "Could not delete", at: 1 }],
       output: (id, tabId) =>
         id !== PROJECT.id
@@ -899,6 +901,17 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["hook", "stop"], fromSandbox)).status, EXIT_CODES.ok);
   });
 
+  it("closes, renames and reads from a sandbox only a tab running there", async () => {
+    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
+    for (const args of [["tabs-close", OWN_TAB], ["tabs-rename", OWN_TAB, "x"], ["tabs-output", OWN_TAB]]) {
+      const run = await tetCtl(args, fromSandbox);
+      assert.equal(run.status, EXIT_CODES.usage, args[0]);
+      assert.match(run.stderr, /runs on this machine/, args[0]);
+    }
+    assert.equal((await tetCtl(["tabs-rename", "tab-2", "x"], fromSandbox)).status, EXIT_CODES.ok, "tab-2 runs in the sandbox");
+    assert.deepEqual((await tetCtl(["tabs-output", "tab-2"], fromSandbox)).result, { output: "bold line\nnext" });
+  });
+
   it("creates and deletes a sandboxed tab's worktrees of its own project only", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     assertRefused(await tetCtl(["worktree-add", "x", "--project", OTHER.id], fromSandbox), /own project/, "worktree-add");
@@ -1023,8 +1036,20 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("answers before removing the caller's own project", async () => {
-    assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id])).result, { removed: PROJECT.id });
-    await eventually("what the answer was followed by", () => calls.removed.includes(PROJECT.id));
+    editorListing = [];
+    try {
+      assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id])).result, { removed: PROJECT.id });
+      await eventually("what the answer was followed by", () => calls.removed.includes(PROJECT.id));
+    } finally {
+      editorListing = EDITOR_LISTING;
+    }
+  });
+
+  it("refuses to remove a project while an editor tab of it has unsaved changes", async () => {
+    const run = await tetCtl(["projects-remove", PROJECT.id]);
+    assert.equal(run.status, EXIT_CODES.usage);
+    assert.match(run.stderr, /unsaved changes in a\.txt/);
+    assert.deepEqual(calls.removed, []);
   });
 
   it("relays a notification to the process behind the control channel", async () => {

@@ -588,6 +588,9 @@ export interface FileContent {
 /** Written, or why not — a stale `mtimeMs` never overwrites silently. */
 export interface FileWriteResult extends GitActionResult {
   mtimeMs?: number;
+  /** Refused as changed on disk since `expectedMtimeMs`: its mtime now, to overwrite against once
+   *  the user agreed. */
+  diskMtimeMs?: number;
 }
 
 /**

@@ -41,7 +41,7 @@ import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
 import { sbxVerbs } from "./control-sbx-verbs";
-import { ControlError, count, text, type Handler } from "./control-verb";
+import { ControlError, count, text, type Caller, type Handler } from "./control-verb";
 import { canBind } from "../can-bind";
 import { isRecord } from "../json-file";
 
@@ -143,6 +143,8 @@ export interface InspectedTab extends TerminalDescriptor {
   /** The session this tab's hooks named, claimed or not. */
   reportedSessionId?: string;
   sandbox?: string;
+  /** Opened from a sandbox, so it runs there or not at all. */
+  sandboxOnly?: true;
 }
 
 /** The slice of ProjectSessionManager the verbs use. */
@@ -309,6 +311,19 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     return { tabs, tabId, found };
   };
 
+  /** `knownTab` for a verb reaching into the tab (its output, its session): from a sandbox, only its
+   *  own tab or one known to run there — a host tab is this machine's, which a sandbox never reaches,
+   *  and its output may print the host's control token. */
+  const ownedTab = (args: Record<string, unknown>, caller: Caller) => {
+    const known = knownTab(args, caller);
+    const own = known.found.id === caller.projectId && known.tabId === caller.tabId;
+    const tab = known.tabs.inspect().find((entry) => entry.tabId === known.tabId);
+    if (caller.sandboxed && !own && tab?.sandbox === undefined && tab?.sandboxOnly !== true) {
+      throw new ControlError("bad_args", `${known.tabId} runs on this machine, not in the sandbox`);
+    }
+    return known;
+  };
+
   return {
     ...sbxVerbs(deps, project),
 
@@ -373,6 +388,11 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "projects-remove": (args, caller) => {
       const id = text(args, "projectId", "project id");
       projectById(id);
+      // Only the window asks about unsaved edits (App's closeProject); from here they would be lost.
+      const unsaved = deps.records.editors(id).filter((editor) => editor.dirty);
+      if (unsaved.length > 0) {
+        throw new ControlError("bad_args", `unsaved changes in ${unsaved.map((editor) => editor.path).join(", ")} — save or close them in TET first`);
+      }
       // The caller's own project takes the caller's tab with it — answer first.
       if (id === caller.projectId) {
         return { result: { removed: id }, after: () => deps.removeProject(id) };
@@ -516,7 +536,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-output": (args, caller) => {
-      const { tabId, found } = knownTab(args, caller);
+      const { tabId, found } = ownedTab(args, caller);
       const output = shownText(deps.records.output(found.id, tabId) ?? "");
       return { result: { output: output.slice(-count(args, "kb", OUTPUT_KB) * 1024) } };
     },
@@ -583,7 +603,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-close": (args, caller) => {
-      const { tabs, tabId, found } = knownTab(args, caller);
+      const { tabs, tabId, found } = ownedTab(args, caller);
       const close = (): void => void tabs.closeTabs([tabId]);
       // Closing the tab the CLI runs in kills the CLI — answer first.
       if (found.id === caller.projectId && tabId === caller.tabId) {
@@ -594,7 +614,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-rename": async (args, caller) => {
-      const { tabs, tabId } = knownTab(args, caller);
+      const { tabs, tabId } = ownedTab(args, caller);
       const refused = await tabs.renameTab(tabId, text(args, "title", "title"));
       if (refused !== undefined) {
         throw new ControlError("internal", refused);

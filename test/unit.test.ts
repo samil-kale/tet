@@ -140,6 +140,26 @@ describe("a Claude Code turn leaving a background agent running", () => {
   });
 });
 
+describe("a turn reported after its tab's process exited", () => {
+  it("marks nothing: the report was sent before the exit and arrived after it", async () => {
+    const statuses: string[] = [];
+    // A tab in `error` without a process: sbx is missing, so its sandboxed start fails. A pty
+    // spawned here would keep node's test runner from exiting (node-pty's pipes outlive the exit).
+    await withEmptyPath({ onStatus: (_projectId, _tabId, status) => statuses.push(status) }, async (manager, project) => {
+      fs.writeFileSync(path.join(project, "tet.json"), JSON.stringify({ sbx: { enabled: true } }));
+      const { tabId } = manager.createTab("pi");
+      manager.handleResize(tabId, 80, 24);
+      await eventually(() => `an error after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", "{}", at);
+      assert.deepEqual(manager.hookEvent(tabId, "permission", "{}", at + 1000), {});
+      const inspected = manager.inspect().find((candidate) => candidate.tabId === tabId);
+      assert.notEqual(inspected?.busy, true);
+      assert.equal(inspected?.waitingAt, undefined);
+    });
+  });
+});
+
 describe("a tab of a missing agent", () => {
   it("starts once switching sandboxing on makes its agent startable", async () => {
     const statuses: string[] = [];

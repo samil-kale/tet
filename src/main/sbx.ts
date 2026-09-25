@@ -1463,10 +1463,11 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
  * only a running one lists its ports (readSandboxPorts). Returns what no sandbox took, by
  * `host:container`, and a port it would not unpublish.
  */
-async function applyProjectPorts(names: string[], ports: SbxPort[]): Promise<Record<string, string>> {
-  const started = await Promise.all(names.map((name) => ensureRunning(name)));
+async function applyProjectPorts(names: string[], ports: SbxPort[], read?: Map<string, SbxPort[]>): Promise<Record<string, string>> {
+  // Read already (assertReadable): each of them running.
+  const started = read ? names.map(() => true) : await Promise.all(names.map((name) => ensureRunning(name)));
   const running = names.filter((_, index) => started[index]);
-  const published = await Promise.all(running.map(readSandboxPorts));
+  const published = read ? running.map((name) => read.get(name) ?? []) : await Promise.all(running.map(readSandboxPorts));
   const wanted = new Set(ports.map(sbxPortKey));
   const refused: Record<string, string> = {};
   for (const [index, name] of running.entries()) {
@@ -1500,6 +1501,53 @@ export interface SbxSaveTarget {
   path: string;
 }
 
+/** What a Save read of the kept sandboxes before changing anything (assertReadable), for its
+ *  first pass to work against rather than ask again. */
+interface SaveReads {
+  secrets?: Map<string, LiveSecret[]>;
+  /** By sandbox, each running: what it published. */
+  ports?: Map<string, SbxPort[]>;
+}
+
+/**
+ * Rejects a Save sbx cannot answer for, before it changes anything (saveSbxConfig): what a kept
+ * sandbox holds must be readable, or a row sbx merely could not list would go as refused — a
+ * secret with its stored value, which sbx never gives back — and be taken back from every sandbox.
+ * Ports are listed only by a running sandbox (readSandboxPorts), so theirs are started here.
+ */
+async function assertReadable(
+  kept: readonly { agentId: SbxAgentId; name: string; ports: boolean }[],
+  secrets: boolean,
+  ports: boolean
+): Promise<SaveReads> {
+  const unsaved = "Nothing was saved; try again.";
+  const reads: SaveReads = {};
+  if (kept.length === 0) {
+    return reads;
+  }
+  if (secrets) {
+    reads.secrets = await readSandboxSecrets();
+    if (reads.secrets === undefined) {
+      throw new Error(`SBX could not list the sandboxes' secrets. ${unsaved}`);
+    }
+  }
+  if (ports) {
+    reads.ports = new Map();
+    for (const { agentId, name } of kept.filter((entry) => entry.ports)) {
+      const sandbox = `the ${getAgent(agentId).displayName} sandbox`;
+      if (!(await ensureRunning(name))) {
+        throw new Error(`SBX could not start ${sandbox} to bring its ports in line. ${unsaved}`);
+      }
+      const listed = await runSbx(["ports", name, "--json"]);
+      if (!listed.ok) {
+        throw new Error(`SBX could not list the ports of ${sandbox}. ${unsaved}`);
+      }
+      reads.ports.set(name, parsePublishedPorts(listed.stdout));
+    }
+  }
+  return reads;
+}
+
 /** A sandbox a Save removed, by the project it was of. */
 export interface SbxRemoved {
   projectId: string;
@@ -1517,7 +1565,8 @@ export interface SbxRemoved {
  * unpublish stays, as the sandbox still has it: tet.json holds what was applied. Grants are
  * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
  * is `refused` too, its row and knowledge kind kept as they were. Ports need the sandbox running.
- * A sandbox that cannot be removed rejects, tet.json left as it was. The open `worktrees` of the
+ * A sandbox that cannot be removed rejects, tet.json left as it was; so does a Save sbx cannot read
+ * the sandboxes for (assertReadable), before anything changed. The open `worktrees` of the
  * project's repository take its tet.json (tet-json.ts's configRoot), so their sandboxes are brought
  * in line too, all but the ports, which only the project's own forward. Returns the sandboxes
  * removed, for the caller to say so: a running session of theirs just lost its sandbox; those of
@@ -1546,20 +1595,16 @@ export async function saveSbxConfig(
   const targets = [project, ...worktrees];
   const removed: SbxRemoved[] = [];
   const orphans: SbxRemoved[] = [];
+  // Sorted out first, removed only once `assertReadable` passed: a Save that stops changes nothing.
+  const orphaned: (SbxRemoved & { name: string })[] = [];
   for (const [name, workspaces] of sandboxes) {
-    for (const target of targets) {
-      const agentId = orphanAgent(name, workspaces, target.id, target.path);
-      if (agentId === undefined) {
-        continue;
-      }
-      if (!(await removeSandbox(name))) {
-        throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
-      }
-      orphans.push({ projectId: target.id, agentId });
-      break;
+    const target = targets.find((candidate) => orphanAgent(name, workspaces, candidate.id, candidate.path) !== undefined);
+    if (target !== undefined) {
+      orphaned.push({ name, projectId: target.id, agentId: orphanAgent(name, workspaces, target.id, target.path)! });
     }
   }
   const kept: { agentId: SbxAgentId; name: string; projectId: string; ports: boolean }[] = [];
+  const dropped: (SbxRemoved & { name: string })[] = [];
   for (const target of targets) {
     for (const agentId of SBX_AGENT_IDS) {
       const name = sandboxName(target.id, agentId);
@@ -1569,16 +1614,27 @@ export async function saveSbxConfig(
       }
       if (config.enabled && sameSet(existing, [target.path])) {
         kept.push({ agentId, name, projectId: target.id, ports: target === project });
-      } else if (await removeSandbox(name)) {
-        removed.push({ projectId: target.id, agentId });
       } else {
-        throw new Error(`The ${getAgent(agentId).displayName} sandbox could not be removed.`);
+        dropped.push({ name, projectId: target.id, agentId });
       }
     }
   }
+  const reads = await assertReadable(kept, config.secrets.length > 0 || previous.secrets.length > 0, config.ports.length > 0 || previous.ports.length > 0);
+  for (const { name, projectId, agentId } of orphaned) {
+    if (!(await removeSandbox(name))) {
+      throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
+    }
+    orphans.push({ projectId, agentId });
+  }
+  for (const { name, projectId, agentId } of dropped) {
+    if (!(await removeSandbox(name))) {
+      throw new Error(`The ${getAgent(agentId).displayName} sandbox could not be removed.`);
+    }
+    removed.push({ projectId, agentId });
+  }
   // Brings every kept sandbox to `target`. The listings answer for every sandbox at once, so they
   // are asked together, and only when the project has one: each is an sbx process (~0.45 s).
-  const apply = async (target: SbxProjectConfig): Promise<SbxProblems> => {
+  const apply = async (target: SbxProjectConfig, first?: SaveReads): Promise<SbxProblems> => {
     const refused: SbxProblems = {};
     if (kept.length === 0) {
       return refused;
@@ -1586,13 +1642,13 @@ export async function saveSbxConfig(
     const secrets = target.secrets.length > 0 || previous.secrets.length > 0;
     const [liveHosts, liveSecrets] = await Promise.all([
       organization ? new Map<string, string[]>() : readSandboxHosts(),
-      secrets ? readSandboxSecrets() : new Map<string, LiveSecret[]>()
+      secrets ? (first?.secrets ?? readSandboxSecrets()) : new Map<string, LiveSecret[]>()
     ]);
     // Whenever any are configured or were, since what a sandbox published is only readable while it
     // runs: the rows may match tet.json and still be unpublished (ports written before the sandbox
     // existed).
     if (target.ports.length > 0 || previous.ports.length > 0) {
-      addProblems(refused, "ports", await applyProjectPorts(kept.filter(({ ports }) => ports).map(({ name }) => name), target.ports));
+      addProblems(refused, "ports", await applyProjectPorts(kept.filter(({ ports }) => ports).map(({ name }) => name), target.ports, first?.ports));
     }
     for (const { name, projectId } of kept) {
       if (!organization) {
@@ -1619,7 +1675,7 @@ export async function saveSbxConfig(
     }
     return refused;
   };
-  const refused = await apply(config);
+  const refused = await apply(config, reads);
   const refusedPort = (port: SbxPort): boolean => refused.ports?.[sbxPortKey(port)] !== undefined;
   const applied: SbxProjectConfig = {
     ...config,

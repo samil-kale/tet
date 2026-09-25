@@ -136,10 +136,13 @@ interface CommandListProps {
 /** A project's saved commands, from tet.json in the repository root, so they travel with the
  *  project. Running one opens a terminal tab. One list serves every project: the active one's. */
 export const CommandList = memo(function CommandList({ projectId, height, editable, onOpenTab }: CommandListProps) {
-  const [commands, setCommands] = useState<ProjectCommand[]>([]);
+  /** Tagged with its project: until the next project's list answers, the previous one is held but
+   *  counts as none, so neither Run nor a reorder acts on it in the wrong project. */
+  const [held, setHeld] = useState<{ projectId: string; commands: ProjectCommand[] } | undefined>(undefined);
+  const commands = held?.projectId === projectId ? held.commands : [];
   const menu = useContextMenu<ProjectCommand>();
-  /** The current list, for callbacks created before its last change. */
-  const latest = useRef<ProjectCommand[]>([]);
+  /** The current list, for callbacks created before its last change; tagged like `held`. */
+  const latest = useRef<{ projectId: string; commands: ProjectCommand[] } | undefined>(undefined);
   /** The project currently shown, for the same callbacks. */
   const shownProject = useRef(projectId);
 
@@ -156,14 +159,13 @@ export const CommandList = memo(function CommandList({ projectId, height, editab
   useEffect(() => {
     shownProject.current = projectId;
     if (!projectId) {
-      applyCommands([]);
       return;
     }
     let cancelled = false;
     const load = (): void => {
       void window.tet.commands.list(projectId).then((saved) => {
         if (!cancelled) {
-          applyCommands(saved);
+          applyCommands(projectId, saved);
         }
       });
     };
@@ -182,19 +184,25 @@ export const CommandList = memo(function CommandList({ projectId, height, editab
 
   /** Every change goes through here; callers compute from `latest`, not a closed-over `commands`,
    *  since the file can change while a dialog is open. */
-  const applyCommands = (next: ProjectCommand[]): void => {
-    latest.current = next;
-    setCommands(next);
+  const applyCommands = (project: string, next: ProjectCommand[]): void => {
+    const tagged = { projectId: project, commands: next };
+    latest.current = tagged;
+    setHeld(tagged);
   };
+
+  /** The latest list if it is the shown project's, else none. */
+  const latestCommands = (): ProjectCommand[] =>
+    latest.current?.projectId === shownProject.current ? latest.current.commands : [];
 
   /** Writes the list whole, handing back what refused it — for the questions that stay up to show
    *  it at their field (`prompt`'s `submit`). */
   const saveAsked = async (next: ProjectCommand[]): Promise<string | undefined> => {
-    // A dialog answered after the project changed built `next` from the other project's list.
-    if (!projectId || projectId !== shownProject.current) {
+    // A dialog answered after the project changed built `next` from the other project's list, and
+    // one answered before this project's list arrived from none.
+    if (!projectId || projectId !== shownProject.current || latest.current?.projectId !== projectId) {
       return undefined;
     }
-    applyCommands(next);
+    applyCommands(projectId, next);
     return refusal(await window.tet.commands.save(projectId, next), "Could not save the commands");
   };
 
@@ -211,7 +219,7 @@ export const CommandList = memo(function CommandList({ projectId, height, editab
       render: renderCommandFields,
       submit: async (answer) => {
         const command = toCommand(answer);
-        const current = latest.current;
+        const current = latestCommands();
         // Already saved word for word: nothing to add, and nothing to say about it.
         return current.some((entry) => isSameCommand(entry, command)) ? undefined : saveAsked([...current, command]);
       }
@@ -221,8 +229,9 @@ export const CommandList = memo(function CommandList({ projectId, height, editab
   /** The command's index in the latest list: by identity, else by content, since a re-read while a
    *  dialog is open replaces every object. */
   const indexOf = (command: ProjectCommand): number => {
-    const exact = latest.current.indexOf(command);
-    return exact !== -1 ? exact : latest.current.findIndex((entry) => isSameCommand(entry, command));
+    const current = latestCommands();
+    const exact = current.indexOf(command);
+    return exact !== -1 ? exact : current.findIndex((entry) => isSameCommand(entry, command));
   };
 
   /** `askAdd`'s dialog, prefilled. */
@@ -241,7 +250,7 @@ export const CommandList = memo(function CommandList({ projectId, height, editab
       ready: ({ command: typed }) => filled(typed),
       render: renderCommandFields,
       submit: async (answer) => {
-        const current = latest.current;
+        const current = latestCommands();
         const index = indexOf(command);
         // Removed while the dialog was open: writing it back would resurrect it.
         return index === -1
@@ -261,7 +270,7 @@ export const CommandList = memo(function CommandList({ projectId, height, editab
     if (answer.confirmed) {
       const index = indexOf(command);
       if (index !== -1) {
-        save(latest.current.filter((_entry, position) => position !== index));
+        save(latestCommands().filter((_entry, position) => position !== index));
       }
     }
   };
@@ -330,7 +339,7 @@ export const CommandList = memo(function CommandList({ projectId, height, editab
             </button>
           </div>
         ))}
-        {projectId && commands.length === 0 && <div className="placeholder">No commands yet.</div>}
+        {projectId && held?.projectId === projectId && commands.length === 0 &&<div className="placeholder">No commands yet.</div>}
       </div>
 
       {menu.render(menuEntries)}

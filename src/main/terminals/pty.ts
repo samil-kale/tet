@@ -58,13 +58,20 @@ const WIN32_EXTENSIONS = [...WIN32_NATIVE_EXTENSIONS, ...WIN32_BATCH_EXTENSIONS]
  * put in front of a program is what runs. Undefined where nothing (or only a .ps1) resolves.
  */
 function resolveWin32Executable(executable: string): { path: string; batch: boolean } | undefined {
+  const pathDirs = (): string[] => (process.env.PATH ?? "").split(path.delimiter);
   const ext = path.extname(executable).toLowerCase();
   if (ext) {
-    return WIN32_EXTENSIONS.includes(ext) ? { path: executable, batch: WIN32_BATCH_EXTENSIONS.includes(ext) } : undefined;
+    if (!WIN32_EXTENSIONS.includes(ext)) {
+      return undefined;
+    }
+    // A bare `npm.cmd` is found along PATH too, or isCmdShim would read it in this process's folder
+    // and miss the shim. Unfound, it stays the name, for CreateProcessW or cmd.exe to look up.
+    const found = path.basename(executable) === executable ? pathDirs().map((dir) => path.join(dir, executable)).find((candidate) => fs.existsSync(candidate)) : undefined;
+    return { path: found ?? executable, batch: WIN32_BATCH_EXTENSIONS.includes(ext) };
   }
 
   const dir = path.dirname(executable);
-  const searchDirs = dir !== "." ? [dir] : (process.env.PATH ?? "").split(path.delimiter);
+  const searchDirs = dir !== "." ? [dir] : pathDirs();
   for (const searchDir of searchDirs) {
     for (const extension of WIN32_EXTENSIONS) {
       const candidate = path.join(searchDir, path.basename(executable) + extension);

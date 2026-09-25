@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { failure } from "../shared/errors";
 import { worktreeBase, worktreesSupported, WORKTREES_NEED_GIT } from "../shared/types";
 import type { AddRepositoryResult, GitActionResult, Project, WorktreeRef } from "../shared/types";
 import type { ControlRecords } from "./control/control-records";
@@ -136,7 +137,7 @@ export async function addWorktree(deps: ProjectDeps, projectId: string, branch: 
   if (!result.ok) {
     return { error: result.error || "Creating the worktree failed" };
   }
-  const added = deps.store.add(onDisk(target));
+  const added = deps.store.add(target);
   deps.openProject(added);
   deps.projectsChanged({ added: added.id });
   return { project: added };
@@ -159,14 +160,21 @@ async function withWorktreeClosed(
   const folder = onDisk(worktreePath);
   const project = deps.store.list().find((entry) => onDisk(entry.path) === folder);
   const local = project && deps.sbxLocal.encrypted(project.id);
-  if (project) {
-    await closeProject(deps, project.id);
-    void removeProjectSandboxes(project.id);
+  // A throw (the git process gone, a session refusing to close) is a failure like git's own: the
+  // project, already out of the store, must open again rather than linger in the window.
+  let result: GitActionResult;
+  try {
+    if (project) {
+      await closeProject(deps, project.id);
+      void removeProjectSandboxes(project.id);
+    }
+    result = await command();
+  } catch (error) {
+    result = failure(error);
   }
-  const result = await command();
   if (project) {
     const target = reopenAt(result);
-    const reopened = target === undefined ? undefined : deps.store.add(onDisk(target));
+    const reopened = target === undefined ? undefined : deps.store.add(target);
     if (reopened && local) {
       deps.sbxLocal.restore(reopened.id, local);
       deps.openProject(reopened);
@@ -309,7 +317,9 @@ export class ProjectStore implements ProjectLookup {
 
   /** Adds the folder, or returns the existing project when it is already open. */
   add(directory: string): Project {
-    const normalized = path.resolve(directory);
+    // In on-disk spelling, whichever way the folder came (typed, picked, cloned, a worktree), as
+    // git and readMainWorktree name it: a worktree's `mainPath` compares to it as a string.
+    const normalized = onDisk(directory);
     const existing = this.projects.find((project) => project.path === normalized);
     if (existing) {
       return existing;

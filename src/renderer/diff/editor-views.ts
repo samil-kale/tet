@@ -1,7 +1,7 @@
 import type { editor as MonacoEditor } from "monaco-editor";
 import type { FileContent } from "../../shared/types";
 import { isMac } from "../platform";
-import { confirm } from "../ui/Dialog";
+import { confirm, questionUp } from "../ui/Dialog";
 import { layoutKey } from "../ui/layout-storage";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
@@ -108,6 +108,9 @@ interface EditorView {
   /** Bumped by every save that reached disk: an older re-read must not restore the replaced text
    *  and mtime as clean. */
   saves: number;
+  /** A newer read of the file than the tab holds, kept while its edits keep it out: what a save
+   *  asks before overwriting, and what the tab shows once undone to clean (`foldIn`). */
+  onDisk: FileContent | undefined;
   /** HEAD and status as App last reported them, once acted on. */
   version: string | undefined;
   /** A report that came while the open's read was in flight, applied when it lands. */
@@ -363,6 +366,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
       preview: null,
       readSeq: 0,
       saves: 0,
+      onDisk: undefined,
       version: undefined,
       pendingVersion: undefined,
       pendingReveal: undefined,
@@ -380,6 +384,7 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
   clearPreview(view);
   view.version = undefined;
   view.pendingVersion = undefined;
+  view.onDisk = undefined;
   view.pendingReveal = how.reveal;
   publish(view, {
     path,
@@ -416,9 +421,10 @@ export function openEditorFile(projectId: string, tabId: string, path: string, p
 
 /**
  * Folds outside changes into the open file on a HEAD or status change. The edited side only while
- * clean, in place so undo and cursor survive; HEAD's side always, since a commit or checkout moves
- * what the marks are against. The first report after an open is the baseline. A file that failed to
- * read is read again, so a tab opened before its file existed recovers.
+ * clean, in place so undo and cursor survive — a dirty tab keeps the read as `onDisk`; HEAD's side
+ * always, since a commit or checkout moves what the marks are against. The first report after an
+ * open is the baseline. A file that failed to read is read again, so a tab opened before its file
+ * existed recovers.
  */
 export function setEditorVersion(tabId: string, version: string): void {
   const view = views.get(tabId);
@@ -461,41 +467,51 @@ export function setEditorVersion(tabId: string, version: string): void {
     if (view.snapshot.dirty || view.saves !== saves || (result.mtimeMs === held.mtimeMs && !held.error)) {
       // The edited side stays; HEAD's is carried in anyway, or binary, image and original are
       // decided off a stale HEAD.
+      if (view.snapshot.dirty && view.saves === saves && result.mtimeMs !== held.mtimeMs) {
+        view.onDisk = result;
+      }
       publish(view, { file: { ...held, head: result.head } });
       return;
     }
-    const text = editorKind(result) === "text";
-    publish(view, { file: result, building: text && !view.models });
-    if (!text) {
-      clearModels(view);
-    } else if (view.models) {
-      const model = view.models.modified;
-      // monaco strips a BOM only when building a buffer: pushed as an edit it becomes text, and the
-      // save writes it twice. A BOM that came or went on disk needs a new buffer.
-      const bom = result.content.startsWith("\uFEFF");
-      const modelBom = model.getValueLength(undefined, true) !== model.getValueLength();
-      // Monaco reports the change synchronously, before the new version is saved: read as an edit,
-      // it would keep a preview tab.
-      view.reloading = true;
-      try {
-        if (bom === modelBom) {
-          const text = bom ? result.content.slice(1) : result.content;
-          model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
-        } else {
-          model.setValue(result.content);
-        }
-      } finally {
-        view.reloading = false;
-      }
-      view.savedVersionId = model.getAlternativeVersionId();
-      // As in `showText`: deleted under the tab means read-only, restored means editable.
-      setReadOnly(view, isReadOnly(result));
-      publish(view, { dirty: false });
-    } else {
-      // A new generation: the open may still be building models, and both would create the same two.
-      void showText(view, ++view.readSeq, result);
-    }
+    foldIn(view, result);
   });
+}
+
+/** A read of the file taken into a clean tab: in place so undo and cursor survive, or as a new
+ *  generation where the kind changed or the models are still building. */
+function foldIn(view: EditorView, result: FileContent): void {
+  view.onDisk = undefined;
+  const text = editorKind(result) === "text";
+  publish(view, { file: result, building: text && !view.models });
+  if (!text) {
+    clearModels(view);
+  } else if (view.models) {
+    const model = view.models.modified;
+    // monaco strips a BOM only when building a buffer: pushed as an edit it becomes text, and the
+    // save writes it twice. A BOM that came or went on disk needs a new buffer.
+    const bom = result.content.startsWith("\uFEFF");
+    const modelBom = model.getValueLength(undefined, true) !== model.getValueLength();
+    // Monaco reports the change synchronously, before the new version is saved: read as an edit,
+    // it would keep a preview tab.
+    view.reloading = true;
+    try {
+      if (bom === modelBom) {
+        const text = bom ? result.content.slice(1) : result.content;
+        model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+      } else {
+        model.setValue(result.content);
+      }
+    } finally {
+      view.reloading = false;
+    }
+    view.savedVersionId = model.getAlternativeVersionId();
+    // As in `showText`: deleted under the tab means read-only, restored means editable.
+    setReadOnly(view, isReadOnly(result));
+    publish(view, { dirty: false });
+  } else {
+    // A new generation: the open may still be building models, and both would create the same two.
+    void showText(view, ++view.readSeq, result);
+  }
 }
 
 /** Writes the edited side, guarded by the mtime it was read at (`Repository.writeFile`). */
@@ -512,9 +528,29 @@ export async function saveEditorFile(tabId: string): Promise<void> {
   // the write stays unsaved.
   const content = model.getValue(undefined, true);
   const versionId = model.getAlternativeVersionId();
-  const result = await window.tet.repository.writeFile(view.projectId, path, content, file.mtimeMs);
+  let result = await window.tet.repository.writeFile(view.projectId, path, content, file.mtimeMs);
   if (views.get(tabId) !== view || view.readSeq !== seq) {
     return;
+  }
+  // Changed on disk meanwhile (an agent wrote it): overwritten only once asked — the other version
+  // is gone then. With another question up, told as before.
+  if (!result.ok && result.diskMtimeMs !== undefined && !questionUp()) {
+    const answer = await confirm({
+      title: "File changed on disk",
+      message: `${path} changed on disk since it was opened. Overwrite it with your changes?`,
+      confirmLabel: "Overwrite"
+    });
+    if (views.get(tabId) !== view || view.readSeq !== seq) {
+      return;
+    }
+    if (!answer.confirmed) {
+      publish(view, { saving: false });
+      return;
+    }
+    result = await window.tet.repository.writeFile(view.projectId, path, content, result.diskMtimeMs);
+    if (views.get(tabId) !== view || view.readSeq !== seq) {
+      return;
+    }
   }
   if (!result.ok) {
     notify("error", result.error ?? "Could not save the file");
@@ -523,6 +559,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
   }
   view.savedVersionId = versionId;
   view.saves++;
+  view.onDisk = undefined;
   const held = view.snapshot.file;
   publish(view, {
     file: held ? { ...held, content, mtimeMs: result.mtimeMs ?? held.mtimeMs } : held,
@@ -652,6 +689,16 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
     if (dirty !== view.snapshot.dirty) {
       // An edit keeps a preview, in the same step: nothing can replace the tab in between.
       publish(view, { dirty, preview: view.snapshot.preview && !dirty });
+    }
+    // Undone to clean over a file that changed on disk meanwhile: what a clean tab would have
+    // shown. After this event, as monaco is still inside the edit.
+    const onDisk = view.onDisk;
+    if (!dirty && onDisk) {
+      queueMicrotask(() => {
+        if (view.models === models && !view.snapshot.dirty && view.onDisk === onDisk) {
+          foldIn(view, onDisk);
+        }
+      });
     }
   });
   setReadOnly(view, isReadOnly(file));

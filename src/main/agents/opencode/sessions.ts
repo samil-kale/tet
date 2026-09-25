@@ -45,7 +45,9 @@ const RENAME_POLL_MS = 250;
 async function readRecord(file: string): Promise<SessionRecord | undefined> {
   try {
     const parsed = JSON.parse(await fs.promises.readFile(file, "utf8")) as Partial<SessionRecord>;
-    if (typeof parsed.id !== "string") {
+    // As the plugin names it (plugin.ts's isSessionId), and the file it is in: the id becomes a
+    // path in rename and remove, and a sandbox can write these records through its mount.
+    if (typeof parsed.id !== "string" || !/^[0-9A-Za-z_-]+$/.test(parsed.id) || `${parsed.id}.json` !== path.basename(file)) {
       return undefined;
     }
     return {

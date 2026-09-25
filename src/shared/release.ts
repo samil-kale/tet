@@ -82,10 +82,18 @@ export function processAlive(pid: number): boolean {
   }
 }
 
+/** Far past the updater's longest run (tet-update.ts: a minute's wait for tet to exit, then
+ *  half-minute retry windows). An older lock outlived its updater — killed by a shutdown before its
+ *  `finally` — and its pid may since name another process, which would hold every later tet back. */
+const UPDATER_MAX_LIFE_MS = 10 * 60_000;
+
 /** The lock's pid while that process lives; a crashed updater's lock counts as none. */
 export function runningUpdater(lockFile: string): number | undefined {
   let pid: number;
   try {
+    if (Date.now() - fs.statSync(lockFile).mtimeMs > UPDATER_MAX_LIFE_MS) {
+      return undefined;
+    }
     pid = Number(fs.readFileSync(lockFile, "utf8"));
   } catch {
     return undefined;

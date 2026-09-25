@@ -80,12 +80,17 @@ function file(root: string): string {
   return path.join(configRoot(root), PROJECT_FILE);
 }
 
-/** The file's text, or **null** when there is none. */
+/** The file's text, or **null** when there is none. Any other failure throws: a file there but
+ *  unreadable for the moment (EPERM while another process renames over it on win32) is not a
+ *  missing one, which `patch` would write over. */
 async function readText(root: string): Promise<string | null> {
   try {
     return await fs.readFile(file(root), "utf8");
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
   }
 }
 
@@ -99,18 +104,40 @@ function parse(text: string): ProjectFile {
 /** The file's contents, or **null** when there is none. A write may create a missing file but never
  *  replaces a broken one — it is a file in the user's repository. */
 async function read(root: string): Promise<ProjectFile | null> {
-  const text = await readText(root);
+  const text = await readText(root).catch(() => undefined);
+  if (text === undefined) {
+    // Unreadable reads as a broken file: nothing configured, and nothing written over it.
+    return UNREADABLE;
+  }
   return text === null ? null : parse(text);
 }
 
 /** A value to set at a path inside the file; undefined removes the key. */
 type Change = [JSONPath, unknown];
 
+/** The patch underway per file: commands, the Explorer menu, the sbx dialog and tet-ctl all write
+ *  it, and two read-modify-writes at once keep only the last one's change. */
+const patches = new Map<string, Promise<unknown>>();
+
 /**
  * Applies the changes `edit` derives from the file's contents, leaving comments, formatting and
  * every other key as the user wrote them; throws on a broken file rather than have it written over.
+ * One at a time per file, each after the last however that one ended.
  */
-async function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
+function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
+  const key = file(root);
+  const turn = (patches.get(key) ?? Promise.resolve()).catch(() => undefined).then(() => patchNow(root, edit));
+  patches.set(key, turn);
+  const forget = (): void => {
+    if (patches.get(key) === turn) {
+      patches.delete(key);
+    }
+  };
+  turn.then(forget, forget);
+  return turn;
+}
+
+async function patchNow(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
   assertOwnConfig(root);
   // An empty file holds nothing to keep: written like a missing one.
   const existing = await readText(root);

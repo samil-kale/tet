@@ -217,7 +217,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
           type="button"
           className="button secondary dialog-suggest"
           title={suggestion.title}
-          disabled={suggesting}
+          disabled={disabled || suggesting}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => void suggest()}
         >

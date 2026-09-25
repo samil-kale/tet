@@ -228,7 +228,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       const stored = await window.tet.projects.list();
       setProjects(stored);
       setActiveProjectId((current) => current ?? activeAtStart(stored));
-      const loaded = await Promise.all(
+      const fetched = await Promise.all(
         stored.map(async (project) => {
           const [state, list, isStarting] = await Promise.all([
             window.tet.repository.state(project.id),
@@ -238,6 +238,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           return [project.id, state, list, isStarting] as const;
         })
       );
+      // A project removed meanwhile was forgotten already: merging its entries would revive it.
+      const open = new Set(projectsRef.current.map((project) => project.id));
+      const loaded = fetched.filter(([id]) => open.has(id));
       // Pushes that landed meanwhile are newer than what was fetched.
       setStates((current) => ({
         ...Object.fromEntries(loaded.map(([id, state]) => [id, state])),

@@ -140,8 +140,8 @@ describe("resolveCommand", () => {
     const originalPath = process.env.PATH;
     process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
     try {
-      // The shim by its path, and by a bare name found on PATH.
-      for (const program of [shim, "echo-args"]) {
+      // The shim by its path, and by a bare name found on PATH, with its extension or without.
+      for (const program of [shim, "echo-args", "echo-args.cmd"]) {
         const run = runResolved(program, args, dir);
         assert.deepEqual(JSON.parse(run.stdout), args, `${program}: ${run.stdout} ${run.stderr}`);
       }
@@ -442,11 +442,12 @@ if (args[0] === "ls") {
 
   it("publishes a port tet.json already listed, because the sandbox never published it", async () => {
     const { result, calls } = await save({ has: [], before: [3000], now: [3000] });
+    // Started and listed before anything changes (assertReadable), then worked against.
     assert.deepEqual(calls, [
       "ls --json",
-      "policy ls --type network --include-inactive --json",
       `exec -i ${name} true`,
       `ports ${name} --json`,
+      "policy ls --type network --include-inactive --json",
       `ports ${name} --publish 3000:3000`
     ]);
     assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], config: config([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
@@ -608,15 +609,19 @@ if (args[0] === "ls") {
     );
   });
 
-  it("changes no secret where sbx does not list them, and leaves them out of tet.json", async () => {
+  it("stops a Save where sbx does not list the secrets, changing nothing", async () => {
     const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
     const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
-    const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
+    const before = await readSbxConfig(projectPath);
+    await assert.rejects(
+      withSbx(dir, () =>
+        saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
+      ),
+      /could not list the sandboxes' secrets/
     );
-    assert.ok(!calls.some((call) => call.startsWith("secret rm") || call.startsWith("secret set-custom")));
-    assert.deepEqual(result.refused, { secrets: { TOKEN: "sbx did not list the sandbox's secrets" } });
-    assert.deepEqual((await readSbxConfig(projectPath)).secrets, []);
+    const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
+    assert.ok(!/secret rm|secret set-custom|^rm /m.test(calls), calls);
+    assert.deepEqual(await readSbxConfig(projectPath), before, "tet.json as it was");
   });
 
   it("finds what cannot be applied here: under governance a host its policy refuses, a missing or refused path, a secret or variable without a value", async () => {

@@ -6,6 +6,7 @@ import {
   loadLayout,
   paneOf,
   placeCommandTab,
+  PRESET_PANES,
   saveLayout,
   serializeLayout,
   snapTab as snapTabLayout
@@ -122,14 +123,16 @@ export function useProjectLayouts(
   /**
    * Makes a tab a pane's active one. Without `paneId` it resolves through `paneOf` (a project row's
    * mark, `placeTab`): where it lives, else the focused pane. Collapses on emptying a pane; the
-   * other collapse trigger is a close, in the reconcile effect.
+   * other collapse trigger is a close, in the reconcile effect. A `paneId` the preset no longer has
+   * (collapsed while a new tab was being created) resolves the same way, or the tab is drawn nowhere.
    */
   const activateTab = useCallback((projectId: string, tabId: string, paneId?: PaneId) => {
     setLayouts((current) => {
       const layout = layoutOf(current, projectId);
+      const target = paneId && PRESET_PANES[layout.preset].includes(paneId) ? paneId : paneOf(layout, tabId);
       return {
         ...current,
-        [projectId]: activateTabLayout(layout, tabId, paneId ?? paneOf(layout, tabId), tabsRef.current[projectId] ?? [])
+        [projectId]: activateTabLayout(layout, tabId, target, tabsRef.current[projectId] ?? [])
       };
     });
   }, []);

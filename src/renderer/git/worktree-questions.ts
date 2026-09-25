@@ -2,7 +2,7 @@ import { WORKTREES_NEED_GIT } from "../../shared/types";
 import type { GitActionResult, WorktreeRef } from "../../shared/types";
 import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirm } from "../ui/Dialog";
+import { askName, confirm, questionUp } from "../ui/Dialog";
 
 /**
  * The worktree questions, asked alike from a project row and from the branch tree's WORKTREES:
@@ -85,6 +85,10 @@ export async function askDeleteWorktree(
     const result = await deleted(false);
     if (result.needsConfirmation !== "uncommitted") {
       return result;
+    }
+    // Not asked while another question is up (`askLogin`): the refusal is notified instead.
+    if (questionUp()) {
+      return { ok: false, error: `${branch} has uncommitted changes` };
     }
     const forced = await confirm({
       title: "Delete worktree",
