@@ -7,7 +7,7 @@ import { killProcessTree, resolveCommand } from "../../terminals/pty";
  * request and tears it down, never a persistent one: the shared `$CODEX_HOME` SQLite state has a
  * write-lock race between instances and does not tolerate concurrent cold starts (measured:
  * parallel starts against a fresh `CODEX_HOME` failed). The startup cost is
- * fine for rare renames and deletes.
+ * fine for rare renames; a delete is `codex delete` (sessions.ts).
  */
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -114,8 +114,4 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
 
 export async function renameThread(executable: string, cwd: string, threadId: string, name: string): Promise<void> {
   await callAppServer(executable, cwd, { method: "thread/name/set", params: { threadId, name } });
-}
-
-export async function deleteThread(executable: string, cwd: string, threadId: string): Promise<void> {
-  await callAppServer(executable, cwd, { method: "thread/delete", params: { threadId } });
 }
