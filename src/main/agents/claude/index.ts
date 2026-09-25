@@ -4,7 +4,7 @@ import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { SANDBOX_HOME, sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
-import { setupClaudeHooks } from "./hooks";
+import { claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
 import { claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 
@@ -21,6 +21,7 @@ export const claudeAgent: AgentDefinition = {
   askArgs: ["-p", "--no-session-persistence"],
   sessions: claudeSessionProvider,
   sessionIdOf: hookSessionId,
+  workOutlivesStop: claudeWorkOutlivesStop,
   prepareSpawn: (_executable, _cwd, paths) => {
     let args: string[] = [];
     try {

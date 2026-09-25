@@ -120,6 +120,26 @@ describe("a tab's reported session", () => {
   });
 });
 
+describe("a Claude Code turn leaving a background agent running", () => {
+  it("keeps the tab working, without a toast, until the stop naming none", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("claude");
+      const busy = (): boolean | undefined => manager.inspect().find((tab) => tab.tabId === tabId)?.busy;
+      const stop = (tasks: object[]): string => JSON.stringify({ session_id: "s1", background_tasks: tasks });
+      const agent = { id: "a1", type: "subagent", status: "running" };
+      const shell = { id: "b1", type: "shell", status: "running" };
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at);
+      assert.deepEqual(manager.hookEvent(tabId, "stop", stop([agent, shell]), at + 1000), {});
+      assert.equal(busy(), true, "a background agent runs on");
+      // Its end starts a turn of its own.
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at + 2000);
+      manager.hookEvent(tabId, "stop", stop([shell]), at + 3000);
+      assert.equal(busy(), false, "a background shell alone does not count");
+    });
+  });
+});
+
 describe("a tab of a missing agent", () => {
   it("starts once switching sandboxing on makes its agent startable", async () => {
     const statuses: string[] = [];

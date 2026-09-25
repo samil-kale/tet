@@ -46,3 +46,22 @@ export function setupClaudeHooks(
   writeFileAtomic.sync(settingsFile, JSON.stringify({ hooks, theme: themeName }, null, 2));
   return ["--settings", target.embed(settingsFile)];
 }
+
+/**
+ * AgentDefinition.workOutlivesStop. Stop fires when the main turn ends, background agents still
+ * running; its payload lists them in `background_tasks` (`type: "subagent"`, `status: "running"`)
+ * and each one's end starts a turn of its own (`UserPromptSubmit` with a `<task-notification>`,
+ * then Stop) — measured, 2.1.282. Background shells (`type: "shell"`) don't count: a server never
+ * ends, and one a subagent left behind ends without a turn (measured).
+ */
+export function claudeWorkOutlivesStop(payload: string): boolean {
+  try {
+    const tasks = (JSON.parse(payload) as { background_tasks?: unknown } | null)?.background_tasks;
+    return (
+      Array.isArray(tasks) &&
+      tasks.some((task: { type?: unknown; status?: unknown } | null) => task?.type === "subagent" && task.status === "running")
+    );
+  } catch {
+    return false;
+  }
+}

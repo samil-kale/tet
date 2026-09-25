@@ -1272,6 +1272,9 @@ export class ProjectSessionManager {
           return {};
         }
         const agent = getAgent(tab.agentId);
+        if (agent.workOutlivesStop?.(payload)) {
+          return {};
+        }
         // Read before setTurn, which may clear it.
         const asked = endLeavesQuestion(tab, agent);
         setTurn(tab, false, at, asked);

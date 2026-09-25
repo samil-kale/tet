@@ -155,6 +155,11 @@ export interface AgentDefinition {
    */
   questionOutlivesTurn?: boolean;
   /**
+   * Whether a `stop` report leaves the session working: its turn ended, but work it started runs on
+   * and reports back in a turn of its own. The tab stays busy, no toast. Omitted: `stop` ends it.
+   */
+  workOutlivesStop?: (payload: string) => boolean;
+  /**
    * Setup before any session spawns: hooks, settings, plugins, and how TET's system prompt
    * (system-prompt.ts) reaches the model — the only place an agent may write configuration. A rejection
    * marks the agent unstartable, so reject only for what truly makes it unusable; a failed optional
