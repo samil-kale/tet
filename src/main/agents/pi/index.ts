@@ -14,6 +14,14 @@ import { systemPrompt } from "../system-prompt";
 const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
 
 /**
+ * pi's fullscreen TUI (since 0.84, `--tui-mode`, this run only — settings.json untouched): it
+ * enters the alternate screen and owns the viewport, so a resize redraws in place. It also turns on
+ * mouse reporting (`?1000;1002;1006h`): pi scrolls, selects and pastes on a right click itself
+ * (terminal-views.ts).
+ */
+const FULLSCREEN_ARGS = ["--tui-mode", "fullscreen"];
+
+/**
  * pi (pi.dev, `@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts,
  * reporting turns through a generated extension. Every value here measured through tet's pty
  * against pi 0.85.1.
@@ -49,7 +57,7 @@ export const piAgent: AgentDefinition = {
     }
     // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
     // settings.json untouched (measured).
-    args.push("--use-theme", paths.theme.kind, ...systemPromptArgs(false));
+    args.push(...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, ...systemPromptArgs(false));
     return Promise.resolve({ args });
   },
   prepareSandboxSpawn: (_cwd, paths) => {
@@ -60,10 +68,10 @@ export const piAgent: AgentDefinition = {
       // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the safety
       // boundary, as for Claude Code and opencode. The community pi-kit does not set it (measured,
       // docker/sbx-kits-contrib pi/spec.yaml).
-      return { args: ["-e", SANDBOX_TARGET.embed(extension), "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
+      return { args: ["-e", SANDBOX_TARGET.embed(extension), ...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
     } catch (error) {
       console.error("[tet] could not write pi's sandbox extension:", error);
-      return { args: ["--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
+      return { args: [...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
     }
   },
   // Per pi's bundled docs (0.85.1): skills in `~/.pi/agent/skills` and `~/.agents/skills`,
@@ -99,7 +107,7 @@ export const piAgent: AgentDefinition = {
   // One Ctrl+C clears the editor; two within 500 ms (pi's handleCtrlC) exit 0 in ~1.1 s, 700 ms
   // apart do nothing. TET's 250 ms gap and 2 s grace fit (0.86.1: exit 0 within 500 ms of the first).
   quitPresses: 2
-  // Omitted on purpose, each measured: takesRightMouse (no mouse reporting), swapsBlueMagenta
+  // Omitted on purpose, each measured: swapsBlueMagenta
   // (truecolor `38;2` only, no palette indices, no OSC 10/11), resolveUrlPrefix (a long url comes
   // in OSC 8 with the full url, which the renderer's linkHandler opens).
 };

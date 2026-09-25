@@ -108,8 +108,6 @@ export const opencodeAgent: AgentDefinition = {
   createIsSessionReady: () => createNonAsciiThresholdCheck(20),
   // Its TUI leaves at once (measured, 1.18.4: gone 213 ms after the byte).
   quitPresses: 1,
-  // Its TUI takes the right click (it copies the selection).
-  takesRightMouse: true,
   // With `"theme": "system"` (tui-config.ts).
   swapsBlueMagenta: true
 };

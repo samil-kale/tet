@@ -39,7 +39,6 @@ export function listAgents(): AgentInfo[] {
     id: agent.id,
     displayName: agent.displayName,
     hasSessions: agent.sessions !== undefined,
-    takesRightMouse: agent.takesRightMouse === true,
     swapsBlueMagenta: agent.swapsBlueMagenta === true
   }));
 }

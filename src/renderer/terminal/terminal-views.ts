@@ -487,16 +487,17 @@ export function attachTerminal(projectId: string, tabId: string, agent: AgentInf
   });
   container.addEventListener("contextmenu", (event) => {
     event.preventDefault();
-    if (!agent.takesRightMouse) {
-      // Nothing takes the right click (measured, AgentDefinition.takesRightMouse): copy a
-      // selection, else paste.
+    // Asked per click, not per agent: whether a TUI reports the mouse depends on its mode (Codex
+    // only in its fullscreen transcript). Without reporting — the shell — nothing takes the
+    // right click: copy a selection, else paste.
+    if (view.term.modes.mouseTrackingMode === "none") {
       if (!copySelection(view.term)) {
         void pasteClipboard(view.term);
       }
       return;
     }
-    // The CLI takes the right button via mouse reporting (Claude Code pastes, opencode copies),
-    // but neither pastes an image.
+    // The CLI takes the right button (Claude Code and pi paste, opencode and Codex copy a
+    // selection), but none pastes an image.
     void pasteClipboardImage(view.term);
   });
 }

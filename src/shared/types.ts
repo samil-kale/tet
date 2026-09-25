@@ -6,9 +6,8 @@ export interface AgentInfo {
   displayName: string;
   /** False for the shell, whose tabs are plain terminals. */
   hasSessions: boolean;
-  /* Mirrors of the measured AgentDefinition fields, for the renderer, which cannot import
+  /* Mirror of the measured AgentDefinition field, for the renderer, which cannot import
      src/main/agents. */
-  takesRightMouse: boolean;
   swapsBlueMagenta: boolean;
 }
 

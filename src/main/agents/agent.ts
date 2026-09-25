@@ -225,15 +225,9 @@ export interface AgentDefinition {
    */
   quitPresses?: number;
   /**
-   * The TUI takes the right mouse button through mouse reporting (Claude Code pastes, opencode
-   * copies). Otherwise — the shell, Codex (github.com/openai/codex#8344) — tet copies a selection or
-   * pastes (terminal-views.ts). pi turns on no mouse reporting at all. A measured fact the renderer
-   * acts on, travelling as a flag on AgentInfo, as does `swapsBlueMagenta`.
-   */
-  takesRightMouse?: boolean;
-  /**
    * opencode under `"theme": "system"` (tui-config.ts) draws blue and magenta swapped against VS
-   * Code's palette (observed); buildXtermTheme in theme.ts swaps them back.
+   * Code's palette (observed); buildXtermTheme in theme.ts swaps them back. A measured fact the
+   * renderer acts on, travelling as a flag on AgentInfo.
    */
   swapsBlueMagenta?: boolean;
 }

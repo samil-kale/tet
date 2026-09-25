@@ -53,7 +53,5 @@ export const claudeAgent: AgentDefinition = {
   // threshold than 500 is not reliably reached.
   createIsSessionReady: () => createByteThresholdCheck(500),
   // The first only offers to exit, the second takes it up.
-  quitPresses: 2,
-  // Its Ink TUI takes the right click (it pastes).
-  takesRightMouse: true
+  quitPresses: 2
 };

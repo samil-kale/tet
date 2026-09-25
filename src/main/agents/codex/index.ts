@@ -30,6 +30,16 @@ function writeConsoleColorLauncher(agentDir: string, executable: string, theme: 
   return launcher;
 }
 
+/**
+ * Codex's fullscreen transcript, always: only there does it enter the alternate screen (0.156.1,
+ * raw pty bytes), so a resize redraws in place instead of reprinting the whole transcript into the
+ * scrollback (openai/codex#24552); the plain TUI never does, `tui.alternate_screen = "always"`
+ * included. It also turns on mouse reporting (`?1003;1006h`): Codex scrolls, selects and copies on a
+ * right click itself (terminal-views.ts). Unmeasured on a Codex older than the key, as a sandbox's
+ * may be.
+ */
+const FULLSCREEN_ARGS = ["-c", "tui.fullscreen_transcript=true"];
+
 export const codexAgent: AgentDefinition = {
   id: "codex",
   displayName: "Codex",
@@ -41,7 +51,7 @@ export const codexAgent: AgentDefinition = {
   sessions: codexSessionProvider,
   sessionIdOf: hookSessionId,
   prepareSpawn: (executable, _cwd, paths) => {
-    let args: string[] = [];
+    let args: string[] = FULLSCREEN_ARGS;
     let launcher: string | undefined;
     if (process.platform === "win32") {
       try {
@@ -52,7 +62,7 @@ export const codexAgent: AgentDefinition = {
       }
     }
     try {
-      args = setupCodexHooks();
+      args = [...FULLSCREEN_ARGS, ...setupCodexHooks()];
     } catch (error) {
       // See prepareSpawn: swallow, never reject.
       console.error("[tet] could not set up Codex hooks:", error);
@@ -61,10 +71,10 @@ export const codexAgent: AgentDefinition = {
   },
   prepareSandboxSpawn: () => {
     try {
-      return { args: setupCodexHooks(SANDBOX_TARGET) };
+      return { args: [...FULLSCREEN_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] };
     } catch (error) {
       console.error("[tet] could not set up Codex sandbox hooks:", error);
-      return { args: [] };
+      return { args: FULLSCREEN_ARGS };
     }
   },
   // Measured: skills in `~/.codex/skills` and `~/.agents/skills` (its "failed to load skill" log
@@ -90,8 +100,5 @@ export const codexAgent: AgentDefinition = {
   // Measured at 0.153.4: Codex reads \x03 as a byte — it clears a non-empty composer, and quits
   // (exit 0) on an empty one.
   //
-  // Codex reprints its whole scrollback on any real pty resize: it never enters its alternate
-  // screen, and `alternate_screen = "always"` has no effect in the shipped binary (raw pty bytes
-  // captured; openai/codex#24552). A Codex bug — per-agent resize suppression only trades one
-  // symptom for another, so wait for an upstream fix.
+  // Resize: see FULLSCREEN_ARGS.
 };
