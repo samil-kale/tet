@@ -23,7 +23,7 @@ export function worktreeEntry(label: string, supported: boolean, run: (() => voi
 export async function askNewWorktree(projectId: string, run: GitRun, base: string): Promise<void> {
   await prompt({
     title: "New worktree",
-    detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/worktrees and opened as a project.`,
+    detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/worktrees.`,
     value: "",
     confirmLabel: "Create worktree",
     ready: filled,

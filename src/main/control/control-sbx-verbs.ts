@@ -20,6 +20,7 @@ import {
   withoutProblems
 } from "../../shared/sbx-rules";
 import { sbxNotReady } from "../sbx-policy";
+import { configRoot, isWorktree } from "../tet-json";
 import type { ControlDeps } from "./control-server";
 import { ControlError, list, text, type Answer, type Handler } from "./control-verb";
 
@@ -50,7 +51,8 @@ export function sbxVerbs(
    * One SBX Settings field changed, then saved as the dialog's Save does, everything else as it
    * stands: a row that cannot be applied here is left out and answered as `notApplied`. As the
    * dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch while sandboxing
-   * is off. A stored value stays with its row's name; a removed row's goes.
+   * is off. A stored value stays with its row's name; a removed row's goes. Refused for a worktree
+   * before anything is read, as it takes its main worktree's (tet-json.ts's configRoot).
    */
   const editSbx = async (
     args: Record<string, unknown>,
@@ -62,6 +64,12 @@ export function sbxVerbs(
     switching = false
   ): Promise<Answer> => {
     const found = project(args, caller);
+    if (isWorktree(found.path)) {
+      throw new ControlError(
+        "bad_args",
+        `${found.name} is a worktree and takes its SBX Settings from ${path.basename(configRoot(found.path))}: change them there`
+      );
+    }
     const status = await readySbx(found);
     const config = await deps.sbx.config(found);
     const { knowledge } = deps.sbx.stored(found.id);

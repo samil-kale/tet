@@ -206,11 +206,25 @@ export const ProjectList = memo(function ProjectList({
     });
   };
 
+  /** A row's close: a repository is closed, a worktree deleted — asked first (askDeleteWorktree). */
+  const close = (project: Project): void => {
+    if (project.mainPath === undefined) {
+      onClose(project.id);
+      return;
+    }
+    const { head, detached, upstream } = heads[project.id] ?? {};
+    // Named by its branch, which is its name; by its folder while detached.
+    const name = head && !detached ? head : project.name;
+    const ref = { path: project.path, mainPath: project.mainPath };
+    // Its unsaved edits have a say before its terminals close.
+    void askDeleteWorktree(ref, name, upstream, runIn(project.id), () => canDiscardProjectEdits(project.id));
+  };
+
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
    *  pane, where its target is on screen — but for a worktree's own row, which is that tree, and
    *  its merge into the base, run where the base is checked out. */
   const menuEntries = (project: Project): ContextMenuEntry[] => {
-    const { head, detached, upstream, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[project.id] ?? {};
+    const { head, detached, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[project.id] ?? {};
     const web = remoteUrl ? webUrl(remoteUrl) : null;
     const run = runIn(project.id);
     // Named by its branch, which is its name; by its folder while detached.
@@ -234,8 +248,7 @@ export const ProjectList = memo(function ProjectList({
                 : undefined
           },
           SEPARATOR,
-          worktreeEntry("Rename worktree", worktreesSupported, () => void askRenameWorktree(ref, name, run, canClose)),
-          { label: "Delete worktree...", run: () => void askDeleteWorktree(ref, name, upstream, run, canClose) }
+          worktreeEntry("Rename worktree", worktreesSupported, () => void askRenameWorktree(ref, name, run, canClose))
         ]
       : [];
     // The repository's, offered on its main worktree's row only.
@@ -264,7 +277,7 @@ export const ProjectList = memo(function ProjectList({
       ...worktree,
       SEPARATOR,
       ...sbx,
-      { label: ref ? "Close worktree" : "Close repository", run: () => onClose(project.id) }
+      { label: ref ? "Delete worktree..." : "Close repository", run: () => close(project) }
     ];
   };
 
@@ -332,7 +345,7 @@ export const ProjectList = memo(function ProjectList({
                 ) : (
                   rowButton("SBX enabled", () => onSbxSettings(project.id), <ShieldIcon />)
                 ))}
-              {rowButton(project.mainPath ? "Close worktree" : "Close repository", () => onClose(project.id), <CloseIcon />)}
+              {rowButton(project.mainPath ? "Delete worktree" : "Close repository", () => close(project), <CloseIcon />)}
             </div>
           );
         })}

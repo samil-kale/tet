@@ -860,6 +860,29 @@ describe("tet-ctl against the control server", () => {
     assert.equal(sbxConfig.enabled, true);
   });
 
+  it("changes no SBX Settings of a worktree, which takes its main worktree's", async () => {
+    // A linked worktree as git lays it out, which is all configRoot reads.
+    const main = fs.mkdtempSync(path.join(tempDir, "main-"));
+    const linked = fs.mkdtempSync(path.join(tempDir, "linked-"));
+    const gitDir = path.join(main, ".git", "worktrees", "four");
+    fs.mkdirSync(gitDir, { recursive: true });
+    fs.writeFileSync(path.join(gitDir, "commondir"), "../..");
+    fs.writeFileSync(path.join(linked, ".git"), `gitdir: ${gitDir}`);
+    const original = WORKTREE.path;
+    WORKTREE.path = linked;
+    try {
+      const saved = calls.sbxSaved.length;
+      for (const args of [["sbx-set-enabled", "on"], ["sbx-set-hosts", "example.com"]]) {
+        const run = await tetCtl([...args, "--project", WORKTREE.id]);
+        assert.equal(run.status, EXIT_CODES.usage, args[0]);
+        assert.match(run.stderr, new RegExp(`takes its SBX Settings from ${path.basename(main)}`), args[0]);
+      }
+      assert.equal(calls.sbxSaved.length, saved);
+    } finally {
+      WORKTREE.path = original;
+    }
+  });
+
   it("answers a sandboxed tab for its own project only", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     // editor-state: its own test below, since a sandbox reads only a file inside the repository.
