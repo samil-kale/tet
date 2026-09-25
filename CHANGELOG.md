@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.11.7 (2026-09-25)
+
+- **Codex and pi run fullscreen.** Resizing their tab redraws in place instead of reprinting the
+  transcript, and the right mouse button goes to the agent, which scrolls, selects and copies
+  itself.
+- **Sturdier updates.** An update installs beside the running version, and a download that was
+  cut short continues where it stopped. Starting tet while an update is being put in place waits
+  for it.
+- **Fixes.** Deleting Codex sessions is more reliable. The Light Gameboy theme's progress bar
+  takes the theme's accent.
+
 ## 0.11.6 (2026-09-25)
 
 - **Git asks for logins.** When a fetch, pull, push or clone needs a username and password, tet
