@@ -21,7 +21,7 @@ interface SessionCallbacks {
 /** Between two Ctrl+C bytes: long enough to be read as two keypresses (measured), short enough for
  *  the offer the second answers. */
 const CTRL_C_GAP_MS = 250;
-/** After the last one. Measured: Claude Code, opencode and Codex are gone well inside it. A session
+/** After the last one. Measured: Claude Code and Codex are gone well inside it. A session
  *  that read Ctrl+C as "interrupt the turn" never leaves. */
 const GRACEFUL_EXIT_MS = 2000;
 /** After the kill, so stopping cannot hang on a pty that never reports its exit. */

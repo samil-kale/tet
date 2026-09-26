@@ -5,12 +5,10 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSessionProvider } from "../src/main/agents/codex/sessions";
-import { opencodeSessionProvider, registerAgentDir } from "../src/main/agents/opencode/sessions";
 import { encodeCwd, piSessionProvider } from "../src/main/agents/pi/sessions";
 
 /**
- * The session providers against transcripts written the way the CLIs write them (for opencode,
- * the way its plugin writes records). A regression in the title rules or turn forensics shows a
+ * The session providers against transcripts written the way the CLIs write them. A regression in the title rules or turn forensics shows a
  * wrong title or a spinner that never stops, caught only here.
  */
 
@@ -351,89 +349,6 @@ describe("pi's transcripts", () => {
   });
 });
 
-describe("opencode's session records", () => {
-  /** A fresh agentDir per case, registered for its own cwd and marked seeded: seeding runs
-   *  opencode itself, which these tests never do. */
-  function records(files: Record<string, unknown>): { cwd: string; dir: string } {
-    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-"));
-    const cwd = path.join(agentDir, "repo");
-    registerAgentDir(cwd, agentDir);
-    const dir = path.join(agentDir, "sessions");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, ".seeded"), "");
-    for (const [name, record] of Object.entries(files)) {
-      fs.writeFileSync(path.join(dir, name), typeof record === "string" ? record : JSON.stringify(record));
-    }
-    return { cwd, dir };
-  }
-
-  it("lists the records oldest first", async () => {
-    const { cwd } = records({
-      "ses_b.json": { id: "ses_b", title: "Second", created: 2, updated: 5 },
-      "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3 },
-      "ses_c.json.tmp": "{",
-      "ses_d.json": "not json"
-    });
-    const listed = await opencodeSessionProvider.list(cwd);
-    assert.deepEqual(
-      listed.map((info) => [info.id, info.title, info.createdAt, info.updatedAt, info.sandbox]),
-      [
-        ["ses_a", "First", 1, 3, undefined],
-        ["ses_b", "Second", 2, 5, undefined]
-      ],
-      "the host's records only: the manager names a sandbox on its own listing"
-    );
-  });
-
-  it("lists nothing for a repository that was never prepared", async () => {
-    assert.deepEqual(await opencodeSessionProvider.list(path.join(os.tmpdir(), "never")), []);
-  });
-
-  it("resumes by id and renames through the session's own process", async () => {
-    assert.deepEqual(opencodeSessionProvider.resumeArgs("ses_a"), ["--session", "ses_a"]);
-    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3 } });
-    const requests = path.join(path.dirname(dir), "rename");
-    // Stands in for the plugin: the request appears, the record follows.
-    const plugin = setInterval(() => {
-      const request = path.join(requests, "ses_a");
-      if (fs.existsSync(request)) {
-        const title = fs.readFileSync(request, "utf8");
-        fs.rmSync(request);
-        fs.writeFileSync(path.join(dir, "ses_a.json"), JSON.stringify({ id: "ses_a", title, created: 1, updated: 4 }));
-      }
-    }, 50);
-    try {
-      await opencodeSessionProvider.rename("opencode", cwd, "ses_a", "  Renamed ");
-    } finally {
-      clearInterval(plugin);
-    }
-    assert.equal((await opencodeSessionProvider.list(cwd))[0].title, "Renamed");
-    await assert.rejects(opencodeSessionProvider.rename("opencode", cwd, "ses_a", "  "), /non-empty/);
-  });
-
-  it("drops a record only once its session is gone, keeping it when the delete failed", async () => {
-    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3 } });
-    fs.mkdirSync(cwd);
-    /** A stand-in opencode that fails `session delete` and answers `session list` with `listed`. */
-    const fakeOpencode = (listed: string): string => {
-      const win32 = process.platform === "win32";
-      const file = path.join(path.dirname(dir), win32 ? "opencode.cmd" : "opencode");
-      fs.writeFileSync(
-        file,
-        win32
-          ? `@if "%~2"=="list" (echo ${listed}& exit /b 0)\r\n@echo database is locked 1>&2\r\n@exit /b 1\r\n`
-          : `#!/bin/sh\nif [ "$2" = list ]; then echo '${listed}'; exit 0; fi\necho 'database is locked' >&2\nexit 1\n`,
-        { mode: 0o755 }
-      );
-      return file;
-    };
-    await assert.rejects(opencodeSessionProvider.remove(fakeOpencode('[{"id":"ses_a"}]'), cwd, "ses_a"), /database is locked/);
-    assert.ok(fs.existsSync(path.join(dir, "ses_a.json")), "a failed delete keeps where the session is");
-    await opencodeSessionProvider.remove(fakeOpencode('[{"id":"ses_b"}]'), cwd, "ses_a");
-    assert.ok(!fs.existsSync(path.join(dir, "ses_a.json")));
-  });
-});
-
 /**
  * The providers read through the directory tet mounts into an sbx sandbox: paths are the
  * container's (`/c/work/...`, as `toContainerPath` makes them) and the root is the mounted host
@@ -461,7 +376,7 @@ describe("sessions written inside a sandbox", () => {
     assert.equal(session.title, "In the sandbox");
     await sandbox.rename(dir, cwd, "s1", "Renamed");
     assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
-    await sandbox.remove(dir, cwd, "s1", "tet-claude-abc");
+    await sandbox.remove(dir, cwd, "s1");
     assert.deepEqual(await sandbox.list(dir, cwd), []);
   });
 
@@ -495,12 +410,12 @@ describe("sessions written inside a sandbox", () => {
     await assert.rejects(sandbox.rename(dir, cwd, "s2", "  "), /non-empty/);
 
     const indexBefore = fs.readFileSync(index, "utf8");
-    await sandbox.remove(dir, cwd, "s1", "tet-codex-abc");
+    await sandbox.remove(dir, cwd, "s1");
     assert.deepEqual(fs.readdirSync(day), ["rollout-s2.jsonl"]);
     assert.equal(fs.readFileSync(index, "utf8"), indexBefore, "the index is left as it is");
     assert.deepEqual(await titles(), [["s2", "Renamed"]], "a name without its rollout lists nothing");
     // A session that is already gone resolves — see SessionProvider.remove.
-    await sandbox.remove(dir, cwd, "s1", "tet-codex-abc");
+    await sandbox.remove(dir, cwd, "s1");
   });
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {
@@ -526,42 +441,13 @@ describe("sessions written inside a sandbox", () => {
     assert.equal(session.title, "In the sandbox");
     await sandbox.rename(dir, cwd, "s1", "Renamed");
     assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
-    await sandbox.remove(dir, cwd, "s1", "tet-pi-abc");
+    await sandbox.remove(dir, cwd, "s1");
     assert.deepEqual(await sandbox.list(dir, cwd), []);
-  });
-
-  it("lists and renames opencode's sandboxed records, written into the mounted folder", async () => {
-    // The sandbox's agentDir: its plugin writes records into `sessions/`, which is the root.
-    const agentDir = root("tet-sbx-oc-");
-    const dir = path.join(agentDir, "sessions");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "ses_s.json"), JSON.stringify({ id: "ses_s", title: "In the sandbox", created: 1, updated: 2 }));
-    const sandbox = opencodeSessionProvider.sandbox;
-    assert.ok(sandbox);
-    assert.deepEqual(sandbox.mounts, [], "the whole agentDir is mounted already");
-    const [session] = await sandbox.list(dir, cwd);
-    assert.deepEqual([session.id, session.title], ["ses_s", "In the sandbox"]);
-    // Stands in for the sandboxed plugin, polling its own agentDir's requests.
-    const requests = path.join(agentDir, "rename");
-    const plugin = setInterval(() => {
-      const request = path.join(requests, "ses_s");
-      if (fs.existsSync(request)) {
-        const title = fs.readFileSync(request, "utf8");
-        fs.rmSync(request);
-        fs.writeFileSync(path.join(dir, "ses_s.json"), JSON.stringify({ id: "ses_s", title, created: 1, updated: 3 }));
-      }
-    }, 50);
-    try {
-      await sandbox.rename(dir, cwd, "ses_s", "Renamed");
-    } finally {
-      clearInterval(plugin);
-    }
-    assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
   });
 
   it("has nothing to list where the sandbox never wrote anything", async () => {
     const dir = path.join(os.tmpdir(), "tet-sbx-never");
-    for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider, opencodeSessionProvider]) {
+    for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider]) {
       assert.deepEqual(await provider.sandbox?.list(dir, cwd), []);
     }
   });

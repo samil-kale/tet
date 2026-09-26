@@ -41,7 +41,7 @@ function onDiskCase(hostPath: string): string {
   }
 }
 
-/** The sandbox user's home in every template — verified in Claude, Codex, opencode and pi's
+/** The sandbox user's home in every template — verified in Claude, Codex and pi's
  *  community kit. A mount target must be absolute (`sbx mount --help`): `~` never expands. */
 export const SANDBOX_HOME = "/home/agent";
 

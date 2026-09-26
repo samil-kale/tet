@@ -22,9 +22,8 @@ export async function askAgent(root: string, executable: string, args: string[],
 }
 
 /**
- * Runs `<name> <args>` to completion on the host, for an agent's one-offs (codex/cli.ts,
- * opencode/cli.ts). Resolves with stdout on exit 0, rejects with stderr otherwise, or on the
- * timeout.
+ * Runs `<name> <args>` to completion on the host, for an agent's one-offs (codex/cli.ts). Resolves
+ * with stdout on exit 0, rejects with stderr otherwise, or on the timeout.
  */
 export async function runAgent(name: string, executable: string, cwd: string, args: string[], timeoutMs: number): Promise<string> {
   const result = await runProcess(executable, args, { cwd, timeoutMs });

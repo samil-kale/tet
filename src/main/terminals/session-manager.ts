@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AGENTS, getAgent } from "../agents";
 
-import type { AgentDefinition, AgentPaths, AgentSessionInfo, SessionProvider, SpawnPreparation } from "../agents/agent";
+import type { AgentDefinition, AgentPaths, AgentSessionInfo, SessionProvider } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_ENV } from "../../shared/control";
@@ -21,7 +21,8 @@ import type {
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import type { ResolvedRef } from "../resolved-ref";
-import { hostDir, sandboxDir } from "../project-dirs";
+import { HostSetups } from "./host-setup";
+import { sandboxDir } from "../project-dirs";
 import { readSbxConfig } from "../tet-json";
 import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
 import type { SbxLocalStore } from "../sbx-local";
@@ -110,18 +111,8 @@ interface AgentRuntime {
    * is resolveSbxRun's question, per spawn.
    */
   sbxOnly: boolean;
-  /** Resolves once the version check, spawn preparation and initial listing are done. */
+  /** Resolves once the version check, the host setup (HostSetups) and initial listing are done. */
   ready: Promise<void>;
-  preparation?: SpawnPreparation;
-  /** The theme `preparation` was written for — see themeChanged. */
-  preparedTheme?: string;
-  /** The idle reminder `preparation` was written for — see idleReminderChanged. */
-  preparedIdleReminder?: boolean;
-  prepareFailed: boolean;
-  /** One setup at a time: two tabs opened at once must not write it twice. */
-  preparing?: Promise<boolean>;
-  /** A rerun was asked for while `preparing` ran, which read the theme before it changed. */
-  prepareAgain?: boolean;
   stopWatching?: () => void;
   reconciling?: Promise<void>;
   reconcileTimer?: ReturnType<typeof setTimeout>;
@@ -281,17 +272,17 @@ export class TabSessionManager {
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
+    private readonly hostSetups: HostSetups,
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
-  /** See AgentDefinition.prepareSpawn and prepareSandboxSpawn: each is handed its own side's folder,
-   *  created only when asked for. */
-  private pathsFor(runtime: AgentRuntime, side: "host" | "sandbox"): AgentPaths {
-    const agentDir = (side === "host" ? hostDir : sandboxDir)(this.storageRoot, this.at.ref, runtime.agent.id);
+  /** See AgentDefinition.prepareSandboxSpawn: the repository's or worktree's sandbox folder of the
+   *  agent, created only when asked for. The host side is HostSetups'. */
+  private sandboxPaths(runtime: AgentRuntime): AgentPaths {
+    const agentDir = sandboxDir(this.storageRoot, this.at.ref, runtime.agent.id);
     fs.mkdirSync(agentDir, { recursive: true });
     return {
       agentDir,
-      storageRoot: this.storageRoot,
       idleReminder: this.settings.get().notifications.idleReminder,
       theme: currentTheme(this.settings)
     };
@@ -431,7 +422,6 @@ export class TabSessionManager {
       startable: agent.versionArgs === undefined,
       sbxOnly: false,
       ready: Promise.resolve(),
-      prepareFailed: false,
       reconcileRetriesLeft: 0
     };
     this.runtimes.set(agentId, runtime);
@@ -480,8 +470,7 @@ export class TabSessionManager {
   ): { remove: (sessionId: string) => Promise<void>; rename: (sessionId: string, title: string) => Promise<void> } {
     const { agent, executable } = runtime;
     const sandbox = tab.sandbox ? sessions.sandbox : undefined;
-    const sandboxName = tab.sandbox;
-    if (!sandbox || sandboxName === undefined) {
+    if (!sandbox) {
       return {
         remove: (sessionId) => sessions.remove(executable, this.at.path, sessionId),
         rename: (sessionId, title) => sessions.rename(executable, this.at.path, sessionId, title)
@@ -490,13 +479,13 @@ export class TabSessionManager {
     const root = this.sandboxSessionRoot(agent.id);
     const cwd = toContainerPath(this.at.path);
     return {
-      remove: (sessionId) => sandbox.remove(root, cwd, sessionId, sandboxName),
+      remove: (sessionId) => sandbox.remove(root, cwd, sessionId),
       rename: (sessionId, title) => sandbox.rename(root, cwd, sessionId, title)
     };
   }
 
   private canStart(runtime: AgentRuntime): boolean {
-    return runtime.startable && !runtime.prepareFailed;
+    return runtime.startable && !this.hostSetups.failed(runtime.agent.id);
   }
 
   private async prepareRuntime(runtime: AgentRuntime): Promise<void> {
@@ -522,8 +511,9 @@ export class TabSessionManager {
   /** A startable agent's setup, its existing sessions as tabs, and the watch keeping them current. */
   private async bringUp(runtime: AgentRuntime): Promise<void> {
     const { agent } = runtime;
-    // Before the listing, which may need it (opencode's records directory).
-    if (!(await this.prepare(runtime))) {
+    // A failed setup lists nothing: none of its sessions could start. Closed meanwhile: nothing
+    // may spawn from here on.
+    if (!(await this.hostSetups.prepare(agent)) || this.disposed) {
       return;
     }
 
@@ -611,79 +601,6 @@ export class TabSessionManager {
     }
     // Only when something became startable; otherwise a tab the user closed stays closed.
     this.openFirstAgentTab();
-  }
-
-  /** Re-prepares every agent set up for another theme (AgentPaths.theme — Codex's win32 launcher
-   *  carries the colors). */
-  themeChanged(): void {
-    const { id } = currentTheme(this.settings);
-    this.prepareStale((runtime) => runtime.preparedTheme !== id);
-  }
-
-  /** Re-prepares every agent set up with the other idle reminder (AgentPaths.idleReminder — Claude
-   *  Code's hooks carry it). */
-  idleReminderChanged(): void {
-    const { idleReminder } = this.settings.get().notifications;
-    this.prepareStale((runtime) => runtime.preparedIdleReminder !== idleReminder);
-  }
-
-  /** The old setup stands until replaced, so a tab spawned meanwhile gets one. */
-  private prepareStale(stale: (runtime: AgentRuntime) => boolean): void {
-    for (const runtime of this.runtimes.values()) {
-      // A setup underway counts too: it read the settings before the change.
-      if ((runtime.preparation || runtime.preparing) && stale(runtime)) {
-        void this.prepare(runtime, true);
-      }
-    }
-  }
-
-  /** The agent's setup, one at a time, once unless `again`. False: failed, never start the agent.
-   *  `again` during a setup reruns it once that one is done. */
-  private prepare(runtime: AgentRuntime, again = false): Promise<boolean> {
-    if (runtime.preparing) {
-      runtime.prepareAgain ||= again;
-      return runtime.preparing;
-    }
-    runtime.preparing = this.doPrepare(runtime, again).finally(() => {
-      runtime.preparing = undefined;
-      if (runtime.prepareAgain) {
-        runtime.prepareAgain = false;
-        void this.prepare(runtime, true);
-      }
-    });
-    return runtime.preparing;
-  }
-
-  private async doPrepare(runtime: AgentRuntime, again: boolean): Promise<boolean> {
-    const { agent, executable } = runtime;
-    if (this.disposed) {
-      return false;
-    }
-    if (!agent.prepareSpawn || (runtime.preparation && !again)) {
-      return !runtime.prepareFailed;
-    }
-    try {
-      const paths = this.pathsFor(runtime, "host");
-      const preparation = await markStartup(`prepare ${agent.id}`, () =>
-        agent.prepareSpawn!(executable, this.at.path, paths)
-      );
-      // Closed meanwhile: nothing may spawn from here on.
-      if (this.disposed) {
-        return false;
-      }
-      runtime.preparation = preparation;
-      runtime.preparedTheme = paths.theme.id;
-      runtime.preparedIdleReminder = paths.idleReminder;
-      // Nothing else clears an earlier failure.
-      runtime.prepareFailed = false;
-      return true;
-    } catch (error) {
-      console.error("[tet] spawn preparation failed:", error);
-      this.callbacks.onNotice("error", `${agent.displayName} could not be started: ${errorMessage(error)}`);
-      // A rerun keeps the earlier setup, which still starts the agent (themeChanged).
-      runtime.prepareFailed = runtime.preparation === undefined;
-      return false;
-    }
   }
 
   private startWatching(runtime: AgentRuntime): void {
@@ -884,8 +801,8 @@ export class TabSessionManager {
       }
       return null;
     }
-    const paths = this.pathsFor(runtime, "sandbox");
-    const hooks = agent.prepareSandboxSpawn?.(this.at.path, paths) ?? { args: [] };
+    const paths = this.sandboxPaths(runtime);
+    const hooks = agent.prepareSandboxSpawn?.(paths) ?? { args: [] };
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
     const { args, env, problems } = await prepareSbxRun({
       agentId: tab.agentId,
@@ -899,7 +816,7 @@ export class TabSessionManager {
       warm,
       paths,
       agentArgs: [...hooks.args, ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])],
-      env: [...(agent.sandboxEnv ?? []), ...Object.entries(hooks.env ?? {}).map(([key, value]) => `${key}=${value}`)],
+      env: agent.sandboxEnv ?? [],
       sessionMounts: (agent.sessions?.sandbox?.mounts ?? []).map((mount) => ({
         host: path.join(sessionRoot, mount.sub),
         target: mount.target,
@@ -950,7 +867,8 @@ export class TabSessionManager {
 
   private startSession(tab: TabState, sbxRun: SbxRun | null): TerminalSession {
     const runtime = this.runtimeFor(tab.agentId);
-    const { agent, executable, preparation } = runtime;
+    const { agent, executable } = runtime;
+    const preparation = this.hostSetups.preparation(agent.id);
     const tabId = tab.tabId;
 
     // Fresh per session, counting from zero.
@@ -1034,27 +952,6 @@ export class TabSessionManager {
       tab.submittedAt = Date.now();
     }
     this.sessions.get(tabId)?.write(data);
-  }
-
-  /**
-   * See AgentDefinition.resolveUrlPrefix. Undefined when it can't be answered, which the renderer
-   * caches as "don't ask again".
-   */
-  async resolveUrlPrefix(tabId: string, prefix: string): Promise<string | undefined> {
-    const tab = this.tabOf(tabId);
-    if (!tab?.sessionId) {
-      return undefined;
-    }
-    const { agent, executable } = this.runtimeFor(tab.agentId);
-    if (!agent.resolveUrlPrefix) {
-      return undefined;
-    }
-    try {
-      const cwd = tab.sandbox === undefined ? this.at.path : toContainerPath(this.at.path);
-      return await agent.resolveUrlPrefix(executable, cwd, tab.sessionId, prefix, tab.sandbox);
-    } catch {
-      return undefined;
-    }
   }
 
   /**
@@ -1283,7 +1180,7 @@ export class TabSessionManager {
     // A stale report gets no mark and no toast, which would contradict the marks — "Finished" over
     // a tab working again (turn-order.ts).
     const fresh = reportApplies(tab.signalAt, at);
-    // A report sent before the exit can arrive after it (Codex's aborted hook, a plugin's post, a
+    // A report sent before the exit can arrive after it (Codex's aborted hook, an extension's post, a
     // sandbox's latency) and would mark a tab whose process is gone until the next stop.
     const exited = tab.status === "stopped" || tab.status === "error";
     switch (event) {
@@ -1536,9 +1433,6 @@ export class TabSessionManager {
     // All at once: each may take a grace period (TerminalSession.stop), and quit waits on this.
     await Promise.all([...this.sessions.values()].map((session) => session.stop()));
     this.sessions.clear();
-    for (const runtime of this.runtimes.values()) {
-      runtime.preparation = undefined;
-    }
   }
 }
 
@@ -1549,13 +1443,16 @@ export class SessionManagerRegistry {
   /** The renderer's last report, sent only on change — for a repository or worktree opened after
    *  it. */
   private inFront: { key: string | null; tabIds: readonly string[] } = { key: null, tabIds: [] };
+  private readonly hostSetups: HostSetups;
 
   constructor(
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
     private readonly callbacks: SessionManagerCallbacks
-  ) {}
+  ) {
+    this.hostSetups = new HostSetups(storageRoot, settings, callbacks.onNotice);
+  }
 
   open(resolved: ResolvedRef): TabSessionManager {
     const key = projectRefKey(resolved.ref);
@@ -1563,7 +1460,7 @@ export class SessionManagerRegistry {
     if (existing) {
       return existing;
     }
-    const manager = new TabSessionManager(resolved, this.storageRoot, this.settings, this.sbxLocal, this.callbacks);
+    const manager = new TabSessionManager(resolved, this.storageRoot, this.settings, this.sbxLocal, this.hostSetups, this.callbacks);
     manager.setInFront(key === this.inFront.key ? this.inFront.tabIds : []);
     this.managers.set(key, manager);
     manager.bootstrap().catch((error: unknown) => {
@@ -1590,18 +1487,14 @@ export class SessionManagerRegistry {
     }
   }
 
-  /** See TabSessionManager.themeChanged. */
+  /** See HostSetups.themeChanged. */
   themeChanged(): void {
-    for (const manager of this.managers.values()) {
-      manager.themeChanged();
-    }
+    this.hostSetups.themeChanged();
   }
 
-  /** See TabSessionManager.idleReminderChanged. */
+  /** See HostSetups.idleReminderChanged. */
   idleReminderChanged(): void {
-    for (const manager of this.managers.values()) {
-      manager.idleReminderChanged();
-    }
+    this.hostSetups.idleReminderChanged();
   }
 
   async close(ref: ProjectRef): Promise<void> {

@@ -315,7 +315,7 @@ describe("worktrees, each with a branch of its own", () => {
 });
 
 describe("where a worktree starts without a remote HEAD", () => {
-  it("is the main worktree's branch when no default branch is known", async () => {
+  it("is the repository's branch when no default branch is known", async () => {
     // No remote, and a branch other than init.defaultBranch's ("main" while unset): as `git init`
     // with an older git or another default leaves it.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-trunk-"));

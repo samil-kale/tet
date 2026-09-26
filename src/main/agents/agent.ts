@@ -2,11 +2,11 @@ import type { ThemeDefinition } from "../../shared/themes";
 import type { AgentId, SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types";
 
 export interface AgentSessionInfo {
-  /** Agent-native session id (Claude: transcript uuid; opencode: "ses_..."). */
+  /** Agent-native session id (Claude: transcript uuid). */
   id: string;
   /** Human-readable label; "" allowed — the UI falls back to a placeholder. */
   title: string;
-  /** Last activity, ms since epoch (Claude: transcript mtime; opencode: `updated`). */
+  /** Last activity, ms since epoch (Claude: transcript mtime). */
   updatedAt: number;
   /** Creation time, ms since epoch — decides tab order. */
   createdAt: number;
@@ -51,8 +51,7 @@ interface SandboxSessions {
   mounts: SandboxSessionMount[];
   /** SessionProvider.list against the mounted root; the manager names the sandbox on the result. */
   list(root: string, cwd: string): Promise<AgentSessionInfo[]>;
-  /** `sandbox` is the sandbox's name, for an agent whose delete runs in it (opencode). */
-  remove(root: string, cwd: string, sessionId: string, sandbox: string): Promise<void>;
+  remove(root: string, cwd: string, sessionId: string): Promise<void>;
   rename(root: string, cwd: string, sessionId: string, title: string): Promise<void>;
 }
 
@@ -76,13 +75,12 @@ export interface SessionProvider {
 /** What one agent is handed to set itself up for a repository or one of its worktrees. */
 export interface AgentPaths {
   /**
-   * This agent's folder for this repository or worktree, already created: the host tabs' to
-   * `prepareSpawn`, the sandboxed tabs' to `prepareSandboxSpawn` — the one TET folder its sandbox
-   * mounts, whole (project-dirs.ts's hostDir and sandboxDir). Neither side sees the other's.
+   * This agent's folder, already created: to `prepareSpawn` the host tabs' setup, one for every
+   * project (data-root.ts's agentConfigDir); to `prepareSandboxSpawn` the repository's or
+   * worktree's sandbox folder, the one TET folder its sandbox mounts, whole (project-dirs.ts's
+   * sandboxDir). Neither side sees the other's.
    */
   agentDir: string;
-  /** TET's data folder (`~/.tet`, data-root.ts), for anything installed machine-wide. */
-  storageRoot: string;
   /**
    * The one notification setting handed to an agent: every other one is read when a report
    * arrives (session-manager's `toast`), but the idle reminder has no mark, so its hook is only
@@ -111,8 +109,6 @@ export interface SpawnPreparation {
 interface SandboxPreparation {
   /** Appended after `sbx run`'s own "--". */
   args: string[];
-  /** `sbx run -e KEY=VALUE`, in container paths; per repository only — constants go in `sandboxEnv`. */
-  env?: Record<string, string>;
 }
 
 /**
@@ -166,21 +162,21 @@ export interface AgentDefinition {
   workOutlivesStop?: (payload: string) => boolean;
   /**
    * Setup before any session spawns: hooks, settings, plugins, and how TET's system prompt
-   * (system-prompt.ts) reaches the model — the only place an agent may write configuration. A rejection
+   * (system-prompt.ts) reaches the model — the only place an agent may write configuration. The same
+   * for every project, so it knows none (data-root.ts's agentConfigDir). A rejection
    * marks the agent unstartable, so reject only for what truly makes it unusable; a failed optional
    * write (an extension, a theme file) is swallowed.
    */
-  prepareSpawn?: (executable: string, cwd: string, paths: AgentPaths) => Promise<SpawnPreparation>;
+  prepareSpawn?: (executable: string, paths: AgentPaths) => Promise<SpawnPreparation>;
   /**
    * prepareSpawn for an sbx sandbox: generated for POSIX regardless of `process.platform`, paths in
    * the sandbox's view (`SANDBOX_TARGET`, hook-target.ts). Hooks report over the control channel,
    * so the host shows the toast.
    *
-   * Returns args after `sbx run`'s "--" and, where the setup is found through a variable, its env.
-   * No executable override: the sandbox's bundled binary runs. `cwd` is the host path (scopes
-   * opencode's plugin). Synchronous. Omitted by the shell.
+   * Returns args after `sbx run`'s "--"; constants for its environment go in `sandboxEnv`. No
+   * executable override: the sandbox's bundled binary runs. Synchronous. Omitted by the shell.
    */
-  prepareSandboxSpawn?: (cwd: string, paths: AgentPaths) => SandboxPreparation;
+  prepareSandboxSpawn?: (paths: AgentPaths) => SandboxPreparation;
   /**
    * "KEY=VALUE" for `sbx run -e`, for facts that differ only inside the sandbox. Claude Code's
    * fullscreen rollout reads flags from `statsig.anthropic.com`, which the per-sandbox `kit:` rule
@@ -209,22 +205,6 @@ export interface AgentDefinition {
    */
   sandboxKit?: string;
   /**
-   * Completes a url the TUI wrapped across rows, from the agent's own record — in the buffer such
-   * a row looks like one ending in a url (opencode breaks a long token at the last "." that fits).
-   * Returns the full url starting with `prefix`, or undefined (the renderer keeps the fragment).
-   *
-   * Called only on a modifier hover, at most once per fragment, so it may use HTTP; a rejection
-   * reads as "nothing known". `sandbox` names the sandbox the session lives in, if it does; `cwd`
-   * is then the sandbox's view of it (toContainerPath).
-   */
-  resolveUrlPrefix?: (
-    executable: string,
-    cwd: string,
-    sessionId: string,
-    prefix: string,
-    sandbox: string | undefined
-  ) => Promise<string | undefined>;
-  /**
    * Factory for a fresh per-session "CLI ready yet" check fed each output chunk; once true, the tab
    * strip's progress bar hides. Output reaches the terminal throughout — some CLIs query it for
    * capabilities at start.
@@ -235,16 +215,10 @@ export interface AgentDefinition {
   createIsSessionReady?: () => (chunk: string) => boolean;
   /**
    * Ctrl+C presses that make the CLI quit by itself, sent before a kill (TerminalSession.stop).
-   * Measured: Claude Code and pi 2 (pi within 500 ms), and both soon withdraw the offer; Codex and
-   * opencode 1 — a second byte to a leaving Codex lands after raw mode ended, where ConPTY turns it
-   * into a CTRL_C_EVENT that kills the shutdown. All four read `\x03` as an ordinary byte and decide
-   * what it means. Omitted for the shell (plain SIGINT).
+   * Measured: Claude Code and pi 2 (pi within 500 ms), and both soon withdraw the offer; Codex 1 —
+   * a second byte to a leaving Codex lands after raw mode ended, where ConPTY turns it into a
+   * CTRL_C_EVENT that kills the shutdown. All three read `\x03` as an ordinary byte and decide what
+   * it means. Omitted for the shell (plain SIGINT).
    */
   quitPresses?: number;
-  /**
-   * opencode under `"theme": "system"` (tui-config.ts) draws blue and magenta swapped against VS
-   * Code's palette (observed); buildXtermTheme in theme.ts swaps them back. A measured fact the
-   * renderer acts on, travelling as a flag on AgentInfo.
-   */
-  swapsBlueMagenta?: boolean;
 }

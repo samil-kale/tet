@@ -7,7 +7,7 @@ import { Terminal } from "@xterm/xterm";
 import { projectRefKey } from "../../shared/types";
 import type { AgentInfo, ProjectRef } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
-import { endLinkHover, type WrappedUrlResolver } from "./links/link-provider";
+import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isLinux, isMac, isModifierHeld, isWindows } from "../platform";
 import { reportSlow } from "../slow-report";
@@ -17,7 +17,7 @@ import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 interface TerminalView {
   term: Terminal;
   fit: FitAddon;
-  /** What its theme is built for — see `buildXtermTheme`. */
+  /** Whose paths a drop or paste quotes — see `quotePath`. */
   agent: AgentInfo;
   /** The size last reported to the pty, so an unchanged fit does not report again. */
   sent?: { cols: number; rows: number };
@@ -116,20 +116,6 @@ export function openFile(ref: ProjectRef, filePath: string, markdownPreview = fa
   });
 }
 
-/**
- * How long "no such url" is trusted: the url may not have been persisted yet when asked. Short,
- * since a retry is cheap — only while the pointer is on the link, one request in flight.
- */
-const NEGATIVE_TTL_MS = 2000;
-
-/**
- * resolveUrl answers by tab and fragment; null means none, not to be asked again. One entry per
- * distinct url hovered, so no eviction.
- */
-const resolvedUrls = new Map<string, string | null>();
-const negativeAnswers = new Map<string, number>();
-const pendingUrlRequests = new Set<string>();
-
 /** Drops every key starting with `prefix` — a gone tab's or project's view key. */
 function deletePrefixed(cache: { keys(): Iterable<string>; delete(key: string): unknown }, prefix: string): void {
   for (const key of [...cache.keys()]) {
@@ -137,46 +123,6 @@ function deletePrefixed(cache: { keys(): Iterable<string>; delete(key: string): 
       cache.delete(key);
     }
   }
-}
-
-/** Forgets the url answers of a gone tab or project; keys start with their view key. */
-function forgetUrls(prefix: string): void {
-  for (const cache of [resolvedUrls, negativeAnswers, pendingUrlRequests]) {
-    deletePrefixed(cache, prefix);
-  }
-}
-
-function createWrappedUrlResolver(ref: ProjectRef, tabId: string): WrappedUrlResolver {
-  const cacheKey = (fragment: string): string => `${viewKey(ref, tabId)} ${fragment}`;
-  return {
-    lookup: (fragment) => {
-      const key = cacheKey(fragment);
-      const answeredNoAt = negativeAnswers.get(key);
-      if (answeredNoAt !== undefined && Date.now() - answeredNoAt > NEGATIVE_TTL_MS) {
-        negativeAnswers.delete(key);
-        resolvedUrls.delete(key);
-      }
-      return resolvedUrls.get(key);
-    },
-    request: (fragment) => {
-      // Called every render until answered; the in-flight set makes it one request.
-      const key = cacheKey(fragment);
-      if (pendingUrlRequests.has(key)) {
-        return;
-      }
-      pendingUrlRequests.add(key);
-      void window.tet.terminals.resolveUrl(ref, tabId, fragment).then((url) => {
-        // Gone in flight: the terminal closed (forgetUrls); don't put an entry back.
-        if (!pendingUrlRequests.delete(key)) {
-          return;
-        }
-        resolvedUrls.set(key, url);
-        if (url === null) {
-          negativeAnswers.set(key, Date.now());
-        }
-      });
-    }
-  };
 }
 
 function toBase64(buffer: ArrayBuffer): string {
@@ -375,7 +321,7 @@ function createView(ref: ProjectRef, tabId: string, agent: AgentInfo): TerminalV
   const term = new Terminal({
     fontFamily: editorFontFamily(),
     fontSize: defaultFontSize(),
-    theme: buildXtermTheme(agent),
+    theme: buildXtermTheme(),
     scrollback: 4000,
     // FitAddon reserves `options.overviewRuler?.width || 14` pixels for the hidden scrollbar; `0`
     // gives 14, so 1px is the minimum. The ruler xterm then draws, `theme.ts` makes invisible.
@@ -406,7 +352,7 @@ function createView(ref: ProjectRef, tabId: string, agent: AgentInfo): TerminalV
   // columns where Unicode 6 counts one, and the cursor drifts off what it drew.
   term.loadAddon(new Unicode11Addon());
   term.unicode.activeVersion = "11";
-  term.registerLinkProvider(createUrlLinkProvider(term, openUrl, createWrappedUrlResolver(ref, tabId)));
+  term.registerLinkProvider(createUrlLinkProvider(term, openUrl));
   term.registerLinkProvider(createFileLinkProvider(term, (filePath) => openFile(ref, filePath)));
 
   term.onData((data) => window.tet.terminals.input(ref, tabId, data));
@@ -514,8 +460,8 @@ export function attachTerminal(ref: ProjectRef, tabId: string, agent: AgentInfo,
       }
       return;
     }
-    // The CLI takes the right button (Claude Code and pi paste, opencode and Codex copy a
-    // selection), but none pastes an image.
+    // The CLI takes the right button (Claude Code and pi paste, Codex copies a selection), but
+    // none pastes an image.
     void pasteClipboardImage(view.term, view.agent);
   });
 }
@@ -592,7 +538,7 @@ export function focusTerminal(ref: ProjectRef, tabId: string): void {
 /** Repaints every built terminal in the root element's current theme. Colors only: no resize. */
 export function rethemeTerminals(): void {
   for (const view of views.values()) {
-    view.term.options.theme = buildXtermTheme(view.agent);
+    view.term.options.theme = buildXtermTheme();
   }
 }
 
@@ -611,7 +557,6 @@ export function disposeTerminal(ref: ProjectRef, tabId: string): void {
   }
   dropView(key, view);
   webglPool.forget(key);
-  forgetUrls(`${key} `);
 }
 
 /** One xterm gone for good. */
@@ -643,5 +588,4 @@ export function disposeRefTerminals(ref: ProjectRef): void {
     }
   }
   webglPool.forgetPrefix(prefix);
-  forgetUrls(prefix);
 }

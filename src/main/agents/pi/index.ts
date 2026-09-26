@@ -44,7 +44,7 @@ export const piAgent: AgentDefinition = {
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
   sessionIdOf: hookSessionId,
-  prepareSpawn: (_executable, _cwd, paths) => {
+  prepareSpawn: (_executable, paths) => {
     const args: string[] = [];
     try {
       const extension = writePiExtension(paths.agentDir);
@@ -59,13 +59,13 @@ export const piAgent: AgentDefinition = {
     args.push(...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, ...systemPromptArgs(false));
     return Promise.resolve({ args });
   },
-  prepareSandboxSpawn: (_cwd, paths) => {
+  prepareSandboxSpawn: (paths) => {
     try {
       const extension = writePiExtension(paths.agentDir);
       // Written at the host path, read at the sandbox's: the sandbox's agentDir is mounted whole
       // (sbx.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
       // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the safety
-      // boundary, as for Claude Code and opencode. The community pi-kit does not set it (measured,
+      // boundary, as for Claude Code. The community pi-kit does not set it (measured,
       // docker/sbx-kits-contrib pi/spec.yaml).
       return { args: ["-e", SANDBOX_TARGET.embed(extension), ...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
     } catch (error) {
@@ -106,7 +106,4 @@ export const piAgent: AgentDefinition = {
   // One Ctrl+C clears the editor; two within 500 ms (pi's handleCtrlC) exit 0 in ~1.1 s, 700 ms
   // apart do nothing. TET's 250 ms gap and 2 s grace fit (0.86.1: exit 0 within 500 ms of the first).
   quitPresses: 2
-  // Omitted on purpose, each measured: swapsBlueMagenta
-  // (truecolor `38;2` only, no palette indices, no OSC 10/11), resolveUrlPrefix (a long url comes
-  // in OSC 8 with the full url, which the renderer's linkHandler opens).
 };

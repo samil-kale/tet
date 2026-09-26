@@ -11,7 +11,7 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
  */
 
 /** When tet-ctl is the right tool at all. systemPrompt's one line sends an agent here, so this
- *  sits beside the verbs: nothing installed into an agent's configuration, and all four read it
+ *  sits beside the verbs: nothing installed into an agent's configuration, and every agent reads it
  *  alike. It does not repeat that prompt. */
 function whenToUse(sandboxed: boolean): string[] {
   return [

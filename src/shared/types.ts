@@ -1,4 +1,4 @@
-export const AGENT_IDS = ["claude", "opencode", "codex", "pi", "shell"] as const;
+export const AGENT_IDS = ["claude", "codex", "pi", "shell"] as const;
 export type AgentId = (typeof AGENT_IDS)[number];
 
 export interface AgentInfo {
@@ -6,9 +6,6 @@ export interface AgentInfo {
   displayName: string;
   /** False for the shell, whose tabs are plain terminals. */
   hasSessions: boolean;
-  /* Mirror of the measured AgentDefinition field, for the renderer, which cannot import
-     src/main/agents. */
-  swapsBlueMagenta: boolean;
 }
 
 /** A program tet needs, and whether the startup check found it. */
@@ -169,9 +166,9 @@ export function withSettings<T extends SettingsEdits>(base: T, edits: SettingsEd
   };
 }
 
-/** Agents that run in an sbx sandbox: three with Docker's built-in kit, pi through a community kit
+/** Agents that run in an sbx sandbox: two with Docker's built-in kit, pi through a community kit
  *  (`AgentDefinition.sandboxKit`). Not the shell. */
-export const SBX_AGENT_IDS = ["claude", "codex", "opencode", "pi"] as const satisfies readonly AgentId[];
+export const SBX_AGENT_IDS = ["claude", "codex", "pi"] as const satisfies readonly AgentId[];
 export type SbxAgentId = (typeof SBX_AGENT_IDS)[number];
 
 export function isSbxAgent(agentId: string): agentId is SbxAgentId {

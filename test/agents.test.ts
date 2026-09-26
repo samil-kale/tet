@@ -9,10 +9,8 @@ import { after, before, describe, it } from "node:test";
 import { getAgent } from "../src/main/agents";
 import type { AgentDefinition, AgentSessionInfo } from "../src/main/agents/agent";
 import { askAgent } from "../src/main/agents/ask";
-import { registerAgentDir } from "../src/main/agents/opencode/sessions";
-import { ensureRunning, execInSandbox, pathMountSpecs, SBX_VERIFIED_VERSION } from "../src/main/sbx";
+import { ensureRunning, pathMountSpecs, SBX_VERIFIED_VERSION } from "../src/main/sbx";
 import { parseFilesystemRules } from "../src/main/sbx-policy";
-import { hostDir } from "../src/main/project-dirs";
 import { toContainerPath } from "../src/main/terminals/hook-target";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
@@ -72,7 +70,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   /**
    * The question a CLI asks in a folder it has not been trusted with, as `tabs-output` shows
    * it (spaces may be gone), and the keys answering "trust". Measured 2026-09-16, win32: Claude
-   * Code 2.1.273 preselects "No, exit", Codex 0.154.0 "1. Yes, continue"; opencode and pi ask nothing.
+   * Code 2.1.273 preselects "No, exit", Codex 0.154.0 "1. Yes, continue"; pi asks nothing.
    */
   const TRUST_QUESTIONS: Partial<Record<SbxAgentId, { asked: RegExp; keys: string[] }>> = {
     claude: { asked: /Yes,\s*I\s*trust\s*this\s*folder/, keys: ["\x1b[B", "\r"] },
@@ -94,7 +92,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
 
   /**
    * The name, in the output with everything but letters and digits taken out: a TUI draws a word in
-   * pieces between its spinner's frames (measured, opencode 1.18.4: "t⬝⬝⬝⬝⬝⬝⬝⬝et-ctl").
+   * pieces between its spinner's frames.
    */
   function answered(output: string): boolean {
     return output.replace(/[^a-z0-9]/gi, "").includes("tetctl");
@@ -137,8 +135,6 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   /** The sessions as tet lists them, read here straight from where the CLI keeps them. */
   function listSessions(agent: AgentDefinition): Promise<AgentSessionInfo[]> {
     assert.ok(agent.sessions, `${agent.displayName} has sessions`);
-    // opencode's listing is its plugin's records, found through what prepareSpawn registered in the app.
-    registerAgentDir(currentProject().path, hostDir(userData, { projectId: currentProject().id }, agent.id));
     return agent.sessions.list(currentProject().path);
   }
 
@@ -395,12 +391,9 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     assert.notEqual(inSandbox("test -e ~/.claude/skills").status, 0, "no skills directory bound by sbx");
   });
 
-  it("runs a command in the workspace's container path, and says when there is no sandbox", async () => {
+  it("runs a sandbox, and says when there is none", async () => {
     assert.equal(await ensureRunning(NAME), true);
-    assert.equal((await execInSandbox(NAME, toContainerPath(WORKSPACE), ["pwd"])).trim(), toContainerPath(WORKSPACE));
     assert.equal(await ensureRunning(`${NAME}-missing`), false);
-    // opencode's session removal tells a gone sandbox by this wording.
-    await assert.rejects(execInSandbox(`${NAME}-missing`, WORKSPACE, ["true"]), /sandbox '[^']*' not found/);
   });
 
   it("takes a launcher in ~/.local/bin, first on the PATH and run by node", () => {

@@ -4,7 +4,7 @@ import { writeIfChanged } from "../../write-if-changed";
 import { renderHookReport } from "../hook-report";
 
 /**
- * Writes the extension into `storageDir` (already per agent per project, so a fixed name) and
+ * Writes the extension into `storageDir` (already the agent's own, so a fixed name) and
  * returns the `-e` path. Renamed into place: a win32 read mid-write fails. Throws on a failed
  * write: pi must never get a half file. Nothing in it depends on where it runs: the control
  * channel's address is read from its env.

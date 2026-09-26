@@ -123,20 +123,6 @@ async function runSbx(args: string[], options: RunOptions = {}): Promise<RunResu
   return { ok: result.code === 0, stdout: result.stdout, stderr: result.stderr };
 }
 
-/**
- * One command via `sbx exec` (no shell, `-w` `cwd` as the sandbox sees it: toContainerPath), for
- * one-off actions on a sandboxed session; exec starts a stopped sandbox. Stdout on exit 0, else rejects with stderr —
- * for a deleted sandbox `ERROR: sandbox '<name>' not found`.
- */
-export async function execInSandbox(name: string, cwd: string, command: string[]): Promise<string> {
-  const result = await runSbx(["exec", "-i", "-w", cwd, name, ...command]);
-  if (!result.ok) {
-    const said = result.stderr.trim();
-    throw new Error(`${command[0]} failed in sandbox ${name}${said ? `: ${said.slice(-300)}` : ""}`);
-  }
-  return result.stdout;
-}
-
 /** A `--json` run's stdout parsed: undefined when sbx failed or printed no JSON, so a reader
  *  answers "sbx cannot say" rather than an empty list. The shape is the caller's claim, read
  *  defensively at its site. */
@@ -720,11 +706,6 @@ function inTurn<T>(queue: Map<string, Promise<unknown>>, name: string, action: (
 /** Undefined when `sbx ls` fails, as it does signed out (probeSbx). One process for all sandboxes. */
 async function listSandboxes(): Promise<SandboxList | undefined> {
   return parseSandboxes(await runSbx(["ls", "--json"]));
-}
-
-/** Undefined when sbx cannot say (listSandboxes). */
-export async function sandboxExists(name: string): Promise<boolean | undefined> {
-  return (await listSandboxes())?.has(name);
 }
 
 /** probeSbx reads the run itself too, for why `ls` failed. */

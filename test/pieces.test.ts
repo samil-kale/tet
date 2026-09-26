@@ -10,14 +10,13 @@ import * as esbuild from "esbuild";
 import { holdEscape } from "../src/renderer/ui/use-escape";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { hookSessionId } from "../src/main/agents/hook-payload";
-import { renderOpencodePlugin, type OpencodePluginOptions } from "../src/main/agents/opencode/plugin";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
 import { systemPrompt } from "../src/main/agents/system-prompt";
 import { machineSets } from "../src/main/env-names";
 import { EnvRequests, EnvStore } from "../src/main/environment";
 import { GitLoginStore } from "../src/main/git-logins";
 import type { EnvRequest, GitLogin } from "../src/shared/types";
-import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
+import { createByteThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, sandboxSessionDir, toContainerPath } from "../src/main/terminals/hook-target";
 import { stripAnsi } from "../src/shared/ansi";
@@ -41,7 +40,8 @@ import {
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
-import { hostDir, newWorktreeKey, ownedWorktreeKeys, sandboxDir, worktreeFiles, worktreeKeyOf } from "../src/main/project-dirs";
+import { agentConfigDir } from "../src/main/data-root";
+import { newWorktreeKey, ownedWorktreeKeys, sandboxDir, worktreeDir, worktreeKeyOf } from "../src/main/project-dirs";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
 import { fetchHttpsImage } from "../src/main/ipc/shell";
@@ -776,18 +776,18 @@ describe("a sandboxed tab's variables", () => {
 });
 
 describe("a project's folder under ~/.tet", () => {
-  it("lays out the data of the repository or a worktree: repository/ or worktrees/<key>/, a side per agent", () => {
+  it("lays out a sandbox folder per agent under sandboxes/repository/ or sandboxes/<key>/, the host setup once per agent", () => {
     const root = path.join(os.tmpdir(), "tet-data");
     const repository = { projectId: "p" };
     const worktree = { projectId: "p", worktree: "k1" };
-    assert.equal(hostDir(root, repository, "claude"), path.join(root, "projects", "p", "repository", "host", "claude"));
-    assert.equal(sandboxDir(root, worktree, "codex"), path.join(root, "projects", "p", "worktrees", "k1", "sandbox", "codex"));
-    assert.equal(sandboxSessionDir(sandboxDir(root, repository, "pi")), path.join(root, "projects", "p", "repository", "sandbox", "pi", "sessions"));
+    assert.equal(sandboxDir(root, worktree, "codex"), path.join(root, "projects", "p", "sandboxes", "k1", "codex"));
+    assert.equal(sandboxSessionDir(sandboxDir(root, repository, "pi")), path.join(root, "projects", "p", "sandboxes", "repository", "pi", "sessions"));
+    assert.equal(agentConfigDir(root, "claude"), path.join(root, "agent-config", "claude"));
   });
 
   it("knows a worktree TET made by its path, and no other", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
-    const files = worktreeFiles(root, "p", "k1");
+    const files = worktreeDir(root, "p", "k1");
     assert.equal(worktreeKeyOf(root, "p", files), "k1");
     assert.equal(worktreeKeyOf(root, "q", files), undefined, "another project's");
     assert.equal(worktreeKeyOf(root, "p", path.dirname(files)), undefined, "not the worktree's folder itself");
@@ -798,8 +798,8 @@ describe("a project's folder under ~/.tet", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
     const key = newWorktreeKey(root, "p");
     assert.match(key, /^[0-9a-f]{8}$/);
-    fs.mkdirSync(worktreeFiles(root, "p", key), { recursive: true });
-    fs.writeFileSync(path.join(worktreeFiles(root, "p", key), ".git"), "gitdir: x");
+    fs.mkdirSync(worktreeDir(root, "p", key), { recursive: true });
+    fs.writeFileSync(path.join(worktreeDir(root, "p", key), ".git"), "gitdir: x");
     fs.mkdirSync(path.join(root, "projects", "p", "worktrees", "halfway"), { recursive: true });
     assert.deepEqual(ownedWorktreeKeys(root, "p"), [key], "one left without its files is none");
     assert.notEqual(newWorktreeKey(root, "p"), key);
@@ -1351,16 +1351,6 @@ describe("session readiness checks", () => {
     assert.equal(ready("12345"), false);
     assert.equal(ready("1"), true);
   });
-
-  it("counts only non-ASCII characters, ignoring escape codes and blank fills", () => {
-    const ready = createNonAsciiThresholdCheck(1);
-    // opencode's blank repaint while it waits on its model list: escape codes and spaces only.
-    assert.equal(ready("\x1b[38;2;255;255;255m\x1b[H" + " ".repeat(4800)), false);
-    assert.equal(ready("\x1b[38;2;255;255;255m\x1b[H" + " ".repeat(4800)), false);
-    // A real frame: two box-drawing characters clear the threshold.
-    assert.equal(ready("▄"), false);
-    assert.equal(ready("▄"), true);
-  });
 });
 
 /**
@@ -1580,163 +1570,6 @@ describe("pi's extension", () => {
     assert.equal(file, path.join(storageDir, "tet", "index.ts"), "pi lists it by its folder's name");
     assert.deepEqual(fs.readdirSync(path.join(storageDir, "tet")), ["index.ts"], "no notify script, no marker directories");
     assert.ok(source.includes(JSON.stringify(CONTROL_ENV)), "the channel is read from the environment, not baked in");
-  });
-});
-
-describe("opencode's plugin", () => {
-  const nasty = "C:\\Users\\it's $x `y\\ctx.md";
-  type Hooks = Record<string, (...args: unknown[]) => Promise<void>>;
-  const options = (dir: string, sandboxed = false): OpencodePluginOptions => ({
-    projectRoot: dir,
-    sessionsDir: path.join(dir, "sessions"),
-    renameDir: path.join(dir, "rename"),
-    sandboxed
-  });
-
-  /** Compiles the plugin; the fake client records renames and answers each with `answer` (the
-   *  SDK's `{ error }` for a session its process does not hold). */
-  async function load(dir: string, sandboxed = false, answer?: unknown): Promise<{ hooks: Hooks; renames: unknown[] }> {
-    const source = renderOpencodePlugin(options(dir, sandboxed));
-    const compiled = path.join(dir, "tet.js");
-    fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
-    const renames: unknown[] = [];
-    const client = {
-      session: {
-        update: async (request: unknown) => {
-          renames.push(request);
-          return answer;
-        }
-      }
-    };
-    const module = createRequire(__filename)(compiled) as { TETPlugin: (input: unknown) => Promise<Hooks> };
-    return { hooks: await module.TETPlugin({ client, directory: dir }), renames };
-  }
-
-  const session = (id: string, extra: Record<string, unknown> = {}): unknown => ({
-    type: "session.created",
-    properties: { info: { id, title: "First prompt", time: { created: 1, updated: 2 }, ...extra } }
-  });
-
-  it("compiles as TypeScript whatever the paths hold", () => {
-    const source = renderOpencodePlugin(options(nasty));
-    assert.doesNotThrow(() => esbuild.transformSync(source, { loader: "ts" }));
-    assert.ok(source.includes(JSON.stringify(nasty)), "baked in as a JS literal, never spliced raw");
-  });
-
-  it("does nothing for another repository's process", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
-    process.env.TET_PROJECT_ROOT = "elsewhere";
-    const channel = await controlChannel();
-    try {
-      const { hooks } = await load(dir);
-      await hooks.event({ event: session("ses_a") });
-      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
-      assert.deepEqual(channel.reports, []);
-      // The plugins dir is shared across repositories: another one's prompt would be doubled.
-      const request = { system: ["opencode's own"] };
-      await hooks["experimental.chat.system.transform"]({ sessionID: "ses_a" }, request);
-      assert.deepEqual(request.system, ["opencode's own"]);
-    } finally {
-      await channel.close();
-    }
-  });
-
-  it("records root sessions, reports the turns, and appends TET's system prompt", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
-    process.env.TET_PROJECT_ROOT = dir;
-    const channel = await controlChannel();
-    try {
-      const { hooks } = await load(dir, true);
-
-      await hooks.event({ event: session("ses_a") });
-      await hooks.event({ event: session("ses_child", { parentID: "ses_a" }) });
-      const record = JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8"));
-      assert.deepEqual(record, { id: "ses_a", title: "First prompt", created: 1, updated: 2 });
-      assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_child.json")), false, "a subagent's session is no tab");
-      await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
-      assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
-
-      // chat.message is the turn's one start, and adds nothing to the message.
-      const output = { message: { id: "msg_1", sessionID: "ses_a" }, parts: [] as unknown[] };
-      await hooks["chat.message"]({}, output);
-      assert.equal(output.parts.length, 0);
-      await hooks["chat.message"]({}, { message: { id: "msg_2", sessionID: "ses_child" }, parts: [] });
-      const request = { system: ["opencode's own"] };
-      await hooks["experimental.chat.system.transform"]({ sessionID: "ses_a" }, request);
-      // Sandboxed: the prompt without the credentials.
-      assert.deepEqual(request.system, ["opencode's own", systemPrompt(true)]);
-
-      // Raised on every step of a turn, so not reported: each would be a round trip, the last
-      // racing the idle below.
-      await hooks.event({ event: { type: "session.status", properties: { sessionID: "ses_a", status: { type: "busy" } } } });
-      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_a" } } });
-      await hooks.event({ event: { type: "session.idle", properties: { sessionID: "ses_child" } } });
-      await hooks.event({ event: { type: "question.asked", properties: { sessionID: "ses_a" } } });
-      // A subagent's turns are not the tab's.
-      await eventually("the root session's three", () => channel.reports.length === 3, 3000);
-      assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
-      assert.deepEqual(
-        channel.reports.map((report) => hookSessionId(String(report.args.payload))),
-        ["ses_a", "ses_a", "ses_a"],
-        "each report names the root session, which binds the tab to it"
-      );
-
-      await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_a" } } } });
-      assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_a.json")), false);
-    } finally {
-      await channel.close();
-    }
-  });
-
-  it("holds a permission back until opencode had its chance to approve it itself", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
-    process.env.TET_PROJECT_ROOT = dir;
-    const channel = await controlChannel();
-    try {
-      const { hooks } = await load(dir);
-      await hooks.event({ event: { type: "permission.asked", properties: { id: "per_1", sessionID: "ses_a" } } });
-      await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_1", sessionID: "ses_a" } } });
-      await hooks.event({ event: { type: "permission.asked", properties: { id: "per_2", sessionID: "ses_b" } } });
-      await new Promise((resolve) => setTimeout(resolve, 700));
-      assert.deepEqual(reported(channel.reports), ["permission"], "the auto-approved one never counted as a question");
-
-      // The slow one stood as a question, so its reply must clear the mark — nothing else would
-      // before the turn ends.
-      await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_2", sessionID: "ses_b" } } });
-      await eventually("the question taken back", () => channel.reports.length === 2, 3000);
-      assert.deepEqual(reported(channel.reports), ["permission", "prompt-submit"]);
-      await hooks.event({ event: { type: "permission.replied", properties: { requestID: "per_2", sessionID: "ses_b" } } });
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      assert.equal(channel.reports.length, 2, "and only once, however often the reply is seen");
-    } finally {
-      await channel.close();
-    }
-  });
-
-  it("applies a rename request through the session's own process", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
-    process.env.TET_PROJECT_ROOT = dir;
-    const { renames } = await load(dir);
-    fs.mkdirSync(path.join(dir, "rename"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "rename", "ses_a"), "New title\n");
-    fs.writeFileSync(path.join(dir, "rename", "..escape"), "nope");
-    await eventually("the request is picked up", () => renames.length === 1, 3000);
-    assert.deepEqual(renames, [{ path: { id: "ses_a" }, body: { title: "New title" } }]);
-    assert.equal(fs.existsSync(path.join(dir, "rename", "ses_a")), false, "consumed");
-  });
-
-  it("leaves a rename request its own database has no session for", async () => {
-    // Two tabs of one repository or worktree on one side poll the same folder, each holding only
-    // its own sessions: neither may drop the other's request.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
-    process.env.TET_PROJECT_ROOT = dir;
-    const { renames } = await load(dir, true, { error: { name: "NotFoundError" } });
-    fs.mkdirSync(path.join(dir, "rename"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "rename", "ses_b"), "Other title\n");
-    await eventually("the request is tried", () => renames.length >= 1, 3000);
-    assert.equal(fs.existsSync(path.join(dir, "rename", "ses_b")), true, "left for the process whose session it is");
   });
 });
 

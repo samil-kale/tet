@@ -282,7 +282,7 @@ ${stderr.slice(uncaught)}`);
     assert.equal(added.status, 0, added.stderr);
     const worktree = added.result as { projectId: string; worktree: string; branch: string; path: string };
     // Named by its key, which never changes; the branch names only the row.
-    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "projects", main.id, "worktrees", worktree.worktree, "files"));
+    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "projects", main.id, "worktrees", worktree.worktree));
     assert.equal(worktree.branch, "from/ctl");
     await eventually(
       "the new branch read",

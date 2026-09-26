@@ -373,7 +373,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               <>
                 <strong>Enable SBX sandboxing for this project</strong>
                 <p className="dialog-detail">
-                  Claude, Codex, OpenCode and Pi tabs run in their own isolated Docker sandbox.
+                  Claude, Codex and Pi tabs run in their own isolated Docker sandbox.
                   {locked && " No agent is installed on this machine, so this is the only way to run one here."}
                 </p>
               </>

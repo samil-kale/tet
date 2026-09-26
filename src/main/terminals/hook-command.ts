@@ -2,7 +2,7 @@ import type { HookEvent } from "../../shared/control";
 
 /**
  * The hook command Claude Code and Codex run to report one event: `tet-ctl` off the terminal's
- * PATH. opencode and pi report from inside their own process over the wire contract.
+ * PATH. pi reports from inside its own process over the wire contract.
  *
  * A bare name plus arguments, nothing else, because the agent picks the shell: on win32 Claude
  * Code uses `/usr/bin/bash`, and PowerShell and cmd.exe have been seen too. All three resolve a

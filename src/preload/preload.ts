@@ -149,8 +149,6 @@ const api: TETApi = {
     inFront: (ref, tabIds) => ipcRenderer.send("terminals:in-front", ref, tabIds),
     input: (ref, tabId, data) => ipcRenderer.send("terminals:input", ref, tabId, data),
     resize: (ref, tabId, cols, rows) => ipcRenderer.send("terminals:resize", ref, tabId, cols, rows),
-    resolveUrl: (ref, tabId, fragment) =>
-      ipcRenderer.invoke("terminals:resolve-url", ref, tabId, fragment),
     onTabs: (listener) => subscribe("terminals:tabs", listener),
     onOutput: (listener) => subscribe("terminals:output", listener),
     onStatus: (listener) => subscribe("terminals:status", listener),

@@ -132,7 +132,7 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 /**
  * Everything tet keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits
  * its own copy and writes on Save; Cancel and Escape drop the edits. A setting reaches an agent
- * through `AgentPaths` at `prepareSpawn`, once per project, as does the color theme. Deliberately
+ * through `AgentPaths` at `prepareSpawn`, once per agent (HostSetups), as does the color theme. Deliberately
  * not in here: the session marks.
  */
 export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {

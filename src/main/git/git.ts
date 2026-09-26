@@ -498,7 +498,7 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
     await worktree(mainPath, commonDir, true),
     ...linked
       .filter((entry): entry is WorktreeInfo => entry !== undefined)
-      // By branch: every worktree TET made is a folder named "files" (project-dirs.ts).
+      // By branch: every worktree TET made is a folder named by its key (project-dirs.ts).
       .sort((a, b) => (a.branch ?? "").localeCompare(b.branch ?? "") || a.path.localeCompare(b.path))
   ];
 }

@@ -307,8 +307,6 @@ export interface TETApi {
     input(ref: ProjectRef, tabId: string, data: string): void;
     /** The first resize starts the process (lazy spawn). */
     resize(ref: ProjectRef, tabId: string, cols: number, rows: number): void;
-    /** The full url of a wrapped fragment; null means no answer — do not re-ask. */
-    resolveUrl(ref: ProjectRef, tabId: string, fragment: string): Promise<string | null>;
     /** The project's full tab list on every change. */
     onTabs(listener: (payload: { ref: ProjectRef; tabs: TerminalDescriptor[] }) => void): Unsubscribe;
     /** One message per flush for all terminals. */

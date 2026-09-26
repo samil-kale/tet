@@ -46,8 +46,8 @@ project's terminals.
   (`projectRefKey`) only where a single key is unavoidable.
 - A project needs git — a folder without it is refused. Its id is `tet.id` in the repository's own
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees, and everything TET keeps
-  of it lies in `~/.tet/projects/<id>/` (`project-dirs.ts`: `repository/` and `worktrees/<key>/`,
-  each with `host/<agent>` and `sandbox/<agent>`, a worktree's files in `worktrees/<key>/files`).
+  of it lies in `~/.tet/projects/<id>/` (`project-dirs.ts`: `sandboxes/repository/<agent>` and
+  `sandboxes/<key>/<agent>`, the worktrees in `worktrees/<key>`).
   Nothing a sandbox must not see ever goes there: sbx is granted the folder whole.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
   the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing or malformed
@@ -57,7 +57,7 @@ project's terminals.
 
 ## Never assume the agents behave alike
 
-Claude Code, Codex, opencode and pi are four products in the same kind of tab, alike in nothing:
+Claude Code, Codex and pi are three products in the same kind of tab, alike in nothing:
 readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw. So
 anything about how a CLI is driven is an `AgentDefinition` field with a value per agent (or what
 its `prepareSpawn` returns, e.g. the fullscreen args that make a resize redraw in place),
@@ -69,8 +69,9 @@ exception is the right mouse button, decided per click by the terminal's mouse m
 ## Never touch the user's agent configuration
 
 Everything TET generates for an agent lives under `~/.tet` (`data-root.ts`) and is pointed at from
-outside — what belongs to the repository or a worktree in its `host/<agent>` or `sandbox/<agent>`
-folder (`project-dirs.ts`), each side handed only its own; only pasted or dropped files go to the OS temp
+outside — a host tab's setup once per agent in `~/.tet/agent-config/<agent>` (`data-root.ts`), a
+sandboxed tab's in the `sandboxes/…/<agent>` folder of its repository or worktree
+(`project-dirs.ts`), each side handed only its own; only pasted or dropped files go to the OS temp
 directory (`ipc/files.ts`).
 `prepareSpawn` and `prepareSandboxSpawn` are the only places an agent writes configuration;
 beyond them it touches only its own sessions: when the user renames or deletes one, and the one a
@@ -78,7 +79,6 @@ background question leaves (`cleanupAsk`).
 
 - Claude Code: a generated `--settings` file; never `~/.claude/settings.json`.
 - Codex: `-c key=value` for that one process; never `~/.codex/config.toml` or `hooks.json`.
-- opencode: `OPENCODE_CONFIG_DIR` (additive) and `OPENCODE_TUI_CONFIG`; never an `opencode.json`.
 - pi: a generated extension via `-e`; never `PI_CODING_AGENT_DIR`.
 
 ## Cross-platform
@@ -92,7 +92,7 @@ others.
   (`src/main/script-text.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
   `tet-ctl hook <event>`.
-- A file another process reads (hook settings, opencode records, launchers) is written beside the
+- A file another process reads (hook settings, launchers) is written beside the
   target and renamed into place.
 
 ## Git
@@ -112,7 +112,7 @@ others.
 - tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
 - **A linked worktree is a worktree and belongs to its project; it is not a project.** It only
   behaves like one in places (its own row, tabs and git pane) — never design from "a worktree is a
-  project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>/files`; the key is
+  project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>`; the key is
   given once and never changes, and every worktree TET made opens with its project, listed under
   its row (`Project.worktrees`) and in the branch tree's WORKTREES (`RepositoryState.worktrees`,
   `WorktreeInfo.key`), both read off the disk. One made elsewhere (plain `git worktree add`, an
@@ -141,8 +141,7 @@ or a per-line decision is for an agent.
 
 - **Layout**: projects in the left sidebar, each with its worktrees; the tab strip is the
   terminals and editor tabs of the repository or a worktree — VS Code's preview rule, one preview
-  tab each (`editor-tab.ts`). Git and
-  files are not tabs but one side pane toggled from the strip.
+  tab each (`editor-tab.ts`). Git and files are not tabs but one side pane toggled from the strip.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/terminal/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.
@@ -173,8 +172,8 @@ or a per-line decision is for an agent.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out and the Add Repository dialog's account removal and
   namespace pick, which act at once. A setting reaches an agent at its setup
-  (`AgentPaths`), so it applies to projects opened afterwards; the theme and the idle reminder
-  redo the setup of open ones (`themeChanged`, `idleReminderChanged`).
+  (`AgentPaths`), so it applies to tabs started afterwards; the theme and the idle reminder
+  redo the host setup, once per agent (`HostSetups`).
 - **A section of typed rows never says it is empty** (`RowSection`): it shows one blank row to
   type into, on opening and once the last is removed (`atLeastOne`), and Save drops a blank row.
   Only rows a picker adds (the SBX paths) get a line saying there are none.
@@ -218,7 +217,7 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
 
 - **Nothing is read off the terminal or a file.** Every agent reports its turn over the control
   channel as `tet-ctl hook <event>`, addressed by `TET_TAB_ID`: Claude Code and Codex as a hook
-  command, opencode's plugin and pi's extension by posting the same request. The one exception: no
+  command, pi's extension by posting the same request. The one exception: no
   agent's hook fires for a turn the user cut short, so reconcile ends a turn by the agent's own
   session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
 - The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
@@ -239,12 +238,11 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt (Codex: its
   `SessionStart` hook's added context), never replacing the user's instructions.
 - **Environment variables** (`src/main/environment.ts`): tokens and passwords an agent needs, typed
-  only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab gets them anyway), global, and
-  set in every tab at its start (`pty.ts`'s `buildEnv`), over what the machine sets itself — said
-  in a notice.
-  A running tab takes them up only when restarted: the dialog's Save restarts the asking one.
-  None in a sandbox, and the verbs refused *and* unmentioned there — not in `help`, not in its
-  system prompt.
+  only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab gets them
+  anyway), global, and set in every tab at its start (`pty.ts`'s `buildEnv`), over what the machine
+  sets itself — said in a notice. A running tab takes them up only when restarted: the dialog's
+  Save restarts the asking one. None in a sandbox, and the verbs refused *and* unmentioned there —
+  not in `help`, not in its system prompt.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`control-token.ts`): a terminal gets its tab's token, never the run's.
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
@@ -269,16 +267,18 @@ the `sbx` CLI; its comments are the record of what was measured.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox
   (`AgentRuntime.sbxOnly`).
 - The sandbox never sees the agent's own config directory; sessions are read through host mounts,
-  so the same listing code serves both. Of `~/.tet` it sees only the `sandbox/<agent>` folder of
-  its repository or worktree, and a worktree's sandbox is its own (its workspace is fixed at `sbx create`); under
-  governance one rule, `~/.tet/projects/**`, allows TET's folders and its worktrees.
+  so the same listing code serves both. Of `~/.tet` it sees only the `sandboxes/…/<agent>` folder
+  of its repository or worktree, and a worktree's sandbox is its own (its workspace is fixed at
+  `sbx create`); under governance one rule, `~/.tet/projects/**`, allows TET's folders and its
+  worktrees.
 - Generated setup targets where it runs, not `process.platform` (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`
   evaluates) and against this machine (a path exists, a port is free, a value is stored). A row
   that fails, or that sbx refuses while applying, is neither saved nor applied; the rest goes
   through. A Save sbx cannot answer for (a listing fails, a sandbox will not start) stops before
-  changing anything — could-not-say is no refusal. One check for the dialog, `sbx-set-*` and a session's start (`readSbxProblems`).
+  changing anything — could-not-say is no refusal. One check for the dialog, `sbx-set-*` and a
+  session's start (`readSbxProblems`).
 - **The dialog checks live** whatever can be checked, and marks a failing row with the error mark
   saying what is wrong — never that it will not be saved.
 - **A session's start applies tet.json as it stands and never writes it.** What the policy forbids

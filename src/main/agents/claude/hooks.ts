@@ -5,8 +5,8 @@ import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
 import { writeIfChanged } from "../../write-if-changed";
 
 /**
- * Writes the per-repository settings file registering Claude Code's hooks; returns the
- * `--settings` args. Layered over the user's config; `~/.claude/settings.json` is never touched.
+ * Writes the settings file registering Claude Code's hooks into `agentDir` (the host tabs' one,
+ * or a sandbox folder's); returns the `--settings` args. Layered over the user's config; `~/.claude/settings.json` is never touched.
  *
  * Every hook is a bare `tet-ctl hook <event>`, independent of Claude Code's shell (measured on
  * win32: `/usr/bin/bash`, where only the extensionless launcher resolves; control-launcher.ts).

@@ -7,7 +7,7 @@ import { writeIfChanged } from "../write-if-changed";
  * The `tet-ctl` launcher, rewritten into the data folder at every start (install and `npm start`
  * run from different places) and prepended to each pty's PATH in `spawnAgentProcess`, never
  * installed machine-wide. Runs the CLI with tet's own electron under `ELECTRON_RUN_AS_NODE`: a
- * `node` is not a given (opencode and Codex ship native binaries).
+ * `node` is not a given (Codex ships a native binary).
  */
 export function writeLaunchers(dataRoot: string, cliPath: string): string {
   const binDir = path.join(dataRoot, "bin");

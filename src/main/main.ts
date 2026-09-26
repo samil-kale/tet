@@ -481,7 +481,7 @@ function applyTheme(): boolean {
     send("app:theme", theme.id);  }
   const saved = currentTheme(settings);
   // Agents get the saved theme (AgentPaths.theme), so only once it is on screen: a kind awaiting its
-  // restart is not handed to open projects.
+  // restart is not handed to them.
   if (saved.id === shownTheme.id) {
     sessions.themeChanged();
   }

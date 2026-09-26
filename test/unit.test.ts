@@ -15,6 +15,7 @@ import { SbxLocalStore } from "../src/main/sbx-local";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv, setStoredEnv } from "../src/main/terminals/pty";
+import { HostSetups } from "../src/main/terminals/host-setup";
 import { TabSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
@@ -32,7 +33,7 @@ describe("a turn's toast", () => {
     const settings = new SettingsStore(root);
     settings.patch({ notifications: { finished: true, needsYou: true, idleReminder: true } });
     let pushed: TerminalDescriptor[] = [];
-    const manager = new TabSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), {
+    const manager = new TabSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), new HostSetups(root, settings, () => undefined), {
       onTabs: (_projectId, tabs) => (pushed = tabs),
       onOutput: () => undefined,
       onStatus: () => undefined,
@@ -93,7 +94,8 @@ async function withEmptyPath(
   fs.mkdirSync(project);
   const originalPath = process.env.PATH;
   process.env.PATH = path.join(root, "empty");
-  const manager = new TabSessionManager({ ref: { projectId: "p" }, path: project, name: () => "repo" }, root, new SettingsStore(root), new SbxLocalStore(root), {
+  const settings = new SettingsStore(root);
+  const manager = new TabSessionManager({ ref: { projectId: "p" }, path: project, name: () => "repo" }, root, settings, new SbxLocalStore(root), new HostSetups(root, settings, () => undefined), {
     ...NO_CALLBACKS,
     ...callbacks
   });

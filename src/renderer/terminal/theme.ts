@@ -1,5 +1,4 @@
 import type { ITheme } from "@xterm/xterm";
-import type { AgentInfo } from "../../shared/types";
 
 const ANSI_CSS_VARS: Record<string, string> = {
   black: "--vscode-terminal-ansiBlack",
@@ -25,11 +24,8 @@ export function editorFontFamily(): string {
   return getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim() || "monospace";
 }
 
-/**
- * xterm draws on canvas and needs resolved colors, not var() references. Built per terminal: the
- * blue/magenta swap below depends on the agent.
- */
-export function buildXtermTheme(agent: AgentInfo): ITheme {
+/** xterm draws on canvas and needs resolved colors, not var() references. */
+export function buildXtermTheme(): ITheme {
   const styles = getComputedStyle(document.documentElement);
   const read = (name: string): string | undefined => styles.getPropertyValue(name).trim() || undefined;
 
@@ -56,12 +52,7 @@ export function buildXtermTheme(agent: AgentInfo): ITheme {
     overviewRulerBorder: "#00000000"
   };
 
-  // opencode draws blue and magenta swapped (measured, see AgentDefinition.swapsBlueMagenta).
-  const ansiCssVars = agent.swapsBlueMagenta
-    ? { ...ANSI_CSS_VARS, blue: ANSI_CSS_VARS.magenta, magenta: ANSI_CSS_VARS.blue }
-    : ANSI_CSS_VARS;
-
-  for (const [key, cssVar] of Object.entries(ansiCssVars)) {
+  for (const [key, cssVar] of Object.entries(ANSI_CSS_VARS)) {
     (theme as Record<string, string | undefined>)[key] = read(cssVar);
   }
 

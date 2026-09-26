@@ -9,7 +9,7 @@ import { resolveProjectRef } from "../src/main/resolved-ref";
 import type { ControlRecords } from "../src/main/control/control-records";
 import { GitLoginStore } from "../src/main/git-logins";
 import { RepositoryManager } from "../src/main/git/repository";
-import { projectRefDataDir, projectDir, worktreeFiles } from "../src/main/project-dirs";
+import { projectDir, worktreeDir, worktreeFolders } from "../src/main/project-dirs";
 import {
   addProject,
   addWorktree,
@@ -185,7 +185,7 @@ describe("a worktree TET makes", () => {
     const added = await addWorktree(deps, id, "feature");
     assert.ok(added.worktree, added.error);
     const ref = { projectId: id, worktree: added.worktree };
-    const files = worktreeFiles(dataRoot, id, added.worktree);
+    const files = worktreeDir(dataRoot, id, added.worktree);
     assert.equal(real(files), files, "in on-disk spelling, as git lists it");
     assert.equal(git(files, "branch", "--show-current"), "feature");
     assert.equal(git(repo.main, "config", "branch.feature.base"), "main");
@@ -202,7 +202,7 @@ describe("a worktree TET makes", () => {
     const main = repositories.get({ projectId: id })!;
     assert.deepEqual(await main.renameBranch("before", "after"), { ok: true });
     syncWorktrees(deps, id, main.getState());
-    const files = worktreeFiles(dataRoot, id, key);
+    const files = worktreeDir(dataRoot, id, key);
     assert.deepEqual(store.get(id)?.worktrees, [{ key, path: files, branch: "after" }]);
     assert.equal(git(files, "branch", "--show-current"), "after");
   });
@@ -213,13 +213,13 @@ describe("a worktree TET makes", () => {
     const id = await add(repo.main);
     const key = (await addWorktree(deps, id, "target")).worktree!;
     const ref = { projectId: id, worktree: key };
-    const files = worktreeFiles(dataRoot, id, key);
+    const files = worktreeDir(dataRoot, id, key);
     git(files, "push", "-q", "-u", "origin", "target");
     // What the watcher reads in the app: the upstream the delete takes along.
     await repositories.get({ projectId: id })!.refresh();
     const result = await deleteWorktree(deps, ref, { force: false, onRemote: true });
     assert.deepEqual(result, { ok: true });
-    assert.ok(!fs.existsSync(projectRefDataDir(dataRoot, ref)));
+    assert.ok(worktreeFolders(dataRoot, id, key).every((folder) => !fs.existsSync(folder)));
     assert.equal(git(repo.main, "branch", "--list", "target"), "", "the branch went with it");
     assert.ok(!remoteHas(repo.bare, "target"), "and its upstream, as asked");
     assert.deepEqual(store.get(id)?.worktrees, []);
@@ -244,7 +244,7 @@ describe("a worktree TET makes", () => {
     assert.match(refused.error ?? "", /already running/);
     assert.deepEqual(closed, [], "no terminal closed for a command that could not run");
     assert.equal(changes.length, seen);
-    assert.ok(fs.existsSync(worktreeFiles(dataRoot, id, key)));
+    assert.ok(fs.existsSync(worktreeDir(dataRoot, id, key)));
     release();
     assert.deepEqual(await other, { ok: true });
     assert.deepEqual(await deleteWorktree(deps, ref, { force: true, onRemote: false }), { ok: true });
@@ -257,7 +257,7 @@ describe("a worktree TET makes", () => {
     // As an agent saving its work on its way out.
     const opened = open((ref) => {
       if (ref.worktree === key) {
-        fs.writeFileSync(path.join(worktreeFiles(dataRoot, ref.projectId, key), "late.txt"), "late\n");
+        fs.writeFileSync(path.join(worktreeDir(dataRoot, ref.projectId, key), "late.txt"), "late\n");
       }
     });
     dataRoot = opened.dataRoot;
@@ -266,7 +266,7 @@ describe("a worktree TET makes", () => {
     const ref = { projectId: id, worktree: key };
     const result = await deleteWorktree(opened.deps, ref, { force: false, onRemote: false });
     assert.deepEqual(result, { ok: false, needsConfirmation: "uncommitted" });
-    assert.ok(fs.existsSync(path.join(worktreeFiles(dataRoot, id, key), "late.txt")), "nothing deleted without the question");
+    assert.ok(fs.existsSync(path.join(worktreeDir(dataRoot, id, key), "late.txt")), "nothing deleted without the question");
     assert.deepEqual(await deleteWorktree(opened.deps, ref, { force: true, onRemote: false }), { ok: true });
   });
 
@@ -288,7 +288,7 @@ describe("a project removed", () => {
     const key = (await addWorktree(deps, id, "own")).worktree!;
     deps.sbxLocal.restore(id, { secrets: { TOKEN: "encrypted" }, variables: {} });
     assert.deepEqual(await removeProject(deps, id), { ok: true });
-    assert.ok(!fs.existsSync(worktreeFiles(dataRoot, id, key)));
+    assert.ok(!fs.existsSync(worktreeDir(dataRoot, id, key)));
     assert.equal(git(repo.main, "branch", "--list", "own"), "", "its branch went with it");
     assert.ok(!fs.existsSync(projectDir(dataRoot, id)));
     assert.equal(tetId(repo.main), undefined);
@@ -343,7 +343,7 @@ describe("a worktree's tet.json", () => {
     const id = await add(repo.main);
     const key = (await addWorktree(deps, id, "told")).worktree!;
     await repositories.get({ projectId: id, worktree: key })!.refresh();
-    fs.writeFileSync(path.join(worktreeFiles(dataRoot, id, key), "tet.json"), JSON.stringify({ commands: ["ignored"] }));
+    fs.writeFileSync(path.join(worktreeDir(dataRoot, id, key), "tet.json"), JSON.stringify({ commands: ["ignored"] }));
     fs.writeFileSync(path.join(repo.main, "tet.json"), JSON.stringify({ commands: ["npm test"] }));
     await eventually("told", () => told.includes(id));
     assert.ok(told.every((projectId) => projectId === id));

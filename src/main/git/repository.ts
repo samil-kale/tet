@@ -54,7 +54,7 @@ const WATCH_RETRY_MS = 1000;
 const WATCH_RETRY_MAX_MS = 60_000;
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
  *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus).
- *  `ownWorktree` is a linked worktree's id under `.git/worktrees/`, undefined for a main worktree. */
+ *  `ownWorktree` is a linked worktree's id under `.git/worktrees/`, undefined for the repository. */
 function isIgnoredEvent(relativePath: string, ownWorktree?: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/");
   // Another worktree's admin directory: of it, a refresh reads only `HEAD` and `gitdir`

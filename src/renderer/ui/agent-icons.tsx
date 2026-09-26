@@ -29,20 +29,6 @@ function ClaudeIcon({ className }: { className?: string }) {
   );
 }
 
-/** opencode's own extension icon (sbc-open-code/media/icon.svg). */
-function OpencodeIcon({ className }: { className?: string }) {
-  return (
-    <FillSvg className={className} extent={256.27} cx={255.15} cy={255.72} grid={320}>
-      <path d="M320 224V352H192V224H320Z" fill="currentColor" opacity="0.6" />
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M 365.35922,394.53486 H 144.94616 V 116.90026 H 365.35922 Z M 320,160 H 192 v 192 h 128 z"
-        fill="currentColor"
-      />
-    </FillSvg>
-  );
-}
 
 /**
  * Codex CLI's own icon (not OpenAI's mark): a prompt in a circle, as terminaltrove.com lists it,
@@ -109,8 +95,6 @@ export function AgentIcon({ agentId, className }: AgentIconProps) {
   switch (agentId) {
     case "claude":
       return <ClaudeIcon className={className} />;
-    case "opencode":
-      return <OpencodeIcon className={className} />;
     case "codex":
       return <CodexIcon className={className} />;
     case "pi":

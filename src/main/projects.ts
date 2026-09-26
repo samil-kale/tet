@@ -19,7 +19,7 @@ import { readHeadBranch, readMainWorktree } from "./git/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
 import { isRecord, readJson, saveJson } from "./json-file";
 import { onDisk } from "./path-inside";
-import { projectRefDataDir, newWorktreeKey, ownedWorktreeKeys, projectDir, worktreeFiles, worktreeKeyOf } from "./project-dirs";
+import { newWorktreeKey, ownedWorktreeKeys, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./project-dirs";
 import { removeRefSandboxes } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
@@ -151,11 +151,13 @@ export function closeProjectRef({ repositories, sessions, records }: ProjectDeps
 
 /** The sandboxes of closed repositories and worktrees and a folder of TET's data; what cannot go is
  *  logged, not thrown: the repositories and worktrees are gone either way. */
-async function dropRefData(refs: ProjectRef[], folder: string): Promise<void> {
+async function dropRefData(refs: ProjectRef[], folders: string[]): Promise<void> {
   await removeRefSandboxes(refs);
-  await fs.promises
-    .rm(folder, { recursive: true, force: true, maxRetries: 5 })
-    .catch((error: unknown) => console.error(`[tet] could not remove ${folder}:`, error));
+  for (const folder of folders) {
+    await fs.promises
+      .rm(folder, { recursive: true, force: true, maxRetries: 5 })
+      .catch((error: unknown) => console.error(`[tet] could not remove ${folder}:`, error));
+  }
 }
 
 /**
@@ -190,14 +192,14 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
         console.error(`[tet] could not unset tet.id in ${project.path}: ${unset.error}`);
       }
     }
-    await dropRefData(closing, projectDir(deps.dataRoot, projectId));
+    await dropRefData(closing, [projectDir(deps.dataRoot, projectId)]);
     return { ok: true };
   });
 }
 
 /**
  * Creates a worktree of the project's repository with a new branch of its own under
- * `projects/<id>/worktrees/<key>/files`, and opens it with its project. The branch names it, and
+ * `projects/<id>/worktrees/<key>`, and opens it with its project. The branch names it, and
  * starts at the default branch (`worktreeBase`), as most worktree tools start it.
  */
 export function addWorktree(deps: ProjectDeps, projectId: string, typed: string): Promise<AddRepositoryResult> {
@@ -217,11 +219,11 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
     }
     const key = newWorktreeKey(deps.dataRoot, projectId);
     const ref = projectRef(projectId, key);
-    const target = worktreeFiles(deps.dataRoot, projectId, key);
+    const target = worktreeDir(deps.dataRoot, projectId, key);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     const result = await repository.addWorktree(target, branch, base);
     if (!result.ok) {
-      fs.rmSync(projectRefDataDir(deps.dataRoot, ref), { recursive: true, force: true });
+      fs.rmSync(target, { recursive: true, force: true });
       return { error: result.error || "Creating the worktree failed" };
     }
     // As the store has them now: the add's own refresh may have listed it already (syncWorktrees).
@@ -281,7 +283,7 @@ export async function deleteWorktree(
       deps.openProjectRef(ref);
       return result;
     }
-    await dropRefData([], projectRefDataDir(deps.dataRoot, ref));
+    await dropRefData([], worktreeFolders(deps.dataRoot, ref.projectId, ref.worktree!));
     const left = deps.store.get(ref.projectId)?.worktrees.filter((entry) => entry.key !== ref.worktree) ?? [];
     deps.store.setWorktrees(ref.projectId, left);
     deps.projectsChanged({ removed: [ref] });
@@ -316,7 +318,7 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
     return;
   }
   for (const ref of gone) {
-    void closeProjectRef(deps, ref).then(() => dropRefData([ref], projectRefDataDir(deps.dataRoot, ref)));
+    void closeProjectRef(deps, ref).then(() => dropRefData([ref], worktreeFolders(deps.dataRoot, projectId, ref.worktree!)));
   }
   deps.projectsChanged({ removed: gone });
 }
@@ -395,8 +397,8 @@ export class ProjectStore implements ProjectLookup {
    *  rows, and the first state corrects them (syncWorktrees). */
   private ownWorktrees(projectId: string): ProjectWorktree[] {
     return ownedWorktreeKeys(this.dataRoot, projectId).map((key) => {
-      const files = worktreeFiles(this.dataRoot, projectId, key);
-      return { key, path: files, branch: readHeadBranch(files) };
+      const folder = worktreeDir(this.dataRoot, projectId, key);
+      return { key, path: folder, branch: readHeadBranch(folder) };
     });
   }
 

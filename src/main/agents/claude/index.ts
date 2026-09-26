@@ -28,7 +28,7 @@ export const claudeAgent: AgentDefinition = {
   sessions: claudeSessionProvider,
   sessionIdOf: hookSessionId,
   workOutlivesStop: claudeWorkOutlivesStop,
-  prepareSpawn: (_executable, _cwd, paths) => {
+  prepareSpawn: (_executable, paths) => {
     let args: string[] = [];
     try {
       args = setupClaudeHooks(paths.agentDir, paths, paths.theme.kind);
@@ -38,7 +38,7 @@ export const claudeAgent: AgentDefinition = {
     }
     return Promise.resolve({ args: [...args, ...systemPromptArgs(false)], env: FULLSCREEN_ENV });
   },
-  prepareSandboxSpawn: (_cwd, paths) => {
+  prepareSandboxSpawn: (paths) => {
     try {
       return { args: [...setupClaudeHooks(paths.agentDir, paths, paths.theme.kind, SANDBOX_TARGET), ...systemPromptArgs(true)] };
     } catch (error) {

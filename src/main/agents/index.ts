@@ -3,12 +3,11 @@ import type { AgentId, AgentInfo } from "../../shared/types";
 import type { AgentDefinition } from "./agent";
 import { claudeAgent } from "./claude";
 import { codexAgent } from "./codex";
-import { opencodeAgent } from "./opencode";
 import { piAgent } from "./pi";
 import { shellAgent } from "./shell";
 
 /** Also the order of the "new terminal" menu. */
-export const AGENTS: AgentDefinition[] = [claudeAgent, opencodeAgent, codexAgent, piAgent, shellAgent];
+export const AGENTS: AgentDefinition[] = [claudeAgent, codexAgent, piAgent, shellAgent];
 
 /** The first installed agent with `askArgs`, in registration order. */
 export async function findAskableAgent(
@@ -38,7 +37,6 @@ export function listAgents(): AgentInfo[] {
   return AGENTS.map((agent) => ({
     id: agent.id,
     displayName: agent.displayName,
-    hasSessions: agent.sessions !== undefined,
-    swapsBlueMagenta: agent.swapsBlueMagenta === true
+    hasSessions: agent.sessions !== undefined
   }));
 }

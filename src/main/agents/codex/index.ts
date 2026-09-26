@@ -49,7 +49,7 @@ export const codexAgent: AgentDefinition = {
   askArgs: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
   sessions: codexSessionProvider,
   sessionIdOf: hookSessionId,
-  prepareSpawn: (executable, _cwd, paths) => {
+  prepareSpawn: (executable, paths) => {
     let args: string[] = FULLSCREEN_ARGS;
     let launcher: string | undefined;
     if (process.platform === "win32") {

@@ -74,7 +74,4 @@ export function registerTerminalsIpc({
     return sessions.get(ref)?.isStarting() ?? false;
   });
 
-  ipcMain.handle("terminals:resolve-url", async (_event, ref: ProjectRef, tabId: string, fragment: string) => {
-    return (await sessions.get(ref)?.resolveUrlPrefix(tabId, fragment)) ?? null;
-  });
 }
