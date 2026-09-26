@@ -1,5 +1,5 @@
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
-import type { NoticeSeverity, Project, RepositoryState } from "../../shared/types";
+import type { NoticeSeverity, RepositoryState } from "../../shared/types";
 import type { ControlRecords } from "../control/control-records";
 import type { EnvRequests, EnvStore } from "../environment";
 import type { GitLoginStore } from "../git-logins";
@@ -33,10 +33,9 @@ export interface IpcDeps {
   send: (channel: string, payload: unknown) => void;
   /** Tells the user (Notices.tsx), as main.ts does; a handler with a dialog up answers it instead. */
   notice: (severity: NoticeSeverity, message: string) => void;
-  /** Shared with the bootstrap's restore. */
-  openProject: (project: Project) => void;
-  /** Opens the stored projects, once, when the requirements are met. */
-  openWorkspace: () => void;
+  /** Opens the stored projects, once, when the requirements are met; resolves once their ids are
+   *  read, so the window's first list has them. */
+  openWorkspace: () => Promise<void>;
   /** Returns whether a restart is still needed. */
   applyTheme: () => boolean;
   /** main.ts's one way out, shared with the control channel's `restart-app`. */
@@ -44,5 +43,5 @@ export interface IpcDeps {
 }
 
 /** The answer of every verb addressed to a project that is not open. */
-export const MISSING_REPOSITORY: RepositoryState = { ...EMPTY_REPOSITORY_STATE, error: "Project not found" };
+export const MISSING_REPOSITORY: RepositoryState = { ...EMPTY_REPOSITORY_STATE, error: "Repository not open" };
 

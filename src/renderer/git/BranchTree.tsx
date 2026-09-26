@@ -1,7 +1,8 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
-import { defaultRemote, refName, upstreamName } from "../../shared/types";
+import { checkoutKey, checkoutRef, defaultRemote, refName, upstreamName, worktreeName } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
+import type { Checkout } from "../checkout";
 import type { GitRun } from "./run-action";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, filled, prompt, questionUp } from "../ui/Dialog";
@@ -20,7 +21,7 @@ import {
   TREE_CHEVRON,
   WorktreeIcon
 } from "../ui/icons";
-import { askDeleteWorktree, askRenameWorktree, worktreeEntry } from "./worktree-questions";
+import { askDeleteWorktree, askRenameWorktree, NOT_MADE_BY_TET, worktreeEntry } from "./worktree-questions";
 
 /** One git command at a time per project, labelled while it runs (`GitRun`). The tree asks its
  *  questions itself, knowing which remote holds a branch and where HEAD is. */
@@ -33,15 +34,11 @@ export interface BranchActions extends GitRun {
 }
 
 interface BranchTreeProps {
-  projectId: string;
+  checkout: Checkout;
   state: RepositoryState;
   branch: BranchActions;
-  /** Brings the worktree's project to the front, opening it first when it is not a project yet. */
-  onOpenWorktree: (worktreePath: string) => void;
-  /** Whether the unsaved editor edits of the worktree's project, if it is one, may go. */
-  canCloseWorktree: (worktreePath: string) => Promise<boolean>;
-  /** git creates and renames worktrees (Requirements.worktrees); else both entries say why not. */
-  worktreesSupported: boolean;
+  /** Brings a checkout of the project to the front, by its key — as a sidebar row does. */
+  onSelect: (key: string) => void;
 }
 
 /** The row the menu was opened on. */
@@ -52,12 +49,7 @@ type MenuTarget =
   | { kind: "worktree"; worktree: WorktreeInfo };
 
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
-const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the main project, or create a new worktree";
-
-/** A worktree by its branch, which is its name; by its folder's while detached. */
-function worktreeName(worktree: WorktreeInfo): string {
-  return worktree.branch ?? worktree.path.split(/[\\/]/).filter(Boolean).pop() ?? worktree.path;
-}
+const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the main worktree, or create a new worktree";
 
 /**
  * One collapsible section of the tree. `rows` is called only while the section is open, so a
@@ -89,13 +81,13 @@ function TreeSection({
 }
 
 export const BranchTree = memo(function BranchTree({
-  projectId,
+  checkout: shown,
   state,
   branch,
-  onOpenWorktree,
-  canCloseWorktree,
-  worktreesSupported
+  onSelect
 }: BranchTreeProps) {
+  const at = shown.ref;
+  const projectId = shown.ref.projectId;
   const [filter, setFilter] = useState("");
   // Only local branches start open, as in GitHub Desktop; folds persist.
   const [isCollapsed, toggle] = useCollapsedSections("branch-tree.sections", ["remotes", "tags", "stashes"]);
@@ -132,24 +124,36 @@ export const BranchTree = memo(function BranchTree({
   const defaultRef = state.defaultBranch && refName(state.defaultBranch);
 
   /** Where the local branch a checkout would switch to is checked out in another worktree. */
-  const worktreeOf = (target: CheckoutTarget): string | undefined =>
+  const worktreeOf = (target: CheckoutTarget): WorktreeInfo | undefined =>
     target.remote === undefined || state.localBranches.includes(target.name)
-      ? state.worktrees.find((worktree) => !worktree.current && worktree.branch === target.name)?.path
+      ? state.worktrees.find((worktree) => !worktree.current && worktree.branch === target.name)
       : undefined;
+
+  /** Brings a worktree of the repository to the front: the main one, or one TET made; one made
+   *  elsewhere is never opened, so it is only told. */
+  const openWorktree = (worktree: WorktreeInfo): void => {
+    if (worktree.main) {
+      onSelect(checkoutKey(checkoutRef(projectId)));
+    } else if (worktree.key !== undefined) {
+      onSelect(checkoutKey(checkoutRef(projectId, worktree.key)));
+    } else {
+      notify("info", `${worktreeName(worktree)} is checked out in ${worktree.path}, a worktree ${NOT_MADE_BY_TET}`);
+    }
+  };
 
   /** A branch checked out in another worktree is shown there, as in GitHub Desktop; git would
    *  refuse the switch. */
   const checkout = (target: CheckoutTarget): void => {
     const worktree = worktreeOf(target);
     if (worktree !== undefined) {
-      onOpenWorktree(worktree);
+      openWorktree(worktree);
       return;
     }
     if (inWorktree) {
       notify("info", WORKTREE_KEEPS_BRANCH);
       return;
     }
-    branch.run(`Switching to ${target.name}...`, () => repository.checkout(projectId, target));
+    branch.run(`Switching to ${target.name}...`, () => repository.checkout(at, target));
   };
 
   /** Checking out a tag leaves HEAD detached, as in git; never in a worktree, as `checkout`. */
@@ -158,7 +162,7 @@ export const BranchTree = memo(function BranchTree({
       notify("info", WORKTREE_KEEPS_BRANCH);
       return;
     }
-    branch.run(`Switching to ${name}...`, () => repository.checkoutTag(projectId, name));
+    branch.run(`Switching to ${name}...`, () => repository.checkoutTag(at, name));
   };
 
   const askCreateBranch = async (startPoint: string): Promise<void> => {
@@ -167,7 +171,7 @@ export const BranchTree = memo(function BranchTree({
       detail: `The new branch starts at ${startPoint} and is checked out.`,
       confirmLabel: "Create branch",
       // git's own words for a name it will not take, at the field (`prompt`'s `submit`).
-      submit: (name) => branch.ask(`Creating ${name}...`, () => repository.createBranch(projectId, name, startPoint))
+      submit: (name) => branch.ask(`Creating ${name}...`, () => repository.createBranch(at, name, startPoint))
     });
   };
 
@@ -176,7 +180,7 @@ export const BranchTree = memo(function BranchTree({
       title: "Rename branch",
       current: name,
       confirmLabel: "Rename",
-      submit: (typed) => branch.ask(`Renaming ${name}...`, () => repository.renameBranch(projectId, name, typed))
+      submit: (typed) => branch.ask(`Renaming ${name}...`, () => repository.renameBranch(at, name, typed))
     });
   };
 
@@ -195,8 +199,8 @@ export const BranchTree = memo(function BranchTree({
       // With a login, the local branch is gone already: only its upstream is tried again.
       branch.run(`Deleting ${name}...`, (login) =>
         login && upstream
-          ? repository.deleteRemoteBranch(projectId, upstream.remote, upstream.branch, login)
-          : repository.deleteBranch(projectId, name, answer.checked)
+          ? repository.deleteRemoteBranch(at, upstream.remote, upstream.branch, login)
+          : repository.deleteBranch(at, name, answer.checked)
       );
     }
   };
@@ -209,14 +213,14 @@ export const BranchTree = memo(function BranchTree({
       confirmLabel: "Delete branch"
     });
     if (answer.confirmed) {
-      branch.run(`Deleting ${from}/${name}...`, (login) => repository.deleteRemoteBranch(projectId, from, name, login));
+      branch.run(`Deleting ${from}/${name}...`, (login) => repository.deleteRemoteBranch(at, from, name, login));
     }
   };
 
   /** Asks first only when the main process answers `rewrites-pushed`, as GitHub Desktop warns. */
   const rebaseOnto = (ref: string, confirmed = false): void =>
     branch.run(`Rebasing onto ${ref}...`, async () => {
-      const result = await repository.rebase(projectId, ref, confirmed);
+      const result = await repository.rebase(at, ref, confirmed);
       if (result.needsConfirmation !== "rewrites-pushed") {
         return result;
       }
@@ -270,7 +274,7 @@ export const BranchTree = memo(function BranchTree({
       ),
       submit: ({ name, message }) =>
         branch.ask(`Creating tag ${name.trim()}...`, () =>
-          repository.createTag(projectId, name.trim(), target, message.trim())
+          repository.createTag(at, name.trim(), target, message.trim())
         )
     });
   };
@@ -285,7 +289,7 @@ export const BranchTree = memo(function BranchTree({
     if (answer.confirmed) {
       // With a login, the local tag is gone already: only the remote one is tried again.
       branch.run(`Deleting tag ${name}...`, (login) =>
-        login ? repository.deleteRemoteTag(projectId, name, login) : repository.deleteTag(projectId, name, answer.checked)
+        login ? repository.deleteRemoteTag(at, name, login) : repository.deleteTag(at, name, answer.checked)
       );
     }
   };
@@ -298,7 +302,7 @@ export const BranchTree = memo(function BranchTree({
       confirmLabel: "Drop stash"
     });
     if (answer.confirmed) {
-      branch.run(`Dropping ${stash.ref}...`, () => repository.stash(projectId, "drop", stash.sha));
+      branch.run(`Dropping ${stash.ref}...`, () => repository.stash(at, "drop", stash.sha));
     }
   };
 
@@ -308,7 +312,7 @@ export const BranchTree = memo(function BranchTree({
       return [];
     }
     const label = state.operation === "merge" ? "Abort merge" : "Abort rebase";
-    return [{ label, run: () => branch.run(`${label}...`, () => repository.abort(projectId)) }, SEPARATOR];
+    return [{ label, run: () => branch.run(`${label}...`, () => repository.abort(at)) }, SEPARATOR];
   };
 
   /** Brings the default branch into HEAD; every fetch moves a local default branch up to its
@@ -317,7 +321,7 @@ export const BranchTree = memo(function BranchTree({
     label: `Update from ${defaultRef ?? "the default branch"}`,
     run:
       defaultRef && !state.detached && state.head !== defaultRef
-        ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(projectId, defaultRef))
+        ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(at, defaultRef))
         : undefined
   });
 
@@ -348,7 +352,7 @@ export const BranchTree = memo(function BranchTree({
         : [
             {
               label: `Merge ${ref} into ${state.head}`,
-              run: () => branch.run(`Merging ${ref}...`, () => repository.merge(projectId, ref))
+              run: () => branch.run(`Merging ${ref}...`, () => repository.merge(at, ref))
             },
             {
               label: `Rebase ${state.head} onto ${ref}`,
@@ -367,7 +371,7 @@ export const BranchTree = memo(function BranchTree({
     {
       label: remote ? `Push to ${remote}` : "Push",
       run: remote
-        ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(projectId, name, login))
+        ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(at, name, login))
         : undefined
     },
     { label: "Delete...", run: () => void askDeleteTag(name) },
@@ -380,11 +384,11 @@ export const BranchTree = memo(function BranchTree({
     ...abortEntries(),
     {
       label: "Apply",
-      run: () => branch.run(`Applying ${stash.ref}...`, () => repository.stash(projectId, "apply", stash.sha))
+      run: () => branch.run(`Applying ${stash.ref}...`, () => repository.stash(at, "apply", stash.sha))
     },
     {
       label: "Pop",
-      run: () => branch.run(`Popping ${stash.ref}...`, () => repository.stash(projectId, "pop", stash.sha))
+      run: () => branch.run(`Popping ${stash.ref}...`, () => repository.stash(at, "pop", stash.sha))
     },
     { label: "Drop...", run: () => void askDropStash(stash) }
   ];
@@ -396,29 +400,35 @@ export const BranchTree = memo(function BranchTree({
   const worktreeEntries = (worktree: WorktreeInfo): ContextMenuEntry[] => {
     const name = worktreeName(worktree);
     const merged = worktree.branch;
-    const mainPath = state.worktrees.find((entry) => entry.main)?.path;
-    const linked = mainPath !== undefined ? { path: worktree.path, mainPath } : undefined;
+    // Only one TET made is renamed or deleted here; one made elsewhere is git's to change.
+    const own = worktree.key === undefined ? undefined : checkoutRef(projectId, worktree.key);
     const upstream = merged ? state.branchUpstreams[merged] : undefined;
     const mergedUpstream = upstream ? upstreamName(upstream) : undefined;
-    const canClose = (): Promise<boolean> => canCloseWorktree(worktree.path);
     return [
       ...abortEntries(),
-      { label: "Open", run: worktree.current ? undefined : () => onOpenWorktree(worktree.path) },
+      worktree.key === undefined
+        ? { label: `Open (${NOT_MADE_BY_TET})` }
+        : { label: "Open", run: worktree.current ? undefined : () => openWorktree(worktree) },
       worktree.current
         ? updateFromDefault()
         : {
             label: merged ? `Merge ${merged} into ${state.head}` : "Merge (no branch checked out)",
             run:
               merged && !state.detached
-                ? () => branch.run(`Merging ${merged}...`, () => repository.merge(projectId, merged))
+                ? () => branch.run(`Merging ${merged}...`, () => repository.merge(at, merged))
                 : undefined
           },
       SEPARATOR,
-      worktreeEntry("Rename worktree", worktreesSupported, linked ? () => void askRenameWorktree(linked, name, branch, canClose) : undefined),
-      {
-        label: "Delete worktree...",
-        run: linked ? () => void askDeleteWorktree(linked, name, mergedUpstream, branch, canClose) : undefined
-      },
+      worktreeEntry(
+        "Rename worktree",
+        own ? undefined : NOT_MADE_BY_TET,
+        own && merged ? () => void askRenameWorktree(projectId, merged, branch) : undefined
+      ),
+      worktreeEntry(
+        "Delete worktree",
+        own ? undefined : NOT_MADE_BY_TET,
+        own ? () => void askDeleteWorktree(own, name, mergedUpstream, branch) : undefined
+      ),
       SEPARATOR,
       { label: "Copy path", run: () => void navigator.clipboard.writeText(worktree.path) }
     ];
@@ -491,8 +501,8 @@ export const BranchTree = memo(function BranchTree({
               <button
                 key={worktree.path}
                 className={`tree-item${worktree.current ? " current" : ""}`}
-                title={`${worktree.path}${worktree.current ? "" : "\nDouble-click to open"}`}
-                onDoubleClick={() => !worktree.current && onOpenWorktree(worktree.path)}
+                title={`${worktree.path}${worktree.key === undefined ? `\nA worktree ${NOT_MADE_BY_TET}` : worktree.current ? "" : "\nDouble-click to open"}`}
+                onDoubleClick={() => !worktree.current && worktree.key !== undefined && openWorktree(worktree)}
                 onContextMenu={(event) => menu.open(event, { kind: "worktree", worktree })}
               >
                 <WorktreeIcon className="tree-icon" />

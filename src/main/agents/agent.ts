@@ -23,7 +23,7 @@ export interface AgentSessionInfo {
   turnEndedAt?: number;
   /**
    * The sbx sandbox this session lives in; unset on the host. Resumable only there (resolveSbxRun).
-   * Set by the manager on a `SessionProvider.sandbox` listing, and by opencode from its plugin's records.
+   * Set by the manager on a `SessionProvider.sandbox` listing.
    */
   sandbox?: string;
 }
@@ -31,7 +31,7 @@ export interface AgentSessionInfo {
 /** One host path mounted into a sandbox so an agent's sessions land on the host. Curated subpaths
  *  only, never the one holding the agent's credentials. */
 export interface SandboxSessionMount {
-  /** The mounted file or directory, under the host root (`sandboxSessionDir`). */
+  /** The mounted file or directory, under the host root (`sandboxSessionDir` of the sandbox's agentDir). */
   sub: string;
   /** Absolute container path it is mounted at — where the CLI looks. */
   target: string;
@@ -51,7 +51,8 @@ interface SandboxSessions {
   mounts: SandboxSessionMount[];
   /** SessionProvider.list against the mounted root; the manager names the sandbox on the result. */
   list(root: string, cwd: string): Promise<AgentSessionInfo[]>;
-  remove(root: string, cwd: string, sessionId: string): Promise<void>;
+  /** `sandbox` is the sandbox's name, for an agent whose delete runs in it (opencode). */
+  remove(root: string, cwd: string, sessionId: string, sandbox: string): Promise<void>;
   rename(root: string, cwd: string, sessionId: string, title: string): Promise<void>;
 }
 
@@ -61,20 +62,24 @@ export interface SessionProvider {
   list(cwd: string): Promise<AgentSessionInfo[]>;
   resumeArgs(sessionId: string): string[];
   /** Deletes the session; rejects on failure. An already-gone session must resolve: a tab whose
-   *  removal rejects is put back (ProjectSessionManager.destroyTab) and could never be closed. */
+   *  removal rejects is put back (CheckoutSessionManager.destroyTab) and could never be closed. */
   remove(executable: string, cwd: string, sessionId: string): Promise<void>;
   /** Renames the persisted title; rejects on failure. */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;
   /** Calls `onChange` when this repository's sessions change, so the manager re-lists without
    *  waiting for its poll. Returns a stop function. */
   watch?(cwd: string, onChange: () => void): () => void;
-  /** Omitted where sandboxed sessions already come back from `list` (opencode) or there are none. */
+  /** Omitted where there are none. */
   sandbox?: SandboxSessions;
 }
 
-/** What one agent is handed to set itself up for one repository. */
+/** What one agent is handed to set itself up for one checkout (a repository or one of its worktrees). */
 export interface AgentPaths {
-  /** This agent's scratch directory for this repository, already created. */
+  /**
+   * This agent's folder for this checkout, already created: the host tabs' to `prepareSpawn`, the
+   * sandboxed tabs' to `prepareSandboxSpawn` — the one TET folder its sandbox mounts, whole
+   * (project-dirs.ts's hostDir and sandboxDir). Neither side sees the other's.
+   */
   agentDir: string;
   /** TET's data folder (`~/.tet`, data-root.ts), for anything installed machine-wide. */
   storageRoot: string;
@@ -173,9 +178,9 @@ export interface AgentDefinition {
    *
    * Returns args after `sbx run`'s "--" and, where the setup is found through a variable, its env.
    * No executable override: the sandbox's bundled binary runs. `cwd` is the host path (scopes
-   * opencode's plugin); `sandbox` its name. Synchronous. Omitted by the shell.
+   * opencode's plugin). Synchronous. Omitted by the shell.
    */
-  prepareSandboxSpawn?: (cwd: string, paths: AgentPaths, sandbox: string) => SandboxPreparation;
+  prepareSandboxSpawn?: (cwd: string, paths: AgentPaths) => SandboxPreparation;
   /**
    * "KEY=VALUE" for `sbx run -e`, for facts that differ only inside the sandbox. Claude Code's
    * fullscreen rollout reads flags from `statsig.anthropic.com`, which the per-sandbox `kit:` rule
@@ -209,9 +214,16 @@ export interface AgentDefinition {
    * Returns the full url starting with `prefix`, or undefined (the renderer keeps the fragment).
    *
    * Called only on a modifier hover, at most once per fragment, so it may use HTTP; a rejection
-   * reads as "nothing known".
+   * reads as "nothing known". `sandbox` names the sandbox the session lives in, if it does; `cwd`
+   * is then the sandbox's view of it (toContainerPath).
    */
-  resolveUrlPrefix?: (executable: string, cwd: string, sessionId: string, prefix: string) => Promise<string | undefined>;
+  resolveUrlPrefix?: (
+    executable: string,
+    cwd: string,
+    sessionId: string,
+    prefix: string,
+    sandbox: string | undefined
+  ) => Promise<string | undefined>;
   /**
    * Factory for a fresh per-session "CLI ready yet" check fed each output chunk; once true, the tab
    * strip's progress bar hides. Output reaches the terminal throughout — some CLIs query it for

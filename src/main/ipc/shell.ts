@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { net, shell } from "electron";
 import { ipcMain } from "electron";
 import { errorMessage } from "../../shared/errors";
+import type { CheckoutRef } from "../../shared/types";
 import { expandHome, repositoryRelative } from "../path-inside";
 import { isExecutableFile, isOpenableUrl } from "../shell-open";
 import type { IpcDeps } from "./deps";
@@ -114,13 +115,13 @@ export function registerShellIpc({
    * A ctrl-clicked terminal path: inside the repository, its relative path for the editor tab;
    * otherwise opened by the OS here, or shown in the file manager if opening would run it.
    */
-  ipcMain.handle("shell:open-file", async (_event, projectId: string, rawPath: string): Promise<string | null> => {
-    const repository = repositories.get(projectId);
+  ipcMain.handle("shell:open-file", async (_event, checkout: CheckoutRef, rawPath: string): Promise<string | null> => {
+    const repository = repositories.get(checkout);
     if (!repository) {
       return null;
     }
     const expanded = expandHome(rawPath);
-    const root = repository.project.path;
+    const root = repository.at.path;
     const resolved = path.isAbsolute(expanded) ? expanded : path.join(root, expanded);
     const stat = await fs.promises.stat(resolved).catch(() => null);
     if (!stat?.isFile()) {
@@ -140,27 +141,27 @@ export function registerShellIpc({
   });
 
   /** The git pane's "show in file manager". */
-  ipcMain.handle("shell:reveal-file", (_event, projectId: string, filePath: string): void => {
-    const repository = repositories.get(projectId);
+  ipcMain.handle("shell:reveal-file", (_event, checkout: CheckoutRef, filePath: string): void => {
+    const repository = repositories.get(checkout);
     if (repository) {
-      shell.showItemInFolder(path.join(repository.project.path, filePath));
+      shell.showItemInFolder(path.join(repository.at.path, filePath));
     }
   });
 
   /** "Open in external editor": no editor setting, so the OS default for the type. */
-  ipcMain.handle("shell:open-file-externally", async (_event, projectId: string, filePath: string): Promise<void> => {
-    const repository = repositories.get(projectId);
+  ipcMain.handle("shell:open-file-externally", async (_event, checkout: CheckoutRef, filePath: string): Promise<void> => {
+    const repository = repositories.get(checkout);
     if (!repository) {
       return;
     }
-    await openWithNotice(path.join(repository.project.path, filePath), "file", filePath);
+    await openWithNotice(path.join(repository.at.path, filePath), "file", filePath);
   });
 
-  ipcMain.handle("shell:open-project", async (_event, projectId: string): Promise<void> => {
-    const repository = repositories.get(projectId);
+  ipcMain.handle("shell:open-project", async (_event, checkout: CheckoutRef): Promise<void> => {
+    const repository = repositories.get(checkout);
     if (!repository) {
       return;
     }
-    await openWithNotice(repository.project.path, "folder", repository.project.path);
+    await openWithNotice(repository.at.path, "folder", repository.at.path);
   });
 }

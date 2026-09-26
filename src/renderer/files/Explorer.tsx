@@ -1,5 +1,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { ExplorerListing, FileChange, GitActionResult, Project } from "../../shared/types";
+import { checkoutKey } from "../../shared/types";
+import type { CheckoutRef, ExplorerListing, FileChange, GitActionResult } from "../../shared/types";
+import type { Checkout } from "../checkout";
 import type { OpenEditor } from "../terminal/editor-tab";
 import type { FileAct, FileAsk } from "../git/run-action";
 import { openEntries, pathEntries } from "./file-menu";
@@ -81,7 +83,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
 }
 
 interface ExplorerProps {
-  project: Project;
+  checkout: Checkout;
   /** Undefined while the listing is read. */
   files: ExplorerListing | undefined;
   /** False while hidden behind the git view, where a row can't be scrolled to. */
@@ -89,8 +91,8 @@ interface ExplorerProps {
   /** The active editor tab's file — revealed and highlighted. */
   selected: string | null;
   /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked.
-   *  The project is named: the same handler serves every view that opens a file. */
-  onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
+   *  The checkout is named: the same handler serves every view that opens a file. */
+  onOpenFile: (checkout: CheckoutRef, path: string, how?: OpenEditor) => void;
   /** What a question runs, shown on the question's own bar and refused at its field. */
   ask: FileAsk;
   /** What a menu entry that asks nothing runs: the owner's bar shows it, a notice tells its
@@ -119,7 +121,7 @@ export interface ExplorerHandle {
  * search finds in the files' lines is the pane under it (`FileSearch`).
  */
 export const Explorer = memo(function Explorer({
-  project,
+  checkout,
   files,
   shown: visible,
   selected,
@@ -134,10 +136,10 @@ export const Explorer = memo(function Explorer({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const menu = useContextMenu<TreeNode | null>();
   const rows = useRef(new Map<string, HTMLButtonElement>());
-  /** The project is this view's; the rows say only which file and how. */
+  /** The checkout is this view's; the rows say only which file and how. */
   const onOpen = useCallback(
-    (path: string, how?: OpenEditor) => onOpenFile(project.id, path, how),
-    [onOpenFile, project.id]
+    (path: string, how?: OpenEditor) => onOpenFile(checkout.ref, path, how),
+    [onOpenFile, checkout.ref]
   );
 
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
@@ -248,7 +250,7 @@ export const Explorer = memo(function Explorer({
       title: kind === "file" ? "New File" : "New Folder",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
       confirmLabel: "Create",
-      submit: (name) => runAsked(() => create(project.id, under(dir, name)))
+      submit: (name) => runAsked(() => create(checkout.ref, under(dir, name)))
     });
   };
 
@@ -260,7 +262,7 @@ export const Explorer = memo(function Explorer({
       current: baseName(node.path),
       confirmLabel: "Rename",
       submit: (name) =>
-        runAsked(() => window.tet.repository.renamePath(project.id, node.path, under(parentOf(node.path), name)))
+        runAsked(() => window.tet.repository.renamePath(checkout.ref, node.path, under(parentOf(node.path), name)))
     });
   };
 
@@ -275,7 +277,7 @@ export const Explorer = memo(function Explorer({
       confirmLabel: "Delete"
     });
     if (answer.confirmed) {
-      run(() => window.tet.repository.deletePath(project.id, node.path));
+      run(() => window.tet.repository.deletePath(checkout.ref, node.path));
     }
   };
 
@@ -297,7 +299,7 @@ export const Explorer = memo(function Explorer({
     const fileEntries: ContextMenuEntry[] = isFile
       ? [
           { label: "Open", run: () => onOpen(node.path) },
-          ...openEntries(project.id, node.path, true, (how) => onOpen(node.path, how)),
+          ...openEntries(checkout.ref, node.path, true, (how) => onOpen(node.path, how)),
           SEPARATOR
         ]
       : [];
@@ -310,24 +312,24 @@ export const Explorer = memo(function Explorer({
           ]
         : [];
     const viewEntries: ContextMenuEntry[] = [];
-    // A worktree shows its main worktree's view and never changes it (tet-json.ts's configRoot).
-    if (node && !project.mainPath) {
+    // A worktree shows its project's view and never changes it (tet-json.ts's configRoot).
+    if (node && checkout.ref.worktree === undefined) {
       viewEntries.push(SEPARATOR);
       if (isRoot) {
         viewEntries.push({
           label: "Remove Folder from Workspace",
-          run: () => run(() => window.tet.repository.removeFolder(project.id, node.path))
+          run: () => run(() => window.tet.repository.removeFolder(checkout.ref.projectId, node.path))
         });
       } else {
         if (!isFile) {
           viewEntries.push({
             label: "Add Folder to Workspace",
-            run: () => run(() => window.tet.repository.addFolder(project.id, node.path))
+            run: () => run(() => window.tet.repository.addFolder(checkout.ref.projectId, node.path))
           });
         }
         viewEntries.push({
           label: "Exclude from Files",
-          run: () => run(() => window.tet.repository.excludePath(project.id, node.path))
+          run: () => run(() => window.tet.repository.excludePath(checkout.ref.projectId, node.path))
         });
       }
     }
@@ -338,7 +340,7 @@ export const Explorer = memo(function Explorer({
       { label: "New Folder...", run: () => void askNew("folder", dir) },
       ...editEntries,
       ...viewEntries,
-      ...(node ? pathEntries(project, [node.path], isFile ? "file path" : "path") : [])
+      ...(node ? pathEntries(checkout, [node.path], isFile ? "file path" : "path") : [])
     ];
   };
 
@@ -380,30 +382,35 @@ export const Explorer = memo(function Explorer({
  * adds and removes files never in `changes`, and ignored files never are), and via
  * `refreshExplorer` after the tree's own edits (an empty new folder never touches git status).
  *
- * Held with its project: one files pane serves all, and a switch must not show the previous tree.
+ * Held with its checkout: one files pane serves all, and a switch must not show the previous tree.
  */
 export function useExplorerListing(
-  projectId: string,
+  checkout: Checkout,
   changes: FileChange[],
   shown: boolean
 ): { explorerListing: ExplorerListing | undefined; listing: boolean; refreshExplorer: () => void } {
-  const [held, setHeld] = useState<{ projectId: string; listing: ExplorerListing } | undefined>(undefined);
+  const [held, setHeld] = useState<{ key: string; listing: ExplorerListing } | undefined>(undefined);
   const [listing, setListing] = useState(false);
   const [explorerVersion, setExplorerVersion] = useState(0);
   const refreshExplorer = useCallback(() => setExplorerVersion((count) => count + 1), []);
   useEffect(() => {
-    const bump = (payload: { projectId: string }): void => {
-      if (payload.projectId === projectId) {
-        setExplorerVersion((count) => count + 1);
+    const bump = (): void => setExplorerVersion((count) => count + 1);
+    // tet.json is the project's, whichever checkout shows it; the files are this checkout's own.
+    const unsubscribeCommands = window.tet.commands.onChanged(({ projectId }) => {
+      if (projectId === checkout.ref.projectId) {
+        bump();
       }
-    };
-    const unsubscribeCommands = window.tet.commands.onChanged(bump);
-    const unsubscribeFiles = window.tet.repository.onFilesChanged(bump);
+    });
+    const unsubscribeFiles = window.tet.repository.onFilesChanged((payload) => {
+      if (checkoutKey(payload.checkout) === checkout.key) {
+        bump();
+      }
+    });
     return () => {
       unsubscribeCommands();
       unsubscribeFiles();
     };
-  }, [projectId]);
+  }, [checkout]);
   const changesKey = useMemo(
     () =>
       changes
@@ -419,11 +426,11 @@ export function useExplorerListing(
     }
     let cancelled = false;
     setListing(true);
-    void window.tet.repository.listExplorer(projectId).then((result) => {
+    void window.tet.repository.listExplorer(checkout.ref).then((result) => {
       if (!cancelled) {
         setHeld((previous) => ({
-          projectId,
-          listing: keepRoots(previous?.projectId === projectId ? previous.listing : undefined, result)
+          key: checkout.key,
+          listing: keepRoots(previous?.key === checkout.key ? previous.listing : undefined, result)
         }));
         setListing(false);
       }
@@ -431,8 +438,8 @@ export function useExplorerListing(
     return () => {
       cancelled = true;
     };
-  }, [projectId, changesKey, explorerVersion, shown]);
-  return { explorerListing: held?.projectId === projectId ? held.listing : undefined, listing, refreshExplorer };
+  }, [checkout, changesKey, explorerVersion, shown]);
+  return { explorerListing: held?.key === checkout.key ? held.listing : undefined, listing, refreshExplorer };
 }
 
 /** The listing with the previous `roots` where unchanged: the reveal effect depends on it, and a

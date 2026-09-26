@@ -14,6 +14,8 @@ export const CONTROL_ENV = {
   port: "TET_CONTROL_PORT",
   token: "TET_CONTROL_TOKEN",
   projectId: "TET_PROJECT_ID",
+  /** The worktree's key; unset in a project's main worktree. */
+  worktree: "TET_WORKTREE",
   tabId: "TET_TAB_ID",
   /** Only sbx sessions set it ("host.docker.internal" — the sandbox has its own loopback); unset
    *  means CONTROL_HOST. Also needs the policy allow in sbx.ts's isControlChannelAllowed. */
@@ -30,9 +32,9 @@ export interface ControlRequest {
   token: string;
   verb: string;
   args: Record<string, unknown>;
-  /** The tab the CLI ran in: the default project without `--project`, and a target a verb must
-   *  answer *before* acting on. */
-  caller: { projectId?: string; tabId?: string };
+  /** The tab the CLI ran in, and the worktree it runs in: the default target without `--project`
+   *  or `--worktree`, and a target a verb must answer *before* acting on. */
+  caller: { projectId?: string; worktree?: string; tabId?: string };
   /**
    * When the caller spoke, by its own clock. Turn signals are ordered by this, not by arrival: two
    * hooks of one turn race each other. A tab's reports all come from its own agent, so one clock.
@@ -101,6 +103,7 @@ export type HookEvent = (typeof HOOK_EVENTS)[number];
  *  and reads the ones it uses. */
 export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   project: "value",
+  worktree: "value",
   agent: "value",
   confirm: "switch",
   enter: "switch",
@@ -167,13 +170,14 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary: "Set the text of a background question; no text puts TET's own back. Applies to the next press.",
     positionals: ["id", "text"]
   },
-  { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path).", positionals: [], sandbox: "ownProject" },
+  { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownProject" },
   { verb: "projects-add", group: "TET itself", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
   {
     verb: "projects-remove",
     group: "TET itself",
-    usage: "projects-remove <project-id>",
-    summary: "Close a project (the folder stays). Refused while one of its editor tabs has unsaved changes.",
+    usage: "projects-remove <project-id> [--confirm]",
+    summary:
+      "Remove a project: deletes the worktrees TET made with their branches and TET's data of it; the repository's folder stays. With worktrees, needs --confirm. Refused while one of its editor tabs has unsaved changes.",
     positionals: ["projectId"]
   },
   {
@@ -181,16 +185,16 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     group: "TET itself",
     usage: "worktree-add <branch> [--project <id>]",
     summary:
-      "Create a git worktree of the project under ~/.tet/worktrees with a new branch <branch> at the default branch, and open it as a project.",
+      "Create a git worktree of the project under ~/.tet/projects with a new branch <branch> at the default branch, and open it with the project.",
     positionals: ["branch"],
     sandbox: "ownProject"
   },
   {
     verb: "worktree-delete",
     group: "TET itself",
-    usage: "worktree-delete <branch> [--project <id>] [--force]",
+    usage: "worktree-delete <branch|key> [--project <id>] [--force]",
     summary:
-      "Close the project's worktree of branch <branch> and delete its folder and the branch. --force also deletes uncommitted changes. Never the caller's own worktree.",
+      "Close the project's worktree of branch <branch> (or key) and delete it with the branch. --force also deletes uncommitted changes. Never the caller's own worktree.",
     positionals: ["branch"],
     sandbox: "ownProject"
   },

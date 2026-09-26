@@ -10,12 +10,12 @@ import type {
   ListRepositoriesResult,
   Project,
   ProviderAccount,
-  ProviderId,
-  WorktreeRef
+  CheckoutRef,
+  ProviderId
 } from "../../shared/types";
 import { urlOrigin } from "../../shared/git-url";
 import { git } from "../git/git-client";
-import { addProject, addWorktree, deleteWorktree, removeProject, renameWorktree } from "../projects";
+import { addProject, addWorktree, deleteWorktree, removeProject } from "../projects";
 import { PROVIDERS } from "../providers";
 import type { IpcDeps } from "./deps";
 
@@ -25,9 +25,8 @@ export function registerProjectsIpc({
   store,
   accounts,
   logins,
-  projectDeps,
-  openProject
-}: Pick<IpcDeps, "store" | "accounts" | "logins" | "projectDeps" | "openProject">): void {
+  projectDeps
+}: Pick<IpcDeps, "store" | "accounts" | "logins" | "projectDeps">): void {
   ipcMain.handle("projects:list", (): Project[] => store.list());
 
   ipcMain.handle(
@@ -69,7 +68,7 @@ export function registerProjectsIpc({
     addProject(projectDeps, directory)
   );
 
-  /** Clone and create both end with the new folder added as a project. */
+  /** Clone and create both end with the new folder added as a project, as `projects:open` does. */
   const addRepository = async (
     action: Promise<GitActionResult>,
     directory: string,
@@ -85,9 +84,7 @@ export function registerProjectsIpc({
       // The git process died mid-command.
       return { error: errorMessage(error) };
     }
-    const project = store.add(directory);
-    openProject(project);
-    return { project };
+    return addProject(projectDeps, directory);
   };
 
   ipcMain.handle(
@@ -155,7 +152,7 @@ export function registerProjectsIpc({
 
   ipcMain.handle("projects:reorder", (_event, projectIds: string[]): void => store.reorder(projectIds));
 
-  ipcMain.handle("projects:remove", (_event, projectId: string): void => void removeProject(projectDeps, projectId));
+  ipcMain.handle("projects:remove", (_event, projectId: string): Promise<GitActionResult> => removeProject(projectDeps, projectId));
 
   // Each announces its outcome as `projects:changed`, as the control channel's verbs do.
   ipcMain.handle(
@@ -165,12 +162,7 @@ export function registerProjectsIpc({
   );
   ipcMain.handle(
     "projects:delete-worktree",
-    (_event, worktree: WorktreeRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult> =>
+    (_event, worktree: CheckoutRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult> =>
       deleteWorktree(projectDeps, worktree, options)
-  );
-  ipcMain.handle(
-    "projects:rename-worktree",
-    (_event, worktree: WorktreeRef, branch: string): Promise<GitActionResult> =>
-      renameWorktree(projectDeps, worktree, branch)
   );
 }

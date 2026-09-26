@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { SANDBOX_HOME, sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
+import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
@@ -61,9 +61,9 @@ export const piAgent: AgentDefinition = {
   },
   prepareSandboxSpawn: (_cwd, paths) => {
     try {
-      const extension = writePiExtension(sandboxHookDir(paths.agentDir));
-      // Written at the host path, read at the sandbox's: agentDir is mounted whole (sbx.ts's
-      // fixedMountSpecs). On a failed write pi starts without `-e`.
+      const extension = writePiExtension(paths.agentDir);
+      // Written at the host path, read at the sandbox's: the sandbox's agentDir is mounted whole
+      // (sbx.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
       // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the safety
       // boundary, as for Claude Code and opencode. The community pi-kit does not set it (measured,
       // docker/sbx-kits-contrib pi/spec.yaml).

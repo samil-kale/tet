@@ -12,7 +12,7 @@ import { askAgent } from "../src/main/agents/ask";
 import { registerAgentDir } from "../src/main/agents/opencode/sessions";
 import { ensureRunning, execInSandbox, pathMountSpecs, SBX_VERIFIED_VERSION } from "../src/main/sbx";
 import { parseFilesystemRules } from "../src/main/sbx-policy";
-import { agentDirFor } from "../src/main/terminals/agent-data";
+import { hostDir } from "../src/main/project-dirs";
 import { toContainerPath } from "../src/main/terminals/hook-target";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
@@ -138,7 +138,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   function listSessions(agent: AgentDefinition): Promise<AgentSessionInfo[]> {
     assert.ok(agent.sessions, `${agent.displayName} has sessions`);
     // opencode's listing is its plugin's records, found through what prepareSpawn registered in the app.
-    registerAgentDir(currentProject().path, agentDirFor(userData, agent.id, currentProject().id));
+    registerAgentDir(currentProject().path, hostDir(userData, { projectId: currentProject().id }, agent.id));
     return agent.sessions.list(currentProject().path);
   }
 
@@ -397,7 +397,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
 
   it("runs a command in the workspace's container path, and says when there is no sandbox", async () => {
     assert.equal(await ensureRunning(NAME), true);
-    assert.equal((await execInSandbox(NAME, WORKSPACE, ["pwd"])).trim(), toContainerPath(WORKSPACE));
+    assert.equal((await execInSandbox(NAME, toContainerPath(WORKSPACE), ["pwd"])).trim(), toContainerPath(WORKSPACE));
     assert.equal(await ensureRunning(`${NAME}-missing`), false);
     // opencode's session removal tells a gone sandbox by this wording.
     await assert.rejects(execInSandbox(`${NAME}-missing`, WORKSPACE, ["true"]), /sandbox '[^']*' not found/);

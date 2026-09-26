@@ -29,28 +29,89 @@ export interface Requirements {
   agents: Requirement[];
   /** Enough without any agent installed here. */
   sbx: Requirement;
-  /** git is new enough to create and rename worktrees (worktreesSupported). */
+  /** git is new enough to create worktrees (worktreesSupported). */
   worktrees: boolean;
 }
 
+/** A repository TET has open. Stored in `projects.json` as `{id, path, name}`; `worktrees` is read off
+ *  the disk and never stored. */
 export interface Project {
+  /** `tet.id` in the repository's git config (projects.ts's resolveProjectId), shared by its
+   *  worktrees. */
   id: string;
-  /** Absolute path of the working directory. */
+  /** Absolute path of the main worktree. */
   path: string;
   /** The directory's base name. */
   name: string;
-  /** For a linked worktree, its main worktree's path — read off the disk when the project is
-   *  added and once the window is up (`refreshMainPaths`); the value in `projects.json` only
-   *  draws the first frame. The sidebar indents it there. */
-  mainPath?: string;
+  /** Its linked worktrees, by branch (git.ts's readWorktrees). Those TET made carry their `key`;
+   *  the others (made with `git worktree add` elsewhere, or by an older TET) are shown greyed and
+   *  never opened. */
+  worktrees: ProjectWorktree[];
 }
 
-/** The project and its worktrees' projects, which are never open without it and so close with it
- *  (projects.ts's removeProject): the worktrees first. A worktree's own closes alone. */
-export function closedWith(projects: readonly Project[], projectId: string): string[] {
-  const project = projects.find((entry) => entry.id === projectId);
-  const worktrees = project?.mainPath === undefined ? projects.filter((other) => other.mainPath === project?.path) : [];
-  return [...worktrees.map((worktree) => worktree.id), projectId];
+/** A linked worktree of a project, as the sidebar lists it. */
+export type ProjectWorktree = Pick<WorktreeInfo, "path" | "branch" | "key">;
+
+/**
+ * Where something runs: a project's main worktree, or one of the worktrees TET made (`worktree` its
+ * key). A worktree has no id of its own — it is always this pair.
+ */
+export interface CheckoutRef {
+  projectId: string;
+  worktree?: string;
+}
+
+/** A checkout's ref, the main worktree's without a `worktree` key at all: two refs of one checkout
+ *  then compare, and print, alike. */
+export function checkoutRef(projectId: string, worktree?: string): CheckoutRef {
+  return worktree === undefined ? { projectId } : { projectId, worktree };
+}
+
+/**
+ * The pair as one string, for what can hold only one (a map, localStorage, a sandbox's name, a
+ * toast): the project id alone for the main worktree. Never passed on as an address. No space (a
+ * project's terminals are disposed by the prefix `${key} `) and no ":" (Monaco's URI authority).
+ */
+export function checkoutKey(ref: CheckoutRef): string {
+  return ref.worktree === undefined ? ref.projectId : `${ref.projectId}-${ref.worktree}`;
+}
+
+/** The main worktree first, then the worktrees TET made. */
+export function checkoutsOf(project: Project): CheckoutRef[] {
+  return [
+    checkoutRef(project.id),
+    ...project.worktrees.flatMap((worktree) => (worktree.key === undefined ? [] : [checkoutRef(project.id, worktree.key)]))
+  ];
+}
+
+/** Two refs of one checkout. */
+export function sameCheckout(a: CheckoutRef, b: CheckoutRef | undefined): boolean {
+  return b !== undefined && checkoutKey(a) === checkoutKey(b);
+}
+
+/** The worktree of the project a ref names; undefined for the main worktree, and for a key the
+ *  project does not list. */
+export function worktreeOf(project: Project, ref: CheckoutRef): ProjectWorktree | undefined {
+  return ref.worktree === undefined ? undefined : project.worktrees.find((worktree) => worktree.key === ref.worktree);
+}
+
+/** What the window is told of a change to the projects (projects.ts): checkouts opened and closed,
+ *  and the one the user (or tet-ctl) just opened, to bring to the front. */
+export interface ProjectsChange {
+  added?: CheckoutRef[];
+  removed?: CheckoutRef[];
+  show?: CheckoutRef;
+}
+
+/** A worktree's name: its branch, else (detached) TET's key, else its folder's. */
+export function worktreeName(worktree: ProjectWorktree): string {
+  return worktree.branch ?? worktree.key ?? worktree.path.split(/[\\/]/).pop() ?? worktree.path;
+}
+
+/** What a notice or toast calls a checkout: the project's name, a worktree's with it. */
+export function checkoutName(project: Project, ref: CheckoutRef): string {
+  const worktree = worktreeOf(project, ref);
+  return worktree ? `${worktreeName(worktree)} (${project.name})` : project.name;
 }
 
 /** What every agent notifies the OS about. */
@@ -318,9 +379,11 @@ export interface SuggestionResult {
   error?: string;
 }
 
-/** Clone/create: the opened project, or git's message. */
+/** Open/clone/create/new worktree: the project, or git's message. `worktree` names the worktree it
+ *  was about, to bring to the front. */
 export interface AddRepositoryResult {
   project?: Project;
+  worktree?: string;
   error?: string;
   /** The clone wants a login for this url; the dialog asks for one (GitActionResult). */
   loginUrl?: string;
@@ -365,7 +428,7 @@ export function overridesMachineNote(names: string[]): string {
 export interface EnvRequest {
   id: number;
   /** The asking tab, for the dialog to name and to restart. */
-  projectId?: string;
+  checkout?: CheckoutRef;
   tabId?: string;
   /** A stored one's value the dialog replaces. */
   variables: (EnvVarInfo & { stored: boolean })[];
@@ -509,6 +572,9 @@ export interface WorktreeInfo {
   base?: string;
   /** The one holding the repository's `.git`, which is never renamed or deleted. */
   main: boolean;
+  /** TET's key for a worktree it made (project-dirs.ts's worktreeKeyOf); absent for the main one and
+   *  for one made elsewhere. Laid over the read by `Repository.emit`, like `base`. */
+  key?: string;
   /** The worktree this state was read in. */
   current: boolean;
 }
@@ -701,12 +767,6 @@ export interface GitActionResult {
   needsConfirmation?: "trash-failed" | "rewrites-pushed" | "uncommitted";
 }
 
-/** A worktree an action names: its folder, and the main worktree its git commands run in. */
-export interface WorktreeRef {
-  path: string;
-  mainPath: string;
-}
-
 /** A local branch, or a remote-tracking one like "origin/development". */
 export interface CheckoutTarget {
   name: string;
@@ -716,7 +776,7 @@ export interface CheckoutTarget {
 /** One terminal's output since the last flush. Batched, so the message count does not grow with
  *  the number of open terminals. */
 export interface TerminalOutput {
-  projectId: string;
+  checkout: CheckoutRef;
   tabId: string;
   data: string;
 }
@@ -725,9 +785,8 @@ export const TERMINAL_STATUSES = ["missing", "ready", "running", "stopped", "err
 export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
 export interface TerminalDescriptor {
-  /** Unique within its project; equals the agent's session id for a restored tab. */
+  /** Unique within its checkout; equals the agent's session id for a restored tab. */
   tabId: string;
-  projectId: string;
   agentId: AgentId;
   /** Session title; "" makes the UI show a placeholder. */
   title: string;
@@ -758,12 +817,12 @@ export interface TerminalDescriptor {
   command?: string;
 }
 
-/** Why a worktree cannot be created or renamed with an older git (worktreesSupported). */
+/** Why a worktree cannot be created with an older git (worktreesSupported). */
 export const WORKTREES_NEED_GIT = "needs git 2.48 or newer";
 
 /**
- * Whether `git --version`'s answer has `worktree add` and `move` with `--relative-paths` (2.48),
- * which tet's worktrees are made with (git.ts's worktreeAdd). Deleting one needs neither.
+ * Whether `git --version`'s answer has `worktree add --relative-paths` (2.48), which tet's worktrees
+ * are made with (git.ts's worktreeAdd). Renaming (the branch alone) and deleting need nothing new.
  */
 export function worktreesSupported(version: string | undefined): boolean {
   const [major = 0, minor = 0] = (version ?? "").split(".").map((part) => parseInt(part, 10) || 0);

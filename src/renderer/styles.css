@@ -416,26 +416,55 @@ textarea:focus,
   cursor: pointer;
 }
 
-/* A worktree under its main worktree's row, indented as `.tree-item.nested`. */
+/* A worktree under its project's row, indented as `.tree-item.nested`. */
 .project-item.worktree {
   padding-left: 30px;
 }
 
-/* Being dragged; it stays in place until the drop. */
-.project-item.dragging,
+/* A worktree TET did not make: listed, never opened. Dimmed as a disabled menu entry. */
+.project-item.foreign {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Being dragged; it stays in place until the drop. A project moves with its worktrees. */
+.project-group.dragging,
 .command-item.dragging {
   opacity: 0.5;
 }
 
 /* Where the drop lands: a line between rows, inset so it adds no height. */
-.project-item.drop-above,
 .command-item.drop-above {
   box-shadow: inset 0 1px 0 var(--vscode-focusBorder);
 }
 
-.project-item.drop-below,
 .command-item.drop-below {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
+}
+
+/* A group's line is drawn over its rows, whose hover and selection would paint over a shadow. */
+.project-group {
+  position: relative;
+}
+
+.project-group.drop-above::before,
+.project-group.drop-below::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--vscode-focusBorder);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.project-group.drop-above::before {
+  top: 0;
+}
+
+.project-group.drop-below::after {
+  bottom: 0;
 }
 
 /* Takes the leftover width, so the close button stays at the row's right edge. */
@@ -585,7 +614,7 @@ textarea:focus,
 
 /* Every list's rows, one hover and one selection. */
 .command-item:hover,
-.project-item:hover,
+.project-item:not(.foreign):hover,
 .tree-header:hover,
 .tree-item:hover,
 .account-item:hover,

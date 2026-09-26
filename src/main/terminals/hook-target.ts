@@ -45,14 +45,8 @@ function onDiskCase(hostPath: string): string {
  *  community kit. A mount target must be absolute (`sbx mount --help`): `~` never expands. */
 export const SANDBOX_HOME = "/home/agent";
 
-/** The host directory mounted where a sandboxed CLI writes its transcripts, with the rest of what
- *  its sandbox is handed. */
-export function sandboxSessionDir(agentDir: string): string {
-  return path.join(sandboxHookDir(agentDir), "sessions");
-}
-
-/** A sandboxed session's generated setup: inside agentDir, which sbx.ts mounts whole, but apart
- *  from the host session's files. */
-export function sandboxHookDir(agentDir: string): string {
-  return path.join(agentDir, "sandbox");
+/** The host side of an agent's session mounts (SessionProvider.sandbox): inside its sandbox folder
+ *  (project-dirs.ts's sandboxDir), which sbx.ts mounts whole. */
+export function sandboxSessionDir(sandboxDir: string): string {
+  return path.join(sandboxDir, "sessions");
 }

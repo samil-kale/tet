@@ -20,7 +20,7 @@ export function registerAppIpc({
     await markStartup("path", augmentAgentPath);
     const requirements = await markStartup("requirements", checkRequirements);
     if (requirements.met) {
-      openWorkspace();
+      await openWorkspace();
     }
     return requirements;
   });

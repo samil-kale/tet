@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
-import { SANDBOX_HOME, sandboxHookDir, SANDBOX_TARGET } from "../../terminals/hook-target";
+import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
 import { claudeConfigDir, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
@@ -40,7 +40,7 @@ export const claudeAgent: AgentDefinition = {
   },
   prepareSandboxSpawn: (_cwd, paths) => {
     try {
-      return { args: [...setupClaudeHooks(sandboxHookDir(paths.agentDir), paths, paths.theme.kind, SANDBOX_TARGET), ...systemPromptArgs(true)] };
+      return { args: [...setupClaudeHooks(paths.agentDir, paths, paths.theme.kind, SANDBOX_TARGET), ...systemPromptArgs(true)] };
     } catch (error) {
       console.error("[tet] could not write Claude sandbox hook settings:", error);
       return { args: systemPromptArgs(true) };

@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import type { ControlRequest } from "../../shared/control";
 import type {
+  CheckoutRef,
   Project,
   SbxKnowledgeConfig,
   SbxKnowledgeKind,
@@ -20,18 +21,18 @@ import {
   withoutProblems
 } from "../../shared/sbx-rules";
 import { sbxNotReady } from "../sbx-policy";
-import { configRoot, isWorktree } from "../tet-json";
 import type { ControlDeps } from "./control-server";
 import { ControlError, list, text, type Answer, type Handler } from "./control-verb";
 
 /**
  * The SBX Settings verbs: `sbx-get` and one `sbx-set-*` per field, each a Save as the dialog's
- * (ControlDeps.sbx). `project` is the server's lookup of the verb's project.
+ * (ControlDeps.sbx). `checkout` is the server's lookup of the verb's checkout (resolveCheckout).
  */
 export function sbxVerbs(
   deps: ControlDeps,
-  project: (args: Record<string, unknown>, caller: ControlRequest["caller"]) => Project
+  checkout: (args: Record<string, unknown>, caller: ControlRequest["caller"]) => { project: Project; ref: CheckoutRef }
 ): Record<string, Handler> {
+  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => checkout(args, caller).project;
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
    *  which only the user can set up there. Returns the status it read. */
   const readySbx = async (found: Project): Promise<SbxStatus> => {
@@ -52,7 +53,7 @@ export function sbxVerbs(
    * stands: a row that cannot be applied here is left out and answered as `notApplied`. As the
    * dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch while sandboxing
    * is off. A stored value stays with its row's name; a removed row's goes. Refused for a worktree
-   * before anything is read, as it takes its main worktree's (tet-json.ts's configRoot).
+   * before anything is read, as it takes its project's (tet-json.ts's configRoot).
    */
   const editSbx = async (
     args: Record<string, unknown>,
@@ -63,11 +64,11 @@ export function sbxVerbs(
     },
     switching = false
   ): Promise<Answer> => {
-    const found = project(args, caller);
-    if (isWorktree(found.path)) {
+    const { project: found, ref } = checkout(args, caller);
+    if (ref.worktree !== undefined) {
       throw new ControlError(
         "bad_args",
-        `${found.name} is a worktree and takes its SBX Settings from ${path.basename(configRoot(found.path))}: change them there`
+        `a worktree takes its SBX Settings from its project ${found.name}: change them there (--project ${found.id})`
       );
     }
     const status = await readySbx(found);

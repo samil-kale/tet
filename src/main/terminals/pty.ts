@@ -164,9 +164,14 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
  *  envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "sandboxed">): Record<string, string> {
   const stored = options.sandboxed ? {} : storedEnv();
+  const inherited = withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored));
+  // Never an outer tet's caller ids (a tet started from a tet tab): only `own` names this tab.
+  for (const name of [CONTROL_ENV.projectId, CONTROL_ENV.worktree, CONTROL_ENV.tabId]) {
+    delete inherited[name];
+  }
   const env: Record<string, string> = {
     ...options.env,
-    ...withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored)),
+    ...inherited,
     ...stored,
     ...controlEnv,
     ...options.own
@@ -180,7 +185,7 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
   if (runToken) {
     env[CONTROL_ENV.token] = tabControlToken(
       runToken,
-      env[CONTROL_ENV.projectId] ?? "",
+      { projectId: env[CONTROL_ENV.projectId] ?? "", worktree: env[CONTROL_ENV.worktree] },
       env[CONTROL_ENV.tabId] ?? "",
       options.sandboxed === true
     );

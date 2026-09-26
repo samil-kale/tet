@@ -53,7 +53,7 @@ export const opencodeAgent: AgentDefinition = {
     registerAgentDir(cwd, paths.agentDir);
     let env: Record<string, string> = {};
     try {
-      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, HOST_TARGET, null);
+      env = writeOpencodePlugin(hostConfigDir(paths.storageRoot), paths.agentDir, cwd, HOST_TARGET);
     } catch (error) {
       // Costs turn marks, records and TET's system prompt, not the CLI — swallow (see prepareSpawn).
       console.error("[tet] could not write opencode's plugin:", error);
@@ -64,16 +64,16 @@ export const opencodeAgent: AgentDefinition = {
       env: { ...env, ...installTuiConfig(paths.storageRoot) }
     });
   },
-  prepareSandboxSpawn: (cwd, paths, sandbox) => {
+  prepareSandboxSpawn: (cwd, paths) => {
     // The sandbox is the safety boundary, as with Claude Code's kit
     // (--dangerously-skip-permissions). sbx's opencode kit does not set this itself (measured,
     // 0.42.1) — drop it once a kit does.
     const args = ["--auto"];
     try {
-      // Its own config dir (a Linux bun install); records and rename requests stay agentDir's,
-      // shared with host tabs.
+      // Its own config dir (a Linux bun install); records and rename requests in the sandbox's
+      // agentDir, apart from the host tabs' (sessions.ts's `sandbox`).
       const configDir = sandboxConfigDir(paths.agentDir);
-      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, SANDBOX_TARGET, sandbox);
+      const env = writeOpencodePlugin(configDir, paths.agentDir, cwd, SANDBOX_TARGET);
       // Under the mounted dir: storageRoot's copy is not in the sandbox.
       for (const [key, file] of Object.entries(installTuiConfig(configDir))) {
         env[key] = SANDBOX_TARGET.embed(file);

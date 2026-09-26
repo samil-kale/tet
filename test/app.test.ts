@@ -1,6 +1,5 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -228,50 +227,74 @@ ${stderr.slice(uncaught)}`);
     );
   });
 
-  it("reflects a branch switched in a linked worktree, whose git directory lies outside it", async () => {
-    const worktree = `${repo}-worktree`;
-    assert.equal(spawnSync("git", ["worktree", "add", "-q", "-b", "in-worktree", worktree], { cwd: repo }).status, 0);
-    const added = await ctl("projects-add", worktree);
+  it("reflects a branch switched in a worktree TET made, whose git directory lies outside it", async () => {
+    const [main] = (await ctl("projects-list")).result as Project[];
+    const added = await ctl("worktree-add", "in-worktree", "--project", main.id);
     assert.equal(added.status, 0, added.stderr);
-    const project = added.result as Project;
+    const { worktree, path: checkout } = added.result as { worktree: string; path: string };
+    // By its key: the branch that names it is what changes.
     const head = async (): Promise<string | undefined> =>
-      ((await ctl("repo-state", "--project", project.id)).result as RepositoryState).head;
+      ((await ctl("repo-state", "--project", main.id, "--worktree", worktree)).result as RepositoryState).head;
     try {
       await eventually("the first read", async () => (await head()) === "in-worktree", STARTUP_MS);
-      assert.equal(spawnSync("git", ["switch", "-q", "-c", "switched"], { cwd: worktree }).status, 0);
+      assert.equal(spawnSync("git", ["switch", "-q", "-c", "switched"], { cwd: checkout }).status, 0);
       await eventually("the switch seen", async () => (await head()) === "switched", 10_000);
+      await eventually(
+        "the row named by its new branch",
+        async () =>
+          ((await ctl("projects-list")).result as Project[])
+            .find((project) => project.id === main.id)
+            ?.worktrees.some((entry) => entry.key === worktree && entry.branch === "switched") === true,
+        10_000
+      );
     } finally {
-      await ctl("projects-remove", project.id);
-      spawnSync("git", ["worktree", "remove", "--force", worktree], { cwd: repo });
+      const deleted = await ctl("worktree-delete", worktree, "--project", main.id, "--force");
+      assert.equal(deleted.status, 0, deleted.stderr);
+      spawnSync("git", ["branch", "-D", "in-worktree"], { cwd: repo });
     }
   });
 
-  it("creates a worktree in the profile, under its repository's row, and deletes it with its branch", async () => {
-    const projects = (await ctl("projects-list")).result as Project[];
-    const main = projects.find((project) => project.mainPath === undefined)!;
+  it("lists a worktree made with plain git, but never opens it", async () => {
+    const [main] = (await ctl("projects-list")).result as Project[];
+    const elsewhere = `${repo}-elsewhere`;
+    assert.equal(spawnSync("git", ["worktree", "add", "-q", "-b", "elsewhere", elsewhere], { cwd: repo }).status, 0);
+    try {
+      await eventually(
+        "listed without a key",
+        async () =>
+          ((await ctl("projects-list")).result as Project[])
+            .find((project) => project.id === main.id)
+            ?.worktrees.some((entry) => entry.branch === "elsewhere" && entry.key === undefined) === true,
+        STARTUP_MS
+      );
+      const refused = await ctl("repo-state", "--project", main.id, "--worktree", "elsewhere");
+      assert.notEqual(refused.status, 0);
+      assert.match(refused.stderr, /not made by TET/);
+    } finally {
+      spawnSync("git", ["worktree", "remove", "--force", elsewhere], { cwd: repo });
+      spawnSync("git", ["branch", "-D", "elsewhere"], { cwd: repo });
+    }
+  });
+
+  it("creates a worktree under its project's folder in the profile, and deletes it with its branch", async () => {
+    const [main] = (await ctl("projects-list")).result as Project[];
     const added = await ctl("worktree-add", "from/ctl", "--project", main.id);
     assert.equal(added.status, 0, added.stderr);
-    const worktree = added.result as Project;
-    // The branch names the folder, a "/" in it no subfolder; the repository's folder carries a hash
-    // of its path.
-    const repositoryFolder = `${path.basename(main.path)}-${createHash("sha1").update(main.path).digest("hex").slice(0, 8)}`;
-    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "worktrees", repositoryFolder, "from-ctl"));
-    assert.equal(worktree.mainPath, main.path);
+    const worktree = added.result as { projectId: string; worktree: string; branch: string; path: string };
+    // Named by its key, which never changes; the branch names only the row.
+    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "projects", main.id, "worktrees", worktree.worktree, "checkout"));
+    assert.equal(worktree.branch, "from/ctl");
     await eventually(
       "the new branch read",
-      async () => ((await ctl("repo-state", "--project", worktree.id)).result as RepositoryState).head === "from/ctl",
-      STARTUP_MS
-    );
-    await eventually(
-      "the worktree read by its repository",
       async () =>
-        ((await ctl("repo-state", "--project", main.id)).result as RepositoryState).worktrees.some((entry) => entry.branch === "from/ctl"),
+        ((await ctl("repo-state", "--project", main.id, "--worktree", "from/ctl")).result as RepositoryState).head === "from/ctl",
       STARTUP_MS
     );
     const deleted = await ctl("worktree-delete", "from/ctl", "--project", main.id);
     assert.equal(deleted.status, 0, deleted.stderr);
     assert.ok(!fs.existsSync(worktree.path));
-    assert.ok(!((await ctl("projects-list")).result as Project[]).some((project) => project.id === worktree.id));
+    const listed = ((await ctl("projects-list")).result as Project[]).find((project) => project.id === main.id);
+    assert.ok(!listed?.worktrees.some((entry) => entry.key === worktree.worktree));
     const branches = ((await ctl("repo-state", "--project", main.id)).result as RepositoryState).localBranches;
     assert.ok(!branches.includes("from/ctl"), "its branch went with it");
   });

@@ -26,6 +26,18 @@ export function readLinkedGitDir(root: string): { gitDir: string; commonDir?: st
   }
 }
 
+/** The branch a linked worktree has checked out, off its git directory's HEAD; undefined while
+ *  detached or unreadable. Synchronous, for the store's first frame and before a delete. */
+export function readHeadBranch(root: string): string | undefined {
+  const gitDir = readLinkedGitDir(root)?.gitDir;
+  try {
+    const head = gitDir === undefined ? "" : fs.readFileSync(path.join(gitDir, "HEAD"), "utf8");
+    return /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * A linked worktree's main worktree, the folder holding the common `.git`; undefined otherwise. In
  * on-disk spelling, as `git rev-parse --show-toplevel` gives a project's path (measured on win32),

@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { sandboxHookDir, type HookTarget } from "../../terminals/hook-target";
+import { SANDBOX_TARGET, type HookTarget } from "../../terminals/hook-target";
 import { writeIfChanged } from "../../write-if-changed";
 import { renderHookReport } from "../hook-report";
 import { systemPrompt } from "../system-prompt";
@@ -25,11 +25,12 @@ import { systemPrompt } from "../system-prompt";
 export interface OpencodePluginOptions {
   /** The repository root as the plugin's process sees it — the `TET_PROJECT_ROOT` guard. */
   projectRoot: string;
-  /** Session records (sessions/<id>.json) and rename requests. */
+  /** Session records (sessions/<id>.json) and rename requests: the host tabs' own, or the
+   *  sandboxed tabs' (read through SessionProvider.sandbox), never shared. */
   sessionsDir: string;
   renameDir: string;
-  /** Recorded on every session; null on the host. */
-  sandbox: string | null;
+  /** For TET's system prompt, which leaves out what a sandbox may not do. */
+  sandboxed: boolean;
 }
 
 /** Tells the plugin which repository its process serves. */
@@ -41,14 +42,14 @@ export interface SessionRecord {
   title: string;
   created: number;
   updated: number;
-  sandbox: string | null;
 }
 
-/** A sandboxed tab's config dir under agentDir, mounted whole: its bun install is Linux's own. */
+/** A sandboxed tab's config dir under its agentDir, mounted whole: its bun install is Linux's own. */
 export function sandboxConfigDir(agentDir: string): string {
-  return path.join(sandboxHookDir(agentDir), "opencode");
+  return path.join(agentDir, "opencode");
 }
 
+/** The records' folder: for a sandboxed tab's agentDir, `sandboxSessionDir` of it. */
 export function sessionsDir(agentDir: string): string {
   return path.join(agentDir, "sessions");
 }
@@ -72,8 +73,7 @@ export function writeOpencodePlugin(
   configDir: string,
   agentDir: string,
   cwd: string,
-  target: HookTarget,
-  sandbox: string | null
+  target: HookTarget
 ): Record<string, string> {
   const pluginsDir = path.join(configDir, "plugins");
   fs.mkdirSync(pluginsDir, { recursive: true });
@@ -84,7 +84,7 @@ export function writeOpencodePlugin(
     projectRoot: target.embed(cwd),
     sessionsDir: target.embed(sessionsDir(agentDir)),
     renameDir: target.embed(renameDir(agentDir)),
-    sandbox
+    sandboxed: target === SANDBOX_TARGET
   });
   writeIfChanged(path.join(pluginsDir, pluginName(cwd)), contents);
   return { OPENCODE_CONFIG_DIR: target.embed(configDir), [PROJECT_ROOT_ENV]: target.embed(cwd) };
@@ -102,10 +102,9 @@ import * as path from "node:path";
 import * as http from "node:http";
 
 const PROJECT_ROOT = ${JSON.stringify(options.projectRoot)};
-const SYSTEM_PROMPT = ${JSON.stringify(systemPrompt(options.sandbox !== null))};
+const SYSTEM_PROMPT = ${JSON.stringify(systemPrompt(options.sandboxed))};
 const SESSIONS_DIR = ${JSON.stringify(options.sessionsDir)};
 const RENAME_DIR = ${JSON.stringify(options.renameDir)};
-const SANDBOX: string | null = ${JSON.stringify(options.sandbox)};
 // A permission opencode approves by itself still raises permission.asked, with the reply
 // milliseconds behind it (measured: 7 ms). Held this long before it counts as a question, and
 // let go when the reply arrives first.
@@ -192,8 +191,7 @@ export const TETPlugin = async (input: any) => {
       id: info.id,
       title: typeof info.title === "string" ? info.title : "",
       created: typeof info.time?.created === "number" ? info.time.created : 0,
-      updated: typeof info.time?.updated === "number" ? info.time.updated : 0,
-      sandbox: SANDBOX
+      updated: typeof info.time?.updated === "number" ? info.time.updated : 0
     });
   };
 
@@ -217,9 +215,9 @@ export const TETPlugin = async (input: any) => {
       } catch {
         continue;
       }
-      // Every opencode of the repository polls this one folder, a sandboxed one included, and only
-      // the process whose database holds the session can apply it: a request another process could
-      // not apply is left for that one, and withdrawn by tet's own timeout when there is none.
+      // Every opencode of the checkout on this side polls this one folder, and only the process
+      // whose database holds the session can apply it: a request another process could not apply is
+      // left for that one, and withdrawn by tet's own timeout when there is none.
       let applied = !title;
       try {
         if (title) {

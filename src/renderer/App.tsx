@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { closedWith, EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
-import type { AgentInfo, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import { checkoutKey, checkoutsOf, EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
+import type { AgentInfo, CheckoutRef, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import { checkoutsByKey, type Checkout } from "./checkout";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { CommandList } from "./sidebar/CommandList";
@@ -11,14 +12,14 @@ import { FilesPane } from "./files/FilesPane";
 import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
-import type { ProjectHead, ProjectMarks } from "./sidebar/ProjectList";
+import type { CheckoutHead, CheckoutMarks } from "./sidebar/ProjectList";
 import { activeAfterChange, activeAtStart, rememberActive } from "./sidebar/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize, usePaneToggle } from "./ui/layout-storage";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
 import { TerminalsPane } from "./terminal/TerminalsPane";
 import type { SideView } from "./terminal/Pane";
-import { clearTerminal, disposeProjectTerminals } from "./terminal/terminal-views";
+import { clearTerminal, disposeCheckoutTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
@@ -29,10 +30,10 @@ import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./terminal/editor-tab";
 import {
+  canDiscardCheckoutEdits,
   canDiscardEdits,
-  canDiscardProjectEdits,
+  disposeCheckoutEditors,
   disposeEditor,
-  disposeProjectEditors,
   keepEditor,
   openEditorFile,
   previewEditorTab,
@@ -46,15 +47,15 @@ import { useEditorSync } from "./diff/use-editor-sync";
  *  autocontract". */
 function requesterOf(
   request: EnvRequest,
-  projects: Project[],
+  checkouts: Record<string, Checkout>,
   tabs: Record<string, TerminalDescriptor[]>,
   agents: AgentInfo[]
 ): string {
-  const project = projects.find((entry) => entry.id === request.projectId);
-  const tab = project && tabs[project.id]?.find((entry) => entry.tabId === request.tabId);
+  const checkout = request.checkout && checkouts[checkoutKey(request.checkout)];
+  const tab = checkout && tabs[checkout.key]?.find((entry) => entry.tabId === request.tabId);
   const agent = tab && (agents.find((entry) => entry.id === tab.agentId)?.displayName ?? tab.agentId);
   const who = agent ? (tab.title ? `${agent} (${tab.title})` : agent) : "An agent";
-  return project ? `${who} in ${project.name}` : who;
+  return checkout ? `${who} in ${checkout.name}` : who;
 }
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
@@ -64,7 +65,7 @@ const DEFAULT_LAYOUT = defaultLayout();
 
 let renderStartedAt = 0;
 
-/** `worktreesSupported`: git creates and renames them (Requirements.worktrees). */
+/** `worktreesSupported`: git creates them (Requirements.worktrees). */
 export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   renderStartedAt = performance.now();
   // App's render to commit: what a state change here costs across the tree (React's Profiler is
@@ -76,13 +77,22 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  /** Every open checkout — a project's main worktree and the worktrees TET made — by the key every
+   *  record below is kept under (`checkoutKey`). Identity-stable where unchanged. */
+  const checkoutsHeld = useRef<Record<string, Checkout>>({});
+  const checkouts = useMemo(() => checkoutsByKey(checkoutsHeld, projects), [projects]);
+  /** For callbacks that only need it on a click: see `tabsRef`. */
+  const checkoutsRef = useRef(checkouts);
+  checkoutsRef.current = checkouts;
+  /** The checkout in front, by key. */
+  const [activeKey, setActiveKey] = useState<string | null>(null);
   /** For callbacks the project list gets, read on a click: see `tabsRef`. */
-  const activeProjectIdRef = useRef(activeProjectId);
-  activeProjectIdRef.current = activeProjectId;
-  useEffect(() => rememberActive(activeProjectId), [activeProjectId]);
+  const activeKeyRef = useRef(activeKey);
+  activeKeyRef.current = activeKey;
+  useEffect(() => rememberActive(activeKey), [activeKey]);
+  /** Each checkout's repository state; everything below is by checkout key too, but `sandboxed`. */
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
-  /** Every project's tabs: the project list needs all of them at once. */
+  /** Every checkout's tabs: the project list needs all of them at once. */
   const [tabs, setTabs] = useState<Record<string, TerminalDescriptor[]>>({});
   /**
    * For callbacks that read it only on a click: depending on `tabs` would remake them, and every
@@ -91,14 +101,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   /**
-   * Renderer-only, see `editor-tab.ts`; a project with none has no entry. Untouched tabs keep
+   * Renderer-only, see `editor-tab.ts`; a checkout with none has no entry. Untouched tabs keep
    * their instance across updates: `stripTabs` compares items.
    */
   const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab[]>>({});
   const editorTabsRef = useRef(editorTabs);
   editorTabsRef.current = editorTabs;
   /**
-   * Each project's tab strip: its terminals, then its editor tabs. The layout reconciles against
+   * Each checkout's tab strip: its terminals, then its editor tabs. The layout reconciles against
    * it, panes draw it, next/previous step through it; marks and `seen` stay on `tabs` (the editor
    * has no turns). Identity: `tabs`' own list without a file open, else the previous list while
    * unchanged.
@@ -106,14 +116,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const stripTabsRef = useRef<Record<string, PaneTab[]>>({});
   const stripTabs = useMemo(() => {
     const next: Record<string, PaneTab[]> = { ...tabs };
-    for (const [projectId, editors] of Object.entries(editorTabs)) {
-      next[projectId] = sameList(stripTabsRef.current[projectId], [...(tabs[projectId] ?? []), ...editors], NO_TABS);
+    for (const [key, editors] of Object.entries(editorTabs)) {
+      next[key] = sameList(stripTabsRef.current[key], [...(tabs[key] ?? []), ...editors], NO_TABS);
     }
     stripTabsRef.current = next;
     return next;
   }, [tabs, editorTabs]);
   /**
-   * Projects with something starting (bootstrap listing, a CLI booting). Read by the progress bar
+   * Checkouts with something starting (bootstrap listing, a CLI booting). Read by the progress bar
    * and the layout persistence.
    */
   const [starting, setStarting] = useState<Record<string, boolean>>({});
@@ -127,9 +137,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     starting
   );
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
-  const { activeEditors, forgetProject: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
+  const { activeEditors, forgetCheckout: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git pane's and project list's ways in (run-action.ts). */
-  const { activeBranch, projectListBusy, runInProject } = useBranchActions(activeProjectId);
+  const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
   // Pane defaults and limits; both side-pane views share the two below ("git-panels" predates the
   // files view).
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
@@ -159,13 +169,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * at width 0 while in, so opening and closing both transition — and the sash sets the same
    * width, where an animated one would lag the pointer. Set by what opens or closes the pane,
    * cleared once the transition ends; switching views while out slides nothing. Not without a
-   * project: no pane is drawn then, and nothing would end the transition.
+   * checkout: no pane is drawn then, and nothing would end the transition.
    */
   const [sideSliding, setSideSliding] = useState(false);
   const stopSliding = useCallback(() => setSideSliding(false), []);
   const slidePane = useCallback((open: boolean) => {
     setSidePaneOpen(open);
-    if (activeProjectIdRef.current !== null) {
+    if (activeKeyRef.current !== null) {
       setSideSliding(true);
     }
   }, [setSidePaneOpen]);
@@ -190,8 +200,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** What an agent asked for with `tet-ctl env-request`; main sends one at a time. */
   const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
   /**
-   * Each tet.json's `sbx.enabled`, replaced only where it changed (the memoized list re-renders
-   * otherwise). Any writer of that file (dialog, agent, editor, checkout) arrives as `commands:changed`.
+   * Each tet.json's `sbx.enabled`, by project id — a worktree runs as its project does. Replaced
+   * only where it changed (the memoized list re-renders otherwise). Any writer of that file
+   * (dialog, agent, editor, checkout) arrives as `commands:changed`.
    */
   const [sandboxed, setSandboxed] = useState<Record<string, boolean>>({});
   /** Projects whose flag was read on arrival — not `sandboxed`, which holds no entry for "off".
@@ -200,47 +211,49 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   useEffect(() => {
     const unsubscribers = [
-      window.tet.repository.onState(({ projectId, state }) =>
-        setStates((current) => ({ ...current, [projectId]: state }))
+      window.tet.repository.onState(({ checkout, state }) =>
+        setStates((current) => ({ ...current, [checkoutKey(checkout)]: state }))
       ),
-      window.tet.terminals.onTabs(({ projectId, tabs: list }) =>
-        setTabs((current) => ({ ...current, [projectId]: list }))
+      window.tet.terminals.onTabs(({ checkout, tabs: list }) =>
+        setTabs((current) => ({ ...current, [checkoutKey(checkout)]: list }))
       ),
-      window.tet.terminals.onStatus(({ projectId, tabId, status }) => {
+      window.tet.terminals.onStatus(({ checkout, tabId, status }) => {
+        const key = checkoutKey(checkout);
       // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
       // it off screen (main flushes the old output before the status, the new one's has not come).
-        if (status === "running" && tabsRef.current[projectId]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
-          clearTerminal(projectId, tabId);
+        if (status === "running" && tabsRef.current[key]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
+          clearTerminal(checkout, tabId);
         }
         setTabs((current) => {
-          const list = current[projectId];
+          const list = current[key];
           return list
-            ? { ...current, [projectId]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) }
+            ? { ...current, [key]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) }
             : current;
         });
       }),
-      window.tet.terminals.onStartupProgress(({ projectId, show }) =>
-        setStarting((current) => (current[projectId] === show ? current : { ...current, [projectId]: show }))
-      )
+      window.tet.terminals.onStartupProgress(({ checkout, show }) => {
+        const key = checkoutKey(checkout);
+        setStarting((current) => (current[key] === show ? current : { ...current, [key]: show }));
+      })
     ];
 
     void (async () => {
       const stored = await window.tet.projects.list();
       setProjects(stored);
-      setActiveProjectId((current) => current ?? activeAtStart(stored));
+      setActiveKey((current) => current ?? activeAtStart(stored));
       const fetched = await Promise.all(
-        stored.map(async (project) => {
+        stored.flatMap(checkoutsOf).map(async (checkout) => {
           const [state, list, isStarting] = await Promise.all([
-            window.tet.repository.state(project.id),
-            window.tet.terminals.list(project.id),
-            window.tet.terminals.starting(project.id)
+            window.tet.repository.state(checkout),
+            window.tet.terminals.list(checkout),
+            window.tet.terminals.starting(checkout)
           ]);
-          return [project.id, state, list, isStarting] as const;
+          return [checkoutKey(checkout), state, list, isStarting] as const;
         })
       );
-      // A project removed meanwhile was forgotten already: merging its entries would revive it.
-      const open = new Set(projectsRef.current.map((project) => project.id));
-      const loaded = fetched.filter(([id]) => open.has(id));
+      // A checkout closed meanwhile was forgotten already: merging its entries would revive it.
+      const open = new Set(projectsRef.current.flatMap(checkoutsOf).map(checkoutKey));
+      const loaded = fetched.filter(([key]) => open.has(key));
       // Pushes that landed meanwhile are newer than what was fetched.
       setStates((current) => ({
         ...Object.fromEntries(loaded.map(([id, state]) => [id, state])),
@@ -261,74 +274,69 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     []
   );
 
-  /** A branch's worktree from the git pane: its project, else the folder opened as one (which
-   *  `projects:changed` then shows). */
-  const openWorktree = useCallback(async (worktreePath: string) => {
-    const open = projectsRef.current.find((project) => project.path === worktreePath);
-    if (open) {
-      setActiveProjectId(open.id);
-      return;
-    }
-    const result = await window.tet.projects.open(worktreePath);
-    if (!result.project) {
-      notify("error", result.error ?? `Could not open ${worktreePath}`);
-    }
-  }, []);
+  /** A checkout's key, as a row or the git pane selects it. */
+  const select = useCallback((key: string) => setActiveKey(key), []);
 
-  /** A worktree's own project, if it is one, before its terminals close. */
-  const canCloseWorktree = useCallback(async (worktreePath: string) => {
-    const project = projectsRef.current.find((entry) => entry.path === worktreePath);
-    return project ? canDiscardProjectEdits(project.id) : true;
-  }, []);
-
-  /** Drops everything held for a project; the project list is the caller's. */
-  const forgetProject = useCallback((projectId: string) => {
-    setStates((current) => forget(current, projectId));
-    setTabs((current) => forget(current, projectId));
-    setStarting((current) => forget(current, projectId));
-    setSandboxed((current) => forget(current, projectId));
-    sandboxedRead.current.delete(projectId);
-    setEditorTabs((current) => forget(current, projectId));
-    forgetEditorSync(projectId);
-    disposeProjectEditors(projectId);
-    forgetLayout(projectId);
-    busyCursor.current = forget(busyCursor.current, projectId);
-    // The xterms live outside React; this is where a project ends for good.
-    disposeProjectTerminals(projectId);
+  /** Drops everything held for a checkout; the project list is the caller's. */
+  const forgetCheckout = useCallback((ref: CheckoutRef) => {
+    const key = checkoutKey(ref);
+    setStates((current) => forget(current, key));
+    setTabs((current) => forget(current, key));
+    setStarting((current) => forget(current, key));
+    setEditorTabs((current) => forget(current, key));
+    forgetEditorSync(key);
+    disposeCheckoutEditors(ref);
+    forgetLayout(key);
+    busyCursor.current = forget(busyCursor.current, key);
+    // The xterms live outside React; this is where a checkout ends for good.
+    disposeCheckoutTerminals(ref);
   }, [forgetLayout, forgetEditorSync]);
 
-  /** The project row's close, its worktrees' with it (closedWith); the list follows through
+  /** A project's sbx switch goes with the project, not with a checkout of it. */
+  const forgetSandboxed = useCallback((projectId: string) => {
+    setSandboxed((current) => forget(current, projectId));
+    sandboxedRead.current.delete(projectId);
+  }, []);
+
+  /** The project row's remove, once the row asked about its worktrees; the list follows through
    *  `projects:changed`. */
-  const closeProject = useCallback(async (projectId: string) => {
-    if (await canDiscardProjectEdits(...closedWith(projectsRef.current, projectId))) {
-      await window.tet.projects.remove(projectId);
+  const removeProject = useCallback(async (projectId: string) => {
+    const project = projectsRef.current.find((entry) => entry.id === projectId);
+    if (!project || !(await canDiscardCheckoutEdits(...checkoutsOf(project)))) {
+      return;
+    }
+    const result = await window.tet.projects.remove(projectId);
+    if (!result.ok) {
+      notify("error", result.error ?? `Could not remove ${project.name}`);
     }
   }, []);
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git pane's
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
   // opened where no agent is installed can only run sandboxed, so its sbx settings open at once,
-  // locked (SbxSettingsDialog); not one reopened under a new id (a renamed worktree: removed and
-  // added at once), whose settings came along with its folder, nor a worktree, which has none.
+  // locked (SbxSettingsDialog); not a worktree, which has none.
   useEffect(
     () =>
-      window.tet.projects.onChanged(({ projects: list, added, removed }) => {
-        const before = projectsRef.current;
+      window.tet.projects.onChanged(({ projects: list, added, removed, show }) => {
         setProjects(list);
-        setActiveProjectId((current) => activeAfterChange(current, before, list, added, removed));
-        if (removed !== undefined) {
-          forgetProject(removed);
+        setActiveKey((current) => activeAfterChange(current, list, removed, show));
+        for (const ref of removed ?? []) {
+          forgetCheckout(ref);
+          if (ref.worktree === undefined) {
+            forgetSandboxed(ref.projectId);
+          }
         }
-        const opened = added !== undefined && removed === undefined ? list.find((project) => project.id === added) : undefined;
-        if (opened && !opened.mainPath) {
+        const opened = added?.find((ref) => ref.worktree === undefined);
+        const project = opened && list.find((entry) => entry.id === opened.projectId);
+        if (project) {
           void window.tet.startup.anyAgentInstalled().then((installed) => {
             if (!installed) {
-              setSbxSettingsProject(opened);
+              setSbxSettingsProject(project);
             }
           });
         }
       }),
-    [forgetProject]
+    [forgetCheckout, forgetSandboxed]
   );
 
   const readSandboxed = useCallback(async (projectId: string) => {
@@ -356,19 +364,22 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
 
   /**
-   * Shows a tab opened from outside the terminals pane, bringing its project to front — a one-off
+   * Shows a tab opened from outside the terminals pane, bringing its checkout to front — a one-off
    * write into the layout (`placeTab`: a saved command's goes where its line last lay).
    */
   const showTab = useCallback(
-    (projectId: string, tabId: string, command?: string) => {
-      setActiveProjectId(projectId);
-      placeTab(projectId, tabId, command);
+    (key: string, tabId: string, command?: string) => {
+      setActiveKey(key);
+      placeTab(key, tabId, command);
     },
     [placeTab]
   );
 
   // A control-channel tab, shown like a saved command's: drawing it starts its process.
-  useEffect(() => window.tet.terminals.onShow(({ projectId, tabId }) => showTab(projectId, tabId)), [showTab]);
+  useEffect(
+    () => window.tet.terminals.onShow(({ checkout, tabId }) => showTab(checkoutKey(checkout), tabId)),
+    [showTab]
+  );
 
   const [focused, setFocused] = useState(() => document.hasFocus());
   useEffect(() => {
@@ -383,21 +394,24 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
   const covered = useWindowCovered();
 
+  const activeCheckout = (activeKey ? checkouts[activeKey] : undefined) ?? null;
+
   /**
-   * The active project's tabs in front of the user (`tabsInFront`) — the one definition marks,
+   * The active checkout's tabs in front of the user (`tabsInFront`) — the one definition marks,
    * `seen` and toasts (`terminals.inFront`) go by. Identity-stable: it is reported on change.
    */
   const inFrontRef = useRef<string[]>(NO_IDS);
   const inFront = useMemo(() => {
-    const next = activeProjectId ? tabsInFront(layouts[activeProjectId] ?? DEFAULT_LAYOUT, focused, covered) : NO_IDS;
+    const next = activeKey ? tabsInFront(layouts[activeKey] ?? DEFAULT_LAYOUT, focused, covered) : NO_IDS;
     inFrontRef.current = sameList(inFrontRef.current, next, NO_IDS);
     return inFrontRef.current;
-  }, [focused, covered, activeProjectId, layouts]);
+  }, [focused, covered, activeKey, layouts]);
 
   // May include editor tabs, which match no tab in the main process.
+  const activeRef = activeCheckout?.ref ?? null;
   useEffect(() => {
-    window.tet.terminals.inFront(activeProjectId, inFront);
-  }, [activeProjectId, inFront]);
+    window.tet.terminals.inFront(activeRef, inFront);
+  }, [activeRef, inFront]);
 
   /**
    * Finished or waiting sessions not in front of the user, oldest first — the tab strip's marks and
@@ -406,13 +420,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * decide.
    */
   const markedTabs = useCallback(
-    (projectId: string, field: "finishedAt" | "waitingAt"): TerminalDescriptor[] => {
-      const onScreen = projectId === activeProjectId ? inFront : NO_IDS;
-      return (tabs[projectId] ?? [])
+    (key: string, field: "finishedAt" | "waitingAt"): TerminalDescriptor[] => {
+      const onScreen = key === activeKey ? inFront : NO_IDS;
+      return (tabs[key] ?? [])
         .filter((tab) => tab[field] !== undefined && !onScreen.includes(tab.tabId))
         .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
     },
-    [tabs, inFront, activeProjectId]
+    [tabs, inFront, activeKey]
   );
 
   /**
@@ -420,43 +434,43 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * screen included: the bar is about the pane's own tabs.
    */
   const startingTabs = useCallback(
-    (projectId: string): TerminalDescriptor[] => (tabs[projectId] ?? []).filter((tab) => tab.starting === true),
+    (key: string): TerminalDescriptor[] => (tabs[key] ?? []).filter((tab) => tab.starting === true),
     [tabs]
   );
 
   /**
-   * The above as tab ids plus `busy` (`ProjectMarks`), per project, identity-stable where unchanged:
+   * The above as tab ids plus `busy` (`CheckoutMarks`), per checkout, identity-stable where unchanged:
    * panes and the project list take them as props, and most pushes change nothing here. `busy`
    * includes the tab on screen (a spinner is about now) but not one waiting on a question: that
    * session is not working, and both marks would stand side by side.
    */
-  const marksRef = useRef<Record<string, ProjectMarks>>({});
+  const marksRef = useRef<Record<string, CheckoutMarks>>({});
   const marks = useMemo(() => {
-    const next: Record<string, ProjectMarks> = {};
-    for (const projectId of Object.keys(tabs)) {
-      const previous = marksRef.current[projectId];
-      next[projectId] = {
-        finished: sameList(previous?.finished, markedTabs(projectId, "finishedAt").map((tab) => tab.tabId), NO_IDS),
-        waiting: sameList(previous?.waiting, markedTabs(projectId, "waitingAt").map((tab) => tab.tabId), NO_IDS),
-        starting: sameList(previous?.starting, startingTabs(projectId).map((tab) => tab.tabId), NO_IDS),
-        busy: (tabs[projectId] ?? []).some(isWorking)
+    const next: Record<string, CheckoutMarks> = {};
+    for (const key of Object.keys(tabs)) {
+      const previous = marksRef.current[key];
+      next[key] = {
+        finished: sameList(previous?.finished, markedTabs(key, "finishedAt").map((tab) => tab.tabId), NO_IDS),
+        waiting: sameList(previous?.waiting, markedTabs(key, "waitingAt").map((tab) => tab.tabId), NO_IDS),
+        starting: sameList(previous?.starting, startingTabs(key).map((tab) => tab.tabId), NO_IDS),
+        busy: (tabs[key] ?? []).some(isWorking)
       };
     }
     return stableRecord(marksRef, next);
   }, [tabs, markedTabs, startingTabs]);
 
   /**
-   * The project row's HEAD, first remote and dirty flag, identity-stable where unchanged (`states`
+   * A row's HEAD, first remote and dirty flag, by checkout, identity-stable where unchanged (`states`
    * is fresh on every push, so every field is a value — the remote by what the row shows of it).
    * No git call of its own: `changes` comes with every refresh.
    */
-  const headsRef = useRef<Record<string, ProjectHead>>({});
+  const headsRef = useRef<Record<string, CheckoutHead>>({});
   const heads = useMemo(() => {
-    const next: Record<string, ProjectHead> = {};
-    for (const [projectId, state] of Object.entries(states)) {
+    const next: Record<string, CheckoutHead> = {};
+    for (const [key, state] of Object.entries(states)) {
       const base = state.worktrees.find((worktree) => worktree.current)?.base;
       const target = worktreeBase(state);
-      next[projectId] = {
+      next[key] = {
         head: state.head,
         detached: state.detached,
         upstream: state.upstream,
@@ -480,26 +494,26 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    */
   const busyCursor = useRef<Record<string, string>>({});
   const showBusy = useCallback(
-    (projectId: string) => {
-      const working = (tabsRef.current[projectId] ?? []).filter(isWorking);
+    (key: string) => {
+      const working = (tabsRef.current[key] ?? []).filter(isWorking);
       if (working.length === 0) {
         return;
       }
       // -1 when the last shown tab stopped or is gone; the index wraps.
-      const at = working.findIndex((tab) => tab.tabId === busyCursor.current[projectId]);
+      const at = working.findIndex((tab) => tab.tabId === busyCursor.current[key]);
       const next = working[(at + 1) % working.length];
-      busyCursor.current[projectId] = next.tabId;
-      showTab(projectId, next.tabId);
+      busyCursor.current[key] = next.tabId;
+      showTab(key, next.tabId);
     },
     [showTab]
   );
 
   /** The project row's marks: the oldest finished session first, and the longest-waiting question. */
   const [showFinished, showWaiting] = useMemo(() => {
-    const showFirst = (mark: "finished" | "waiting") => (projectId: string) => {
-      const next = marksRef.current[projectId]?.[mark][0];
+    const showFirst = (mark: "finished" | "waiting") => (key: string) => {
+      const next = marksRef.current[key]?.[mark][0];
       if (next) {
-        showTab(projectId, next);
+        showTab(key, next);
       }
     };
     return [showFirst("finished"), showFirst("waiting")];
@@ -512,20 +526,20 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * it would cost an IPC per push.
    */
   useEffect(() => {
-    if (!activeProjectId) {
+    if (!activeRef) {
       return;
     }
-    for (const tab of tabs[activeProjectId] ?? []) {
+    for (const tab of tabs[checkoutKey(activeRef)] ?? []) {
       if (inFront.includes(tab.tabId) && tab.finishedAt !== undefined) {
-        window.tet.terminals.seen(activeProjectId, tab.tabId);
+        window.tet.terminals.seen(activeRef, tab.tabId);
       }
     }
-  }, [activeProjectId, inFront, tabs]);
+  }, [activeRef, inFront, tabs]);
 
-  /** A shell tab — the project row's "terminal". */
+  /** A shell tab — a row's "terminal". */
   const openTerminal = useCallback(
-    (projectId: string) => {
-      void window.tet.terminals.create(projectId, "shell").then((tab) => showTab(projectId, tab.tabId));
+    (checkout: CheckoutRef) => {
+      void window.tet.terminals.create(checkout, "shell").then((tab) => showTab(checkoutKey(checkout), tab.tabId));
     },
     [showTab]
   );
@@ -536,55 +550,55 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    */
   const showNeedsAttention = useCallback(() => {
     // Through `markedTabs`, so the "not on screen" rule stays in one place.
-    const collect = (field: "waitingAt" | "finishedAt"): { projectId: string; tab: TerminalDescriptor }[] =>
+    const collect = (field: "waitingAt" | "finishedAt"): { key: string; tab: TerminalDescriptor }[] =>
       Object.keys(tabs)
-        .flatMap((projectId) => markedTabs(projectId, field).map((tab) => ({ projectId, tab })))
+        .flatMap((key) => markedTabs(key, field).map((tab) => ({ key, tab })))
         .sort((a, b) => (a.tab[field] ?? 0) - (b.tab[field] ?? 0));
     const next = collect("waitingAt")[0] ?? collect("finishedAt")[0];
     if (next) {
-      showTab(next.projectId, next.tab.tabId);
+      showTab(next.key, next.tab.tabId);
     }
   }, [tabs, markedTabs, showTab]);
 
   /** Ctrl/Cmd+Shift+./, — within the focused pane. */
   const cycleTab = useCallback(
     (direction: 1 | -1) => {
-      if (!activeProjectId) {
+      if (!activeKey) {
         return;
       }
-      const layout = layouts[activeProjectId] ?? DEFAULT_LAYOUT;
-      const list = (stripTabs[activeProjectId] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane);
+      const layout = layouts[activeKey] ?? DEFAULT_LAYOUT;
+      const list = (stripTabs[activeKey] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane);
       if (list.length === 0) {
         return;
       }
       const at = list.findIndex((tab) => tab.tabId === layout.activeTab[layout.focusedPane]);
       const next = list[(at + direction + list.length) % list.length];
-      activateTab(activeProjectId, next.tabId, layout.focusedPane);
+      activateTab(activeKey, next.tabId, layout.focusedPane);
     },
-    [activeProjectId, stripTabs, layouts, activateTab]
+    [activeKey, stripTabs, layouts, activateTab]
   );
 
   /** Ctrl/Cmd+Shift+T. */
   const newShellTab = useCallback(() => {
-    if (activeProjectId) {
-      openTerminal(activeProjectId);
+    if (activeRef) {
+      openTerminal(activeRef);
     }
-  }, [activeProjectId, openTerminal]);
+  }, [activeRef, openTerminal]);
 
   /**
-   * Refresh on window focus, for changes the watcher missed. Only the project on screen — each
+   * Refresh on window focus, for changes the watcher missed. Only the checkout on screen — each
    * other would cost three git processes for a state nobody reads.
    */
   useEffect(() => {
-    if (!activeProjectId) {
+    if (!activeRef) {
       return;
     }
     const onFocus = (): void => {
-      void window.tet.repository.refresh(activeProjectId);
+      void window.tet.repository.refresh(activeRef);
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [activeProjectId]);
+  }, [activeRef]);
 
   /**
    * The window's shortcuts, on `document` in the capture phase to beat xterm's textarea listener.
@@ -624,8 +638,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
-  const activeState = (activeProjectId ? states[activeProjectId] : undefined) ?? EMPTY_REPOSITORY_STATE;
+  const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
 
   // Stable handles, so memoized views re-render only for what they show.
   const openAdd = useCallback(() => setAddOpen(true), []);
@@ -638,13 +651,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   );
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
   /**
-   * The project row's git mark: switches to the project and slides git out; on the shown project,
-   * the strip's toggle.
+   * A row's git mark: switches to the checkout and slides git out; on the shown checkout, the
+   * strip's toggle.
    */
   const showChanges = useCallback(
-    (projectId: string) => {
-      setActiveProjectId(projectId);
-      if (projectId === activeProjectIdRef.current) {
+    (key: string) => {
+      setActiveKey(key);
+      if (key === activeKeyRef.current) {
         toggleSideView("git");
       } else {
         setFilesShown(false);
@@ -668,12 +681,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    *
    * Handed as is to every way in but the changes list (`openActiveDiff`) — the Explorer, its
    * search, a path ctrl-clicked in a terminal, a Markdown preview's link: the file itself, in the
-   * project the view names.
+   * checkout the view names.
    */
   const openEditor = useCallback(
-    (projectId: string, path: string, how: OpenEditor = {}) => {
-      const open = editorTabsRef.current[projectId]?.find((tab) => tab.path === path);
-      const preview = how.keep ? undefined : previewEditorTab(projectId);
+    (checkout: CheckoutRef, path: string, how: OpenEditor = {}) => {
+      const key = checkoutKey(checkout);
+      const open = editorTabsRef.current[key]?.find((tab) => tab.path === path);
+      const preview = how.keep ? undefined : previewEditorTab(checkout);
       let tabId: string;
       if (open) {
         tabId = open.tabId;
@@ -691,26 +705,26 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         }
       } else if (preview !== undefined) {
         tabId = preview;
-        openEditorFile(projectId, tabId, path, true, how);
+        openEditorFile(checkout, tabId, path, true, how);
         setEditorTabs((current) => ({
           ...current,
-          [projectId]: (current[projectId] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
+          [key]: (current[key] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
         }));
       } else {
         tabId = nextEditorTabId();
-        openEditorFile(projectId, tabId, path, how.keep !== true, how);
-        setEditorTabs((current) => ({ ...current, [projectId]: [...(current[projectId] ?? []), { tabId, projectId, path }] }));
+        openEditorFile(checkout, tabId, path, how.keep !== true, how);
+        setEditorTabs((current) => ({ ...current, [key]: [...(current[key] ?? []), { tabId, checkout, path }] }));
       }
-      activateTab(projectId, tabId);
+      activateTab(key, tabId);
     },
     [activateTab]
   );
   // A file the control channel asked for, brought to front.
   useEffect(
     () =>
-      window.tet.repository.onOpenEditor(({ projectId, path, keep }) => {
-        setActiveProjectId(projectId);
-        openEditor(projectId, path, { keep });
+      window.tet.repository.onOpenEditor(({ checkout, path, keep }) => {
+        setActiveKey(checkoutKey(checkout));
+        openEditor(checkout, path, { keep });
       }),
     [openEditor]
   );
@@ -729,21 +743,21 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The changes list's, the one view that opens a file against HEAD. */
   const openActiveDiff = useCallback(
     (path: string, how?: OpenEditor) => {
-      if (activeProjectId) {
-        openEditor(activeProjectId, path, { ...how, diff: true });
+      if (activeRef) {
+        openEditor(activeRef, path, { ...how, diff: true });
       }
     },
-    [activeProjectId, openEditor]
+    [activeRef, openEditor]
   );
-  /** Disposes the editors; the layout collapses a pane left empty. */
-  const closeEditors = useCallback((projectId: string, tabIds: string[]) => {
+  /** Disposes the editors; the layout collapses a pane left empty. By checkout key. */
+  const closeEditors = useCallback((key: string, tabIds: string[]) => {
     void canDiscardEdits(tabIds).then((discard) => {
       if (!discard) {
         return;
       }
       setEditorTabs((current) => {
-        const rest = (current[projectId] ?? []).filter((tab) => !tabIds.includes(tab.tabId));
-        return rest.length > 0 ? { ...current, [projectId]: rest } : forget(current, projectId);
+        const rest = (current[key] ?? []).filter((tab) => !tabIds.includes(tab.tabId));
+        return rest.length > 0 ? { ...current, [key]: rest } : forget(current, key);
       });
       for (const tabId of tabIds) {
         disposeEditor(tabId);
@@ -763,9 +777,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         <div className="sidebar" style={{ width: sidebarWidth }}>
           <ProjectList
             projects={projects}
-            activeProjectId={activeProjectId}
-            onSelect={setActiveProjectId}
-            onClose={closeProject}
+            checkouts={checkouts}
+            activeKey={activeKey}
+            onSelect={select}
+            onRemove={removeProject}
             onReorder={reorderProjects}
             onAdd={openAdd}
             heads={heads}
@@ -777,7 +792,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             onShowFinished={showFinished}
             onShowWaiting={showWaiting}
             onSbxSettings={openSbxSettings}
-            runIn={runInProject}
+            runIn={runIn}
             gitBusy={projectListBusy}
             worktreesSupported={worktreesSupported}
           />
@@ -789,7 +804,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             reverse
             onResize={setCommandsHeight}
           />
-          <CommandList projectId={activeProjectId} height={commandsHeight} editable={!activeProject?.mainPath} onOpenTab={showTab} />
+          <CommandList checkout={activeCheckout} height={commandsHeight} onOpenTab={showTab} />
         </div>
         <Sash
           orientation="vertical"
@@ -799,10 +814,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           onResize={setSidebarWidth}
         />
 
-        {/* One side pane for all projects, in the DOM at width 0 while in (so a slide has a box to
+        {/* One side pane for all checkouts, in the DOM at width 0 while in (so a slide has a box to
             transition). Both views stay mounted, hidden while not shown, so a switch keeps
             selection, filter, open folders and a running action's bar. */}
-        {activeProject && (
+        {activeCheckout && (
           <>
             <div
               className={`side-pane${sideSliding ? " sliding" : ""}`}
@@ -810,29 +825,23 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               onTransitionEnd={stopSliding}
             >
               <FilesPane
-                project={activeProject}
+                checkout={activeCheckout}
                 state={activeState}
                 shown={sideView === "files"}
-                openPath={
-                  activeProjectId
-                    ? (editorTabs[activeProjectId]?.find((tab) => tab.tabId === activeEditors[activeProjectId])?.path ?? null)
-                    : null
-                }
+                openPath={editorTabs[activeCheckout.key]?.find((tab) => tab.tabId === activeEditors[activeCheckout.key])?.path ?? null}
                 onOpenFile={openEditor}
                 searchHeight={fileSearchHeight}
                 onSearchHeight={setFileSearchHeight}
               />
               <GitPane
-                project={activeProject}
+                checkout={activeCheckout}
                 state={activeState}
                 shown={sideView === "git"}
                 branch={activeBranch}
                 treeHeight={branchTreeHeight}
                 onTreeHeight={setBranchTreeHeight}
                 onOpenDiff={openActiveDiff}
-                onOpenWorktree={openWorktree}
-                canCloseWorktree={canCloseWorktree}
-                worktreesSupported={worktreesSupported}
+                onSelect={select}
               />
             </div>
             {sideView && (
@@ -848,31 +857,31 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         )}
 
         <main className="content">
-          {/* Every project's terminals stay mounted, so switching keeps buffers and processes. */}
-          {projects.map((project) => (
+          {/* Every checkout's terminals stay mounted, so switching keeps buffers and processes. */}
+          {Object.values(checkouts).map((checkout) => (
             <TerminalsPane
-              key={project.id}
-              project={project}
-              tabs={stripTabs[project.id] ?? NO_TABS}
-              visible={project.id === activeProjectId}
+              key={checkout.key}
+              checkout={checkout}
+              tabs={stripTabs[checkout.key] ?? NO_TABS}
+              visible={checkout.key === activeKey}
               sideView={sideView}
               onToggleSideView={toggleSideView}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
-              externalBusy={starting[project.id] === true && (marks[project.id]?.starting ?? NO_IDS).length === 0}
+              externalBusy={starting[checkout.key] === true && (marks[checkout.key]?.starting ?? NO_IDS).length === 0}
               onOpenFile={openEditor}
               onCloseEditors={closeEditors}
-              layout={layouts[project.id] ?? DEFAULT_LAYOUT}
+              layout={layouts[checkout.key] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
               onSnapTab={snapTab}
               onFocusPane={focusPane}
               onOpenSettings={openSettings}
-              finishedTabIds={marks[project.id]?.finished ?? NO_IDS}
-              waitingTabIds={marks[project.id]?.waiting ?? NO_IDS}
-              startingTabIds={marks[project.id]?.starting ?? NO_IDS}
+              finishedTabIds={marks[checkout.key]?.finished ?? NO_IDS}
+              waitingTabIds={marks[checkout.key]?.waiting ?? NO_IDS}
+              startingTabIds={marks[checkout.key]?.starting ?? NO_IDS}
             />
           ))}
-          {!activeProject && (
+          {!activeCheckout && (
             <div className="empty-workspace">
               <p>No repository open.</p>
               <button className="button" onClick={openAdd}>
@@ -886,13 +895,19 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 
-      {settingsOpen && <SettingsDialog activeProject={activeProject?.mainPath ? null : activeProject} onClose={closeSettings} />}
+      {/* A worktree takes its project's Explorer view and never changes it (tet-json.ts's configRoot). */}
+      {settingsOpen && (
+        <SettingsDialog
+          activeProject={activeRef?.worktree === undefined ? (projects.find((project) => project.id === activeRef?.projectId) ?? null) : null}
+          onClose={closeSettings}
+        />
+      )}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
       {envRequest && (
         <EnvDialog
           key={envRequest.id}
           request={envRequest}
-          requester={requesterOf(envRequest, projects, tabs, agents)}
+          requester={requesterOf(envRequest, checkouts, tabs, agents)}
           onClose={closeEnvRequest}
         />
       )}

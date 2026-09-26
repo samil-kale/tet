@@ -44,14 +44,17 @@ const trashContents = (): string[] =>
 
 const opened: Repository[] = [];
 
-/** A started Repository on `dir`, disposed after the file. */
+/** A started Repository on `dir`, disposed after the file. `worktreeKeyOf` stands in for
+ *  project-dirs.ts's: which worktrees TET made. */
 async function open(
   dir: string,
   // The remotes are mostly folders, which take no login.
-  logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-")))
+  logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-"))),
+  worktreeKeyOf: (worktreePath: string) => string | undefined = () => undefined
 ): Promise<Repository> {
   const repository = new Repository(
-    { id: path.basename(dir), path: dir, name: path.basename(dir) },
+    { ref: { projectId: path.basename(dir) }, path: dir, name: () => path.basename(dir) },
+    worktreeKeyOf,
     () => undefined,
     () => undefined,
     () => undefined,
@@ -241,7 +244,8 @@ describe("worktrees, each with a branch of its own", () => {
     git(dir, "add", "b.txt");
     git(dir, "commit", "-q", "-m", "ahead of base");
     worktrees = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-wts-"));
-    repository = await open(dir);
+    // "second" stands for one TET made, the others for ones made elsewhere.
+    repository = await open(dir, undefined, (worktreePath) => (path.basename(worktreePath) === "second" ? "k2" : undefined));
   });
 
   it("makes a new branch at its base, untracked, recorded, linked relatively", async () => {
@@ -261,16 +265,16 @@ describe("worktrees, each with a branch of its own", () => {
     assert.ok(!fs.existsSync(at("taken")));
   });
 
-  it("lists the worktrees off the disk, main first, with their branches and bases", async () => {
+  it("lists the worktrees off the disk, main first, with their branches, bases and TET's keys", async () => {
     assert.deepEqual(await repository.addWorktree(at("second"), "second", { name: "main" }), { ok: true });
     // One made outside tet has no base.
     git(dir, "worktree", "add", "-q", "-b", "third", at("third"));
     const { worktrees: listed } = await repository.refresh();
-    assert.deepEqual(listed[0], { path: real(dir), branch: "main", base: undefined, main: true, current: true });
+    assert.deepEqual(listed[0], { path: real(dir), branch: "main", base: undefined, key: undefined, main: true, current: true });
     assert.deepEqual(listed.slice(1), [
-      { path: real(at("fresh")), branch: "fresh", base: "base", main: false, current: false },
-      { path: real(at("second")), branch: "second", base: "main", main: false, current: false },
-      { path: real(at("third")), branch: "third", base: undefined, main: false, current: false }
+      { path: real(at("fresh")), branch: "fresh", base: "base", key: undefined, main: false, current: false },
+      { path: real(at("second")), branch: "second", base: "main", key: "k2", main: false, current: false },
+      { path: real(at("third")), branch: "third", base: undefined, key: undefined, main: false, current: false }
     ]);
     git(dir, "worktree", "remove", at("third"));
     git(at("fresh"), "switch", "-q", "--detach");
@@ -296,29 +300,15 @@ describe("worktrees, each with a branch of its own", () => {
     assert.ok(!repository.getState().worktrees.some((worktree) => worktree.branch === "second"));
   });
 
-  it("renames a branch checked out in a worktree, which follows it with its base, and moves the folder", async () => {
+  // A worktree's rename: its folder stays (projects.ts).
+  it("renames a branch checked out in a worktree, which follows it with its base", async () => {
     assert.deepEqual(await repository.renameBranch("fresh", "renamed"), { ok: true });
     assert.equal(git(at("fresh"), "branch", "--show-current"), "renamed");
     assert.equal(git(dir, "config", "branch.renamed.base"), "base");
-    assert.deepEqual(await repository.moveWorktree(at("fresh"), at("renamed")), { ok: true });
-    assert.equal(git(at("renamed"), "branch", "--show-current"), "renamed");
-    // Still relative, or a sandbox loses it.
-    assert.match(fs.readFileSync(path.join(at("renamed"), ".git"), "utf8"), /^gitdir: \.\./);
-  });
-
-  // What projects.ts's renameWorktree does for a rename by case alone, which git refuses directly
-  // where names are case-insensitive (measured on win32: "Invalid argument").
-  it("moves a worktree by case alone through a name of its own", async () => {
-    assert.deepEqual(await repository.moveWorktree(at("renamed"), at("Renamed.tet-rename")), { ok: true });
-    assert.deepEqual(await repository.moveWorktree(at("Renamed.tet-rename"), at("Renamed")), { ok: true });
-    assert.ok(fs.readdirSync(worktrees).includes("Renamed"));
-    assert.equal(git(at("Renamed"), "branch", "--show-current"), "renamed");
-    assert.deepEqual(await repository.moveWorktree(at("Renamed"), at("back.tet-rename")), { ok: true });
-    assert.deepEqual(await repository.moveWorktree(at("back.tet-rename"), at("renamed")), { ok: true });
   });
 
   it("forgets a worktree whose folder is gone", async () => {
-    fs.rmSync(at("renamed"), { recursive: true, force: true });
+    fs.rmSync(at("fresh"), { recursive: true, force: true });
     assert.deepEqual(await repository.pruneWorktrees(), { ok: true });
     assert.deepEqual(repository.getState().worktrees.map((worktree) => worktree.branch), ["main"]);
   });

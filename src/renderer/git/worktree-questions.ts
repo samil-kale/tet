@@ -1,29 +1,37 @@
 import { WORKTREES_NEED_GIT } from "../../shared/types";
-import type { GitActionResult, WorktreeRef } from "../../shared/types";
+import type { CheckoutRef, GitActionResult } from "../../shared/types";
+import { canDiscardCheckoutEdits } from "../diff/editor-views";
 import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, questionUp } from "../ui/Dialog";
 
 /**
- * The worktree questions, asked alike from a project row and from the branch tree's WORKTREES:
+ * The worktree questions, asked alike from a sidebar row and from the branch tree's WORKTREES:
  * each view hands in how it runs a command (`GitRun`: its progress bar, and the failure either
- * notified or handed back to the field it was typed in) and, where the worktree is an open project,
- * whether its unsaved editor edits may go with its terminals.
+ * notified or handed back to the field it was typed in).
  *
- * A worktree and its branch are one (projects.ts): made together under one name, renamed and
- * deleted together.
+ * A worktree and its branch are one (projects.ts): made together, named by the branch, deleted
+ * together.
  */
-/** "New worktree" or "Rename worktree" in a menu: disabled, saying why, where git is too old
- *  (Requirements.worktrees). */
-export function worktreeEntry(label: string, supported: boolean, run: (() => void) | undefined): ContextMenuEntry {
-  return supported ? { label: `${label}...`, run } : { label: `${label} (${WORKTREES_NEED_GIT})` };
+/** Why a worktree git lists offers nothing but its path: TET never opens one it did not make. */
+export const NOT_MADE_BY_TET = "not created by TET";
+
+/** A worktree entry in a menu, disabled saying `why` where there is a reason: git too old to create
+ *  one (Requirements.worktrees), or one TET did not make. */
+export function worktreeEntry(label: string, why: string | undefined, run: (() => void) | undefined): ContextMenuEntry {
+  return why === undefined ? { label: `${label}...`, run } : { label: `${label} (${why})` };
+}
+
+/** Why "New worktree" is disabled, if it is. */
+export function newWorktreeRefusal(supported: boolean): string | undefined {
+  return supported ? undefined : WORKTREES_NEED_GIT;
 }
 
 /** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
 export async function askNewWorktree(projectId: string, run: GitRun, base: string): Promise<void> {
   await askName({
     title: "New worktree",
-    detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/worktrees.`,
+    detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/projects.`,
     confirmLabel: "Create worktree",
     // The name is the branch's, so git refuses the same names here; shown at the field.
     submit: (name) =>
@@ -34,35 +42,28 @@ export async function askNewWorktree(projectId: string, run: GitRun, base: strin
   });
 }
 
-/** Its terminals end first, which unsaved editor edits get a say in, as on a close. */
-export async function askRenameWorktree(
-  worktree: WorktreeRef,
-  branch: string,
-  run: GitRun,
-  canClose: () => Promise<boolean>
-): Promise<void> {
+/** Renames the worktree's branch, which names it; the folder stays, and so do its terminals. Run in
+ *  the main worktree, whose state lists the worktrees. */
+export async function askRenameWorktree(projectId: string, branch: string, run: GitRun): Promise<void> {
   await askName({
     title: "Rename worktree",
-    detail: "Renames the worktree and its folder. Its terminals are closed first, and agent sessions started there can no longer be resumed.",
+    detail: "Renames its branch. Its terminals keep running.",
     current: branch,
     confirmLabel: "Rename",
-    // Its unsaved edits kept it: nothing to say, and the question is done.
-    submit: async (name) =>
-      (await canClose()) ? run.ask(`Renaming ${branch}...`, () => window.tet.projects.renameWorktree(worktree, name)) : undefined
+    submit: (name) => run.ask(`Renaming ${branch}...`, () => window.tet.repository.renameBranch({ projectId }, branch, name))
   });
 }
 
 /**
  * GitHub Desktop's two questions: whether to delete, then — once the main process found changes,
  * before closing anything — whether to delete them too. The branch goes along; its upstream is a
- * checkbox, as on a branch's own delete.
+ * checkbox, as on a branch's own delete. Its unsaved editor edits get a say, as on a close.
  */
 export async function askDeleteWorktree(
-  worktree: WorktreeRef,
+  worktree: CheckoutRef,
   branch: string,
   upstream: string | undefined,
-  run: GitRun,
-  canClose: () => Promise<boolean>
+  run: GitRun
 ): Promise<void> {
   const answer = await confirm({
     title: "Delete worktree",
@@ -71,7 +72,7 @@ export async function askDeleteWorktree(
     confirmLabel: "Delete worktree",
     checkboxLabel: upstream ? `Also delete ${upstream} on the remote` : undefined
   });
-  if (!answer.confirmed || !(await canClose())) {
+  if (!answer.confirmed || !(await canDiscardCheckoutEdits(worktree))) {
     return;
   }
   const options = { force: false, onRemote: answer.checked };

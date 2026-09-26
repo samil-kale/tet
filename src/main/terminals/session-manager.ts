@@ -10,20 +10,22 @@ import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
 import { isSbxAgent } from "../../shared/types";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
+import { checkoutKey } from "../../shared/types";
 import type {
   AgentId,
+  CheckoutRef,
   NoticeSeverity,
-  Project,
   ProjectCommand,
   TerminalDescriptor,
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
-import { configRoot, readSbxConfig } from "../tet-json";
+import type { Checkout } from "../checkout";
+import { hostDir, sandboxDir } from "../project-dirs";
+import { readSbxConfig } from "../tet-json";
 import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
-import { agentDirFor } from "./agent-data";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
 import { sandboxSessionDir, toContainerPath } from "./hook-target";
 import { reportApplies } from "./turn-order";
@@ -48,7 +50,7 @@ const MAX_RECORDED_EVENTS = 200;
 const CONTROL_START_SIZE = { cols: 120, rows: 30 };
 // Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
-// Across managers, so a project reopened in this run never reuses a closed tab's id — and token.
+// Across managers, so a checkout reopened in this run never reuses a closed tab's id — and token.
 let newTabCounter = 0;
 /**
  * A shell-only token, refused in a saved command (no shell runs it). Whole tokens only — `2>&1`
@@ -88,20 +90,20 @@ interface TabState extends TerminalDescriptor {
   executable?: string;
   /** A saved command's arguments — its program's, or a shell's when it asked for one. */
   runArgs?: string[];
-  /** The process's folder, when not the project root. */
+  /** The process's folder, when not the checkout root. */
   cwd?: string;
   /** A saved command's variables, outranking the machine's. */
   env?: Record<string, string>;
 }
 
-/** Per-agent state within one project. */
+/** Per-agent state within one checkout. */
 interface AgentRuntime {
   agent: AgentDefinition;
   executable: string;
-  /** Startable here: the host executable, or the project's sandbox standing in (sbxOnly). */
+  /** Startable here: the host executable, or the checkout's sandbox standing in (sbxOnly). */
   startable: boolean;
   /**
-   * No host executable — startable only through the project's sandbox, with nothing to fall back
+   * No host executable — startable only through the checkout's sandbox, with nothing to fall back
    * to. Decided with the project's config; whether the sandbox is *reachable* is resolveSbxRun's
    * question, per spawn.
    */
@@ -127,11 +129,11 @@ interface AgentRuntime {
 }
 
 export interface SessionManagerCallbacks {
-  onTabs: (projectId: string, tabs: TerminalDescriptor[]) => void;
-  onOutput: (projectId: string, tabId: string, data: string) => void;
-  onStatus: (projectId: string, tabId: string, status: TerminalStatus) => void;
-  /** Whether anything in this project is still starting — drives the tab strip's bar. */
-  onStartupProgress: (projectId: string, show: boolean) => void;
+  onTabs: (ref: CheckoutRef, tabs: TerminalDescriptor[]) => void;
+  onOutput: (ref: CheckoutRef, tabId: string, data: string) => void;
+  onStatus: (ref: CheckoutRef, tabId: string, status: TerminalStatus) => void;
+  /** Whether anything in this checkout is still starting — drives the tab strip's bar. */
+  onStartupProgress: (ref: CheckoutRef, show: boolean) => void;
   onNotice: (severity: NoticeSeverity, message: string) => void;
 }
 
@@ -201,10 +203,9 @@ function answersQuestion(data: string): boolean {
 
 /** `starting` comes from the caller's `tabIndicators`. */
 function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
-  const { tabId, projectId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } = tab;
+  const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } = tab;
   return {
     tabId,
-    projectId,
     agentId,
     title,
     updatedAt,
@@ -231,10 +232,11 @@ function resumeArgsOf(tab: TabState, agent: AgentDefinition): string[] {
 }
 
 /**
- * One project's terminal tabs, mirroring the agents' persisted sessions: each session found at
- * open becomes a tab, and closing a tab deletes its session.
+ * One checkout's terminal tabs — a project's main worktree or one of its worktrees — mirroring the
+ * agents' persisted sessions: each session found at open becomes a tab, and closing a tab deletes
+ * its session.
  */
-export class ProjectSessionManager {
+export class CheckoutSessionManager {
   private tabs: TabState[] = [];
   private readonly sessions = new Map<string, TerminalSession>();
   private readonly runtimes = new Map<AgentId, AgentRuntime>();
@@ -270,23 +272,19 @@ export class ProjectSessionManager {
   private inFront: ReadonlySet<string> = new Set();
 
   constructor(
-    readonly project: Project,
+    /** The checkout its tabs run in. Its sandboxes take the project's sbx values (sbx-local.ts), as
+     *  it takes the project's tet.json (tet-json.ts's configRoot). */
+    readonly at: Checkout,
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
-    private readonly callbacks: SessionManagerCallbacks,
-    /** The project whose sbx values (sbx-local.ts) its sandboxes take: a worktree's main worktree's
-     *  while that is open, as it takes its tet.json (tet-json.ts's configRoot); else its own. */
-    private readonly sbxValuesId: () => string = () => project.id
+    private readonly callbacks: SessionManagerCallbacks
   ) {}
 
-  private agentDirOf(agentId: AgentId): string {
-    return agentDirFor(this.storageRoot, agentId, this.project.id);
-  }
-
-  /** See AgentDefinition.prepareSpawn. */
-  private pathsFor(runtime: AgentRuntime): AgentPaths {
-    const agentDir = this.agentDirOf(runtime.agent.id);
+  /** See AgentDefinition.prepareSpawn and prepareSandboxSpawn: each is handed its own side's folder,
+   *  created only when asked for. */
+  private pathsFor(runtime: AgentRuntime, side: "host" | "sandbox"): AgentPaths {
+    const agentDir = (side === "host" ? hostDir : sandboxDir)(this.storageRoot, this.at.ref, runtime.agent.id);
     fs.mkdirSync(agentDir, { recursive: true });
     return {
       agentDir,
@@ -341,11 +339,11 @@ export class ProjectSessionManager {
   }
 
   private postTabs(): void {
-    // A late post would revive a closed project in the renderer.
+    // A late post would revive a closed checkout in the renderer.
     if (this.disposed) {
       return;
     }
-    this.callbacks.onTabs(this.project.id, this.snapshot());
+    this.callbacks.onTabs(this.at.ref, this.snapshot());
   }
 
   /** What onStartupProgress last said — a bootstrap at app start runs before the window exists. */
@@ -360,7 +358,7 @@ export class ProjectSessionManager {
   private acquireIndicator(tabId?: string): void {
     this.indicators += 1;
     if (this.indicators === 1) {
-      this.callbacks.onStartupProgress(this.project.id, true);
+      this.callbacks.onStartupProgress(this.at.ref, true);
     }
     if (tabId !== undefined) {
       const count = this.tabIndicators.get(tabId) ?? 0;
@@ -378,7 +376,7 @@ export class ProjectSessionManager {
     }
     this.indicators -= 1;
     if (this.indicators === 0) {
-      this.callbacks.onStartupProgress(this.project.id, false);
+      this.callbacks.onStartupProgress(this.at.ref, false);
     }
     if (tabId !== undefined) {
       const count = this.tabIndicators.get(tabId) ?? 0;
@@ -403,7 +401,7 @@ export class ProjectSessionManager {
   }
 
   /**
-   * A project with no restored session opens one tab of the first installed agent with sessions
+   * A checkout with no restored session opens one tab of the first installed agent with sessions
    * (never the shell). Nothing spawns until the first resize; unused, it persists nothing.
    */
   private openFirstAgentTab(): void {
@@ -447,7 +445,7 @@ export class ProjectSessionManager {
     if (!agent.sessions) {
       return [];
     }
-    const onHost = agent.sessions.list(this.project.path);
+    const onHost = agent.sessions.list(this.at.path);
     const sandbox = agent.sessions.sandbox;
     if (!sandbox || !isSbxAgent(agent.id)) {
       return onHost;
@@ -455,14 +453,14 @@ export class ProjectSessionManager {
     // In parallel: the bootstrap listing, and what `logSlow` times on every reconcile.
     const [host, inSandbox] = await Promise.all([
       onHost,
-      sandbox.list(this.sandboxSessionRoot(agent.id), toContainerPath(this.project.path))
+      sandbox.list(this.sandboxSessionRoot(agent.id), toContainerPath(this.at.path))
     ]);
-    const name = sandboxName(this.project.id, agent.id);
+    const name = sandboxName(this.at.ref, agent.id);
     return [...host, ...inSandbox.map((info) => ({ ...info, sandbox: name }))];
   }
 
   private sandboxSessionRoot(agentId: AgentId): string {
-    return sandboxSessionDir(this.agentDirOf(agentId));
+    return sandboxSessionDir(sandboxDir(this.storageRoot, this.at.ref, agentId));
   }
 
   /**
@@ -478,16 +476,17 @@ export class ProjectSessionManager {
   ): { remove: (sessionId: string) => Promise<void>; rename: (sessionId: string, title: string) => Promise<void> } {
     const { agent, executable } = runtime;
     const sandbox = tab.sandbox ? sessions.sandbox : undefined;
-    if (!sandbox) {
+    const sandboxName = tab.sandbox;
+    if (!sandbox || sandboxName === undefined) {
       return {
-        remove: (sessionId) => sessions.remove(executable, this.project.path, sessionId),
-        rename: (sessionId, title) => sessions.rename(executable, this.project.path, sessionId, title)
+        remove: (sessionId) => sessions.remove(executable, this.at.path, sessionId),
+        rename: (sessionId, title) => sessions.rename(executable, this.at.path, sessionId, title)
       };
     }
     const root = this.sandboxSessionRoot(agent.id);
-    const cwd = toContainerPath(this.project.path);
+    const cwd = toContainerPath(this.at.path);
     return {
-      remove: (sessionId) => sandbox.remove(root, cwd, sessionId),
+      remove: (sessionId) => sandbox.remove(root, cwd, sessionId, sandboxName),
       rename: (sessionId, title) => sandbox.rename(root, cwd, sessionId, title)
     };
   }
@@ -498,7 +497,7 @@ export class ProjectSessionManager {
 
   private async prepareRuntime(runtime: AgentRuntime): Promise<void> {
     const { agent, executable } = runtime;
-    const cwd = this.project.path;
+    const cwd = this.at.path;
 
     if (agent.versionArgs) {
       runtime.startable = await isAgentInstalled(executable, agent.versionArgs, cwd);
@@ -540,7 +539,6 @@ export class ProjectSessionManager {
     for (const info of fresh) {
       this.tabs.push({
         tabId: info.id,
-        projectId: this.project.id,
         agentId: agent.id,
         sessionId: info.id,
         title: info.title,
@@ -570,7 +568,7 @@ export class ProjectSessionManager {
     }
     // During bootstrap, a running version check's "not startable" is not "no executable here".
     await Promise.all(sbxRuntimes.map((runtime) => runtime.ready));
-    const { enabled } = await readSbxConfig(this.project.path);
+    const { enabled } = await readSbxConfig(this.at.path);
     if (this.disposed) {
       return;
     }
@@ -602,7 +600,7 @@ export class ProjectSessionManager {
     for (const tab of this.tabs.filter((candidate) => candidate.status === "missing" && startable.has(candidate.agentId))) {
       this.sessions.delete(tab.tabId);
       tab.status = "ready";
-      this.callbacks.onStatus(this.project.id, tab.tabId, "ready");
+      this.callbacks.onStatus(this.at.ref, tab.tabId, "ready");
       if (this.lastSizes.has(tab.tabId)) {
         this.startTab(tab);
       }
@@ -661,9 +659,9 @@ export class ProjectSessionManager {
       return !runtime.prepareFailed;
     }
     try {
-      const paths = this.pathsFor(runtime);
+      const paths = this.pathsFor(runtime, "host");
       const preparation = await markStartup(`prepare ${agent.id}`, () =>
-        agent.prepareSpawn!(executable, this.project.path, paths)
+        agent.prepareSpawn!(executable, this.at.path, paths)
       );
       // Closed meanwhile: nothing may spawn from here on.
       if (this.disposed) {
@@ -688,12 +686,12 @@ export class ProjectSessionManager {
     if (runtime.stopWatching) {
       return;
     }
-    runtime.stopWatching = runtime.agent.sessions?.watch?.(this.project.path, () =>
+    runtime.stopWatching = runtime.agent.sessions?.watch?.(this.at.path, () =>
       this.scheduleReconcile(runtime, WATCH_DEBOUNCE_MS)
     );
   }
 
-  /** Whether the project still has this tab: main drops output it batched for one that closed
+  /** Whether the checkout still has this tab: main drops output it batched for one that closed
    *  before the batch was flushed (main.ts's flushOutput). */
   hasTab(tabId: string): boolean {
     return this.tabs.some((tab) => tab.tabId === tabId);
@@ -712,7 +710,7 @@ export class ProjectSessionManager {
       title: command.name ?? command.command,
       command: command.command,
       // `resolve`, not `join`, so an absolute folder is left alone.
-      cwd: command.cwd ? path.resolve(this.project.path, command.cwd) : undefined,
+      cwd: command.cwd ? path.resolve(this.at.path, command.cwd) : undefined,
       env: command.env
     };
     if (command.shell) {
@@ -741,7 +739,6 @@ export class ProjectSessionManager {
     newTabCounter += 1;
     const tab: TabState = {
       tabId: `new-${newTabCounter}`,
-      projectId: this.project.id,
       agentId,
       title: "",
       status: this.canStart(runtime) ? "ready" : "missing",
@@ -800,7 +797,7 @@ export class ProjectSessionManager {
         // size (`sent` in terminal-views.ts). resolveSbxRun has said why.
         if (sbxRun === "stranded") {
           tab.status = "error";
-          this.callbacks.onStatus(this.project.id, tabId, "error");
+          this.callbacks.onStatus(this.at.ref, tabId, "error");
           return;
         }
         this.startSession(tab, sbxRun).ensureStarted(dims.cols, dims.rows);
@@ -810,7 +807,7 @@ export class ProjectSessionManager {
         // Spawned nothing; `error` offers Restart, as above.
         if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
           tab.status = "error";
-          this.callbacks.onStatus(this.project.id, tabId, "error");
+          this.callbacks.onStatus(this.at.ref, tabId, "error");
         }
       })
       .finally(() => {
@@ -821,7 +818,7 @@ export class ProjectSessionManager {
   }
 
   /**
-   * The `sbx run` arguments if this tab runs in the project's sandbox; tet.json is read fresh per
+   * The `sbx run` arguments if this tab runs in the checkout's sandbox; tet.json is read fresh per
    * spawn. Only plain tabs of sbx agents (isSbxAgent), never a saved command's.
    *
    * A session runs where it lives: a host session fails to resume in a sandbox ("No conversation
@@ -838,22 +835,22 @@ export class ProjectSessionManager {
     if (tab.executable || !isSbxAgent(tab.agentId)) {
       return null;
     }
-    const config = await readSbxConfig(this.project.path);
+    const config = await readSbxConfig(this.at.path);
     if (!config.enabled) {
       // A notice only for a tab that cannot run on this machine.
       return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : null;
     }
-    const sandbox = sandboxName(this.project.id, tab.agentId);
+    const sandbox = sandboxName(this.at.ref, tab.agentId);
     // Started before it is known whether it may be used, since it is the slowest step and the
     // readiness check answers nothing it depends on (why that is safe: ensureRunning). Not for a
     // tab about to run on this machine, which would start a sandbox nobody asked for.
     const warm = tab.sessionId && !tab.sandbox ? undefined : ensureRunning(sandbox);
-    const ready = await checkSbxReady(this.project.path, this.project.id);
+    const ready = await checkSbxReady(this.at.path, this.at.ref);
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, ready.notReady)) {
         this.callbacks.onNotice(
           "warning",
-          `SBX is not available for ${this.project.name}: ${ready.notReady}. The tab does not start on this machine instead; the tab menu's Restart tries again once that has changed.`
+          `SBX is not available for ${this.at.name()}: ${ready.notReady}. The tab does not start on this machine instead; the tab menu's Restart tries again once that has changed.`
         );
       }
       return "stranded";
@@ -870,7 +867,7 @@ export class ProjectSessionManager {
       if (runtime.sbxOnly) {
         this.callbacks.onNotice(
           "warning",
-          `${agent.displayName} is not installed on this machine any more, and a session made here cannot be resumed in ${this.project.name}'s SBX sandbox. A new tab runs in the sandbox; this one cannot.`
+          `${agent.displayName} is not installed on this machine any more, and a session made here cannot be resumed in ${this.at.name()}'s SBX sandbox. A new tab runs in the sandbox; this one cannot.`
         );
         return "stranded";
       }
@@ -878,20 +875,20 @@ export class ProjectSessionManager {
         this.sbxPreexistingSaid = true;
         this.callbacks.onNotice(
           "info",
-          `${agent.displayName} tabs from before SBX was enabled for ${this.project.name} keep running on this machine; only new tabs run in its sandbox.`
+          `${agent.displayName} tabs from before SBX was enabled for ${this.at.name()} keep running on this machine; only new tabs run in its sandbox.`
         );
       }
       return null;
     }
-    const paths = this.pathsFor(runtime);
-    const hooks = agent.prepareSandboxSpawn?.(this.project.path, paths, sandbox) ?? { args: [] };
+    const paths = this.pathsFor(runtime, "sandbox");
+    const hooks = agent.prepareSandboxSpawn?.(this.at.path, paths) ?? { args: [] };
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
     const { args, env, problems } = await prepareSbxRun({
       agentId: tab.agentId,
-      projectId: this.project.id,
-      projectPath: this.project.path,
+      ref: this.at.ref,
+      checkoutPath: this.at.path,
       config,
-      knowledge: this.sbxLocal.knowledge(this.sbxValuesId()),
+      knowledge: this.sbxLocal.knowledge(this.at.ref.projectId),
       sandboxes: ready.sandboxes,
       organization: ready.organization,
       rules: ready.rules,
@@ -904,8 +901,8 @@ export class ProjectSessionManager {
         target: mount.target,
         file: mount.file
       })),
-      secretValues: this.sbxLocal.values(this.sbxValuesId(), "secrets"),
-      variableValues: this.sbxLocal.values(this.sbxValuesId(), "variables"),
+      secretValues: this.sbxLocal.values(this.at.ref.projectId, "secrets"),
+      variableValues: this.sbxLocal.values(this.at.ref.projectId, "variables"),
       onData: (data) => this.reportOutput(tab, data)
     });
     // tet.json as it stands was not all applied: one notice per option and reason (sbxProblemNotices).
@@ -926,10 +923,10 @@ export class ProjectSessionManager {
       return false;
     }
     const what = tab.sandbox
-      ? `This ${agent.displayName} session lives in ${this.project.name}'s SBX sandbox and cannot run on this machine`
+      ? `This ${agent.displayName} session lives in ${this.at.name()}'s SBX sandbox and cannot run on this machine`
       : tab.sandboxOnly
-        ? `This ${agent.displayName} tab was opened from ${this.project.name}'s SBX sandbox and cannot run on this machine`
-        : `${agent.displayName} is not installed on this machine and only runs in ${this.project.name}'s SBX sandbox`;
+        ? `This ${agent.displayName} tab was opened from ${this.at.name()}'s SBX sandbox and cannot run on this machine`
+        : `${agent.displayName} is not installed on this machine and only runs in ${this.at.name()}'s SBX sandbox`;
     this.callbacks.onNotice(
       "warning",
       `${what}: ${reason}. The tab menu's Restart tries again once that has changed.`
@@ -943,7 +940,7 @@ export class ProjectSessionManager {
    */
   private reportOutput(tab: TabState, data: string): void {
     if (this.tabs.includes(tab)) {
-      this.callbacks.onOutput(this.project.id, tab.tabId, data);
+      this.callbacks.onOutput(this.at.ref, tab.tabId, data);
     }
   }
 
@@ -975,13 +972,17 @@ export class ProjectSessionManager {
     const session = new TerminalSession(
       sbxRun ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),
       {
-        cwd: tab.cwd ?? this.project.path,
+        cwd: tab.cwd ?? this.at.path,
         env: sbxRun ? undefined : preparation?.env,
         // A saved command's variables, or those `sbx run -e NAME` passes on — never both, as a saved
         // command never runs in a sandbox. Over the machine's, so the sandbox gets the row's value.
         envOverride: sbxRun ? sbxRun.env : tab.env,
         // What `tet-ctl` in this tab reports as its caller — see src/shared/control.ts.
-        own: { [CONTROL_ENV.projectId]: this.project.id, [CONTROL_ENV.tabId]: tabId },
+        own: {
+          [CONTROL_ENV.projectId]: this.at.ref.projectId,
+          ...(this.at.ref.worktree !== undefined && { [CONTROL_ENV.worktree]: this.at.ref.worktree }),
+          [CONTROL_ENV.tabId]: tabId
+        },
         sandboxed: sbxRun !== null
       },
       {
@@ -995,7 +996,7 @@ export class ProjectSessionManager {
         },
         onStatusChange: (status) => {
           tab.status = status;
-          this.callbacks.onStatus(this.project.id, tabId, status);
+          this.callbacks.onStatus(this.at.ref, tabId, status);
           if (status === "stopped" || status === "error" || status === "missing") {
             this.scheduleReconcile(runtime);
             // A CLI killed mid-turn never reports its end.
@@ -1045,7 +1046,8 @@ export class ProjectSessionManager {
       return undefined;
     }
     try {
-      return await agent.resolveUrlPrefix(executable, this.project.path, tab.sessionId, prefix);
+      const cwd = tab.sandbox === undefined ? this.at.path : toContainerPath(this.at.path);
+      return await agent.resolveUrlPrefix(executable, cwd, tab.sessionId, prefix, tab.sandbox);
     } catch {
       return undefined;
     }
@@ -1360,8 +1362,8 @@ export class ProjectSessionManager {
     }
     const name = getAgent(tab.agentId).displayName;
     // The tab's title too, or two tabs of one agent would toast identically.
-    const repository = path.basename(this.project.path);
-    const where = tab.title ? `${repository} - ${tab.title}` : repository;
+    const checkout = this.at.name();
+    const where = tab.title ? `${checkout} - ${tab.title}` : checkout;
     switch (kind) {
       case "finished":
         return { title: `${name}: Finished`, body: `Finished in ${where}` };
@@ -1536,12 +1538,12 @@ export class ProjectSessionManager {
   }
 }
 
-/** The open projects' session managers. */
+/** The open checkouts' session managers, by `checkoutKey`. */
 export class SessionManagerRegistry {
-  private readonly managers = new Map<string, ProjectSessionManager>();
+  private readonly managers = new Map<string, CheckoutSessionManager>();
 
-  /** The renderer's last report, sent only on change — for a project opened after it. */
-  private inFront: { projectId: string | null; tabIds: readonly string[] } = { projectId: null, tabIds: [] };
+  /** The renderer's last report, sent only on change — for a checkout opened after it. */
+  private inFront: { key: string | null; tabIds: readonly string[] } = { key: null, tabIds: [] };
 
   constructor(
     private readonly storageRoot: string,
@@ -1550,54 +1552,57 @@ export class SessionManagerRegistry {
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
-  open(project: Project): ProjectSessionManager {
-    const existing = this.managers.get(project.id);
+  open(checkout: Checkout): CheckoutSessionManager {
+    const key = checkoutKey(checkout.ref);
+    const existing = this.managers.get(key);
     if (existing) {
       return existing;
     }
-    const manager = new ProjectSessionManager(project, this.storageRoot, this.settings, this.sbxLocal, this.callbacks, () => {
-      const root = configRoot(project.path);
-      return [...this.managers.values()].find((other) => other.project.path === root)?.project.id ?? project.id;
-    });
-    manager.setInFront(project.id === this.inFront.projectId ? this.inFront.tabIds : []);
-    this.managers.set(project.id, manager);
+    const manager = new CheckoutSessionManager(checkout, this.storageRoot, this.settings, this.sbxLocal, this.callbacks);
+    manager.setInFront(key === this.inFront.key ? this.inFront.tabIds : []);
+    this.managers.set(key, manager);
     manager.bootstrap().catch((error: unknown) => {
-      this.callbacks.onNotice("error", `${project.name} could not be opened: ${errorMessage(error)}`);
+      this.callbacks.onNotice("error", `${checkout.name()} could not be opened: ${errorMessage(error)}`);
     });
     return manager;
   }
 
-  get(projectId: string): ProjectSessionManager | undefined {
-    return this.managers.get(projectId);
+  get(ref: CheckoutRef): CheckoutSessionManager | undefined {
+    return this.managers.get(checkoutKey(ref));
   }
 
+  /** Every open checkout's of the project: its main worktree's and its worktrees'. */
+  forProject(projectId: string): CheckoutSessionManager[] {
+    return [...this.managers.values()].filter((manager) => manager.at.ref.projectId === projectId);
+  }
 
-  /** The tabs in front belong to one project at most. */
-  setInFront(projectId: string | null, tabIds: readonly string[]): void {
-    this.inFront = { projectId, tabIds };
+  /** The tabs in front belong to one checkout at most. */
+  setInFront(ref: CheckoutRef | null, tabIds: readonly string[]): void {
+    const key = ref && checkoutKey(ref);
+    this.inFront = { key, tabIds };
     for (const [id, manager] of this.managers) {
-      manager.setInFront(id === projectId ? tabIds : []);
+      manager.setInFront(id === key ? tabIds : []);
     }
   }
 
-  /** See ProjectSessionManager.themeChanged. */
+  /** See CheckoutSessionManager.themeChanged. */
   themeChanged(): void {
     for (const manager of this.managers.values()) {
       manager.themeChanged();
     }
   }
 
-  /** See ProjectSessionManager.idleReminderChanged. */
+  /** See CheckoutSessionManager.idleReminderChanged. */
   idleReminderChanged(): void {
     for (const manager of this.managers.values()) {
       manager.idleReminderChanged();
     }
   }
 
-  async close(projectId: string): Promise<void> {
-    const manager = this.managers.get(projectId);
-    // Dropped before the wait, so a project removed and reopened at once never has two.
-    this.managers.delete(projectId);
+  async close(ref: CheckoutRef): Promise<void> {
+    const manager = this.managers.get(checkoutKey(ref));
+    // Dropped before the wait, so a checkout closed and reopened at once never has two.
+    this.managers.delete(checkoutKey(ref));
     await manager?.dispose();
   }
 

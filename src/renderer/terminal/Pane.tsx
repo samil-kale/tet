@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { isWorking } from "../../shared/types";
-import type { AgentId, AgentInfo, TerminalDescriptor } from "../../shared/types";
+import type { AgentId, AgentInfo, CheckoutRef, TerminalDescriptor } from "../../shared/types";
 import { fitTerminal, focusTerminal, hideTerminal, showTerminal } from "./terminal-views";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
@@ -43,7 +43,7 @@ export interface PaneChrome {
 }
 
 interface PaneProps {
-  projectId: string;
+  checkout: CheckoutRef;
   paneId: PaneId;
   /** The project's preset, for this pane's "move to" siblings. */
   preset: SplitPreset;
@@ -52,7 +52,7 @@ interface PaneProps {
   activeTabId: string | null;
   agents: AgentInfo[];
   visible: boolean;
-  /** Where keyboard focus goes on showing the project or changing the active tab; not drawn. */
+  /** Where keyboard focus goes on showing the checkout or changing the active tab; not drawn. */
   focused: boolean;
   /** Shows a tab; in another pane, moves it there. */
   onActivate: (tabId: string, paneId: PaneId) => void;
@@ -93,7 +93,7 @@ const EditorTabLabel = memo(function EditorTabLabel({ tabId, label }: { tabId: s
 });
 
 export const Pane = memo(function Pane({
-  projectId,
+  checkout,
   paneId,
   preset,
   tabs,
@@ -151,7 +151,7 @@ export const Pane = memo(function Pane({
 
   // An editor tab has no pty and focuses and measures itself (`EditorHost`).
   const activeTerminalId = activeTabId !== null && isEditorTabId(activeTabId) ? null : activeTabId;
-  const editorBusy = useEditorBusy(projectId, tabs);
+  const editorBusy = useEditorBusy(checkout, tabs);
 
   // Refit on becoming visible: hidden, its size went stale. The resize also starts its process.
   // Shown before the fit, since the renderer decides the cell width the fit measures
@@ -160,10 +160,10 @@ export const Pane = memo(function Pane({
     if (!visible || !activeTerminalId) {
       return;
     }
-    showTerminal(projectId, activeTerminalId);
-    fitTerminal(projectId, activeTerminalId);
-    return () => hideTerminal(projectId, activeTerminalId);
-  }, [visible, activeTerminalId, projectId]);
+    showTerminal(checkout, activeTerminalId);
+    fitTerminal(checkout, activeTerminalId);
+    return () => hideTerminal(checkout, activeTerminalId);
+  }, [visible, activeTerminalId, checkout]);
 
   // Keyboard focus follows the focused pane's active tab — only that pane's, or the last effect
   // wins. Apart from the refit: a focus change alone must not resize the pty (repaints the CLI).
@@ -173,9 +173,9 @@ export const Pane = memo(function Pane({
   const activeTabReady = activeTerminalId !== null && tabs.some((tab) => tab.tabId === activeTerminalId);
   useEffect(() => {
     if (visible && focused && activeTerminalId) {
-      focusTerminal(projectId, activeTerminalId);
+      focusTerminal(checkout, activeTerminalId);
     }
-  }, [visible, focused, activeTerminalId, projectId, activeTabReady]);
+  }, [visible, focused, activeTerminalId, checkout, activeTabReady]);
 
   useEffect(() => {
     const element = stack.current;
@@ -191,21 +191,21 @@ export const Pane = memo(function Pane({
         return;
       }
       clearTimeout(timer);
-      timer = setTimeout(() => fitTerminal(projectId, activeTerminalId), RESIZE_DEBOUNCE_MS);
+      timer = setTimeout(() => fitTerminal(checkout, activeTerminalId), RESIZE_DEBOUNCE_MS);
     });
     observer.observe(element);
     return () => {
       clearTimeout(timer);
       observer.disconnect();
     };
-  }, [visible, activeTerminalId, projectId]);
+  }, [visible, activeTerminalId, checkout]);
 
   const createTab = useCallback(
     async (agentId: AgentId) => {
-      const descriptor = await window.tet.terminals.create(projectId, agentId);
+      const descriptor = await window.tet.terminals.create(checkout, agentId);
       onActivate(descriptor.tabId, paneId);
     },
-    [projectId, paneId, onActivate]
+    [checkout, paneId, onActivate]
   );
 
   /**
@@ -220,15 +220,15 @@ export const Pane = memo(function Pane({
         onCloseEditors(editorIds);
       }
       if (terminalIds.length > 0) {
-        void window.tet.terminals.close(projectId, terminalIds);
+        void window.tet.terminals.close(checkout, terminalIds);
       }
     },
-    [projectId, onCloseEditors]
+    [checkout, onCloseEditors]
   );
 
   const restartTab = useCallback(
-    (tabId: string) => void window.tet.terminals.restart(projectId, tabId),
-    [projectId]
+    (tabId: string) => void window.tet.terminals.restart(checkout, tabId),
+    [checkout]
   );
 
   // The menu's tab closed or moved away under it (`tet-ctl`, another pane): its close entries,
@@ -248,10 +248,10 @@ export const Pane = memo(function Pane({
         confirmLabel: "Rename",
         maxLength: MAX_TITLE_LENGTH,
         submit: async (name) =>
-          refusal(await window.tet.terminals.rename(projectId, tab.tabId, name), "Could not rename the session")
+          refusal(await window.tet.terminals.rename(checkout, tab.tabId, name), "Could not rename the session")
       });
     },
-    [projectId]
+    [checkout]
   );
 
   const agentName = (agentId: AgentId): string =>
@@ -531,7 +531,7 @@ export const Pane = memo(function Pane({
           ) : (
             <TerminalHost
               key={tab.tabId}
-              projectId={projectId}
+              checkout={checkout}
               tabId={tab.tabId}
               agent={agents.find((agent) => agent.id === tab.agentId)}
               active={tab.tabId === activeTabId}

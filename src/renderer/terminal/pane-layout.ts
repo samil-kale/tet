@@ -555,11 +555,11 @@ export function snapZoneAt(
 
 /**
  * `localStorage` under `layout-storage.ts`'s namespace: layout describes the window, not the
- * repository. Per project, unlike `usePaneSize`/`usePaneToggle`'s fixed keys. `suffix` tells the
- * layout from `TerminalsPane`'s divider positions.
+ * repository. Per checkout (its key), unlike `usePaneSize`/`usePaneToggle`'s fixed keys. `suffix`
+ * tells the layout from `TerminalsPane`'s divider positions.
  */
-export function layoutStorageKey(projectId: string, suffix: string): string {
-  return layoutKey(`terminals.${projectId}.${suffix}`);
+export function layoutStorageKey(key: string, suffix: string): string {
+  return layoutKey(`terminals.${key}.${suffix}`);
 }
 
 /**
@@ -585,10 +585,10 @@ interface PersistedLayout {
  * Read defensively: a bad shape falls back to a fresh layout. Entries of vanished sessions stay
  * (`normalizeLayout`). Session ids come back as tab ids, hence the editor tab's unlike id.
  */
-export function loadLayout(projectId: string): ProjectLayout {
+export function loadLayout(key: string): ProjectLayout {
   const fallback = defaultLayout();
   try {
-    const raw = localStorage.getItem(layoutStorageKey(projectId, "layout"));
+    const raw = localStorage.getItem(layoutStorageKey(key, "layout"));
     if (raw === null) {
       return fallback;
     }
@@ -669,6 +669,17 @@ export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): strin
   return JSON.stringify(persisted);
 }
 
-export function saveLayout(projectId: string, serialized: string): void {
-  localStorage.setItem(layoutStorageKey(projectId, "layout"), serialized);
+export function saveLayout(key: string, serialized: string): void {
+  localStorage.setItem(layoutStorageKey(key, "layout"), serialized);
+}
+
+/** Drops everything stored under a checkout's key: removed, it never comes back under it. */
+export function dropStoredLayout(key: string): void {
+  const prefix = layoutStorageKey(key, "");
+  const stored = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index));
+  for (const entry of stored) {
+    if (entry?.startsWith(prefix)) {
+      localStorage.removeItem(entry);
+    }
+  }
 }

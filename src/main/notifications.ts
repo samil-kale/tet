@@ -1,5 +1,7 @@
 import * as crypto from "node:crypto";
 import { app, Notification } from "electron";
+import { checkoutKey, checkoutRef } from "../shared/types";
+import type { CheckoutRef } from "../shared/types";
 import type { ToastTarget } from "./control/control-server";
 import { logError } from "./uncaught";
 
@@ -13,7 +15,7 @@ interface NotificationDeps {
   /** Flashes the taskbar until the window is focused. */
   attractAttention(): void;
   /** Brings a toast's tab to the front; false while that tab is not restored yet. */
-  showTab(target: { projectId: string; tabId: string; sessionId?: string }): boolean;
+  showTab(target: ToastTarget & { sessionId?: string }): boolean;
   /** The target tab's session id, which outlives a quit (see `windowsToastXml`). */
   sessionIdOf(target: ToastTarget): string | undefined;
 }
@@ -22,9 +24,9 @@ let deps: NotificationDeps;
 
 /**
  * A clicked toast's tab not yet restored (the click started tet). Looked for on each `onTabs` of
- * its project; replaced by a later click.
+ * its checkout; replaced by a later click.
  */
-let toastTargetAwaited: { projectId: string; tabId: string; sessionId?: string } | undefined;
+let toastTargetAwaited: (ToastTarget & { sessionId?: string }) | undefined;
 
 /** Like notices (Notices.tsx), an identical toast within this span is dropped, without extending
  *  it. The target tab is part of the identity: two untitled tabs of one agent read the same, and
@@ -39,7 +41,7 @@ function repeatedToast(title: string, body: string, target?: ToastTarget): boole
       recentToasts.delete(seen);
     }
   }
-  const key = `${title}\u0000${body}\u0000${target?.projectId ?? ""}\u0000${target?.tabId ?? ""}`;
+  const key = `${title}\u0000${body}\u0000${target ? checkoutKey(target.checkout) : ""}\u0000${target?.tabId ?? ""}`;
   if (recentToasts.has(key)) {
     return true;
   }
@@ -67,8 +69,12 @@ function holdToast(toast: Notification): void {
 }
 
 /** For a toast clicked before its tab was restored. */
-export function awaitedToastTab(projectId: string): void {
-  if (toastTargetAwaited?.projectId === projectId && deps.showTab(toastTargetAwaited)) {
+export function awaitedToastTab(checkout: CheckoutRef): void {
+  if (
+    toastTargetAwaited !== undefined &&
+    checkoutKey(toastTargetAwaited.checkout) === checkoutKey(checkout) &&
+    deps.showTab(toastTargetAwaited)
+  ) {
     toastTargetAwaited = undefined;
   }
 }
@@ -98,7 +104,8 @@ export function startNotifications(started: NotificationDeps): void {
       if (!projectId || !tabId) {
         return;
       }
-      const target = { projectId, tabId, sessionId: launch.get("session") || undefined };
+      const checkout = checkoutRef(projectId, launch.get("worktree") || undefined);
+      const target = { checkout, tabId, sessionId: launch.get("session") || undefined };
       toastTargetAwaited = deps.showTab(target) ? undefined : target;
     });
   });
@@ -116,7 +123,10 @@ function escapeXml(text: string): string {
 function windowsToastXml(id: string, title: string, body: string, target?: ToastTarget): string {
   const launch = new URLSearchParams({ type: "click", tag: id });
   if (target) {
-    launch.set("project", target.projectId);
+    launch.set("project", target.checkout.projectId);
+    if (target.checkout.worktree !== undefined) {
+      launch.set("worktree", target.checkout.worktree);
+    }
     launch.set("tab", target.tabId);
     const sessionId = deps.sessionIdOf(target);
     if (sessionId) {

@@ -41,7 +41,7 @@ import {
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
-import { agentDirFor, migrateAgentDirs } from "../src/main/terminals/agent-data";
+import { hostDir, newWorktreeKey, ownedWorktreeKeys, sandboxDir, worktreeCheckout, worktreeKeyOf } from "../src/main/project-dirs";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
 import { fetchHttpsImage } from "../src/main/ipc/shell";
@@ -228,10 +228,12 @@ describe("resolveCommand", () => {
 
 describe("sbx sandbox naming and mounts", () => {
   it("names a sandbox deterministically, within sbx create --name's own character set", () => {
-    const name = sandboxName("a project id with spaces/slashes", "claude");
+    const project = { projectId: "a project id with spaces/slashes" };
+    const name = sandboxName(project, "claude");
     assert.match(name, /^[a-z0-9][a-z0-9.-]+$/);
-    assert.equal(name, sandboxName("a project id with spaces/slashes", "claude"), "stable across calls");
-    assert.notEqual(name, sandboxName("a project id with spaces/slashes", "codex"), "one sandbox per agent too");
+    assert.equal(name, sandboxName(project, "claude"), "stable across calls");
+    assert.notEqual(name, sandboxName(project, "codex"), "one sandbox per agent too");
+    assert.notEqual(name, sandboxName({ ...project, worktree: "k1" }, "claude"), "one per worktree: its workspace is its own");
   });
 
   it("mounts a Windows path the way sbx does inside the sandbox, verified live 2026-09-08", {
@@ -292,8 +294,8 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(pathMountSpecs({ path: "~/data/", access: "rw" }).unmount, `${home}:${toContainerPath(home)}`);
   });
 
-  it("mounts tet's own dir live — agentDir read-write, nothing else", () => {
-    const agentDir = path.join(os.tmpdir(), "agents", "claude", "p");
+  it("mounts tet's own dir live — the sandbox's agentDir read-write, nothing else", () => {
+    const agentDir = sandboxDir(os.tmpdir(), { projectId: "p" }, "claude");
     assert.deepEqual(
       fixedMountSpecs({ agentDir }).map((spec) => spec.mount),
       [`${agentDir}:${toContainerPath(agentDir)}`]
@@ -331,7 +333,8 @@ describe("a sandbox's published ports", () => {
  */
 describe("saving an sbx config", () => {
   const projectId = "a project with one sandbox";
-  const name = sandboxName(projectId, "claude");
+  const main = { projectId };
+  const name = sandboxName(main, "claude");
   /** No knowledge before or after: nothing of it to revoke. */
   const NO_KNOWLEDGE = { previous: EMPTY_SBX_KNOWLEDGE, current: EMPTY_SBX_KNOWLEDGE };
   // `sbx ports --publish` of a port another sandbox holds, sbx 0.42.1 (2026-09-17).
@@ -441,7 +444,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxConfig(projectPath, config(setup.before.map(port)));
     const saved = await withSbx(dir, () =>
-      saveSbxConfig({ id: projectId, path: projectPath }, [], config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveSbxConfig({ ref: main, path: projectPath }, [], config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     return { ...saved, projectPath };
   }
@@ -459,13 +462,13 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], config: config([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
   });
 
-  it("brings an open worktree's sandbox in line along with the project's, all but the ports", async () => {
-    const worktree = { id: "a worktree", path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
-    const worktreeName = sandboxName(worktree.id, "claude");
+  it("brings a worktree's sandbox in line along with the project's, all but the ports", async () => {
+    const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
+    const worktreeName = sandboxName(worktree.ref, "claude");
     const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
     const { result, calls } = await withSbx(dir, () =>
       saveSbxConfig(
-        { id: projectId, path: projectPath },
+        { ref: main, path: projectPath },
         [worktree],
         { ...config([port(3000)]), hosts: ["example.com"] },
         NO_KNOWLEDGE,
@@ -485,16 +488,16 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     }
   });
 
-  it("removes an open worktree's sandbox along with the project's when sandboxing goes off", async () => {
-    const worktree = { id: "a worktree", path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
-    const worktreeName = sandboxName(worktree.id, "claude");
+  it("removes a worktree's sandbox along with the project's when sandboxing goes off", async () => {
+    const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
+    const worktreeName = sandboxName(worktree.ref, "claude");
     const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ id: projectId, path: projectPath }, [worktree], EMPTY_SBX_CONFIG, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveSbxConfig({ ref: main, path: projectPath }, [worktree], EMPTY_SBX_CONFIG, NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(result.removed, [
-      { projectId, agentId: "claude" },
-      { projectId: worktree.id, agentId: "claude" }
+      { ref: main, agentId: "claude" },
+      { ref: worktree.ref, agentId: "claude" }
     ]);
     assert.ok(calls.includes(`rm ${worktreeName} --force`));
   });
@@ -528,7 +531,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const { dir, projectPath } = fakeSbx({ published: [], mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }] });
     await writeSbxConfig(projectPath, { ...config([]), paths: [held, unheld] });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ id: projectId, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveSbxConfig({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
     assert.deepEqual([result.refused, result.config.paths], [{}, []]);
@@ -566,7 +569,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       ["ADDED", "v-added"]
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
+      saveSbxConfig({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -606,9 +609,9 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       ]
     });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ id: projectId, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveSbxConfig({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
-    assert.deepEqual(result.orphans, [{ projectId, agentId: "codex" }]);
+    assert.deepEqual(result.orphans, [{ ref: main, agentId: "codex" }]);
     assert.deepEqual(
       calls.filter((call) => call.startsWith("rm ")),
       ["rm tet-codex-aaaaaaaaaaaa --force"]
@@ -621,7 +624,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const before = await readSbxConfig(projectPath);
     await assert.rejects(
       withSbx(dir, () =>
-        saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
+        saveSbxConfig({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
       ),
       /could not list the sandboxes' secrets/
     );
@@ -640,7 +643,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       const before = await readSbxConfig(projectPath);
       await assert.rejects(
         withSbx(dir, () =>
-          saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+          saveSbxConfig({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
         ),
         message
       );
@@ -756,7 +759,7 @@ describe("a sandboxed tab's variables", () => {
       variables: [{ env: "NPM_TOKEN" }, { env: "AGENT_SET" }, { env: "NO_VALUE_HERE" }, { env: "MISSING" }]
     };
     const result = sandboxEnv({
-      projectId: "p",
+      ref: { projectId: "p" },
       config,
       env: ["AGENT_SET=agent"],
       secretValues: new Map([["GITLAB_TOKEN", "glpat-real"]]),
@@ -772,27 +775,34 @@ describe("a sandboxed tab's variables", () => {
   });
 });
 
-describe("tet's agent data", () => {
-  it("moves agentDirs out of agent-data/agents, leaving one already in the new place", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-agent-data-"));
-    const legacy = (agentId: string, projectId: string) => path.join(root, "agent-data", "agents", agentId, projectId);
-    fs.mkdirSync(legacy("claude", "p"), { recursive: true });
-    fs.writeFileSync(path.join(legacy("claude", "p"), "tet-hooks-settings.json"), "old");
-    fs.mkdirSync(legacy("codex", "q"), { recursive: true });
-    fs.mkdirSync(agentDirFor(root, "codex", "q"), { recursive: true });
-    migrateAgentDirs(root);
-    assert.equal(fs.readFileSync(path.join(agentDirFor(root, "claude", "p"), "tet-hooks-settings.json"), "utf8"), "old");
-    assert.ok(!fs.existsSync(legacy("claude", "p")));
-    assert.ok(fs.existsSync(legacy("codex", "q")), "a project already in the new place is not overwritten");
+describe("a project's folder under ~/.tet", () => {
+  it("lays out a checkout's data: main or a worktree's key, a side per agent", () => {
+    const root = path.join(os.tmpdir(), "tet-data");
+    const main = { projectId: "p" };
+    const worktree = { projectId: "p", worktree: "k1" };
+    assert.equal(hostDir(root, main, "claude"), path.join(root, "projects", "p", "main", "host", "claude"));
+    assert.equal(sandboxDir(root, worktree, "codex"), path.join(root, "projects", "p", "worktrees", "k1", "sandbox", "codex"));
+    assert.equal(sandboxSessionDir(sandboxDir(root, main, "pi")), path.join(root, "projects", "p", "main", "sandbox", "pi", "sessions"));
   });
 
-  it("moves sandbox-sessions into the sandbox folder", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-agent-data-"));
-    const agentDir = agentDirFor(root, "claude", "p");
-    fs.mkdirSync(path.join(agentDir, "sandbox-sessions", "projects"), { recursive: true });
-    migrateAgentDirs(root);
-    assert.ok(fs.existsSync(path.join(sandboxSessionDir(agentDir), "projects")));
-    assert.ok(!fs.existsSync(path.join(agentDir, "sandbox-sessions")));
+  it("knows a worktree TET made by its path, and no other", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
+    const checkout = worktreeCheckout(root, "p", "k1");
+    assert.equal(worktreeKeyOf(root, "p", checkout), "k1");
+    assert.equal(worktreeKeyOf(root, "q", checkout), undefined, "another project's");
+    assert.equal(worktreeKeyOf(root, "p", path.dirname(checkout)), undefined, "not the checkout itself");
+    assert.equal(worktreeKeyOf(root, "p", path.join(os.tmpdir(), "elsewhere")), undefined, "one made elsewhere");
+  });
+
+  it("gives a new worktree a key no other of the project has, and lists those with a checkout", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
+    const key = newWorktreeKey(root, "p");
+    assert.match(key, /^[0-9a-f]{8}$/);
+    fs.mkdirSync(worktreeCheckout(root, "p", key), { recursive: true });
+    fs.writeFileSync(path.join(worktreeCheckout(root, "p", key), ".git"), "gitdir: x");
+    fs.mkdirSync(path.join(root, "projects", "p", "worktrees", "halfway"), { recursive: true });
+    assert.deepEqual(ownedWorktreeKeys(root, "p"), [key], "one left without its checkout is none");
+    assert.notEqual(newWorktreeKey(root, "p"), key);
   });
 });
 
@@ -1112,8 +1122,8 @@ describe("sbx's filesystem policy", () => {
 
   it("lets an organization granting write alone mount read-write and read-only, as measured", () => {
     const measured = parseFilesystemRules(governed);
-    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\agent-data\\claude\\p", "rw", win32));
-    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\agent-data\\projects\\p", "ro", win32));
+    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\main\\sandbox\\claude", "rw", win32));
+    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\worktrees\\k1\\checkout", "ro", win32));
     assert.ok(!isMountAllowed(measured, "D:\\work", "rw", win32), "another drive matches no rule: default deny");
     assert.ok(isMountAllowed(measured, "/home/saka/work", "rw", posix));
   });
@@ -1134,7 +1144,7 @@ describe("sbx's filesystem policy", () => {
   });
 
   it("expands ~ and *: for any drive, and ignores case on win32 alone", () => {
-    assert.ok(isMountAllowed(rules([allow("filesystem:write", "~\\.tet\\agent-data\\**")]), "C:\\Users\\saka\\.tet\\agent-data\\claude", "rw", win32));
+    assert.ok(isMountAllowed(rules([allow("filesystem:write", "~\\.tet\\projects\\**")]), "C:\\Users\\saka\\.tet\\projects\\p", "rw", win32));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "~/**")]), "/home/saka/tet", "rw", posix));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "*:\\data\\**")]), "E:\\data\\x", "rw", win32));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "c:\\USERS\\**")]), "C:\\Users\\saka", "rw", win32));
@@ -1302,7 +1312,7 @@ describe("the stores", () => {
     assert.equal("theme" in system, false, "not written back");
   });
 
-  it("keep only well-formed projects, deduplicate by path and reorder what they know", () => {
+  it("keep only well-formed projects, never a worktree stored as one, and reorder what they know", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-"));
     const pathOf = (name: string): string => path.resolve(path.sep, name);
     fs.writeFileSync(
@@ -1311,16 +1321,24 @@ describe("the stores", () => {
         { id: "a", path: pathOf("a"), name: "a" },
         { id: "b", path: pathOf("b") },
         "junk",
-        { id: "c", path: pathOf("c"), name: "c" }
+        { id: "c", path: pathOf("c"), name: "c" },
+        // A worktree was a project of its own before.
+        { id: "w", path: pathOf("w"), name: "w", mainPath: pathOf("a") }
       ])
     );
     const store = new ProjectStore(dir);
     assert.deepEqual(store.list().map((project) => project.id), ["a", "c"]);
-    assert.equal(store.add(pathOf("a")).id, "a", "already open");
-    const added = store.add(path.join(dir, "repo"));
-    assert.equal(added.name, "repo");
+    const added = store.add(path.join(dir, "repo"), "r");
+    assert.deepEqual([added.name, added.worktrees], ["repo", []]);
     store.reorder(["nope", added.id]);
     assert.deepEqual(store.list().map((project) => project.id), [added.id, "a", "c"], "unknown dropped, omitted kept behind");
+    assert.ok(store.setWorktrees("a", [{ path: pathOf("wt"), branch: "feature" }]));
+    assert.equal(store.setWorktrees("a", [{ path: pathOf("wt"), branch: "feature" }]), false, "unchanged");
+    assert.deepEqual(
+      JSON.parse(fs.readFileSync(path.join(dir, "projects.json"), "utf8"))[1],
+      { id: "a", path: pathOf("a"), name: "a" },
+      "worktrees are read off the disk, never stored"
+    );
     assert.equal(new ProjectStore(dir).list().length, 3, "persisted");
     assert.deepEqual(fs.readdirSync(dir), ["projects.json"], "renamed into place, no temporary file left");
   });
@@ -1568,17 +1586,17 @@ describe("pi's extension", () => {
 describe("opencode's plugin", () => {
   const nasty = "C:\\Users\\it's $x `y\\ctx.md";
   type Hooks = Record<string, (...args: unknown[]) => Promise<void>>;
-  const options = (dir: string, sandbox: string | null = null): OpencodePluginOptions => ({
+  const options = (dir: string, sandboxed = false): OpencodePluginOptions => ({
     projectRoot: dir,
     sessionsDir: path.join(dir, "sessions"),
     renameDir: path.join(dir, "rename"),
-    sandbox
+    sandboxed
   });
 
   /** Compiles the plugin; the fake client records renames and answers each with `answer` (the
    *  SDK's `{ error }` for a session its process does not hold). */
-  async function load(dir: string, sandbox: string | null = null, answer?: unknown): Promise<{ hooks: Hooks; renames: unknown[] }> {
-    const source = renderOpencodePlugin(options(dir, sandbox));
+  async function load(dir: string, sandboxed = false, answer?: unknown): Promise<{ hooks: Hooks; renames: unknown[] }> {
+    const source = renderOpencodePlugin(options(dir, sandboxed));
     const compiled = path.join(dir, "tet.js");
     fs.writeFileSync(compiled, esbuild.transformSync(source, { loader: "ts", format: "cjs" }).code);
     const renames: unknown[] = [];
@@ -1630,12 +1648,12 @@ describe("opencode's plugin", () => {
     process.env.TET_PROJECT_ROOT = dir;
     const channel = await controlChannel();
     try {
-      const { hooks } = await load(dir, "tet-opencode-abc");
+      const { hooks } = await load(dir, true);
 
       await hooks.event({ event: session("ses_a") });
       await hooks.event({ event: session("ses_child", { parentID: "ses_a" }) });
       const record = JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8"));
-      assert.deepEqual(record, { id: "ses_a", title: "First prompt", created: 1, updated: 2, sandbox: "tet-opencode-abc" });
+      assert.deepEqual(record, { id: "ses_a", title: "First prompt", created: 1, updated: 2 });
       assert.equal(fs.existsSync(path.join(dir, "sessions", "ses_child.json")), false, "a subagent's session is no tab");
       await hooks.event({ event: { ...(session("ses_a", { title: "Named" }) as object), type: "session.updated" } });
       assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "sessions", "ses_a.json"), "utf8")).title, "Named");
@@ -1647,7 +1665,7 @@ describe("opencode's plugin", () => {
       await hooks["chat.message"]({}, { message: { id: "msg_2", sessionID: "ses_child" }, parts: [] });
       const request = { system: ["opencode's own"] };
       await hooks["experimental.chat.system.transform"]({ sessionID: "ses_a" }, request);
-      // Sandboxed ("tet-opencode-abc"): the prompt without the credentials.
+      // Sandboxed: the prompt without the credentials.
       assert.deepEqual(request.system, ["opencode's own", systemPrompt(true)]);
 
       // Raised on every step of a turn, so not reported: each would be a round trip, the last
@@ -1710,11 +1728,11 @@ describe("opencode's plugin", () => {
   });
 
   it("leaves a rename request its own database has no session for", async () => {
-    // A host and a sandboxed tab of one repository poll the same folder, each holding only its own
+    // Two tabs of one checkout on one side poll the same folder, each holding only its own
     // sessions: neither may drop the other's request.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
     process.env.TET_PROJECT_ROOT = dir;
-    const { renames } = await load(dir, "tet-opencode-abc", { error: { name: "NotFoundError" } });
+    const { renames } = await load(dir, true, { error: { name: "NotFoundError" } });
     fs.mkdirSync(path.join(dir, "rename"), { recursive: true });
     fs.writeFileSync(path.join(dir, "rename", "ses_b"), "Other title\n");
     await eventually("the request is tried", () => renames.length >= 1, 3000);

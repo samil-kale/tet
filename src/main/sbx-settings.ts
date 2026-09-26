@@ -1,7 +1,8 @@
 import { errorMessage } from "../shared/errors";
 import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../shared/sbx-rules";
-import { SBX_AGENT_IDS } from "../shared/types";
+import { checkoutName, checkoutRef, SBX_AGENT_IDS } from "../shared/types";
 import type {
+  CheckoutRef,
   NoticeSeverity,
   Project,
   SbxKnowledgeConfig,
@@ -12,9 +13,8 @@ import type {
   SbxStatus
 } from "../shared/types";
 import { getAgent } from "./agents";
-import { readGovernance, readSbxProblems, saveSbxConfig } from "./sbx";
+import { readGovernance, readSbxProblems, saveSbxConfig, type SbxSaveTarget } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
-import { assertOwnConfig, configRoot } from "./tet-json";
 
 /** The env names holding a value, per list. */
 interface ValueNames {
@@ -68,26 +68,23 @@ export async function readProjectSbxProblems(
  * refuses is left out too (saveSbxConfig), so tet.json holds what was applied, and only its rows
  * keep a value here. `problems` says what was left out; sbx's refusals are the error as well, as
  * nothing marked them before. Notices for the sandboxes it removed. `status`: the caller's, when it
- * read one. Refused for a worktree, which takes its main worktree's (tet-json.ts's configRoot), before
- * any sandbox changes; the open worktrees of the project's repository are saved along.
+ * read one. The project's worktrees take its tet.json (tet-json.ts's configRoot), so their
+ * sandboxes are saved along.
  */
 export async function saveProjectSbx(
-  {
-    sbxLocal,
-    store,
-    notice
-  }: { sbxLocal: SbxLocalStore; store: { list(): Project[] }; notice: (severity: NoticeSeverity, message: string) => void },
+  { sbxLocal, notice }: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
   project: Project,
   request: SbxProjectConfig,
   local: SbxLocalSave,
   status?: Pick<SbxStatus, "organization">
 ): Promise<SbxSaveResult> {
-  const worktrees = store.list().filter((other) => other.id !== project.id && configRoot(other.path) === project.path);
-  const nameOf = (projectId: string): string => worktrees.find((other) => other.id === projectId)?.name ?? project.name;
+  const worktrees = project.worktrees.flatMap((worktree): SbxSaveTarget[] =>
+    worktree.key === undefined ? [] : [{ ref: checkoutRef(project.id, worktree.key), path: worktree.path }]
+  );
+  const nameOf = (ref: CheckoutRef): string => checkoutName(project, ref);
   const stored = sbxLocal.encrypted(project.id);
   const previous = sbxLocal.knowledge(project.id);
   try {
-    assertOwnConfig(project.path);
     sbxLocal.update(project.id, local);
     const secretValues = sbxLocal.values(project.id, "secrets");
     const knowledge = sbxLocal.knowledge(project.id);
@@ -101,7 +98,7 @@ export async function saveProjectSbx(
       : {};
     const wanted = withoutProblems(request, knowledge, problems);
     const { removed, orphans, refused, failures, config, knowledge: applied } = await saveSbxConfig(
-      project,
+      { ref: { projectId: project.id }, path: project.path },
       worktrees,
       wanted.config,
       { previous, current: wanted.knowledge },
@@ -110,14 +107,14 @@ export async function saveProjectSbx(
       organization
     );
     sbxLocal.update(project.id, { secrets: keptValues(config.secrets), variables: keptValues(config.variables), knowledge: applied });
-    for (const { projectId, agentId } of removed) {
+    for (const { ref, agentId } of removed) {
       const message = request.enabled
-        ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(projectId)} was removed and is rebuilt when its next tab starts.`
-        : `The ${getAgent(agentId).displayName} sandbox of ${nameOf(projectId)} was removed.`;
+        ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed and is rebuilt when its next tab starts.`
+        : `The ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed.`;
       notice("info", message);
     }
-    for (const { projectId, agentId } of orphans) {
-      notice("info", `An earlier ${getAgent(agentId).displayName} sandbox of ${nameOf(projectId)} was removed.`);
+    for (const { ref, agentId } of orphans) {
+      notice("info", `An earlier ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed.`);
     }
     const left: SbxProblems = { ...problems };
     for (const [option, rows] of Object.entries(refused) as [keyof SbxProblems, Record<string, string>][]) {

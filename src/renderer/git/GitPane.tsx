@@ -1,6 +1,7 @@
 import { memo, useRef } from "react";
 import { syncRemote } from "../../shared/types";
-import type { Project, RepositoryState } from "../../shared/types";
+import type { RepositoryState } from "../../shared/types";
+import type { Checkout } from "../checkout";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
@@ -10,7 +11,7 @@ import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIco
 import { Section } from "../ui/Section";
 
 interface GitPaneProps {
-  project: Project;
+  checkout: Checkout;
   state: RepositoryState;
   /** False while the files view stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
@@ -18,33 +19,29 @@ interface GitPaneProps {
   /** Set by the sash between tree and changes; held by the app, like the width. */
   treeHeight: number;
   onTreeHeight: (size: number) => void;
-  /** Opens in the project's preview tab, a Markdown file with its preview if asked. */
+  /** Opens in the checkout's preview tab, a Markdown file with its preview if asked. */
   onOpenDiff: (path: string, how?: OpenEditor) => void;
   /** See BranchTree. */
-  onOpenWorktree: (worktreePath: string) => void;
-  canCloseWorktree: (worktreePath: string) => Promise<boolean>;
-  worktreesSupported: boolean;
+  onSelect: (key: string) => void;
 }
 
 /** The side pane's git view: branches over the changed files, nothing else. */
 export const GitPane = memo(function GitPane({
-  project,
+  checkout,
   state: latestState,
   shown,
   branch,
   treeHeight,
   onTreeHeight,
   onOpenDiff,
-  onOpenWorktree,
-  canCloseWorktree,
-  worktreesSupported
+  onSelect
 }: GitPaneProps) {
-  const { acting, act, ask } = useFileAct(project.id);
+  const { acting, act, ask } = useFileAct(checkout.key);
   // Hidden, the pane keeps the state it last showed: every push re-rendered the whole tree and list
-  // for nobody. A project switch is never held — the keyed views would get another repository's.
-  const held = useRef({ projectId: project.id, state: latestState });
-  if (shown || held.current.projectId !== project.id) {
-    held.current = { projectId: project.id, state: latestState };
+  // for nobody. A checkout switch is never held — the keyed views would get another repository's.
+  const held = useRef({ key: checkout.key, state: latestState });
+  if (shown || held.current.key !== checkout.key) {
+    held.current = { key: checkout.key, state: latestState };
   }
   const state = held.current.state;
 
@@ -65,7 +62,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title={remote ? `Fetch from ${remote}` : "This repository has no remote"}
               disabled={locked || !canSync}
-              onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(project.id, login))}
+              onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(checkout.ref, login))}
             >
               <SyncIcon />
             </button>
@@ -73,7 +70,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title={state.upstream ? `Pull from ${state.upstream}` : "No upstream to pull from"}
               disabled={locked || !canSync || state.upstream === undefined}
-              onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(project.id, login))}
+              onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(checkout.ref, login))}
             >
               <ArrowDownIcon />
             </button>
@@ -87,7 +84,7 @@ export const GitPane = memo(function GitPane({
               disabled={locked || !canSync}
               onClick={() =>
                 branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", (login) =>
-                  window.tet.repository.push(project.id, login)
+                  window.tet.repository.push(checkout.ref, login)
                 )
               }
             >
@@ -96,15 +93,13 @@ export const GitPane = memo(function GitPane({
           </>
         }
       >
-        {/* Keyed: a menu left open across a project switch would act on the next one. */}
+        {/* Keyed: a menu left open across a checkout switch would act on the next one. */}
         <BranchTree
-          key={project.id}
-          projectId={project.id}
+          key={checkout.key}
+          checkout={checkout}
           state={state}
           branch={branch}
-          onOpenWorktree={onOpenWorktree}
-          canCloseWorktree={canCloseWorktree}
-          worktreesSupported={worktreesSupported}
+          onSelect={onSelect}
         />
       </Section>
       <Sash
@@ -126,7 +121,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title="Commit all changes"
               disabled={locked || state.changes.length === 0}
-              onClick={() => void askCommit(project, state, undefined, ask)}
+              onClick={() => void askCommit(checkout.ref, state, undefined, ask)}
             >
               <CommitIcon />
             </button>
@@ -135,7 +130,7 @@ export const GitPane = memo(function GitPane({
               title="Stash all changes"
               disabled={locked || state.changes.length === 0}
               // `act`, not `branch.run`: it belongs to this section, whose bar shows it.
-              onClick={() => act(() => window.tet.repository.stashPush(project.id, ""))}
+              onClick={() => act(() => window.tet.repository.stashPush(checkout.ref, ""))}
             >
               <StashIcon />
             </button>
@@ -143,14 +138,14 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title="Discard all changes"
               disabled={locked || state.changes.length === 0}
-              onClick={() => void confirmDiscard(project.id, state.changes.map((change) => change.path), act)}
+              onClick={() => void confirmDiscard(checkout.ref, state.changes.map((change) => change.path), act)}
             >
               <DiscardIcon />
             </button>
           </>
         }
       >
-        <ChangesList key={project.id} project={project} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
+        <ChangesList key={checkout.key} checkout={checkout} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
       </Section>
     </div>
   );

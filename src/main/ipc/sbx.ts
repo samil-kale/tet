@@ -40,7 +40,7 @@ export function registerSbxIpc({
   ipcMain.handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
     const project = store.get(projectId);
     return project
-      ? readSbxStatus(project.path, projectId)
+      ? readSbxStatus(project.path, { projectId })
       : { installed: false, loggedIn: false, policyInitialized: false, blockers: [], failure: MISSING_REPOSITORY.error };
   });
 
@@ -95,7 +95,7 @@ export function registerSbxIpc({
     "sbx:save-config",
     async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult> => {
       const project = store.get(projectId);
-      return project ? saveProjectSbx({ sbxLocal, store, notice }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
+      return project ? saveProjectSbx({ sbxLocal, notice }, project, request, local) : { ok: false, error: MISSING_REPOSITORY.error };
     }
   );
 }

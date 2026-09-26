@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { errorMessage } from "../../shared/errors";
-import type { GitActionResult, ProjectCommand, TerminalDescriptor } from "../../shared/types";
+import type { CheckoutRef, GitActionResult, ProjectCommand, TerminalDescriptor } from "../../shared/types";
 import { readCommands, writeCommands } from "../tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 
@@ -32,8 +32,8 @@ export function registerCommandsIpc({ store, sessions }: Pick<IpcDeps, "store" |
   /** Opens a tab whose process is the command. */
   ipcMain.handle(
     "commands:run",
-    (_event, projectId: string, command: ProjectCommand): TerminalDescriptor | null => {
-      return sessions.get(projectId)?.createCommandTab(command) ?? null;
+    (_event, checkout: CheckoutRef, command: ProjectCommand): TerminalDescriptor | null => {
+      return sessions.get(checkout)?.createCommandTab(command) ?? null;
     }
   );
 }

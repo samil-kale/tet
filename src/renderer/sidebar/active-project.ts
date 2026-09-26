@@ -1,43 +1,47 @@
-import type { Project } from "../../shared/types";
+import { checkoutKey, checkoutRef, checkoutsOf } from "../../shared/types";
+import type { CheckoutRef, Project } from "../../shared/types";
 import { layoutKey } from "../ui/layout-storage";
 
-/** The project in front, in layout storage: which one is in front describes the window. */
+/** The checkout in front (its `checkoutKey`), in layout storage: which one is in front describes
+ *  the window. */
 const ACTIVE_PROJECT_KEY = layoutKey("active-project");
 
-/** The project in front at startup: the one in front when tet last closed, while still open, else the first. */
+/** The checkout in front at startup: the one in front when tet last closed, while still open, else
+ *  the first project's main worktree. */
 export function activeAtStart(projects: readonly Project[]): string | null {
   const remembered = localStorage.getItem(ACTIVE_PROJECT_KEY);
-  return (projects.find((project) => project.id === remembered) ?? projects[0])?.id ?? null;
+  const open = projects.flatMap((project) => checkoutsOf(project).map(checkoutKey));
+  const first = projects[0];
+  return open.find((key) => key === remembered) ?? (first ? checkoutKey(checkoutRef(first.id)) : null);
 }
 
-/** Remembers the project in front for the next start; none leaves the last one standing. */
-export function rememberActive(projectId: string | null): void {
-  if (projectId !== null) {
-    localStorage.setItem(ACTIVE_PROJECT_KEY, projectId);
+/** Remembers the checkout in front for the next start; none leaves the last one standing. */
+export function rememberActive(key: string | null): void {
+  if (key !== null) {
+    localStorage.setItem(ACTIVE_PROJECT_KEY, key);
   }
 }
 
 /**
- * The project in front after `projects:changed`, from the one in front before (`current`) and the
- * lists before and after. A project added on its own comes to the front. One added in place of one
- * removed — a worktree renamed, or reopened after a failed delete — takes over only where that one
- * was in front. A removed project in front gives way to its main worktree's project when it was a
- * worktree, else to the first.
+ * The checkout in front after `projects:changed`, from the one in front before (`current`): the one
+ * the user just opened (`show`) comes to the front. A removed checkout in front gives way to its
+ * project's main worktree when it was a worktree of a project still open, else to the first
+ * project's.
  */
 export function activeAfterChange(
   current: string | null,
-  before: readonly Project[],
   after: readonly Project[],
-  added: string | undefined,
-  removed: string | undefined
+  removed: readonly CheckoutRef[] | undefined,
+  show: CheckoutRef | undefined
 ): string | null {
-  if (removed === undefined) {
-    return added ?? current;
+  if (show !== undefined) {
+    return checkoutKey(show);
   }
-  if (current !== removed) {
+  const gone = removed?.find((ref) => checkoutKey(ref) === current);
+  if (gone === undefined) {
     return current;
   }
-  const gone = before.find((project) => project.id === removed);
-  const main = gone?.mainPath === undefined ? undefined : after.find((project) => project.path === gone.mainPath);
-  return added ?? main?.id ?? after[0]?.id ?? null;
+  const main = gone.worktree === undefined ? undefined : after.find((project) => project.id === gone.projectId);
+  const next = main ?? after[0];
+  return next ? checkoutKey(checkoutRef(next.id)) : null;
 }

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { FileSearchMatch, Project, RepositoryState } from "../../shared/types";
+import type { CheckoutRef, FileSearchMatch, RepositoryState } from "../../shared/types";
+import type { Checkout } from "../checkout";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { FileSearch, searchSummary, type FileSearchHandle } from "./FileSearch";
@@ -10,16 +11,16 @@ import { ClearIcon, CollapseAllIcon, ExpandAllIcon, NewFileIcon, NewFolderIcon }
 import { Section } from "../ui/Section";
 
 interface FilesPaneProps {
-  project: Project;
+  checkout: Checkout;
   /** Its changes trigger listing re-reads — a file starting or stopping to exist. */
   state: RepositoryState;
   /** False while the git view stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
   /** The active editor tab's file — the tree reveals it. */
   openPath: string | null;
-  /** Opens in the project's preview tab, or as `how` asks (`editor-tab.ts`) — a search result at
+  /** Opens in the checkout's preview tab, or as `how` asks (`editor-tab.ts`) — a search result at
    *  its match. */
-  onOpenFile: (projectId: string, path: string, how?: OpenEditor) => void;
+  onOpenFile: (checkout: CheckoutRef, path: string, how?: OpenEditor) => void;
   /** Set by the sash between the tree and the search; held by the app, like the branch tree's. */
   searchHeight: number;
   onSearchHeight: (size: number) => void;
@@ -47,7 +48,7 @@ function useDelayed(active: boolean, delayMs: number): boolean {
  * one sidebar). The listing is read only while on screen.
  */
 export const FilesPane = memo(function FilesPane({
-  project,
+  checkout,
   state,
   shown,
   openPath,
@@ -55,9 +56,9 @@ export const FilesPane = memo(function FilesPane({
   searchHeight,
   onSearchHeight
 }: FilesPaneProps) {
-  const { acting, act, ask } = useFileAct(project.id);
-  const { explorerListing, listing, refreshExplorer } = useExplorerListing(project.id, state.changes, shown);
-  const { searchResult, searching, search } = useFileSearch(project.id);
+  const { acting, act, ask } = useFileAct(checkout.key);
+  const { explorerListing, listing, refreshExplorer } = useExplorerListing(checkout, state.changes, shown);
+  const { searchResult, searching, search } = useFileSearch(checkout);
   const explorerRef = useRef<ExplorerHandle>(null);
   const searchRef = useRef<FileSearchHandle>(null);
   /** What the sections' header buttons stand for, reported by the views that hold the state. */
@@ -68,8 +69,8 @@ export const FilesPane = memo(function FilesPane({
   /** A match row: the file at the match, which its editor selects. */
   const onOpenMatch = useCallback(
     (path: string, match: FileSearchMatch) =>
-      onOpenFile(project.id, path, { reveal: { line: match.line, column: match.column, length: match.length } }),
-    [onOpenFile, project.id]
+      onOpenFile(checkout.ref, path, { reveal: { line: match.line, column: match.column, length: match.length } }),
+    [onOpenFile, checkout.ref]
   );
 
   return (
@@ -116,11 +117,11 @@ export const FilesPane = memo(function FilesPane({
           </>
         }
       >
-        {/* Keyed by project: fold and filter state is keyed by paths that repeat across repositories. */}
+        {/* Keyed by checkout: fold and filter state is keyed by paths that repeat across repositories. */}
         <Explorer
-          key={project.id}
+          key={checkout.key}
           ref={explorerRef}
-          project={project}
+          checkout={checkout}
           files={explorerListing}
           shown={shown}
           selected={openPath}
@@ -169,7 +170,7 @@ export const FilesPane = memo(function FilesPane({
       >
         {/* Its own query — the tree above filters by name, this looks inside the files. */}
         <FileSearch
-          key={project.id}
+          key={checkout.key}
           ref={searchRef}
           result={searchResult}
           runSearch={search}

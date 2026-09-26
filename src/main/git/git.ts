@@ -103,6 +103,36 @@ export async function resolveRoot(cwd: string): Promise<string | undefined> {
   }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The repository's project id, `tet.id` in its own config (`--local`: a linked worktree reads its
+ * main one's, which is the point); undefined where it has none, or none valid. Rejects where git
+ * cannot say (the folder gone, git not started): no answer is not "none", which would replace it.
+ */
+export async function readProjectId(cwd: string): Promise<string | undefined> {
+  const result = await git(cwd, ["config", "--local", "--get", "tet.id"]);
+  // Exit 1 is git's "no such key".
+  if (result.code !== 0 && result.code !== 1) {
+    throw new Error(result.stderr.trim() || `git config failed (exit code ${result.code})`);
+  }
+  const id = result.code === 0 ? result.stdout.trim() : "";
+  return UUID.test(id) ? id.toLowerCase() : undefined;
+}
+
+export function writeProjectId(cwd: string, id: string): Promise<GitActionResult> {
+  return run(cwd, ["config", "--local", "tet.id", id]);
+}
+
+/** Exit 5 is git's "no such key": already gone is gone. */
+export async function unsetProjectId(cwd: string): Promise<GitActionResult> {
+  const result = await git(cwd, ["config", "--local", "--unset-all", "tet.id"]).catch(failure);
+  if ("ok" in result) {
+    return result;
+  }
+  return result.code === 0 || result.code === 5 ? { ok: true } : { ok: false, error: result.stderr.trim() || "git config failed" };
+}
+
 /** What the status header says about HEAD. */
 type HeadState = Pick<RepositoryState, "head" | "detached" | "upstream" | "ahead" | "behind">;
 
@@ -439,7 +469,7 @@ async function readOperation(gitDir: string): Promise<GitOperation | undefined> 
  * refresh: its `HEAD` for the main one, and per linked one under `worktrees/<id>` a `gitdir`
  * naming the worktree's `.git` (relative since `--relative-paths`) and its own `HEAD`.
  */
-export async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resolveGitDirs(cwd)): Promise<WorktreeInfo[]> {
+async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resolveGitDirs(cwd)): Promise<WorktreeInfo[]> {
   const linkedRoot = path.join(commonDir, "worktrees");
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
   const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
@@ -468,7 +498,8 @@ export async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs 
     await worktree(mainPath, commonDir, true),
     ...linked
       .filter((entry): entry is WorktreeInfo => entry !== undefined)
-      .sort((a, b) => path.basename(a.path).localeCompare(path.basename(b.path)))
+      // By branch: every worktree TET made is a folder named "checkout" (project-dirs.ts).
+      .sort((a, b) => (a.branch ?? "").localeCompare(b.branch ?? "") || a.path.localeCompare(b.path))
   ];
 }
 
@@ -1018,7 +1049,7 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
 
 /**
  * A worktree always with a new branch of its own at `base`, the default branch: tet couples the
- * two, so deleting or renaming one does the other. `--no-track`, as `createBranch`: the first push
+ * two, so deleting one does the other, and the worktree is named by its branch. `--no-track`, as `createBranch`: the first push
  * publishes it. `--relative-paths` (git 2.48) links the two `.git`s relatively, so the link holds
  * in an sbx sandbox, where the paths differ from the host's on Windows (measured, git 2.53 in the
  * kits: status, commit and branch work with the main `.git` mounted). It sets
@@ -1038,12 +1069,6 @@ export async function worktreeAdd(cwd: string, target: string, branch: string, b
 /** Without `force` git refuses a worktree with changes or untracked files; a locked one either way. */
 export function worktreeRemove(cwd: string, target: string, force: boolean): Promise<GitActionResult> {
   return run(cwd, ["worktree", "remove", ...(force ? ["--force"] : []), "--", target]);
-}
-
-/** `--relative-paths` again: without it the move writes both links absolute, even in a repository
- *  set to relative ones (measured, git 2.55), and a sandbox loses the worktree (worktreeAdd). */
-export function worktreeMove(cwd: string, from: string, to: string): Promise<GitActionResult> {
-  return run(cwd, ["worktree", "move", "--relative-paths", "--", from, to]);
 }
 
 /** Forgets worktrees whose folder is gone; until then git keeps their branches checked out. */

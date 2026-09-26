@@ -16,8 +16,9 @@ import {
   sbxProblemNotices,
   withoutProblems
 } from "../shared/sbx-rules";
-import { SBX_AGENT_IDS } from "../shared/types";
+import { checkoutKey, SBX_AGENT_IDS } from "../shared/types";
 import type {
+  CheckoutRef,
   SbxAccess,
   SbxAgentId,
   SbxBlocker,
@@ -41,7 +42,7 @@ import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
 import { expandHome, relativeInside } from "./path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
-import { agentDataDir, agentDirFor } from "./terminals/agent-data";
+import { projectsDir, sandboxDir } from "./project-dirs";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/hook-target";
 import { isSimulatedMissing } from "./simulate";
@@ -57,7 +58,7 @@ let currentChild: ChildProcess | undefined;
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
  *  from main.ts. Unset without a control channel, and then nothing of it reaches a sandbox. */
 let control: { cliPath: string; port: number } | undefined;
-/** tet's data folder, holding its mounted folders (readSbxBlockers, agent-data.ts). */
+/** tet's data folder, holding its mounted folders (readSbxBlockers, project-dirs.ts). */
 let storageRoot: string | undefined;
 export function configureSandboxes(cliPath: string, port: number, dataRoot: string): void {
   control = { cliPath, port };
@@ -123,12 +124,12 @@ async function runSbx(args: string[], options: RunOptions = {}): Promise<RunResu
 }
 
 /**
- * One command via `sbx exec` (no shell, `-w` the sandbox's view of `cwd`), for one-off actions on a
- * sandboxed session; exec starts a stopped sandbox. Stdout on exit 0, else rejects with stderr —
+ * One command via `sbx exec` (no shell, `-w` `cwd` as the sandbox sees it: toContainerPath), for
+ * one-off actions on a sandboxed session; exec starts a stopped sandbox. Stdout on exit 0, else rejects with stderr —
  * for a deleted sandbox `ERROR: sandbox '<name>' not found`.
  */
 export async function execInSandbox(name: string, cwd: string, command: string[]): Promise<string> {
-  const result = await runSbx(["exec", "-i", "-w", toContainerPath(cwd), name, ...command]);
+  const result = await runSbx(["exec", "-i", "-w", cwd, name, ...command]);
   if (!result.ok) {
     const said = result.stderr.trim();
     throw new Error(`${command[0]} failed in sandbox ${name}${said ? `: ${said.slice(-300)}` : ""}`);
@@ -277,8 +278,8 @@ type SandboxList = Map<string, string[]>;
  * runs with no turn marks and no reason given.
  */
 export async function checkSbxReady(
-  projectPath: string,
-  projectId: string
+  checkoutPath: string,
+  ref: CheckoutRef
 ): Promise<{ notReady: string } | { sandboxes: SandboxList; organization?: string; rules?: FilesystemRule[] }> {
   // No PATH re-read on the spawn path: on macOS/Linux that is a login shell per call.
   const { status, sandboxes } = await probeSbx(false);
@@ -287,7 +288,7 @@ export async function checkSbxReady(
   if (notReady !== undefined || !sandboxes) {
     return { notReady: notReady ?? "SBX is not signed in to Docker" };
   }
-  const { blockers, rules } = await readSbxBlockers(projectPath, projectId);
+  const { blockers, rules } = await readSbxBlockers(checkoutPath, ref);
   if (blockers.length > 0) {
     const policy = status.organization ? "your organization's SBX policy" : "SBX's policy";
     return { notReady: `${policy} does not allow ${blockers.map((blocker) => blocker.allow).join("; ")}` };
@@ -299,10 +300,10 @@ export async function checkSbxReady(
  * What the sbx-settings dialog asks before showing its fields. PATH is re-read: "Check again"
  * follows an install. Nothing cached — sbx changes from outside tet at any time.
  */
-export async function readSbxStatus(projectPath: string, projectId: string): Promise<SbxStatus> {
+export async function readSbxStatus(checkoutPath: string, ref: CheckoutRef): Promise<SbxStatus> {
   const { status } = await probeSbx(true);
   if (status.policyInitialized) {
-    status.blockers = (await readSbxBlockers(projectPath, projectId)).blockers;
+    status.blockers = (await readSbxBlockers(checkoutPath, ref)).blockers;
   }
   return status;
 }
@@ -316,9 +317,10 @@ function folderRule(folder: string): string {
 
 /**
  * What sbx's policy must still allow for a sandboxed tab: the control channel
- * (isControlChannelAllowed), the project as workspace, and tet's mounted folders — each agentDir
- * rw (fixedMountSpecs). Checked as mounted, asked for as one rule under agentDataDir, read *and*
- * write as Docker's docs require (write alone measured to suffice). Rules come from one
+ * (isControlChannelAllowed), the checkout as workspace, and tet's mounted folders — each agent's
+ * sandbox folder rw (fixedMountSpecs). Checked as mounted, asked for as one rule over projectsDir,
+ * which covers a worktree TET made as well, read *and* write as Docker's docs require (write alone
+ * measured to suffice). Rules come from one
  * `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
  * for — a tab starts without them.
  *
@@ -326,8 +328,8 @@ function folderRule(folder: string): string {
  * are returned too, for a spawn's readSbxProblems.
  */
 async function readSbxBlockers(
-  projectPath: string,
-  projectId: string
+  checkoutPath: string,
+  ref: CheckoutRef
 ): Promise<{ blockers: SbxBlocker[]; rules?: FilesystemRule[] }> {
   const [channelAllowed, rules] = await Promise.all([isControlChannelAllowed(), readFilesystemRules()]);
   const blockers: SbxBlocker[] = [];
@@ -335,18 +337,23 @@ async function readSbxBlockers(
     blockers.push({ what: "tet's hooks", allow: "localhost (network, no port)" });
   }
   const mountable = mountableBy(rules ?? []);
-  if (!mountable(projectPath, "rw")) {
-    blockers.push({ what: "The project", allow: `${folderRule(projectPath)} (read and write)` });
+  const projects = storageRoot === undefined ? undefined : projectsDir(storageRoot);
+  // A worktree TET made lies under projectsDir, which the rule below covers.
+  const ownWorktree = ref.worktree !== undefined;
+  if (!ownWorktree && !mountable(checkoutPath, "rw")) {
+    blockers.push({ what: "The project", allow: `${folderRule(checkoutPath)} (read and write)` });
   }
-  const repositoryGitDir = readLinkedGitDir(projectPath)?.commonDir;
+  const repositoryGitDir = readLinkedGitDir(checkoutPath)?.commonDir;
   if (repositoryGitDir !== undefined && !mountable(repositoryGitDir, "rw")) {
     blockers.push({ what: "The worktree's repository", allow: `${folderRule(repositoryGitDir)} (read and write)` });
   }
-  if (storageRoot) {
+  if (storageRoot !== undefined && projects !== undefined) {
     const root = storageRoot;
-    const own = SBX_AGENT_IDS.every((agentId) => mountable(agentDirFor(root, agentId, projectId), "rw"));
+    const own =
+      SBX_AGENT_IDS.every((agentId) => mountable(sandboxDir(root, ref, agentId), "rw")) &&
+      (!ownWorktree || mountable(checkoutPath, "rw"));
     if (!own) {
-      blockers.push({ what: "tet's agent data", allow: `${folderRule(agentDataDir(root))} (read and write)` });
+      blockers.push({ what: "tet's project data", allow: `${folderRule(projects)} (read and write)` });
     }
   }
   return { blockers, rules };
@@ -485,26 +492,27 @@ async function isControlChannelAllowed(): Promise<boolean> {
 }
 
 /**
- * Stable per (project, agent) so `sbx run --name` reattaches. Hashed: `sbx create --name` allows
- * only letters, numbers, hyphens and periods.
+ * Stable per (checkout, agent) so `sbx run --name` reattaches: a worktree's workspace is its own,
+ * fixed at `sbx create`. Hashed: `sbx create --name` allows only letters, numbers, hyphens and
+ * periods.
  */
-export function sandboxName(projectId: string, agentId: SbxAgentId): string {
-  return `tet-${agentId}-${projectHash(projectId)}`;
+export function sandboxName(ref: CheckoutRef, agentId: SbxAgentId): string {
+  return `tet-${agentId}-${idHash(checkoutKey(ref))}`;
 }
 
 /**
- * The agent of a sandbox tet made (sandboxName) for this workspace under another project id — the
- * project closed and opened again. Nothing reaches it any more, yet it keeps grants, rules and
- * secrets of its own; undefined for any other sandbox.
+ * The agent of a sandbox tet made (sandboxName) for this workspace under another id — made by a TET
+ * before project ids came from `tet.id`, or for a copied folder given a new one. Nothing reaches it
+ * any more, yet it keeps grants, rules and secrets of its own; undefined for any other sandbox.
  */
-function orphanAgent(name: string, workspaces: string[], projectId: string, projectPath: string): SbxAgentId | undefined {
+function orphanAgent(name: string, workspaces: string[], target: SbxSaveTarget): SbxAgentId | undefined {
   const agentId = SBX_AGENT_IDS.find((candidate) => new RegExp(`^tet-${candidate}-[0-9a-f]{12}$`).test(name));
-  return agentId !== undefined && name !== sandboxName(projectId, agentId) && sameSet(workspaces, [projectPath]) ? agentId : undefined;
+  return agentId !== undefined && name !== sandboxName(target.ref, agentId) && sameSet(workspaces, [target.path]) ? agentId : undefined;
 }
 
-/** The project's share of a sandbox name and of a secret placeholder: one identity, one place. */
-function projectHash(projectId: string): string {
-  return crypto.createHash("sha1").update(projectId).digest("hex").slice(0, 12);
+/** An id's share of a sandbox name (a checkout's) and of a secret placeholder (a project's). */
+function idHash(id: string): string {
+  return crypto.createHash("sha1").update(id).digest("hex").slice(0, 12);
 }
 
 /**
@@ -573,9 +581,10 @@ function statOf(candidate: string): Stats | undefined {
 type SandboxPaths = Pick<AgentPaths, "agentDir">;
 
 /**
- * tet's own mount for every sandboxed tab: `agentDir` rw (hook settings, agents' records). A live
- * mount, since a create positional cannot change afterwards ("already exists and can't be given
- * new workspaces"). The project stays create-time: `sbx run` has no `--workdir`
+ * tet's own mount for every sandboxed tab: its agent's sandbox folder rw (hook settings, agents'
+ * records), and nothing else of `~/.tet` — the host tabs' folders stay out. A live mount, since a
+ * create positional cannot change afterwards ("already exists and can't be given new
+ * workspaces"). The checkout stays create-time: `sbx run` has no `--workdir`
  * (docker/sbx-releases#394), and without a positional the agent starts in an empty
  * `/home/agent/workspace` (measured, 0.42.1). It lands at the host path's container form, so
  * `HookTarget` paths hold.
@@ -595,8 +604,8 @@ export function fixedMountSpecs(paths: SandboxPaths): MountSpec[] {
  * links (git.ts's worktreeAdd), which hold at the container paths; with the mount, status, commit and
  * branch work there (measured, sbx 0.42.1, git 2.53 in the kits). Live, like fixedMountSpecs.
  */
-function worktreeMountSpecs(projectPath: string): MountSpec[] {
-  const commonDir = readLinkedGitDir(projectPath)?.commonDir;
+function worktreeMountSpecs(checkoutPath: string): MountSpec[] {
+  const commonDir = readLinkedGitDir(checkoutPath)?.commonDir;
   return commonDir === undefined ? [] : [pathMountSpecs({ path: commonDir, access: "rw" })];
 }
 
@@ -771,15 +780,17 @@ async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {
 }
 
 /**
- * A removed or renamed worktree's sandboxes: their one workspace is gone, and the project id they
- * are named by (sandboxName) never comes back. Nothing when sbx cannot list them.
+ * The sandboxes of checkouts going away — a deleted worktree, a removed project: their workspace is
+ * gone or no longer TET's. Nothing when sbx cannot list them.
  */
-export async function removeProjectSandboxes(projectId: string): Promise<void> {
+export async function removeCheckoutSandboxes(refs: CheckoutRef[]): Promise<void> {
   const sandboxes = await listSandboxes();
-  for (const agentId of SBX_AGENT_IDS) {
-    const name = sandboxName(projectId, agentId);
-    if (sandboxes?.has(name)) {
-      await removeSandbox(name);
+  for (const ref of refs) {
+    for (const agentId of SBX_AGENT_IDS) {
+      const name = sandboxName(ref, agentId);
+      if (sandboxes?.has(name)) {
+        await removeSandbox(name);
+      }
     }
   }
 }
@@ -800,10 +811,10 @@ export async function ensureRunning(name: string, onData?: OnData): Promise<bool
 }
 
 /**
- * Ensures a sandbox whose one workspace is this project — all else is mounted live, so this is
+ * Ensures a sandbox whose one workspace is this checkout — all else is mounted live, so this is
  * all `sbx create` is told. A different workspace means a rebuild: an older tet's sandbox with
- * create-time fixed paths, or a project whose path moved under the same id (`sandboxName` hashes
- * the id; `projects.json` is hand-editable). Nothing open can be attached to such a sandbox, so it
+ * create-time fixed paths, or a repository moved under the same id (`sandboxName` hashes the
+ * checkout's key, and `tet.id` travels with the repository). Nothing open can be attached to such a sandbox, so it
  * is removed outright. Returns whether it created one, which needs seeding from tet.json
  * (prepareSbxRun's allowHosts).
  *
@@ -1076,7 +1087,7 @@ export function secretPlaceholder(projectId: string, env: string): string {
 }
 
 function secretPrefix(projectId: string): string {
-  return `tet-${projectHash(projectId)}-`;
+  return `tet-${idHash(projectId)}-`;
 }
 
 /** A custom secret as `sbx secret ls --json` lists it. */
@@ -1168,8 +1179,9 @@ interface SbxSessionMount {
 
 interface SbxRunRequest {
   agentId: SbxAgentId;
-  projectId: string;
-  projectPath: string;
+  /** The checkout the tab runs in; its sandbox is its own, its sbx values the project's. */
+  ref: CheckoutRef;
+  checkoutPath: string;
   config: SbxProjectConfig;
   /** This machine's knowledge for the project (SbxLocalStore.knowledge). */
   knowledge: SbxKnowledgeConfig;
@@ -1235,12 +1247,12 @@ async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<MountSpec[]
  * secret or variable without a value on this machine (a problem, readSbxProblems).
  */
 export function sandboxEnv({
-  projectId,
+  ref,
   config,
   env: agentEnv = [],
   secretValues,
   variableValues
-}: Pick<SbxRunRequest, "projectId" | "config" | "env" | "secretValues" | "variableValues">): {
+}: Pick<SbxRunRequest, "ref" | "config" | "env" | "secretValues" | "variableValues">): {
   env: string[];
   passed: Record<string, string>;
 } {
@@ -1258,7 +1270,7 @@ export function sandboxEnv({
     }
   }
   return {
-    env: [...agentEnv, ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(projectId, secret.env)}`)],
+    env: [...agentEnv, ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(ref.projectId, secret.env)}`)],
     passed
   };
 }
@@ -1277,14 +1289,15 @@ export async function prepareSbxRun(
   request: SbxRunRequest
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
   const { agentId, onData, secretValues, variableValues } = request;
-  const name = sandboxName(request.projectId, agentId);
-  const created = await ensureSandboxExists(agentId, request.projectPath, name, request.sandboxes, onData);
+  const { projectId } = request.ref;
+  const name = sandboxName(request.ref, agentId);
+  const created = await ensureSandboxExists(agentId, request.checkoutPath, name, request.sandboxes, onData);
   // Ports, hosts and secrets only reach a sandbox this call created: they survive a stop, and after
   // that a Save brings them in line (saveSbxConfig). A port another sandbox of the project forwards
   // is in place already (applyProjectPorts).
-  const forwarded = created && request.config.ports.length > 0 ? await readProjectPorts(request.projectId, request.sandboxes) : new Set<string>();
+  const forwarded = created && request.config.ports.length > 0 ? await readProjectPorts(projectId, request.sandboxes) : new Set<string>();
   const problems = await readSbxProblems({
-    projectId: request.projectId,
+    projectId,
     config: request.config,
     knowledge: request.knowledge,
     values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
@@ -1301,7 +1314,7 @@ export async function prepareSbxRun(
   // tab stops with sbx's reason in its output.
   const own = [
     ...fixedMountSpecs(request.paths),
-    ...worktreeMountSpecs(request.projectPath),
+    ...worktreeMountSpecs(request.checkoutPath),
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
   const grants = await grantsOf(agentId, knowledge, config.paths);
@@ -1326,7 +1339,7 @@ export async function prepareSbxRun(
     const added = config.ports.filter((port) => !forwarded.has(sbxPortKey(port)));
     addProblems(problems, "ports", await applyPortChanges(name, { removed: [], added }, onData));
     // The sandbox's secrets went with any earlier one of its name.
-    addProblems(problems, "secrets", await applySecrets(name, request.projectId, config.secrets, secretValues, [], new Set(), onData));
+    addProblems(problems, "secrets", await applySecrets(name, projectId, config.secrets, secretValues, [], new Set(), onData));
   }
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged (verified, 2026-09-08: "sandbox 'x'
@@ -1341,9 +1354,10 @@ export async function prepareSbxRun(
     ...Object.keys(passed).flatMap((variable) => ["-e", variable])
   ];
   if (control) {
-    // The tab id too: a hook reports for the tab it runs in (ProjectSessionManager.hookEvent).
+    // The tab id too: a hook reports for the tab it runs in (CheckoutSessionManager.hookEvent).
     const passThrough = [CONTROL_ENV.port, CONTROL_ENV.token, CONTROL_ENV.projectId, CONTROL_ENV.tabId];
-    args.push(...passThrough.flatMap((variable) => ["-e", variable]), "-e", `${CONTROL_ENV.host}=host.docker.internal`);
+    const worktree = request.ref.worktree === undefined ? [] : ["-e", `${CONTROL_ENV.worktree}=${request.ref.worktree}`];
+    args.push(...passThrough.flatMap((variable) => ["-e", variable]), ...worktree, "-e", `${CONTROL_ENV.host}=host.docker.internal`);
     // Best-effort: a missing launcher must not keep the agent from starting.
     await ensureSandboxLauncher(name, onData);
   }
@@ -1359,7 +1373,8 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
   if (!sandboxes) {
     throw new Error("SBX could not list the sandboxes.");
   }
-  const names = SBX_AGENT_IDS.map((agentId) => sandboxName(projectId, agentId)).filter((name) => sandboxes.has(name));
+  // A worktree forwards no ports (tet-json.ts's readSbxConfig): only the main worktree's sandboxes.
+  const names = SBX_AGENT_IDS.map((agentId) => sandboxName({ projectId }, agentId)).filter((name) => sandboxes.has(name));
   const published = await Promise.all(names.map(readSandboxPorts));
   if (published.includes(undefined)) {
     throw new Error("SBX could not list the sandboxes' ports.");
@@ -1509,9 +1524,9 @@ async function applyProjectPorts(names: string[], ports: SbxPort[], read?: Map<s
   return refused;
 }
 
-/** A project whose sandboxes a Save brings in line (saveSbxConfig). */
+/** A checkout whose sandboxes a Save brings in line (saveSbxConfig), with its folder. */
 export interface SbxSaveTarget {
-  id: string;
+  ref: CheckoutRef;
   path: string;
 }
 
@@ -1571,9 +1586,9 @@ async function assertReadable(
   return reads;
 }
 
-/** A sandbox a Save removed, by the project it was of. */
+/** A sandbox a Save removed, by the checkout it was of. */
 export interface SbxRemoved {
-  projectId: string;
+  ref: CheckoutRef;
   agentId: SbxAgentId;
 }
 
@@ -1589,9 +1604,9 @@ export interface SbxRemoved {
  * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
  * is `refused` too, its row and knowledge kind kept as they were. Ports need the sandbox running.
  * A sandbox that cannot be removed rejects, tet.json left as it was; so does a Save sbx cannot read
- * the sandboxes for (assertReadable), before anything changed. The open `worktrees` of the
- * project's repository take its tet.json (tet-json.ts's configRoot), so their sandboxes are brought
- * in line too, all but the ports, which only the project's own forward. Returns the sandboxes
+ * the sandboxes for (assertReadable), before anything changed. The project's `worktrees` take its
+ * tet.json (tet-json.ts's configRoot), so their sandboxes are brought in line too, all but the
+ * ports, which only the main worktree's forward. Returns the sandboxes
  * removed, for the caller to say so: a running session of theirs just lost its sandbox; those of
  * the earlier ids; what sbx refused; what could not be taken back; and what tet.json and the
  * knowledge now hold.
@@ -1624,24 +1639,24 @@ export async function saveSbxConfig(
   // Sorted out first, removed only once `assertReadable` passed: a Save that stops changes nothing.
   const orphaned: (SbxRemoved & { name: string })[] = [];
   for (const [name, workspaces] of sandboxes) {
-    const target = targets.find((candidate) => orphanAgent(name, workspaces, candidate.id, candidate.path) !== undefined);
+    const target = targets.find((candidate) => orphanAgent(name, workspaces, candidate) !== undefined);
     if (target !== undefined) {
-      orphaned.push({ name, projectId: target.id, agentId: orphanAgent(name, workspaces, target.id, target.path)! });
+      orphaned.push({ name, ref: target.ref, agentId: orphanAgent(name, workspaces, target)! });
     }
   }
   const kept: { agentId: SbxAgentId; name: string; projectId: string; ports: boolean }[] = [];
   const dropped: (SbxRemoved & { name: string })[] = [];
   for (const target of targets) {
     for (const agentId of SBX_AGENT_IDS) {
-      const name = sandboxName(target.id, agentId);
+      const name = sandboxName(target.ref, agentId);
       const existing = sandboxes.get(name);
       if (existing === undefined) {
         continue;
       }
       if (config.enabled && sameSet(existing, [target.path])) {
-        kept.push({ agentId, name, projectId: target.id, ports: target === project });
+        kept.push({ agentId, name, projectId: target.ref.projectId, ports: target === project });
       } else {
-        dropped.push({ name, projectId: target.id, agentId });
+        dropped.push({ name, ref: target.ref, agentId });
       }
     }
   }
@@ -1651,17 +1666,17 @@ export async function saveSbxConfig(
     config.ports.length > 0 || previous.ports.length > 0,
     !organization
   );
-  for (const { name, projectId, agentId } of orphaned) {
+  for (const { name, ref, agentId } of orphaned) {
     if (!(await removeSandbox(name))) {
       throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
     }
-    orphans.push({ projectId, agentId });
+    orphans.push({ ref, agentId });
   }
-  for (const { name, projectId, agentId } of dropped) {
+  for (const { name, ref, agentId } of dropped) {
     if (!(await removeSandbox(name))) {
       throw new Error(`The ${getAgent(agentId).displayName} sandbox could not be removed.`);
     }
-    removed.push({ projectId, agentId });
+    removed.push({ ref, agentId });
   }
   // Brings every kept sandbox to `target`. The listings answer for every sandbox at once, so they
   // are asked together, and only when the project has one: each is an sbx process (~0.45 s).

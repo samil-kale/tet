@@ -1,6 +1,5 @@
 import { findUrls } from "../../../shared/urls";
 import { runOpencode } from "./cli";
-import { sessionSandbox } from "./sessions";
 
 /**
  * opencode's TUI breaks a long url at the last "." that fits, indistinguishable in the buffer; the
@@ -16,7 +15,8 @@ export async function resolveOpencodeUrlPrefix(
   executable: string,
   cwd: string,
   sessionId: string,
-  prefix: string
+  prefix: string,
+  sandbox: string | undefined
 ): Promise<string | undefined> {
   const cached = cache.get(sessionId);
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
@@ -26,7 +26,7 @@ export async function resolveOpencodeUrlPrefix(
     }
     // The cache may predate the url's message.
   }
-  return longestStartingWith(await fetchSessionUrls(executable, cwd, sessionId), prefix);
+  return longestStartingWith(await fetchSessionUrls(executable, cwd, sessionId, sandbox), prefix);
 }
 
 /** Every string value, at any depth. */
@@ -56,10 +56,10 @@ function longestStartingWith(urls: string[], prefix: string): string | undefined
 
 /**
  * `opencode export <id>` prints the session as json on stdout (banner on stderr, measured). ~1.5 s
- * per run, fine on hover once per fragment; run where the session's record says it lives.
+ * per run, fine on hover once per fragment; run where the session lives.
  */
-async function fetchSessionUrls(executable: string, cwd: string, sessionId: string): Promise<string[]> {
-  const output = await runOpencode(executable, cwd, await sessionSandbox(cwd, sessionId),["export", sessionId]);
+async function fetchSessionUrls(executable: string, cwd: string, sessionId: string, sandbox: string | undefined): Promise<string[]> {
+  const output = await runOpencode(executable, cwd, sandbox, ["export", sessionId]);
   // Every string, so opencode's message schema needn't be tracked. Parsed, not scanned raw: json
   // escapes would corrupt urls ("\n" gives "nhttps://...", "\/" cuts one short).
   const strings: string[] = [];

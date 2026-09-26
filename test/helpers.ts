@@ -123,6 +123,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     [CONTROL_ENV.port]: String(await findControlPort(userData)),
     [CONTROL_ENV.token]: token,
     [CONTROL_ENV.projectId]: undefined,
+    [CONTROL_ENV.worktree]: undefined,
     [CONTROL_ENV.tabId]: undefined
   };
   const args = [path.join(__dirname, ".."), `--user-data-dir=${userData}`, "--allow-shell-only"];
@@ -144,7 +145,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   const ctl = (...ctlArgs: string[]): Promise<Run> => tetCtl(ctlArgs, env);
   const asTab = (projectId: string, tabId: string): Record<string, string | undefined> => ({
     ...env,
-    [CONTROL_ENV.token]: tabControlToken(token, projectId, tabId, false),
+    [CONTROL_ENV.token]: tabControlToken(token, { projectId }, tabId, false),
     [CONTROL_ENV.projectId]: projectId,
     [CONTROL_ENV.tabId]: tabId
   });

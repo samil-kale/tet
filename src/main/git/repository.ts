@@ -3,8 +3,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
-import { EMPTY_REPOSITORY_STATE, defaultRemote, headRemote } from "../../shared/types";
+import { EMPTY_REPOSITORY_STATE, checkoutKey, defaultRemote, headRemote } from "../../shared/types";
 import type {
+  CheckoutRef,
   CheckoutTarget,
   ExplorerListing,
   ExplorerSettings,
@@ -17,12 +18,13 @@ import type {
   GitLogin,
   HeadBlob,
   NoticeSeverity,
-  Project,
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { addExclude, addFolder, configRoot, isWorktree, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
+import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
+import type { Checkout } from "../checkout";
 import { countActivity, logSlow } from "../event-loop-monitor";
+import { worktreeKeyOf } from "../project-dirs";
 import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
 import { git } from "./git-client";
 import type { GitLoginStore } from "../git-logins";
@@ -151,7 +153,10 @@ export class Repository {
   private disposed = false;
 
   constructor(
-    readonly project: Project,
+    /** The checkout it reads and runs git in. */
+    readonly at: Checkout,
+    /** TET's key of a worktree of this repository, by its path (project-dirs.ts's worktreeKeyOf). */
+    private readonly worktreeKeyOf: (worktreePath: string) => string | undefined,
     private readonly onState: (state: RepositoryState) => void,
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
     /** tet.json changed — an editor, an agent or a checkout may rewrite it. */
@@ -175,7 +180,7 @@ export class Repository {
   /** Reports a read error, named by project, only when it changed — not again on every refresh. */
   private reportError(next: RepositoryState): void {
     if (next.error && next.error !== this.state.error) {
-      this.onNotice("error", `${this.project.name}: ${next.error}`);
+      this.onNotice("error", `${this.at.name()}: ${next.error}`);
     }
   }
 
@@ -192,7 +197,7 @@ export class Repository {
     // All three at once: each is a git start (the measured cost); in sequence they visibly delay
     // the pane.
     const [isGit, , read] = await Promise.all([
-      git.isRepository(this.project.path).catch(() => false),
+      git.isRepository(this.at.path).catch(() => false),
       this.loadConfig(),
       this.read()
     ]);
@@ -215,8 +220,8 @@ export class Repository {
   private async loadConfig(): Promise<void> {
     this.configStale = false;
     const [urls, branchConfig] = await Promise.all([
-      git.readRemoteUrls(this.project.path).catch(() => ({})),
-      git.readBranchConfig(this.project.path).catch(() => ({ defaultBranchName: "main", worktreeBases: {} }))
+      git.readRemoteUrls(this.at.path).catch(() => ({})),
+      git.readBranchConfig(this.at.path).catch(() => ({ defaultBranchName: "main", worktreeBases: {} }))
     ]);
     this.remoteUrls = urls;
     this.defaultBranchName = branchConfig.defaultBranchName;
@@ -232,9 +237,9 @@ export class Repository {
     // With a kept login, never a typed one: nothing is asked in the background.
     const remote = this.headRemote;
     this.autoFetching = this.network(remote, undefined, (login) =>
-      git.fetch(this.project.path, remote, login, AUTO_FETCH_TIMEOUT_MS)
+      git.fetch(this.at.path, remote, login, AUTO_FETCH_TIMEOUT_MS)
     )
-      .then(() => git.fastForwardBranches(this.project.path))
+      .then(() => git.fastForwardBranches(this.at.path))
       .catch(() => undefined)
       .then(() => this.refresh())
       .then(
@@ -249,7 +254,7 @@ export class Repository {
 
   private read(): Promise<RepositoryState> {
     // readState reports errors in its result; a rejection is the git process gone.
-    return git.readState(this.project.path, Object.keys(this.remoteUrls)).catch((error: unknown) => ({
+    return git.readState(this.at.path, Object.keys(this.remoteUrls)).catch((error: unknown) => ({
       ...EMPTY_REPOSITORY_STATE,
       error: errorMessage(error)
     }));
@@ -321,8 +326,9 @@ export class Repository {
       (read.localBranches.includes(this.defaultBranchName) ? { name: this.defaultBranchName } : undefined);
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
-      // Only a linked worktree carries a base; the main one was made with the repository.
-      base: worktree.main || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch]
+      // Only a linked worktree carries a base and a key; the main one was made with the repository.
+      base: worktree.main || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch],
+      key: worktree.main ? undefined : this.worktreeKeyOf(worktree.path)
     }));
     const next: RepositoryState = { ...read, remotes, defaultBranch, worktrees };
     this.reportError(next);
@@ -365,7 +371,7 @@ export class Repository {
       await this.autoFetching;
     }
     // Closed meanwhile: dispose() resolved once the fetch ended, and a worktree's folder may now be
-    // being moved or removed — git started in it would fail it on win32 ("Permission denied").
+    // being removed — git started in it would fail it on win32 ("Permission denied").
     if (this.disposed) {
       return { ok: false, error: "The repository was closed" };
     }
@@ -386,8 +392,8 @@ export class Repository {
 
   /**
    * Several commands, and what happens between them, in one hold of the slot: refused up front when
-   * another command runs, never halfway. projects.ts's worktree delete and rename close a project
-   * midway, which must not be for nothing. This repository's commands called from `steps` run in
+   * another command runs, never halfway. projects.ts's worktree delete closes the worktree midway,
+   * which must not be for nothing. This repository's commands called from `steps` run in
    * the hold; a call from anywhere else meanwhile is refused as usual.
    */
   exclusive(steps: () => Promise<GitActionResult>): Promise<GitActionResult> {
@@ -395,15 +401,15 @@ export class Repository {
   }
 
   checkout(target: CheckoutTarget): Promise<GitActionResult> {
-    return this.runAction(() => git.checkout(this.project.path, target, this.state.localBranches));
+    return this.runAction(() => git.checkout(this.at.path, target, this.state.localBranches));
   }
 
   fetch(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(async () => {
       // The remote whose login is looked up, named: git's default could be another host's.
       const remote = this.headRemote;
-      const fetched = await this.network(remote, login, (networkLogin) => git.fetch(this.project.path, remote, networkLogin));
-      await git.fastForwardBranches(this.project.path);
+      const fetched = await this.network(remote, login, (networkLogin) => git.fetch(this.at.path, remote, networkLogin));
+      await git.fastForwardBranches(this.at.path);
       return fetched;
     });
   }
@@ -415,13 +421,13 @@ export class Repository {
       const remote = this.headRemote;
       // The remote's HEAD with the same login: on a host that wants one, without it it always fails.
       const pulled = await this.network(remote, login, async (networkLogin) => {
-        const result = await git.pull(this.project.path, networkLogin);
+        const result = await git.pull(this.at.path, networkLogin);
         if (result.ok && remote) {
-          await git.updateRemoteHead(this.project.path, remote, networkLogin);
+          await git.updateRemoteHead(this.at.path, remote, networkLogin);
         }
         return result;
       });
-      await git.fastForwardBranches(this.project.path);
+      await git.fastForwardBranches(this.at.path);
       return pulled;
     });
   }
@@ -438,7 +444,7 @@ export class Repository {
         return Promise.resolve({ ok: false, error: "HEAD is detached — check out a branch to push it" });
       }
       return this.network(remote, login, (networkLogin) =>
-        git.push(this.project.path, remote, this.state.head, upstream?.branch, networkLogin)
+        git.push(this.at.path, remote, this.state.head, upstream?.branch, networkLogin)
       );
     });
   }
@@ -461,49 +467,45 @@ export class Repository {
     command: (login?: NetworkLogin) => Promise<GitActionResult>
   ): Promise<GitActionResult> {
     const url = remote === undefined ? undefined : this.remoteUrls[remote];
-    return url === undefined ? command() : this.logins.run(this.project.path, url, login, command);
+    return url === undefined ? command() : this.logins.run(this.at.path, url, login, command);
   }
 
   /** Re-reads the config after, since only this changes a url. */
   setRemoteUrl(remote: string, url: string): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const result = await git.setRemoteUrl(this.project.path, remote, url);
+      const result = await git.setRemoteUrl(this.at.path, remote, url);
       await this.loadConfig();
       return result;
     });
   }
 
   createBranch(name: string, startPoint: string): Promise<GitActionResult> {
-    return this.runAction(() => git.createBranch(this.project.path, name, startPoint));
+    return this.runAction(() => git.createBranch(this.at.path, name, startPoint));
   }
 
   /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). Re-reads the config
    *  after: this is what records `branch.<name>.base`, and the new row shows it at once. */
   addWorktree(target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const result = await git.worktreeAdd(this.project.path, target, branch, base);
+      const result = await git.worktreeAdd(this.at.path, target, branch, base);
       await this.loadConfig();
       return result;
     });
   }
 
   removeWorktree(target: string, force: boolean): Promise<GitActionResult> {
-    return this.runAction(() => git.worktreeRemove(this.project.path, target, force));
-  }
-
-  moveWorktree(from: string, to: string): Promise<GitActionResult> {
-    return this.runAction(() => git.worktreeMove(this.project.path, from, to));
+    return this.runAction(() => git.worktreeRemove(this.at.path, target, force));
   }
 
   pruneWorktrees(): Promise<GitActionResult> {
-    return this.runAction(() => git.worktreePrune(this.project.path));
+    return this.runAction(() => git.worktreePrune(this.at.path));
   }
 
   /** git moves the branch's whole config section with it, `branch.<name>.base` included, so the
    *  config is read again. */
   renameBranch(from: string, to: string): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const result = await git.renameBranch(this.project.path, from, to);
+      const result = await git.renameBranch(this.at.path, from, to);
       await this.loadConfig();
       return result;
     });
@@ -519,18 +521,18 @@ export class Repository {
         if (!fallback || (fallback.remote === undefined && fallback.name === name)) {
           return { ok: false, error: `There is no default branch to switch to before deleting ${name}` };
         }
-        const switched = await git.checkout(this.project.path, fallback, this.state.localBranches);
+        const switched = await git.checkout(this.at.path, fallback, this.state.localBranches);
         if (!switched.ok) {
           return switched;
         }
       }
-      const local = await git.deleteBranch(this.project.path, name);
+      const local = await git.deleteBranch(this.at.path, name);
       if (!local.ok || !onRemote) {
         return local;
       }
       return upstream
         ? this.network(upstream.remote, undefined, (login) =>
-            git.deleteRemoteBranch(this.project.path, upstream.remote, upstream.branch, login)
+            git.deleteRemoteBranch(this.at.path, upstream.remote, upstream.branch, login)
           )
         : { ok: false, error: `${name} has no upstream to delete on a remote` };
     });
@@ -540,22 +542,22 @@ export class Repository {
    *  whose remote half wanted a login. */
   deleteRemoteBranch(remote: string, name: string, login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(() =>
-      this.network(remote, login, (networkLogin) => git.deleteRemoteBranch(this.project.path, remote, name, networkLogin))
+      this.network(remote, login, (networkLogin) => git.deleteRemoteBranch(this.at.path, remote, name, networkLogin))
     );
   }
 
   merge(ref: string): Promise<GitActionResult> {
-    return this.runAction(() => git.merge(this.project.path, ref));
+    return this.runAction(() => git.merge(this.at.path, ref));
   }
 
   /** Unless `confirmed`, refused with `rewrites-pushed` where it would rewrite commits the upstream
    *  has: the caller asks, since pushing them afterwards takes a force push. */
   rebase(ref: string, confirmed: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
-      if (!confirmed && (await git.rebaseRewritesPushed(this.project.path, ref))) {
+      if (!confirmed && (await git.rebaseRewritesPushed(this.at.path, ref))) {
         return { ok: false, needsConfirmation: "rewrites-pushed" };
       }
-      return git.rebase(this.project.path, ref);
+      return git.rebase(this.at.path, ref);
     });
   }
 
@@ -563,27 +565,27 @@ export class Repository {
     return this.runAction(() => {
       const operation = this.state.operation;
       return operation
-        ? git.abortOperation(this.project.path, operation)
+        ? git.abortOperation(this.at.path, operation)
         : Promise.resolve({ ok: false, error: "Nothing is in progress here" });
     });
   }
 
   createTag(name: string, target: string, message: string): Promise<GitActionResult> {
-    return this.runAction(() => git.createTag(this.project.path, name, target, message));
+    return this.runAction(() => git.createTag(this.at.path, name, target, message));
   }
 
   pushTag(name: string, login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(() => {
       const remote = this.remote;
       return remote
-        ? this.network(remote, login, (networkLogin) => git.pushTag(this.project.path, remote, name, networkLogin))
+        ? this.network(remote, login, (networkLogin) => git.pushTag(this.at.path, remote, name, networkLogin))
         : Promise.resolve({ ok: false, error: "This repository has no remote to push the tag to" });
     });
   }
 
   deleteTag(name: string, onRemote: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const local = await git.deleteTag(this.project.path, name);
+      const local = await git.deleteTag(this.at.path, name);
       return !local.ok || !onRemote ? local : this.deleteTagOnRemote(name, undefined);
     });
   }
@@ -596,17 +598,17 @@ export class Repository {
   private deleteTagOnRemote(name: string, login: GitLogin | undefined): Promise<GitActionResult> {
     const remote = this.remote;
     return remote
-      ? this.network(remote, login, (networkLogin) => git.deleteRemoteTag(this.project.path, remote, name, networkLogin))
+      ? this.network(remote, login, (networkLogin) => git.deleteRemoteTag(this.at.path, remote, name, networkLogin))
       : Promise.resolve({ ok: false, error: "This repository has no remote to delete the tag from" });
   }
 
   checkoutTag(name: string): Promise<GitActionResult> {
-    return this.runAction(() => git.checkoutTag(this.project.path, name));
+    return this.runAction(() => git.checkoutTag(this.at.path, name));
   }
 
   /** Commits everything, untracked files included. */
   commitAll(message: string): Promise<GitActionResult> {
-    return this.runAction(() => git.commitAll(this.project.path, message));
+    return this.runAction(() => git.commitAll(this.at.path, message));
   }
 
   /** Commits only these files, untracked ones included. */
@@ -614,13 +616,13 @@ export class Repository {
     return this.runAction(() => {
       const changes = this.changesByPath();
       const untracked = paths.filter((filePath) => changes.get(filePath)?.status === "untracked");
-      return git.commitPaths(this.project.path, message, this.pathspec(paths), untracked);
+      return git.commitPaths(this.at.path, message, this.pathspec(paths), untracked);
     });
   }
 
   /** Stashes everything, untracked files included. */
   stashPush(message: string): Promise<GitActionResult> {
-    return this.runAction(() => git.stashPush(this.project.path, message));
+    return this.runAction(() => git.stashPush(this.at.path, message));
   }
 
   /** These paths plus each rename's old one: a commit given only the new path takes half a rename. */
@@ -651,7 +653,7 @@ export class Repository {
 
   /** By the stash's commit, which a stash made meanwhile doesn't move. */
   stash(command: StashCommand, sha: string): Promise<GitActionResult> {
-    return this.runAction(() => git.stash(this.project.path, command, sha));
+    return this.runAction(() => git.stash(this.at.path, command, sha));
   }
 
   /** Throws away changes to these files, each file on disk going to the trash first, as in GitHub
@@ -667,7 +669,7 @@ export class Repository {
       const changes = paths.flatMap((filePath) => byPath.get(filePath) ?? []);
       const unsure = changes.filter((change) => change.status === "untracked" || change.status === "conflicted");
       const inHead = new Set(
-        unsure.length > 0 ? await git.readHeadPaths(this.project.path, unsure.map((change) => change.path)) : []
+        unsure.length > 0 ? await git.readHeadPaths(this.at.path, unsure.map((change) => change.path)) : []
       );
       for (const change of changes) {
         const filePath = change.path;
@@ -677,7 +679,7 @@ export class Repository {
         // Staged, then deleted on disk, still reads "added": nothing to trash. A tracked directory is
         // a submodule, which git restores and the trash must not take; an untracked one (a
         // repository inside this one) goes whole.
-        const absolute = path.join(this.project.path, filePath);
+        const absolute = path.join(this.at.path, filePath);
         const stat = change.status === "deleted" ? undefined : await fs.promises.lstat(absolute).catch(() => undefined);
         if (stat && (change.status === "untracked" || !stat.isDirectory())) {
           try {
@@ -685,7 +687,7 @@ export class Repository {
           } catch (error) {
             if (!permanently) {
               // Reset what the trash already took, or it would be missing until asked again.
-              const reset = await git.discard(this.project.path, targets);
+              const reset = await git.discard(this.at.path, targets);
               const message = errorMessage(error);
               return reset.ok ? { ok: false, error: message, needsConfirmation: "trash-failed" } : reset;
             }
@@ -702,23 +704,23 @@ export class Repository {
         (notInHead ? targets.drop : targets.restore).push(filePath);
       }
 
-      return git.discard(this.project.path, targets);
+      return git.discard(this.at.path, targets);
     });
   }
 
   ignore(filePath: string, scope: "file" | "extension"): Promise<GitActionResult> {
-    return this.runAction(() => git.ignorePath(this.project.path, filePath, scope));
+    return this.runAction(() => git.ignorePath(this.at.path, filePath, scope));
   }
 
   /** The Explorer's listing (explorer.ts): a filesystem walk off the index lock `runAction` holds. */
   listExplorer(): Promise<ExplorerListing> {
-    return listExplorer(this.project.path);
+    return listExplorer(this.at.path);
   }
 
   /** The SEARCH pane's matches (explorer.ts); a search is given up once the next one is asked for. */
   searchFiles(query: FileSearchQuery): Promise<FileSearchResult> {
     const seq = ++this.searchSeq;
-    return searchFiles(this.project.path, query, () => seq !== this.searchSeq);
+    return searchFiles(this.at.path, query, () => seq !== this.searchSeq);
   }
 
   /** A repository-relative path for a new entry, resolved, or an error if outside or taken.
@@ -784,31 +786,31 @@ export class Repository {
   /** The Explorer's tet.json edits ("Add Folder to Workspace", "Remove Folder from Workspace",
    *  "Exclude from Files"); the watcher sees the write and re-lists. */
   addFolder(folderPath: string): Promise<GitActionResult> {
-    return attempt(() => addFolder(this.project.path, folderPath));
+    return attempt(() => addFolder(this.at.path, folderPath));
   }
 
   removeFolder(folderPath: string): Promise<GitActionResult> {
-    return attempt(() => removeFolder(this.project.path, folderPath));
+    return attempt(() => removeFolder(this.at.path, folderPath));
   }
 
   excludePath(relPath: string): Promise<GitActionResult> {
-    return attempt(() => addExclude(this.project.path, relPath));
+    return attempt(() => addExclude(this.at.path, relPath));
   }
 
   /** For the settings dialog's Files tab; folders and exclude globs stay the tree's own. */
   async readExplorerSettings(): Promise<ExplorerSettings> {
-    const { excludeGitIgnore, compactFolders, sortOrder } = await readExplorerView(this.project.path);
+    const { excludeGitIgnore, compactFolders, sortOrder } = await readExplorerView(this.at.path);
     return { excludeGitIgnore, compactFolders, sortOrder };
   }
 
   setExplorerSetting<K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): Promise<GitActionResult> {
-    return attempt(() => setExplorerSetting(this.project.path, key, value));
+    return attempt(() => setExplorerSetting(this.at.path, key, value));
   }
 
   /** The absolute path, or undefined if it escapes the root. */
   private resolveInside(filePath: string): string | undefined {
-    const absolute = path.resolve(this.project.path, filePath);
-    return relativeInside(this.project.path, absolute) === undefined ? undefined : absolute;
+    const absolute = path.resolve(this.at.path, filePath);
+    return relativeInside(this.at.path, absolute) === undefined ? undefined : absolute;
   }
 
   /** A file for the editor tab: the working tree's text, plus HEAD's (the diff's original side)
@@ -862,7 +864,7 @@ export class Repository {
       return Promise.resolve({ content: "", binary: false, missing: true });
     }
     return git
-      .readHeadBlob(this.project.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES })
+      .readHeadBlob(this.at.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES })
       .catch(() => undefined);
   }
 
@@ -889,13 +891,13 @@ export class Repository {
 
   private startWatching(): void {
     try {
-      this.watcher = fs.watch(this.project.path, { recursive: true }, (event, filename) => {
+      this.watcher = fs.watch(this.at.path, { recursive: true }, (event, filename) => {
         const name = filename?.toString();
         if (name && isIgnoredEvent(name)) {
           return;
         }
         // The retry loop picks the directory back up when it reappears.
-        if (watchedDirectoryGone(this.project.path, name)) {
+        if (watchedDirectoryGone(this.at.path, name)) {
           this.closeWatchers();
           this.retryWatching();
           return;
@@ -936,7 +938,7 @@ export class Repository {
         this.scheduleRefresh();
       });
       this.watcher.on("error", (error) => {
-        console.error(`[tet] watcher failed for ${this.project.path}:`, error);
+        console.error(`[tet] watcher failed for ${this.at.path}:`, error);
         this.closeWatchers();
         this.retryWatching();
       });
@@ -944,7 +946,7 @@ export class Repository {
     } catch (error) {
       // A filesystem that can't watch recursively throws here instead of emitting an error. The
       // root's watcher may already stand when the git directory's threw.
-      console.error(`[tet] could not watch ${this.project.path}:`, error);
+      console.error(`[tet] could not watch ${this.at.path}:`, error);
       this.closeWatchers();
       this.retryWatching();
     }
@@ -957,7 +959,7 @@ export class Repository {
    * the root's `.git/` ones.
    */
   private watchLinkedGitDir(): void {
-    const linked = readLinkedGitDir(this.project.path);
+    const linked = readLinkedGitDir(this.at.path);
     if (!linked) {
       return;
     }
@@ -1006,7 +1008,7 @@ export class Repository {
   /**
    * Resolves once the git commands this repository started have ended: a running one's working
    * directory is the folder, which Windows then keeps from being moved or removed ("Permission
-   * denied", measured) — and a worktree's is, right after its project closes (projects.ts).
+   * denied", measured) — and a worktree's is, right after it closes (projects.ts).
    */
   dispose(): Promise<void> {
     // Read by a refresh whose git call may outlive this.
@@ -1019,63 +1021,60 @@ export class Repository {
     clearInterval(this.autoFetchTimer);
     this.closeWatchers();
     // The git process caches per-directory answers; on quit it is stopped right after this.
-    void git.forget(this.project.path).catch(() => undefined);
+    void git.forget(this.at.path).catch(() => undefined);
     return Promise.allSettled([this.starting, this.inflight, this.action, this.autoFetching]).then(() => undefined);
   }
 }
 
+/** The open checkouts' repositories, by `checkoutKey`. */
 export class RepositoryManager {
   private readonly repositories = new Map<string, Repository>();
 
   constructor(
-    private readonly onState: (projectId: string, state: RepositoryState) => void,
+    private readonly dataRoot: string,
+    private readonly onState: (ref: CheckoutRef, state: RepositoryState) => void,
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
+    /** The project's tet.json changed (only its main worktree's counts: tet-json.ts's configRoot). */
     private readonly onCommandsChanged: (projectId: string) => void,
-    private readonly onFilesChanged: (projectId: string) => void,
-    private readonly onFileChanged: (projectId: string, filePath: string) => void,
+    private readonly onFilesChanged: (ref: CheckoutRef) => void,
+    private readonly onFileChanged: (ref: CheckoutRef, filePath: string) => void,
     private readonly logins: GitLoginStore
   ) {}
 
-  open(project: Project): Repository {
-    const existing = this.repositories.get(project.id);
+  open(checkout: Checkout): Repository {
+    const { ref } = checkout;
+    const existing = this.repositories.get(checkoutKey(ref));
     if (existing) {
       return existing;
     }
     const repository = new Repository(
-      project,
-      (state) => this.onState(project.id, state),
+      checkout,
+      (worktreePath) => worktreeKeyOf(this.dataRoot, ref.projectId, worktreePath),
+      (state) => this.onState(ref, state),
       this.onNotice,
-      () => this.configChanged(project),
-      () => this.onFilesChanged(project.id),
-      (filePath) => this.onFileChanged(project.id, filePath),
+      // A worktree's own copy of tet.json counts for nothing.
+      () => {
+        if (ref.worktree === undefined) {
+          this.onCommandsChanged(ref.projectId);
+        }
+      },
+      () => this.onFilesChanged(ref),
+      (filePath) => this.onFileChanged(ref, filePath),
       this.logins
     );
-    this.repositories.set(project.id, repository);
+    this.repositories.set(checkoutKey(ref), repository);
     void repository.start();
     return repository;
   }
 
-  get(projectId: string): Repository | undefined {
-    return this.repositories.get(projectId);
-  }
-
-  /** tet.json changed in the project's folder: a worktree's own copy counts for nothing, its main
-   *  worktree's for every open project of the repository (tet-json.ts's configRoot). */
-  private configChanged(project: Project): void {
-    if (isWorktree(project.path)) {
-      return;
-    }
-    for (const [projectId, repository] of this.repositories) {
-      if (configRoot(repository.project.path) === project.path) {
-        this.onCommandsChanged(projectId);
-      }
-    }
+  get(ref: CheckoutRef): Repository | undefined {
+    return this.repositories.get(checkoutKey(ref));
   }
 
   /** Resolves once its git commands have ended (Repository.dispose); it is gone at once. */
-  close(projectId: string): Promise<void> {
-    const closing = this.repositories.get(projectId)?.dispose();
-    this.repositories.delete(projectId);
+  close(ref: CheckoutRef): Promise<void> {
+    const closing = this.repositories.get(checkoutKey(ref))?.dispose();
+    this.repositories.delete(checkoutKey(ref));
     return closing ?? Promise.resolve();
   }
 

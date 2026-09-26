@@ -142,8 +142,8 @@ export class SbxLocalStore {
     this.setProject(projectId, emptyLocal());
   }
 
-  /** The project's values as stored, still encrypted — for `restore` under a project's new id
-   *  (a renamed worktree, projects.ts's withWorktreeClosed). */
+  /** The project's values as stored, still encrypted — for `restore` when a Save fails
+   *  (sbx-settings.ts's saveProjectSbx). */
   encrypted(projectId: string): StoredSbxLocal {
     return structuredClone(this.projects[projectId] ?? emptyLocal());
   }

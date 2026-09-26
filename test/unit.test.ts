@@ -15,7 +15,7 @@ import { SbxLocalStore } from "../src/main/sbx-local";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv, setStoredEnv } from "../src/main/terminals/pty";
-import { ProjectSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
+import { CheckoutSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
@@ -32,7 +32,7 @@ describe("a turn's toast", () => {
     const settings = new SettingsStore(root);
     settings.patch({ notifications: { finished: true, needsYou: true, idleReminder: true } });
     let pushed: TerminalDescriptor[] = [];
-    const manager = new ProjectSessionManager({ id: "p", path: root, name: "repo" }, root, settings, new SbxLocalStore(root), {
+    const manager = new CheckoutSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), {
       onTabs: (_projectId, tabs) => (pushed = tabs),
       onOutput: () => undefined,
       onStatus: () => undefined,
@@ -86,14 +86,14 @@ const NO_CALLBACKS: SessionManagerCallbacks = {
  */
 async function withEmptyPath(
   callbacks: Partial<SessionManagerCallbacks>,
-  use: (manager: ProjectSessionManager, project: string) => Promise<void> | void
+  use: (manager: CheckoutSessionManager, project: string) => Promise<void> | void
 ): Promise<void> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-empty-path-"));
   const project = path.join(root, "repo");
   fs.mkdirSync(project);
   const originalPath = process.env.PATH;
   process.env.PATH = path.join(root, "empty");
-  const manager = new ProjectSessionManager({ id: "p", path: project, name: "repo" }, root, new SettingsStore(root), new SbxLocalStore(root), {
+  const manager = new CheckoutSessionManager({ ref: { projectId: "p" }, path: project, name: () => "repo" }, root, new SettingsStore(root), new SbxLocalStore(root), {
     ...NO_CALLBACKS,
     ...callbacks
   });
@@ -183,8 +183,8 @@ describe("a tab of a missing agent", () => {
 
 describe("a sandboxed tab's control token", () => {
   it("differs from the same tab's on the host, so its limits outlive the tab", () => {
-    const host = tabControlToken("run-token", "p", "tab-1", false);
-    const sandboxed = tabControlToken("run-token", "p", "tab-1", true);
+    const host = tabControlToken("run-token", { projectId: "p" }, "tab-1", false);
+    const sandboxed = tabControlToken("run-token", { projectId: "p" }, "tab-1", true);
     assert.notEqual(host, sandboxed);
     // Nothing is kept per tab: the control server reads the flag back off whichever of the two
     // matches, so a process left in the sandbox is answered by the rules its tab started under
@@ -248,14 +248,41 @@ describe("a terminal's environment", () => {
   it("gives a terminal its own tab's control token, never the run's", () => {
     setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
     const env = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
-    assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-1", false));
-    assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-2", false), "another tab's differs");
+    assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", false));
+    assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-2", false), "another tab's differs");
     const inSandbox = buildEnv({
       own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" },
       sandboxed: true
     });
-    assert.equal(inSandbox[CONTROL_ENV.token], tabControlToken("run-token", "p1", "tab-1", true), "the sandbox is in it");
+    assert.equal(inSandbox[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", true), "the sandbox is in it");
     setControlEnv({}, "");
+  });
+
+  it("gives a worktree's terminal a token of that worktree, and no outer tet's ids", () => {
+    setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
+    const inherited = { worktree: process.env[CONTROL_ENV.worktree], tab: process.env[CONTROL_ENV.tabId] };
+    // A tet started from a worktree tab of another tet inherits that tab's ids.
+    process.env[CONTROL_ENV.worktree] = "outer";
+    process.env[CONTROL_ENV.tabId] = "outer-tab";
+    try {
+      const main = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
+      assert.equal(main[CONTROL_ENV.worktree], undefined, "the main worktree's tab names no worktree");
+      const env = buildEnv({
+        own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.worktree]: "k3f9a2c1", [CONTROL_ENV.tabId]: "tab-1" }
+      });
+      assert.equal(env[CONTROL_ENV.worktree], "k3f9a2c1");
+      assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1", worktree: "k3f9a2c1" }, "tab-1", false));
+      assert.notEqual(env[CONTROL_ENV.token], main[CONTROL_ENV.token], "the main worktree's tab of that id has another");
+    } finally {
+      for (const [name, value] of [[CONTROL_ENV.worktree, inherited.worktree], [CONTROL_ENV.tabId, inherited.tab]] as const) {
+        if (value === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = value;
+        }
+      }
+      setControlEnv({}, "");
+    }
   });
 
   it("prepends the launcher directory to PATH under whatever name PATH has", () => {
@@ -318,27 +345,27 @@ describe("the tet-ctl launcher", () => {
 describe("a tab's recorded output", () => {
   it("keeps the latest output of open tabs only", () => {
     const records = new ControlRecords();
-    records.addOutput("p1", "tab-1", "one");
-    records.addOutput("p1", "tab-1", "two");
-    records.addOutput("p1", "tab-2", "gone");
-    records.addOutput("p2", "tab-3", "other project");
-    records.keepOutputs("p1", new Set(["tab-1"]));
-    assert.equal(records.output("p1", "tab-1"), "onetwo");
-    assert.equal(records.output("p1", "tab-2"), undefined, "a closed tab's output goes with it");
-    assert.equal(records.output("p2", "tab-3"), "other project", "another project's tabs untouched");
-    records.forgetProject("p2");
-    assert.equal(records.output("p2", "tab-3"), undefined, "a removed project's output goes with it");
+    records.addOutput({ projectId: "p1" }, "tab-1", "one");
+    records.addOutput({ projectId: "p1" }, "tab-1", "two");
+    records.addOutput({ projectId: "p1" }, "tab-2", "gone");
+    records.addOutput({ projectId: "p2" }, "tab-3", "other project");
+    records.keepOutputs({ projectId: "p1" }, new Set(["tab-1"]));
+    assert.equal(records.output({ projectId: "p1" }, "tab-1"), "onetwo");
+    assert.equal(records.output({ projectId: "p1" }, "tab-2"), undefined, "a closed tab's output goes with it");
+    assert.equal(records.output({ projectId: "p2" }, "tab-3"), "other project", "another project's tabs untouched");
+    records.forget({ projectId: "p2" });
+    assert.equal(records.output({ projectId: "p2" }, "tab-3"), undefined, "a closed checkout's output goes with it");
   });
 
   it("holds the latest 256 KB of a tab", () => {
     const records = new ControlRecords();
     // A progress bar redrawn for hours, never a newline: bounded all the same.
     for (let i = 0; i < 400; i++) {
-      records.addOutput("p", "shell", "\rDownloading 42%".padEnd(16 * 1024, " "));
-      records.addOutput("p", "agent", "\x1b[H".padEnd(16 * 1024, "x"));
+      records.addOutput({ projectId: "p" }, "shell", "\rDownloading 42%".padEnd(16 * 1024, " "));
+      records.addOutput({ projectId: "p" }, "agent", "\x1b[H".padEnd(16 * 1024, "x"));
     }
-    assert.equal(records.output("p", "shell")?.length, 256 * 1024);
-    assert.equal(records.output("p", "agent")?.length, 256 * 1024);
+    assert.equal(records.output({ projectId: "p" }, "shell")?.length, 256 * 1024);
+    assert.equal(records.output({ projectId: "p" }, "agent")?.length, 256 * 1024);
   });
 });
 

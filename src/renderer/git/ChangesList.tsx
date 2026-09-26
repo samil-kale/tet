@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { syncRemote } from "../../shared/types";
-import type { ChangeStatus, FileChange, GitActionResult, Project, RepositoryState } from "../../shared/types";
+import type { ChangeStatus, CheckoutRef, FileChange, GitActionResult, RepositoryState } from "../../shared/types";
+import type { Checkout } from "../checkout";
 import type { OpenEditor } from "../terminal/editor-tab";
 import type { FileAct, FileAsk } from "./run-action";
 import { baseName } from "../files/explorer-tree";
@@ -13,7 +14,7 @@ import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
 
 interface ChangesListProps {
-  project: Project;
+  checkout: Checkout;
   /** The changes are the list; the rest feeds a commit from the menu. */
   state: RepositoryState;
   /** The owner shows it running on its own bar. */
@@ -36,7 +37,7 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
 /** The files go to the trash; where the trash fails, a second question offers to delete them.
  *  Asked although the trash can give them back: a discard is GitHub Desktop's one confirmed
  *  action, and a click on a row's × would otherwise empty the list. */
-export async function confirmDiscard(projectId: string, paths: string[], act: FileAct): Promise<void> {
+export async function confirmDiscard(checkout: CheckoutRef, paths: string[], act: FileAct): Promise<void> {
   const what = paths.length === 1 ? paths[0] : `${paths.length} files`;
   const answer = await confirm({
     title: "Discard changes",
@@ -46,18 +47,18 @@ export async function confirmDiscard(projectId: string, paths: string[], act: Fi
   });
   if (answer.confirmed) {
     act(async () => {
-      const result = await window.tet.repository.discard(projectId, paths, false);
+      const result = await window.tet.repository.discard(checkout, paths, false);
       if (result.needsConfirmation !== "trash-failed") {
         return result;
       }
-      void confirmDiscardPermanently(projectId, paths, result.error, act);
+      void confirmDiscardPermanently(checkout, paths, result.error, act);
       return { ok: true };
     });
   }
 }
 
 async function confirmDiscardPermanently(
-  projectId: string,
+  checkout: CheckoutRef,
   paths: string[],
   reason: string | undefined,
   act: FileAct
@@ -74,14 +75,14 @@ async function confirmDiscardPermanently(
     confirmLabel: "Discard permanently"
   });
   if (answer.confirmed) {
-    act(() => window.tet.repository.discard(projectId, paths, true));
+    act(() => window.tet.repository.discard(checkout, paths, true));
   }
 }
 
 /** One message, then `add` and `commit` of all changes or only `paths`, optionally pushing. No
  *  staging area: the selection is what one commit takes. */
 export async function askCommit(
-  project: Project,
+  checkout: CheckoutRef,
   state: RepositoryState,
   paths: string[] | undefined,
   ask: FileAsk
@@ -99,9 +100,9 @@ export async function askCommit(
   const running: { submitted?: Promise<{ committed: GitActionResult; pushed?: GitActionResult }> } = {};
   const commitAndPush = async (message: string, push: boolean) => {
     const committed = await (paths
-      ? window.tet.repository.commitPaths(project.id, message, paths)
-      : window.tet.repository.commitAll(project.id, message));
-    return { committed, pushed: committed.ok && push ? await window.tet.repository.push(project.id) : undefined };
+      ? window.tet.repository.commitPaths(checkout, message, paths)
+      : window.tet.repository.commitAll(checkout, message));
+    return { committed, pushed: committed.ok && push ? await window.tet.repository.push(checkout) : undefined };
   };
   await prompt({
     title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
@@ -121,7 +122,7 @@ export async function askCommit(
           onChange={(message) => onChange({ ...value, message })}
           suggestion={{
             title: "Suggest a commit message",
-            run: () => window.tet.repository.suggestCommitMessage(project.id, paths)
+            run: () => window.tet.repository.suggestCommitMessage(checkout, paths)
           }}
           disabled={busy}
           ref={field}
@@ -143,7 +144,7 @@ export async function askCommit(
   const pushed = (await running.submitted)?.pushed;
   if (pushed?.loginUrl !== undefined) {
     await askLogin(pushed.loginUrl, pushed.error ?? "Push failed", (login) =>
-      ask(() => window.tet.repository.push(project.id, login))
+      ask(() => window.tet.repository.push(checkout, login))
     );
   } else if (pushed && !pushed.ok) {
     notify("error", pushed.error ?? "Push failed");
@@ -151,7 +152,7 @@ export async function askCommit(
 }
 
 /** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */
-export const ChangesList = memo(function ChangesList({ project, state, act, ask, onOpenDiff }: ChangesListProps) {
+export const ChangesList = memo(function ChangesList({ checkout, state, act, ask, onOpenDiff }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
   /** Ctrl- and shift-click extend it, so one action can cover several files. */
@@ -166,10 +167,10 @@ export const ChangesList = memo(function ChangesList({ project, state, act, ask,
     [changes, query]
   );
 
-  // Reset on a project switch, in render, so the previous selection never paints.
-  const [projectId, setProjectId] = useState(project.id);
-  if (projectId !== project.id) {
-    setProjectId(project.id);
+  // Reset on a checkout switch, in render, so the previous selection never paints.
+  const [shownKey, setShownKey] = useState(checkout.key);
+  if (shownKey !== checkout.key) {
+    setShownKey(checkout.key);
     setSelected([]);
     setAnchor(null);
   }
@@ -218,18 +219,18 @@ export const ChangesList = memo(function ChangesList({ project, state, act, ask,
     // path.extname's rule, as git.ts's ignorePath applies it: a dotfile has none.
     const name = baseName(change.path);
     const extension = name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : undefined;
-    const discard = (targets: string[]) => () => void confirmDiscard(project.id, targets, act);
+    const discard = (targets: string[]) => () => void confirmDiscard(checkout.ref, targets, act);
     const ignore = (scope: "file" | "extension") => () =>
-      act(() => window.tet.repository.ignore(project.id, change.path, scope));
+      act(() => window.tet.repository.ignore(checkout.ref, change.path, scope));
 
     const entries: ContextMenuEntry[] = [
       { label: "Open diff", run: one ? () => onOpenDiff(change.path) : undefined },
-      ...openEntries(project.id, change.path, one, (how) => onOpenDiff(change.path, how)),
+      ...openEntries(checkout.ref, change.path, one, (how) => onOpenDiff(change.path, how)),
       SEPARATOR,
       {
         label: one ? "Commit changes..." : `Commit ${paths.length} selected changes...`,
         // git refuses a commit of some paths while a merge is being concluded.
-        run: state.operation === undefined ? () => void askCommit(project, state, paths, ask) : undefined
+        run: state.operation === undefined ? () => void askCommit(checkout.ref, state, paths, ask) : undefined
       },
       { label: one ? "Discard changes..." : `Discard ${paths.length} selected changes...`, run: discard(paths) },
       {
@@ -237,7 +238,7 @@ export const ChangesList = memo(function ChangesList({ project, state, act, ask,
         // When the selection is everything, the entry above already does this.
         run: changes.length > paths.length ? discard(changes.map((entry) => entry.path)) : undefined
       },
-      ...pathEntries(project, paths, "file path")
+      ...pathEntries(checkout, paths, "file path")
     ];
     if (one && change.status === "untracked") {
       entries.push(SEPARATOR, { label: "Ignore file (add to .gitignore)", run: ignore("file") });

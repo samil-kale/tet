@@ -55,19 +55,24 @@ function inSandbox(): boolean {
 /** The rules the verb list does not carry, each side told only its own: a sandbox is no concern of
  *  a tab on the host, which cannot end up in one. */
 function limits(sandboxed: boolean): string[] {
-  const own = "Without --project, a verb acts on the project of the tab it is run from.";
+  const own = [
+    "Without flags, a verb acts on the checkout of the tab it is run from: its project's main",
+    "worktree or one of its worktrees. --project <id> alone means that project's main worktree,",
+    "--worktree <branch> one of its worktrees. A worktree listed without a key (projects-list) was",
+    "made outside TET, with plain git or by an older TET: TET shows it greyed and cannot open it."
+  ];
   return sandboxed
     ? [
-        own,
+        ...own,
         "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",
         "restarting TET, starting or typing into a tab — is refused there and is not listed above.",
-        "What is listed answers for this project's tabs only (exit 2, the reason on stderr)."
+        "What is listed answers for this checkout's tabs only (exit 2, the reason on stderr)."
       ]
     : [
-        `${own} restartRequired in an`,
-        "answer means the change waits for a restart — tell the user, never restart for them.",
-        "A terminal of another project is refused, exit 2 with the reason on stderr (tabs-output,",
-        "tabs-send)."
+        ...own,
+        "restartRequired in an answer means the change waits for a restart — tell the user, never",
+        "restart for them. A terminal of another project is refused, exit 2 with the reason on stderr",
+        "(tabs-output, tabs-send)."
       ];
 }
 
@@ -247,7 +252,11 @@ async function main(): Promise<void> {
     token,
     verb,
     args,
-    caller: { projectId: process.env[CONTROL_ENV.projectId], tabId: process.env[CONTROL_ENV.tabId] },
+    caller: {
+      projectId: process.env[CONTROL_ENV.projectId],
+      worktree: process.env[CONTROL_ENV.worktree] || undefined,
+      tabId: process.env[CONTROL_ENV.tabId]
+    },
     // Started when the hook fired, which orders turn signals.
     at: Date.now()
   };

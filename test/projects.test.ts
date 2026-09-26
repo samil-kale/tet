@@ -1,23 +1,36 @@
 import * as assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { after, before, describe, it } from "node:test";
+import { after, describe, it } from "node:test";
+import { checkoutOf } from "../src/main/checkout";
 import type { ControlRecords } from "../src/main/control/control-records";
 import { GitLoginStore } from "../src/main/git-logins";
 import { RepositoryManager } from "../src/main/git/repository";
-import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, renameWorktree, type ProjectDeps } from "../src/main/projects";
+import { checkoutDataDir, projectDir, worktreeCheckout } from "../src/main/project-dirs";
+import {
+  addProject,
+  addWorktree,
+  deleteWorktree,
+  ProjectStore,
+  removeProject,
+  resolveStoredIds,
+  syncWorktrees,
+  type ProjectDeps
+} from "../src/main/projects";
 import { SbxLocalStore } from "../src/main/sbx-local";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import { readCommands, readSbxConfig, writeCommands } from "../src/main/tet-json";
-import type { Project } from "../src/shared/types";
+import type { CheckoutRef, ProjectsChange } from "../src/shared/types";
 import { eventually, forkGitInProcess, git, initBare, isolateGitConfig } from "./helpers";
 
 /**
- * projects.ts's worktree actions against the real git and real Repositories, the project's
- * sessions faked: which repository a command runs through, what closing the terminals may leave
- * behind, what a delete takes along. electron's `utilityProcess` runs git.ts in this process, as in
- * repository.test.ts.
+ * projects.ts against the real git and real Repositories, the sessions faked: a project's id in its
+ * git config, the worktrees TET makes under the project's folder, what closing their terminals may
+ * leave behind, what a delete and a project's removal take along. electron's `utilityProcess` runs
+ * git.ts in this process, as in repository.test.ts.
  */
 
 isolateGitConfig("tet-projects-noglobal");
@@ -25,171 +38,288 @@ forkGitInProcess();
 
 const real = (folder: string): string => fs.realpathSync.native(folder);
 
-/**
- * A repository with a remote, and its linked worktrees `names`, each on a branch of that name
- * published with an upstream. `worktree` is the shape deleteWorktree and renameWorktree take.
- */
-function repositoryWithWorktrees(names: string[]) {
+/** `git config --local --get tet.id`, or undefined without one. */
+function tetId(folder: string): string | undefined {
+  const result = spawnSync("git", ["config", "--local", "--get", "tet.id"], { cwd: folder, encoding: "utf8" });
+  return result.status === 0 ? result.stdout.trim() : undefined;
+}
+
+/** A repository with a remote; `foreign` worktrees made with plain git, each on a published branch. */
+function repository(foreign: string[] = []) {
   const bare = initBare("tet-projects-bare-");
   const main = real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-main-")));
   git(main, "init", "-q", "--initial-branch=main");
   git(main, "commit", "-q", "--allow-empty", "-m", "base");
   git(main, "remote", "add", "origin", bare);
   git(main, "push", "-q", "-u", "origin", "main");
-  const worktrees = real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-wts-")));
-  const at = (name: string): string => path.join(worktrees, name);
-  for (const name of names) {
+  const elsewhere = real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-elsewhere-")));
+  const at = (name: string): string => path.join(elsewhere, name);
+  for (const name of foreign) {
     git(main, "worktree", "add", "-q", "--relative-paths", "-b", name, at(name));
     git(at(name), "push", "-q", "-u", "origin", name);
   }
-  return { main, bare, at, worktree: (name: string) => ({ path: at(name), mainPath: main }) };
+  return { main, bare, at };
 }
 
 const managers: RepositoryManager[] = [];
 after(() => managers.forEach((manager) => manager.disposeAll()));
 
 /**
- * The deps main.ts hands projects.ts, with the given folders open as projects. `onClose` runs as a
- * project's sessions end — where a quitting agent could still write.
+ * The deps main.ts hands projects.ts. `onClose` runs as a checkout's sessions end — where a quitting
+ * agent could still write.
  */
-async function open(folders: string[], onClose: (project: Project) => void = () => undefined) {
+function open(onClose: (ref: CheckoutRef) => void = () => undefined) {
   const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-data-"));
   const store = new ProjectStore(dataRoot);
+  const told: string[] = [];
   const repositories = new RepositoryManager(
+    dataRoot,
     () => undefined,
     () => undefined,
-    () => undefined,
+    (projectId) => told.push(projectId),
     () => undefined,
     () => undefined,
     new GitLoginStore(dataRoot)
   );
   managers.push(repositories);
-  const changes: { added?: string; removed?: string }[] = [];
+  const changes: ProjectsChange[] = [];
   const deps: ProjectDeps = {
     store,
     repositories,
     sessions: {
-      close: async (projectId: string) => {
-        const project = store.list().find((entry) => entry.id === projectId);
-        if (project) {
-          onClose(project);
-        }
-      },
+      close: async (ref: CheckoutRef) => onClose(ref),
       open: () => undefined
     } as unknown as SessionManagerRegistry,
-    records: { forgetProject: () => undefined } as unknown as ControlRecords,
+    records: { forget: () => undefined } as unknown as ControlRecords,
     sbxLocal: new SbxLocalStore(dataRoot),
-    openProject: (project) => void repositories.open(project),
+    openCheckout: (ref) => void repositories.open(checkoutOf(dataRoot, store, ref)),
     dataRoot,
-    projectsChanged: (change) => changes.push(change)
+    projectsChanged: (change) => changes.push(change),
+    notice: () => undefined
   };
-  for (const folder of folders) {
-    // open() starts it; refresh() is what can be awaited.
-    await repositories.open(store.add(folder)).refresh();
-  }
-  const idOf = (folder: string): string => store.list().find((project) => project.path === folder)!.id;
-  return { deps, store, repositories, changes, idOf };
+  /** Adds the repository and waits for its main worktree's first read. */
+  const add = async (folder: string): Promise<string> => {
+    const added = await addProject(deps, folder);
+    assert.ok(added.project, added.error);
+    await repositories.get({ projectId: added.project.id })!.refresh();
+    return added.project.id;
+  };
+  return { deps, store, repositories, changes, told, dataRoot, add };
 }
 
 const remoteHas = (bare: string, branch: string): boolean => git(bare, "branch", "--list", branch) !== "";
 
-describe("a project opened or closed", () => {
-  it("is announced to the window here, the same whichever transport asked", async () => {
-    const repo = repositoryWithWorktrees([]);
-    const { deps, store, changes } = await open([]);
-    const added = await addProject(deps, repo.main);
-    assert.ok(added.project);
-    assert.deepEqual(changes, [{ added: added.project.id }]);
-    await removeProject(deps, added.project.id);
-    assert.deepEqual(changes, [{ added: added.project.id }, { removed: added.project.id }]);
+describe("a project added", () => {
+  it("takes its id from the repository's git config, writing one where there is none", async () => {
+    const repo = repository();
+    const { deps, store, changes, add } = open();
+    const id = await add(repo.main);
+    assert.equal(tetId(repo.main), id);
+    assert.deepEqual(changes, [{ added: [{ projectId: id }], show: { projectId: id } }]);
+    // Removed and added again, by this TET or another: the same id as long as the config keeps it.
+    store.remove(id);
+    assert.equal((await addProject(deps, repo.main)).project?.id, id);
+  });
+
+  it("is the same project when added again, and its repository when a subfolder is picked", async () => {
+    const repo = repository();
+    const { deps, store, add } = open();
+    const id = await add(repo.main);
+    fs.mkdirSync(path.join(repo.main, "sub"));
+    assert.equal((await addProject(deps, path.join(repo.main, "sub"))).project?.id, id);
+    assert.equal(store.list().length, 1);
+  });
+
+  it("gets a new id where it is a copy of a project open elsewhere", async () => {
+    const repo = repository();
+    const { add } = open();
+    const id = await add(repo.main);
+    const copy = path.join(real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-copy-"))), "copy");
+    fs.cpSync(repo.main, copy, { recursive: true });
+    const copied = await add(copy);
+    assert.notEqual(copied, id);
+    assert.equal(tetId(copy), copied, "written over the copied one");
+    assert.equal(tetId(repo.main), id, "the original keeps its own");
+  });
+
+  it("takes at start the id its repository holds, and keeps the stored one where git cannot answer", async () => {
+    const repo = repository();
+    const { store } = open();
+    const held = randomUUID();
+    git(repo.main, "config", "tet.id", held);
+    store.add(repo.main, randomUUID());
+    const gone = path.join(os.tmpdir(), `tet-projects-gone-${randomUUID()}`);
+    const kept = store.add(gone, randomUUID()).id;
+    await resolveStoredIds({ store, notice: () => undefined });
+    assert.deepEqual(
+      store.list().map((project) => project.id),
+      [held, kept]
+    );
+  });
+
+  it("refuses a folder that is no git repository", async () => {
+    const { deps, store } = open();
+    const plain = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-plain-"));
+    const result = await addProject(deps, plain);
+    assert.match(result.error ?? "", /is not a git repository/);
     assert.deepEqual(store.list(), []);
   });
 
-  it("opens a worktree's folder with its main worktree's project", async () => {
-    const repo = repositoryWithWorktrees(["picked"]);
-    const { deps, store, changes } = await open([]);
+  it("opens a worktree's folder as its project, listing a worktree made elsewhere without a key", async () => {
+    const repo = repository(["picked"]);
+    const { deps, store, repositories } = open();
     const added = await addProject(deps, repo.at("picked"));
-    assert.ok(added.project);
-    assert.equal(added.project.mainPath, repo.main);
-    assert.deepEqual(store.list().map((project) => project.path).sort(), [repo.at("picked"), repo.main].sort());
-    assert.deepEqual(changes, [{ added: added.project.id }]);
-  });
-
-  it("closes a main worktree's project with its worktrees', each announced", async () => {
-    const repo = repositoryWithWorktrees(["one", "two"]);
-    const { deps, store, changes, idOf } = await open([repo.main, repo.at("one"), repo.at("two")]);
-    const ids = [idOf(repo.at("one")), idOf(repo.at("two")), idOf(repo.main)];
-    await removeProject(deps, idOf(repo.main));
-    assert.deepEqual(store.list(), []);
-    assert.deepEqual(changes, ids.map((removed) => ({ removed })));
-  });
-
-  it("closes a worktree's project alone", async () => {
-    const repo = repositoryWithWorktrees(["only"]);
-    const { deps, store, idOf } = await open([repo.main, repo.at("only")]);
-    await removeProject(deps, idOf(repo.at("only")));
-    assert.deepEqual(store.list().map((project) => project.path), [repo.main]);
+    assert.equal(added.project?.path, repo.main);
+    assert.equal(added.worktree, undefined, "one made elsewhere is never opened");
+    const id = added.project!.id;
+    syncWorktrees(deps, id, await repositories.get({ projectId: id })!.refresh());
+    assert.deepEqual(store.get(id)?.worktrees, [{ path: repo.at("picked"), branch: "picked", key: undefined }]);
   });
 });
 
-describe("a worktree deleted with its main project closed", () => {
-  let repo: ReturnType<typeof repositoryWithWorktrees>;
-
-  before(() => {
-    repo = repositoryWithWorktrees(["target", "sibling", "alone"]);
+describe("a worktree TET makes", () => {
+  it("lies under the project's folder, named by its key, its branch at the default branch with its base", async () => {
+    const repo = repository();
+    const { deps, store, changes, dataRoot, add } = open();
+    const id = await add(repo.main);
+    const added = await addWorktree(deps, id, "feature");
+    assert.ok(added.worktree, added.error);
+    const ref = { projectId: id, worktree: added.worktree };
+    const checkout = worktreeCheckout(dataRoot, id, added.worktree);
+    assert.equal(real(checkout), checkout, "in on-disk spelling, as git lists it");
+    assert.equal(git(checkout, "branch", "--show-current"), "feature");
+    assert.equal(git(repo.main, "config", "branch.feature.base"), "main");
+    assert.deepEqual(store.get(id)?.worktrees, [{ key: added.worktree, path: checkout, branch: "feature" }]);
+    assert.deepEqual(changes.at(-1), { added: [ref], show: ref });
+    assert.equal(tetId(checkout), id, "a worktree reads its project's id");
   });
 
-  it("runs through a sibling worktree's repository, and deletes the upstream it was asked to", async () => {
-    const { deps, repositories, idOf } = await open([repo.at("target"), repo.at("sibling")]);
-    const sibling = repositories.get(idOf(repo.at("sibling")))!;
-    const result = await deleteWorktree(deps, repo.worktree("target"), { force: false, onRemote: true });
+  it("keeps its folder when renamed: the branch alone changes", async () => {
+    const repo = repository();
+    const { deps, store, repositories, dataRoot, add } = open();
+    const id = await add(repo.main);
+    const key = (await addWorktree(deps, id, "before")).worktree!;
+    const main = repositories.get({ projectId: id })!;
+    assert.deepEqual(await main.renameBranch("before", "after"), { ok: true });
+    syncWorktrees(deps, id, main.getState());
+    const checkout = worktreeCheckout(dataRoot, id, key);
+    assert.deepEqual(store.get(id)?.worktrees, [{ key, path: checkout, branch: "after" }]);
+    assert.equal(git(checkout, "branch", "--show-current"), "after");
+  });
+
+  it("is deleted with its folder, TET's data of it, its branch and the upstream it was asked to", async () => {
+    const repo = repository();
+    const { deps, store, repositories, changes, dataRoot, add } = open();
+    const id = await add(repo.main);
+    const key = (await addWorktree(deps, id, "target")).worktree!;
+    const ref = { projectId: id, worktree: key };
+    const checkout = worktreeCheckout(dataRoot, id, key);
+    git(checkout, "push", "-q", "-u", "origin", "target");
+    // What the watcher reads in the app: the upstream the delete takes along.
+    await repositories.get({ projectId: id })!.refresh();
+    const result = await deleteWorktree(deps, ref, { force: false, onRemote: true });
     assert.deepEqual(result, { ok: true });
-    // Refreshed by its own action slot, not left for the watcher.
-    assert.ok(!sibling.getState().worktrees.some((worktree) => worktree.branch === "target"), "run through the sibling");
-    assert.ok(!fs.existsSync(repo.at("target")));
+    assert.ok(!fs.existsSync(checkoutDataDir(dataRoot, ref)));
     assert.equal(git(repo.main, "branch", "--list", "target"), "", "the branch went with it");
     assert.ok(!remoteHas(repo.bare, "target"), "and its upstream, as asked");
+    assert.deepEqual(store.get(id)?.worktrees, []);
+    assert.deepEqual(changes.at(-1), { removed: [ref] });
+    // Refreshed by the main worktree's own action slot, not left for the watcher.
+    assert.ok(!repositories.get({ projectId: id })!.getState().worktrees.some((worktree) => worktree.branch === "target"));
   });
 
-  it("is refused, before anything closes, with no project of the repository left to run it", async () => {
-    const { deps, store, changes } = await open([repo.at("alone")]);
-    const result = await deleteWorktree(deps, repo.worktree("alone"), { force: false, onRemote: true });
-    assert.equal(result.ok, false);
-    assert.match(result.error ?? "", /^Open .+ to delete this worktree$/);
-    assert.ok(fs.existsSync(repo.at("alone")));
-    assert.ok(remoteHas(repo.bare, "alone"));
-    assert.equal(store.list().length, 1, "its project still open");
-    assert.deepEqual(changes, []);
+  it("is refused up front while another command runs in its repository, and runs once it is done", async () => {
+    const repo = repository();
+    const closed: CheckoutRef[] = [];
+    const { deps, repositories, changes, dataRoot, add } = open((ref) => closed.push(ref));
+    const id = await add(repo.main);
+    const key = (await addWorktree(deps, id, "held")).worktree!;
+    const seen = changes.length;
+    // As a push running in the main worktree.
+    let release: () => void = () => undefined;
+    const other = repositories.get({ projectId: id })!.exclusive(() => new Promise((resolve) => (release = () => resolve({ ok: true }))));
+    const ref = { projectId: id, worktree: key };
+    const refused = await deleteWorktree(deps, ref, { force: true, onRemote: false });
+    assert.equal(refused.ok, false);
+    assert.match(refused.error ?? "", /already running/);
+    assert.deepEqual(closed, [], "no terminal closed for a command that could not run");
+    assert.equal(changes.length, seen);
+    assert.ok(fs.existsSync(worktreeCheckout(dataRoot, id, key)));
+    release();
+    assert.deepEqual(await other, { ok: true });
+    assert.deepEqual(await deleteWorktree(deps, ref, { force: true, onRemote: false }), { ok: true });
+  });
+
+  it("is asked about again when written to while its terminals close, not refused by git after", async () => {
+    const repo = repository();
+    let dataRoot = "";
+    let key = "";
+    // As an agent saving its work on its way out.
+    const opened = open((ref) => {
+      if (ref.worktree === key) {
+        fs.writeFileSync(path.join(worktreeCheckout(dataRoot, ref.projectId, key), "late.txt"), "late\n");
+      }
+    });
+    dataRoot = opened.dataRoot;
+    const id = await opened.add(repo.main);
+    key = (await addWorktree(opened.deps, id, "busy")).worktree!;
+    const ref = { projectId: id, worktree: key };
+    const result = await deleteWorktree(opened.deps, ref, { force: false, onRemote: false });
+    assert.deepEqual(result, { ok: false, needsConfirmation: "uncommitted" });
+    assert.ok(fs.existsSync(path.join(worktreeCheckout(dataRoot, id, key), "late.txt")), "nothing deleted without the question");
+    assert.deepEqual(await deleteWorktree(opened.deps, ref, { force: true, onRemote: false }), { ok: true });
+  });
+
+  it("is only one TET made: another is not found", async () => {
+    const repo = repository(["elsewhere"]);
+    const { deps, add } = open();
+    const id = await add(repo.main);
+    const result = await deleteWorktree(deps, { projectId: id, worktree: "nope" }, { force: true, onRemote: false });
+    assert.deepEqual(result, { ok: false, error: "Worktree not found" });
+    assert.ok(fs.existsSync(repo.at("elsewhere")));
   });
 });
 
-describe("worktrees of two repositories with one folder name", () => {
-  it("are kept apart under ~/.tet/worktrees", async () => {
-    const repositoryNamedApp = (): string => {
-      const folder = path.join(real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-same-"))), "app");
-      fs.mkdirSync(folder);
-      git(folder, "init", "-q", "--initial-branch=main");
-      git(folder, "commit", "-q", "--allow-empty", "-m", "base");
-      return folder;
-    };
-    const first = repositoryNamedApp();
-    const second = repositoryNamedApp();
-    const { deps, repositories, idOf } = await open([first, second]);
-    // The first read, which knows the branch a worktree starts at.
-    await eventually("both repositories read", () =>
-      [first, second].every((folder) => repositories.get(idOf(folder))?.getState().defaultBranch !== undefined)
-    );
-    const added = [await addWorktree(deps, idOf(first), "feature"), await addWorktree(deps, idOf(second), "feature")];
-    assert.deepEqual(added.map((result) => result.error), [undefined, undefined]);
-    const [a, b] = added.map((result) => result.project!.path);
-    assert.notEqual(path.dirname(a), path.dirname(b));
-    assert.deepEqual([path.basename(a), path.basename(b)], ["feature", "feature"], "each named by its branch");
+describe("a project removed", () => {
+  it("takes its worktrees with their branches, TET's folder of it and its id; the rest stays", async () => {
+    const repo = repository(["foreign"]);
+    const { deps, store, changes, dataRoot, add } = open();
+    const id = await add(repo.main);
+    const key = (await addWorktree(deps, id, "own")).worktree!;
+    deps.sbxLocal.restore(id, { secrets: { TOKEN: "encrypted" }, variables: {} });
+    assert.deepEqual(await removeProject(deps, id), { ok: true });
+    assert.ok(!fs.existsSync(worktreeCheckout(dataRoot, id, key)));
+    assert.equal(git(repo.main, "branch", "--list", "own"), "", "its branch went with it");
+    assert.ok(!fs.existsSync(projectDir(dataRoot, id)));
+    assert.equal(tetId(repo.main), undefined);
+    assert.deepEqual(deps.sbxLocal.encrypted(id), { secrets: {}, variables: {} });
+    assert.deepEqual(store.list(), []);
+    assert.deepEqual(changes.slice(-2), [{ removed: [{ projectId: id, worktree: key }] }, { removed: [{ projectId: id }] }]);
+    assert.ok(fs.existsSync(repo.main), "the repository's folder stays");
+    assert.ok(fs.existsSync(repo.at("foreign")), "and a worktree made elsewhere");
+    assert.equal(git(repo.main, "branch", "--list", "--format=%(refname:short)", "foreign"), "foreign");
+  });
+
+  it("stops, the project left open, where a worktree cannot go", async () => {
+    const repo = repository();
+    const { deps, store, repositories, add } = open();
+    const id = await add(repo.main);
+    await addWorktree(deps, id, "kept");
+    let release: () => void = () => undefined;
+    const other = repositories.get({ projectId: id })!.exclusive(() => new Promise((resolve) => (release = () => resolve({ ok: true }))));
+    const result = await removeProject(deps, id);
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /already running/);
+    assert.ok(store.get(id));
+    assert.equal(tetId(repo.main), id);
+    release();
+    await other;
   });
 });
 
 describe("a worktree's tet.json", () => {
-  it("is its main worktree's, read without the ports and never written from the worktree", async () => {
-    const repo = repositoryWithWorktrees(["inherits"]);
+  it("is its project's, read without the ports and never written from the worktree", async () => {
+    const repo = repository(["inherits"]);
     const worktree = repo.at("inherits");
     const ports = [{ host: "3000", container: "3000" }];
     fs.writeFileSync(
@@ -207,108 +337,15 @@ describe("a worktree's tet.json", () => {
     assert.deepEqual(await readCommands(repo.main), [{ command: "npm test" }], "left as it was");
   });
 
-  it("tells every open project of the repository when the main worktree's changes", async () => {
-    const repo = repositoryWithWorktrees(["told"]);
-    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-data-"));
-    const store = new ProjectStore(dataRoot);
-    const told: string[] = [];
-    const repositories = new RepositoryManager(
-      () => undefined,
-      () => undefined,
-      (projectId) => told.push(projectId),
-      () => undefined,
-      () => undefined,
-      new GitLoginStore(dataRoot)
-    );
-    managers.push(repositories);
-    const main = store.add(repo.main);
-    const worktree = store.add(repo.at("told"));
-    await Promise.all([repositories.open(main).refresh(), repositories.open(worktree).refresh()]);
+  it("tells the project once when the main worktree's changes, and not for a worktree's own", async () => {
+    const repo = repository();
+    const { deps, told, dataRoot, repositories, add } = open();
+    const id = await add(repo.main);
+    const key = (await addWorktree(deps, id, "told")).worktree!;
+    await repositories.get({ projectId: id, worktree: key })!.refresh();
+    fs.writeFileSync(path.join(worktreeCheckout(dataRoot, id, key), "tet.json"), JSON.stringify({ commands: ["ignored"] }));
     fs.writeFileSync(path.join(repo.main, "tet.json"), JSON.stringify({ commands: ["npm test"] }));
-    await eventually("both told", () => told.includes(main.id) && told.includes(worktree.id));
-  });
-});
-
-describe("a worktree command while another runs in its repository", () => {
-  it("is refused up front, its project still open, and runs once the other is done", async () => {
-    const repo = repositoryWithWorktrees(["held"]);
-    const closed: string[] = [];
-    const { deps, repositories, changes, idOf } = await open([repo.main, repo.at("held")], (project) => closed.push(project.path));
-    const main = repositories.get(idOf(repo.main))!;
-    // As a push running in the main project.
-    let release: () => void = () => undefined;
-    const other = main.exclusive(() => new Promise((resolve) => (release = () => resolve({ ok: true }))));
-    const worktree = repo.worktree("held");
-    for (const result of [
-      await deleteWorktree(deps, worktree, { force: true, onRemote: false }),
-      await renameWorktree(deps, worktree, "renamed")
-    ]) {
-      assert.equal(result.ok, false);
-      assert.match(result.error ?? "", /already running/);
-    }
-    assert.deepEqual(closed, [], "no terminal closed for a command that could not run");
-    assert.deepEqual(changes, []);
-    assert.ok(fs.existsSync(repo.at("held")));
-    assert.equal(git(repo.at("held"), "branch", "--show-current"), "held", "the branch not renamed either");
-    release();
-    assert.deepEqual(await other, { ok: true });
-    assert.deepEqual(await deleteWorktree(deps, worktree, { force: true, onRemote: false }), { ok: true });
-    assert.ok(!fs.existsSync(repo.at("held")));
-  });
-});
-
-describe("a worktree written to while its terminals close", () => {
-  it("is asked about again, not refused by git after the terminals are gone", async () => {
-    const repo = repositoryWithWorktrees(["busy"]);
-    // As an agent saving its work on its way out.
-    const { deps } = await open([repo.main, repo.at("busy")], (project) => {
-      if (project.path === repo.at("busy")) {
-        fs.writeFileSync(path.join(repo.at("busy"), "late.txt"), "late\n");
-      }
-    });
-    const result = await deleteWorktree(deps, repo.worktree("busy"), { force: false, onRemote: false });
-    assert.deepEqual(result, { ok: false, needsConfirmation: "uncommitted" });
-    assert.ok(fs.existsSync(path.join(repo.at("busy"), "late.txt")), "nothing deleted without the question");
-    assert.deepEqual(await deleteWorktree(deps, repo.worktree("busy"), { force: true, onRemote: false }), { ok: true });
-    assert.ok(!fs.existsSync(repo.at("busy")));
-  });
-});
-
-describe("a worktree renamed to the folder it already has", () => {
-  it("renames only the branch where the folder name stays, closing nothing", async () => {
-    const repo = repositoryWithWorktrees([]);
-    git(repo.main, "worktree", "add", "-q", "--relative-paths", "-b", "feature/x", repo.at("feature-x"));
-    const { deps, changes } = await open([repo.main, repo.at("feature-x")]);
-    assert.deepEqual(await renameWorktree(deps, repo.worktree("feature-x"), "feature-x"), { ok: true });
-    assert.equal(git(repo.at("feature-x"), "branch", "--show-current"), "feature-x");
-    assert.deepEqual(changes, [], "its project stays open");
-  });
-
-  it("moves the folder by case alone, where git refuses that directly", async () => {
-    const repo = repositoryWithWorktrees(["lower"]);
-    const { deps } = await open([repo.main, repo.at("lower")]);
-    assert.deepEqual(await renameWorktree(deps, repo.worktree("lower"), "Lower"), { ok: true });
-    assert.ok(fs.readdirSync(path.dirname(repo.at("lower"))).includes("Lower"));
-    assert.equal(git(repo.at("Lower"), "branch", "--show-current"), "Lower");
-  });
-
-  it("carries what sbx keeps on this machine over to the project reopened under a new id, and a delete drops it", async () => {
-    const repo = repositoryWithWorktrees(["old-name"]);
-    const { deps, store } = await open([repo.main, repo.at("old-name")]);
-    // By name: the store keeps a folder in on-disk spelling (projects.ts's onDisk).
-    const named = (name: string) => store.list().find((project) => path.basename(project.path) === name);
-    const before = named("old-name");
-    assert.ok(before);
-    // Stored as the store keeps them, so no OS encryption is needed here.
-    const local = { secrets: { GITLAB_TOKEN: "encrypted-value" }, variables: { NPM_TOKEN: "encrypted-npm" } };
-    deps.sbxLocal.restore(before.id, local);
-    assert.deepEqual(await renameWorktree(deps, repo.worktree("old-name"), "new-name"), { ok: true });
-    const after = named("new-name");
-    assert.ok(after && after.id !== before.id, "reopened as a new project");
-    const nothing = { secrets: {}, variables: {} };
-    assert.deepEqual(deps.sbxLocal.encrypted(after.id), local);
-    assert.deepEqual(deps.sbxLocal.encrypted(before.id), nothing, "the old id keeps nothing");
-    assert.deepEqual(await deleteWorktree(deps, repo.worktree("new-name"), { force: true, onRemote: false }), { ok: true });
-    assert.deepEqual(deps.sbxLocal.encrypted(after.id), nothing, "a deleted worktree's values go");
+    await eventually("told", () => told.includes(id));
+    assert.ok(told.every((projectId) => projectId === id));
   });
 });

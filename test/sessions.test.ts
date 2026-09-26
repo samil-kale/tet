@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSessionProvider } from "../src/main/agents/codex/sessions";
-import { opencodeSessionProvider, registerAgentDir, sessionSandbox } from "../src/main/agents/opencode/sessions";
+import { opencodeSessionProvider, registerAgentDir } from "../src/main/agents/opencode/sessions";
 import { encodeCwd, piSessionProvider } from "../src/main/agents/pi/sessions";
 
 /**
@@ -367,10 +367,10 @@ describe("opencode's session records", () => {
     return { cwd, dir };
   }
 
-  it("lists the records oldest first, with where each session lives", async () => {
+  it("lists the records oldest first", async () => {
     const { cwd } = records({
-      "ses_b.json": { id: "ses_b", title: "Second", created: 2, updated: 5, sandbox: "tet-opencode-abc" },
-      "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null },
+      "ses_b.json": { id: "ses_b", title: "Second", created: 2, updated: 5 },
+      "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3 },
       "ses_c.json.tmp": "{",
       "ses_d.json": "not json"
     });
@@ -379,12 +379,10 @@ describe("opencode's session records", () => {
       listed.map((info) => [info.id, info.title, info.createdAt, info.updatedAt, info.sandbox]),
       [
         ["ses_a", "First", 1, 3, undefined],
-        ["ses_b", "Second", 2, 5, "tet-opencode-abc"]
-      ]
+        ["ses_b", "Second", 2, 5, undefined]
+      ],
+      "the host's records only: the manager names a sandbox on its own listing"
     );
-    assert.equal(await sessionSandbox(cwd, "ses_b"), "tet-opencode-abc");
-    assert.equal(await sessionSandbox(cwd, "ses_a"), null);
-    assert.equal(await sessionSandbox(cwd, "ses_none"), null, "an unrecorded session can only be on the host");
   });
 
   it("lists nothing for a repository that was never prepared", async () => {
@@ -393,7 +391,7 @@ describe("opencode's session records", () => {
 
   it("resumes by id and renames through the session's own process", async () => {
     assert.deepEqual(opencodeSessionProvider.resumeArgs("ses_a"), ["--session", "ses_a"]);
-    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null } });
+    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3 } });
     const requests = path.join(path.dirname(dir), "rename");
     // Stands in for the plugin: the request appears, the record follows.
     const plugin = setInterval(() => {
@@ -401,7 +399,7 @@ describe("opencode's session records", () => {
       if (fs.existsSync(request)) {
         const title = fs.readFileSync(request, "utf8");
         fs.rmSync(request);
-        fs.writeFileSync(path.join(dir, "ses_a.json"), JSON.stringify({ id: "ses_a", title, created: 1, updated: 4, sandbox: null }));
+        fs.writeFileSync(path.join(dir, "ses_a.json"), JSON.stringify({ id: "ses_a", title, created: 1, updated: 4 }));
       }
     }, 50);
     try {
@@ -414,7 +412,7 @@ describe("opencode's session records", () => {
   });
 
   it("drops a record only once its session is gone, keeping it when the delete failed", async () => {
-    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3, sandbox: null } });
+    const { cwd, dir } = records({ "ses_a.json": { id: "ses_a", title: "First", created: 1, updated: 3 } });
     fs.mkdirSync(cwd);
     /** A stand-in opencode that fails `session delete` and answers `session list` with `listed`. */
     const fakeOpencode = (listed: string): string => {
@@ -463,7 +461,7 @@ describe("sessions written inside a sandbox", () => {
     assert.equal(session.title, "In the sandbox");
     await sandbox.rename(dir, cwd, "s1", "Renamed");
     assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
-    await sandbox.remove(dir, cwd, "s1");
+    await sandbox.remove(dir, cwd, "s1", "tet-claude-abc");
     assert.deepEqual(await sandbox.list(dir, cwd), []);
   });
 
@@ -497,12 +495,12 @@ describe("sessions written inside a sandbox", () => {
     await assert.rejects(sandbox.rename(dir, cwd, "s2", "  "), /non-empty/);
 
     const indexBefore = fs.readFileSync(index, "utf8");
-    await sandbox.remove(dir, cwd, "s1");
+    await sandbox.remove(dir, cwd, "s1", "tet-codex-abc");
     assert.deepEqual(fs.readdirSync(day), ["rollout-s2.jsonl"]);
     assert.equal(fs.readFileSync(index, "utf8"), indexBefore, "the index is left as it is");
     assert.deepEqual(await titles(), [["s2", "Renamed"]], "a name without its rollout lists nothing");
     // A session that is already gone resolves — see SessionProvider.remove.
-    await sandbox.remove(dir, cwd, "s1");
+    await sandbox.remove(dir, cwd, "s1", "tet-codex-abc");
   });
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {
@@ -528,18 +526,43 @@ describe("sessions written inside a sandbox", () => {
     assert.equal(session.title, "In the sandbox");
     await sandbox.rename(dir, cwd, "s1", "Renamed");
     assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
-    await sandbox.remove(dir, cwd, "s1");
+    await sandbox.remove(dir, cwd, "s1", "tet-pi-abc");
     assert.deepEqual(await sandbox.list(dir, cwd), []);
+  });
+
+  it("lists and renames opencode's sandboxed records, written into the mounted folder", async () => {
+    // The sandbox's agentDir: its plugin writes records into `sessions/`, which is the root.
+    const agentDir = root("tet-sbx-oc-");
+    const dir = path.join(agentDir, "sessions");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "ses_s.json"), JSON.stringify({ id: "ses_s", title: "In the sandbox", created: 1, updated: 2 }));
+    const sandbox = opencodeSessionProvider.sandbox;
+    assert.ok(sandbox);
+    assert.deepEqual(sandbox.mounts, [], "the whole agentDir is mounted already");
+    const [session] = await sandbox.list(dir, cwd);
+    assert.deepEqual([session.id, session.title], ["ses_s", "In the sandbox"]);
+    // Stands in for the sandboxed plugin, polling its own agentDir's requests.
+    const requests = path.join(agentDir, "rename");
+    const plugin = setInterval(() => {
+      const request = path.join(requests, "ses_s");
+      if (fs.existsSync(request)) {
+        const title = fs.readFileSync(request, "utf8");
+        fs.rmSync(request);
+        fs.writeFileSync(path.join(dir, "ses_s.json"), JSON.stringify({ id: "ses_s", title, created: 1, updated: 3 }));
+      }
+    }, 50);
+    try {
+      await sandbox.rename(dir, cwd, "ses_s", "Renamed");
+    } finally {
+      clearInterval(plugin);
+    }
+    assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
   });
 
   it("has nothing to list where the sandbox never wrote anything", async () => {
     const dir = path.join(os.tmpdir(), "tet-sbx-never");
-    for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider]) {
+    for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider, opencodeSessionProvider]) {
       assert.deepEqual(await provider.sandbox?.list(dir, cwd), []);
     }
-  });
-
-  it("keeps opencode out of it — its plugin already records where a session ran", () => {
-    assert.equal(opencodeSessionProvider.sandbox, undefined);
   });
 });
