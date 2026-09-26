@@ -97,7 +97,8 @@ export const SBX_PROBLEM = {
   portInUse: "In use on this machine",
   refused: "Refused by sbx",
   notStarted: "Its sandbox could not be started",
-  secretsUnlisted: "sbx did not list the sandbox's secrets"
+  secretsUnlisted: "sbx did not list the sandbox's secrets",
+  hostsUnlisted: "sbx did not list the sandbox's allowed hosts"
 } as const;
 
 /** The policy's no: under governance the organization's, else sbx's own. */

@@ -4,7 +4,8 @@ import { FillSvg, LARGER, Svg } from "./icons";
 /**
  * Which icon belongs to which agent — the one agent-specific thing outside `src/main/agents/`: an
  * icon on `AgentDefinition` would pull JSX into the main bundle and agent setup into this one. A
- * new agent is a folder, an entry in `src/main/agents/index.ts`, and a case below.
+ * new agent is a folder, an entry in `src/main/agents/index.ts`, its id in `AGENT_IDS` (and
+ * `SBX_AGENT_IDS`, `src/shared/types.ts`), and a case below.
  */
 interface AgentIconProps {
   agentId: AgentId;

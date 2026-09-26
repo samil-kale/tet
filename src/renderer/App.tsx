@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
+import { closedWith, EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
 import type { AgentInfo, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
@@ -297,9 +297,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     disposeProjectTerminals(projectId);
   }, [forgetLayout, forgetEditorSync]);
 
-  /** The project row's close; the list follows through `projects:changed`. */
+  /** The project row's close, its worktrees' with it (closedWith); the list follows through
+   *  `projects:changed`. */
   const closeProject = useCallback(async (projectId: string) => {
-    if (await canDiscardProjectEdits(projectId)) {
+    if (await canDiscardProjectEdits(...closedWith(projectsRef.current, projectId))) {
       await window.tet.projects.remove(projectId);
     }
   }, []);

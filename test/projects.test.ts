@@ -104,6 +104,32 @@ describe("a project opened or closed", () => {
     assert.deepEqual(changes, [{ added: added.project.id }, { removed: added.project.id }]);
     assert.deepEqual(store.list(), []);
   });
+
+  it("opens a worktree's folder with its main worktree's project", async () => {
+    const repo = repositoryWithWorktrees(["picked"]);
+    const { deps, store, changes } = await open([]);
+    const added = await addProject(deps, repo.at("picked"));
+    assert.ok(added.project);
+    assert.equal(added.project.mainPath, repo.main);
+    assert.deepEqual(store.list().map((project) => project.path).sort(), [repo.at("picked"), repo.main].sort());
+    assert.deepEqual(changes, [{ added: added.project.id }]);
+  });
+
+  it("closes a main worktree's project with its worktrees', each announced", async () => {
+    const repo = repositoryWithWorktrees(["one", "two"]);
+    const { deps, store, changes, idOf } = await open([repo.main, repo.at("one"), repo.at("two")]);
+    const ids = [idOf(repo.at("one")), idOf(repo.at("two")), idOf(repo.main)];
+    await removeProject(deps, idOf(repo.main));
+    assert.deepEqual(store.list(), []);
+    assert.deepEqual(changes, ids.map((removed) => ({ removed })));
+  });
+
+  it("closes a worktree's project alone", async () => {
+    const repo = repositoryWithWorktrees(["only"]);
+    const { deps, store, idOf } = await open([repo.main, repo.at("only")]);
+    await removeProject(deps, idOf(repo.at("only")));
+    assert.deepEqual(store.list().map((project) => project.path), [repo.main]);
+  });
 });
 
 describe("a worktree deleted with its main project closed", () => {

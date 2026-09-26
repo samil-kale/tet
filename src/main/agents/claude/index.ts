@@ -22,7 +22,7 @@ export const claudeAgent: AgentDefinition = {
   displayName: "Claude",
   executable: () => "claude",
   versionArgs: ["--version"],
-  verifiedVersion: "2.1.273",
+  verifiedVersion: "2.1.282",
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   askArgs: ["-p", "--no-session-persistence"],
   sessions: claudeSessionProvider,

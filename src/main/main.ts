@@ -629,8 +629,15 @@ if (!app.requestSingleInstanceLock()) {
     timeStartup("window", createWindow);
     // Off the start path: reading each project's main worktree is up to two reads and a realpath,
     // and the stored value is right until a folder is made or unmade a worktree behind tet's back.
+    // A worktree stored without its main worktree's project (from before tet opened both) gets it:
+    // opened now, or with the workspace.
     setImmediate(() => {
-      if (store.refreshMainPaths()) {
+      const refreshed = store.refreshMainPaths();
+      const added = store.addMissingMains();
+      if (workspaceOpen) {
+        added.forEach(openProject);
+      }
+      if (refreshed || added.length > 0) {
         projectDeps.projectsChanged({});
       }
     });

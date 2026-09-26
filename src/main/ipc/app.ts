@@ -9,10 +9,11 @@ import type { IpcDeps } from "./deps";
 /** The startup gate, the app's own facts, the settings, and what the agents are. */
 export function registerAppIpc({
   settings,
+  sessions,
   openWorkspace,
   applyTheme,
   shutdown
-}: Pick<IpcDeps, "settings" | "openWorkspace" | "applyTheme" | "shutdown">): void {
+}: Pick<IpcDeps, "settings" | "sessions" | "openWorkspace" | "applyTheme" | "shutdown">): void {
   /** The startup gate, asked on every re-check; passing opens the workspace. */
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
     // Re-scans for manager bin dirs created since startup, so "Check again" finds them.
@@ -62,6 +63,9 @@ export function registerAppIpc({
   ipcMain.handle("settings:patch", (_event, edits: SettingsEdits): void => {
     settings.patch(edits);
     applyTheme();
+    if (edits.notifications?.idleReminder !== undefined) {
+      sessions.idleReminderChanged();
+    }
   });
 
   ipcMain.handle("agents:list", () => listAgents());

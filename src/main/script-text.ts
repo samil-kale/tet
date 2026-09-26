@@ -2,7 +2,8 @@ import writeFileAtomic from "write-file-atomic";
 
 /**
  * Line endings and quoting for files tet generates for other processes to run (control
- * launchers).
+ * launchers). git's `askpass.sh` is one too, written in `git.ts`, which may not import this: LF by
+ * its own `join("\n")`, nothing interpolated.
  */
 
 /** sh chokes on CRLF (`then\r`), whatever the source's line endings. Executable: run directly

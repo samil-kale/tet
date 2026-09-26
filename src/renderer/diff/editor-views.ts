@@ -585,9 +585,9 @@ export async function canDiscardEdits(tabIds: string[]): Promise<boolean> {
   return answer.confirmed;
 }
 
-/** `canDiscardEdits` over every editor tab of the project. */
-export function canDiscardProjectEdits(projectId: string): Promise<boolean> {
-  return canDiscardEdits(projectViews(projectId).map((view) => view.tabId));
+/** `canDiscardEdits` over every editor tab of the projects. */
+export function canDiscardProjectEdits(...projectIds: string[]): Promise<boolean> {
+  return canDiscardEdits(projectIds.flatMap((projectId) => projectViews(projectId).map((view) => view.tabId)));
 }
 
 /** Moves the preview's scroller into the tab's frame beside the editor, and renders it. */

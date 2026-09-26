@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types";
-import { SparkleIcon, SpinnerIcon } from "./icons";
+import { SparkleIcon } from "./icons";
 
 /**
  * What refused an answer, where the answer was given: under the field to blame (`Field`), in a
@@ -221,7 +221,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => void suggest()}
         >
-          {suggesting ? <SpinnerIcon className="spinning" /> : <SparkleIcon />}
+          <SparkleIcon />
         </button>
       </div>
     </Field>

@@ -7,7 +7,7 @@ import { errorMessage } from "../../shared/errors";
 import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, isSbxAgent, isWorking } from "../../shared/types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, closedWith, isSbxAgent, isWorking } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -388,13 +388,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "projects-remove": (args, caller) => {
       const id = text(args, "projectId", "project id");
       projectById(id);
+      const closing = closedWith(store.list(), id);
       // Only the window asks about unsaved edits (App's closeProject); from here they would be lost.
-      const unsaved = deps.records.editors(id).filter((editor) => editor.dirty);
+      const unsaved = closing.flatMap((closed) => deps.records.editors(closed)).filter((editor) => editor.dirty);
       if (unsaved.length > 0) {
         throw new ControlError("bad_args", `unsaved changes in ${unsaved.map((editor) => editor.path).join(", ")} — save or close them in TET first`);
       }
       // The caller's own project takes the caller's tab with it — answer first.
-      if (id === caller.projectId) {
+      if (caller.projectId !== undefined && closing.includes(caller.projectId)) {
         return { result: { removed: id }, after: () => deps.removeProject(id) };
       }
       deps.removeProject(id);

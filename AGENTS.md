@@ -36,7 +36,7 @@ project's terminals.
   types and the agent-neutral `ask.ts` and `system-prompt.ts`. A new agent is a new folder, one
   registry entry, its id in `AGENT_IDS` (and `SBX_AGENT_IDS`, `src/shared/types.ts`), and one case
   in `AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only agent-specific code outside
-  `agents/`).
+  `agents/`; user-facing text may name agents).
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
   the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing or malformed
   means nothing configured. A linked worktree has none of its own: it takes its main worktree's
@@ -47,15 +47,20 @@ project's terminals.
 
 Claude Code, Codex, opencode and pi are four products in the same kind of tab, alike in nothing:
 readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw. So
-anything about how a CLI is driven is an `AgentDefinition` field with a value per agent,
-**measured through this same pty** — never taken from docs, source or another agent — and
-commented there with the measurement.
+anything about how a CLI is driven is an `AgentDefinition` field with a value per agent (or what
+its `prepareSpawn` returns, e.g. the fullscreen args that make a resize redraw in place),
+commented there with how it was found. **Measured through this same pty** is preferred, never
+taken from another agent; a value only docs or source could give says so in its comment. The one
+exception is the right mouse button, decided per click by the terminal's mouse mode
+(`terminal-views.ts`), not per agent.
 
 ## Never touch the user's agent configuration
 
-Everything TET generates lives under `~/.tet` (`data-root.ts`) and is pointed at from outside.
+Everything TET generates for an agent lives under `~/.tet` (`data-root.ts`) and is pointed at from
+outside; only pasted or dropped files go to the OS temp directory (`ipc/files.ts`).
 `prepareSpawn` and `prepareSandboxSpawn` are the only places an agent writes configuration;
-beyond them it touches only its own sessions, when the user renames or deletes one.
+beyond them it touches only its own sessions: when the user renames or deletes one, and the one a
+background question leaves (`cleanupAsk`).
 
 - Claude Code: a generated `--settings` file; never `~/.claude/settings.json`.
 - Codex: `-c key=value` for that one process; never `~/.codex/config.toml` or `hooks.json`.
@@ -79,22 +84,25 @@ others.
 ## Git
 
 - Git is never reimplemented and never run from the renderer. `src/main/git/git.ts` wraps the CLI
-  in its own `utilityProcess` (`git-host.ts`, via `git-client.ts`): nothing there imports electron,
-  everything crossing the boundary survives a structured clone.
+  in its own `utilityProcess` (`git-host.ts`, via `git-client.ts`): nothing in `git.ts` or
+  `git-host.ts` imports electron, everything crossing the boundary survives a structured clone.
 - Starting git is the cost, so count invocations: anything added to the refresh path must earn its
   process (the budget is commented at `git.ts`'s `readState`).
 - `Repository` is the single source of truth for the git pane and the terminals; every git command
-  on an open repository goes through `Repository.runAction` (renderer: `git/run-action.ts` —
-  `BranchActions` for branch commands, `useFileAct` for the changes list).
+  that changes an open repository goes through `Repository.runAction` (renderer:
+  `git/run-action.ts` — `useBranchActions` for branch commands, `useFileAct` for the changes list
+  and the Explorer). Reads run beside it, and so does the periodic fetch, which actions wait on.
 - Remote commands run with `NETWORK_ENV`. **TET writes into no credential helper itself**: a login
   typed into tet reaches git through askpass (`GitLoginStore.run`), and git stores it in the
   user's helper; where there is none, tet keeps it sealed in `~/.tet/git-logins.json`.
 - tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
 - A linked worktree is a project of its own, indented under its main worktree's row
   (`Project.mainPath`) and listed in the branch tree's WORKTREES (`RepositoryState.worktrees`) —
-  both read off the disk (a stored `mainPath` only draws the first frame). A worktree and its
-  branch are one: made together at the default branch (`worktreeBase`), named, renamed and deleted
-  together, and never switched. Its base is tet's own `branch.<name>.base` (`git.ts`'s
+  both read off the disk (a stored `mainPath` only draws the first frame) — and never open without
+  that row: opening a worktree's folder opens its main worktree too, closing that closes its
+  worktrees (`ProjectStore.addMissingMains`, `closedWith`). A worktree and its branch are one: made
+  together at the default branch (`worktreeBase`), named, renamed and deleted together, and never
+  switched. Its base is tet's own `branch.<name>.base` (`git.ts`'s
   `worktreeAdd`); tet creates worktrees in `~/.tet/worktrees` (`projects.ts`).
 
 **Scope.** Everything the git pane does fits in a context menu, an icon button or a question. Of
@@ -102,9 +110,10 @@ that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), 
 and tag create/rename/delete, merge and rebase onto a branch, abort, per-file diff, discard,
 `.gitignore`, fetch/pull/push, commit of all changes or the selection, stash of all and
 apply/pop/drop, remote URL, worktrees (add, rename, delete), init and clone (GitHub/GitLab via
-`GitProvider`). Where Desktop differs from git's defaults, follow Desktop. The project row's entries
-are repository-wide and never touch the working tree — a worktree's own row excepted, which is that
-tree, and its merge into the base, run where the base is checked out.
+`GitProvider`), and a commit message suggested by an installed agent. Where Desktop differs from
+git's defaults, follow Desktop. The project row's entries are repository-wide and never touch the
+working tree — a worktree's own row excepted, which is that tree, and its merge into the base, run
+where the base is checked out.
 
 Don't add without being asked: staging or per-line staging, history or graph, cherry-pick, revert,
 squash, reorder, bisect, submodules, conflict resolution beyond aborting, side-by-side text diff,
@@ -117,7 +126,8 @@ or a per-line decision is for an agent.
   editor tabs — VS Code's preview rule, one preview tab per project (`editor-tab.ts`). Git and
   files are not tabs but one side pane toggled from the strip.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
-  zone. Every rule is in `src/renderer/terminal/pane-layout.ts`, the state in `App`.
+  zone. Every rule is in `src/renderer/terminal/pane-layout.ts`, the state in
+  `use-project-layouts.ts`, called from `App`.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a
   message of its own; a status (marks, progress bar) is not a notice.
@@ -131,7 +141,8 @@ or a per-line decision is for an agent.
   one mark; on a dialog tab, `DialogTab.mark`); else left in the button row, level with the
   buttons (`DialogFrame`'s `error`) where the fields are several or across tabs — what was typed
   is held so it can be corrected, and it is git's own words for a name it will not take, never
-  tet's guess at them.
+  tet's guess at them. A list that could not be loaded shows its failure in its place
+  (`DialogError`).
   What the unsaved edits as a whole lead to goes in the same place (`DialogFrame`'s `message`),
   e.g. `RestartNote` while they reach running tabs only once restarted. A notice is for what has
   no dialog up to carry it; a `confirm`
@@ -140,14 +151,18 @@ or a per-line decision is for an agent.
   while the action runs, so what runs it hands the failure back instead of notifying it
   (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than sending
   `app:notice`.
-- **Nothing is written until Save**; Cancel and Escape drop edits. A setting reaches an agent at
-  its setup (`AgentPaths`), so it applies to projects opened afterwards.
+- **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
+  dialog's Docker sign-in and sign-out and the Add Repository dialog's account removal and
+  namespace pick, which act at once. A setting reaches an agent at its setup
+  (`AgentPaths`), so it applies to projects opened afterwards; the theme and the idle reminder
+  redo the setup of open ones (`themeChanged`, `idleReminderChanged`).
 - **A section of typed rows never says it is empty** (`RowSection`): it shows one blank row to
   type into, on opening and once the last is removed (`atLeastOne`), and Save drops a blank row.
   Only rows a picker adds (the SBX paths) get a line saying there are none.
 - **One progress indicator per section** (`ProgressBar.tsx`, `Section`'s `busy`): a new slow
   reason feeds the existing bar. In a dialog that bar is `DialogFrame`'s `busy`, so a busy state
-  held by a nested view is lifted to the view owning the frame.
+  held by a nested view is lifted to the view owning the frame. No spinners for progress: the one
+  spinner is a session's working mark.
 - **The keyboard belongs to the terminal**: tet's key handler runs before xterm and takes nothing
   an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
   window shortcut closes a tab.
@@ -184,7 +199,9 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
 
 - **Nothing is read off the terminal or a file.** Every agent reports its turn over the control
   channel as `tet-ctl hook <event>`, addressed by `TET_TAB_ID`: Claude Code and Codex as a hook
-  command, opencode's plugin and pi's extension by posting the same request.
+  command, opencode's plugin and pi's extension by posting the same request. The one exception: no
+  agent's hook fires for a turn the user cut short, so reconcile ends a turn by the agent's own
+  session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
 - The main process sets the state (`ProjectSessionManager.hookEvent`); the renderer decides what is
   shown (`App.markedTabs`) and clears what was seen (`terminals.seen`).
 - A session is asked to quit (`quitPresses`) before it is killed — a hard kill skips a CLI's exit
@@ -204,7 +221,8 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   `SessionStart` hook's added context), never replacing the user's instructions.
 - **Environment variables** (`src/main/environment.ts`): tokens and passwords an agent needs, typed
   only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab gets them anyway), global, and
-  set in every tab at its start (`buildEnv`), over what the machine sets itself — said in a notice.
+  set in every tab at its start (`pty.ts`'s `buildEnv`), over what the machine sets itself — said
+  in a notice.
   A running tab takes them up only when restarted: the dialog's Save restarts the asking one.
   None in a sandbox, and the verbs refused *and* unmentioned there — not in `help`, not in its
   system prompt.

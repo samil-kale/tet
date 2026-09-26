@@ -37,7 +37,8 @@ export interface PromptFields<T> {
   busy: boolean;
   /** For the field the dialog opens focused and selected, and returns to on a refusal. */
   field: RefObject<HTMLInputElement | null>;
-  /** A field still fetching its value (`SuggestField`'s wand) holds the answer back meanwhile. */
+  /** A field still fetching its value (`SuggestField`'s wand) holds the answer back meanwhile, and
+   *  runs the frame's bar. */
   hold: (held: boolean) => void;
 }
 

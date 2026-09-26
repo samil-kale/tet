@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { failure } from "../shared/errors";
-import { worktreeBase, worktreesSupported, WORKTREES_NEED_GIT } from "../shared/types";
+import { closedWith, worktreeBase, worktreesSupported, WORKTREES_NEED_GIT } from "../shared/types";
 import type { AddRepositoryResult, GitActionResult, Project, WorktreeRef } from "../shared/types";
 import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
@@ -31,7 +31,8 @@ export interface ProjectDeps {
  * Opens a folder as a project, shared by the add-repository dialog (`projects:open`) and the
  * control channel, and tells the window (`projectsChanged`), as every change to the list here
  * does: the window keeps no list of its own, so both transports lead to one behaviour. A stored
- * project whose folder is gone watches and spawns nothing, with a notice per action.
+ * project whose folder is gone watches and spawns nothing, with a notice per action. A worktree's
+ * folder opens its main worktree's project too (ProjectStore.addMissingMains).
  */
 export async function addProject({ store, openProject, projectsChanged }: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
   if (!(await fs.promises.stat(directory).then((stat) => stat.isDirectory(), () => false))) {
@@ -39,17 +40,22 @@ export async function addProject({ store, openProject, projectsChanged }: Projec
   }
   // Picking a subdirectory opens the repository itself: git reports paths relative to the root.
   const project = store.add((await git.resolveRoot(directory).catch(() => undefined)) ?? directory);
+  store.addMissingMains().forEach(openProject);
   openProject(project);
   projectsChanged({ added: project.id });
   return { project };
 }
 
-/** Closes the project and tells the window. Resolves once the project's sessions and git commands
- *  have ended — a worktree's folder is removed or moved only then. */
+/** Closes the project, its worktrees' projects with it (closedWith), and tells the window.
+ *  Resolves once their sessions and git commands have ended — a worktree's folder is removed or
+ *  moved only then. */
 export function removeProject(deps: ProjectDeps, projectId: string): Promise<void> {
-  const ended = closeProject(deps, projectId);
-  deps.projectsChanged({ removed: projectId });
-  return ended;
+  const ended = closedWith(deps.store.list(), projectId).map((id) => {
+    const closed = closeProject(deps, id);
+    deps.projectsChanged({ removed: id });
+    return closed;
+  });
+  return Promise.all(ended).then(() => undefined);
 }
 
 /** removeProject's work, unannounced: withWorktreeClosed tells the window together with the
@@ -333,6 +339,18 @@ export class ProjectStore implements ProjectLookup {
     this.projects.push(project);
     this.save();
     return project;
+  }
+
+  /** The main worktrees of listed worktrees, where not listed themselves: a worktree is never open
+   *  without its main worktree's project. Returns those added, for the caller to open. */
+  addMissingMains(): Project[] {
+    const listed = new Set(this.projects.map((project) => project.path));
+    const missing = new Set(
+      this.projects.flatMap((project) =>
+        project.mainPath !== undefined && !listed.has(project.mainPath) && fs.existsSync(project.mainPath) ? [project.mainPath] : []
+      )
+    );
+    return [...missing].map((mainPath) => this.add(mainPath));
   }
 
   remove(projectId: string): void {

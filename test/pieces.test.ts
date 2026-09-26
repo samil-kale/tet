@@ -357,6 +357,8 @@ describe("saving an sbx config", () => {
     others?: { name: string; workspaces?: string[] }[];
     /** `inspect --json`'s `runtime_mounts`. */
     mounts?: object[];
+    /** Calls that fail with nothing on stdout, by how their arguments start: sbx that cannot say. */
+    fail?: string[];
   }): { dir: string; projectPath: string } {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
     const projectPath = path.join(dir, "repo");
@@ -373,7 +375,10 @@ describe("saving an sbx config", () => {
 const answers = JSON.parse(fs.readFileSync(${JSON.stringify(answerFile)}, "utf8"));
 const args = process.argv.slice(2);
 fs.appendFileSync(answers.log, args.join(" ") + "\\n");
-if (args[0] === "ls") {
+if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
+  process.stderr.write("ERROR: ensure daemon\\n");
+  process.exit(1);
+} else if (args[0] === "ls") {
   const others = (answers.others ?? []).map((other) => ({ workspaces: answers.workspaces, ...other }));
   process.stdout.write(JSON.stringify({ sandboxes: [{ name: answers.name, workspaces: answers.workspaces }, ...others] }));
 } else if (args[0] === "policy" && args[1] === "check") {
@@ -445,9 +450,9 @@ if (args[0] === "ls") {
     // Started and listed before anything changes (assertReadable), then worked against.
     assert.deepEqual(calls, [
       "ls --json",
+      "policy ls --type network --include-inactive --json",
       `exec -i ${name} true`,
       `ports ${name} --json`,
-      "policy ls --type network --include-inactive --json",
       `ports ${name} --publish 3000:3000`
     ]);
     assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], config: config([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
@@ -623,6 +628,50 @@ if (args[0] === "ls") {
     assert.ok(!/secret rm|secret set-custom|^rm /m.test(calls), calls);
     assert.deepEqual(await readSbxConfig(projectPath), before, "tet.json as it was");
   });
+
+  for (const [what, fail, message] of [
+    ["the sandboxes", "ls", /could not list the sandboxes\./],
+    ["the sandboxes' allowed hosts", "policy ls --type network", /could not list the sandboxes' allowed hosts/]
+  ] as const) {
+    it(`stops a Save where sbx does not list ${what}, changing nothing`, async () => {
+      const { dir, projectPath } = fakeSbx({ published: [], fail: [fail] });
+      await writeSbxConfig(projectPath, { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["old.example.com"] });
+      const before = await readSbxConfig(projectPath);
+      await assert.rejects(
+        withSbx(dir, () =>
+          saveSbxConfig({ id: projectId, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+        ),
+        message
+      );
+      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
+      assert.ok(!/policy rm|policy allow|^rm /m.test(calls), calls);
+      assert.deepEqual(await readSbxConfig(projectPath), before, "tet.json as it was");
+    });
+  }
+
+  for (const [what, fail, rows] of [
+    ["the governed policy", "policy check", { hosts: ["closed.example.com"] }],
+    ["the filesystem rules", "policy ls --type filesystem", { paths: [{ path: os.tmpdir(), access: "ro" }] }],
+    ["the published ports", "ports", { ports: [port(3000)] }]
+  ] satisfies [string, string, Partial<SbxProjectConfig>][]) {
+    it(`rejects where sbx does not answer for ${what}, rather than finding a problem`, async () => {
+      const { dir } = fakeSbx({ published: [], fail: [fail] });
+      await assert.rejects(
+        withSbx(dir, () =>
+          readSbxProblems({
+            projectId,
+            config: { ...EMPTY_SBX_CONFIG, enabled: true, ...rows },
+            knowledge: EMPTY_SBX_KNOWLEDGE,
+            values: { secrets: new Set(), variables: new Set() },
+            agentIds: ["claude"],
+            organization: "acme",
+            ports: true
+          })
+        ),
+        /SBX could not/
+      );
+    });
+  }
 
   it("finds what cannot be applied here: under governance a host its policy refuses, a missing or refused path, a secret or variable without a value", async () => {
     const { dir, projectPath } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });

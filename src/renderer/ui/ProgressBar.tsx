@@ -8,9 +8,9 @@ const SPEED = 500;
 /**
  * The one indeterminate progress bar, drawn under the header it is a child of, which declares
  * `position: relative`. See "One progress indicator per section" in AGENTS.md. Never a second one
- * under a header: a new slow reason feeds the bar it has. A spinner in an icon's place is not one of these,
- * and a button disabled for being underway only dims; the project row is the one place a spinner
- * stands alone.
+ * under a header: a new slow reason feeds the bar it has. No spinner stands in for it, and a
+ * button disabled for being underway only dims; the one spinner is a session's working mark
+ * (`SessionMark`), a status rather than progress.
  *
  * Length and speed are absolute, not a share of the width, so bars of different widths side by
  * side look alike; the duration follows from the measured width. `useLayoutEffect`, so the first

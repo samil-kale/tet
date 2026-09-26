@@ -111,6 +111,8 @@ interface AgentRuntime {
   preparation?: SpawnPreparation;
   /** The theme `preparation` was written for — see themeChanged. */
   preparedTheme?: string;
+  /** The idle reminder `preparation` was written for — see idleReminderChanged. */
+  preparedIdleReminder?: boolean;
   prepareFailed: boolean;
   /** One setup at a time: two tabs opened at once must not write it twice. */
   preparing?: Promise<boolean>;
@@ -609,15 +611,25 @@ export class ProjectSessionManager {
     this.openFirstAgentTab();
   }
 
-  /**
-   * Re-prepares every agent set up for another theme (AgentPaths.theme — Codex's win32 launcher
-   * carries the colors). The old setup stands until replaced, so a tab spawned meanwhile gets one.
-   */
+  /** Re-prepares every agent set up for another theme (AgentPaths.theme — Codex's win32 launcher
+   *  carries the colors). */
   themeChanged(): void {
     const { id } = currentTheme(this.settings);
+    this.prepareStale((runtime) => runtime.preparedTheme !== id);
+  }
+
+  /** Re-prepares every agent set up with the other idle reminder (AgentPaths.idleReminder — Claude
+   *  Code's hooks carry it). */
+  idleReminderChanged(): void {
+    const { idleReminder } = this.settings.get().notifications;
+    this.prepareStale((runtime) => runtime.preparedIdleReminder !== idleReminder);
+  }
+
+  /** The old setup stands until replaced, so a tab spawned meanwhile gets one. */
+  private prepareStale(stale: (runtime: AgentRuntime) => boolean): void {
     for (const runtime of this.runtimes.values()) {
-      // A setup underway counts too: it read the theme before the change.
-      if ((runtime.preparation || runtime.preparing) && runtime.preparedTheme !== id) {
+      // A setup underway counts too: it read the settings before the change.
+      if ((runtime.preparation || runtime.preparing) && stale(runtime)) {
         void this.prepare(runtime, true);
       }
     }
@@ -659,6 +671,7 @@ export class ProjectSessionManager {
       }
       runtime.preparation = preparation;
       runtime.preparedTheme = paths.theme.id;
+      runtime.preparedIdleReminder = paths.idleReminder;
       // Nothing else clears an earlier failure.
       runtime.prepareFailed = false;
       return true;
@@ -1237,7 +1250,8 @@ export class ProjectSessionManager {
   }
 
   /**
-   * A tab's hook report — the only way turns reach tet ("Turns and session marks" in AGENTS.md).
+   * A tab's hook report — how turns reach tet ("Turns and session marks" in AGENTS.md); only a turn
+   * the user cut short is ended otherwise (reconcile, AgentSessionInfo.turnEndedAt).
    * Addressed by tab (`TET_TAB_ID` in the hook's environment, passed into a sandbox by
    * prepareSbxRun), so no turn is reported for a session no tab has claimed.
    *
@@ -1570,6 +1584,13 @@ export class SessionManagerRegistry {
   themeChanged(): void {
     for (const manager of this.managers.values()) {
       manager.themeChanged();
+    }
+  }
+
+  /** See ProjectSessionManager.idleReminderChanged. */
+  idleReminderChanged(): void {
+    for (const manager of this.managers.values()) {
+      manager.idleReminderChanged();
     }
   }
 

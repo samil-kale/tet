@@ -45,6 +45,14 @@ export interface Project {
   mainPath?: string;
 }
 
+/** The project and its worktrees' projects, which are never open without it and so close with it
+ *  (projects.ts's removeProject): the worktrees first. A worktree's own closes alone. */
+export function closedWith(projects: readonly Project[], projectId: string): string[] {
+  const project = projects.find((entry) => entry.id === projectId);
+  const worktrees = project?.mainPath === undefined ? projects.filter((other) => other.mainPath === project?.path) : [];
+  return [...worktrees.map((worktree) => worktree.id), projectId];
+}
+
 /** What every agent notifies the OS about. */
 export interface NotificationSettings {
   /** The agent finished responding, with nothing it started still running. */

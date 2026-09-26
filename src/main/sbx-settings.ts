@@ -92,9 +92,12 @@ export async function saveProjectSbx(
     const secretValues = sbxLocal.values(project.id, "secrets");
     const knowledge = sbxLocal.knowledge(project.id);
     const organization = await organizationOf(status);
-    // Off, nothing is applied, so nothing is left out.
+    // Off, nothing is applied, so nothing is left out. What sbx cannot say stops the Save: a row
+    // it could not be asked about is no refusal.
     const problems = request.enabled
-      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization)
+      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization).catch((error: unknown) => {
+          throw new Error(`${errorMessage(error)} Nothing was saved; try again.`);
+        })
       : {};
     const wanted = withoutProblems(request, knowledge, problems);
     const { removed, orphans, refused, failures, config, knowledge: applied } = await saveSbxConfig(

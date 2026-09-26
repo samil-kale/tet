@@ -249,11 +249,15 @@ export function useSbxProblems(projectId: string, state: FieldsState, stored: Sb
     opened.current = false;
     let current = true;
     const timer = setTimeout(() => {
-      void window.tet.sbx.problems(projectId, config, knowledge, values).then((answer) => {
-        if (current) {
-          setProblems(answer);
-        }
-      });
+      // Where sbx cannot say, the marks stay as they were; Save asks again and stops.
+      void window.tet.sbx.problems(projectId, config, knowledge, values).then(
+        (answer) => {
+          if (current) {
+            setProblems(answer);
+          }
+        },
+        () => undefined
+      );
     }, delay);
     return () => {
       current = false;
