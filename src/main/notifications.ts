@@ -52,7 +52,7 @@ function repeatedToast(title: string, body: string, target?: ToastTarget): boole
 /**
  * Clickable toasts, held so their click handlers are not garbage-collected — outside win32, where
  * clicks arrive through `Notification.handleActivation`. Not released on `close`: that can be the
- * move to the notification center, where a click still arrives (measured on win32). Capped.
+ * move to the notification center, where a click still arrives. Capped.
  */
 const LIVE_TOASTS_MAX = 50;
 const liveToasts = new Set<Notification>();
@@ -170,7 +170,7 @@ export function showDesktopNotification(title: string, body: string, target?: To
     });
   }
   // The only trace of notifications being off in Windows' settings: "Settings prevent the
-  // notification from being delivered" (measured).
+  // notification from being delivered".
   toast.on("failed", (_event, error) => {
     liveToasts.delete(toast);
     logError(`toast not delivered: ${error}`);

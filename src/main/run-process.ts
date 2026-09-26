@@ -73,8 +73,8 @@ export function runProcess(executable: string, args: string[], options: RunProce
     child.on("error", (error) => finish({ code: null, timedOut: false, error }));
     child.on("close", (code) => finish({ code, timedOut: false }));
     if (options.stdin !== undefined) {
-      // A command gone before reading it fails the write (EPIPE, measured on Linux); unhandled, that
-      // stream error raises Electron's modal crash dialog. The exit reports the failure.
+      // A command gone before reading it fails the write (EPIPE); unhandled, that stream error
+      // raises Electron's modal crash dialog. The exit reports the failure.
       child.stdin?.on("error", () => undefined);
       child.stdin?.end(options.stdin);
     }

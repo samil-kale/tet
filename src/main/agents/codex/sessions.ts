@@ -237,10 +237,9 @@ export const codexSessionProvider: SessionProvider = {
     return ["resume", sessionId];
   },
 
-  /** `codex delete` drops the rollout, the index lines and the db rows, as `thread/delete` does;
-   *  `--force` asks nothing, taking only a UUID (measured, 0.156.1). A failure for a thread
-   *  without a rollout resolves (SessionProvider.remove): an unknown id exits 1 with the generic
-   *  "failed to delete session", so the rollout files say whether it is gone, not the answer. */
+  /** `codex delete` drops the rollout, the index lines and the db rows; `--force` asks nothing,
+   *  taking only a UUID. An unknown id fails like any other failure, so the rollout files say
+   *  whether it is gone: a thread without a rollout resolves (SessionProvider.remove). */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     try {
       await runCodex(executable, cwd, ["delete", "--force", sessionId]);
@@ -257,10 +256,8 @@ export const codexSessionProvider: SessionProvider = {
 
   /**
    * The sandbox's `~/.codex/sessions` plus `session_index.jsonl`, where names live outside the
-   * rollout. Measured: the codex template has no volume under `~/.codex`, sbx creates a missing
-   * target of either kind, and `auth.json` stays unmounted. Rename and delete edit the mounted
-   * files (removeInHome, renameInHome): a host `codex` needs Codex on the host and leaves a whole
-   * Codex home of its own in the root.
+   * rollout; `auth.json` stays unmounted. Rename and delete edit the mounted files (removeInHome,
+   * renameInHome): a host `codex` needs Codex on the host and leaves a Codex home in the root.
    */
   sandbox: {
     mounts: [
@@ -374,16 +371,10 @@ async function renameIn(executable: string, cwd: string, sessionId: string, titl
 }
 
 /**
- * `codex delete` on the files alone: the rollout goes; an unknown id resolves
- * (SessionProvider.remove). Codex inside the sandbox (0.149.1) then hides the thread from its lists
- * and resume picker, and `codex resume <id or name>` answers "No saved session found", though its
- * own db keeps a row.
- *
- * The host's `codex delete` (0.156.1) also drops the id's index lines; this leaves them. Measured
- * harmless: Codex inside behaves the same with or without them, and listIn names only rollouts it
- * finds. Rewriting the index is not: while Codex inside appends to it through the Windows mount
- * (sbx 0.42.1), the replacing rename failed with EPERM for 1 in 8, about one appended line was
- * lost per rewrite, and some appends landed as NUL runs.
+ * `codex delete` on the files alone: the rollout goes, and Codex inside the sandbox no longer lists
+ * or resumes the thread; an unknown id resolves (SessionProvider.remove). The index lines stay:
+ * listIn names only rollouts it finds, and rewriting the index while Codex inside appends to it
+ * through the mount loses lines.
  */
 async function removeInHome(home: string, sessionId: string): Promise<void> {
   for (const filePath of await rolloutFilesOf(home, sessionId)) {
@@ -402,9 +393,9 @@ async function rolloutFilesOf(home: string, sessionId: string): Promise<string[]
 }
 
 /**
- * `thread/name/set` on the files alone (measured against host 0.154.0 and 0.149.1 in the sandbox):
- * one appended index line, `updated_at` with seven fractional digits on both. Codex inside the
- * sandbox reads names from its own db only, so it keeps showing the old name.
+ * `thread/name/set` on the files alone: one appended index line, `updated_at` with seven fractional
+ * digits. Codex inside the sandbox reads names from its own db only, so it keeps showing the old
+ * name.
  */
 async function renameInHome(home: string, sessionId: string, title: string): Promise<void> {
   const trimmed = requireTitle(title);

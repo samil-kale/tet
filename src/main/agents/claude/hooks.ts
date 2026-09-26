@@ -6,10 +6,11 @@ import { writeIfChanged } from "../../write-if-changed";
 
 /**
  * Writes the settings file registering Claude Code's hooks into `agentDir` (the host tabs' one,
- * or a sandbox folder's); returns the `--settings` args. Layered over the user's config; `~/.claude/settings.json` is never touched.
+ * or a sandbox folder's); returns the `--settings` args. Layered over the user's config;
+ * `~/.claude/settings.json` is never touched.
  *
- * Every hook is a bare `tet-ctl hook <event>`, independent of Claude Code's shell (measured on
- * win32: `/usr/bin/bash`, where only the extensionless launcher resolves; control-launcher.ts).
+ * Every hook is a bare `tet-ctl hook <event>`, independent of Claude Code's shell (on win32 a bash,
+ * where only the extensionless launcher resolves; control-launcher.ts).
  * One `UserPromptSubmit` command marks the session busy; its answer is empty, since TET's system
  * prompt goes in once at spawn (index.ts).
  */
@@ -37,9 +38,8 @@ export function setupClaudeHooks(
     PreToolUse: [{ matcher: "AskUserQuestion", hooks: command("question") }]
   };
 
-  // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process
-  // (measured). Built-in only: a custom theme loads after the first render, drawing a dark frame
-  // meanwhile (measured).
+  // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process.
+  // Built-in only: a custom theme loads after the first render, drawing a dark frame meanwhile.
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.mkdirSync(storageDir, { recursive: true });
   // Rename into place: a sandbox's copy is rewritten on every spawn while another tab may read it.
@@ -51,8 +51,8 @@ export function setupClaudeHooks(
  * AgentDefinition.workOutlivesStop. Stop fires when the main turn ends, background agents still
  * running; its payload lists them in `background_tasks` (`type: "subagent"`, `status: "running"`)
  * and each one's end starts a turn of its own (`UserPromptSubmit` with a `<task-notification>`,
- * then Stop) — measured, 2.1.282. Background shells (`type: "shell"`) don't count: a server never
- * ends, and one a subagent left behind ends without a turn (measured).
+ * then Stop). Background shells (`type: "shell"`) don't count: a server never ends, and one a
+ * subagent left behind ends without a turn.
  */
 export function claudeWorkOutlivesStop(payload: string): boolean {
   try {

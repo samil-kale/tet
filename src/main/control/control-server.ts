@@ -224,11 +224,10 @@ const OUTPUT_KB = 16;
 
 /**
  * What a hook prints back into its agent. `{}` rather than nothing: Codex parses its Stop hook's
- * stdout as JSON, and every agent takes JSON on hook channels not appended to the prompt
- * (measured). `prompt-submit`'s stdout would be appended to the prompt: "". `session-start`
- * carries TET's system prompt as added context, appended to the user's instructions (measured,
- * Codex 0.154.0: in the first turn, and again on `resume`) — a sandbox's without the environment
- * variables.
+ * stdout as JSON, and every agent takes JSON on hook channels not appended to the prompt.
+ * `prompt-submit`'s stdout would be appended to the prompt: "". `session-start` carries TET's
+ * system prompt as added context, appended to the user's instructions, in the first turn and again
+ * on `resume` — a sandbox's without the environment variables.
  */
 const HOOK_STDOUT: Record<HookEvent, (sandboxed: boolean) => string> = {
   "session-start": (sandboxed) =>
@@ -253,10 +252,9 @@ function hashPort(dataRoot: string): number {
 
 /**
  * Derived from the data folder (data-root.ts), so two accounts, or a test profile beside the tet it
- * runs in, get ports of their own. Probed by binding: Windows excludes dynamic-range pieces for
- * Hyper-V/WSL/Docker NAT (`netsh int ipv4 show excludedportrange`), failing with `EACCES` — static
- * enough to reuse the probed port. Not OS-assigned: the port must be in every terminal's
- * environment (setControlEnv) before the server starts.
+ * runs in, get ports of their own. Probed by binding: Windows excludes pieces of the dynamic range,
+ * failing with `EACCES`, and keeps them long enough to reuse the probed port. Not OS-assigned: the
+ * port must be in every terminal's environment (setControlEnv) before the server starts.
  */
 export async function findControlPort(dataRoot: string): Promise<number> {
   const start = hashPort(dataRoot);
@@ -747,8 +745,8 @@ const MAX_REQUEST_CHARS = 1024 * 1024;
 
 /**
  * The server `tet-ctl` talks to: one POST per connection on 127.0.0.1. HTTP, not raw TCP, because
- * a sandbox reaches `host.docker.internal` through sbx's HTTP-only proxy (measured: raw TCP
- * connects but no bytes arrive; curl works). Every request must carry this run's token from
+ * a sandbox reaches `host.docker.internal` through sbx's HTTP-only proxy. Every request must
+ * carry this run's token from
  * main.ts, or its tab's token for the caller ids it names (control-token.ts), else `unauthorized`.
  */
 export async function startControlServer(
@@ -893,7 +891,7 @@ export async function startControlServer(
   await bind(server, port);
 
   return {
-    // closeAllConnections (Node 18.2+): else an unfinished request holds server.close() open forever.
+    // closeAllConnections: else an unfinished request holds server.close() open forever.
     close: () =>
       new Promise((resolve) => {
         server.close(() => resolve());

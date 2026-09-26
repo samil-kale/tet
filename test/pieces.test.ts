@@ -56,7 +56,7 @@ import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, wi
 import type { SbxPath, SbxPort, SbxProjectConfig } from "../src/shared/types";
 import { eventually, fakeSafeStorage, processAlive } from "./helpers";
 
-/** The small measured pieces, each one edit away from silently wrong. */
+/** The small pieces, each one edit away from silently wrong. */
 
 describe("Codex's hook trust", () => {
   // Verified against a real Codex install (see hooks.ts): a change here brings back the "Hooks
@@ -304,7 +304,7 @@ describe("sbx sandbox naming and mounts", () => {
 });
 
 describe("a sandbox's published ports", () => {
-  // `sbx ports <name> --json`, sbx 0.42.1 (2026-09-17), after publishing 38111:8080 and 38112:9090.
+  // `sbx ports <name> --json` after publishing 38111:8080 and 38112:9090.
   const published = JSON.stringify([
     { host_ip: "127.0.0.1", host_port: 38111, sandbox_port: 8080, protocol: "tcp4" },
     { host_ip: "127.0.0.1", host_port: 38112, sandbox_port: 9090, protocol: "tcp4" }
@@ -318,7 +318,7 @@ describe("a sandbox's published ports", () => {
   });
 
   it("reads none where the sandbox has none, or says something else entirely", () => {
-    // An empty list is `[]` (verified live); a stopped sandbox answers "No published ports" as text.
+    // An empty list is `[]`; a stopped sandbox answers "No published ports" as text.
     assert.deepEqual(parsePublishedPorts("[]"), []);
     assert.deepEqual(parsePublishedPorts("No published ports\n"), []);
     assert.deepEqual(parsePublishedPorts(""), []);
@@ -337,7 +337,7 @@ describe("saving an sbx config", () => {
   const name = sandboxName(main, "claude");
   /** No knowledge before or after: nothing of it to revoke. */
   const NO_KNOWLEDGE = { previous: EMPTY_SBX_KNOWLEDGE, current: EMPTY_SBX_KNOWLEDGE };
-  // `sbx ports --publish` of a port another sandbox holds, sbx 0.42.1 (2026-09-17).
+  // `sbx ports --publish` of a port another sandbox holds.
   const refusal = "ERROR: publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published\n";
 
   const port = (number: number): SbxPort => ({ host: String(number), container: String(number) });
@@ -1093,8 +1093,8 @@ describe("who sbx says is signed in", () => {
 });
 
 describe("sbx's filesystem policy", () => {
-  // `sbx policy ls --type filesystem --json` on an organization-governed account, sbx 0.42.1
-  // (2026-09-14), trimmed to the fields read. `local` is an ungoverned account's active defaults.
+  // `sbx policy ls --type filesystem --json` on an organization-governed account, trimmed to the
+  // fields read. `local` is an ungoverned account's active defaults.
   const governed = JSON.stringify({
     rules: [
       { resource_type: "filesystem:read", decision: "allow", resources: ["**"], status: "inactive" },
@@ -1164,7 +1164,7 @@ describe("sbx's filesystem policy", () => {
 
 describe("sbx's governance line", () => {
   it("names the organization of a governed account, nothing for an ungoverned one", () => {
-    // `sbx policy ls` on an organization-governed account, sbx 0.42.1 (2026-09-17).
+    // `sbx policy ls` on an organization-governed account.
     const governed = [
       "Governance: Managed by prehcmservice | Sync: OK, last synced 08:18:18 | Hidden: 34 inactive rules. Show with: sbx policy ls --include-inactive",
       "",
@@ -1322,7 +1322,7 @@ describe("the stores", () => {
         { id: "b", path: pathOf("b") },
         "junk",
         { id: "c", path: pathOf("c"), name: "c" },
-        // A worktree was a project of its own before.
+        // A worktree stored as a project of its own.
         { id: "w", path: pathOf("w"), name: "w", mainPath: pathOf("a") }
       ])
     );
@@ -1485,7 +1485,7 @@ function reported(reports: ControlRequest[]): string[] {
 }
 
 describe("the session a hook report names", () => {
-  // Trimmed from what the real hooks wrote to stdin (Claude Code 2.1.270, Codex 0.154.0).
+  // Trimmed from what the real hooks write to stdin.
   it("is read off Claude Code's and Codex's payloads alike", () => {
     const claude = `{"session_id":"e1ddb9cf-df0f-40b3-82b2-1343910fc3e4","transcript_path":"C:\\\\x.jsonl","hook_event_name":"UserPromptSubmit","prompt":"ok"}`;
     const codex = `{"session_id":"01a09f45-f0d2-74e1-be90-a8f79f43cb7e","turn_id":"01a09f45-f15d-77e1-b1d3-5375a8ce98d5","hook_event_name":"Stop"}`;
@@ -1510,7 +1510,7 @@ describe("which of two turn reports counts", () => {
 });
 
 describe("TET's system prompt", () => {
-  // It crosses cmd.exe, `sbx run` and a TOML basic string, measured only as a plain line
+  // It crosses cmd.exe, `sbx run` and a TOML basic string, safe only as a plain line
   // (system-prompt.ts).
   it("stays one line of letters, digits and plain punctuation", () => {
     for (const sandboxed of [false, true]) {

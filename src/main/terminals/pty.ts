@@ -107,9 +107,9 @@ function isCmdShim(file: string): boolean {
   }
 }
 
-/** One argument for a program behind cmd.exe: quoted by the C runtime's rules (qntm.org/cmd), then
- *  `^`-escaped, so `&`, `>` or `%VAR%` reach it literally (measured through an npm shim, via
- *  child_process and node-pty). A shim parses its `%*` a second time, so there it is escaped twice:
+/** One argument for a program behind cmd.exe: quoted by the C runtime's rules, then `^`-escaped, so
+ *  `&`, `>` or `%VAR%` reach it literally. A shim parses its `%*` a second time, so there it is
+ *  escaped twice:
  *  once, `a"&b` ends the quote cmd.exe sees and `&b` runs as a command. Only there — a batch file
  *  reading `%~1` itself keeps the second carets (Maven's `if "%~1" == "-f"`: a syntax error). */
 function escapeCmdArgument(arg: string, shim: boolean): string {
@@ -147,7 +147,7 @@ export function killProcessTree(child: ChildProcess): void {
 
 /** Deletes from `env` the variables `names` replace, and returns it: on win32 names ignore case, a
  *  name in another case would be a second variable, and of the two the child sees the inherited one
- *  (measured through node-pty) — so a replacement removes its name in any spelling. */
+ *  — so a replacement removes its name in any spelling. */
 function withoutNames(env: Record<string, string>, names: string[]): Record<string, string> {
   if (process.platform === "win32") {
     const replaced = new Set(names.map((name) => name.toUpperCase()));
@@ -203,8 +203,8 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
  * process behind it has gone — a tab closed, a quit, a resize on the way out — then fails with
  * nothing listening, which is an uncaught `write EAGAIN` and, through uncaught.ts, a notice telling
  * the user TET hit an unexpected error. There is nothing to do about the write itself; those bytes
- * had nowhere to go. Measured on win32 through test/app.test.ts, which fails a run on any uncaught
- * exception. POSIX has no `_agent` and node-pty guards its socket there, so this is a no-op.
+ * had nowhere to go. POSIX has no `_agent` and node-pty guards its socket there, so this is a
+ * no-op.
  */
 function guardPtyInput(spawned: IPty): void {
   const agent = (spawned as unknown as { _agent?: { inSocket?: { on?: (event: string, listener: () => void) => void } } })._agent;
@@ -213,8 +213,8 @@ function guardPtyInput(spawned: IPty): void {
 
 export function spawnAgentProcess(executable: string, args: string[], options: SpawnOptions): IPty {
   const env = buildEnv(options);
-  // A path is the tab's folder's, as child_process takes it; node-pty looks from this process's
-  // (measured on win32: "File not found" for a relative `bin\tool.exe`). A bare name stays a search.
+  // A path is the tab's folder's, as child_process takes it; node-pty looks from this process's. A
+  // bare name stays a search.
   const program = path.basename(executable) === executable ? executable : path.resolve(options.cwd, executable);
   const resolved = resolveCommand(program, args);
 

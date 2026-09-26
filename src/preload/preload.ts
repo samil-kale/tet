@@ -158,7 +158,7 @@ const api: TETApi = {
     list: () => ipcRenderer.invoke("agents:list")
   },
   files: {
-    // Replaces File.path (gone since Electron 32); preload-only under contextIsolation.
+    // The file's path, which the renderer cannot read; preload-only under contextIsolation.
     pathOf: (file) => webUtils.getPathForFile(file),
     writeTemp: (name, dataBase64) => ipcRenderer.invoke("files:write-temp", name, dataBase64),
     clipboardImage: () => ipcRenderer.invoke("files:clipboard-image")

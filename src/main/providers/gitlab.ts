@@ -26,8 +26,8 @@ export const gitlab: GitProvider = {
 
   async listRepositories(host, token) {
     // membership=true: without it a self-hosted instance answers with everything it can see.
-    // simple=true: the full record adds permissions, statistics, owner and _links — measured on a
-    // real instance, several times the bytes and wait, for none of the fields below.
+    // simple=true: the full record adds permissions, statistics, owner and _links, several times
+    // the size, for none of the fields below.
     const url = `${apiBase(host)}/projects?membership=true&per_page=100&order_by=last_activity_at&simple=true`;
     const entries = (await getPaged(url, headers(token))) as GitLabProject[];
     return entries.map(

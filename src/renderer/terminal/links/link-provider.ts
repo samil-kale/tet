@@ -26,8 +26,8 @@ export function createModifierGatedLinkProvider(
   terminal: Terminal,
   regex: RegExp,
   /**
-   * A substring every match contains. Both regexes backtrack quadratically through a 2048-char
-   * space-free window (a wrapped base64 blob), every render; a linear `includes` rules it out first.
+   * A substring every match contains. Both regexes backtrack quadratically through a long
+   * space-free run (a wrapped base64 blob), on every render; a linear `includes` rules it out first.
    */
   anchor: string,
   onActivate: (text: string) => void
@@ -104,8 +104,8 @@ const hovered = new WeakMap<Terminal, () => void>();
 
 /**
  * Ends the hover of a terminal about to be disposed: xterm's dispose calls no link's `leave`, so a
- * tab closed under the pointer (`tet-ctl tabs-close`) kept its window key listeners, and with them
- * the disposed terminal (measured).
+ * tab closed under the pointer (`tet-ctl tabs-close`) would keep its window key listeners, and with
+ * them the disposed terminal.
  */
 export function endLinkHover(terminal: Terminal): void {
   hovered.get(terminal)?.();

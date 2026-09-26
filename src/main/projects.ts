@@ -414,7 +414,7 @@ export class ProjectStore implements ProjectLookup {
           typeof entry.id === "string" &&
           typeof entry.path === "string" &&
           typeof entry.name === "string" &&
-          // A worktree was stored as a project of its own before, with `mainPath` or, older, without.
+          // A worktree stored as a project of its own, with `mainPath` or without.
           entry.mainPath === undefined &&
           readMainWorktree(entry.path) === undefined
       )

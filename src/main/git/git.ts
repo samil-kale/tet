@@ -67,7 +67,7 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: n
   });
 }
 
-/** git's version as it prints it ("2.55.0.windows.3"); undefined when the CLI cannot be started.
+/** git's version as it prints it; undefined when the CLI cannot be started.
  *  Runs in the temp directory, which exists everywhere. Asked once: git does not change under a
  *  running app, and the worktree actions would otherwise spawn a process each to ask again. */
 let gitVersion: Promise<string | undefined> | undefined;
@@ -146,8 +146,7 @@ async function readHead(cwd: string, header: string): Promise<HeadState> {
     const short = await git(cwd, ["rev-parse", "--short", "HEAD"]);
     return { ...base, head: short.stdout.trim() || "HEAD", detached: true };
   }
-  // Unborn branch: a prefix, then a normal header ("No commits yet on master...origin/master [gone]"
-  // for a clone of an empty repository). Git before 2.16 says "Initial commit on".
+  // Unborn branch: a prefix ("No commits yet on" or "Initial commit on"), then a normal header.
   const branch = header.replace(/^(?:No commits yet on|Initial commit on) /, "");
   // "<branch>...<upstream> [ahead 1, behind 2]", or plain "<branch>". A branch name holds neither
   // "..." nor a space.
@@ -370,8 +369,7 @@ function toChangeStatus(code: string): ChangeStatus {
 /** The changed files and, from the `--branch` header, HEAD — in one git process. */
 async function readStatus(cwd: string): Promise<HeadState & { changes: FileChange[] }> {
   // --no-optional-locks: otherwise `git status` writes its stat cache, the watcher reports it, and
-  // the refresh runs this again — forever. Measured: a burst of events per run without the flag,
-  // none with it, same runtime. core.quotePath=false: non-ASCII paths unescaped.
+  // the refresh runs this again — forever. core.quotePath=false: non-ASCII paths unescaped.
   const result = await git(cwd, [
     "--no-optional-locks",
     "-c",
@@ -467,7 +465,7 @@ async function readOperation(gitDir: string): Promise<GitOperation | undefined> 
 /**
  * The worktrees, read off the common git directory as git keeps them — no `git worktree list` per
  * refresh: its `HEAD` for the main one, and per linked one under `worktrees/<id>` a `gitdir`
- * naming the worktree's `.git` (relative since `--relative-paths`) and its own `HEAD`.
+ * naming the worktree's `.git` (relative with `--relative-paths`) and its own `HEAD`.
  */
 async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resolveGitDirs(cwd)): Promise<WorktreeInfo[]> {
   const linkedRoot = path.join(commonDir, "worktrees");
@@ -491,8 +489,8 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
     })
   );
   // The main worktree holds the common directory — unless `cwd` is not a linked worktree: a
-  // submodule's or a `--separate-git-dir` repository's lives elsewhere (`<super>/.git/modules/…`,
-  // which `git worktree list` itself names, measured on 2.55), and its folder is `cwd`.
+  // submodule's or a `--separate-git-dir` repository's lives elsewhere (`<super>/.git/modules/…`),
+  // and its folder is `cwd`.
   const mainPath = gitDir === commonDir ? cwd : path.dirname(commonDir);
   return [
     await worktree(mainPath, commonDir, true),
@@ -597,11 +595,11 @@ const NETWORK_ENV: NodeJS.ProcessEnv = {
   // Set but empty: unset, git falls back to the terminal.
   GIT_ASKPASS: "",
   SSH_ASKPASS: "",
-  // Git Credential Manager ignores GIT_TERMINAL_PROMPT and waits on a window of its own (measured:
-  // 86 s until killed, Windows, GCM 2.9). Told never to, it gives up at once, git fails for want of
-  // a login and tet asks; a login that then works through askpass it still stores (measured).
+  // Git Credential Manager ignores GIT_TERMINAL_PROMPT and waits on a window of its own. Told never
+  // to, it gives up at once, git fails for want of a login and tet asks; a login that then works
+  // through askpass it still stores.
   GCM_INTERACTIVE: "never",
-  // A stalled connection is given up: below 1 KB/s for a minute, git's http transport aborts. The
+  // A stalled connection is given up: git's http transport aborts below the limit for the time. The
   // ssh equivalent is in networkEnv.
   GIT_HTTP_LOW_SPEED_LIMIT: "1000",
   GIT_HTTP_LOW_SPEED_TIME: "60",
@@ -629,8 +627,8 @@ export function forget(cwd: string): void {
 
 /**
  * `NETWORK_ENV` plus an ssh that never asks (`-oBatchMode=yes`, e.g. about an unknown host key) and
- * never hangs: four unanswered keepalives 15 s apart end it, the minute http gets too. Only where
- * the user chose no ssh of their own: `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so
+ * never hangs: unanswered keepalives end it, as http's low-speed limit does. Only where the user
+ * chose no ssh of their own: `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so
  * setting it blindly breaks a plink or `ssh -i work_key` setup; a non-OpenSSH program lacks the flag.
  * `core.sshCommand` is read per network command, not cached: the global config changes unwatched,
  * and a stale "none" would override the user's ssh. Off the refresh path, beside a remote round trip.
@@ -766,14 +764,13 @@ export function init(directory: string): Promise<GitActionResult> {
 }
 
 /**
- * A GIT_ASKPASS script answering from environment variables (VS Code's askpass.sh pattern). One sh
- * script everywhere: Git for Windows runs a non-exe askpass through its own sh. No secret in it.
- * git's question is `$1`: "Username for 'https://host': " or "Password for 'https://user@host': ",
- * the url with its path under `credential.useHttpPath`, and the host as the remote's url spells
- * it, while TET_ASKPASS_ORIGIN (urlOrigin) is lowercase without a default port. It answers only
- * for that origin: a
- * submodule, a pushurl or a redirect on another host gets nothing, and git fails there for want of
- * a login rather than being handed one for elsewhere.
+ * A GIT_ASKPASS script answering from environment variables. One sh script everywhere: Git for
+ * Windows runs a non-exe askpass through its own sh. No secret in it. git's question is `$1`:
+ * "Username for 'https://host': " or "Password for 'https://user@host': ", the url with its path
+ * under `credential.useHttpPath`, and the host as the remote's url spells it, while
+ * TET_ASKPASS_ORIGIN (urlOrigin) is lowercase without a default port. It answers only for that
+ * origin: a submodule, a pushurl or a redirect on another host gets nothing, and git fails there
+ * for want of a login rather than being handed one for elsewhere.
  */
 const ASKPASS_SCRIPT = [
   "#!/bin/sh",
@@ -796,8 +793,8 @@ const ASKPASS_SCRIPT = [
 /** The script in `dir` (tet's data folder), written when missing or from another tet — not on
  *  every call: on Windows a rename over the script while an sh reads it fails, and two commands
  *  reaching remotes at once (the periodic fetches) would race. Not the temp directory: git executes
- *  the script itself, which a `noexec` /tmp refuses (measured), and a long-running tet would find it
- *  cleaned away. */
+ *  the script itself, which a `noexec` /tmp refuses, and a long-running tet would find it cleaned
+ *  away. */
 export async function ensureAskpass(dir: string): Promise<string> {
   const file = path.join(dir, "askpass.sh");
   const current = await fs.readFile(file, "utf8").catch(() => undefined);
@@ -832,7 +829,7 @@ export async function readRemoteUrls(cwd: string): Promise<Record<string, string
   }
   for (const line of result.stdout.split("\n")) {
     // "origin\tgit@github.com:owner/repo.git (fetch)", and again for (push). A partial clone adds
-    // its filter after the fetch line: " [blob:none]" (measured).
+    // its filter after the fetch line: " [blob:none]".
     const match = /^(\S+)\t(.+) \(fetch\)(?: \[[^\]]*\])?$/.exec(line.trim());
     if (match) {
       urls[match[1]] = match[2];
@@ -976,11 +973,9 @@ function capped(text: string, budget: number): string {
 
 /**
  * Everything an agent needs for a commit message up front: recent subjects for the style, and what
- * the commit would take — every change, or only `selection`. Three invocations plus a read per
- * untracked file, fine on a wand press. Measured with `claude -p`: running git itself, the agent
- * took several times as long, each status, diff and log a round trip. Without HEAD there are no
- * subjects and the diff is the staged one: a file added before the first commit is neither
- * untracked nor in a diff against HEAD.
+ * the commit would take — every change, or only `selection`: faster than the agent running git
+ * itself, a round trip each. Without HEAD there are no subjects and the diff is the staged one: a
+ * file added before the first commit is neither untracked nor in a diff against HEAD.
  */
 export async function readCommitContext(cwd: string, selection?: string[]): Promise<string> {
   const pathspec = selection ? ["--", ...selection] : [];
@@ -1049,13 +1044,12 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
 
 /**
  * A worktree always with a new branch of its own at `base`, the default branch: tet couples the
- * two, so deleting one does the other, and the worktree is named by its branch. `--no-track`, as `createBranch`: the first push
- * publishes it. `--relative-paths` (git 2.48) links the two `.git`s relatively, so the link holds
- * in an sbx sandbox, where the paths differ from the host's on Windows (measured, git 2.53 in the
- * kits: status, commit and branch work with the main `.git` mounted). It sets
- * `extensions.relativeWorktrees` in the main repository's config.
+ * two, so deleting one does the other, and the worktree is named by its branch. `--no-track`, as
+ * `createBranch`: the first push publishes it. `--relative-paths` links the two `.git`s relatively,
+ * so the link holds in an sbx sandbox, where the paths differ from the host's on Windows. It sets
+ * `extensions.relativeWorktrees` in the repository's config.
  *
- * git keeps no branch's origin, so the base is recorded as `branch.<name>.base`, as superset does:
+ * git keeps no branch's origin, so the base is recorded as `branch.<name>.base`:
  * `branch -m` carries the key along and `branch -D` drops it. A failed write loses only that.
  */
 export async function worktreeAdd(cwd: string, target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {

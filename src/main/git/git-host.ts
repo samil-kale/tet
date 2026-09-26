@@ -5,8 +5,8 @@ import { errorMessage } from "../../shared/errors";
  * The git process: all of `git.ts` runs here, in its own `utilityProcess`; the main process sends
  * only a method name and arguments (`git-client.ts`). Nothing here or in `git.ts` may import
  * electron, so it may block as long as git does, and every value crossing must survive a structured
- * clone (an image as a data URL, an error as its message). Measured: git in the main process brings
- * typing lag back, since that process also relays pty output.
+ * clone (an image as a data URL, an error as its message). Off the main process, which relays pty
+ * output: git there would lag typing.
  */
 export interface GitRequest {
   id: number;

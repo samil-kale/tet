@@ -68,7 +68,7 @@ export async function switchHighlightTheme(id: string): Promise<void> {
   themeListeners.forEach((listener) => listener());
 }
 
-/** What a repository plausibly holds, not all ~200 Shiki ships: the renderer is one file, no code
+/** What a repository plausibly holds, not every one Shiki ships: the renderer is one file, no code
  *  splitting. Anything else is uncolored. Lazy, so an unopened language costs parse, not startup. */
 const GRAMMARS: Record<string, () => Promise<{ default: LanguageRegistration[] }>> = {
   bat: () => import("@shikijs/langs/bat"),

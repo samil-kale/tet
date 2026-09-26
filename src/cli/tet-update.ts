@@ -16,8 +16,7 @@ const EXIT_WAIT_MS = 60_000;
 const POLL_MS = 250;
 /**
  * A handle briefly outliving the process (a pty's console host) fails a rename with EBUSY, or on
- * win32 with EPERM. Measured: five tries over 10s were not enough on a CI runner (the release of
- * 0.11.1 failed there), so the wait is a window, not a count of tries.
+ * win32 with EPERM: retried over a window of time, not a count of tries.
  */
 const RETRY_WINDOW_MS = 30_000;
 const RETRY_MS = 1000;
@@ -51,8 +50,8 @@ function install(pid: number, version: string, staged: string, root: string, res
   while (processAlive(pid) && Date.now() < deadline) {
     sleep(POLL_MS);
   }
-  // Never under a running tet: on macOS a quit can leave a windowless process (measured). The
-  // next start finds the version again, and the next quit installs it.
+  // Never under a running tet: on macOS a quit can leave a windowless process. The next start finds
+  // the version again, and the next quit installs it.
   if (processAlive(pid)) {
     writeResult(resultFile, { version, ok: false, output: `tet (pid ${pid}) was still running after ${EXIT_WAIT_MS / 1000}s` });
     return;

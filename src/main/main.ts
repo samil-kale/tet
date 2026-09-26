@@ -362,7 +362,7 @@ function showToastTarget(target: { ref: ProjectRef; tabId: string; sessionId?: s
  * taskbar flash on Windows, dock bounce on macOS, urgency hint on Linux. No badge count: only
  * macOS has one everywhere.
  *
- * `isMinimized` too: a win32 window minimized by its button still reports `isFocused` (measured).
+ * `isMinimized` too: a win32 window minimized by its button still reports `isFocused`.
  */
 function attractAttention(): void {
   if (window && !window.isDestroyed() && (!window.isFocused() || window.isMinimized())) {
@@ -575,9 +575,9 @@ function createWindow(): void {
 
   // Nothing in the page takes the window away from tet or opens another: a link or form in a
   // Markdown preview, a stray drop. A new window is what monaco's ctrl-clicked link asks for, so
-  // its web and mail links reach the browser as `shell:open-url`'s do; nothing else leaves.
-  // Measured: a navigation to `about:blank` reaches neither event — Chromium offers no cancel for
-  // it — so only the page's own script could blank the window, and there is none but tet's.
+  // its web and mail links reach the browser as `shell:open-url`'s do; nothing else leaves. A
+  // navigation to `about:blank` reaches neither event, so only the page's own script could blank
+  // the window, and there is none but tet's.
   window.webContents.on("will-navigate", (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isOpenableUrl(url)) {
@@ -674,9 +674,8 @@ app.on("window-all-closed", () => {
  */
 const QUIT_TEARDOWN_TIMEOUT_MS = 5000;
 /**
- * After `app.quit()` the exit is electron's: windows close, then `will-quit`. On macOS that has
- * stalled there with nothing left to tear down (install.test.ts, a quit by Apple Event: the second
- * `before-quit` logged, `will-quit` never). Everything of ours is written by then, so the process
+ * After `app.quit()` the exit is electron's: windows close, then `will-quit`, which on macOS can
+ * stall with nothing left to tear down. Everything of ours is written by then, so the process
  * leaves on its own after this — said in the log, since a forced exit is not the normal way out.
  */
 const QUIT_EXIT_TIMEOUT_MS = 5000;
@@ -692,7 +691,7 @@ function shutdown(relaunch: boolean): void {
     return;
   }
   quitting = true;
-  // Each step logged: a quit on macOS has hung without saying where (install.test.ts).
+  // Each step logged, so a quit that hangs shows where.
   console.error(`[tet] quit: ending sessions${relaunch ? " for a restart" : ""}`);
   void Promise.race([
     sessions.disposeAll().then(() => "sessions ended"),
@@ -732,12 +731,10 @@ app.on("will-quit", () => console.error("[tet] quit: will-quit"));
 
 /**
  * Keeps electron's own handling of these signals, a quit through before-quit. write-file-atomic
- * listens on them (signal-exit) during each write, and libuv resets a signal to SIG_DFL when its
- * last listener goes (libuv#2435): from then on SIGTERM killed tet outright — no sessions ended,
- * no update installed (install.test.ts on Linux). A listener of our own, added before electron
- * installs its handler, keeps libuv from ever touching the disposition again. Measured (electron
- * 43.4.0, Linux, 2026-09-25): with it, SIGTERM/SIGINT/SIGHUP after a write reach before-quit and
- * this callback is never called; the quit is only its fallback.
+ * listens on them during each write, and libuv resets a signal to its default when its last
+ * listener goes, after which SIGTERM would kill tet outright — no sessions ended, no update
+ * installed. A listener of our own, added before electron installs its handler, keeps libuv from
+ * touching the disposition; the quit here is only its fallback.
  */
 for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
   process.on(signal, () => app.quit());

@@ -1,15 +1,13 @@
 import { isModifierHeld, modifierLabel } from "./platform";
 
 /**
- * The window's shortcuts, all on combinations xterm's `Keyboard.ts` never turns into bytes
- * (verified against the installed `@xterm/xterm`). See "The keyboard belongs to the terminal" in
- * AGENTS.md.
+ * The window's shortcuts, all on combinations xterm never turns into bytes. See "The keyboard
+ * belongs to the terminal" in AGENTS.md.
  *
- * Findings, for the next shortcut: `evaluateKeyboardEvent`'s ctrl branch requires `!shiftKey`, so
- * `Ctrl+<letter>` is a control byte (`Ctrl+G` is `\x07`) but `Ctrl+Shift+<letter>` sends nothing.
- * `Alt+1…9` is out (`ESC 1`, readline's digit argument). `Ctrl+Tab`/`Ctrl+Shift+Tab` are out:
- * keyCode 9 ignores `ctrlKey`, so they equal Tab/Shift+Tab — the latter Claude Code's mode toggle.
- * `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` appear in no branch. None of these close a tab.
+ * For the next shortcut: `Ctrl+<letter>` is a control byte, `Ctrl+Shift+<letter>` sends nothing.
+ * `Alt+1…9` is taken (readline's digit argument). `Ctrl+Tab`/`Ctrl+Shift+Tab` equal Tab/Shift+Tab —
+ * the latter Claude Code's mode toggle. `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` send nothing.
+ * None of these close a tab.
  */
 type ShortcutId =
   | "settings"
@@ -55,7 +53,7 @@ const DEFS: ShortcutDef[] = [
 export function matchesShortcut(event: KeyboardEvent, id: ShortcutId): boolean {
   const def = DEFS.find((entry) => entry.id === id);
   // No shortcut takes Alt, and on Windows AltGr arrives as Ctrl+Alt: AltGr+Shift+Comma types "Ç"
-  // on US International, which `code` alone would read as "previous tab" (measured).
+  // on US International, which `code` alone would read as "previous tab".
   if (def === undefined || !isModifierHeld(event) || event.altKey || event.shiftKey !== def.shift) {
     return false;
   }

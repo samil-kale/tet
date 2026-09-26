@@ -21,7 +21,7 @@ interface DropdownProps<T extends string> {
 
 /**
  * A `<select>` stand-in on `ContextMenu`: Chrome draws a native select's open list itself and
- * ignores CSS colors (`option:hover`/`:checked`) for the highlighted row (measured).
+ * ignores CSS colors for the highlighted row.
  */
 export function Dropdown<T extends string>({ value, options, onChange }: DropdownProps<T>) {
   const [menu, setMenu] = useState<{ x: number; y: number; width: number; maxHeight: number } | null>(null);

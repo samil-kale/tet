@@ -42,7 +42,7 @@ const WATCH_DEBOUNCE_MS = 300;
 // Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
 const SESSION_REMOVE_DELAY_MS = 500;
 // How long after a fresh tab's Enter its close waits for the hook naming its session
-// (reportBeforeQuit). Measured on win32, Codex on the host: 1.2–1.3 s.
+// (reportBeforeQuit).
 const REPORT_WAIT_MS = 3000;
 // How far back `tet-ctl events-tail` can look.
 const MAX_RECORDED_EVENTS = 200;
@@ -740,13 +740,13 @@ export class TabSessionManager {
    * The `sbx run` arguments if this tab runs in the repository's or worktree's sandbox; tet.json is
    * read fresh per spawn. Only plain tabs of sbx agents (isSbxAgent), never a saved command's.
    *
-   * A session runs where it lives: a host session fails to resume in a sandbox ("No conversation
-   * found with session ID: …", measured). A tab with no `sessionId` yet is sandboxed.
+   * A session runs where it lives: a host session fails to resume in a sandbox. A tab with no
+   * `sessionId` yet is sandboxed.
    *
    * Sbx not ready starts nothing and says so, leaving `error` for Restart: a sandboxing project
    * never runs an agent on this machine behind the user's back (past an organization's policy).
    * Nor is `enabled: false` written back: `sbx ls` fails the same way while the daemon restarts.
-   * And never `sbx run` regardless: it prints its interactive sign-in and policy setup (measured).
+   * And never `sbx run` regardless: it prints its interactive sign-in and policy setup.
    *
    * Null runs the tab on this machine; "stranded" runs it nowhere, its notice already said.
    */
@@ -991,9 +991,8 @@ export class TabSessionManager {
 
   /**
    * For a tab closed right after its first prompt, resolves once it named its session (bounded).
-   * Codex takes the quitting Ctrl+C as an abort of a still-running `UserPromptSubmit` hook
-   * (measured), and its hooks are the only reports naming the session, which would then come back
-   * as a tab of its own.
+   * Codex takes the quitting Ctrl+C as an abort of a still-running `UserPromptSubmit` hook, and its
+   * hooks are the only reports naming the session, which would then come back as a tab of its own.
    */
   private reportBeforeQuit(tab: TabState): Promise<void> {
     const waited = tab.submittedAt === undefined ? 0 : Date.now() - tab.submittedAt;
@@ -1166,8 +1165,8 @@ export class TabSessionManager {
     const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
     const sessionId = bound ? getAgent(bound.agentId).sessionIdOf?.(payload) : undefined;
     this.record({ tabId, kind: "hook", event, reportedAt, sessionId });
-    // When the hook *fired*, not arrived: two hooks of a turn race (~100 ms each out of a sandbox,
-    // events ms apart), and arrival order leaves a tab finished and working. One tab, one clock.
+    // When the hook *fired*, not arrived: two hooks of a turn race, and arrival order leaves a tab
+    // finished and working. One tab, one clock.
     const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
     if (bound && sessionId) {
       this.bindReportedSession(bound, sessionId, at);
@@ -1183,8 +1182,8 @@ export class TabSessionManager {
     const exited = tab.status === "stopped" || tab.status === "error";
     switch (event) {
       case "session-start":
-        // Only names the session (above). Codex fires it with the first prompt (measured), whose
-        // turn prompt-submit marks.
+        // Only names the session (above). Codex fires it with the first prompt, whose turn
+        // prompt-submit marks.
         return {};
       case "prompt-submit":
         if (fresh && !exited) {
@@ -1227,7 +1226,7 @@ export class TabSessionManager {
 
   /**
    * Records the session a report names, for a tab with none or one that moved on (`/clear`, `/new`,
-   * `/resume`; measured for Claude Code's `/clear`). Whatever the turn marks' age (`signalAt`), but
+   * `/resume`). Whatever the turn marks' age (`signalAt`), but
    * ordered against the reports naming sessions (turn-order.ts): a late hook of the session left
    * behind would take it back. Reconcile claims it once listed; the session left behind becomes its
    * own tab next start.

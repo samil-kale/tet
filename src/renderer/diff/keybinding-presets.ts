@@ -16,7 +16,6 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     bindings: {}
   },
   {
-    // Source: github.com/isudox/vscode-jetbrains-keybindings
     id: "jetbrains",
     label: "JetBrains",
     bindings: {
@@ -31,7 +30,6 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/microsoft/vscode-sublime-keybindings
     id: "sublime",
     label: "Sublime Text",
     bindings: {
@@ -46,7 +44,6 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/Grogdunn/vscode-nb-keybinding
     id: "netbeans",
     label: "NetBeans",
     bindings: {
@@ -65,8 +62,7 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/microsoft/vscode-vs-keybindings. Its comment/move-line keys are chords or
-    // absent.
+    // Its comment/move-line keys are chords or absent.
     id: "visualstudio",
     label: "Visual Studio",
     bindings: {
@@ -75,7 +71,6 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/alphabotsec/vscode-eclipse-keybindings
     id: "eclipse",
     label: "Eclipse",
     bindings: {
@@ -86,8 +81,7 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/stevemoser/vscode-xcode-keybindings. "cmd" written "ctrl": KeyMod.CtrlCmd
-    // resolves per platform (parseKeyCombo).
+    // "cmd" written "ctrl": KeyMod.CtrlCmd resolves per platform (parseKeyCombo).
     id: "xcode",
     label: "Xcode",
     bindings: {
@@ -100,7 +94,6 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/microsoft/vscode-notepadplusplus-keybindings
     id: "notepad++",
     label: "Notepad++",
     bindings: {
@@ -113,7 +106,6 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/microsoft/vscode-atom-keybindings
     id: "atom",
     label: "Atom",
     bindings: {
@@ -127,7 +119,6 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     }
   },
   {
-    // Source: github.com/microsoft/vscode-brackets-keybindings
     id: "brackets",
     label: "Brackets",
     bindings: {

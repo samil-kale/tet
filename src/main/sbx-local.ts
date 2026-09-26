@@ -42,7 +42,7 @@ function isEmptyKnowledge(knowledge: SbxKnowledgeConfig): boolean {
   return JSON.stringify(knowledge) === JSON.stringify(EMPTY_SBX_KNOWLEDGE);
 }
 
-/** A project's entry as read. One written before the variables was its secrets' values alone. */
+/** A project's entry as read; one holding its secrets' values alone reads as those secrets. */
 function toLocal(project: Record<string, unknown>): StoredSbxLocal {
   if (isRecord(project.secrets) || isRecord(project.variables) || isRecord(project.knowledge)) {
     const local: StoredSbxLocal = { secrets: stringsOf(project.secrets), variables: stringsOf(project.variables) };
@@ -68,8 +68,8 @@ export class SbxLocalStore {
 
   constructor(dataRoot: string) {
     this.file = path.join(dataRoot, "sbx-local.json");
-    // The file's name before it held the variables too; its shape is read by `toLocal`. Read in
-    // place where it cannot be renamed, so no value is lost; the next save writes the new file.
+    // The file under its other name, whose shape `toLocal` reads. Read in place where it cannot be
+    // renamed, so no value is lost; the next save writes the new file.
     const legacy = path.join(dataRoot, "sbx-secrets.json");
     if (!fs.existsSync(this.file) && fs.existsSync(legacy)) {
       try {

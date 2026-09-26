@@ -12,12 +12,12 @@ export interface AgentSessionInfo {
   createdAt: number;
   /**
    * `title` stands in for a name the agent hasn't assigned yet (Claude: the first prompt until an
-   * agent-name/ai-title lands, possibly after the CLI went quiet); reconcile polls such sessions longer.
+   * agent-name/ai-title lands); reconcile polls such sessions longer.
    */
   provisionalTitle?: boolean;
   /**
    * When the last turn ended, per the agent's own record; undefined where it keeps none. A net
-   * under the `stop` hook (no agent's hook fires for a turn the user cut short). Read only in
+   * under the `stop` hook, which no agent fires for a turn the user cut short. Read only in
    * reconcile, only to end a turn.
    */
   turnEndedAt?: number;
@@ -31,7 +31,7 @@ export interface AgentSessionInfo {
 /** One host path mounted into a sandbox so an agent's sessions land on the host. Curated subpaths
  *  only, never the one holding the agent's credentials. */
 export interface SandboxSessionMount {
-  /** The mounted file or directory, under the host root (`sandboxSessionDir` of the sandbox's agentDir). */
+  /** The mounted file or directory, under the host root (`sandboxSessionDir`). */
   sub: string;
   /** Absolute container path it is mounted at — where the CLI looks. */
   target: string;
@@ -40,12 +40,10 @@ export interface SandboxSessionMount {
 }
 
 /**
- * How sessions are read out of an sbx sandbox: a host directory bind-mounted where the CLI writes
- * (stacks even over sbx's own volume), read by the host transcript code. Every method takes the
- * mounted `root` and the sandbox's `cwd` (`toContainerPath`), since the CLI records container
- * paths. Without it a sandboxed tab gets no session id: no resume, title or turn marks.
- *
- * No `watch`: the sandboxed tab's own output already schedules the reconcile.
+ * How sessions are read out of an sbx sandbox: a host directory bind-mounted where the CLI writes,
+ * read by the host transcript code. Every method takes the mounted `root` and the sandbox's `cwd`
+ * (`toContainerPath`), since the CLI records container paths. No `watch`: the sandboxed tab's own
+ * output schedules the reconcile.
  */
 interface SandboxSessions {
   mounts: SandboxSessionMount[];
@@ -123,9 +121,8 @@ export interface AgentDefinition {
   /** Tells "not installed" from a spawn that failed otherwise. Omitted where it always exists (the shell). */
   versionArgs?: string[];
   /**
-   * The CLI version test/agents.test.ts last passed against, on a signed-in machine: every measured
-   * value in this definition held there. Read by nothing in the app — a newer install is not
-   * refused; the test reports the difference. Omitted by the shell.
+   * The CLI version this definition is tested against (test/agents.test.ts reports a difference).
+   * Not read by the app: a newer install is not refused. Omitted by the shell.
    */
   verifiedVersion?: string;
   /**
@@ -143,16 +140,14 @@ export interface AgentDefinition {
   /** Listing, resume args, rename, delete, optional watch. Missing means "this agent has no sessions". */
   sessions?: SessionProvider;
   /**
-   * The session a hook report is about — the only thing binding a new tab to its session. A
-   * listing carries no pid or tab, and a CLI persists its session at the first prompt, so of two
-   * new tabs the one typed into first would hand its session to the other. Omitted without sessions.
+   * The session a hook report is about — the only thing binding a new tab to its session: a
+   * listing carries no pid or tab. Omitted without sessions.
    */
   sessionIdOf?: (payload: string) => string | undefined;
   /**
-   * Whether a question still stands after its turn ended. Claude Code's `AskUserQuestion` blocks
-   * its turn. Codex's does not (measured, 0.154.0: `request_user_input_async` answers
-   * `{"accepted":true}` at once, the turn ends, the question waits queued in the composer), so
-   * clearing it at turn end would drop the tab's only "wants the user" mark.
+   * Whether a question still stands after its turn ended: Codex's question lets the turn end while
+   * it waits in the composer, so clearing it at turn end would drop the tab's only "wants the user"
+   * mark.
    */
   questionOutlivesTurn?: boolean;
   /**
@@ -162,10 +157,10 @@ export interface AgentDefinition {
   workOutlivesStop?: (payload: string) => boolean;
   /**
    * Setup before any session spawns: hooks, settings, plugins, and how TET's system prompt
-   * (system-prompt.ts) reaches the model — the only place an agent may write configuration. The same
-   * for every project, so it knows none (data-root.ts's agentConfigDir). A rejection
-   * marks the agent unstartable, so reject only for what truly makes it unusable; a failed optional
-   * write (an extension, a theme file) is swallowed.
+   * (system-prompt.ts) reaches the model — the only place an agent may write configuration. The
+   * same for every project, so it knows none (data-root.ts's agentConfigDir). A rejection marks the
+   * agent unstartable, so reject only for what makes it unusable; a failed optional write is
+   * swallowed.
    */
   prepareSpawn?: (executable: string, paths: AgentPaths) => Promise<SpawnPreparation>;
   /**
@@ -177,13 +172,7 @@ export interface AgentDefinition {
    * executable override: the sandbox's bundled binary runs. Synchronous. Omitted by the shell.
    */
   prepareSandboxSpawn?: (paths: AgentPaths) => SandboxPreparation;
-  /**
-   * "KEY=VALUE" for `sbx run -e`, for facts that differ only inside the sandbox. Claude Code's
-   * fullscreen rollout reads flags from `statsig.anthropic.com`, which the per-sandbox `kit:` rule
-   * does not allow (measured: `sbx policy ls --type network` lists it only for the global
-   * default-ai-services rule), so it falls back to the classic renderer; `CLAUDE_CODE_NO_FLICKER=1`
-   * forces fullscreen (code.claude.com/docs/en/fullscreen).
-   */
+  /** "KEY=VALUE" for `sbx run -e`, for facts that differ only inside the sandbox. */
   sandboxEnv?: string[];
   /**
    * The agent's shareable knowledge on the host, per `SbxKnowledgeKind` — never its config
@@ -206,19 +195,13 @@ export interface AgentDefinition {
   sandboxKit?: string;
   /**
    * Factory for a fresh per-session "CLI ready yet" check fed each output chunk; once true, the tab
-   * strip's progress bar hides. Output reaches the terminal throughout — some CLIs query it for
-   * capabilities at start.
-   *
-   * No real readiness signal exists: a per-agent guess at "the CLI drew its first real frame", from
-   * undocumented output, its threshold tuned by hand per agent. Omitted by the shell.
+   * strip's progress bar hides. Output reaches the terminal throughout. No CLI signals readiness, so
+   * this is a per-agent guess at "the first real frame is drawn". Omitted by the shell.
    */
   createIsSessionReady?: () => (chunk: string) => boolean;
   /**
    * Ctrl+C presses that make the CLI quit by itself, sent before a kill (TerminalSession.stop).
-   * Measured: Claude Code and pi 2 (pi within 500 ms), and both soon withdraw the offer; Codex 1 —
-   * a second byte to a leaving Codex lands after raw mode ended, where ConPTY turns it into a
-   * CTRL_C_EVENT that kills the shutdown. All three read `\x03` as an ordinary byte and decide what
-   * it means. Omitted for the shell (plain SIGINT).
+   * Omitted for the shell (plain SIGINT).
    */
   quitPresses?: number;
 }

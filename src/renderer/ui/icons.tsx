@@ -45,23 +45,16 @@ const TARGET_EXTENT = 12.8;
 const GRID = 16;
 
 /**
- * Fits an icon by how much of its grid it actually draws on.
+ * Fits an icon by how much of its grid it actually draws on, since icons cover their grids
+ * unequally. Each declares its extent — the side of its drawing's bounding box, half a stroke
+ * included — and the viewBox is cropped to put that extent at TARGET_EXTENT. `strokeWidth` scales
+ * by the same factor, or the crop would thicken every enlarged stroke.
  *
- * Measured with `getBBox`, the icons cover 59% (the chevron) to 100% (Claude's mark) of their
- * grid, so equal `width`s look unequal. Each declares its measured extent, and the viewBox is
- * cropped to put that extent at TARGET_EXTENT. `strokeWidth` scales by the same factor, or the
- * crop would thicken every enlarged stroke.
+ * An extent is the **geometric mean** of the box's sides, not the longer side, capped at about 87%
+ * of the box in the long axis so a long thin icon does not outgrow its place.
  *
- * Extents are tuned to the **geometric mean**, not the longer side: 12 by 9 carries far less ink
- * than 12 by 12. Each is capped at about 87% of the box in the long axis, so a chevron or a row of
- * dots does not outgrow its place.
- *
- * Re-measure when a path changes: render every icon and read `getBBox()` on each child, grown by
- * half a stroke.
- *
- * The box is `--icon-size` (13px), stated in CSS. A new icon comes from lucide-react first
- * (`Lucide`); a hand drawing (`Svg`, or `FillSvg` for a fill-only one) is for what Lucide has no
- * match for.
+ * The box is `--icon-size`, stated in CSS. A new icon comes from lucide-react first (`Lucide`); a
+ * hand drawing (`Svg`, or `FillSvg` for a fill-only one) is for what Lucide has no match for.
  */
 function geometry(extent: number, cx: number, cy: number, grid: number, stroke: number) {
   const side = (extent * grid) / ((TARGET_EXTENT / GRID) * grid);
@@ -72,7 +65,7 @@ function geometry(extent: number, cx: number, cy: number, grid: number, stroke: 
 }
 
 /** `Svg`'s box for a fill-only icon on its own grid (git's mark, agent-icons.tsx): the same
- *  fitting, nothing stroked. `extent` is measured, a `scale` already divided in. */
+ *  fitting, nothing stroked, a `scale` already divided into `extent`. */
 export function FillSvg({
   className,
   extent,
@@ -113,14 +106,14 @@ const SMALLER = 11 / 13;
 /** Two pixels over, for an icon that should read larger. */
 export const LARGER = 15 / 13;
 
-/** A tree's folding chevron, in the git pane and the Explorer alike: 10px drawn at the 13px
- *  `--icon-size`, which draws TARGET_EXTENT/GRID of it (10.4px) unscaled. */
+/** A tree's folding chevron, in the git pane and the Explorer alike: 10px of the `--icon-size`
+ *  box, which draws TARGET_EXTENT/GRID of it unscaled. */
 export const TREE_CHEVRON = 10 / 10.4;
 
 /**
- * `extent` (stroke included) and the centre `cx`/`cy` on the 16 grid are measured. `scale` is a
- * *choice* — read smaller than the neighbours — kept apart so the extent stays re-measurable.
- * Also the stroked agent icons' box (agent-icons.tsx).
+ * `extent` and the centre `cx`/`cy` are the drawing's, on the 16 grid; `scale` is a *choice* — to
+ * read smaller or larger than the neighbours — kept apart from the extent. Also the stroked agent
+ * icons' box (agent-icons.tsx).
  */
 export function Svg({
   children,
@@ -162,9 +155,9 @@ export function Svg({
 
 /**
  * A lucide-react icon, cropped like `Svg`: its native 24-unit grid, centred where most of them are,
- * and its stroke of 2. Only the measured `extent` differs from one to the next — an icon off that
- * centre or drawn heavier says so, and one drawn `SMALLER`/`LARGER` passes it as `scale`. The
- * extents hold for the paths lucide-react ships; re-measure when an update redraws one.
+ * and its stroke of 2. Only `extent` differs from one to the next — an icon off that centre or
+ * drawn heavier says so, and one drawn `SMALLER`/`LARGER` passes it as `scale`. The extents hold
+ * for the paths lucide-react ships.
  */
 function Lucide({
   icon: Icon,
@@ -187,45 +180,39 @@ function Lucide({
   return <Icon className={className} size={13} viewBox={viewBox} strokeWidth={strokeWidth} />;
 }
 
-/** Lucide's `plus`. Measured: 16 by 16, extent 16, centered at (12, 12). Stroke 2.3 instead of
- *  Lucide's 2, to read heavier leading a row. */
+/** Lucide's `plus`, stroked heavier to lead a row. */
 export function PlusIcon(props: IconProps) {
   return <Lucide {...props} icon={Plus} extent={16} stroke={2.3} />;
 }
 
-/** Lucide's `x`, drawn `SMALLER` (measured extent divided by it): 14 by 14, extent 14 becomes
- *  16.55, centered at (12, 12). */
+/** Lucide's `x`, drawn `SMALLER`. */
 export function CloseIcon(props: IconProps) {
   return <Lucide {...props} icon={X} extent={14} scale={SMALLER} />;
 }
 
-/** Lucide's `log-in` — sign in with an SBX access token. Measured: 20 by 20, extent 20, centered at
- *  (12, 12). */
+/** Lucide's `log-in` — sign in with an SBX access token. */
 export function LogInIcon(props: IconProps) {
   return <Lucide {...props} icon={LogIn} extent={20} />;
 }
 
-/** Lucide's `check` — the SBX access token signed in with. Measured: 18 by 13, extent 15.3,
- *  centered at (12, 11.5). */
+/** Lucide's `check` — the SBX access token signed in with. */
 export function CheckIcon(props: IconProps) {
   return <Lucide {...props} icon={Check} extent={15.3} cy={11.5} />;
 }
 
-/** Lucide's `shield` — a project sandboxed by sbx. Tall, so the long-side cap: measured 18 by 22
- *  (stroke included), extent 20.23, centered at (12, 12). Full size: it stands beside the session
- *  marks in the project row. */
+/** Lucide's `shield` — a project sandboxed by sbx. Tall, so the long-side cap. Full size: it
+ *  stands beside the session marks in the project row. */
 export function ShieldIcon(props: IconProps) {
   return <Lucide {...props} icon={Shield} extent={20.23} />;
 }
 
-/** Lucide's `landmark` — sbx's policy governed by an organization. Tall, so the long-side cap:
- *  measured 20 by 22 (stroke included), extent 20.23, centered at (12, 12). */
+/** Lucide's `landmark` — sbx's policy governed by an organization. Tall, so the long-side cap. */
 export function LandmarkIcon(props: IconProps) {
   return <Lucide {...props} icon={Landmark} extent={20.23} />;
 }
 
 /** Lucide's `file-diff` — the project row's mark for uncommitted changes. Tall, so the long-side
- *  cap: measured 18 by 22 (stroke included), extent 20.23, centered at (12, 12). */
+ *  cap. */
 export function ChangesIcon(props: IconProps) {
   return <Lucide {...props} icon={FileDiff} extent={20.23} />;
 }
@@ -245,21 +232,19 @@ export function SeverityIcon({ severity, ...props }: IconProps & { severity: Not
   );
 }
 
-/** Lucide's `git-branch`. Measured: 20 by 20, extent 20, centered at (12, 12). */
+/** Lucide's `git-branch`. */
 export function BranchIcon(props: IconProps) {
   return <Lucide {...props} icon={GitBranch} extent={20} />;
 }
 
-/** Lucide's `folder-git-2` — a worktree. From its path bounds, stroke included: 22 by 21, extent
- *  21.49 (the geometric mean), centered at (12, 12.5). */
+/** Lucide's `folder-git-2` — a worktree. */
 export function WorktreeIcon(props: IconProps) {
   return <Lucide {...props} icon={FolderGit2} extent={21.49} cy={12.5} />;
 }
 
 /**
- * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. Measured: tips
- * at 2 and 30, a bbox of side 28 centred at (16, 16). A step past `LARGER`, since a diamond inks
- * half its bbox; three pixels over is the limit, beyond which the tips clip.
+ * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. A step past
+ * `LARGER`, since a diamond inks half its bounding box; larger still would clip the tips.
  */
 const GIT_SCALE = 16 / 13;
 
@@ -274,27 +259,24 @@ export function GitIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `search`. Measured: 20 by 20, extent 20, centered at (12, 12). */
+/** Lucide's `search`. */
 export function SearchIcon(props: IconProps) {
   return <Lucide {...props} icon={Search} extent={20} />;
 }
 
 /** Lucide's `case-sensitive` — the search field's "Match Case", VS Code's `Aa`. Wide and flat, so
- *  the long-side cap, which their geometric mean (16.25) would have drawn past the box: measured 22
- *  by 12 (stroke included), extent 20.23, centered at (12, 11). */
+ *  the long-side cap: the geometric mean would draw it past the box. */
 export function CaseSensitiveIcon(props: IconProps) {
   return <Lucide {...props} icon={CaseSensitive} extent={20.23} cy={11} />;
 }
 
 /** Lucide's `whole-word` — "Match Whole Word", VS Code's underlined `ab`. The long-side cap again,
- *  so it reads level with the `Aa` beside it: measured 22 by 14 (stroke included), extent 20.23,
- *  centered at (12, 13). */
+ *  so it reads level with the `Aa` beside it. */
 export function WholeWordIcon(props: IconProps) {
   return <Lucide {...props} icon={WholeWord} extent={20.23} cy={13} />;
 }
 
-/** Lucide's `regex` — "Use Regular Expression", VS Code's `.*`. Measured: 20.33 by 20, extent
- *  20.16, centered at (12.17, 12). */
+/** Lucide's `regex` — "Use Regular Expression", VS Code's `.*`. */
 export function RegexIcon(props: IconProps) {
   return <Lucide {...props} icon={Regex} extent={20.16} cx={12.17} />;
 }
@@ -309,7 +291,7 @@ export function ChevronIcon({ expanded, scale, ...props }: IconProps & { expande
 
 /**
  * A gapped ring, used with the `spinning` class in place of the running action's icon. The dash
- * pattern splits the circumference 2π·5 ≈ 31 into arc 23 and gap 8; re-cut it if the radius moves.
+ * pattern splits the circumference 2π·r into arc and gap; re-cut it if the radius moves.
  */
 export function SpinnerIcon(props: IconProps) {
   return (
@@ -319,25 +301,22 @@ export function SpinnerIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `wand` — a model's suggestion. Measured: 21 by 21, extent 21, centered at
- *  (12.5, 11.5). */
+/** Lucide's `wand` — a model's suggestion. */
 export function SparkleIcon(props: IconProps) {
   return <Lucide {...props} icon={Wand} extent={21} cx={12.5} cy={11.5} />;
 }
 
-/** Lucide's `play`, `SMALLER` like `CloseIcon`: measured 18 by 20 (stroke included), extent 18.98
- *  becomes 22.43, centered at (13, 12). */
+/** Lucide's `play`, `SMALLER` like `CloseIcon`. */
 export function PlayIcon(props: IconProps) {
   return <Lucide {...props} icon={Play} extent={18.98} scale={SMALLER} cx={13} />;
 }
 
-/** Lucide's `tag`. Measured: 22 by 22, extent 22, centered at (12, 12). */
+/** Lucide's `tag`. */
 export function TagIcon(props: IconProps) {
   return <Lucide {...props} icon={Tag} extent={22} />;
 }
 
-/** Lucide's `git-commit-horizontal`. Wide and flat, so the long-side cap: measured 20 by 8, extent
- *  18.39, centered at (12, 12). */
+/** Lucide's `git-commit-horizontal`. Wide and flat, so the long-side cap. */
 export function CommitIcon(props: IconProps) {
   return <Lucide {...props} icon={GitCommitHorizontal} extent={18.39} />;
 }
@@ -352,24 +331,23 @@ export function StashIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `trash` — discard, beside the stash's "put away". Its two inner lines sit inside the
- *  box. Measured: 20 by 22; the geometric mean would clip the bottom, so the long-axis cap: extent
- *  20.98, centered at (12, 12). */
+/** Lucide's `trash` — discard, beside the stash's "put away". The long-axis cap: the geometric
+ *  mean would clip the bottom. */
 export function DiscardIcon(props: IconProps) {
   return <Lucide {...props} icon={Trash} extent={20.98} />;
 }
 
-/** Lucide's `arrow-up`. Measured: 16 by 16, extent 16, centered at (12, 12). */
+/** Lucide's `arrow-up`. */
 export function ArrowUpIcon(props: IconProps) {
   return <Lucide {...props} icon={ArrowUp} extent={16} />;
 }
 
-/** Lucide's `arrow-down`. Measured: 16 by 16, extent 16, centered at (12, 12). */
+/** Lucide's `arrow-down`. */
 export function ArrowDownIcon(props: IconProps) {
   return <Lucide {...props} icon={ArrowDown} extent={16} />;
 }
 
-/** Lucide's `refresh-cw` — fetch. Measured: 20 by 20, extent 20, centered at (12, 12). */
+/** Lucide's `refresh-cw` — fetch. */
 export function SyncIcon(props: IconProps) {
   return <Lucide {...props} icon={RefreshCw} extent={20} />;
 }
@@ -389,15 +367,13 @@ export function QuestionIcon(props: IconProps) {
 
 /**
  * Lucide's `circle-alert` — what cannot work as it stands: a tab whose agent cannot start, a
- * sbx-settings row or tab. Measured: 22 by 22, extent 22, centered at (12, 12).
- * Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
+ * sbx-settings row or tab. Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
  */
 export function CircleAlertIcon(props: IconProps) {
   return <Lucide {...props} icon={CircleAlert} extent={22} />;
 }
 
-/** Lucide's `message-square` — a finished turn nobody has seen yet. Measured: 22 by 21, extent
- *  21.49, centered at (12, 12.5). */
+/** Lucide's `message-square` — a finished turn nobody has seen yet. */
 export function CommentIcon(props: IconProps) {
   return <Lucide {...props} icon={MessageSquare} extent={21.49} cy={12.5} />;
 }
@@ -411,33 +387,31 @@ export function RemoteIcon(props: IconProps) {
   );
 }
 
-/** Lucide's `settings`. Measured: 20 by 22, extent 20.91, centered at (12, 12). Drawn `LARGER`: a
- *  gear is mostly gaps and reads small beside the git mark. */
+/** Lucide's `settings`, drawn `LARGER`: a gear is mostly gaps and reads small beside the git
+ *  mark. */
 export function GearIcon(props: IconProps) {
   return <Lucide {...props} icon={Settings} extent={20.91} scale={LARGER} />;
 }
 
-/** Lucide's `file-braces` — the files view. Measured: 18 by 22; the geometric mean would clip the
- *  bottom, so the long-axis cap: extent 20.23, centered at (12, 12). */
+/** Lucide's `file-braces` — the files view. The long-axis cap: the geometric mean would clip the
+ *  bottom. */
 export function FilesIcon(props: IconProps) {
   return <Lucide {...props} icon={FileBraces} extent={20.23} />;
 }
 
-/** The EXPLORER header's "New File...": Lucide's `file-plus`. Measured, stroke included: 18 by 22;
- *  the geometric mean would clip the bottom, so the long-axis cap: extent 20.23, centered at
- *  (12, 12). */
+/** The EXPLORER header's "New File...": Lucide's `file-plus`. The long-axis cap: the geometric
+ *  mean would clip the bottom. */
 export function NewFileIcon(props: IconProps) {
   return <Lucide {...props} icon={FilePlus} extent={20.23} />;
 }
 
-/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`. Measured: 22 by 19, square enough
- *  for the uncapped geometric mean: extent 20.45, centered at (12, 11.5). */
+/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`, square enough for the uncapped
+ *  geometric mean. */
 export function NewFolderIcon(props: IconProps) {
   return <Lucide {...props} icon={FolderPlus} extent={20.45} cy={11.5} />;
 }
 
-/** "Collapse Folders in Explorer": Lucide's `copy-minus`. Measured: 22 by 22, extent 22, centered
- *  at (12, 12). */
+/** "Collapse Folders in Explorer": Lucide's `copy-minus`. */
 export function CollapseAllIcon(props: IconProps) {
   return <Lucide {...props} icon={CopyMinus} extent={22} />;
 }
@@ -448,25 +422,22 @@ export function ExpandAllIcon(props: IconProps) {
   return <Lucide {...props} icon={CopyPlus} extent={22} />;
 }
 
-/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap: measured 19.5
- *  by 16 (stroke included), extent 17.93, centered at (11.75, 12). */
+/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap. */
 export function ClearIcon(props: IconProps) {
   return <Lucide {...props} icon={ListX} extent={17.93} cx={11.75} />;
 }
 
-/** Lucide's `save`. Measured: 20 by 20, extent 20, centered at (12, 12). */
+/** Lucide's `save`. */
 export function SaveIcon(props: IconProps) {
   return <Lucide {...props} icon={Save} extent={20} />;
 }
 
-/** Lucide's `eye` — a Markdown preview. Wide, so the long-side cap: measured 22 by 16 (stroke
- *  included), extent 20.23, centered at (12, 12). */
+/** Lucide's `eye` — a Markdown preview. Wide, so the long-side cap. */
 export function EyeIcon(props: IconProps) {
   return <Lucide {...props} icon={Eye} extent={20.23} />;
 }
 
-/** Lucide's `git-compare` — the editor tab's diff toggle. Square: measured 20 by 20 (stroke
- *  included), extent 20, centered at (12, 12). */
+/** Lucide's `git-compare` — the editor tab's diff toggle. */
 export function CompareIcon(props: IconProps) {
   return <Lucide {...props} icon={GitCompare} extent={20} />;
 }

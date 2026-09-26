@@ -26,8 +26,8 @@ export function isPort(value: string): boolean {
   return /^\d{1,5}$/.test(trimmed) && Number(trimmed) >= 1 && Number(trimmed) <= 65535;
 }
 
-/** A scheme or port, which `sbx secret set-custom` rejects (measured), or a leading "-", which sbx
- *  would read as an option of its own. */
+/** A scheme or port, which `sbx secret set-custom` rejects, or a leading "-", which sbx would read
+ *  as an option of its own. */
 function isBadHost(host: string): boolean {
   return /^-|[/:]/.test(host);
 }

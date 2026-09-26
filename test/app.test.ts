@@ -158,7 +158,7 @@ ${stderr.slice(uncaught)}`);
     const relative = path.join("bin", process.platform === "win32" ? "tool.exe" : "tool");
     fs.mkdirSync(path.join(repo, "bin"), { recursive: true });
     if (process.platform === "win32") {
-      // A native program: node-pty takes it directly, where a relative path once missed the folder.
+      // A native program: node-pty takes it directly.
       fs.copyFileSync(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "whoami.exe"), path.join(repo, relative));
     } else {
       fs.writeFileSync(path.join(repo, relative), "#!/bin/sh\nexit 0\n", { mode: 0o755 });

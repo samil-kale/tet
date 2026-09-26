@@ -41,8 +41,7 @@ export interface Project {
   /** The directory's base name. */
   name: string;
   /** Its linked worktrees, by branch (git.ts's readWorktrees). Those TET made carry their `key`;
-   *  the others (made with `git worktree add` elsewhere, or by an older TET) are shown greyed and
-   *  never opened. */
+   *  the others (made elsewhere) are shown greyed and never opened. */
   worktrees: ProjectWorktree[];
 }
 
@@ -232,7 +231,7 @@ export interface SbxKnowledgeSource {
  */
 export interface SbxSecret {
   env: string;
-  /** Exact host, IP or wildcard (`*.example.com`) — sbx refuses a scheme or port (measured, 0.42.1). */
+  /** Exact host, IP or wildcard (`*.example.com`) — sbx refuses a scheme or port. */
   hosts: string[];
 }
 
@@ -251,7 +250,7 @@ export interface SbxProjectConfig {
   ports: SbxPort[];
   paths: SbxPath[];
   /** "Allowed hosts" in sbx's grammar — exact host, wildcard (`*.example.com`), optional port.
-   *  Unvalidated: sbx accepts anything (measured, 0.42.1 — `https://example.com` matches nothing). */
+   *  Unvalidated: sbx accepts anything, and a scheme then matches nothing. */
   hosts: string[];
   secrets: SbxSecret[];
   variables: SbxVariable[];
@@ -603,9 +602,9 @@ export interface NoticeReport extends Notice {
 }
 
 /** An editor tab's state, reported by the renderer (where the editor alone lives) on every
- *  snapshot change, for `tet-ctl editor-state` and `editor-list`. Without the text: up to 4 MB,
- *  and a snapshot changes several times per write on disk (measured). Which tab is active is
- *  reported apart, by the window's layout. */
+ *  snapshot change, for `tet-ctl editor-state` and `editor-list`. Without the text, which may be
+ *  large and changes several times per write on disk. Which tab is active is reported apart, by
+ *  the window's layout. */
 export interface EditorReport {
   path: string;
   /** The read of `path` still in flight. */
@@ -819,8 +818,8 @@ export interface TerminalDescriptor {
 export const WORKTREES_NEED_GIT = "needs git 2.48 or newer";
 
 /**
- * Whether `git --version`'s answer has `worktree add --relative-paths` (2.48), which tet's worktrees
- * are made with (git.ts's worktreeAdd). Renaming (the branch alone) and deleting need nothing new.
+ * Whether `git --version`'s answer has `worktree add --relative-paths`, which tet's worktrees are
+ * made with (git.ts's worktreeAdd). Renaming (the branch alone) and deleting need nothing new.
  */
 export function worktreesSupported(version: string | undefined): boolean {
   const [major = 0, minor = 0] = (version ?? "").split(".").map((part) => parseInt(part, 10) || 0);

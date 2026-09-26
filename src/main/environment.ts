@@ -21,7 +21,7 @@ function isStoredVar(entry: unknown): entry is StoredVar {
   return isRecord(entry) && typeof entry.name === "string" && typeof entry.text === "string";
 }
 
-/** A row from before the values were kept in the clear: its value encrypted by the OS, dropped. */
+/** A row whose value is encrypted by the OS rather than in the clear: dropped. */
 function isSealedVar(entry: unknown): boolean {
   return isRecord(entry) && typeof entry.name === "string" && typeof entry.value === "string";
 }

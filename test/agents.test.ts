@@ -19,8 +19,8 @@ import { SBX_AGENT_IDS, type Project, type SbxAgentId, type TerminalDescriptor }
 import { eventually, killApp, startApp, tetCtl, type TestApp } from "./helpers";
 
 /**
- * The agents' CLIs and sbx as installed on this machine, measured again the way tet uses them —
- * what the AgentDefinitions and sbx.ts hold as measured. Run it before relying on an update.
+ * The agents' CLIs and sbx as installed on this machine, driven the way tet drives them — what the
+ * AgentDefinitions and sbx.ts rely on. Run it before relying on an update.
  *
  * Only on a machine where they are installed and signed in, each part on its own switch:
  * - TET_AGENT_TEST=1: every agent in a tab of the real app, driven through tet-ctl. Spends model
@@ -69,8 +69,8 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
 
   /**
    * The question a CLI asks in a folder it has not been trusted with, as `tabs-output` shows
-   * it (spaces may be gone), and the keys answering "trust". Measured 2026-09-16, win32: Claude
-   * Code 2.1.273 preselects "No, exit", Codex 0.154.0 "1. Yes, continue"; pi asks nothing.
+   * it (spaces may be gone), and the keys answering "trust". Claude Code preselects "No, exit",
+   * Codex "1. Yes, continue"; pi asks nothing.
    */
   const TRUST_QUESTIONS: Partial<Record<SbxAgentId, { asked: RegExp; keys: string[] }>> = {
     claude: { asked: /Yes,\s*I\s*trust\s*this\s*folder/, keys: ["\x1b[B", "\r"] },

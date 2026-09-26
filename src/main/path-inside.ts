@@ -5,7 +5,7 @@ import * as path from "node:path";
 /**
  * A folder in on-disk spelling, as `readWorktrees` and `readMainWorktree` give it: a project's path
  * is stored so, or string comparisons with theirs miss — a Windows 8.3 name, macOS's `/var`, a
- * junction or a symlink (measured with a junction). As written while the folder does not exist.
+ * junction or a symlink. As written while the folder does not exist.
  */
 export function onDisk(folder: string): string {
   try {

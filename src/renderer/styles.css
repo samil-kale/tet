@@ -79,7 +79,7 @@ textarea:focus,
 }
 
 /* Styled like a `<select>`: a native select's open list is drawn by Chrome, ignoring every color
-   and :hover rule here (measured), so its highlighted row cannot be themed. */
+   and :hover rule here, so its highlighted row cannot be themed. */
 .dropdown-trigger {
   text-align: left;
   overflow: hidden;
@@ -103,8 +103,7 @@ textarea:focus,
   text-decoration: underline;
 }
 
-/* RadioGroup: VS Code's radio widget (base/browser/ui/radio/radio.css), at the fields' height and
-   a button's padding. A border between two options is drawn once: an inactive one leaves off its
+/* RadioGroup: VS Code's radio widget, at the fields' height and a button's padding. A border between two options is drawn once: an inactive one leaves off its
    right, the one after the active its left. */
 .radio-group {
   display: flex;
@@ -218,7 +217,7 @@ textarea:focus,
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
   --small-font-size: 12px;
   --tiny-font-size: 11px;
-  /* The tabbed dialogs (settings, sbx): seven tabs no longer fit in `.dialog`'s 500. */
+  /* The tabbed dialogs (settings, sbx): their tabs need more than `.dialog`'s width. */
   --dialog-wide-width: 580px;
 }
 
@@ -265,8 +264,8 @@ textarea:focus,
   width: var(--action-size);
   height: var(--action-size);
   flex: none;
-  /* The reset above keeps Chrome's default `1px 6px` padding, which with border-box leaves 12px
-     of content and squeezes every icon to 12 by 18 (measured). */
+  /* The reset above keeps Chrome's default button padding, which with border-box squeezes every
+     icon. */
   padding: 0;
   border-radius: 3px;
   color: inherit;
@@ -556,7 +555,7 @@ textarea:focus,
   padding-right: 72px;
 }
 
-/* The field no longer carries the 6px the branch tree's icon is placed against. */
+/* Here the field lacks the 6px the branch tree's icon is placed against. */
 .filter-row .filter-icon,
 .remote-main .filter-icon {
   left: 7px;
@@ -641,17 +640,15 @@ textarea:focus,
   min-height: 0;
 }
 
-/* VS Code's explorer row (ExplorerDelegate.ITEM_HEIGHT 22px). No flex gap: the twistie and the
-   file mark carry their own. */
+/* VS Code's explorer row. No flex gap: the twistie and the file mark carry their own. */
 .explorer-tree .tree-item {
   height: 22px;
   gap: 0;
 }
 
-/* A file mark is a glyph of Seti's font (files/file-icons.ts), centred in the chevron's 12px
-   `.tree-icon` box. VS Code draws it at 150% of the 13px label in a 16px box; the same share of this
-   12px box. The chevron's gap after it (TWISTIE_WIDTH + TWISTIE_GAP in files/tree-rows.tsx), so file and
-   folder labels stay level. */
+/* A file mark is a glyph of Seti's font (files/file-icons.ts), centred in the chevron's
+   `.tree-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
+   (TWISTIE_WIDTH + TWISTIE_GAP in files/tree-rows.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
   src: url("./files/seti.woff") format("woff");
@@ -1081,9 +1078,8 @@ textarea:focus,
   /* The stack's padding: an absolute child is placed against the padding box. */
   inset: 6px;
   background: var(--vscode-terminal-background);
-  /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window
-     (measured: 0.7-1.2s long tasks on ~100-char writes). No `paint`: it would clip the
-     drag-over frame reaching past the host. */
+  /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. No
+     `paint`: it would clip the drag-over frame reaching past the host. */
   contain: size layout style;
 }
 
@@ -1121,9 +1117,8 @@ textarea:focus,
 }
 
 /*
- * These only hide a native scrollbar. Since xterm 6 the bar is a <div class="slider"> in a copy
- * of VS Code's scrollable element, out of CSS's reach; `theme.ts` hides it by color, with the
- * overview ruler.
+ * These only hide a native scrollbar. xterm's own bar is a <div class="slider"> out of CSS's
+ * reach; `theme.ts` hides it by color, with the overview ruler.
  */
 
 /* Side pane: git or files ----------------------------------------------------------------- */
@@ -1492,9 +1487,9 @@ textarea:focus,
 }
 
 /* Always drawn: the 1px `--vscode-panel-border` of every pane boundary, not the 4px hit area.
-   A border, not a 1px background: at a fractional scale (125%) Chromium snaps a box's edges, so
-   1px paints one or two device pixels depending on where the sash sits, but rounds a border's
-   width to whole device pixels. */
+   A border, not a 1px background: at a fractional scale Chromium snaps a box's edges, so 1px
+   paints one or two device pixels depending on where the sash sits, but rounds a border's width
+   to whole device pixels. */
 .sash::before {
   content: "";
   position: absolute;
@@ -1794,8 +1789,8 @@ textarea:focus,
   min-width: 0;
 }
 
-/* A path's access: one width for either choice, which still holds "Read+Write" (102px, measured)
-   once the row's mark takes its room. */
+/* A path's access: one width for either choice, which still holds "Read+Write" once the row's
+   mark takes its room. */
 .edit-row > .select-field {
   --field-width: 120px;
   width: var(--field-width);
@@ -1991,9 +1986,8 @@ textarea:focus,
   display: grid;
   place-content: center;
   /* Stated so the offset is arithmetic. The 15 is not the box: centring the real 18 sits high,
-     the line box holding descender space, 3px by measurement at Chrome's own 13. Re-check if the
-     font changes. The sides are Chromium's own for a checkbox, stated so the icon takes the same
-     column. */
+     the line box holding descender space. The sides are Chromium's own for a checkbox, stated so
+     the icon takes the same column. */
   width: 18px;
   height: 18px;
   flex: none;
@@ -2425,8 +2419,8 @@ textarea:focus,
   align-items: flex-start;
   /* With the 13px icon, the text starts where VS Code's does beside its 16px one. */
   gap: 7px;
-  /* VS Code's fixed width (MAX_WIDTH in notificationsToasts.ts): a notice sized to its text is
-     easily missed. Capped by the window minus margins. */
+  /* VS Code's fixed width: a notice sized to its text is easily missed. Capped by the window
+     minus margins. */
   width: min(450px, 100vw - 14px);
   margin: 4px;
   padding: 10px 9px;

@@ -35,9 +35,8 @@ import { isImage, toDataUrl } from "./image-type";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;
-/** Least time between two finished refreshes, or continuous change runs them back to back. Measured
- *  with instrumented process creation: the git start is the cost, three per refresh (git.ts's
- *  `readState`). */
+/** Least time between two finished refreshes, or continuous change runs them back to back. The git
+ *  starts are the cost (git.ts's `readState`). */
 const REFRESH_MIN_INTERVAL_MS = 2000;
 /** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
  *  from" merges what the last fetch brought, whatever the host. */
@@ -193,8 +192,7 @@ export class Repository {
   }
 
   private async startReading(): Promise<void> {
-    // All three at once: each is a git start (the measured cost); in sequence they visibly delay
-    // the pane.
+    // All three at once: each is a git start; in sequence they visibly delay the pane.
     const [isGit, , read] = await Promise.all([
       git.isRepository(this.at.path).catch(() => false),
       this.loadConfig(),
@@ -907,8 +905,8 @@ export class Repository {
           clearTimeout(this.commandsTimer);
           this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);
         }
-        // A path appearing or going is "rename", a write only "change" (measured on win32), so an
-        // edit never re-lists the tree. Nothing under .git is in it.
+        // A path appearing or going is "rename", a write only "change", so an edit never re-lists
+        // the tree. Nothing under .git is in it.
         if (event === "rename" && name && !/^\.git(?:[\\/]|$)/.test(name)) {
           clearTimeout(this.filesTimer);
           const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastFilesChangedAt + REFRESH_MIN_INTERVAL_MS - Date.now());
@@ -949,9 +947,9 @@ export class Repository {
 
   /**
    * A linked worktree's or a submodule's `.git` is a file naming the git directory elsewhere, where
-   * a commit or checkout in a terminal writes HEAD, index and refs without an event under the root
-   * (measured). `gitdir`, and for a worktree the `commondir` holding it, whose events are named as
-   * the root's `.git/` ones.
+   * a commit or checkout in a terminal writes HEAD, index and refs without an event under the root.
+   * `gitdir`, and for a worktree the `commondir` holding it, whose events are named as the root's
+   * `.git/` ones.
    */
   private watchLinkedGitDir(): void {
     const linked = readLinkedGitDir(this.at.path);
@@ -1002,8 +1000,8 @@ export class Repository {
 
   /**
    * Resolves once the git commands this repository started have ended: a running one's working
-   * directory is the folder, which Windows then keeps from being moved or removed ("Permission
-   * denied", measured) — and a worktree's is, right after it closes (projects.ts).
+   * directory is the folder, which Windows then keeps from being moved or removed — and a
+   * worktree's is, right after it closes (projects.ts).
    */
   dispose(): Promise<void> {
     // Read by a refresh whose git call may outlive this.

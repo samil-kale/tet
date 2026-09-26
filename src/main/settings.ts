@@ -67,14 +67,15 @@ export class SettingsStore implements SettingsAccess {
   }
 }
 
-/** An older file's single theme setting: one theme id, or "system". */
+/** A single theme setting in the file: one theme id, or "system". */
 interface LegacyThemeSetting {
   theme?: unknown;
 }
 
 /** Every key as the store holds it, from the dialog or the file. */
 function normalize(value: Partial<AppSettings> & LegacyThemeSetting): AppSettings {
-  // An older file's theme becomes its kind and that kind's theme; "system" or an unknown id doesn't.
+  // A single theme setting becomes its kind and that kind's theme; "system" or an unknown id
+  // does not.
   const legacy = THEMES.find((theme) => theme.id === value.theme);
   return {
     notifications: booleans(value.notifications),

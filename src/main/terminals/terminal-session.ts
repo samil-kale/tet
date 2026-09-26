@@ -14,14 +14,13 @@ interface SessionCallbacks {
 // kill, so the CLI runs its exit handlers. Claude Code arms a record in `~/.claude.json` while its
 // fullscreen renderer boots and clears it ten seconds later; a process dying in between counts as a
 // strike, and two turn fullscreen off machine-wide — a tab spawned at tet's startup is in that
-// window. `\x03` is safe only because an agent TUI in raw mode reads it as a byte (measured); in
-// cooked mode ConPTY makes it a CTRL_C_EVENT that kills without running anything.
+// window. `\x03` is safe only because an agent TUI in raw mode reads it as a byte; in cooked mode
+// ConPTY makes it a CTRL_C_EVENT that kills without running anything.
 
-/** Between two Ctrl+C bytes: long enough to be read as two keypresses (measured), short enough for
- *  the offer the second answers. */
+/** Between two Ctrl+C bytes: long enough to be read as two keypresses, short enough for the offer
+ *  the second answers. */
 const CTRL_C_GAP_MS = 250;
-/** After the last one. Measured: Claude Code and Codex are gone well inside it. A session
- *  that read Ctrl+C as "interrupt the turn" never leaves. */
+/** After the last one; a session that read Ctrl+C as "interrupt the turn" never leaves. */
 const GRACEFUL_EXIT_MS = 2000;
 /** After the kill, so stopping cannot hang on a pty that never reports its exit. */
 const FORCE_KILL_MS = 1000;

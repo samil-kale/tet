@@ -114,8 +114,8 @@ const PLAIN_PATH = isWindows() ? /^[\w./\\:-]+$/ : /^[\w./:-]+$/;
 /**
  * A path as one word. The shell tab single-quotes it, since PowerShell and POSIX shells expand `$`
  * and a backtick inside double quotes too; a `'` in it is doubled (PowerShell) or closed, escaped
- * and reopened (POSIX). An agent's input field is no shell, and how each CLI reads a pasted path is
- * not measured: there only a space is quoted, in double quotes.
+ * and reopened (POSIX). An agent's input field is no shell: there only a space is quoted, in double
+ * quotes.
  */
 function quotePath(filePath: string, agent: AgentInfo): string {
   if (agent.id !== "shell") {
@@ -188,9 +188,9 @@ const inFront = new Set<string>();
 let webglAllowed: boolean | undefined;
 
 /**
- * Orca's policy, not measured here. On Linux WebGL stays off under Wayland, where a context is
- * reported to wedge terminal input (stablyai/orca#5319), and where the renderer is missing, unnamed
- * or software — slower than the DOM, with glyph corruption that never reports a lost context.
+ * On Linux WebGL stays off under Wayland, where a context can wedge terminal input, and where the
+ * renderer is missing, unnamed or software — slower than the DOM, with glyph corruption that never
+ * reports a lost context.
  */
 function decideWebgl(): boolean {
   if (!isLinux()) {
@@ -226,7 +226,7 @@ function releaseWebgl(view: TerminalView): void {
   view.webgl = undefined;
   try {
     // ANGLE on Windows can keep a disposed context alive long enough for quick tab switches to hit
-    // the budget (Orca, #6874); losing it and emptying the canvas returns it at once.
+    // the budget; losing it and emptying the canvas returns it at once.
     const renderer = (addon as unknown as WebglAddonInternals)._renderer;
     renderer?._gl?.getExtension("WEBGL_lose_context")?.loseContext();
     if (renderer?._canvas) {
@@ -441,8 +441,8 @@ export function attachTerminal(ref: ProjectRef, tabId: string, agent: AgentInfo,
 /**
  * Refits and reports the new size — which starts the process. Never an immediate local reflow
  * plus a debounced pty notify: a resize landing mid-redraw has ConPTY reflow its buffer under the
- * CLI's cursor-relative redraw, corrupting it (microsoft/vscode#230852, #260038). Reflow and
- * notify go together once activity settles (`RESIZE_DEBOUNCE_MS` in `Pane.tsx`).
+ * CLI's cursor-relative redraw, corrupting it. Reflow and notify go together once activity settles
+ * (`RESIZE_DEBOUNCE_MS` in `Pane.tsx`).
  */
 export function fitTerminal(ref: ProjectRef, tabId: string): void {
   const view = views.get(viewKey(ref, tabId));

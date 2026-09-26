@@ -382,8 +382,8 @@ function toSbxPorts(value: unknown): SbxPort[] {
   );
 }
 
-/** Trimmed as sbx trims them itself (measured, 2026-09-24, 0.45.1: " example.com" is taken as
- *  "example.com"), so a row equals the rule sbx lists for it (sbx.ts's readSandboxHosts). */
+/** Trimmed as sbx trims them itself, so a row equals the rule sbx lists for it (sbx.ts's
+ *  readSandboxHosts). */
 function toSbxHosts(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -392,7 +392,7 @@ function toSbxHosts(value: unknown): string[] {
 }
 
 /** A row needs an env name and a host; hosts trimmed as toSbxHosts, a repeated env name dropped —
- *  sbx refuses a second secret for one (measured, 0.42.1). */
+ *  sbx refuses a second secret for one. */
 function toSbxSecrets(value: unknown): SbxSecret[] {
   const secrets = objectRows(value, ({ env, hosts }) => {
     const name = typeof env === "string" ? env.trim() : "";

@@ -5,10 +5,9 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 
 /**
  * Fetches `url` into `file`, continuing what an earlier call left there: a quit or a dropped
- * connection keeps the part, and the next call asks only for the rest (`Range`; GitHub's release
- * downloads answer 206, measured). A server sending the whole file anyway (200) overwrites the
- * part. What is appended is not checked against the part: a mismatch makes an archive the unpack
- * refuses, and the caller deletes it.
+ * connection keeps the part, and the next call asks only for the rest (`Range`). A server sending
+ * the whole file anyway (200) overwrites the part. What is appended is not checked against the
+ * part: a mismatch makes an archive the unpack refuses, and the caller deletes it.
  */
 export async function resumableDownload(url: string, file: string, signal: AbortSignal): Promise<void> {
   const have = await fs.promises.stat(file).then(

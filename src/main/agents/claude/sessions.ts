@@ -50,8 +50,7 @@ export const claudeSessionProvider: SessionProvider = {
     );
   },
 
-  /** Mounted over the sandbox's `~/.claude/projects`. Measured: sbx gives that path its own volume
-   *  (`/dev/vde`); a later `sbx mount` stacks on top and wins, shadowing (not deleting) its content. */
+  /** Mounted over the sandbox's `~/.claude/projects`, stacking on sbx's own volume there. */
   sandbox: {
     mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
     list: (root, cwd) => listIn(path.join(root, "projects"), cwd),
@@ -117,8 +116,9 @@ function projectsRoot(): string {
   return path.join(claudeConfigDir(), "projects");
 }
 
-/** Read off the 2.1.283 binary (`Kx`): every non-alphanumeric as `-`; past 200 characters the first
- *  200, a `-` and the path's 32-bit string hash (`(h << 5) - h + c | 0`), absolute, in base 36. */
+/** Claude Code's folder name for a cwd: every non-alphanumeric as `-`; past 200 characters the
+ *  first 200, a `-` and the path's 32-bit string hash (`(h << 5) - h + c | 0`), absolute, in base
+ *  36. */
 const PROJECT_DIR_MAX = 200;
 
 function projectDirName(cwd: string): string {
@@ -143,8 +143,8 @@ interface ResolvedTitle {
   provisional: boolean;
 }
 
-/** Resolves the display name as Claude Code's `/resume` list does (order verified against the
- *  CLI): `custom-title` (anywhere in the file, so from the backwards scan); else "agent-name",
+/** Resolves the display name as Claude Code's `/resume` list does: `custom-title` (anywhere in
+ *  the file, so from the backwards scan); else "agent-name",
  *  else "ai-title" — the last occurrence wins, the head window's copy is the fallback; else
  *  "summary" (only after `/compact`); else the first typed prompt; else "".
  *
@@ -262,8 +262,8 @@ const TAIL_ENTRY_TYPES = [
   '"[Request interrupted by user'
 ];
 
-/** The user entry Claude appends when Escape cuts a turn short. Measured (2.1.270): during a tool
- *  ("… for tool use]") a `turn_duration` follows; anywhere else this entry is all there is. */
+/** The user entry Claude appends when Escape cuts a turn short. During a tool ("… for tool use]")
+ *  a `turn_duration` follows; anywhere else this entry is all there is. */
 function isInterruptEntry(entry: Record<string, unknown>): boolean {
   if (entry.type !== "user" || entry.isSidechain === true) {
     return false;
@@ -344,7 +344,7 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
 
 /** Reads backwards for entries whose *last* occurrence counts: custom-title, agent-name and
  *  ai-title (re-appended on a resume), and the last turn's end. Runs to the file's start if
- *  needed — a rename 300 KB ago is still the name. A turn ends with `turn_duration` or, for most
+ *  needed — an old rename is still the name. A turn ends with `turn_duration` or, for most
  *  turns cut short, an interrupt entry (isInterruptEntry); sidechain entries are subagent turns. */
 function scanTail(filePath: string, sessionId: string): Promise<ScannedTail<TranscriptTail>> {
   return scanTranscriptTail(filePath, scanCache, {

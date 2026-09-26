@@ -10,32 +10,29 @@ import { setupCodexHooks } from "./hooks";
 import { codexHome, codexSessionProvider } from "./sessions";
 
 /**
- * On win32 Codex reads its colors from the *console* (`GetConsoleScreenBufferInfoEx` on ConPTY,
- * conhost's Campbell palette whatever xterm draws) and blends its composer and message boxes from
- * it — near-black on a light theme (measured).
+ * On win32 Codex reads its colors from the *console* (conhost's palette, whatever xterm draws) and
+ * blends its composer and message boxes from it — near-black on a light theme.
  *
  * ConPTY reflects OSC 4 in that table: set entries 0 (background) and 7 (foreground) and Codex
- * reads the theme's colors (measured); OSC 10/11 do not. It must come from inside the pty, so a
- * generated `.cmd` prints it (`<nul set /p`; `echo` adds a line) and runs Codex with `%*`. The
- * OSC 4 also reaches xterm, where `terminal-views.ts` swallows it.
+ * reads the theme's colors; OSC 10/11 do not. It must come from inside the pty, so a generated
+ * `.cmd` prints it (`<nul set /p`; `echo` adds a line) and runs Codex with `%*`. The OSC 4 also
+ * reaches xterm, where `terminal-views.ts` swallows it.
  */
 function writeConsoleColorLauncher(agentDir: string, executable: string, theme: ThemeDefinition): string {
   const rgb = (hex: string): string => `rgb:${hex.slice(1, 3)}/${hex.slice(3, 5)}/${hex.slice(5, 7)}`;
   const osc4 = `\x1b]4;0;${rgb(theme.terminalBackground)}\x1b\\\x1b]4;7;${rgb(theme.terminalForeground)}\x1b\\`;
   const launcher = path.join(agentDir, "launch.cmd");
   // Rename into place: a theme change rewrites it while a tab may be starting through it, and
-  // cmd.exe reading it truncated runs nothing (measured under repeated rewrites).
+  // cmd.exe reading it truncated runs nothing.
   writeIfChanged(launcher, `@echo off\r\n<nul set /p "=${osc4}"\r\n${executable} %*\r\n`);
   return launcher;
 }
 
 /**
- * Codex's fullscreen transcript, always: only there does it enter the alternate screen (0.156.1,
- * raw pty bytes), so a resize redraws in place instead of reprinting the whole transcript into the
- * scrollback (openai/codex#24552); the plain TUI never does, `tui.alternate_screen = "always"`
- * included. It also turns on mouse reporting (`?1003;1006h`): Codex scrolls, selects and copies on a
- * right click itself (terminal-views.ts). Unmeasured on a Codex older than the key, as a sandbox's
- * may be.
+ * Codex's fullscreen transcript, always: only there does it enter the alternate screen, so a resize
+ * redraws in place instead of reprinting the whole transcript into the scrollback. It also turns on
+ * mouse reporting (`?1003;1006h`): Codex scrolls, selects and copies on a right click itself
+ * (terminal-views.ts).
  */
 const FULLSCREEN_ARGS = ["-c", "tui.fullscreen_transcript=true"];
 
@@ -76,10 +73,9 @@ export const codexAgent: AgentDefinition = {
       return { args: FULLSCREEN_ARGS };
     }
   },
-  // Measured: skills in `~/.codex/skills` and `~/.agents/skills` (its "failed to load skill" log
-  // names both); all of `~/.codex/plugins` (code under `plugins/cache/…`); `~/.codex/AGENTS.md`,
-  // `AGENTS.override.md` preferred per its load order. Under the config root the sessions are read
-  // from.
+  // Skills in `~/.codex/skills` and `~/.agents/skills`; all of `~/.codex/plugins`;
+  // `~/.codex/AGENTS.md`, `AGENTS.override.md` preferred. Under the config root the sessions are
+  // read from.
   sandboxKnowledge: () => {
     const home = codexHome();
     const instructionsHost = [path.join(home, "AGENTS.override.md"), path.join(home, "AGENTS.md")].find((file) => fs.existsSync(file));
@@ -90,15 +86,11 @@ export const codexAgent: AgentDefinition = {
     };
   },
   sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
-  // Observed: setup and onboarding total a few hundred bytes before the first real redraw, one
-  // ~700-900 byte chunk. Unverified for a logged-in start, which may draw less.
+  // Above what setup and onboarding print before the first real redraw.
   createIsSessionReady: () => createByteThresholdCheck(600),
   // See AgentDefinition.questionOutlivesTurn.
   questionOutlivesTurn: true,
-  // A second byte would land mid-shutdown and kill it.
+  // One Ctrl+C clears a non-empty composer and quits on an empty one; a second byte would land
+  // mid-shutdown, where ConPTY turns it into a CTRL_C_EVENT that kills the shutdown.
   quitPresses: 1
-  // Measured at 0.153.4: Codex reads \x03 as a byte — it clears a non-empty composer, and quits
-  // (exit 0) on an empty one.
-  //
-  // Resize: see FULLSCREEN_ARGS.
 };

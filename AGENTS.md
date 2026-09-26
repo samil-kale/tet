@@ -10,6 +10,10 @@ in two clicks belongs in an agent or a shell, not in a new dialog.
 This file holds rules of conduct, cross-file invariants and where things live. A reason that fits
 one file is a comment at that site, not an entry here. Adding here means cutting.
 
+Comments, here and in code, say what holds and why, in a sentence: never how it was found, what
+was measured, history, dates, version numbers or links. An agent's tested version is its
+`verifiedVersion` alone.
+
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI —
 classic layout, Dark Modern's palette, tab semantics, theme names; **Monaco** for the editor tab.
 
@@ -33,10 +37,10 @@ project's terminals.
   shell — `App`, `Startup`, `styles.css`, `shortcuts.ts`.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
   documents every field). Shared code imports only the registry (`agents/index.ts`), `agent.ts`'s
-  types and the agent-neutral `ask.ts` and `system-prompt.ts`. A new agent is a new folder, one
-  registry entry, its id in `AGENT_IDS` (and `SBX_AGENT_IDS`, `src/shared/types.ts`), and one case
-  in `AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only agent-specific code outside
-  `agents/`; user-facing text may name agents).
+  types and the agent-neutral `ask.ts` and `system-prompt.ts`. A new agent must fit the data model
+  (below) and is a new folder, one registry entry, its id in `AGENT_IDS` (and `SBX_AGENT_IDS`,
+  `src/shared/types.ts`), and one case in `AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only
+  agent-specific code outside `agents/`; user-facing text may name agents).
 - **A project is its repository and its worktrees** — the words for them, in code, texts and
   comments alike. The repository is the folder the user opened, holding `.git`; never call it a
   worktree (nor "main worktree"), and there is no noun for both: where one of them is meant — where
@@ -45,34 +49,62 @@ project's terminals.
   said as "the repository or a worktree". A worktree has no id of its own; one string
   (`projectRefKey`) only where a single key is unavoidable.
 - A project needs git — a folder without it is refused. Its id is `tet.id` in the repository's own
-  git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees, and everything TET keeps
-  of it lies in `~/.tet/projects/<id>/` (`project-dirs.ts`: `sandboxes/repository/<agent>` and
-  `sandboxes/<key>/<agent>`, the worktrees in `worktrees/<key>`).
-  Nothing a sandbox must not see ever goes there: sbx is granted the folder whole.
+  git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees; what TET keeps of it is
+  laid out in the data model below.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
   the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing or malformed
   means nothing configured. A worktree has none of its own: it takes its project's (`configRoot`)
   and its sbx values, forwards none of the ports, and changes nothing of it — its row, Explorer and
   COMMANDS offer no settings, `tet-ctl` refuses them.
 
+## Data model: `~/.tet`
+
+Everything TET keeps lives here (`data-root.ts`, `project-dirs.ts`). The layout is fixed: every
+change, and every agent added, fits it.
+
+```
+~/.tet/
+  settings.json  environment.json  projects.json  sbx-local.json  *-accounts.json  git-logins.json
+  bin/                             tet-ctl, first on every tab's PATH
+  askpass/                         for TET's own git runs only
+  update/
+  config/<agent>/                  a host tab's setup, once per agent (HostSetups)
+  projects/<id>/                   id: the repository's `tet.id`
+    sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
+      sessions/                    the host side of its session mounts
+    sandboxes/<key>/<agent>/       a worktree's
+    worktrees/<key>/               a worktree TET made
+```
+
+- **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
+  `projects/<id>/` only what a sandbox may see, since sbx is granted it whole — never a setting, a
+  token or an sbx value. Removing a project deletes its folder.
+- **A host setup knows no project.** `prepareSpawn` is handed no project path and writes only into
+  `config/<agent>`: one set of files serves every repository and worktree, rewritten once when a
+  setting in it changes.
+- **Sessions stay the agent's own.** TET lists them from the agent's own store, per repository or
+  worktree (`SessionProvider`), and keeps no list of them of its own.
+- **A sandbox is read without starting it.** Its setup lies in its `sandboxes/…/<agent>` folder,
+  its sessions reach the host through `SandboxSessions.mounts` into `sessions/`, listed by the same
+  code as the host's.
+- **An agent that cannot fit is not added**: one needing project data on the host, session records
+  kept by TET, or a running process to list its sessions. Bending the model for one agent is the
+  user's call.
+
 ## Never assume the agents behave alike
 
 Claude Code, Codex and pi are three products in the same kind of tab, alike in nothing:
 readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw. So
 anything about how a CLI is driven is an `AgentDefinition` field with a value per agent (or what
-its `prepareSpawn` returns, e.g. the fullscreen args that make a resize redraw in place),
-commented there with how it was found. **Measured through this same pty** is preferred, never
-taken from another agent; a value only docs or source could give says so in its comment. The one
-exception is the right mouse button, decided per click by the terminal's mouse mode
-(`terminal-views.ts`), not per agent.
+its `prepareSpawn` returns, e.g. the fullscreen args that make a resize redraw in place), found
+through this same pty for that agent, never taken from another. The one exception is the right
+mouse button, decided per click by the terminal's mouse mode (`terminal-views.ts`), not per agent.
 
 ## Never touch the user's agent configuration
 
-Everything TET generates for an agent lives under `~/.tet` (`data-root.ts`) and is pointed at from
-outside — a host tab's setup once per agent in `~/.tet/config/<agent>` (`data-root.ts`), a
-sandboxed tab's in the `sandboxes/…/<agent>` folder of its repository or worktree
-(`project-dirs.ts`), each side handed only its own; only pasted or dropped files go to the OS temp
-directory (`ipc/files.ts`).
+Everything TET generates for an agent lives under `~/.tet` (the data model above) and is pointed
+at from outside, each side — host and sandbox — handed only its own folder; only pasted or dropped
+files go to the OS temp directory (`ipc/files.ts`).
 `prepareSpawn` and `prepareSandboxSpawn` are the only places an agent writes configuration;
 beyond them it touches only its own sessions: when the user renames or deletes one, and the one a
 background question leaves (`cleanupAsk`).
@@ -115,8 +147,8 @@ others.
   project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>`; the key is
   given once and never changes, and every worktree TET made opens with its project, listed under
   its row (`Project.worktrees`) and in the branch tree's WORKTREES (`RepositoryState.worktrees`,
-  `WorktreeInfo.key`), both read off the disk. One made elsewhere (plain `git worktree add`, an
-  older TET) has no key: shown greyed, never opened, never renamed or deleted by TET. A worktree
+  `WorktreeInfo.key`), both read off the disk. One made elsewhere (plain `git worktree add`) has
+  no key: shown greyed, never opened, never renamed or deleted by TET. A worktree
   and its branch are one: made together at the default branch (`worktreeBase`), named by the
   branch, deleted together, and never switched; renaming it renames the branch alone, its folder
   and terminals stay. Its base is tet's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`).
@@ -260,7 +292,7 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 ## sbx: agent tabs in a Docker sandbox
 
 Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx.ts` drives
-the `sbx` CLI; its comments are the record of what was measured.
+the `sbx` CLI.
 
 - **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error` — the
   host would bypass an organization's policy.

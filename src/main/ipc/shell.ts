@@ -81,8 +81,7 @@ export function registerShellIpc({
    *
    * Redirects are followed by hand (`fetchHttpsImage`): a followed one is a fetch of its own, and
    * left to `net.fetch` it would carry a README's image off https and onto whatever host the
-   * redirect names — the machine's own network included, which is what fetching here instead of
-   * in the page was meant to prevent.
+   * redirect names — the machine's own network included, which fetching here keeps it from.
    */
   ipcMain.handle("shell:fetch-image", async (_event, url: string): Promise<string | null> => {
     try {

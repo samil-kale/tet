@@ -16,7 +16,7 @@ import { runProcess } from "./run-process";
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
 
 const CHECK_TIMEOUT_MS = 15_000;
-/** The archive is over 100 MB. */
+/** Generous for a large archive. */
 const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 /** An updater lives for a minute or two at most (tet-update.ts's waits). */
 const UPDATER_POLL_MS = 2000;
@@ -72,8 +72,7 @@ function reportLastUpdate(notify: Notify): void {
  * Removes earlier sessions' unpacked updates. Best effort: on win32 the updater may still hold its
  * executable briefly after writing its result. Awaited before the first check, whose `stage` may
  * unpack into the swept folder. Removed with original-fs: electron's fs opens `app.asar` as an
- * archive and then fails its rm with EBUSY (measured, electron 43, win32). A download cut short
- * stays for `stage` to continue.
+ * archive and fails its rm with EBUSY. A download cut short stays for `stage` to continue.
  */
 async function sweepUpdateDir(asset: string): Promise<void> {
   let entries: string[];
@@ -109,7 +108,7 @@ async function latestVersion(releasesUrl: string): Promise<string | undefined> {
   }
 }
 
-/** Also unpacks the zip: Windows' tar (since 10 1803) is bsdtar. */
+/** Also unpacks the zip: Windows' tar is bsdtar. */
 async function unpack(archive: string, into: string): Promise<void> {
   const tar =
     process.platform === "win32" ? path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
@@ -141,7 +140,7 @@ async function stage(releasesUrl: string, asset: string, version: string): Promi
   await originalFs.promises.rm(dir, { recursive: true, force: true });
   await fs.promises.mkdir(dir, { recursive: true });
   const archive = archivePath(version, asset);
-  // Parts of versions since overtaken.
+  // Parts of versions overtaken.
   for (const entry of await fs.promises.readdir(updateDir())) {
     if (entry.endsWith(`-${asset}`) && entry !== path.basename(archive)) {
       await fs.promises.rm(path.join(updateDir(), entry), { force: true });

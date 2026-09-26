@@ -4,7 +4,7 @@ import { SeverityIcon } from "./icons";
 import { createStore, useStore } from "./store";
 import { useTopDialog } from "./window-covered";
 
-/** VS Code's durations (notificationsToasts.ts). */
+/** VS Code's durations. */
 const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_000, error: 15_000 };
 
 interface ShownNotice {

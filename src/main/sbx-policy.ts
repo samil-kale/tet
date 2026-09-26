@@ -1,14 +1,13 @@
 /**
  * sbx's filesystem policy, evaluated in tet: sbx has `policy check network` but no filesystem
- * counterpart (0.42.1, none up to 0.43.0-rc3). This only predicts sbx's own enforcement, for the
- * dialog's marks and what a Save or a spawn leaves out (sbx.ts's readSbxProblems); a mount sbx
- * refuses all the same is left out and told too (prepareSbxRun). Pure, so testable against
- * measured output.
+ * counterpart. This only predicts sbx's own enforcement, for the dialog's marks and what a Save or
+ * a spawn leaves out (sbx.ts's readSbxProblems); a mount sbx refuses all the same is left out and
+ * told too (prepareSbxRun). Pure, so testable.
  *
- * Grammar per Docker's docs ("Filesystem rules"): `*` within one segment, `**` any depth, `~` home
- * on every platform, `*:` any Windows drive, a pattern matches only its own path format, no env
- * expansion. Undocumented, decided leniently (a wrong blocker costs more than a refused mount):
- * case is ignored on win32, and `dir/**` covers `dir`.
+ * Grammar: `*` within one segment, `**` any depth, `~` home on every platform, `*:` any Windows
+ * drive, a pattern matches only its own path format, no env expansion. Where sbx leaves it open,
+ * decided leniently (a wrong blocker costs more than a refused mount): case is ignored on win32,
+ * and `dir/**` covers `dir`.
  */
 
 import type { SbxAccess, SbxStatus } from "../shared/types";
@@ -17,10 +16,9 @@ import { isRecord } from "./json-file";
 type FilesystemAction = "read" | "write";
 
 /**
- * The organization in `sbx policy ls`'s first line on a governed account: "Governance: Managed by
- * prehcmservice | Sync: OK, last synced 08:18:18 | Hidden: 34 inactive rules. …" (measured,
- * 0.42.1). An ungoverned account has no such line. sbx words a failed lookup "managed by unknown
- * organization (lookup failed)", which is shown as it stands.
+ * The organization in `sbx policy ls`'s first line on a governed account ("Governance: Managed by
+ * <org> | …"). An ungoverned account has no such line. sbx words a failed lookup "managed by
+ * unknown organization (lookup failed)", which is shown as it stands.
  */
 export function parseGovernance(policyList: string): string | undefined {
   return /^Governance:\s*Managed by\s+([^|\r\n]+?)\s*(?:\||$)/im.exec(policyList)?.[1];
@@ -131,9 +129,8 @@ function patternRegExp(pattern: string, flavor: PathFlavor): RegExp {
 
 /**
  * Whether sbx would mount `hostPath` with `access`. A matching deny wins; else an allow must match
- * (default deny): read-write needs a write allow, read-only a read *or* write allow. Docker's docs
- * ask for read plus write and read respectively, but a write-only grant (`C:\**`, `/**`) was
- * measured to allow both (sbx 0.42.1) — the binary decides.
+ * (default deny): read-write needs a write allow, read-only a read *or* write allow — a write-only
+ * grant allows both.
  */
 export function isMountAllowed(rules: FilesystemRule[], hostPath: string, access: SbxAccess, flavor: PathFlavor): boolean {
   const target = normalize(hostPath, flavor);

@@ -21,7 +21,7 @@ import { SANDBOX_HOME } from "../../terminals/hook-target";
 
 /**
  * pi keeps one JSONL transcript per session, `<ISO timestamp, ":" and "." as "-">_<uuid>.jsonl`,
- * in a directory encoding the cwd (encodeCwd). Format as pi 0.85.1 wrote it:
+ * in a directory encoding the cwd (encodeCwd):
  *
  * - line 1 is the header `{"type":"session","version":3,"id":"<uuid>","timestamp":"<ISO>",
  *   "cwd":"<path>"}`; its id is what `--session` matches
@@ -59,10 +59,8 @@ export const piSessionProvider: SessionProvider = {
     );
   },
 
-  /**
-   * The sandbox's default `~/.pi/agent/sessions` (`PI_CODING_AGENT_DIR` is never set). Measured: no
-   * other mount or volume under pi's config dir, and `auth.json` sits beside it, not in it.
-   */
+  /** The sandbox's default `~/.pi/agent/sessions` (`PI_CODING_AGENT_DIR` is never set); `auth.json`
+   *  sits beside it, not in it. */
   sandbox: {
     mounts: [{ sub: "sessions", target: `${SANDBOX_HOME}/.pi/agent/sessions` }],
     list: (root, cwd) => listIn(path.join(root, "sessions"), cwd, path.posix),
@@ -114,9 +112,8 @@ async function removeIn(root: string, cwd: string, sessionId: string, paths = pa
 }
 
 /**
- * Mirrors pi's `/name` (appendSessionInfo): a `session_info` entry parented to the last entry.
- * Measured safe while pi runs on the file (it keeps its in-memory leaf as parent, the file stays
- * valid); a running pi shows the name only after a restart.
+ * Mirrors pi's `/name` (appendSessionInfo): a `session_info` entry parented to the last entry. Safe
+ * while pi runs on the file; a running pi shows the name only after a restart.
  */
 async function renameIn(root: string, cwd: string, sessionId: string, title: string, paths = path): Promise<void> {
   const trimmed = requireTitle(title);
@@ -169,9 +166,8 @@ export function encodeCwd(cwd: string, paths: path.PlatformPath = path): string 
 }
 
 /**
- * The repository's transcript directory, if pi ever ran here. Measured on win32: the drive letter's
- * case follows the spawn (`c:\…` → `--c--Users…`), folder names are canonical — findEncodedDir
- * matches case-insensitively.
+ * The repository's transcript directory, if pi ever ran here. On win32 the drive letter's case
+ * follows the spawn, so findEncodedDir matches case-insensitively.
  */
 function findSessionDir(root: string, cwd: string, paths = path): Promise<string | undefined> {
   return findEncodedDir(root, encodeCwd(cwd, paths));
@@ -271,7 +267,7 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
 
 /**
  * Reads backwards for the two entries whose *last* occurrence counts, to the file's start if needed
- * — a rename 300 KB ago is still the name.
+ * — an old rename is still the name.
  */
 function scanTail(filePath: string): Promise<ScannedTail<TranscriptTail>> {
   return scanTranscriptTail(filePath, scanCache, {
@@ -303,7 +299,7 @@ function readTailEntries(lines: string[], tail: TranscriptTail): void {
       tail.name = typeof entry.name === "string" ? entry.name.trim() : "";
     } else if (tail.turnEndedAt === undefined && entry.type === "message") {
       const message = entry.message as Record<string, unknown> | undefined;
-      // pi writes each assistant message as it ends, and one calling a tool is mid-turn (measured).
+      // pi writes each assistant message as it ends, and one calling a tool is mid-turn.
       if (message?.role !== "assistant" || message.stopReason === "toolUse") {
         continue;
       }

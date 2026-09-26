@@ -132,8 +132,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git pane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
-  // Pane defaults and limits; both side-pane views share the two below ("git-panels" predates the
-  // files view).
+  // Pane defaults and limits; both side-pane views share the two below.
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
   const [sidePaneWidth, setSidePaneWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
@@ -146,8 +145,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   );
   /**
    * Whether the side pane is out, and whether it shows files instead of git — remembered like a
-   * pane size. One view at a time, as VS Code's Explorer and Source Control ("git-pane" predates
-   * the files view).
+   * pane size. One view at a time, as VS Code's Explorer and Source Control.
    */
   const [sidePaneOpen, setSidePaneOpen] = usePaneToggle("git-pane", false);
   const [filesShown, setFilesShown] = usePaneToggle("side-pane-files", false);

@@ -134,7 +134,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   }
   const electronPath: string = createRequire(__filename)("electron");
   // Not a Claude Code session's own variables, when the tests run inside one (an agent tab): an
-  // interactive `claude` started with them answers but writes no transcript (measured, 2.1.273).
+  // interactive `claude` started with them answers but writes no transcript.
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^CLAUDE(CODE$|_CODE_|_PID$|_EFFORT$)/.test(key)));
   const child = spawn(electronPath, args, {
     env: { ...inherited, [CONTROL_ENV.token]: token, ELECTRON_RUN_AS_NODE: undefined },

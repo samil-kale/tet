@@ -143,8 +143,8 @@ export const Explorer = memo(function Explorer({
   );
 
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
-  // Deferred: a short query keeps most of the tree, all of it expanded, and rendering that on every
-  // keystroke held up the field.
+  // Deferred: a short query keeps most of the tree, all of it expanded — too much to render on
+  // every keystroke.
   const query = useDeferredValue(filter.trim().toLowerCase());
   const filtering = query.length > 0;
   // The clear button is the header's; only the tree knows whether there is a filter to clear.

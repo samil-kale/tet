@@ -14,12 +14,9 @@ export const HOST_TARGET: HookTarget = { posix: process.platform !== "win32", em
 
 export const SANDBOX_TARGET: HookTarget = { posix: true, embed: toContainerPath };
 
-/** A host path as sbx mounts it in a sandbox (measured): `C:\Users\x` → `/c/Users/x`; macOS and
- *  Linux paths are unchanged.
- *
- *  Spelled as on disk, not as asked (measured, 2026-09-14): a folder created as `tet` mounts at
- *  `…/tet` even when asked as `TET`, and the sandbox is case-sensitive. realpath also resolving
- *  junctions, subst and mapped drives costs nothing: sbx 0.42.1 accepts none of them anyway. */
+/** A host path as sbx mounts it in a sandbox: `C:\Users\x` → `/c/Users/x`; macOS and Linux paths
+ *  are unchanged. Spelled as on disk, not as asked: sbx mounts a folder under its on-disk name, and
+ *  the sandbox is case-sensitive. */
 export function toContainerPath(hostPath: string): string {
   if (process.platform !== "win32") {
     return hostPath;
@@ -41,8 +38,8 @@ function onDiskCase(hostPath: string): string {
   }
 }
 
-/** The sandbox user's home in every template — verified in Claude, Codex and pi's
- *  community kit. A mount target must be absolute (`sbx mount --help`): `~` never expands. */
+/** The sandbox user's home in every template. A mount target must be absolute: `~` never
+ *  expands. */
 export const SANDBOX_HOME = "/home/agent";
 
 /** The host side of an agent's session mounts (SessionProvider.sandbox): inside its sandbox folder

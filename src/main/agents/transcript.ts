@@ -12,7 +12,7 @@ import type { AgentSessionInfo } from "./agent";
 /**
  * How much of a transcript either scan reads. Bounds a pathological single line; forwards it also
  * has to hold what the agent writes before the first prompt (Codex's `session_meta` carries the
- * whole base instructions, measured at 0.14x of this).
+ * whole base instructions).
  */
 export const TRANSCRIPT_SCAN_BYTES = 256 * 1024;
 

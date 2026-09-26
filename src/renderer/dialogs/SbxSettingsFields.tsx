@@ -230,8 +230,8 @@ function valueNames(rows: { env: string; value: string; from?: string }[], store
 /**
  * What of the rows cannot be applied here (sbx-settings.ts's readProjectSbxProblems), asked as soon
  * as the dialog has its rows (`ready`), whatever tab shows — so a row that cannot be applied is
- * marked from the start, its tab too — then again once typing pauses on a change (~0.5 s an sbx
- * call). An answer overtaken by an edit is dropped. Save leaves such a row out.
+ * marked from the start, its tab too — then again once typing pauses on a change, since each
+ * check is an sbx call. An answer overtaken by an edit is dropped. Save leaves such a row out.
  */
 export function useSbxProblems(projectId: string, state: FieldsState, stored: SbxStoredLocal, ready: boolean): SbxProblems {
   const [problems, setProblems] = useState<SbxProblems>({});

@@ -7,13 +7,12 @@ import { claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
 import { claudeConfigDir, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 
-/** Appended to Claude Code's own system prompt for this process (measured, see system-prompt.ts). */
+/** Appended to Claude Code's own system prompt for this process (see system-prompt.ts). */
 const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
 
 /**
  * Fullscreen, always: Claude Code turns it off machine-wide after launches that died while it
- * booted (terminal-session.ts), and this variable overrides that (its own message, 2.1.282:
- * "fullscreen disabled: ... /tui fullscreen or CLAUDE_CODE_NO_FLICKER=1 to override").
+ * booted (terminal-session.ts), and this variable overrides that.
  */
 const FULLSCREEN_ENV = { CLAUDE_CODE_NO_FLICKER: "1" };
 
@@ -46,10 +45,11 @@ export const claudeAgent: AgentDefinition = {
       return { args: systemPromptArgs(true) };
     }
   },
-  // See AgentDefinition.sandboxEnv.
+  // Claude Code falls back to its classic renderer where the sandbox's network rule blocks its
+  // feature flags; this forces fullscreen.
   sandboxEnv: ["CLAUDE_CODE_NO_FLICKER=1"],
-  // Measured: `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/CLAUDE.md` — under the config
-  // root the sessions are read from.
+  // `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/CLAUDE.md` — under the config root the
+  // sessions are read from.
   sandboxKnowledge: () => ({
     skills: [{ host: path.join(claudeConfigDir(), "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
     plugins: [{ host: path.join(claudeConfigDir(), "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
@@ -57,8 +57,7 @@ export const claudeAgent: AgentDefinition = {
   }),
   // No `sharedSkillsTarget`: Claude Code reads only its own skills folder, and putting
   // `~/.agents/skills` there would stand in for it.
-  // Measured: the startup handshake is under 150 bytes, the main UI one ~850-byte chunk; a higher
-  // threshold than 500 is not reliably reached.
+  // Above the start-up handshake, below the chunk that draws the main UI.
   createIsSessionReady: () => createByteThresholdCheck(500),
   // The first only offers to exit, the second takes it up.
   quitPresses: 2

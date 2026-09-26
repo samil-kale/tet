@@ -8,12 +8,11 @@ import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
  * review" screen, so tet reproduces the hash and passes it with the hook.
  *
  * `timeout` is hashed at its effective value, 600 (the default for every event tet uses). Keys
- * sort recursively alphabetical (`matcher` after `hooks`). `async` stays `false`: the build
- * refuses async hooks ("async hooks are not supported yet") and drops them from the trust listing.
+ * sort recursively alphabetical (`matcher` after `hooks`). `async` stays `false`: Codex refuses
+ * async hooks and drops them from the trust listing.
  *
- * The serialization is Codex's private, unversioned one. A changed normalization only shows the
- * hook as "Modified" and the review screen once. Cross-check
- * `hooks/src/engine/discovery.rs::hook_hash` and `config/src/fingerprint.rs`.
+ * The serialization is Codex's private one; a changed normalization only shows the hook as
+ * "Modified" and the review screen once.
  */
 export function hookTrustedHash(eventLabel: string, command: string, matcher?: string): string {
   const identity: Record<string, unknown> = { event_name: eventLabel };
@@ -50,8 +49,7 @@ function sessionFlagsSource(target: HookTarget): string {
 
 /**
  * A hook's trust key: `handlerIndex` within the event's one matcher group (`group_index` always
- * `0`). Each handler is hashed as if alone: verified against Codex's `hooks/list`, a second
- * handler's key is `…:0:1`.
+ * `0`). Each handler is hashed as if alone; a second handler's key is `…:0:1`.
  */
 function trustKey(eventLabel: string, handlerIndex: number, target: HookTarget): string {
   return `${sessionFlagsSource(target)}:${eventLabel}:0:${handlerIndex}`;
@@ -81,9 +79,8 @@ interface HookEntry {
 
 /**
  * One `-c hooks={…}` value with every hook and its trust entry: separate `-c hooks.…` arguments do
- * not reliably merge (verified: the state entry silently did not apply), and `-c`'s key path splits
- * on every `.`, corrupting a trust key like `config.toml`. Inside one value, a real TOML parser
- * reads the quoted key.
+ * not reliably merge, and `-c`'s key path splits on every `.`, corrupting a trust key like
+ * `config.toml`. Inside one value, a real TOML parser reads the quoted key.
  */
 function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
   const hookGroups = entries
@@ -109,12 +106,12 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  * `tet-ctl hook <event>` (hook-command.ts), and `-c` applies to this process only — Codex's
  * `config.toml` and `hooks.json` are never touched.
  *
- * One command per event: `UserPromptSubmit`'s plain stdout would be appended to the prompt
- * (`hooks/src/events/user_prompt_submit.rs`), so the `prompt-submit` answer stays empty. Stop must
- * write one JSON value and gets `{}` (control-server.ts's `HOOK_STDOUT`).
+ * One command per event: `UserPromptSubmit`'s plain stdout would be appended to the prompt, so the
+ * `prompt-submit` answer stays empty. Stop must write one JSON value and gets `{}`
+ * (control-server.ts's `HOOK_STDOUT`).
  *
  * TET's system prompt is `SessionStart`'s added context, not `-c developer_instructions`, which
- * replaces the user's own; `-c hooks` adds to the user's hooks (both measured, 0.154.0).
+ * replaces the user's own; `-c hooks` adds to the user's hooks.
  *
  * No end-of-turn guard: a subagent-only turn reports through `SubagentStop`, which tet does not hook.
  */

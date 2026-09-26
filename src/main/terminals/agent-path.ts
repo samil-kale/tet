@@ -67,7 +67,7 @@ export function win32AgentDirs(env: NodeJS.ProcessEnv, npmPrefix: string | undef
   dirs.push(env.SCOOP ? path.join(env.SCOOP, "shims") : env.USERPROFILE ? path.join(env.USERPROFILE, "scoop", "shims") : "");
   if (env.LOCALAPPDATA) {
     dirs.push(path.join(env.LOCALAPPDATA, "Microsoft", "WinGet", "Links"));
-    // Docker Sandboxes' winget installer writes to the user PATH, not a WinGet Links shim (verified).
+    // Docker Sandboxes' winget installer writes to the user PATH, not a WinGet Links shim.
     dirs.push(path.join(env.LOCALAPPDATA, "DockerSandboxes", "bin"));
   }
   return dirs.filter(Boolean);
@@ -75,8 +75,8 @@ export function win32AgentDirs(env: NodeJS.ProcessEnv, npmPrefix: string | undef
 
 /**
  * A global prefix moved with `npm config set prefix`, read as npm reads it: env before `~/.npmrc`,
- * `${VAR}` expanded. Never by asking npm — `npm config get prefix` through cmd.exe measured as a
- * noticeable part of every start, for what is nearly always the `%APPDATA%\npm` default. win32 only.
+ * `${VAR}` expanded. Never by asking npm: `npm config get prefix` through cmd.exe slows every start,
+ * for what is nearly always the `%APPDATA%\npm` default. win32 only.
  */
 export function npmGlobalPrefix(env: NodeJS.ProcessEnv, npmrc: string | undefined = readUserNpmrc()): string | undefined {
   const fromEnv = env.NPM_CONFIG_PREFIX ?? env.npm_config_prefix;
@@ -120,10 +120,9 @@ export function shellInvocation(shell: string): string[] {
  * directories like nvm's `node/<v>/bin`. Timeout-bounded so a hanging profile cannot hold startup;
  * `TET_RESOLVING_ENVIRONMENT` lets a profile skip its slow part.
  *
- * SIGKILL, because an interactive shell ignores SIGTERM (measured: a hung bash outlived the
- * timeout). It suffices: measured, the timeout settles the call even with a profile's background
- * process holding or writing stdout, or in its own session — so no process-group kill, which would
- * take down what the profile deliberately started.
+ * SIGKILL, because an interactive shell ignores SIGTERM. The timeout settles the call even with a
+ * profile's background process holding stdout, so no process-group kill, which would take down what
+ * the profile deliberately started.
  */
 function loginShellPath(): Promise<string[]> {
   return new Promise((resolve, reject) => {

@@ -12,10 +12,7 @@ interface AgentIconProps {
   className?: string;
 }
 
-/**
- * Claude Code's own extension icon (sbc-claude-code/media/icon.svg). Drawn `LARGER`: dividing the
- * measured extent tightens the crop, growing the glyph in the shared box.
- */
+/** Claude Code's own extension icon, drawn `LARGER` to grow the glyph in the shared box. */
 function ClaudeIcon({ className }: { className?: string }) {
   return (
     <FillSvg className={className} extent={22.15 / LARGER} cx={12} cy={12.14 - 1.85} grid={24}>
@@ -31,10 +28,9 @@ function ClaudeIcon({ className }: { className?: string }) {
 
 
 /**
- * Codex CLI's own icon (not OpenAI's mark): a prompt in a circle, as terminaltrove.com lists it,
- * redrawn in `ShellIcon`'s stroke style since no first-party SVG exists. Measured: the bbox is the
- * r=6 circle at (8, 8), so extent 13.6 (diameter plus the 1.6 stroke). Drawn `LARGER`: an outline
- * circle reads smaller than the filled marks beside it at the same extent.
+ * Codex CLI's own icon (not OpenAI's mark): a prompt in a circle, redrawn in `ShellIcon`'s stroke
+ * style since no first-party SVG exists. Drawn `LARGER`: an outline circle reads smaller than the
+ * filled marks beside it at the same extent.
  */
 function CodexIcon({ className }: { className?: string }) {
   return (
@@ -47,17 +43,12 @@ function CodexIcon({ className }: { className?: string }) {
 }
 
 /**
- * pi's mark is a 4×4 grid; at TARGET_EXTENT (10.4px in the 13px box) a cell is 2.6px and blurs.
- * `crispEdges` snaps edges to pixels, and at exactly 10px that comes out even: cells of 2, 3, 2, 3,
- * the hole a square 2×2. 8px reads too small, 11px too heavy — verified by reading the rendered
- * pixels at 13px.
+ * pi's mark is a 4×4 grid, which blurs at TARGET_EXTENT. `crispEdges` snaps its edges to pixels,
+ * and at 10px of the box the cells come out even.
  */
 const PI_PIXEL_CELLS = 10 / 10.4;
 
-/**
- * pi's own mark (pi.dev/logo-auto.svg) on its native 800 grid, fill only. Measured: both axes run
- * 165.29–634.72, so the extent is 469.43 square about (400, 400).
- */
+/** pi's own mark on its native 800 grid, fill only. */
 function PiIcon({ className }: { className?: string }) {
   return (
     <FillSvg
@@ -79,8 +70,7 @@ function PiIcon({ className }: { className?: string }) {
   );
 }
 
-/** The shell has no upstream icon: a plain prompt glyph. Measured: extent 13.4, centred 1.29
- *  above the grid's middle. */
+/** The shell has no upstream icon: a plain prompt glyph. */
 function ShellIcon({ className }: { className?: string }) {
   return (
     <Svg className={className} extent={13.4} cy={8 - 1.29}>

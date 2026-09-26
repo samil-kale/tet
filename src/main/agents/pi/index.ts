@@ -8,22 +8,21 @@ import { writePiExtension } from "./extension";
 import { piAgentDir, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 
-/** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32
- *  (measured, see system-prompt.ts). */
+/** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32 (see
+ *  system-prompt.ts). */
 const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
 
 /**
- * pi's fullscreen TUI (since 0.84, `--tui-mode`, this run only — settings.json untouched): it
- * enters the alternate screen and owns the viewport, so a resize redraws in place. It also turns on
+ * pi's fullscreen TUI (`--tui-mode`, this run only — settings.json untouched): it enters the
+ * alternate screen and owns the viewport, so a resize redraws in place. It also turns on
  * mouse reporting (`?1000;1002;1006h`): pi scrolls, selects and pastes on a right click itself
  * (terminal-views.ts).
  */
 const FULLSCREEN_ARGS = ["--tui-mode", "fullscreen"];
 
 /**
- * pi (pi.dev, `@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts,
- * reporting turns through a generated extension. Every value here measured through tet's pty
- * against pi 0.85.1.
+ * pi (`@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts, reporting
+ * turns through a generated extension.
  *
  * Deliberately unset: `PI_CODING_AGENT_DIR` (would move the user's sessions and auth) and
  * `PI_OFFLINE`.
@@ -38,8 +37,8 @@ export const piAgent: AgentDefinition = {
   // On win32 a `pi.cmd` npm shim, routed through cmd.exe by resolveCommand.
   versionArgs: ["--version"],
   verifiedVersion: "0.86.1",
-  // Print mode: the prompt on stdin, the answer on stdout (~2.6 s measured). `--no-session` leaves
-  // no transcript, so no cleanupAsk.
+  // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript, so
+  // no cleanupAsk.
   askArgs: ["-p", "--no-session"],
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
@@ -50,12 +49,12 @@ export const piAgent: AgentDefinition = {
       const extension = writePiExtension(paths.agentDir);
       args.push("-e", extension);
     } catch (error) {
-      // An unloadable `-e` file is fatal (measured: "Failed to load extension", exit), so an
-      // unwritten one is not passed. Swallow, never reject (see prepareSpawn).
+      // An unloadable `-e` file is fatal, so an unwritten one is not passed. Swallow, never reject
+      // (see prepareSpawn).
       console.error("[tet] could not write pi's extension:", error);
     }
     // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
-    // settings.json untouched (measured).
+    // settings.json untouched.
     args.push(...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, ...systemPromptArgs(false));
     return Promise.resolve({ args });
   },
@@ -65,17 +64,16 @@ export const piAgent: AgentDefinition = {
       // Written at the host path, read at the sandbox's: the sandbox's agentDir is mounted whole
       // (sbx.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
       // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the safety
-      // boundary, as for Claude Code. The community pi-kit does not set it (measured,
-      // docker/sbx-kits-contrib pi/spec.yaml).
+      // boundary, as for Claude Code, and the pi kit does not set it.
       return { args: ["-e", SANDBOX_TARGET.embed(extension), ...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
     } catch (error) {
       console.error("[tet] could not write pi's sandbox extension:", error);
       return { args: [...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
     }
   },
-  // Per pi's bundled docs (0.85.1): skills in `~/.pi/agent/skills` and `~/.agents/skills`,
-  // extensions in `~/.pi/agent/extensions`, `~/.pi/agent/AGENTS.md` (`AGENTS.override.md`
-  // preferred) — under the agent dir the sessions are read from.
+  // Skills in `~/.pi/agent/skills` and `~/.agents/skills`, extensions in `~/.pi/agent/extensions`,
+  // `~/.pi/agent/AGENTS.md` (`AGENTS.override.md` preferred) — under the agent dir the sessions
+  // are read from.
   sandboxKnowledge: () => {
     const agentDir = piAgentDir();
     const instructionsHost = [path.join(agentDir, "AGENTS.override.md"), path.join(agentDir, "AGENTS.md")].find((file) => fs.existsSync(file));
@@ -86,24 +84,15 @@ export const piAgent: AgentDefinition = {
     };
   },
   sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
-  // pi has no built-in kit (not in `sbx create --help` at 0.42.1), so it is the community kit
-  // (docker/sbx-kits-contrib), whose image (shell-docker plus pi, rebuilt nightly) sbx pulls on the
-  // first create — nothing installed here; home is `/home/agent` like every built-in.
-  //
-  // Verified live, 2026-09-09, sbx 0.42.1 (0.39.0 cannot read the kit's v2 manifest):
-  // - it is the *first positional*; `--kit` is deprecated there and means a mixin onto a built-in.
-  // - only `create` needs it: `sbx run` reattaches by `--name`, and `prepareSbxRun` passes plain
-  //   `pi`, the name the kit declares (and `sbx ls --json`'s `agent`).
-  // - auth is not tet's: pi has no `/login`, so its kit takes an Anthropic credential from sbx's
-  //   store (`sbx secret set anthropic`, a `claude` sandbox's OAuth login, or `claude setup-token`).
-  //   Without one the sandbox starts and every model call is a 401.
+  // pi has no built-in kit, so it is the community kit, whose image sbx pulls on the first create;
+  // home is `/home/agent` like every built-in. It is `create`'s first positional (`--kit` means a
+  // mixin); `sbx run` reattaches by `--name` with plain `pi`. Auth is not tet's: the kit takes an
+  // Anthropic credential from sbx's store, without which every model call fails.
   sandboxKit: "docker.io/sbx/pi-kit:latest",
-  // Measured startup: ~130 B handshake by 120 ms, a 1037 B chunk at ~680 ms, ~3 KB by 0.9 s. The
-  // project-trust dialog (`defaultProjectTrust: "ask"`) holds output at 1458 B until answered, so
-  // 1000 clears the handshake either way without spinning until then. Re-measured at 0.86.1 beside
-  // 0.85.1: the same shape, the handshake and everything before the first redraw well under 1000.
+  // Above the start-up handshake and below what the project-trust dialog shows while it waits for
+  // an answer.
   createIsSessionReady: () => createByteThresholdCheck(1000),
-  // One Ctrl+C clears the editor; two within 500 ms (pi's handleCtrlC) exit 0 in ~1.1 s, 700 ms
-  // apart do nothing. TET's 250 ms gap and 2 s grace fit (0.86.1: exit 0 within 500 ms of the first).
+  // One Ctrl+C clears the editor; two in quick succession exit, which TET's gap between presses
+  // meets.
   quitPresses: 2
 };

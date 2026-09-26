@@ -40,8 +40,8 @@ export function readHeadBranch(root: string): string | undefined {
 
 /**
  * A linked worktree's main worktree, the folder holding the common `.git`; undefined otherwise. In
- * on-disk spelling, as `git rev-parse --show-toplevel` gives a project's path (measured on win32),
- * so the two compare as strings.
+ * on-disk spelling, as `git rev-parse --show-toplevel` gives a project's path, so the two compare
+ * as strings.
  */
 export function readMainWorktree(root: string): string | undefined {
   const commonDir = readLinkedGitDir(root)?.commonDir;
