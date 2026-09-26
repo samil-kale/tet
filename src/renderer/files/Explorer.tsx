@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { ExplorerListing, FileChange, GitActionResult, Project } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
 import type { FileAct, FileAsk } from "../git/run-action";
@@ -141,7 +141,9 @@ export const Explorer = memo(function Explorer({
   );
 
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
-  const query = filter.trim().toLowerCase();
+  // Deferred: a short query keeps most of the tree, all of it expanded, and rendering that on every
+  // keystroke held up the field.
+  const query = useDeferredValue(filter.trim().toLowerCase());
   const filtering = query.length > 0;
   // The clear button is the header's; only the tree knows whether there is a filter to clear.
   useEffect(() => onFiltering(filtering), [filtering, onFiltering]);

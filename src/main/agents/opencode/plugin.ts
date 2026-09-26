@@ -1,8 +1,8 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import writeFileAtomic from "write-file-atomic";
 import { sandboxHookDir, type HookTarget } from "../../terminals/hook-target";
+import { writeIfChanged } from "../../write-if-changed";
 import { renderHookReport } from "../hook-report";
 import { systemPrompt } from "../system-prompt";
 
@@ -55,20 +55,6 @@ export function sessionsDir(agentDir: string): string {
 
 export function renameDir(agentDir: string): string {
   return path.join(agentDir, "rename");
-}
-
-/** Writes `contents` renamed into place, and only when they differ from the file's: a running
- *  opencode may be reading it, and reloads what changed. */
-export function writeIfChanged(file: string, contents: string): void {
-  let existing: string | undefined;
-  try {
-    existing = fs.readFileSync(file, "utf8");
-  } catch {
-    existing = undefined;
-  }
-  if (existing !== contents) {
-    writeFileAtomic.sync(file, contents);
-  }
 }
 
 /** Unique per repository in a shared plugins dir. */

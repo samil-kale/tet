@@ -180,7 +180,8 @@ export const ChangesList = memo(function ChangesList({ project, state, act, ask,
   if (prunedFor !== changes) {
     setPrunedFor(changes);
     setSelected((current) => {
-      const kept = current.filter((path) => changes.some((change) => change.path === path));
+      const changed = new Set(changes.map((change) => change.path));
+      const kept = current.filter((path) => changed.has(path));
       return kept.length === current.length ? current : kept;
     });
   }
@@ -247,6 +248,9 @@ export const ChangesList = memo(function ChangesList({ project, state, act, ask,
     return entries;
   };
 
+  // Asked per row: `includes` made a long list with a long selection quadratic.
+  const selectedSet = new Set(selected);
+
   return (
     <div className="changes-list">
       <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
@@ -254,7 +258,7 @@ export const ChangesList = memo(function ChangesList({ project, state, act, ask,
         {visible.map((change) => (
           <button
             key={change.path}
-            className={`tree-item change-item${selected.includes(change.path) ? " selected" : ""}`}
+            className={`tree-item change-item${selectedSet.has(change.path) ? " selected" : ""}`}
             onClick={(event) => select(event, change.path)}
             onDoubleClick={() => onOpenDiff(change.path)}
             onContextMenu={(event) => {

@@ -28,6 +28,7 @@ import { SbxLocalStore } from "./sbx-local";
 import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";
 import { anyAgentInstalled } from "./requirements";
 import { resolveDataRoot } from "./data-root";
+import { migrateAgentDirs } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv, setStoredEnv } from "./terminals/pty";
 import { installUncaughtHandler, logError } from "./uncaught";
@@ -586,6 +587,7 @@ if (!app.requestSingleInstanceLock()) {
     // second. The requirements re-check (ipc/app.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepTempFiles();
+    migrateAgentDirs(dataRoot);
     // Before the first spawn; each terminal gets only a token made from it for its own tab
     // (control-token.ts). The token lives in this process only — never on disk or a command line.
     const controlToken =

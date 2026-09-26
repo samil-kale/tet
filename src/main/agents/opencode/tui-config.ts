@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { writeIfChanged } from "./plugin";
+import { writeIfChanged } from "../../write-if-changed";
 
 /**
  * `"theme": "system"` is the only way opencode takes the terminal's colours (xterm's `--vscode-*`,

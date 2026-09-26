@@ -202,23 +202,13 @@ async function readSessionNames(home: string): Promise<Map<string, string>> {
   return names;
 }
 
-/** Every `.jsonl` rollout under `sessions/`, three levels deep (`YYYY/MM/DD`). */
+/** Every `.jsonl` rollout under `sessions/`, three levels deep (`YYYY/MM/DD`). Each level's
+ *  folders read at once: one after another, a long history is a readdir per day in sequence. */
 async function listRolloutFiles(home: string): Promise<string[]> {
-  const files: string[] = [];
-  const root = sessionsRoot(home);
-  for (const year of await safeReaddir(root)) {
-    for (const month of await safeReaddir(path.join(root, year))) {
-      for (const day of await safeReaddir(path.join(root, year, month))) {
-        const dayDir = path.join(root, year, month, day);
-        for (const name of await safeReaddir(dayDir)) {
-          if (name.endsWith(".jsonl")) {
-            files.push(path.join(dayDir, name));
-          }
-        }
-      }
-    }
-  }
-  return files;
+  const subdirs = async (dirs: string[]): Promise<string[]> =>
+    (await Promise.all(dirs.map(async (dir) => (await safeReaddir(dir)).map((name) => path.join(dir, name))))).flat();
+  const dayDirs = await subdirs(await subdirs(await subdirs([sessionsRoot(home)])));
+  return (await subdirs(dayDirs)).filter((file) => file.endsWith(".jsonl"));
 }
 
 /** Rollouts read at once: a listing opens every rollout on the machine, and all at once exceeds a
@@ -284,10 +274,11 @@ export const codexSessionProvider: SessionProvider = {
 
   /**
    * Watches today's rollout folder and the name index. Its ancestors are watched too, since the
-   * day's folder may not exist yet and `fs.watch` throws on one. Not per repository: `list()`
-   * filters by cwd.
+   * day's folder may not exist yet and `fs.watch` throws on one. The folders are the machine's,
+   * not the repository's: a write to a rollout already read for another cwd is dropped — every
+   * open project's listing would read the whole tree again.
    */
-  watch(_cwd: string, onChange: () => void): () => void {
+  watch(cwd: string, onChange: () => void): () => void {
     let stopped = false;
     const watchers: fs.FSWatcher[] = [];
     const armed = new Set<string>();
@@ -329,8 +320,13 @@ export const codexSessionProvider: SessionProvider = {
       arm(path.join(root, year), () => rearm());
       arm(path.join(root, year, month), () => rearm());
       arm(dayDir, (filename) => {
-        if (filename === null || filename.endsWith(".jsonl")) {
+        if (filename === null) {
           onChange();
+        } else if (filename.endsWith(".jsonl")) {
+          const meta = metaCache.get(path.join(dayDir, filename));
+          if (!meta || samePath(meta.cwd, cwd)) {
+            onChange();
+          }
         }
       });
       arm(codexHome(), (filename) => {

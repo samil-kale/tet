@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { syncRemote } from "../../shared/types";
 import type { Project, RepositoryState } from "../../shared/types";
 import type { OpenEditor } from "../terminal/editor-tab";
@@ -29,7 +29,7 @@ interface GitPaneProps {
 /** The side pane's git view: branches over the changed files, nothing else. */
 export const GitPane = memo(function GitPane({
   project,
-  state,
+  state: latestState,
   shown,
   branch,
   treeHeight,
@@ -40,6 +40,13 @@ export const GitPane = memo(function GitPane({
   worktreesSupported
 }: GitPaneProps) {
   const { acting, act, ask } = useFileAct(project.id);
+  // Hidden, the pane keeps the state it last showed: every push re-rendered the whole tree and list
+  // for nobody. A project switch is never held — the keyed views would get another repository's.
+  const held = useRef({ projectId: project.id, state: latestState });
+  if (shown || held.current.projectId !== project.id) {
+    held.current = { projectId: project.id, state: latestState };
+  }
+  const state = held.current.state;
 
   // Fetch, pull and push share the one action slot with discard and stash.
   const { remote, canSync } = syncRemote(state);

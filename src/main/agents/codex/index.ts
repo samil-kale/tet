@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import writeFileAtomic from "write-file-atomic";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
+import { writeIfChanged } from "../../write-if-changed";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { AgentDefinition } from "../agent";
 import { hookSessionId } from "../hook-payload";
@@ -25,7 +25,7 @@ function writeConsoleColorLauncher(agentDir: string, executable: string, theme: 
   const launcher = path.join(agentDir, "launch.cmd");
   // Rename into place: a theme change rewrites it while a tab may be starting through it, and
   // cmd.exe reading it truncated runs nothing (measured under repeated rewrites).
-  writeFileAtomic.sync(launcher, `@echo off\r\n<nul set /p "=${osc4}"\r\n${executable} %*\r\n`);
+  writeIfChanged(launcher, `@echo off\r\n<nul set /p "=${osc4}"\r\n${executable} %*\r\n`);
   return launcher;
 }
 

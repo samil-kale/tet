@@ -29,7 +29,8 @@ export function useElementSize(ref: RefObject<HTMLElement | null>, remeasure: un
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       if (width > 0 && height > 0) {
-        setSize({ width, height });
+        // The same object when unchanged: the observer also fires for sizes it already reported.
+        setSize((previous) => (previous?.width === width && previous.height === height ? previous : { width, height }));
       }
     });
     observer.observe(element);

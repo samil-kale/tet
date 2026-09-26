@@ -183,7 +183,8 @@ export interface TETApi {
   };
   repository: {
     state(projectId: string): Promise<RepositoryState>;
-    refresh(projectId: string): Promise<RepositoryState>;
+    /** Schedules a refresh, for changes the watcher may have missed; the state arrives as a push. */
+    refresh(projectId: string): Promise<void>;
     checkout(projectId: string, target: CheckoutTarget): Promise<GitActionResult>;
     /** `git fetch --prune`. Also runs quietly every ten minutes. Each command reaching a remote
      *  takes the `login` typed after it answered `loginUrl`. */

@@ -32,8 +32,8 @@ export function registerRepositoryIpc({
     return repositories.get(projectId)?.getState() ?? MISSING_REPOSITORY;
   });
 
-  ipcMain.handle("repository:refresh", async (_event, projectId: string): Promise<RepositoryState> => {
-    return (await repositories.get(projectId)?.refresh()) ?? MISSING_REPOSITORY;
+  ipcMain.handle("repository:refresh", (_event, projectId: string): void => {
+    repositories.get(projectId)?.refreshSoon();
   });
 
   /** A repository command answering a GitActionResult, or an error when the project is not open. */

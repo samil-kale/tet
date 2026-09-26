@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import writeFileAtomic from "write-file-atomic";
 import { hookCommand } from "../../terminals/hook-command";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
+import { writeIfChanged } from "../../write-if-changed";
 
 /**
  * Writes the per-repository settings file registering Claude Code's hooks; returns the
@@ -43,7 +43,7 @@ export function setupClaudeHooks(
   const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
   fs.mkdirSync(storageDir, { recursive: true });
   // Rename into place: a sandbox's copy is rewritten on every spawn while another tab may read it.
-  writeFileAtomic.sync(settingsFile, JSON.stringify({ hooks, theme: themeName }, null, 2));
+  writeIfChanged(settingsFile, JSON.stringify({ hooks, theme: themeName }, null, 2));
   return ["--settings", target.embed(settingsFile)];
 }
 

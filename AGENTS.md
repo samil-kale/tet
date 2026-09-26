@@ -96,8 +96,9 @@ others.
   typed into tet reaches git through askpass (`GitLoginStore.run`), and git stores it in the
   user's helper; where there is none, tet keeps it sealed in `~/.tet/git-logins.json`.
 - tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
-- A linked worktree is a project of its own, indented under its main worktree's row
-  (`Project.mainPath`) and listed in the branch tree's WORKTREES (`RepositoryState.worktrees`) —
+- **A linked worktree is a worktree and belongs to its project; it is not a project.** It only
+  behaves like one in places (its own row, tabs and git pane) — never design from "a worktree is a
+  project". It is indented under its main worktree's row (`Project.mainPath`) and listed in the branch tree's WORKTREES (`RepositoryState.worktrees`) —
   both read off the disk (a stored `mainPath` only draws the first frame) — and never open without
   that row: opening a worktree's folder opens its main worktree too, closing that closes its
   worktrees (`ProjectStore.addMissingMains`, `closedWith`). A worktree and its branch are one: made

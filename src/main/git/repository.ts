@@ -51,10 +51,19 @@ const AUTO_FETCH_TIMEOUT_MS = 2 * 60_000;
 const WATCH_RETRY_MS = 1000;
 const WATCH_RETRY_MAX_MS = 60_000;
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
- *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus). */
-function isIgnoredEvent(relativePath: string): boolean {
+ *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus).
+ *  `ownWorktree` is a linked worktree's id under `.git/worktrees/`, undefined for a main worktree. */
+function isIgnoredEvent(relativePath: string, ownWorktree?: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/");
+  // Another worktree's admin directory: of it, a refresh reads only `HEAD` and `gitdir`
+  // (git.ts's readWorktrees) — an agent's `git status` there rewrites its index.
+  const linked = /^\.git\/worktrees\/([^/]+)\/(.+)$/.exec(normalized);
+  if (linked && linked[1] !== ownWorktree && linked[2] !== "HEAD" && linked[2] !== "gitdir") {
+    return true;
+  }
   return (
+    // A linked worktree's own index is under `worktrees/<id>`; the common one is the main's.
+    (ownWorktree !== undefined && normalized === ".git/index") ||
     // git's own locks; a lockfile in the tree (yarn.lock, Cargo.lock) is a change like any other.
     (normalized.startsWith(".git/") && normalized.endsWith(".lock")) ||
     normalized.startsWith(".git/objects/") ||
@@ -105,6 +114,8 @@ export class Repository {
   private commandsTimer: ReturnType<typeof setTimeout> | undefined;
   /** Debounce for a path appearing or disappearing. */
   private filesTimer: ReturnType<typeof setTimeout> | undefined;
+  /** When the Explorer was last told, spaced like the refresh: each tells it to walk the tree. */
+  private lastFilesChangedAt = 0;
   /** The files the project's editor tabs show, repository-relative with "/" — see watchFiles. */
   private watchedFiles = new Set<string>();
   /** Debounce for a write, per file: one timer would swallow a second file's write. */
@@ -253,9 +264,19 @@ export class Repository {
     while (this.inflight) {
       await this.inflight;
     }
-    // This run covers whatever the watcher was waiting for.
+    // This run covers whatever the watcher was waiting for, pending or scheduled: an action's own
+    // writes wake the watcher, and its timer would read the same state a second time.
     this.refreshPending = false;
+    clearTimeout(this.debounceTimer);
     return this.runRefresh();
+  }
+
+  /** A refresh for changes the watcher may have missed (the window regained focus), through the
+   *  watcher's schedule: at least REFRESH_MIN_INTERVAL_MS after the last one. */
+  refreshSoon(): void {
+    if (this.isGit && !this.disposed) {
+      this.scheduleRefresh();
+    }
   }
 
   private runRefresh(): Promise<RepositoryState> {
@@ -893,7 +914,11 @@ export class Repository {
         // edit never re-lists the tree. Nothing under .git is in it.
         if (event === "rename" && name && !/^\.git(?:[\\/]|$)/.test(name)) {
           clearTimeout(this.filesTimer);
-          this.filesTimer = setTimeout(this.onFilesChanged, REFRESH_DEBOUNCE_MS);
+          const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastFilesChangedAt + REFRESH_MIN_INTERVAL_MS - Date.now());
+          this.filesTimer = setTimeout(() => {
+            this.lastFilesChangedAt = Date.now();
+            this.onFilesChanged();
+          }, delay);
         }
         // Any event: writing beside and renaming into place reports "rename", not "change". The
         // size check first: this runs for every event under the root, mostly with no file open.
@@ -937,9 +962,10 @@ export class Repository {
       return;
     }
     const dir = linked.commonDir ?? linked.gitDir;
+    const ownWorktree = linked.commonDir === undefined ? undefined : path.basename(linked.gitDir);
     this.gitDirWatcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
       const name = filename === null ? undefined : `.git/${filename.toString().replace(/\\/g, "/")}`;
-      if (name && isIgnoredEvent(name)) {
+      if (name && isIgnoredEvent(name, ownWorktree)) {
         return;
       }
       if (name === ".git/config") {

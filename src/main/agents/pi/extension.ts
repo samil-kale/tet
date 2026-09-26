@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import writeFileAtomic from "write-file-atomic";
+import { writeIfChanged } from "../../write-if-changed";
 import { renderHookReport } from "../hook-report";
 
 /**
@@ -15,7 +15,7 @@ export function writePiExtension(storageDir: string): string {
   const folder = path.join(storageDir, "tet");
   fs.mkdirSync(folder, { recursive: true });
   const file = path.join(folder, "index.ts");
-  writeFileAtomic.sync(file, renderPiExtension());
+  writeIfChanged(file, renderPiExtension());
   return file;
 }
 

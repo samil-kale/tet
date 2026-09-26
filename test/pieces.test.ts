@@ -19,7 +19,7 @@ import { GitLoginStore } from "../src/main/git-logins";
 import type { EnvRequest, GitLogin } from "../src/shared/types";
 import { createByteThresholdCheck, createNonAsciiThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
-import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
+import { HOST_TARGET, SANDBOX_TARGET, sandboxSessionDir, toContainerPath } from "../src/main/terminals/hook-target";
 import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/main/script-text";
 import { ProjectStore } from "../src/main/projects";
@@ -41,6 +41,7 @@ import {
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
+import { agentDirFor, migrateAgentDirs } from "../src/main/terminals/agent-data";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
 import { fetchHttpsImage } from "../src/main/ipc/shell";
@@ -771,6 +772,30 @@ describe("a sandboxed tab's variables", () => {
   });
 });
 
+describe("tet's agent data", () => {
+  it("moves agentDirs out of agent-data/agents, leaving one already in the new place", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-agent-data-"));
+    const legacy = (agentId: string, projectId: string) => path.join(root, "agent-data", "agents", agentId, projectId);
+    fs.mkdirSync(legacy("claude", "p"), { recursive: true });
+    fs.writeFileSync(path.join(legacy("claude", "p"), "tet-hooks-settings.json"), "old");
+    fs.mkdirSync(legacy("codex", "q"), { recursive: true });
+    fs.mkdirSync(agentDirFor(root, "codex", "q"), { recursive: true });
+    migrateAgentDirs(root);
+    assert.equal(fs.readFileSync(path.join(agentDirFor(root, "claude", "p"), "tet-hooks-settings.json"), "utf8"), "old");
+    assert.ok(!fs.existsSync(legacy("claude", "p")));
+    assert.ok(fs.existsSync(legacy("codex", "q")), "a project already in the new place is not overwritten");
+  });
+
+  it("moves sandbox-sessions into the sandbox folder", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-agent-data-"));
+    const agentDir = agentDirFor(root, "claude", "p");
+    fs.mkdirSync(path.join(agentDir, "sandbox-sessions", "projects"), { recursive: true });
+    migrateAgentDirs(root);
+    assert.ok(fs.existsSync(path.join(sandboxSessionDir(agentDir), "projects")));
+    assert.ok(!fs.existsSync(path.join(agentDir, "sandbox-sessions")));
+  });
+});
+
 describe("what sbx keeps on this machine", () => {
   it("counts a value as stored only where it can still be decrypted", () => {
     fakeSafeStorage();
@@ -1087,7 +1112,7 @@ describe("sbx's filesystem policy", () => {
 
   it("lets an organization granting write alone mount read-write and read-only, as measured", () => {
     const measured = parseFilesystemRules(governed);
-    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\agent-data\\agents\\claude\\p", "rw", win32));
+    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\agent-data\\claude\\p", "rw", win32));
     assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\agent-data\\projects\\p", "ro", win32));
     assert.ok(!isMountAllowed(measured, "D:\\work", "rw", win32), "another drive matches no rule: default deny");
     assert.ok(isMountAllowed(measured, "/home/saka/work", "rw", posix));
@@ -1109,7 +1134,7 @@ describe("sbx's filesystem policy", () => {
   });
 
   it("expands ~ and *: for any drive, and ignores case on win32 alone", () => {
-    assert.ok(isMountAllowed(rules([allow("filesystem:write", "~\\.tet\\agent-data\\**")]), "C:\\Users\\saka\\.tet\\agent-data\\agents", "rw", win32));
+    assert.ok(isMountAllowed(rules([allow("filesystem:write", "~\\.tet\\agent-data\\**")]), "C:\\Users\\saka\\.tet\\agent-data\\claude", "rw", win32));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "~/**")]), "/home/saka/tet", "rw", posix));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "*:\\data\\**")]), "E:\\data\\x", "rw", win32));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "c:\\USERS\\**")]), "C:\\Users\\saka", "rw", win32));
