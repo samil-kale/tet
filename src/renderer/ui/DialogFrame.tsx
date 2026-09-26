@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { DialogError } from "./Field";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
@@ -95,6 +95,10 @@ interface DialogFrameProps<T extends string> {
  *
  * Escape is the caller's: a question listens on `window`, the others on `document` (`useEscape`),
  * RequirementsDialog on neither. While one is up, no tab is in front (`window-covered.ts`).
+ *
+ * A modal `<dialog>`: the rest of the window is inert, so Tab cannot leave for the terminal or the
+ * editor behind, and a question over another dialog is the one on top. `closedby="none"`, since
+ * Escape stays the caller's.
  */
 export function DialogFrame<T extends string>({
   header,
@@ -106,7 +110,30 @@ export function DialogFrame<T extends string>({
   buttons,
   children
 }: DialogFrameProps<T>) {
-  useCoversWindow();
+  const overlay = useRef<HTMLDialogElement>(null);
+  useCoversWindow(overlay);
+  // What had focus before the dialog (the terminal, a field of the dialog below), read at the first
+  // render: a child's `autoFocus` takes it before any effect runs. Handed back on unmount.
+  const [opener] = useState(() => document.activeElement);
+  // A layout effect, before a child's effect focuses its field. showModal focuses the first
+  // focusable (the close button), so a child focused through `autoFocus` gets it back.
+  useLayoutEffect(() => {
+    const dialog = overlay.current;
+    if (!dialog) {
+      return;
+    }
+    const focused = document.activeElement;
+    dialog.showModal();
+    if (focused instanceof HTMLElement && dialog.contains(focused)) {
+      focused.focus();
+    }
+    return () => {
+      dialog.close();
+      if (opener instanceof HTMLElement) {
+        opener.focus();
+      }
+    };
+  }, [opener]);
   const cardClass = className ? `dialog ${className}` : "dialog";
   const content = (
     <>
@@ -166,7 +193,7 @@ export function DialogFrame<T extends string>({
     </>
   );
   return (
-    <div className="dialog-overlay">
+    <dialog ref={overlay} className="dialog-overlay" closedby="none">
       {onSubmit ? (
         <form
           className={cardClass}
@@ -180,6 +207,6 @@ export function DialogFrame<T extends string>({
       ) : (
         <div className={cardClass}>{content}</div>
       )}
-    </div>
+    </dialog>
   );
 }

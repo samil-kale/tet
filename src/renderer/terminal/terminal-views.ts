@@ -1,5 +1,6 @@
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import type { OpenEditor } from "./editor-tab";
 import { Terminal } from "@xterm/xterm";
@@ -7,7 +8,7 @@ import type { AgentInfo } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover, type WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
-import { isLinux, isMac, isModifierHeld } from "../platform";
+import { isLinux, isMac, isModifierHeld, isWindows } from "../platform";
 import { reportSlow } from "../slow-report";
 import { buildXtermTheme, editorFontFamily } from "./theme";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
@@ -186,19 +187,31 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+/** What the shell tab's shell (`shellAgent`: PowerShell on win32, else `$SHELL`) reads as is: no
+ *  `$`, backtick, quote, space, `,` (a PowerShell array) or, outside win32, backslash (an escape). */
+const PLAIN_PATH = isWindows() ? /^[\w./\\:-]+$/ : /^[\w./:-]+$/;
+
 /**
- * A path as one word, so a space does not split it. Double quotes read the same in bash, zsh,
- * PowerShell and cmd.exe.
+ * A path as one word. The shell tab single-quotes it, since PowerShell and POSIX shells expand `$`
+ * and a backtick inside double quotes too; a `'` in it is doubled (PowerShell) or closed, escaped
+ * and reopened (POSIX). An agent's input field is no shell, and how each CLI reads a pasted path is
+ * not measured: there only a space is quoted, in double quotes.
  */
-function quotePath(filePath: string): string {
-  return /\s/.test(filePath) ? `"${filePath}"` : filePath;
+function quotePath(filePath: string, agent: AgentInfo): string {
+  if (agent.id !== "shell") {
+    return /\s/.test(filePath) ? `"${filePath}"` : filePath;
+  }
+  if (PLAIN_PATH.test(filePath)) {
+    return filePath;
+  }
+  return isWindows() ? `'${filePath.replace(/'/g, "''")}'` : `'${filePath.replace(/'/g, "'\\''")}'`;
 }
 
 /**
  * Types the dropped files' paths; content without a path (from a browser) goes to a temp file,
  * swept a day old at startup.
  */
-async function pasteDroppedFiles(term: Terminal, files: File[]): Promise<void> {
+async function pasteDroppedFiles(term: Terminal, agent: AgentInfo, files: File[]): Promise<void> {
   const paths: string[] = [];
   for (const file of files) {
     const existing = window.tet.files.pathOf(file);
@@ -210,23 +223,23 @@ async function pasteDroppedFiles(term: Terminal, files: File[]): Promise<void> {
   }
   if (paths.length > 0) {
     // term.paste, so no CLI input mode misreads it as keystrokes (vim mode, say).
-    term.paste(`${paths.map(quotePath).join(" ")} `);
+    term.paste(`${paths.map((filePath) => quotePath(filePath, agent)).join(" ")} `);
   }
 }
 
 /** A copied image has no path either — a temp file too. */
-async function pasteClipboardImage(term: Terminal): Promise<boolean> {
+async function pasteClipboardImage(term: Terminal, agent: AgentInfo): Promise<boolean> {
   const file = await window.tet.files.clipboardImage();
   if (file === null) {
     return false;
   }
   // The temp directory is under the profile, whose name can hold a space.
-  term.paste(`${quotePath(file)} `);
+  term.paste(`${quotePath(file, agent)} `);
   return true;
 }
 
-async function pasteClipboard(term: Terminal): Promise<void> {
-  if (!(await pasteClipboardImage(term))) {
+async function pasteClipboard(term: Terminal, agent: AgentInfo): Promise<void> {
+  if (!(await pasteClipboardImage(term, agent))) {
     term.paste(await navigator.clipboard.readText());
   }
 }
@@ -372,7 +385,9 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
       activate(_event, text) {
         openUrl(text);
       }
-    }
+    },
+    // `term.unicode` is a proposed API (the Unicode 11 widths below).
+    allowProposedApi: true
   });
 
   // OSC 4 *sets* are dropped (returning true skips xterm's handler), queries (`n;?`) answered.
@@ -385,6 +400,10 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
   term.loadAddon(fit);
   // "Select to copy" CLIs send OSC 52, ignored without this addon.
   term.loadAddon(new ClipboardAddon());
+  // Unicode 11's widths, not xterm's default 6: a TUI lays out emoji and symbols like ⏺ at two
+  // columns where Unicode 6 counts one, and the cursor drifts off what it drew.
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
   term.registerLinkProvider(createUrlLinkProvider(term, openUrl, createWrappedUrlResolver(projectId, tabId)));
   term.registerLinkProvider(createFileLinkProvider(term, (filePath) => openFile(projectId, filePath)));
 
@@ -408,7 +427,7 @@ function createView(projectId: string, tabId: string, agent: AgentInfo): Termina
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) {
-        void pasteClipboard(term);
+        void pasteClipboard(term, agent);
       }
       return false;
     }
@@ -480,7 +499,7 @@ export function attachTerminal(projectId: string, tabId: string, agent: AgentInf
   container.addEventListener("drop", (event) => {
     event.preventDefault();
     frame(false);
-    void pasteDroppedFiles(view.term, Array.from(event.dataTransfer?.files ?? []));
+    void pasteDroppedFiles(view.term, view.agent, Array.from(event.dataTransfer?.files ?? []));
   });
   container.addEventListener("contextmenu", (event) => {
     event.preventDefault();
@@ -489,13 +508,13 @@ export function attachTerminal(projectId: string, tabId: string, agent: AgentInf
     // right click: copy a selection, else paste.
     if (view.term.modes.mouseTrackingMode === "none") {
       if (!copySelection(view.term)) {
-        void pasteClipboard(view.term);
+        void pasteClipboard(view.term, view.agent);
       }
       return;
     }
     // The CLI takes the right button (Claude Code and pi paste, opencode and Codex copy a
     // selection), but none pastes an image.
-    void pasteClipboardImage(view.term);
+    void pasteClipboardImage(view.term, view.agent);
   });
 }
 

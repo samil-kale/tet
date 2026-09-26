@@ -1556,7 +1556,8 @@ textarea:focus,
 
 /* Dialog --------------------------------------------------------------------------------- */
 
-/* The dim is a fixed black, not a theme variable. */
+/* The dim is a fixed black, not a theme variable. A modal `<dialog>` (DialogFrame), so in the top
+   layer above everything; its user-agent box is undone to span the window. */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1564,7 +1565,20 @@ textarea:focus,
   display: flex;
   align-items: center;
   justify-content: center;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: none;
+  overflow: visible;
+  color: inherit;
   background: rgb(0 0 0 / 40%);
+}
+
+.dialog-overlay::backdrop {
+  background: none;
 }
 
 .dialog {
@@ -2362,7 +2376,7 @@ textarea:focus,
   position: absolute;
   right: 0;
   bottom: 0;
-  /* Above the views and the context menus, below a dialog, which is modal. */
+  /* Above the views and the context menus. Over a dialog they are drawn inside it (Notices). */
   z-index: 25;
   display: flex;
   flex-direction: column;

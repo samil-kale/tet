@@ -1,6 +1,8 @@
+import { createPortal } from "react-dom";
 import type { NoticeSeverity } from "../../shared/types";
 import { SeverityIcon } from "./icons";
 import { createStore, useStore } from "./store";
+import { useTopDialog } from "./window-covered";
 
 /** VS Code's durations (notificationsToasts.ts). */
 const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_000, error: 15_000 };
@@ -60,13 +62,17 @@ function dismissNotice(id: number): void {
   shown.set(shown.get().filter((notice) => notice.id !== id));
 }
 
-/** Stacked in the bottom right corner, newest at the bottom, dismissed by a click. */
+/**
+ * Stacked in the bottom right corner, newest at the bottom, dismissed by a click. Inside the dialog
+ * on top while one is up (`useTopDialog`): outside it they would lie under its dim, inert.
+ */
 export function Notices() {
   const notices = useStore(shown);
+  const dialog = useTopDialog();
   if (notices.length === 0) {
     return null;
   }
-  return (
+  const stack = (
     <div className="notices">
       {notices.map((notice) => (
         <button
@@ -83,4 +89,5 @@ export function Notices() {
       ))}
     </div>
   );
+  return dialog ? createPortal(stack, dialog) : stack;
 }
