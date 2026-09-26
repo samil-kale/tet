@@ -11,19 +11,15 @@ changed for the user, not the commit list.
 - **Docker sign-in with access tokens.** The sandbox settings keep Docker access tokens and sign
   in with one at a click, beside the sign-in through the browser.
 - **Restart picks up where you left.** tet reopens the last project and each pane's active tab.
-- **Fixes.** Claude Code tabs stay working while background agents run. Saving sandbox settings
-  checks every row before changing anything, and stops when sbx can't answer. The sandbox dialog keeps its
-  height across tabs.
-
-## 0.11.7 (2026-09-25)
-
 - **Codex and pi run fullscreen.** Resizing their tab redraws in place instead of reprinting the
   transcript, and the right mouse button goes to the agent, which scrolls, selects and copies
   itself.
 - **Sturdier updates.** An update installs beside the running version, and a download that was
   cut short continues where it stopped. Starting tet while an update is being put in place waits
   for it.
-- **Fixes.** The Light Gameboy theme's progress bar takes the theme's accent.
+- **Fixes.** Claude Code tabs stay working while background agents run. Saving sandbox settings
+  checks every row before changing anything, and stops when sbx can't answer. The sandbox dialog
+  keeps its height across tabs. The Light Gameboy theme's progress bar takes the theme's accent.
 
 ## 0.11.6 (2026-09-25)
 
