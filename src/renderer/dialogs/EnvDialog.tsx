@@ -27,12 +27,6 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
 
   useEffect(() => firstValue.current?.focus(), []);
 
-  const cancel = (): void => {
-    void window.tet.environment.answer(request.id, null);
-    onClose();
-  };
-  useEscape(cancel);
-
   const complete = rows.every((row) => row.value !== "");
   const tab = request.ref && request.tabId ? { ref: request.ref, tabId: request.tabId } : undefined;
 
@@ -46,6 +40,16 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       onClose();
     }
   );
+
+  // What runs finishes before the dialog goes (DialogFrame's `locked`).
+  const cancel = (): void => {
+    if (busy) {
+      return;
+    }
+    void window.tet.environment.answer(request.id, null);
+    onClose();
+  };
+  useEscape(cancel);
 
   const edit = (name: string, value: string): void => {
     setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)));
@@ -68,7 +72,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       }}
       buttons={
         <>
-          <button type="button" className="button secondary" onClick={cancel}>
+          <button type="button" className="button secondary" disabled={busy} onClick={cancel}>
             Cancel
           </button>
           <button type="submit" className="button" disabled={!complete || busy}>

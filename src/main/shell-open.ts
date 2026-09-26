@@ -1,9 +1,10 @@
 import * as path from "node:path";
 
 /**
- * What a ctrl-click may hand the OS (`shell:open-url`, `shell:open-file` in ipc/shell.ts). Both end in
- * ShellExecute, `open` or `xdg-open`, which run a program as readily as they show a page, so terminal
- * output an agent printed must not reach them unchecked.
+ * What a ctrl-click or "Open in external editor" may hand the OS (`shell:open-url`, `shell:open-file`,
+ * `shell:open-file-externally` in ipc/shell.ts). All end in ShellExecute, `open` or `xdg-open`, which
+ * run a program as readily as they show a page, so terminal output an agent printed, or a file of a
+ * cloned repository, must not reach them unchecked.
  */
 
 /** Anything else — `file:`, `ms-msdt:`, a deep link into another app — is refused. */

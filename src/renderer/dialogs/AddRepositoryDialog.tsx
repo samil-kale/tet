@@ -404,8 +404,6 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
     loginField.current?.focus();
   }, [loginUrl]);
 
-  useEscape(onClose);
-
   const folderName = name ?? cloneFolder(url.trim());
   const ready =
     mode === "clone"
@@ -465,6 +463,13 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   };
 
   const busy = adding || listing || accountForm?.busy === true;
+  // What runs finishes before the dialog goes (DialogFrame's `locked`).
+  const close = (): void => {
+    if (!busy) {
+      onClose();
+    }
+  };
+  useEscape(close);
 
   /** A remote row's Clone: the clone tab filled in, with the row's account. */
   const cloneFromRemote = (repo: RemoteRepository, fromAccountId: string): void => {
@@ -478,7 +483,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
 
   return (
     <DialogFrame
-      header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose }}
+      header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose: close }}
       error={refused}
       className="add-repository-dialog"
       busy={busy}
@@ -496,7 +501,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       }}
       buttons={
         <>
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button type="button" className="button secondary" disabled={busy} onClick={close}>
             Cancel
           </button>
           {accountForm ? (

@@ -68,11 +68,13 @@ export interface ControlVerb {
   unlisted?: true;
   /**
    * What a caller running in an sbx sandbox may do; absent means refused, so a new verb is closed
-   * to it until decided. `ownProject` answers only for the caller's own project. The sandbox is the
-   * organization's policy: a verb that starts a process on this machine, or reads outside the
-   * project it mounts, would walk around it.
+   * to it until decided. `ownRef` answers only for the caller's own repository or worktree, the one
+   * its sandbox mounts; `ownProject` for its project's repository and every worktree, for a verb
+   * whose target is by nature another one of them. The sandbox is the organization's policy: a verb
+   * that starts a process on this machine, or reads outside the project it mounts, would walk
+   * around it.
    */
-  sandbox?: "any" | "ownProject";
+  sandbox?: "any" | "ownRef" | "ownProject";
   /**
    * The key of the answer that names a file of the caller's project. A sandboxed caller gets it
    * only where the file really is inside the repository: a link committed or made in the mounted
@@ -170,7 +172,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary: "Set the text of a background question; no text puts TET's own back. Applies to the next press.",
     positionals: ["id", "text"]
   },
-  { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownProject" },
+  { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownRef" },
   { verb: "projects-add", group: "TET itself", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
   {
     verb: "projects-remove",
@@ -204,7 +206,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "repo-state [--project <id>]",
     summary: "What the git pane shows for a project: branch, upstream, changed files, stashes.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "sbx-get",
@@ -329,7 +331,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "tabs-list [--project <id>]",
     summary: "A project's terminal tabs and their state, with the session each tab's hooks named and its sandbox.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "tabs-output",
@@ -339,7 +341,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
       "The last n KB a tab printed (16, at most 256), escape sequences out and a redrawn line kept as last shown; an agent's TUI redraws in place, so its text comes in pieces. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
     ownProjectOnly: true,
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "events-tail",
@@ -347,7 +349,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "events-tail [--tail <count>] [--project <id>]",
     summary: "The latest hook reports, session claims and closed tabs, with when each arrived.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "tabs-wait",
@@ -356,7 +358,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary:
       "Wait until every condition given holds: a session (--session), working a turn (--busy), not working one (--idle; waiting on a question counts as that, as the spinner shows it), a status. Exits 4 after the timeout (30 s).",
     positionals: ["tabId"],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "tabs-send",
@@ -372,7 +374,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: `tabs-create --agent <${AGENT_IDS.join("|")}> [--project <id>]`,
     summary: "Open a new terminal tab for that agent.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "tabs-run-command",
@@ -401,7 +403,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "tabs-rename <tab-id> <title> [--project <id>]",
     summary: "Rename a tab. From a sandbox, only a tab running there.",
     positionals: ["tabId", "title"],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "tabs-close",
@@ -409,7 +411,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "tabs-close <tab-id> [--project <id>]",
     summary: "Close a tab and end its session. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "editor-open",
@@ -418,7 +420,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     summary:
       "Open a repository-relative file in the project's preview tab and bring it to the front; the next file replaces it, --keep gives it a tab of its own.",
     positionals: ["path"],
-    sandbox: "ownProject",
+    sandbox: "ownRef",
     sandboxFile: "opened"
   },
   {
@@ -427,7 +429,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "editor-state [--project <id>]",
     summary: "What the project's active editor tab shows: the file, its text, whether it is edited, read-only or a preview.",
     positionals: [],
-    sandbox: "ownProject",
+    sandbox: "ownRef",
     sandboxFile: "path"
   },
   {
@@ -436,7 +438,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "editor-list [--project <id>]",
     summary: "The project's open editor tabs: file, preview, edited, read-only, and which one is active.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "explorer-list",
@@ -444,7 +446,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     usage: "explorer-list [--project <id>]",
     summary: "What the files view lists for a project, with tet.json's folders and excludes applied.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownRef"
   },
   {
     verb: "notices-list",

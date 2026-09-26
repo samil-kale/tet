@@ -70,6 +70,9 @@ interface DialogFrameProps<T extends string> {
   header: DialogHeader<T>;
   /** Draws the header's progress bar, the dialog's one indicator. */
   busy?: boolean;
+  /** × is disabled while it holds, and the caller's Cancel and Escape with it. Defaults to `busy`:
+   *  what runs finishes before the dialog goes (only the SBX dialog's setup excepted). */
+  locked?: boolean;
   /** What refused the dialog's Save, on the button row's left (`DialogError`): for a card whose
    *  fields — several, or across tabs — no one of them can be blamed. A field that can writes it
    *  itself, under the control (`Field`). Shown in `message`'s place while it stands. */
@@ -103,6 +106,7 @@ interface DialogFrameProps<T extends string> {
 export function DialogFrame<T extends string>({
   header,
   busy,
+  locked = busy,
   error,
   message,
   className,
@@ -162,7 +166,13 @@ export function DialogFrame<T extends string>({
             </button>
           ))}
           {header.onClose && (
-            <button type="button" className="icon-button dialog-tabs-close" title="Close" onClick={header.onClose}>
+            <button
+              type="button"
+              className="icon-button dialog-tabs-close"
+              title="Close"
+              disabled={locked}
+              onClick={header.onClose}
+            >
               <CloseIcon />
             </button>
           )}
@@ -172,7 +182,7 @@ export function DialogFrame<T extends string>({
         <div className="dialog-bar">
           <span className="dialog-title">{header.title}</span>
           {header.onClose && (
-            <button type="button" className="icon-button" title="Close" onClick={header.onClose}>
+            <button type="button" className="icon-button" title="Close" disabled={locked} onClick={header.onClose}>
               <CloseIcon />
             </button>
           )}

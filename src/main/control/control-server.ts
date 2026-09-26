@@ -791,8 +791,9 @@ export async function startControlServer(
       return { response: reject("unauthorized", `${request.verb} does not answer from inside a sandbox`) };
     }
     // A host tab reaches every repository and worktree of its project (a worktree belongs to it); a
-    // sandboxed one only its own, the one its sandbox mounts.
-    if (entry.ownProjectOnly || (sandboxed && entry.sandbox === "ownProject")) {
+    // sandboxed one only its own, the one its sandbox mounts — but for an `ownProject` verb.
+    if (entry.ownProjectOnly || (sandboxed && entry.sandbox !== "any")) {
+      const ownOnly = sandboxed && entry.sandbox === "ownRef";
       const own = callerRef(caller);
       let target: ProjectRef | undefined;
       try {
@@ -800,9 +801,13 @@ export async function startControlServer(
       } catch (error) {
         return { response: error instanceof ControlError ? reject(error.code, error.message) : reject("internal", errorMessage(error)) };
       }
-      const allowed = own !== undefined && target !== undefined && (sandboxed ? sameProjectRef(target, own) : target.projectId === own.projectId);
+      const allowed = own !== undefined && target !== undefined && (ownOnly ? sameProjectRef(target, own) : target.projectId === own.projectId);
       if (!allowed) {
-        const whose = sandboxed ? "the caller's own repository or worktree" : "a tab of the caller's own project";
+        const whose = ownOnly
+          ? "the caller's own repository or worktree"
+          : sandboxed
+            ? "the caller's own project"
+            : "a tab of the caller's own project";
         return { response: reject("unauthorized", `${request.verb} only answers for ${whose}`) };
       }
     }

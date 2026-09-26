@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import type { GitActionResult } from "../../shared/types";
 import { DialogFrame, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
-import { notify } from "./Notices";
 import { createStore, useStore } from "./store";
 
 interface ConfirmOptions {
@@ -194,6 +193,23 @@ interface FrameProps {
 }
 
 function Frame({ title, confirmLabel, disabled, busy, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        // Captured and swallowed so the ESC never reaches the terminal. On `window`, not
+        // `document`: dialogs a question is asked from capture on `document`, and
+        // `stopPropagation` does not stop listeners on the same node.
+        event.preventDefault();
+        event.stopPropagation();
+        if (!busy) {
+          onCancel();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [busy, onCancel]);
+
   return (
     <DialogFrame
       header={{ title, onClose: onCancel }}
@@ -206,7 +222,7 @@ function Frame({ title, confirmLabel, disabled, busy, focusSubmit, onSubmit, onC
       }}
       buttons={
         <>
-          <button type="button" className="button secondary" onClick={onCancel}>
+          <button type="button" className="button secondary" disabled={busy} onClick={onCancel}>
             Cancel
           </button>
           <button type="submit" className="button" disabled={disabled} autoFocus={focusSubmit}>
@@ -253,17 +269,12 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const [value, setValue] = useState(dialog.value);
   const [held, setHeld] = useState(false);
   const field = useRef<HTMLInputElement>(null);
-  /** Escape closes the question while `submit` runs: the refusal then has no field to sit at and
-   *  falls back to a notice, so it is never lost. */
-  const live = useRef(true);
 
   // Focus and select the first field once on mount; per render would swallow keystrokes.
   useEffect(() => {
     field.current?.focus();
     field.current?.select();
   }, []);
-
-  useEffect(() => () => void (live.current = false), []);
 
   /** What `submit` refused is handed to the fields (`error`). */
   const { busy: running, refused, submit, clear } = useSubmit(
@@ -272,23 +283,12 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
         return undefined;
       }
       const message = await dialog.submit(value);
-      if (!live.current) {
-        if (message !== undefined) {
-          notify("error", message);
-        }
-        return undefined;
-      }
       if (message !== undefined) {
         field.current?.focus();
       }
       return message;
     },
-    () => {
-      // Closed meanwhile: cancelled already, nothing to answer.
-      if (live.current) {
-        dialog.answer(value);
-      }
-    }
+    () => dialog.answer(value)
   );
 
   const onChange = (next: unknown): void => {
@@ -314,24 +314,6 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
 /** Mounted once, next to `Notices`. */
 export function Dialogs() {
   const dialog = useStore(pending);
-
-  useEffect(() => {
-    if (!dialog) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        // Captured and swallowed so the ESC never reaches the terminal. On `window`, not
-        // `document`: dialogs a question is asked from capture on `document`, and
-        // `stopPropagation` does not stop listeners on the same node.
-        event.preventDefault();
-        event.stopPropagation();
-        dialog.cancel();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [dialog]);
 
   if (!dialog) {
     return null;

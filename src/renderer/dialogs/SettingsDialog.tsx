@@ -180,8 +180,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     });
   }, [activeProjectId]);
 
-  useEscape(onClose);
-
   /** The Environment tab if touched, one tet.json write per changed Explorer key, then one
    *  settings.json write — last, since it applies at once (the theme among it) and Cancel could not
    *  take it back after a later write refused. What refuses it goes in the button row: it is about
@@ -240,6 +238,14 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     }
   );
 
+  // What runs finishes before the dialog goes (DialogFrame's `locked`).
+  const close = (): void => {
+    if (!saving) {
+      onClose();
+    }
+  };
+  useEscape(close);
+
   /** Edits the shown copy and records the change for Save. */
   const edit = (change: SettingsEdits): void => {
     edits.current = withSettings(edits.current, change);
@@ -283,14 +289,14 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   return (
     <DialogFrame
-      header={{ tabs, active: tab, onSelect: setTab, onClose }}
+      header={{ tabs, active: tab, onSelect: setTab, onClose: close }}
       busy={saving}
       error={refused}
       message={envChanged(variables, loadedVariables) && <RestartNote />}
       className="settings-dialog"
       buttons={
         <>
-          <button type="button" className="button secondary" onClick={onClose}>
+          <button type="button" className="button secondary" disabled={saving} onClick={close}>
             Cancel
           </button>
           {/* Blocked by class: its tooltip is the reason (.button.disabled). */}

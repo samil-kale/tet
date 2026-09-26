@@ -82,12 +82,11 @@ function tabBlocked(id: SbxSettingsTab, signedIn: boolean, enabled: boolean): st
  * authenticates inside the sandbox.
  */
 export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) {
-  // × / Escape / Cancel all go here; `cancelSbxSetup` is a no-op when nothing runs.
+  // What Save's end and `cancel` close with; `cancelSbxSetup` is a no-op when nothing runs.
   const close = (): void => {
     window.tet.sbx.cancelSetup();
     onClose();
   };
-  useEscape(close);
   const [enabled, setEnabled] = useState(false);
   /** No agent on this machine, so sandboxing cannot be switched off. Derived on every open, not
    *  stored. */
@@ -198,6 +197,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
     return refusal(result, "Could not save the SBX configuration");
   }, close);
+  // × / Escape / Cancel: the one dialog they close while something runs, since its setup (`sbx
+  // login`, `policy init`) is cancelled with it; a Save is not, so it finishes first.
+  const cancel = (): void => {
+    if (!saving) {
+      close();
+    }
+  };
+  useEscape(cancel);
   const editState: typeof setState = (update) => {
     setState(update);
     clear();
@@ -305,16 +312,17 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     <DialogFrame
       header={
         tabbed
-          ? { tabs, active: tab, onSelect: setTab, onClose: close }
-          : { title: `SBX Settings - ${project.name}`, onClose: close }
+          ? { tabs, active: tab, onSelect: setTab, onClose: cancel }
+          : { title: `SBX Settings - ${project.name}`, onClose: cancel }
       }
       className={showsAccount ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
+      locked={saving}
       error={refused ?? accountError}
       message={phase.kind === "ready" && needsRestart(loaded, stored.knowledge, state) && <RestartNote />}
       buttons={
         <>
-          <button type="button" className="button secondary" onClick={close}>
+          <button type="button" className="button secondary" disabled={saving} onClick={cancel}>
             Cancel
           </button>
           {(phase.kind === "not-installed" || phase.kind === "blocked") && (

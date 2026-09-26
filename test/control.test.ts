@@ -947,10 +947,12 @@ describe("tet-ctl against the control server", () => {
 
   it("creates and deletes a sandboxed tab's worktrees of its own project only", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    assertRefused(await tetCtl(["worktree-add", "x", "--project", OTHER.id], fromSandbox), /own repository or worktree/, "worktree-add");
-    assertRefused(await tetCtl(["worktree-delete", "four", "--project", OTHER.id], fromSandbox), /own repository or worktree/, "worktree-delete");
+    assertRefused(await tetCtl(["worktree-add", "x", "--project", OTHER.id], fromSandbox), /own project/, "worktree-add");
+    assertRefused(await tetCtl(["worktree-delete", "four", "--project", OTHER.id], fromSandbox), /own project/, "worktree-delete");
     assert.equal((await tetCtl(["worktree-add", "x"], fromSandbox)).status, EXIT_CODES.ok);
-    assert.deepEqual(calls.worktreesAdded, [[PROJECT.id, "x"]]);
+    const fromWorktreeSandbox = { ...fromSandbox, [CONTROL_ENV.worktree]: WORKTREE.worktree };
+    assert.equal((await tetCtl(["worktree-add", "y", "--project", PROJECT.id], fromWorktreeSandbox)).status, EXIT_CODES.ok, "its project's repository named");
+    assert.deepEqual(calls.worktreesAdded, [[PROJECT.id, "x"], [PROJECT.id, "y"]]);
     assert.deepEqual((await tetCtl(["worktree-delete", "four", "--force"], fromSandbox)).result, { deleted: "four" });
   });
 

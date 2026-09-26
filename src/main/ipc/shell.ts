@@ -147,13 +147,20 @@ export function registerShellIpc({
     }
   });
 
-  /** "Open in external editor": no editor setting, so the OS default for the type. */
+  /** "Open in external editor": no editor setting, so the OS default for the type — or the file
+   *  manager where that default would run it. */
   ipcMain.handle("shell:open-file-externally", async (_event, ref: ProjectRef, filePath: string): Promise<void> => {
     const repository = repositories.get(ref);
     if (!repository) {
       return;
     }
-    await openWithNotice(path.join(repository.at.path, filePath), "file", filePath);
+    const resolved = path.join(repository.at.path, filePath);
+    const stat = await fs.promises.stat(resolved).catch(() => null);
+    if (stat && isExecutableFile(resolved, stat.mode)) {
+      shell.showItemInFolder(resolved);
+      return;
+    }
+    await openWithNotice(resolved, "file", filePath);
   });
 
   ipcMain.handle("shell:open-project", async (_event, ref: ProjectRef): Promise<void> => {
