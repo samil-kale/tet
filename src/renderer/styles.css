@@ -1834,7 +1834,7 @@ textarea:focus,
 
 /* The organization and the signed-in user, set off from the words around them. */
 .sbx-name {
-  color: var(--vscode-textLink-foreground);
+  color: var(--vscode-terminal-ansiGreen);
 }
 
 /* The Docker account (SbxAccounts.tsx), below the project's switch or a blocked wall: set off by a
