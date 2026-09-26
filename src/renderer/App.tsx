@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { checkoutKey, checkoutsOf, EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
-import type { AgentInfo, CheckoutRef, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
-import { checkoutsByKey, type Checkout } from "./checkout";
+import { projectRefKey, projectRefsOf, EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
+import type { AgentInfo, ProjectRef, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { CommandList } from "./sidebar/CommandList";
@@ -12,14 +12,14 @@ import { FilesPane } from "./files/FilesPane";
 import { GitPane } from "./git/GitPane";
 import { Notices, notify } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
-import type { CheckoutHead, CheckoutMarks } from "./sidebar/ProjectList";
+import type { RefHead, RefMarks } from "./sidebar/ProjectList";
 import { activeAfterChange, activeAtStart, rememberActive } from "./sidebar/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize, usePaneToggle } from "./ui/layout-storage";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
 import { TerminalsPane } from "./terminal/TerminalsPane";
 import type { SideView } from "./terminal/Pane";
-import { clearTerminal, disposeCheckoutTerminals } from "./terminal/terminal-views";
+import { clearTerminal, disposeRefTerminals } from "./terminal/terminal-views";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
@@ -30,9 +30,9 @@ import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./terminal/editor-tab";
 import {
-  canDiscardCheckoutEdits,
+  canDiscardRefEdits,
   canDiscardEdits,
-  disposeCheckoutEditors,
+  disposeRefEditors,
   disposeEditor,
   keepEditor,
   openEditorFile,
@@ -47,15 +47,15 @@ import { useEditorSync } from "./diff/use-editor-sync";
  *  autocontract". */
 function requesterOf(
   request: EnvRequest,
-  checkouts: Record<string, Checkout>,
+  resolvedRefs: Record<string, ResolvedRef>,
   tabs: Record<string, TerminalDescriptor[]>,
   agents: AgentInfo[]
 ): string {
-  const checkout = request.checkout && checkouts[checkoutKey(request.checkout)];
-  const tab = checkout && tabs[checkout.key]?.find((entry) => entry.tabId === request.tabId);
+  const resolved = request.ref && resolvedRefs[projectRefKey(request.ref)];
+  const tab = resolved && tabs[resolved.key]?.find((entry) => entry.tabId === request.tabId);
   const agent = tab && (agents.find((entry) => entry.id === tab.agentId)?.displayName ?? tab.agentId);
   const who = agent ? (tab.title ? `${agent} (${tab.title})` : agent) : "An agent";
-  return checkout ? `${who} in ${checkout.name}` : who;
+  return resolved ? `${who} in ${resolved.name}` : who;
 }
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
@@ -77,22 +77,23 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useRef(projects);
   projectsRef.current = projects;
-  /** Every open checkout — a project's main worktree and the worktrees TET made — by the key every
-   *  record below is kept under (`checkoutKey`). Identity-stable where unchanged. */
-  const checkoutsHeld = useRef<Record<string, Checkout>>({});
-  const checkouts = useMemo(() => checkoutsByKey(checkoutsHeld, projects), [projects]);
+  /** Each project's repository and the worktrees TET made, by the key every
+   *  record below is kept under (`projectRefKey`). Identity-stable where unchanged. */
+  const refsHeld = useRef<Record<string, ResolvedRef>>({});
+  const resolvedRefs = useMemo(() => resolvedByKey(refsHeld, projects), [projects]);
   /** For callbacks that only need it on a click: see `tabsRef`. */
-  const checkoutsRef = useRef(checkouts);
-  checkoutsRef.current = checkouts;
-  /** The checkout in front, by key. */
+  const resolvedRefsRef = useRef(resolvedRefs);
+  resolvedRefsRef.current = resolvedRefs;
+  /** The repository or worktree in front, by key. */
   const [activeKey, setActiveKey] = useState<string | null>(null);
   /** For callbacks the project list gets, read on a click: see `tabsRef`. */
   const activeKeyRef = useRef(activeKey);
   activeKeyRef.current = activeKey;
   useEffect(() => rememberActive(activeKey), [activeKey]);
-  /** Each checkout's repository state; everything below is by checkout key too, but `sandboxed`. */
+  /** Each repository's or worktree's repository state; everything below is by `projectRefKey` too,
+   *  but `sandboxed`. */
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
-  /** Every checkout's tabs: the project list needs all of them at once. */
+  /** Every repository's and worktree's tabs: the project list needs all of them at once. */
   const [tabs, setTabs] = useState<Record<string, TerminalDescriptor[]>>({});
   /**
    * For callbacks that read it only on a click: depending on `tabs` would remake them, and every
@@ -101,17 +102,17 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
   /**
-   * Renderer-only, see `editor-tab.ts`; a checkout with none has no entry. Untouched tabs keep
-   * their instance across updates: `stripTabs` compares items.
+   * Renderer-only, see `editor-tab.ts`; a repository or worktree with none has no entry. Untouched
+   * tabs keep their instance across updates: `stripTabs` compares items.
    */
   const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab[]>>({});
   const editorTabsRef = useRef(editorTabs);
   editorTabsRef.current = editorTabs;
   /**
-   * Each checkout's tab strip: its terminals, then its editor tabs. The layout reconciles against
-   * it, panes draw it, next/previous step through it; marks and `seen` stay on `tabs` (the editor
-   * has no turns). Identity: `tabs`' own list without a file open, else the previous list while
-   * unchanged.
+   * Each repository's or worktree's tab strip: its terminals, then its editor tabs. The layout
+   * reconciles against it, panes draw it, next/previous step through it; marks and `seen` stay on
+   * `tabs` (the editor has no turns). Identity: `tabs`' own list without a file open, else the
+   * previous list while unchanged.
    */
   const stripTabsRef = useRef<Record<string, PaneTab[]>>({});
   const stripTabs = useMemo(() => {
@@ -123,8 +124,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     return next;
   }, [tabs, editorTabs]);
   /**
-   * Checkouts with something starting (bootstrap listing, a CLI booting). Read by the progress bar
-   * and the layout persistence.
+   * Repositories and worktrees with something starting (bootstrap listing, a CLI booting). Read by
+   * the progress bar and the layout persistence.
    */
   const [starting, setStarting] = useState<Record<string, boolean>>({});
   /**
@@ -137,7 +138,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     starting
   );
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
-  const { activeEditors, forgetCheckout: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
+  const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git pane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
   // Pane defaults and limits; both side-pane views share the two below ("git-panels" predates the
@@ -169,7 +170,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * at width 0 while in, so opening and closing both transition — and the sash sets the same
    * width, where an animated one would lag the pointer. Set by what opens or closes the pane,
    * cleared once the transition ends; switching views while out slides nothing. Not without a
-   * checkout: no pane is drawn then, and nothing would end the transition.
+   * repository or worktree: no pane is drawn then, and nothing would end the transition.
    */
   const [sideSliding, setSideSliding] = useState(false);
   const stopSliding = useCallback(() => setSideSliding(false), []);
@@ -202,7 +203,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /**
    * Each tet.json's `sbx.enabled`, by project id — a worktree runs as its project does. Replaced
    * only where it changed (the memoized list re-renders otherwise). Any writer of that file
-   * (dialog, agent, editor, checkout) arrives as `commands:changed`.
+   * (dialog, agent, editor, repository or worktree) arrives as `commands:changed`.
    */
   const [sandboxed, setSandboxed] = useState<Record<string, boolean>>({});
   /** Projects whose flag was read on arrival — not `sandboxed`, which holds no entry for "off".
@@ -211,18 +212,18 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   useEffect(() => {
     const unsubscribers = [
-      window.tet.repository.onState(({ checkout, state }) =>
-        setStates((current) => ({ ...current, [checkoutKey(checkout)]: state }))
+      window.tet.repository.onState(({ ref, state }) =>
+        setStates((current) => ({ ...current, [projectRefKey(ref)]: state }))
       ),
-      window.tet.terminals.onTabs(({ checkout, tabs: list }) =>
-        setTabs((current) => ({ ...current, [checkoutKey(checkout)]: list }))
+      window.tet.terminals.onTabs(({ ref, tabs: list }) =>
+        setTabs((current) => ({ ...current, [projectRefKey(ref)]: list }))
       ),
-      window.tet.terminals.onStatus(({ checkout, tabId, status }) => {
-        const key = checkoutKey(checkout);
+      window.tet.terminals.onStatus(({ ref, tabId, status }) => {
+        const key = projectRefKey(ref);
       // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
       // it off screen (main flushes the old output before the status, the new one's has not come).
         if (status === "running" && tabsRef.current[key]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
-          clearTerminal(checkout, tabId);
+          clearTerminal(ref, tabId);
         }
         setTabs((current) => {
           const list = current[key];
@@ -231,8 +232,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             : current;
         });
       }),
-      window.tet.terminals.onStartupProgress(({ checkout, show }) => {
-        const key = checkoutKey(checkout);
+      window.tet.terminals.onStartupProgress(({ ref, show }) => {
+        const key = projectRefKey(ref);
         setStarting((current) => (current[key] === show ? current : { ...current, [key]: show }));
       })
     ];
@@ -242,17 +243,18 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       setProjects(stored);
       setActiveKey((current) => current ?? activeAtStart(stored));
       const fetched = await Promise.all(
-        stored.flatMap(checkoutsOf).map(async (checkout) => {
+        stored.flatMap(projectRefsOf).map(async (ref) => {
           const [state, list, isStarting] = await Promise.all([
-            window.tet.repository.state(checkout),
-            window.tet.terminals.list(checkout),
-            window.tet.terminals.starting(checkout)
+            window.tet.repository.state(ref),
+            window.tet.terminals.list(ref),
+            window.tet.terminals.starting(ref)
           ]);
-          return [checkoutKey(checkout), state, list, isStarting] as const;
+          return [projectRefKey(ref), state, list, isStarting] as const;
         })
       );
-      // A checkout closed meanwhile was forgotten already: merging its entries would revive it.
-      const open = new Set(projectsRef.current.flatMap(checkoutsOf).map(checkoutKey));
+      // A repository or worktree closed meanwhile was forgotten already: merging its entries would
+      // revive it.
+      const open = new Set(projectsRef.current.flatMap(projectRefsOf).map(projectRefKey));
       const loaded = fetched.filter(([key]) => open.has(key));
       // Pushes that landed meanwhile are newer than what was fetched.
       setStates((current) => ({
@@ -274,25 +276,25 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     []
   );
 
-  /** A checkout's key, as a row or the git pane selects it. */
+  /** A repository's or worktree's key, as a row or the git pane selects it. */
   const select = useCallback((key: string) => setActiveKey(key), []);
 
-  /** Drops everything held for a checkout; the project list is the caller's. */
-  const forgetCheckout = useCallback((ref: CheckoutRef) => {
-    const key = checkoutKey(ref);
+  /** Drops everything held for a repository or worktree; the project list is the caller's. */
+  const forgetProjectRef = useCallback((ref: ProjectRef) => {
+    const key = projectRefKey(ref);
     setStates((current) => forget(current, key));
     setTabs((current) => forget(current, key));
     setStarting((current) => forget(current, key));
     setEditorTabs((current) => forget(current, key));
     forgetEditorSync(key);
-    disposeCheckoutEditors(ref);
+    disposeRefEditors(ref);
     forgetLayout(key);
     busyCursor.current = forget(busyCursor.current, key);
-    // The xterms live outside React; this is where a checkout ends for good.
-    disposeCheckoutTerminals(ref);
+    // The xterms live outside React; this is where a repository or worktree ends for good.
+    disposeRefTerminals(ref);
   }, [forgetLayout, forgetEditorSync]);
 
-  /** A project's sbx switch goes with the project, not with a checkout of it. */
+  /** A project's sbx switch goes with the project, not with a repository or worktree of it. */
   const forgetSandboxed = useCallback((projectId: string) => {
     setSandboxed((current) => forget(current, projectId));
     sandboxedRead.current.delete(projectId);
@@ -302,7 +304,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    *  `projects:changed`. */
   const removeProject = useCallback(async (projectId: string) => {
     const project = projectsRef.current.find((entry) => entry.id === projectId);
-    if (!project || !(await canDiscardCheckoutEdits(...checkoutsOf(project)))) {
+    if (!project || !(await canDiscardRefEdits(...projectRefsOf(project)))) {
       return;
     }
     const result = await window.tet.projects.remove(projectId);
@@ -321,7 +323,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         setProjects(list);
         setActiveKey((current) => activeAfterChange(current, list, removed, show));
         for (const ref of removed ?? []) {
-          forgetCheckout(ref);
+          forgetProjectRef(ref);
           if (ref.worktree === undefined) {
             forgetSandboxed(ref.projectId);
           }
@@ -336,7 +338,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           });
         }
       }),
-    [forgetCheckout, forgetSandboxed]
+    [forgetProjectRef, forgetSandboxed]
   );
 
   const readSandboxed = useCallback(async (projectId: string) => {
@@ -364,8 +366,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
 
   /**
-   * Shows a tab opened from outside the terminals pane, bringing its checkout to front — a one-off
-   * write into the layout (`placeTab`: a saved command's goes where its line last lay).
+   * Shows a tab opened from outside the terminals pane, bringing its repository or worktree to
+   * front — a one-off write into the layout (`placeTab`: a saved command's goes where its line last
+   * lay).
    */
   const showTab = useCallback(
     (key: string, tabId: string, command?: string) => {
@@ -377,7 +380,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   // A control-channel tab, shown like a saved command's: drawing it starts its process.
   useEffect(
-    () => window.tet.terminals.onShow(({ checkout, tabId }) => showTab(checkoutKey(checkout), tabId)),
+    () => window.tet.terminals.onShow(({ ref, tabId }) => showTab(projectRefKey(ref), tabId)),
     [showTab]
   );
 
@@ -394,11 +397,12 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
   const covered = useWindowCovered();
 
-  const activeCheckout = (activeKey ? checkouts[activeKey] : undefined) ?? null;
+  const activeResolved = (activeKey ? resolvedRefs[activeKey] : undefined) ?? null;
 
   /**
-   * The active checkout's tabs in front of the user (`tabsInFront`) — the one definition marks,
-   * `seen` and toasts (`terminals.inFront`) go by. Identity-stable: it is reported on change.
+   * The active repository's or worktree's tabs in front of the user (`tabsInFront`) — the one
+   * definition marks, `seen` and toasts (`terminals.inFront`) go by. Identity-stable: it is
+   * reported on change.
    */
   const inFrontRef = useRef<string[]>(NO_IDS);
   const inFront = useMemo(() => {
@@ -408,7 +412,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, [focused, covered, activeKey, layouts]);
 
   // May include editor tabs, which match no tab in the main process.
-  const activeRef = activeCheckout?.ref ?? null;
+  const activeRef = activeResolved?.ref ?? null;
   useEffect(() => {
     window.tet.terminals.inFront(activeRef, inFront);
   }, [activeRef, inFront]);
@@ -439,14 +443,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   );
 
   /**
-   * The above as tab ids plus `busy` (`CheckoutMarks`), per checkout, identity-stable where unchanged:
-   * panes and the project list take them as props, and most pushes change nothing here. `busy`
-   * includes the tab on screen (a spinner is about now) but not one waiting on a question: that
-   * session is not working, and both marks would stand side by side.
+   * The above as tab ids plus `busy` (`RefMarks`), per repository or worktree, identity-stable
+   * where unchanged: panes and the project list take them as props, and most pushes change nothing
+   * here. `busy` includes the tab on screen (a spinner is about now) but not one waiting on a
+   * question: that session is not working, and both marks would stand side by side.
    */
-  const marksRef = useRef<Record<string, CheckoutMarks>>({});
+  const marksRef = useRef<Record<string, RefMarks>>({});
   const marks = useMemo(() => {
-    const next: Record<string, CheckoutMarks> = {};
+    const next: Record<string, RefMarks> = {};
     for (const key of Object.keys(tabs)) {
       const previous = marksRef.current[key];
       next[key] = {
@@ -460,13 +464,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, [tabs, markedTabs, startingTabs]);
 
   /**
-   * A row's HEAD, first remote and dirty flag, by checkout, identity-stable where unchanged (`states`
-   * is fresh on every push, so every field is a value — the remote by what the row shows of it).
-   * No git call of its own: `changes` comes with every refresh.
+   * A row's HEAD, first remote and dirty flag, by repository or worktree, identity-stable where
+   * unchanged (`states` is fresh on every push, so every field is a value — the remote by what the
+   * row shows of it). No git call of its own: `changes` comes with every refresh.
    */
-  const headsRef = useRef<Record<string, CheckoutHead>>({});
+  const headsRef = useRef<Record<string, RefHead>>({});
   const heads = useMemo(() => {
-    const next: Record<string, CheckoutHead> = {};
+    const next: Record<string, RefHead> = {};
     for (const [key, state] of Object.entries(states)) {
       const base = state.worktrees.find((worktree) => worktree.current)?.base;
       const target = worktreeBase(state);
@@ -529,7 +533,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     if (!activeRef) {
       return;
     }
-    for (const tab of tabs[checkoutKey(activeRef)] ?? []) {
+    for (const tab of tabs[projectRefKey(activeRef)] ?? []) {
       if (inFront.includes(tab.tabId) && tab.finishedAt !== undefined) {
         window.tet.terminals.seen(activeRef, tab.tabId);
       }
@@ -538,8 +542,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   /** A shell tab — a row's "terminal". */
   const openTerminal = useCallback(
-    (checkout: CheckoutRef) => {
-      void window.tet.terminals.create(checkout, "shell").then((tab) => showTab(checkoutKey(checkout), tab.tabId));
+    (ref: ProjectRef) => {
+      void window.tet.terminals.create(ref, "shell").then((tab) => showTab(projectRefKey(ref), tab.tabId));
     },
     [showTab]
   );
@@ -586,8 +590,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, [activeRef, openTerminal]);
 
   /**
-   * Refresh on window focus, for changes the watcher missed. Only the checkout on screen — each
-   * other would cost three git processes for a state nobody reads.
+   * Refresh on window focus, for changes the watcher missed. Only the repository or worktree on
+   * screen — each other would cost three git processes for a state nobody reads.
    */
   useEffect(() => {
     if (!activeRef) {
@@ -651,8 +655,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   );
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
   /**
-   * A row's git mark: switches to the checkout and slides git out; on the shown checkout, the
-   * strip's toggle.
+   * A row's git mark: switches to the repository or worktree and slides git out; on the one shown,
+   * the strip's toggle.
    */
   const showChanges = useCallback(
     (key: string) => {
@@ -681,13 +685,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    *
    * Handed as is to every way in but the changes list (`openActiveDiff`) — the Explorer, its
    * search, a path ctrl-clicked in a terminal, a Markdown preview's link: the file itself, in the
-   * checkout the view names.
+   * repository or worktree the view names.
    */
   const openEditor = useCallback(
-    (checkout: CheckoutRef, path: string, how: OpenEditor = {}) => {
-      const key = checkoutKey(checkout);
+    (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
+      const key = projectRefKey(ref);
       const open = editorTabsRef.current[key]?.find((tab) => tab.path === path);
-      const preview = how.keep ? undefined : previewEditorTab(checkout);
+      const preview = how.keep ? undefined : previewEditorTab(ref);
       let tabId: string;
       if (open) {
         tabId = open.tabId;
@@ -705,15 +709,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         }
       } else if (preview !== undefined) {
         tabId = preview;
-        openEditorFile(checkout, tabId, path, true, how);
+        openEditorFile(ref, tabId, path, true, how);
         setEditorTabs((current) => ({
           ...current,
           [key]: (current[key] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
         }));
       } else {
         tabId = nextEditorTabId();
-        openEditorFile(checkout, tabId, path, how.keep !== true, how);
-        setEditorTabs((current) => ({ ...current, [key]: [...(current[key] ?? []), { tabId, checkout, path }] }));
+        openEditorFile(ref, tabId, path, how.keep !== true, how);
+        setEditorTabs((current) => ({ ...current, [key]: [...(current[key] ?? []), { tabId, ref, path }] }));
       }
       activateTab(key, tabId);
     },
@@ -722,9 +726,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   // A file the control channel asked for, brought to front.
   useEffect(
     () =>
-      window.tet.repository.onOpenEditor(({ checkout, path, keep }) => {
-        setActiveKey(checkoutKey(checkout));
-        openEditor(checkout, path, { keep });
+      window.tet.repository.onOpenEditor(({ ref, path, keep }) => {
+        setActiveKey(projectRefKey(ref));
+        openEditor(ref, path, { keep });
       }),
     [openEditor]
   );
@@ -749,7 +753,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     },
     [activeRef, openEditor]
   );
-  /** Disposes the editors; the layout collapses a pane left empty. By checkout key. */
+  /** Disposes the editors; the layout collapses a pane left empty. By `projectRefKey`. */
   const closeEditors = useCallback((key: string, tabIds: string[]) => {
     void canDiscardEdits(tabIds).then((discard) => {
       if (!discard) {
@@ -777,7 +781,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         <div className="sidebar" style={{ width: sidebarWidth }}>
           <ProjectList
             projects={projects}
-            checkouts={checkouts}
+            resolvedRefs={resolvedRefs}
             activeKey={activeKey}
             onSelect={select}
             onRemove={removeProject}
@@ -804,7 +808,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             reverse
             onResize={setCommandsHeight}
           />
-          <CommandList checkout={activeCheckout} height={commandsHeight} onOpenTab={showTab} />
+          <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
         </div>
         <Sash
           orientation="vertical"
@@ -814,10 +818,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           onResize={setSidebarWidth}
         />
 
-        {/* One side pane for all checkouts, in the DOM at width 0 while in (so a slide has a box to
-            transition). Both views stay mounted, hidden while not shown, so a switch keeps
+        {/* One side pane for the repositories and worktrees, in the DOM at width 0 while in (so a
+            slide has a box to transition). Both views stay mounted, hidden while not shown, so a switch keeps
             selection, filter, open folders and a running action's bar. */}
-        {activeCheckout && (
+        {activeResolved && (
           <>
             <div
               className={`side-pane${sideSliding ? " sliding" : ""}`}
@@ -825,16 +829,16 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               onTransitionEnd={stopSliding}
             >
               <FilesPane
-                checkout={activeCheckout}
+                resolved={activeResolved}
                 state={activeState}
                 shown={sideView === "files"}
-                openPath={editorTabs[activeCheckout.key]?.find((tab) => tab.tabId === activeEditors[activeCheckout.key])?.path ?? null}
+                openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
                 onOpenFile={openEditor}
                 searchHeight={fileSearchHeight}
                 onSearchHeight={setFileSearchHeight}
               />
               <GitPane
-                checkout={activeCheckout}
+                resolved={activeResolved}
                 state={activeState}
                 shown={sideView === "git"}
                 branch={activeBranch}
@@ -857,31 +861,32 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         )}
 
         <main className="content">
-          {/* Every checkout's terminals stay mounted, so switching keeps buffers and processes. */}
-          {Object.values(checkouts).map((checkout) => (
+          {/* Every repository's and worktree's terminals stay mounted, so switching keeps buffers
+              and processes. */}
+          {Object.values(resolvedRefs).map((resolved) => (
             <TerminalsPane
-              key={checkout.key}
-              checkout={checkout}
-              tabs={stripTabs[checkout.key] ?? NO_TABS}
-              visible={checkout.key === activeKey}
+              key={resolved.key}
+              resolved={resolved}
+              tabs={stripTabs[resolved.key] ?? NO_TABS}
+              visible={resolved.key === activeKey}
               sideView={sideView}
               onToggleSideView={toggleSideView}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
-              externalBusy={starting[checkout.key] === true && (marks[checkout.key]?.starting ?? NO_IDS).length === 0}
+              externalBusy={starting[resolved.key] === true && (marks[resolved.key]?.starting ?? NO_IDS).length === 0}
               onOpenFile={openEditor}
               onCloseEditors={closeEditors}
-              layout={layouts[checkout.key] ?? DEFAULT_LAYOUT}
+              layout={layouts[resolved.key] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
               onSnapTab={snapTab}
               onFocusPane={focusPane}
               onOpenSettings={openSettings}
-              finishedTabIds={marks[checkout.key]?.finished ?? NO_IDS}
-              waitingTabIds={marks[checkout.key]?.waiting ?? NO_IDS}
-              startingTabIds={marks[checkout.key]?.starting ?? NO_IDS}
+              finishedTabIds={marks[resolved.key]?.finished ?? NO_IDS}
+              waitingTabIds={marks[resolved.key]?.waiting ?? NO_IDS}
+              startingTabIds={marks[resolved.key]?.starting ?? NO_IDS}
             />
           ))}
-          {!activeCheckout && (
+          {!activeResolved && (
             <div className="empty-workspace">
               <p>No repository open.</p>
               <button className="button" onClick={openAdd}>
@@ -907,7 +912,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         <EnvDialog
           key={envRequest.id}
           request={envRequest}
-          requester={requesterOf(envRequest, checkouts, tabs, agents)}
+          requester={requesterOf(envRequest, resolvedRefs, tabs, agents)}
           onClose={closeEnvRequest}
         />
       )}

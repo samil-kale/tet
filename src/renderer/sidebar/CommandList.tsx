@@ -8,7 +8,7 @@ import { ColorField, TextField } from "../ui/Field";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { PlayIcon, PlusIcon } from "../ui/icons";
 import { Section } from "../ui/Section";
-import type { Checkout } from "../checkout";
+import type { ResolvedRef } from "../resolved-ref";
 
 /** Our own type, so a row dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-command";
@@ -122,22 +122,22 @@ function describe(command: ProjectCommand): string {
 }
 
 interface CommandListProps {
-  /** The checkout in front; null when no project is open. */
-  checkout: Checkout | null;
+  /** The repository or worktree in front; null when no project is open. */
+  resolved: ResolvedRef | null;
   /** Set by the sash above the list. */
   height: number;
   /** Brings a started command's tab to front in the pane the command last ran in — hence the
-      command line. By checkout key. */
+      command line. By resolved key. */
   onOpenTab: (key: string, tabId: string, command?: string) => void;
 }
 
 /** A project's saved commands, from tet.json in the repository root, so they travel with the
- *  project. Running one opens a terminal tab in the checkout in front. One list serves every
- *  project: the active one's. */
-export const CommandList = memo(function CommandList({ checkout, height, onOpenTab }: CommandListProps) {
-  const projectId = checkout?.ref.projectId ?? null;
+ *  project. Running one opens a terminal tab in the repository or worktree in front. One list
+ *  serves every project: the active one's. */
+export const CommandList = memo(function CommandList({ resolved, height, onOpenTab }: CommandListProps) {
+  const projectId = resolved?.ref.projectId ?? null;
   /** A worktree runs its project's commands but never changes them (tet-json.ts's configRoot). */
-  const editable = checkout?.ref.worktree === undefined;
+  const editable = resolved?.ref.worktree === undefined;
   /** Tagged with its project: until the next project's list answers, the previous one is held but
    *  counts as none, so neither Run nor a reorder acts on it in the wrong project. */
   const [held, setHeld] = useState<{ projectId: string; commands: ProjectCommand[] } | undefined>(undefined);
@@ -277,12 +277,12 @@ export const CommandList = memo(function CommandList({ checkout, height, onOpenT
     }
   };
 
-  /** Opens the command's tab in the checkout in front and switches to it. */
+  /** Opens the command's tab in the repository or worktree in front and switches to it. */
   const run = (command: ProjectCommand): void => {
-    if (!checkout) {
+    if (!resolved) {
       return;
     }
-    const { key, ref } = checkout;
+    const { key, ref } = resolved;
     void window.tet.commands.run(ref, command).then((tab) => {
       if (tab) {
         onOpenTab(key, tab.tabId, tab.command);

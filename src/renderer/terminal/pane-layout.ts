@@ -555,8 +555,8 @@ export function snapZoneAt(
 
 /**
  * `localStorage` under `layout-storage.ts`'s namespace: layout describes the window, not the
- * repository. Per checkout (its key), unlike `usePaneSize`/`usePaneToggle`'s fixed keys. `suffix`
- * tells the layout from `TerminalsPane`'s divider positions.
+ * repository. Per repository or worktree (its key), unlike `usePaneSize`/`usePaneToggle`'s fixed
+ * keys. `suffix` tells the layout from `TerminalsPane`'s divider positions.
  */
 export function layoutStorageKey(key: string, suffix: string): string {
   return layoutKey(`terminals.${key}.${suffix}`);
@@ -673,7 +673,8 @@ export function saveLayout(key: string, serialized: string): void {
   localStorage.setItem(layoutStorageKey(key, "layout"), serialized);
 }
 
-/** Drops everything stored under a checkout's key: removed, it never comes back under it. */
+/** Drops everything stored under a repository's or worktree's key: removed, it never comes back
+ *  under it. */
 export function dropStoredLayout(key: string): void {
   const prefix = layoutStorageKey(key, "");
   const stored = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index));

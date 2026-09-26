@@ -16,19 +16,19 @@ import type { LayoutTab, PaneId, ProjectLayout, SnapTransition } from "./pane-la
 import type { PaneTab } from "./editor-tab";
 import { forget } from "../identity";
 
-/** Shared instance, so a pane's props stay identical for a checkout that has none. */
+/** Shared instance, so a pane's props stay identical for a repository or worktree that has none. */
 export const NO_TABS: PaneTab[] = [];
 
 /**
- * A checkout's layout (by its key): what is held, else what the last run saved. Loaded at first sight, not up
- * front: tabs can arrive before the project list, and a layout written then would overwrite the
- * restore. `localStorage` is synchronous, so safe in an updater.
+ * A repository's or worktree's layout (by its key): what is held, else what the last run saved.
+ * Loaded at first sight, not up front: tabs can arrive before the project list, and a layout
+ * written then would overwrite the restore. `localStorage` is synchronous, so safe in an updater.
  */
 function layoutOf(layouts: Record<string, ProjectLayout>, key: string): ProjectLayout {
   return layouts[key] ?? loadLayout(key);
 }
 
-/** Every checkout's split state, and the callbacks `App` hands the panes. */
+/** Every repository's and worktree's split state, and the callbacks `App` hands the panes. */
 interface ProjectLayouts {
   layouts: Record<string, ProjectLayout>;
   activateTab: (key: string, tabId: string, paneId?: PaneId) => void;
@@ -39,16 +39,17 @@ interface ProjectLayouts {
 }
 
 /**
- * Each checkout's split state, by checkout key. Held in `App`: the shortcuts and marks/seen need what is on screen
- * across panes (AGENTS.md, "Split view"). Reconciled against `tabs`, persisted once `starting`
- * first reports a checkout not starting.
+ * Each repository's or worktree's split state, by `projectRefKey`. Held in `App`: the shortcuts and
+ * marks/seen need what is on screen across panes (AGENTS.md, "Split view"). Reconciled against
+ * `tabs`, persisted once `starting` first reports a repository or worktree not starting.
  */
 export function useProjectLayouts(
   tabs: Record<string, LayoutTab[]>,
   starting: Record<string, boolean>
 ): ProjectLayouts {
   const [layouts, setLayouts] = useState<Record<string, ProjectLayout>>({});
-  /** The tab list `layouts` was last normalized against, per checkout — see `normalizeLayout`. */
+  /** The tab list `layouts` was last normalized against, per repository or worktree — see
+   *  `normalizeLayout`. */
   const previousTabsRef = useRef<Record<string, LayoutTab[]>>({});
   /** Read by the callbacks: depending on `tabs` would remake every pane's props on every push. */
   const tabsRef = useRef(tabs);
@@ -57,9 +58,9 @@ export function useProjectLayouts(
   /**
    * Reconciles every layout with its tab list (`collapseClosed`).
    *
-   * A layout effect: a checkout's first tabs are its layout's first sight (`layoutOf`), and a
-   * passive effect would paint one frame of the default layout. An unchanged layout is the same
-   * object.
+   * A layout effect: a repository's or worktree's first tabs are its layout's first sight
+   * (`layoutOf`), and a passive effect would paint one frame of the default layout. An unchanged
+   * layout is the same object.
    */
   useLayoutEffect(() => {
     // Outside the updater, which may run late and must have no side effect.
@@ -84,8 +85,9 @@ export function useProjectLayouts(
   }, [tabs]);
 
   /**
-   * The last written layout per checkout. Saved on `tabs` too: output is keyed by session id, so a
-   * push giving a tab one changes it. Compared as the string — spinner ticks change `tabs` often.
+   * The last written layout per repository or worktree. Saved on `tabs` too: output is keyed by
+   * session id, so a push giving a tab one changes it. Compared as the string — spinner ticks
+   * change `tabs` often.
    */
   const savedLayoutsRef = useRef<Record<string, string>>({});
   /**
@@ -174,7 +176,7 @@ export function useProjectLayouts(
     [activateTab]
   );
 
-  /** Lets go of a removed checkout's state, what is stored of it too. */
+  /** Lets go of a removed repository's or worktree's state, what is stored of it too. */
   const forgetLayout = useCallback((key: string) => {
     setLayouts((current) => forget(current, key));
     dropStoredLayout(key);

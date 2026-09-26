@@ -10,8 +10,8 @@ import { WINDOW_ARGS } from "../shared/api";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
-import { checkoutKey, checkoutsOf, overridesMachineNote } from "../shared/types";
-import type { CheckoutRef, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
+import { projectRefKey, projectRefsOf, overridesMachineNote } from "../shared/types";
+import type { ProjectRef, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readCommands, readSbxConfig } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
@@ -21,8 +21,8 @@ import { EnvRequests, EnvStore } from "./environment";
 import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
-import { checkoutOf } from "./checkout";
-import { checkoutPath } from "./project-dirs";
+import { resolveProjectRef } from "./resolved-ref";
+import { projectRefPath } from "./project-dirs";
 import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, resolveStoredIds, syncWorktrees, type ProjectDeps } from "./projects";
 import { configureSandboxes, readSbxStatus, readSbxUser } from "./sbx";
 import { SbxAccountStore, signInToSbx } from "./sbx-accounts";
@@ -84,8 +84,9 @@ ipcMain.on("app:notice-listening", () => {
 const EDITOR_CONTENT_TIMEOUT_MS = 2000;
 let editorContentRequests = 0;
 
-/** A checkout's active editor tab text (ControlDeps.editorContent), on a per-request reply channel. */
-function editorContent(checkout: CheckoutRef): Promise<string | undefined> {
+/** A repository's or worktree's active editor tab text (ControlDeps.editorContent), on a
+ *  per-request reply channel. */
+function editorContent(ref: ProjectRef): Promise<string | undefined> {
   if (!window || window.isDestroyed()) {
     return Promise.resolve(undefined);
   }
@@ -101,7 +102,7 @@ function editorContent(checkout: CheckoutRef): Promise<string | undefined> {
       resolve(undefined);
     }, EDITOR_CONTENT_TIMEOUT_MS);
     ipcMain.once(reply, answer);
-    send("editor:content-request", { checkout, reply });
+    send("editor:content-request", { ref, reply });
   });
 }
 
@@ -115,21 +116,21 @@ let flushTimer: ReturnType<typeof setTimeout> | undefined;
  */
 function flushOutput(): void {
   flushTimer = undefined;
-  const live = [...pendingOutput.values()].filter((pending) => sessions.get(pending.checkout)?.hasTab(pending.tabId));
+  const live = [...pendingOutput.values()].filter((pending) => sessions.get(pending.ref)?.hasTab(pending.tabId));
   pendingOutput.clear();
   if (live.length > 0) {
     send("terminals:output", live);
   }
 }
 
-function queueOutput(checkout: CheckoutRef, tabId: string, data: string): void {
+function queueOutput(ref: ProjectRef, tabId: string, data: string): void {
   countActivity("output");
-  const key = `${checkoutKey(checkout)}\u0000${tabId}`;
+  const key = `${projectRefKey(ref)}\u0000${tabId}`;
   const pending = pendingOutput.get(key);
   if (pending) {
     pending.data += data;
   } else {
-    pendingOutput.set(key, { checkout, tabId, data });
+    pendingOutput.set(key, { ref, tabId, data });
   }
   flushTimer ??= setTimeout(flushOutput, OUTPUT_FLUSH_MS);
 }
@@ -236,12 +237,12 @@ const envRequests = new EnvRequests(
     // Out of sight, told as a question is (session-manager's toast): the agent's shell gives up
     // waiting at some point, and the dialog with it.
     if ((!window.isFocused() || window.isMinimized()) && settings.get().notifications.needsYou) {
-      const tab = request.checkout && request.tabId ? findTab(request.checkout, request.tabId) : undefined;
+      const tab = request.ref && request.tabId ? findTab(request.ref, request.tabId) : undefined;
       const agent = AGENTS.find((entry) => entry.id === tab?.agentId)?.displayName ?? "An agent";
       showDesktopNotification(
         `${agent}: Environment variables needed`,
         `Asks for ${request.variables.map((variable) => variable.name).join(", ")} — answer it in TET`,
-        tab && request.checkout && { checkout: request.checkout, tabId: tab.tabId }
+        tab && request.ref && { ref: request.ref, tabId: tab.tabId }
       );
     }
     return true;
@@ -252,54 +253,55 @@ const envRequests = new EnvRequests(
 const records = new ControlRecords();
 const repositories = new RepositoryManager(
   dataRoot,
-  (checkout, state) => {
-    send("repository:state-changed", { checkout, state });
-    // Every checkout's state lists the project's worktrees; a worktree's own is the first to see a
-    // branch switched in it (the main worktree's watcher skips another worktree's events).
-    syncWorktrees(projectDeps, checkout.projectId, state);
+  (ref, state) => {
+    send("repository:state-changed", { ref, state });
+    // Every repository's and worktree's state lists the project's worktrees; a worktree's own is
+    // the first to see a branch switched in it (the repository's watcher skips a worktree's
+    // events).
+    syncWorktrees(projectDeps, ref.projectId, state);
   },
   notice,
   (projectId) => {
     send("commands:changed", { projectId });
     // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged) — in
-    // every checkout of the project.
+    // every repository and worktree of the project.
     for (const manager of sessions.forProject(projectId)) {
       void manager
         .sbxConfigChanged()
         .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
     }
   },
-  (checkout) => send("repository:files-changed", { checkout }),
-  (checkout, path) => send("repository:file-changed", { checkout, path }),
+  (ref) => send("repository:files-changed", { ref }),
+  (ref, path) => send("repository:file-changed", { ref, path }),
   logins
 );
 const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
-  onTabs: (checkout, tabs) => {
-    send("terminals:tabs", { checkout, tabs });
-    awaitedToastTab(checkout);
-    records.keepOutputs(checkout, new Set(tabs.map((tab) => tab.tabId)));
+  onTabs: (ref, tabs) => {
+    send("terminals:tabs", { ref, tabs });
+    awaitedToastTab(ref);
+    records.keepOutputs(ref, new Set(tabs.map((tab) => tab.tabId)));
   },
-  onOutput: (checkout, tabId, data) => {
-    records.addOutput(checkout, tabId, data);
-    queueOutput(checkout, tabId, data);
+  onOutput: (ref, tabId, data) => {
+    records.addOutput(ref, tabId, data);
+    queueOutput(ref, tabId, data);
   },
-  onStatus: (checkout, tabId, status: TerminalStatus) => {
+  onStatus: (ref, tabId, status: TerminalStatus) => {
     // Output batched before the change goes first, so a status never overtakes it (a restart's
     // clear in App.tsx would otherwise run before the dying process's last bytes arrive).
     if (flushTimer) {
       clearTimeout(flushTimer);
       flushOutput();
     }
-    send("terminals:status", { checkout, tabId, status });
+    send("terminals:status", { ref, tabId, status });
   },
-  onStartupProgress: (checkout, show) => send("terminals:startup-progress", { checkout, show }),
+  onStartupProgress: (ref, show) => send("terminals:startup-progress", { ref, show }),
   onNotice: notice
 });
 
-function openCheckout(ref: CheckoutRef): void {
-  const checkout = checkoutOf(dataRoot, store, ref);
-  repositories.open(checkout);
-  sessions.open(checkout);
+function openProjectRef(ref: ProjectRef): void {
+  const resolved = resolveProjectRef(dataRoot, store, ref);
+  repositories.open(resolved);
+  sessions.open(resolved);
 }
 
 /** For opening and closing projects, shared by the window (ipc/) and the control channel. */
@@ -309,7 +311,7 @@ const projectDeps: ProjectDeps = {
   sessions,
   records,
   sbxLocal,
-  openCheckout,
+  openProjectRef,
   dataRoot,
   projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
   notice
@@ -318,15 +320,16 @@ const projectDeps: ProjectDeps = {
 let workspaceOpened: Promise<void> | undefined;
 
 /**
- * Opens the stored projects once the requirements check passes, each checkout of each. Idempotent:
- * the check reruns. First each project's id as its repository says (resolveStoredIds).
+ * Opens the stored projects once the requirements check passes, the repository and every worktree
+ * of each. Idempotent: the check reruns. First each project's id as its repository says
+ * (resolveStoredIds).
  */
 function openWorkspace(): Promise<void> {
   workspaceOpened ??= (async () => {
     await resolveStoredIds(projectDeps);
     for (const project of store.list()) {
-      for (const ref of checkoutsOf(project)) {
-        timeStartup(`open ${checkoutKey(ref)}`, () => openCheckout(ref));
+      for (const ref of projectRefsOf(project)) {
+        timeStartup(`open ${projectRefKey(ref)}`, () => openProjectRef(ref));
       }
     }
     void markStartup("control", startControl);
@@ -338,20 +341,20 @@ function openWorkspace(): Promise<void> {
 let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
-function findTab(checkout: CheckoutRef, tabId: string): TerminalDescriptor | undefined {
-  return sessions.get(checkout)?.snapshot().find((tab) => tab.tabId === tabId);
+function findTab(ref: ProjectRef, tabId: string): TerminalDescriptor | undefined {
+  return sessions.get(ref)?.snapshot().find((tab) => tab.tabId === tabId);
 }
 
 /**
  * Brings a toast's tab to the front, found by tab id or by session id — the tab id of a restored
  * tab (TerminalDescriptor). Returns whether it was found.
  */
-function showToastTarget(target: { checkout: CheckoutRef; tabId: string; sessionId?: string }): boolean {
+function showToastTarget(target: { ref: ProjectRef; tabId: string; sessionId?: string }): boolean {
   const tab =
-    findTab(target.checkout, target.tabId) ??
-    (target.sessionId !== undefined ? findTab(target.checkout, target.sessionId) : undefined);
+    findTab(target.ref, target.tabId) ??
+    (target.sessionId !== undefined ? findTab(target.ref, target.sessionId) : undefined);
   if (tab) {
-    send("terminals:show", { checkout: target.checkout, tabId: tab.tabId });
+    send("terminals:show", { ref: target.ref, tabId: tab.tabId });
   }
   return tab !== undefined;
 }
@@ -384,7 +387,7 @@ startNotifications({
   revealWindow,
   attractAttention,
   showTab: showToastTarget,
-  sessionIdOf: (target) => findTab(target.checkout, target.tabId)?.sessionId
+  sessionIdOf: (target) => findTab(target.ref, target.tabId)?.sessionId
 });
 
 /**
@@ -423,13 +426,13 @@ async function startControl(): Promise<void> {
         readCommands,
         shutdown,
         records,
-        checkoutPath: (ref) => {
+        projectRefPath: (ref) => {
           const project = store.get(ref.projectId);
-          return project && checkoutPath(dataRoot, project, ref);
+          return project && projectRefPath(dataRoot, project, ref);
         },
-        openEditor: (checkout, filePath, keep) => send("editor:open", { checkout, path: filePath, keep }),
+        openEditor: (ref, filePath, keep) => send("editor:open", { ref, path: filePath, keep }),
         editorContent,
-        showTab: (checkout, tabId) => send("terminals:show", { checkout, tabId }),
+        showTab: (ref, tabId) => send("terminals:show", { ref, tabId }),
         notify: showDesktopNotification,
         applyTheme,
         environment,

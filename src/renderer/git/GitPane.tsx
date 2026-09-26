@@ -1,7 +1,7 @@
 import { memo, useRef } from "react";
 import { syncRemote } from "../../shared/types";
 import type { RepositoryState } from "../../shared/types";
-import type { Checkout } from "../checkout";
+import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
@@ -11,7 +11,7 @@ import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIco
 import { Section } from "../ui/Section";
 
 interface GitPaneProps {
-  checkout: Checkout;
+  resolved: ResolvedRef;
   state: RepositoryState;
   /** False while the files view stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
@@ -19,7 +19,8 @@ interface GitPaneProps {
   /** Set by the sash between tree and changes; held by the app, like the width. */
   treeHeight: number;
   onTreeHeight: (size: number) => void;
-  /** Opens in the checkout's preview tab, a Markdown file with its preview if asked. */
+  /** Opens in the repository's or worktree's preview tab, a Markdown file with its preview if
+   *  asked. */
   onOpenDiff: (path: string, how?: OpenEditor) => void;
   /** See BranchTree. */
   onSelect: (key: string) => void;
@@ -27,7 +28,7 @@ interface GitPaneProps {
 
 /** The side pane's git view: branches over the changed files, nothing else. */
 export const GitPane = memo(function GitPane({
-  checkout,
+  resolved,
   state: latestState,
   shown,
   branch,
@@ -36,12 +37,13 @@ export const GitPane = memo(function GitPane({
   onOpenDiff,
   onSelect
 }: GitPaneProps) {
-  const { acting, act, ask } = useFileAct(checkout.key);
+  const { acting, act, ask } = useFileAct(resolved.key);
   // Hidden, the pane keeps the state it last showed: every push re-rendered the whole tree and list
-  // for nobody. A checkout switch is never held — the keyed views would get another repository's.
-  const held = useRef({ key: checkout.key, state: latestState });
-  if (shown || held.current.key !== checkout.key) {
-    held.current = { key: checkout.key, state: latestState };
+  // for nobody. A repository or worktree switch is never held — the keyed views would get another
+  // repository's.
+  const held = useRef({ key: resolved.key, state: latestState });
+  if (shown || held.current.key !== resolved.key) {
+    held.current = { key: resolved.key, state: latestState };
   }
   const state = held.current.state;
 
@@ -62,7 +64,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title={remote ? `Fetch from ${remote}` : "This repository has no remote"}
               disabled={locked || !canSync}
-              onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(checkout.ref, login))}
+              onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(resolved.ref, login))}
             >
               <SyncIcon />
             </button>
@@ -70,7 +72,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title={state.upstream ? `Pull from ${state.upstream}` : "No upstream to pull from"}
               disabled={locked || !canSync || state.upstream === undefined}
-              onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(checkout.ref, login))}
+              onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(resolved.ref, login))}
             >
               <ArrowDownIcon />
             </button>
@@ -84,7 +86,7 @@ export const GitPane = memo(function GitPane({
               disabled={locked || !canSync}
               onClick={() =>
                 branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", (login) =>
-                  window.tet.repository.push(checkout.ref, login)
+                  window.tet.repository.push(resolved.ref, login)
                 )
               }
             >
@@ -93,10 +95,10 @@ export const GitPane = memo(function GitPane({
           </>
         }
       >
-        {/* Keyed: a menu left open across a checkout switch would act on the next one. */}
+        {/* Keyed: a menu left open across a switch of repository or worktree would act on the next one. */}
         <BranchTree
-          key={checkout.key}
-          checkout={checkout}
+          key={resolved.key}
+          resolved={resolved}
           state={state}
           branch={branch}
           onSelect={onSelect}
@@ -121,7 +123,7 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title="Commit all changes"
               disabled={locked || state.changes.length === 0}
-              onClick={() => void askCommit(checkout.ref, state, undefined, ask)}
+              onClick={() => void askCommit(resolved.ref, state, undefined, ask)}
             >
               <CommitIcon />
             </button>
@@ -130,7 +132,7 @@ export const GitPane = memo(function GitPane({
               title="Stash all changes"
               disabled={locked || state.changes.length === 0}
               // `act`, not `branch.run`: it belongs to this section, whose bar shows it.
-              onClick={() => act(() => window.tet.repository.stashPush(checkout.ref, ""))}
+              onClick={() => act(() => window.tet.repository.stashPush(resolved.ref, ""))}
             >
               <StashIcon />
             </button>
@@ -138,14 +140,14 @@ export const GitPane = memo(function GitPane({
               className="icon-button"
               title="Discard all changes"
               disabled={locked || state.changes.length === 0}
-              onClick={() => void confirmDiscard(checkout.ref, state.changes.map((change) => change.path), act)}
+              onClick={() => void confirmDiscard(resolved.ref, state.changes.map((change) => change.path), act)}
             >
               <DiscardIcon />
             </button>
           </>
         }
       >
-        <ChangesList key={checkout.key} checkout={checkout} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
+        <ChangesList key={resolved.key} resolved={resolved} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
       </Section>
     </div>
   );

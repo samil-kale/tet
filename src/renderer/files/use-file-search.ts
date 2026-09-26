@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileSearchQuery, FileSearchResult } from "../../shared/types";
-import type { Checkout } from "../checkout";
+import type { ResolvedRef } from "../resolved-ref";
 
 /** Typing runs the search, as VS Code's does — but only once the typing stops. */
 const SEARCH_DELAY_MS = 300;
@@ -10,11 +10,11 @@ const SEARCH_DELAY_MS = 300;
  * (`useFileAct` is held the same way); the field itself lives in the pane and asks for a query
  * here, or for null where it is empty.
  *
- * Held with its checkout, as the listing is: one files pane serves all, and a switch must not show
- * the previous checkout's matches. Answers are counted, not flagged — while one search is still
- * running the next has been asked for, and only the newest may be shown.
+ * Held with its repository or worktree, as the listing is: one files pane serves all, and a switch
+ * must not show the previous repository's or worktree's matches. Answers are counted, not flagged —
+ * while one search is still running the next has been asked for, and only the newest may be shown.
  */
-export function useFileSearch(checkout: Checkout): {
+export function useFileSearch(resolved: ResolvedRef): {
   searchResult: FileSearchResult | undefined;
   searching: boolean;
   search: (query: FileSearchQuery | null) => void;
@@ -37,16 +37,16 @@ export function useFileSearch(checkout: Checkout): {
       timer.current = setTimeout(() => {
         // Busy once the search runs, not while the typing is still awaited.
         setSearching(true);
-        void window.tet.repository.searchFiles(checkout.ref, query).then((result) => {
+        void window.tet.repository.searchFiles(resolved.ref, query).then((result) => {
           if (asked.current === seq) {
-            setHeld({ key: checkout.key, result });
+            setHeld({ key: resolved.key, result });
             setSearching(false);
           }
         });
       }, SEARCH_DELAY_MS);
     },
-    [checkout]
+    [resolved]
   );
 
-  return { searchResult: held?.key === checkout.key ? held.result : undefined, searching, search };
+  return { searchResult: held?.key === resolved.key ? held.result : undefined, searching, search };
 }

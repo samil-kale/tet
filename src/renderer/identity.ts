@@ -13,8 +13,8 @@ export function sameList<T>(previous: T[] | undefined, next: T[], empty: T[]): T
 }
 
 /**
- * Drops a closed checkout's (or project's) entry: nothing pushes for it, and a reopened folder gets
- * the same id, so a stale entry would show for a frame.
+ * Drops a closed repository's or worktree's (or project's) entry: nothing pushes for it, and a
+ * reopened folder gets the same id, so a stale entry would show for a frame.
  */
 export function forget<T>(record: Record<string, T>, key: string): Record<string, T> {
   const rest = { ...record };

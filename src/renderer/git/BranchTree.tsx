@@ -1,8 +1,8 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
-import { checkoutKey, checkoutRef, defaultRemote, refName, upstreamName, worktreeName } from "../../shared/types";
+import { projectRefKey, projectRef, defaultRemote, refName, upstreamName, worktreeName } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
-import type { Checkout } from "../checkout";
+import type { ResolvedRef } from "../resolved-ref";
 import type { GitRun } from "./run-action";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, filled, prompt, questionUp } from "../ui/Dialog";
@@ -34,10 +34,11 @@ export interface BranchActions extends GitRun {
 }
 
 interface BranchTreeProps {
-  checkout: Checkout;
+  resolved: ResolvedRef;
   state: RepositoryState;
   branch: BranchActions;
-  /** Brings a checkout of the project to the front, by its key — as a sidebar row does. */
+  /** Brings a repository or worktree of the project to the front, by its key — as a sidebar row
+   *  does. */
   onSelect: (key: string) => void;
 }
 
@@ -49,7 +50,7 @@ type MenuTarget =
   | { kind: "worktree"; worktree: WorktreeInfo };
 
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
-const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the main worktree, or create a new worktree";
+const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or create a new worktree";
 
 /**
  * One collapsible section of the tree. `rows` is called only while the section is open, so a
@@ -81,7 +82,7 @@ function TreeSection({
 }
 
 export const BranchTree = memo(function BranchTree({
-  checkout: shown,
+  resolved: shown,
   state,
   branch,
   onSelect
@@ -98,7 +99,7 @@ export const BranchTree = memo(function BranchTree({
 
   // Plain computations, not memos: `state` is a new object on every push and `query` changes per
   // keystroke, so a memo would miss whenever it matters, to filter a few hundred strings.
-  // The linked ones alone: the main worktree is the repository itself, not one made from it. A
+  // The linked ones alone: the main one is the repository itself, not a worktree made from it. A
   // linked worktree and its branch are one (projects.ts), listed under WORKTREES only.
   const linkedWorktrees = state.worktrees.filter((worktree) => !worktree.main);
   const ownBranches = state.localBranches.filter((name) => !linkedWorktrees.some((worktree) => worktree.branch === name));
@@ -133,9 +134,9 @@ export const BranchTree = memo(function BranchTree({
    *  elsewhere is never opened, so it is only told. */
   const openWorktree = (worktree: WorktreeInfo): void => {
     if (worktree.main) {
-      onSelect(checkoutKey(checkoutRef(projectId)));
+      onSelect(projectRefKey(projectRef(projectId)));
     } else if (worktree.key !== undefined) {
-      onSelect(checkoutKey(checkoutRef(projectId, worktree.key)));
+      onSelect(projectRefKey(projectRef(projectId, worktree.key)));
     } else {
       notify("info", `${worktreeName(worktree)} is checked out in ${worktree.path}, a worktree ${NOT_MADE_BY_TET}`);
     }
@@ -401,7 +402,7 @@ export const BranchTree = memo(function BranchTree({
     const name = worktreeName(worktree);
     const merged = worktree.branch;
     // Only one TET made is renamed or deleted here; one made elsewhere is git's to change.
-    const own = worktree.key === undefined ? undefined : checkoutRef(projectId, worktree.key);
+    const own = worktree.key === undefined ? undefined : projectRef(projectId, worktree.key);
     const upstream = merged ? state.branchUpstreams[merged] : undefined;
     const mergedUpstream = upstream ? upstreamName(upstream) : undefined;
     return [

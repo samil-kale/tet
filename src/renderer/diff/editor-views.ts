@@ -1,6 +1,6 @@
 import type { editor as MonacoEditor } from "monaco-editor";
-import { checkoutKey } from "../../shared/types";
-import type { CheckoutRef, FileContent } from "../../shared/types";
+import { projectRefKey } from "../../shared/types";
+import type { ProjectRef, FileContent } from "../../shared/types";
 import { isMac } from "../platform";
 import { confirm, questionUp } from "../ui/Dialog";
 import { layoutKey } from "../ui/layout-storage";
@@ -87,7 +87,7 @@ interface PreviewView {
 }
 
 interface EditorView {
-  checkout: CheckoutRef;
+  ref: ProjectRef;
   tabId: string;
   /** The diff editor's element and the plain editor's, stacked in the tab's frame and moved
    *  between containers together; never rendered by React. */
@@ -126,7 +126,7 @@ const views = new Map<string, EditorView>();
 /** By tab: a host subscribes before its file was read. */
 const tabListeners = new Map<string, Set<() => void>>();
 /** By project: a pane's progress bar is about every editor tab it holds. */
-const checkoutListeners = new Map<string, Set<() => void>>();
+const refListeners = new Map<string, Set<() => void>>();
 
 /** A tab with no editor yet — one instance, so it compares equal. */
 const CLOSED: EditorSnapshot = {
@@ -179,9 +179,9 @@ export function subscribeEditor(tabId: string, listener: () => void): () => void
   return subscribe(tabListeners, tabId, listener);
 }
 
-/** Fires for any of the checkout's editor tabs. */
-export function subscribeCheckoutEditors(checkout: CheckoutRef, listener: () => void): () => void {
-  return subscribe(checkoutListeners, checkoutKey(checkout), listener);
+/** Fires for any of the repository's or worktree's editor tabs. */
+export function subscribeRefEditors(ref: ProjectRef, listener: () => void): () => void {
+  return subscribe(refListeners, projectRefKey(ref), listener);
 }
 
 /** The code editor on screen: the diff editor's modified side, or the plain one. Null until the
@@ -284,19 +284,19 @@ export function getEditorSnapshot(tabId: string): EditorSnapshot {
   return views.get(tabId)?.snapshot ?? CLOSED;
 }
 
-function checkoutViews(checkout: CheckoutRef): EditorView[] {
-  const key = checkoutKey(checkout);
-  return [...views.values()].filter((view) => checkoutKey(view.checkout) === key);
+function refViews(ref: ProjectRef): EditorView[] {
+  const key = projectRefKey(ref);
+  return [...views.values()].filter((view) => projectRefKey(view.ref) === key);
 }
 
-/** The checkout's preview tab, if it has one. */
-export function previewEditorTab(checkout: CheckoutRef): string | undefined {
-  return checkoutViews(checkout).find((view) => view.snapshot.preview)?.tabId;
+/** The repository's or worktree's preview tab, if it has one. */
+export function previewEditorTab(ref: ProjectRef): string | undefined {
+  return refViews(ref).find((view) => view.snapshot.preview)?.tabId;
 }
 
 function emit(view: EditorView): void {
   tabListeners.get(view.tabId)?.forEach((listener) => listener());
-  checkoutListeners.get(checkoutKey(view.checkout))?.forEach((listener) => listener());
+  refListeners.get(projectRefKey(view.ref))?.forEach((listener) => listener());
 }
 
 /** Dropped for a view disposed meanwhile. */
@@ -312,7 +312,7 @@ function publish(view: EditorView, patch: Partial<EditorSnapshot>): void {
 /** The snapshot for `tet-ctl editor-state` and `editor-list` — see EditorReport. */
 function report(view: EditorView): void {
   const { path, file, loading, dirty, preview } = view.snapshot;
-  window.tet.repository.reportEditor(view.checkout, view.tabId, {
+  window.tet.repository.reportEditor(view.ref, view.tabId, {
     path,
     loading,
     dirty,
@@ -346,7 +346,7 @@ export function editorContent(tabId: string): string | undefined {
  * has made sure nothing unsaved is lost, and calls this before the tab is drawn, whose host
  * attaches the element made here.
  */
-export function openEditorFile(checkout: CheckoutRef, tabId: string, path: string, preview: boolean, how: OpenEditor): void {
+export function openEditorFile(ref: ProjectRef, tabId: string, path: string, preview: boolean, how: OpenEditor): void {
   let view = views.get(tabId);
   if (!view) {
     const host = document.createElement("div");
@@ -354,7 +354,7 @@ export function openEditorFile(checkout: CheckoutRef, tabId: string, path: strin
     const plainHost = document.createElement("div");
     plainHost.className = "editor-host";
     view = {
-      checkout,
+      ref,
       tabId,
       host,
       plainHost,
@@ -401,7 +401,7 @@ export function openEditorFile(checkout: CheckoutRef, tabId: string, path: strin
   });
   applyMode(view);
   const current = view;
-  void window.tet.repository.readFile(checkout, path).then((file) => {
+  void window.tet.repository.readFile(ref, path).then((file) => {
     if (views.get(tabId) !== current || current.readSeq !== seq) {
       return;
     }
@@ -452,7 +452,7 @@ export function setEditorVersion(tabId: string, version: string): void {
   renderPreview(view, 0);
   const seq = view.readSeq;
   const saves = view.saves;
-  void window.tet.repository.readFile(view.checkout, path).then((result) => {
+  void window.tet.repository.readFile(view.ref, path).then((result) => {
     if (views.get(tabId) !== view || view.readSeq !== seq || result.error) {
       return;
     }
@@ -530,7 +530,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
   // the write stays unsaved.
   const content = model.getValue(undefined, true);
   const versionId = model.getAlternativeVersionId();
-  let result = await window.tet.repository.writeFile(view.checkout, path, content, file.mtimeMs);
+  let result = await window.tet.repository.writeFile(view.ref, path, content, file.mtimeMs);
   if (views.get(tabId) !== view || view.readSeq !== seq) {
     return;
   }
@@ -549,7 +549,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
       publish(view, { saving: false });
       return;
     }
-    result = await window.tet.repository.writeFile(view.checkout, path, content, result.diskMtimeMs);
+    result = await window.tet.repository.writeFile(view.ref, path, content, result.diskMtimeMs);
     if (views.get(tabId) !== view || view.readSeq !== seq) {
       return;
     }
@@ -587,9 +587,9 @@ export async function canDiscardEdits(tabIds: string[]): Promise<boolean> {
   return answer.confirmed;
 }
 
-/** `canDiscardEdits` over every editor tab of the checkouts. */
-export function canDiscardCheckoutEdits(...checkouts: CheckoutRef[]): Promise<boolean> {
-  return canDiscardEdits(checkouts.flatMap((checkout) => checkoutViews(checkout).map((view) => view.tabId)));
+/** `canDiscardEdits` over every editor tab of the repositories and worktrees. */
+export function canDiscardRefEdits(...refs: ProjectRef[]): Promise<boolean> {
+  return canDiscardEdits(refs.flatMap((ref) => refViews(ref).map((view) => view.tabId)));
 }
 
 /** Moves the preview's scroller into the tab's frame beside the editor, and renders it. */
@@ -638,12 +638,12 @@ export function disposeEditor(tabId: string): void {
   emit(view);
   // Safe here, not in an unsubscribe: ids are never reused, so nobody subscribes to this one again.
   tabListeners.delete(tabId);
-  window.tet.repository.reportEditor(view.checkout, tabId, null);
+  window.tet.repository.reportEditor(view.ref, tabId, null);
 }
 
-/** The checkout closed. */
-export function disposeCheckoutEditors(checkout: CheckoutRef): void {
-  for (const view of checkoutViews(checkout)) {
+/** The repository or worktree closed. */
+export function disposeRefEditors(ref: ProjectRef): void {
+  for (const view of refViews(ref)) {
     disposeEditor(view.tabId);
   }
 }
@@ -672,11 +672,11 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   if (!built || views.get(view.tabId) !== view || view.readSeq !== seq) {
     return;
   }
-  // One model per URI or monaco throws; the checkout is the authority, as two can show one path.
-  // Within a checkout a path is open in one tab at most (App.openDiff), and the previous models
-  // are cleared before the next open.
+  // One model per URI or monaco throws; the repository or worktree is the authority, as two can
+  // show one path. Within a repository or worktree a path is open in one tab at most
+  // (App.openDiff), and the previous models are cleared before the next open.
   const uri = (scheme: string): ReturnType<typeof monaco.Uri.from> =>
-    monaco.Uri.from({ scheme, authority: checkoutKey(view.checkout), path: `/${file.path}` });
+    monaco.Uri.from({ scheme, authority: projectRefKey(view.ref), path: `/${file.path}` });
   const models = {
     original: monaco.editor.createModel(file.head?.content ?? file.content, language ?? "plaintext", uri("tet-head")),
     modified: monaco.editor.createModel(file.content, language ?? "plaintext", uri("tet"))
@@ -725,7 +725,7 @@ function makePreview(view: EditorView): PreviewView {
     const href = link.getAttribute("href") ?? "";
     const target = resolveLink(view.snapshot.path, href);
     if (target !== undefined) {
-      openFile(view.checkout, target, isMarkdown(target));
+      openFile(view.ref, target, isMarkdown(target));
     } else if (/^[a-z][a-z0-9+.-]*:/i.test(href)) {
       void window.tet.shell.openUrl(href);
     }
@@ -762,7 +762,7 @@ function renderPreview(view: EditorView, delay: number): void {
       if (!image) {
         const loading = /^https:/i.test(source)
           ? window.tet.shell.fetchImage(source).then((url) => url ?? undefined)
-          : window.tet.repository.readFile(view.checkout, source).then((file) => file.image);
+          : window.tet.repository.readFile(view.ref, source).then((file) => file.image);
         void loading.then((url) => {
           if (url === undefined && preview.images.get(source) === loading) {
             preview.images.delete(source);

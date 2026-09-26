@@ -39,7 +39,7 @@ export interface Project {
   /** `tet.id` in the repository's git config (projects.ts's resolveProjectId), shared by its
    *  worktrees. */
   id: string;
-  /** Absolute path of the main worktree. */
+  /** Absolute path of the repository. */
   path: string;
   /** The directory's base name. */
   name: string;
@@ -53,54 +53,54 @@ export interface Project {
 export type ProjectWorktree = Pick<WorktreeInfo, "path" | "branch" | "key">;
 
 /**
- * Where something runs: a project's main worktree, or one of the worktrees TET made (`worktree` its
+ * Where something runs: a project's repository, or one of the worktrees TET made (`worktree` its
  * key). A worktree has no id of its own — it is always this pair.
  */
-export interface CheckoutRef {
+export interface ProjectRef {
   projectId: string;
   worktree?: string;
 }
 
-/** A checkout's ref, the main worktree's without a `worktree` key at all: two refs of one checkout
+/** A ref, the repository's without a `worktree` key at all: two refs of one repository or worktree
  *  then compare, and print, alike. */
-export function checkoutRef(projectId: string, worktree?: string): CheckoutRef {
+export function projectRef(projectId: string, worktree?: string): ProjectRef {
   return worktree === undefined ? { projectId } : { projectId, worktree };
 }
 
 /**
  * The pair as one string, for what can hold only one (a map, localStorage, a sandbox's name, a
- * toast): the project id alone for the main worktree. Never passed on as an address. No space (a
+ * toast): the project id alone for the repository. Never passed on as an address. No space (a
  * project's terminals are disposed by the prefix `${key} `) and no ":" (Monaco's URI authority).
  */
-export function checkoutKey(ref: CheckoutRef): string {
+export function projectRefKey(ref: ProjectRef): string {
   return ref.worktree === undefined ? ref.projectId : `${ref.projectId}-${ref.worktree}`;
 }
 
-/** The main worktree first, then the worktrees TET made. */
-export function checkoutsOf(project: Project): CheckoutRef[] {
+/** The repository first, then the worktrees TET made. */
+export function projectRefsOf(project: Project): ProjectRef[] {
   return [
-    checkoutRef(project.id),
-    ...project.worktrees.flatMap((worktree) => (worktree.key === undefined ? [] : [checkoutRef(project.id, worktree.key)]))
+    projectRef(project.id),
+    ...project.worktrees.flatMap((worktree) => (worktree.key === undefined ? [] : [projectRef(project.id, worktree.key)]))
   ];
 }
 
-/** Two refs of one checkout. */
-export function sameCheckout(a: CheckoutRef, b: CheckoutRef | undefined): boolean {
-  return b !== undefined && checkoutKey(a) === checkoutKey(b);
+/** Two refs of one repository or worktree. */
+export function sameProjectRef(a: ProjectRef, b: ProjectRef | undefined): boolean {
+  return b !== undefined && projectRefKey(a) === projectRefKey(b);
 }
 
-/** The worktree of the project a ref names; undefined for the main worktree, and for a key the
+/** The worktree of the project a ref names; undefined for the repository, and for a key the
  *  project does not list. */
-export function worktreeOf(project: Project, ref: CheckoutRef): ProjectWorktree | undefined {
+export function worktreeOf(project: Project, ref: ProjectRef): ProjectWorktree | undefined {
   return ref.worktree === undefined ? undefined : project.worktrees.find((worktree) => worktree.key === ref.worktree);
 }
 
-/** What the window is told of a change to the projects (projects.ts): checkouts opened and closed,
- *  and the one the user (or tet-ctl) just opened, to bring to the front. */
+/** What the window is told of a change to the projects (projects.ts): repositories and worktrees
+ *  opened and closed, and the one the user (or tet-ctl) just opened, to bring to the front. */
 export interface ProjectsChange {
-  added?: CheckoutRef[];
-  removed?: CheckoutRef[];
-  show?: CheckoutRef;
+  added?: ProjectRef[];
+  removed?: ProjectRef[];
+  show?: ProjectRef;
 }
 
 /** A worktree's name: its branch, else (detached) TET's key, else its folder's. */
@@ -108,8 +108,9 @@ export function worktreeName(worktree: ProjectWorktree): string {
   return worktree.branch ?? worktree.key ?? worktree.path.split(/[\\/]/).pop() ?? worktree.path;
 }
 
-/** What a notice or toast calls a checkout: the project's name, a worktree's with it. */
-export function checkoutName(project: Project, ref: CheckoutRef): string {
+/** What a notice or toast calls a repository or worktree: the project's name, a worktree's with
+ *  it. */
+export function projectRefName(project: Project, ref: ProjectRef): string {
   const worktree = worktreeOf(project, ref);
   return worktree ? `${worktreeName(worktree)} (${project.name})` : project.name;
 }
@@ -428,7 +429,7 @@ export function overridesMachineNote(names: string[]): string {
 export interface EnvRequest {
   id: number;
   /** The asking tab, for the dialog to name and to restart. */
-  checkout?: CheckoutRef;
+  ref?: ProjectRef;
   tabId?: string;
   /** A stored one's value the dialog replaces. */
   variables: (EnvVarInfo & { stored: boolean })[];
@@ -776,7 +777,7 @@ export interface CheckoutTarget {
 /** One terminal's output since the last flush. Batched, so the message count does not grow with
  *  the number of open terminals. */
 export interface TerminalOutput {
-  checkout: CheckoutRef;
+  ref: ProjectRef;
   tabId: string;
   data: string;
 }
@@ -785,7 +786,7 @@ export const TERMINAL_STATUSES = ["missing", "ready", "running", "stopped", "err
 export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
 export interface TerminalDescriptor {
-  /** Unique within its checkout; equals the agent's session id for a restored tab. */
+  /** Unique within its repository or worktree; equals the agent's session id for a restored tab. */
   tabId: string;
   agentId: AgentId;
   /** Session title; "" makes the UI show a placeholder. */
@@ -831,7 +832,7 @@ export function worktreesSupported(version: string | undefined): boolean {
 
 /**
  * Where a new worktree's branch starts: the default branch, else — a repository with no remote HEAD
- * and no local branch named as `init.defaultBranch` has none — what the main worktree has checked
+ * and no local branch named as `init.defaultBranch` has none — what the repository has checked
  * out. Undefined only while that is detached or unborn.
  */
 export function worktreeBase(state: RepositoryState): CheckoutTarget | undefined {

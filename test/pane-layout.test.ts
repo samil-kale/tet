@@ -573,7 +573,7 @@ describe("what is persisted", () => {
 
 describe("an editor tab", () => {
   const EDITOR_TAB_ID = nextEditorTabId();
-  const editor: EditorTab = { tabId: EDITOR_TAB_ID, checkout: { projectId: "p" }, path: "src/index.ts" };
+  const editor: EditorTab = { tabId: EDITOR_TAB_ID, ref: { projectId: "p" }, path: "src/index.ts" };
   const cols2 = (tabPane: Record<string, "a" | "b">, tabs: (TerminalDescriptor | EditorTab)[]): ProjectLayout =>
     normalizeLayout({ preset: "cols2", focusedPane: "a", tabPane, activeTab: {}, commandPane: {} }, tabs, NONE);
 

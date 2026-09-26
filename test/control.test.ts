@@ -10,10 +10,10 @@ import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/con
 import type { EnvAsk } from "../src/main/environment";
 import { tabControlToken } from "../src/main/control/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
-import { checkoutKey, EMPTY_REPOSITORY_STATE, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
+import { projectRefKey, EMPTY_REPOSITORY_STATE, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
 import type {
   AppSettings,
-  CheckoutRef,
+  ProjectRef,
   Project,
   ProjectCommand,
   SbxKnowledgeConfig,
@@ -45,8 +45,8 @@ const PROJECT: Project = {
   ]
 };
 const OTHER: Project = { id: "p2", path: "", name: "two", worktrees: [] };
-/** PROJECT's worktree TET made, as a checkout. */
-const WORKTREE: CheckoutRef = { projectId: PROJECT.id, worktree: "k4" };
+/** PROJECT's worktree TET made. */
+const WORKTREE: ProjectRef = { projectId: PROJECT.id, worktree: "k4" };
 /** The worktrees of PROJECT's repository, as its repository state lists them. */
 const WORKTREES: WorktreeInfo[] = [
   { path: "/repo/one", branch: "main", main: true, current: false },
@@ -71,7 +71,7 @@ interface Calls {
   commands: string[];
   added: string[];
   removed: string[];
-  /** `[projectId, branch]` per worktree-add, `[checkout key, force]` per worktree-delete. */
+  /** `[projectId, branch]` per worktree-add, `[projectRefKey, force]` per worktree-delete. */
   worktreesAdded: [string, string][];
   worktreesDeleted: [string, boolean][];
   shutdown: boolean[];
@@ -135,7 +135,7 @@ let sbxUser: string | undefined;
 /** Why the faked store could not keep a token sbx took. */
 let sbxNotKept: string | undefined;
 
-/** A checkout's terminals, by its key. */
+/** The terminals of the repository or a worktree, by its key. */
 function terminalsOf(key: string): ControlTerminals {
   return {
     snapshot: () => [tab(OWN_TAB), tab("tab-2")],
@@ -181,7 +181,7 @@ function terminalsOf(key: string): ControlTerminals {
       if (tabId !== OWN_TAB) {
         return {};
       }
-      // As CheckoutSessionManager.hookEvent: neither a session's start nor a prompt toasts.
+      // As TabSessionManager.hookEvent: neither a session's start nor a prompt toasts.
       return event === "session-start" || event === "prompt-submit"
         ? {}
         : { toast: { title: "Claude: Finished", body: "Finished in one" } };
@@ -191,15 +191,15 @@ function terminalsOf(key: string): ControlTerminals {
 
 function deps(): ControlDeps {
   const projects = [PROJECT, OTHER];
-  const open = (ref: CheckoutRef): boolean =>
+  const open = (ref: ProjectRef): boolean =>
     projects.some((project) => project.id === ref.projectId && (ref.worktree === undefined || project.worktrees.some((worktree) => worktree.key === ref.worktree)));
   return {
     records: {
-      editor: (ref) => (checkoutKey(ref) === PROJECT.id ? ACTIVE_EDITOR : undefined),
-      editors: (ref) => (checkoutKey(ref) === PROJECT.id ? editorListing : []),
+      editor: (ref) => (projectRefKey(ref) === PROJECT.id ? ACTIVE_EDITOR : undefined),
+      editors: (ref) => (projectRefKey(ref) === PROJECT.id ? editorListing : []),
       notices: () => [{ severity: "error", message: "Could not delete", at: 1 }],
       output: (ref, tabId) =>
-        checkoutKey(ref) !== PROJECT.id
+        projectRefKey(ref) !== PROJECT.id
           ? undefined
           : tabId === "tab-2"
             ? "\x1b[1mbold\x1b[0m line\r\n\x1b]0;title\x07next"
@@ -207,13 +207,13 @@ function deps(): ControlDeps {
               ? "\x1b[32mone\x1b[0m\r\nfetching 10%\rfetching 90%\rtwo\r\nthree\r"
               : undefined
     },
-    checkoutPath: (ref) => {
+    projectRefPath: (ref) => {
       const project = projects.find((entry) => entry.id === ref.projectId);
       return ref.worktree === undefined ? project?.path : project?.worktrees.find((worktree) => worktree.key === ref.worktree)?.path;
     },
-    editorContent: (ref) => Promise.resolve(checkoutKey(ref) === PROJECT.id ? "edited" : undefined),
+    editorContent: (ref) => Promise.resolve(projectRefKey(ref) === PROJECT.id ? "edited" : undefined),
     openEditor: (ref, filePath, keep) => {
-      calls.editorsOpened.push([checkoutKey(ref), filePath, keep]);
+      calls.editorsOpened.push([projectRefKey(ref), filePath, keep]);
     },
     version: "1.2.3",
     pid: 4242,
@@ -225,7 +225,7 @@ function deps(): ControlDeps {
       }
     },
     sessions: {
-      get: (ref) => (open(ref) ? terminalsOf(checkoutKey(ref)) : undefined)
+      get: (ref) => (open(ref) ? terminalsOf(projectRefKey(ref)) : undefined)
     },
     repositories: {
       get: (ref) =>
@@ -233,10 +233,10 @@ function deps(): ControlDeps {
           ? {
               getState: () => ({
                 ...EMPTY_REPOSITORY_STATE,
-                head: `main-of-${checkoutKey(ref)}`,
+                head: `main-of-${projectRefKey(ref)}`,
                 worktrees: ref.projectId === OTHER.id ? [] : WORKTREES
               }),
-              listExplorer: async () => ({ files: [`${checkoutKey(ref)}.txt`], emptyDirs: [], compactFolders: true, sortOrder: "default" as const })
+              listExplorer: async () => ({ files: [`${projectRefKey(ref)}.txt`], emptyDirs: [], compactFolders: true, sortOrder: "default" as const })
             }
           : undefined
     },
@@ -259,7 +259,7 @@ function deps(): ControlDeps {
         : { project: { ...PROJECT, worktrees: [...PROJECT.worktrees, { path: `/wt/${branch}`, branch, key: "k5" }] }, worktree: "k5" };
     },
     deleteWorktree: async (worktree, force) => {
-      calls.worktreesDeleted.push([checkoutKey(worktree), force]);
+      calls.worktreesDeleted.push([projectRefKey(worktree), force]);
       return force ? { ok: true } : { ok: false, needsConfirmation: "uncommitted" as const };
     },
     readCommands: async () => [{ command: "npm run build", name: "build" }, { command: "a && b" }],
@@ -267,7 +267,7 @@ function deps(): ControlDeps {
       calls.shutdown.push(relaunch);
     },
     showTab: (ref, tabId) => {
-      calls.shown.push([checkoutKey(ref), tabId]);
+      calls.shown.push([projectRefKey(ref), tabId]);
     },
     notify: (title, body, target) => {
       calls.notified.push([title, body, target]);
@@ -578,19 +578,19 @@ describe("tet-ctl against the control server", () => {
     assert.match(unknown.stderr, /unknown prompt: commands/);
   });
 
-  it("acts on the caller's own checkout when none is given", async () => {
+  it("acts on the caller's own repository or worktree when none is given", async () => {
     const run = await tetCtl(["tabs-list"]);
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual(calls.inspected, [PROJECT.id]);
     await tetCtl(["tabs-list"], { [CONTROL_ENV.worktree]: WORKTREE.worktree });
-    assert.deepEqual(calls.inspected, [PROJECT.id, checkoutKey(WORKTREE)], "a worktree tab's is its worktree");
+    assert.deepEqual(calls.inspected, [PROJECT.id, projectRefKey(WORKTREE)], "a worktree tab's is its worktree");
   });
 
   it("finds a worktree TET made by its branch or key, never one made elsewhere", async () => {
     const head = async (args: string[]): Promise<string> => ((await tetCtl(["repo-state", ...args])).result as { head: string }).head;
-    assert.equal(await head(["--worktree", "four"]), `main-of-${checkoutKey(WORKTREE)}`);
-    assert.equal(await head(["--worktree", "k4"]), `main-of-${checkoutKey(WORKTREE)}`);
-    assert.equal(await head(["--project", PROJECT.id]), "main-of-p1", "--project alone is the main worktree");
+    assert.equal(await head(["--worktree", "four"]), `main-of-${projectRefKey(WORKTREE)}`);
+    assert.equal(await head(["--worktree", "k4"]), `main-of-${projectRefKey(WORKTREE)}`);
+    assert.equal(await head(["--project", PROJECT.id]), "main-of-p1", "--project alone is the repository");
     assert.equal(await head([]), "main-of-p1");
     const foreign = await tetCtl(["repo-state", "--worktree", "five"]);
     assert.equal(foreign.status, EXIT_CODES.usage);
@@ -601,14 +601,14 @@ describe("tet-ctl against the control server", () => {
   it("takes a worktree tab's ids only with its own token", async () => {
     const mainToken = tabControlToken(TOKEN, { projectId: PROJECT.id }, OWN_TAB, false);
     const run = await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: mainToken, [CONTROL_ENV.worktree]: WORKTREE.worktree });
-    assertRefused(run, /not a terminal of this TET/, "the main worktree's token for a worktree's tab");
+    assertRefused(run, /not a terminal of this TET/, "the repository's token for a worktree's tab");
   });
 
-  it("lets a host tab reach every checkout of its project, a sandboxed one only its own", async () => {
+  it("lets a host tab reach its repository and every worktree, a sandboxed one only its own", async () => {
     const fromWorktree = { [CONTROL_ENV.worktree]: WORKTREE.worktree };
     assert.equal((await tetCtl(["tabs-output", "tab-2", "--project", PROJECT.id], fromWorktree)).status, EXIT_CODES.ok, "its project's main");
     const sandboxed = { ...fromWorktree, [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    assertRefused(await tetCtl(["repo-state", "--project", PROJECT.id], sandboxed), /own checkout/, "the main worktree from a worktree's sandbox");
+    assertRefused(await tetCtl(["repo-state", "--project", PROJECT.id], sandboxed), /own repository or worktree/, "the repository from a worktree's sandbox");
     assert.equal((await tetCtl(["repo-state"], sandboxed)).status, EXIT_CODES.ok, "its own");
   });
 
@@ -921,9 +921,9 @@ describe("tet-ctl against the control server", () => {
   it("answers a sandboxed tab for its own project only", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     // editor-state: its own test below, since a sandbox reads only a file inside the repository.
-    assertRefused(await tetCtl(["editor-state", "--project", OTHER.id], fromSandbox), /own checkout/, "editor-state");
+    assertRefused(await tetCtl(["editor-state", "--project", OTHER.id], fromSandbox), /own repository or worktree/, "editor-state");
     for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["repo-state"], ["explorer-list"]]) {
-      assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own checkout/, args[0]);
+      assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own repository or worktree/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
     assert.deepEqual((await tetCtl(["projects-list"], fromSandbox)).result, [{ ...PROJECT, worktrees: [] }], "not even its worktrees");
@@ -947,8 +947,8 @@ describe("tet-ctl against the control server", () => {
 
   it("creates and deletes a sandboxed tab's worktrees of its own project only", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    assertRefused(await tetCtl(["worktree-add", "x", "--project", OTHER.id], fromSandbox), /own checkout/, "worktree-add");
-    assertRefused(await tetCtl(["worktree-delete", "four", "--project", OTHER.id], fromSandbox), /own checkout/, "worktree-delete");
+    assertRefused(await tetCtl(["worktree-add", "x", "--project", OTHER.id], fromSandbox), /own repository or worktree/, "worktree-add");
+    assertRefused(await tetCtl(["worktree-delete", "four", "--project", OTHER.id], fromSandbox), /own repository or worktree/, "worktree-delete");
     assert.equal((await tetCtl(["worktree-add", "x"], fromSandbox)).status, EXIT_CODES.ok);
     assert.deepEqual(calls.worktreesAdded, [[PROJECT.id, "x"]]);
     assert.deepEqual((await tetCtl(["worktree-delete", "four", "--force"], fromSandbox)).result, { deleted: "four" });
@@ -1072,8 +1072,8 @@ describe("tet-ctl against the control server", () => {
     assert.match(refused.stderr, /uncommitted changes/);
     assert.deepEqual((await tetCtl(["worktree-delete", "four", "--force"])).result, { deleted: "four" });
     assert.deepEqual(calls.worktreesDeleted, [
-      [checkoutKey(WORKTREE), false],
-      [checkoutKey(WORKTREE), true]
+      [projectRefKey(WORKTREE), false],
+      [projectRefKey(WORKTREE), true]
     ]);
   });
 
@@ -1105,12 +1105,12 @@ describe("tet-ctl against the control server", () => {
 
   it("relays a notification to the process behind the control channel", async () => {
     assert.deepEqual((await tetCtl(["notify", "Codex: Finished", "Finished in repo"])).result, { notified: true });
-    assert.deepEqual(calls.notified, [["Codex: Finished", "Finished in repo", { checkout: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
+    assert.deepEqual(calls.notified, [["Codex: Finished", "Finished in repo", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
   });
 
   it("takes a notification that is a title and nothing more", async () => {
     assert.deepEqual((await tetCtl(["notify", "Build finished"])).result, { notified: true });
-    assert.deepEqual(calls.notified, [["Build finished", "", { checkout: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
+    assert.deepEqual(calls.notified, [["Build finished", "", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
   });
 
   it("is about no tab when the caller is not one", async () => {
@@ -1181,7 +1181,7 @@ describe("tet-ctl against the control server", () => {
     const saved = await tetCtl(["env-request", "AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD", "AUTOCONTRACT_USER"]);
     assert.deepEqual(saved.result, { saved: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"], restartRequired: true });
     assert.deepEqual(calls.envAsks, [
-      { checkout: { projectId: PROJECT.id }, tabId: OWN_TAB, names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"] }
+      { ref: { projectId: PROJECT.id }, tabId: OWN_TAB, names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"] }
     ]);
     dialogAnswer = undefined;
     assert.deepEqual((await tetCtl(["env-request", "GITHUB_TOKEN"])).result, { cancelled: true });
@@ -1215,7 +1215,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.stdout, "{}", "Codex reads its Stop hook's stdout as JSON");
     assert.deepEqual(
       calls.notified,
-      [["Claude: Finished", "Finished in one", { checkout: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
+      [["Claude: Finished", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
       "about the tab that reported, which a click on it brings to the front"
     );
   });
@@ -1225,7 +1225,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual(
       calls.notified,
-      [["Claude: Finished", "Finished in one", { checkout: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
+      [["Claude: Finished", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
       "a tab speaks for itself, never for a tab of another project"
     );
   });

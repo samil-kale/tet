@@ -7,11 +7,11 @@ import { errorMessage } from "../../shared/errors";
 import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, checkoutKey, checkoutRef, checkoutsOf, isSbxAgent, isWorking, sameCheckout } from "../../shared/types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isSbxAgent, isWorking, sameProjectRef } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
-  CheckoutRef,
+  ProjectRef,
   EditorListing,
   EditorReport,
   ExplorerListing,
@@ -57,25 +57,27 @@ export interface ControlDeps {
   store: ProjectLookup;
   settings: SettingsAccess;
   sessions: {
-    get(ref: CheckoutRef): ControlTerminals | undefined;
+    get(ref: ProjectRef): ControlTerminals | undefined;
   };
   repositories: {
-    get(ref: CheckoutRef): { getState(): RepositoryState; listExplorer(): Promise<ExplorerListing> } | undefined;
+    get(ref: ProjectRef): { getState(): RepositoryState; listExplorer(): Promise<ExplorerListing> } | undefined;
   };
   /** See ControlRecords. */
   records: {
-    editor(ref: CheckoutRef): EditorReport | undefined;
-    editors(ref: CheckoutRef): EditorListing[];
+    editor(ref: ProjectRef): EditorReport | undefined;
+    editors(ref: ProjectRef): EditorListing[];
     notices(): NoticeReport[];
-    output(ref: CheckoutRef, tabId: string): string | undefined;
+    output(ref: ProjectRef, tabId: string): string | undefined;
   };
-  /** A checkout's folder (project-dirs.ts's checkoutPath); undefined for an unknown project. */
-  checkoutPath(ref: CheckoutRef): string | undefined;
-  /** Opens a file in the checkout's preview tab, or a kept tab, and brings it to the front. */
-  openEditor(ref: CheckoutRef, path: string, keep: boolean): void;
+  /** A repository's or worktree's folder (project-dirs.ts's projectRefPath); undefined for an
+   *  unknown project. */
+  projectRefPath(ref: ProjectRef): string | undefined;
+  /** Opens a file in the repository's or worktree's preview tab, or a kept tab, and brings it to
+   *  the front. */
+  openEditor(ref: ProjectRef, path: string, keep: boolean): void;
   /** The active editor tab's text, asked of the window live — the one thing not kept as a report
    *  (see EditorReport). */
-  editorContent(ref: CheckoutRef): Promise<string | undefined>;
+  editorContent(ref: ProjectRef): Promise<string | undefined>;
   /** The requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
   /** `AGENTS`' ids, so a new agent needs nothing here. */
@@ -84,12 +86,12 @@ export interface ControlDeps {
   addProject(directory: string): Promise<AddRepositoryResult>;
   removeProject(projectId: string): Promise<GitActionResult>;
   addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
-  deleteWorktree(worktree: CheckoutRef, force: boolean): Promise<GitActionResult>;
+  deleteWorktree(worktree: ProjectRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
-  showTab(ref: CheckoutRef, tabId: string): void;
+  showTab(ref: ProjectRef, tabId: string): void;
   /** A desktop toast from this process, which holds the desktop session (a sandboxed hook has
    *  none). Must never throw: `hook` toasts on the way to answering a turn. A click brings
    *  `target` to the front. */
@@ -125,7 +127,7 @@ export interface ControlDeps {
 }
 
 export interface ToastTarget {
-  checkout: CheckoutRef;
+  ref: ProjectRef;
   tabId: string;
 }
 
@@ -149,7 +151,7 @@ export interface InspectedTab extends TerminalDescriptor {
   sandboxOnly?: true;
 }
 
-/** The slice of CheckoutSessionManager the verbs use. */
+/** The slice of TabSessionManager the verbs use. */
 export interface ControlTerminals {
   snapshot(): TerminalDescriptor[];
   inspect(): InspectedTab[];
@@ -267,21 +269,22 @@ export async function findControlPort(dataRoot: string): Promise<number> {
   throw new Error("no free loopback port in the dynamic range");
 }
 
-/** The checkout the caller's tab runs in; undefined for the run itself. */
-function callerCheckout(caller: ControlRequest["caller"]): CheckoutRef | undefined {
-  return caller.projectId === undefined ? undefined : checkoutRef(caller.projectId, caller.worktree);
+/** The repository or worktree the caller's tab runs in; undefined for the run itself. */
+function callerRef(caller: ControlRequest["caller"]): ProjectRef | undefined {
+  return caller.projectId === undefined ? undefined : projectRef(caller.projectId, caller.worktree);
 }
 
 /**
- * The checkout a verb acts on: without flags the caller's own; `--project` alone that project's main
- * worktree; `--worktree` one of its worktrees TET made, by branch or else by key. One made elsewhere
- * cannot be addressed: TET never opens it. Also the gate's answer to "is this the caller's own".
+ * The repository or worktree a verb acts on: without flags the caller's own; `--project` alone that
+ * project's repository; `--worktree` one of its worktrees TET made, by branch or else by key. One
+ * made elsewhere cannot be addressed: TET never opens it. Also the gate's answer to "is this the
+ * caller's own".
  */
-function resolveCheckout(
+function resolveCallerRef(
   store: ProjectLookup,
   args: Record<string, unknown>,
   caller: ControlRequest["caller"]
-): { project: Project; ref: CheckoutRef } {
+): { project: Project; ref: ProjectRef } {
   const askedProject = typeof args.project === "string" && args.project ? args.project : undefined;
   const projectId = askedProject ?? caller.projectId;
   if (!projectId) {
@@ -293,7 +296,7 @@ function resolveCheckout(
   }
   const asked = typeof args.worktree === "string" && args.worktree ? args.worktree : undefined;
   if (asked === undefined) {
-    return { project, ref: checkoutRef(projectId, askedProject === undefined ? caller.worktree : undefined) };
+    return { project, ref: projectRef(projectId, askedProject === undefined ? caller.worktree : undefined) };
   }
   const worktree =
     project.worktrees.find((entry) => entry.branch === asked) ?? project.worktrees.find((entry) => entry.key === asked);
@@ -303,7 +306,7 @@ function resolveCheckout(
   if (worktree.key === undefined) {
     throw new ControlError("bad_args", `the worktree of ${asked} was not made by TET, which cannot open it`);
   }
-  return { project, ref: checkoutRef(projectId, worktree.key) };
+  return { project, ref: projectRef(projectId, worktree.key) };
 }
 
 function verbs(deps: ControlDeps): Record<string, Handler> {
@@ -317,32 +320,32 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     return found;
   };
 
-  const checkout = (args: Record<string, unknown>, caller: ControlRequest["caller"]) => resolveCheckout(store, args, caller);
+  const refFrom = (args: Record<string, unknown>, caller: ControlRequest["caller"]) => resolveCallerRef(store, args, caller);
 
-  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => checkout(args, caller).project;
+  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
 
-  const terminals = (ref: CheckoutRef): ControlTerminals => {
+  const terminals = (ref: ProjectRef): ControlTerminals => {
     const manager = sessions.get(ref);
     if (!manager) {
-      throw new ControlError("internal", `${checkoutKey(ref)} has no terminals`);
+      throw new ControlError("internal", `${projectRefKey(ref)} has no terminals`);
     }
     return manager;
   };
 
-  const repository = (ref: CheckoutRef): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> => {
+  const repository = (ref: ProjectRef): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> => {
     const repo = deps.repositories.get(ref);
     if (!repo) {
-      throw new ControlError("internal", `${checkoutKey(ref)} has no repository`);
+      throw new ControlError("internal", `${projectRefKey(ref)} has no repository`);
     }
     return repo;
   };
 
-  /** A tab id checked to exist, with its checkout and terminals. */
+  /** A tab id checked to exist, with its repository or worktree and terminals. */
   const knownTab = (
     args: Record<string, unknown>,
     caller: ControlRequest["caller"]
-  ): { tabs: ControlTerminals; tabId: string; ref: CheckoutRef } => {
-    const { ref } = checkout(args, caller);
+  ): { tabs: ControlTerminals; tabId: string; ref: ProjectRef } => {
+    const { ref } = refFrom(args, caller);
     const tabId = text(args, "tabId", "tab id");
     const tabs = terminals(ref);
     if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
@@ -356,7 +359,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
    *  and its output may print the host's control token. */
   const ownedTab = (args: Record<string, unknown>, caller: Caller) => {
     const known = knownTab(args, caller);
-    const own = sameCheckout(known.ref, callerCheckout(caller)) && known.tabId === caller.tabId;
+    const own = sameProjectRef(known.ref, callerRef(caller)) && known.tabId === caller.tabId;
     const tab = known.tabs.inspect().find((entry) => entry.tabId === known.tabId);
     if (caller.sandboxed && !own && tab?.sandbox === undefined && tab?.sandboxOnly !== true) {
       throw new ControlError("bad_args", `${known.tabId} runs on this machine, not in the sandbox`);
@@ -365,7 +368,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
   };
 
   return {
-    ...sbxVerbs(deps, checkout),
+    ...sbxVerbs(deps, refFrom),
 
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 
@@ -423,7 +426,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         : store.list()
     }),
 
-    "repo-state": (args, caller) => ({ result: repository(checkout(args, caller).ref).getState() }),
+    "repo-state": (args, caller) => ({ result: repository(refFrom(args, caller).ref).getState() }),
 
     "projects-add": async (args) => {
       const added = await deps.addProject(text(args, "path", "path"));
@@ -437,7 +440,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const id = text(args, "projectId", "project id");
       const found = projectById(id);
       // Only the window asks about unsaved edits (App's removeProject); from here they would be lost.
-      const unsaved = checkoutsOf(found)
+      const unsaved = projectRefsOf(found)
         .flatMap((ref) => deps.records.editors(ref))
         .filter((editor) => editor.dirty);
       if (unsaved.length > 0) {
@@ -486,8 +489,8 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (worktree.key === undefined) {
         throw new ControlError("bad_args", `the worktree of ${branch} was not made by TET: delete it with git`);
       }
-      const ref = checkoutRef(found.id, worktree.key);
-      if (sameCheckout(ref, callerCheckout(caller))) {
+      const ref = projectRef(found.id, worktree.key);
+      if (sameProjectRef(ref, callerRef(caller))) {
         throw new ControlError("bad_args", "a worktree cannot delete itself: run this from another tab of its project");
       }
       const deleted = await deps.deleteWorktree(ref, args.force === true);
@@ -516,7 +519,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       // Once per variable as the machine counts them: on win32 `a` and `A` are one.
       const unique = names.filter((name, index) => names.findIndex((other) => machineName(other) === machineName(name)) === index);
       const saved = await deps.envRequests.ask(
-        { checkout: callerCheckout(caller), tabId: caller.tabId, names: unique },
+        { ref: callerRef(caller), tabId: caller.tabId, names: unique },
         gone
       );
       return { result: saved === undefined ? { cancelled: true } : { saved, restartRequired: true } };
@@ -532,7 +535,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { removed: name } };
     },
 
-    "tabs-list": (args, caller) => ({ result: terminals(checkout(args, caller).ref).inspect() }),
+    "tabs-list": (args, caller) => ({ result: terminals(refFrom(args, caller).ref).inspect() }),
 
     "tabs-start": (args, caller) => {
       const { tabs, tabId } = knownTab(args, caller);
@@ -608,14 +611,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "events-tail": (args, caller) => ({
-      result: terminals(checkout(args, caller).ref).events().slice(-count(args, "tail", EVENTS_TAIL))
+      result: terminals(refFrom(args, caller).ref).events().slice(-count(args, "tail", EVENTS_TAIL))
     }),
 
     "editor-open": async (args, caller) => {
-      const { ref } = checkout(args, caller);
-      const root = deps.checkoutPath(ref);
+      const { ref } = refFrom(args, caller);
+      const root = deps.projectRefPath(ref);
       if (root === undefined) {
-        throw new ControlError("not_found", `${checkoutKey(ref)} is not open`);
+        throw new ControlError("not_found", `${projectRefKey(ref)} is not open`);
       }
       const typed = text(args, "path", "path");
       const filePath = repositoryRelative(root, path.resolve(root, typed));
@@ -628,19 +631,19 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "editor-state": async (args, caller) => {
-      const { ref } = checkout(args, caller);
+      const { ref } = refFrom(args, caller);
       const report = deps.records.editor(ref);
       return { result: report ? { ...report, content: await deps.editorContent(ref) } : null };
     },
 
-    "editor-list": (args, caller) => ({ result: deps.records.editors(checkout(args, caller).ref) }),
+    "editor-list": (args, caller) => ({ result: deps.records.editors(refFrom(args, caller).ref) }),
 
-    "explorer-list": async (args, caller) => ({ result: await repository(checkout(args, caller).ref).listExplorer() }),
+    "explorer-list": async (args, caller) => ({ result: await repository(refFrom(args, caller).ref).listExplorer() }),
 
     "notices-list": () => ({ result: deps.records.notices() }),
 
     "tabs-create": (args, caller) => {
-      const { ref } = checkout(args, caller);
+      const { ref } = refFrom(args, caller);
       const agent = text(args, "agent", "agent: pass --agent <id> (see list-agents)");
       if (!deps.agentIds.includes(agent)) {
         throw new ControlError("bad_args", `unknown agent: ${agent} (see list-agents)`);
@@ -655,7 +658,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-run-command": async (args, caller) => {
-      const { project: found, ref } = checkout(args, caller);
+      const { project: found, ref } = refFrom(args, caller);
       const name = text(args, "name", "command name");
       const commands = await deps.readCommands(found.path);
       // By name or by the line itself — an agent reading tet.json may hold either.
@@ -676,7 +679,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       const { tabs, tabId, ref } = ownedTab(args, caller);
       const close = (): void => void tabs.closeTabs([tabId]);
       // Closing the tab the CLI runs in kills the CLI — answer first.
-      if (sameCheckout(ref, callerCheckout(caller)) && tabId === caller.tabId) {
+      if (sameProjectRef(ref, callerRef(caller)) && tabId === caller.tabId) {
         return { result: { closed: tabId }, after: close };
       }
       close();
@@ -705,8 +708,8 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     notify: (args, caller) => {
       const body = args.body;
       // From one of tet's terminals, the toast is about that tab.
-      const own = callerCheckout(caller);
-      const target = own && caller.tabId ? { checkout: own, tabId: caller.tabId } : undefined;
+      const own = callerRef(caller);
+      const target = own && caller.tabId ? { ref: own, tabId: caller.tabId } : undefined;
       deps.notify(text(args, "title", "title"), typeof body === "string" ? body : "", target);
       return { result: { notified: true } };
     },
@@ -720,12 +723,12 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
         throw new ControlError("bad_args", "a hook reports for the tab it runs in, and this is not one");
       }
       const payload = typeof args.payload === "string" ? args.payload : "";
-      // The caller's own, never `--project`: the token vouches for its tab in its checkout only, and
-      // tab ids like `new-1` repeat across checkouts.
-      const where = checkout({}, caller).ref;
+      // The caller's own, never `--project`: the token vouches for its tab in its repository or
+      // worktree only, and tab ids like `new-1` repeat across repositories and worktrees.
+      const where = refFrom({}, caller).ref;
       const outcome = terminals(where).hookEvent(caller.tabId, event as HookEvent, payload, at);
       if (outcome.toast) {
-        deps.notify(outcome.toast.title, outcome.toast.body, { checkout: where, tabId: caller.tabId });
+        deps.notify(outcome.toast.title, outcome.toast.body, { ref: where, tabId: caller.tabId });
       }
       return { result: { stdout: HOOK_STDOUT[event as HookEvent](caller.sandboxed) } };
     }
@@ -773,7 +776,7 @@ export async function startControlServer(
     };
     // A caller naming no tab is the run itself. For a tab, which of its two tokens matches says
     // whether it runs in a sandbox: read off the token, not looked up, so a tab closed with its
-    // checkout is still answered by the rules it started under (control-token.ts).
+    // repository or worktree is still answered by the rules it started under (control-token.ts).
     const ofTab = caller.projectId !== undefined || caller.worktree !== undefined || caller.tabId !== undefined;
     const tokenOf = (sandbox: boolean): string =>
       tabControlToken(token, { projectId: caller.projectId ?? "", worktree: caller.worktree }, caller.tabId ?? "", sandbox);
@@ -789,27 +792,27 @@ export async function startControlServer(
     if (sandboxed && !entry.sandbox) {
       return { response: reject("unauthorized", `${request.verb} does not answer from inside a sandbox`) };
     }
-    // A host tab reaches every checkout of its project (a worktree belongs to it); a sandboxed one
-    // only its own, the one its sandbox mounts.
+    // A host tab reaches every repository and worktree of its project (a worktree belongs to it); a
+    // sandboxed one only its own, the one its sandbox mounts.
     if (entry.ownProjectOnly || (sandboxed && entry.sandbox === "ownProject")) {
-      const own = callerCheckout(caller);
-      let target: CheckoutRef | undefined;
+      const own = callerRef(caller);
+      let target: ProjectRef | undefined;
       try {
-        target = own && resolveCheckout(deps.store, request.args ?? {}, caller).ref;
+        target = own && resolveCallerRef(deps.store, request.args ?? {}, caller).ref;
       } catch (error) {
         return { response: error instanceof ControlError ? reject(error.code, error.message) : reject("internal", errorMessage(error)) };
       }
-      const allowed = own !== undefined && target !== undefined && (sandboxed ? sameCheckout(target, own) : target.projectId === own.projectId);
+      const allowed = own !== undefined && target !== undefined && (sandboxed ? sameProjectRef(target, own) : target.projectId === own.projectId);
       if (!allowed) {
-        const whose = sandboxed ? "the caller's own checkout" : "a tab of the caller's own project";
+        const whose = sandboxed ? "the caller's own repository or worktree" : "a tab of the caller's own project";
         return { response: reject("unauthorized", `${request.verb} only answers for ${whose}`) };
       }
     }
     try {
       const answer = await handler(request.args ?? {}, { ...caller, sandboxed }, request.at, gone);
       if (sandboxed && entry.sandboxFile !== undefined) {
-        const own = callerCheckout(caller);
-        await assertSandboxFile(own && deps.checkoutPath(own), answer.result, entry.sandboxFile);
+        const own = callerRef(caller);
+        await assertSandboxFile(own && deps.projectRefPath(own), answer.result, entry.sandboxFile);
       }
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {

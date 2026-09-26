@@ -14,7 +14,7 @@ export const CONTROL_ENV = {
   port: "TET_CONTROL_PORT",
   token: "TET_CONTROL_TOKEN",
   projectId: "TET_PROJECT_ID",
-  /** The worktree's key; unset in a project's main worktree. */
+  /** The worktree's key; unset in a project's repository. */
   worktree: "TET_WORKTREE",
   tabId: "TET_TAB_ID",
   /** Only sbx sessions set it ("host.docker.internal" — the sandbox has its own loopback); unset

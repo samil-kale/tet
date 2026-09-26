@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AgentInfo, CheckoutRef } from "../../shared/types";
-import type { Checkout } from "../checkout";
+import type { AgentInfo, ProjectRef } from "../../shared/types";
+import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
 import type { OpenEditor } from "./editor-tab";
 import { disposeTerminal, setRevealHandler } from "./terminal-views";
@@ -17,7 +17,7 @@ import { NO_TABS } from "./use-project-layouts";
  * A divider's position as a *share* of its room (`usePersistedShare`): `renderGrid` multiplies it
  * by `.panes-grid`'s live measurement, so an undragged divider is an even split at any size. A
  * drag, in `Sash`'s pixels, is turned back into a fraction (`divider` below). Persisted per
- * checkout (`layoutStorageKey`).
+ * repository or worktree (`layoutStorageKey`).
  */
 function useDividerFraction(key: string, name: string, initial: number): [number, (fraction: number) => void] {
   return usePersistedShare(layoutStorageKey(key, `divider.${name}`), initial);
@@ -53,20 +53,21 @@ function percentStyle(box: FractionBox): { left: string; top: string; width: str
 }
 
 interface TerminalsPaneProps {
-  checkout: Checkout;
-  /** This checkout's tabs, its editor tabs last. Held by App, since the project list needs all. */
+  resolved: ResolvedRef;
+  /** This repository's or worktree's tabs, its editor tabs last. Held by App, since the project
+   *  list needs all. */
   tabs: PaneTab[];
   visible: boolean;
   /** What the side pane shows, if it is out. */
   sideView: SideView | null;
   onToggleSideView: (view: SideView) => void;
   agents: AgentInfo[];
-  /** Bootstrap's session listing: checkout-wide, with no tab to show on, so it falls to pane "a". */
+  /** Bootstrap's session listing: strip-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
   /** Opens a path ctrl-clicked in a terminal, or linked from a Markdown preview, in the project's
    *  preview tab. */
-  onOpenFile: (checkout: CheckoutRef, path: string, how?: OpenEditor) => void;
-  /** By checkout key, as the layout callbacks below. */
+  onOpenFile: (ref: ProjectRef, path: string, how?: OpenEditor) => void;
+  /** By `projectRefKey`, as the layout callbacks below. */
   onCloseEditors: (key: string, tabIds: string[]) => void;
   layout: ProjectLayout;
   onActivateTab: (key: string, tabId: string, paneId?: PaneId) => void;
@@ -81,9 +82,9 @@ interface TerminalsPaneProps {
   startingTabIds: string[];
 }
 
-/** One checkout's terminals: how many panes, how big, which tabs each holds. */
+/** One repository's or worktree's terminals: how many panes, how big, which tabs each holds. */
 export const TerminalsPane = memo(function TerminalsPane({
-  checkout,
+  resolved,
   tabs,
   visible,
   sideView,
@@ -111,11 +112,11 @@ export const TerminalsPane = memo(function TerminalsPane({
   const knownTabs = useRef<PaneTab[]>([]);
 
   useEffect(
-    () => setRevealHandler(checkout.ref, (path, how) => onOpenFile(checkout.ref, path, how)),
-    [checkout.ref, onOpenFile]
+    () => setRevealHandler(resolved.ref, (path, how) => onOpenFile(resolved.ref, path, how)),
+    [resolved.ref, onOpenFile]
   );
 
-  const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(checkout.key, tabIds), [onCloseEditors, checkout.key]);
+  const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(resolved.key, tabIds), [onCloseEditors, resolved.key]);
 
   // Disposed only for a tab gone for good, not one moved to another pane.
   useEffect(() => {
@@ -125,16 +126,16 @@ export const TerminalsPane = memo(function TerminalsPane({
     for (const tab of previous) {
       // An editor tab's editor is disposed where it closes (App).
       if (!ids.has(tab.tabId) && !isEditorTab(tab)) {
-        disposeTerminal(checkout.ref, tab.tabId);
+        disposeTerminal(resolved.ref, tab.tabId);
       }
     }
-  }, [tabs, checkout.ref]);
+  }, [tabs, resolved.ref]);
 
   // One share per divider *line*, not per preset, so a preset switch moves no line on screen.
   // Unconditional: hooks cannot follow the preset.
-  const [colFraction, setColFraction] = useDividerFraction(checkout.key, "col", HALF);
-  const [leftRowFraction, setLeftRowFraction] = useDividerFraction(checkout.key, "row-left", HALF);
-  const [rightRowFraction, setRightRowFraction] = useDividerFraction(checkout.key, "row-right", HALF);
+  const [colFraction, setColFraction] = useDividerFraction(resolved.key, "col", HALF);
+  const [leftRowFraction, setLeftRowFraction] = useDividerFraction(resolved.key, "row-left", HALF);
+  const [rightRowFraction, setRightRowFraction] = useDividerFraction(resolved.key, "row-right", HALF);
 
   const gridRef = useRef<HTMLDivElement>(null);
   /** `.panes-grid`'s last measured size, what the divider fractions multiply. Re-seeded on coming
@@ -163,10 +164,10 @@ export const TerminalsPane = memo(function TerminalsPane({
     [sideView, onToggleSideView, onOpenSettings]
   );
   const onActivate = useCallback(
-    (tabId: string, paneId: PaneId) => onActivateTab(checkout.key, tabId, paneId),
-    [onActivateTab, checkout.key]
+    (tabId: string, paneId: PaneId) => onActivateTab(resolved.key, tabId, paneId),
+    [onActivateTab, resolved.key]
   );
-  const onFocus = useCallback((paneId: PaneId) => onFocusPane(checkout.key, paneId), [onFocusPane, checkout.key]);
+  const onFocus = useCallback((paneId: PaneId) => onFocusPane(resolved.key, paneId), [onFocusPane, resolved.key]);
 
   const setDragTarget = useCallback((next: DragTarget | null) => {
     dragTargetRef.current = next;
@@ -222,12 +223,12 @@ export const TerminalsPane = memo(function TerminalsPane({
       setDragTarget(null);
       dragSource.current = null;
       if (target?.transition) {
-        onSnapTab(checkout.key, tabId, target.transition);
+        onSnapTab(resolved.key, tabId, target.transition);
       } else {
         onActivate(tabId, paneId);
       }
     },
-    [setDragTarget, onSnapTab, checkout.key, onActivate]
+    [setDragTarget, onSnapTab, resolved.key, onActivate]
   );
 
   // Unconditional, unlike "left": nothing stale follows a drag's end, and a preview would survive
@@ -279,7 +280,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   const renderPane = (paneId: PaneId, size: { width?: number; height?: number }, first: boolean) => (
     <Pane
       key={paneId}
-      checkout={checkout.ref}
+      at={resolved.ref}
       paneId={paneId}
       preset={layout.preset}
       tabs={paneTabs[paneId] ?? NO_TABS}
@@ -295,7 +296,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       finishedTabIds={finishedTabIds}
       waitingTabIds={waitingTabIds}
       chrome={first ? chrome : undefined}
-      // Pane "a" also carries the checkout-wide reason.
+      // Pane "a" also carries the strip-wide reason.
       showProgress={(first && externalBusy) || (startingHere[paneId] ?? false)}
       dragOver={dragOverPane === paneId}
       onDragStart={onDragStart}

@@ -56,8 +56,8 @@ function inSandbox(): boolean {
  *  a tab on the host, which cannot end up in one. */
 function limits(sandboxed: boolean): string[] {
   const own = [
-    "Without flags, a verb acts on the checkout of the tab it is run from: its project's main",
-    "worktree or one of its worktrees. --project <id> alone means that project's main worktree,",
+    "Without flags, a verb acts on where the tab it is run from runs: its project's repository or",
+    "one of its worktrees. --project <id> alone means that project's repository,",
     "--worktree <branch> one of its worktrees. A worktree listed without a key (projects-list) was",
     "made outside TET, with plain git or by an older TET: TET shows it greyed and cannot open it."
   ];
@@ -66,7 +66,7 @@ function limits(sandboxed: boolean): string[] {
         ...own,
         "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",
         "restarting TET, starting or typing into a tab — is refused there and is not listed above.",
-        "What is listed answers for this checkout's tabs only (exit 2, the reason on stderr)."
+        "What is listed answers for the tabs of this repository or worktree only (exit 2, the reason on stderr)."
       ]
     : [
         ...own,

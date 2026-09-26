@@ -1,4 +1,4 @@
-import type { CheckoutRef, TerminalDescriptor } from "../../shared/types";
+import type { ProjectRef, TerminalDescriptor } from "../../shared/types";
 
 /**
  * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview
@@ -44,7 +44,7 @@ export interface OpenEditor {
 
 export interface EditorTab {
   tabId: string;
-  checkout: CheckoutRef;
+  ref: ProjectRef;
   /** Repository-relative path of the file shown. */
   path: string;
 }

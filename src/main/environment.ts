@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { errorMessage } from "../shared/errors";
-import type { CheckoutRef, EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
+import type { ProjectRef, EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
 import { isRecord, saveJson } from "./json-file";
@@ -148,7 +148,7 @@ export class EnvStore {
 
 /** What `env-request` passes on: the asking tab and the names. */
 export interface EnvAsk {
-  checkout?: CheckoutRef;
+  ref?: ProjectRef;
   tabId?: string;
   names: string[];
 }
@@ -218,7 +218,7 @@ export class EnvRequests {
     this.lastId += 1;
     const request: EnvRequest = {
       id: this.lastId,
-      checkout: ask.checkout,
+      ref: ask.ref,
       tabId: ask.tabId,
       variables: ask.names.map((name) => {
         const stored = this.store.info(name);

@@ -62,7 +62,7 @@ export interface SessionProvider {
   list(cwd: string): Promise<AgentSessionInfo[]>;
   resumeArgs(sessionId: string): string[];
   /** Deletes the session; rejects on failure. An already-gone session must resolve: a tab whose
-   *  removal rejects is put back (CheckoutSessionManager.destroyTab) and could never be closed. */
+   *  removal rejects is put back (TabSessionManager.destroyTab) and could never be closed. */
   remove(executable: string, cwd: string, sessionId: string): Promise<void>;
   /** Renames the persisted title; rejects on failure. */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;
@@ -73,12 +73,12 @@ export interface SessionProvider {
   sandbox?: SandboxSessions;
 }
 
-/** What one agent is handed to set itself up for one checkout (a repository or one of its worktrees). */
+/** What one agent is handed to set itself up for a repository or one of its worktrees. */
 export interface AgentPaths {
   /**
-   * This agent's folder for this checkout, already created: the host tabs' to `prepareSpawn`, the
-   * sandboxed tabs' to `prepareSandboxSpawn` — the one TET folder its sandbox mounts, whole
-   * (project-dirs.ts's hostDir and sandboxDir). Neither side sees the other's.
+   * This agent's folder for this repository or worktree, already created: the host tabs' to
+   * `prepareSpawn`, the sandboxed tabs' to `prepareSandboxSpawn` — the one TET folder its sandbox
+   * mounts, whole (project-dirs.ts's hostDir and sandboxDir). Neither side sees the other's.
    */
   agentDir: string;
   /** TET's data folder (`~/.tet`, data-root.ts), for anything installed machine-wide. */

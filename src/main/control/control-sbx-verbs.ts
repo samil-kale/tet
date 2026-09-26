@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import type { ControlRequest } from "../../shared/control";
 import type {
-  CheckoutRef,
+  ProjectRef,
   Project,
   SbxKnowledgeConfig,
   SbxKnowledgeKind,
@@ -26,13 +26,14 @@ import { ControlError, list, text, type Answer, type Handler } from "./control-v
 
 /**
  * The SBX Settings verbs: `sbx-get` and one `sbx-set-*` per field, each a Save as the dialog's
- * (ControlDeps.sbx). `checkout` is the server's lookup of the verb's checkout (resolveCheckout).
+ * (ControlDeps.sbx). `refFrom` is the server's lookup of the repository or worktree a verb acts on
+ * (resolveCallerRef).
  */
 export function sbxVerbs(
   deps: ControlDeps,
-  checkout: (args: Record<string, unknown>, caller: ControlRequest["caller"]) => { project: Project; ref: CheckoutRef }
+  refFrom: (args: Record<string, unknown>, caller: ControlRequest["caller"]) => { project: Project; ref: ProjectRef }
 ): Record<string, Handler> {
-  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => checkout(args, caller).project;
+  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
    *  which only the user can set up there. Returns the status it read. */
   const readySbx = async (found: Project): Promise<SbxStatus> => {
@@ -64,7 +65,7 @@ export function sbxVerbs(
     },
     switching = false
   ): Promise<Answer> => {
-    const { project: found, ref } = checkout(args, caller);
+    const { project: found, ref } = refFrom(args, caller);
     if (ref.worktree !== undefined) {
       throw new ControlError(
         "bad_args",

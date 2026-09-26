@@ -15,7 +15,7 @@ import { SbxLocalStore } from "../src/main/sbx-local";
 import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv, setStoredEnv } from "../src/main/terminals/pty";
-import { CheckoutSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
+import { TabSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
@@ -32,7 +32,7 @@ describe("a turn's toast", () => {
     const settings = new SettingsStore(root);
     settings.patch({ notifications: { finished: true, needsYou: true, idleReminder: true } });
     let pushed: TerminalDescriptor[] = [];
-    const manager = new CheckoutSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), {
+    const manager = new TabSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), {
       onTabs: (_projectId, tabs) => (pushed = tabs),
       onOutput: () => undefined,
       onStatus: () => undefined,
@@ -86,14 +86,14 @@ const NO_CALLBACKS: SessionManagerCallbacks = {
  */
 async function withEmptyPath(
   callbacks: Partial<SessionManagerCallbacks>,
-  use: (manager: CheckoutSessionManager, project: string) => Promise<void> | void
+  use: (manager: TabSessionManager, project: string) => Promise<void> | void
 ): Promise<void> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-empty-path-"));
   const project = path.join(root, "repo");
   fs.mkdirSync(project);
   const originalPath = process.env.PATH;
   process.env.PATH = path.join(root, "empty");
-  const manager = new CheckoutSessionManager({ ref: { projectId: "p" }, path: project, name: () => "repo" }, root, new SettingsStore(root), new SbxLocalStore(root), {
+  const manager = new TabSessionManager({ ref: { projectId: "p" }, path: project, name: () => "repo" }, root, new SettingsStore(root), new SbxLocalStore(root), {
     ...NO_CALLBACKS,
     ...callbacks
   });
@@ -266,13 +266,13 @@ describe("a terminal's environment", () => {
     process.env[CONTROL_ENV.tabId] = "outer-tab";
     try {
       const main = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
-      assert.equal(main[CONTROL_ENV.worktree], undefined, "the main worktree's tab names no worktree");
+      assert.equal(main[CONTROL_ENV.worktree], undefined, "the repository's tab names no worktree");
       const env = buildEnv({
         own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.worktree]: "k3f9a2c1", [CONTROL_ENV.tabId]: "tab-1" }
       });
       assert.equal(env[CONTROL_ENV.worktree], "k3f9a2c1");
       assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1", worktree: "k3f9a2c1" }, "tab-1", false));
-      assert.notEqual(env[CONTROL_ENV.token], main[CONTROL_ENV.token], "the main worktree's tab of that id has another");
+      assert.notEqual(env[CONTROL_ENV.token], main[CONTROL_ENV.token], "the repository's tab of that id has another");
     } finally {
       for (const [name, value] of [[CONTROL_ENV.worktree, inherited.worktree], [CONTROL_ENV.tabId, inherited.tab]] as const) {
         if (value === undefined) {
@@ -354,7 +354,7 @@ describe("a tab's recorded output", () => {
     assert.equal(records.output({ projectId: "p1" }, "tab-2"), undefined, "a closed tab's output goes with it");
     assert.equal(records.output({ projectId: "p2" }, "tab-3"), "other project", "another project's tabs untouched");
     records.forget({ projectId: "p2" });
-    assert.equal(records.output({ projectId: "p2" }, "tab-3"), undefined, "a closed checkout's output goes with it");
+    assert.equal(records.output({ projectId: "p2" }, "tab-3"), undefined, "a closed worktree's output goes with it");
   });
 
   it("holds the latest 256 KB of a tab", () => {

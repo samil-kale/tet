@@ -1,8 +1,8 @@
 import { errorMessage } from "../shared/errors";
 import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../shared/sbx-rules";
-import { checkoutName, checkoutRef, SBX_AGENT_IDS } from "../shared/types";
+import { projectRefName, projectRef, SBX_AGENT_IDS } from "../shared/types";
 import type {
-  CheckoutRef,
+  ProjectRef,
   NoticeSeverity,
   Project,
   SbxKnowledgeConfig,
@@ -79,9 +79,9 @@ export async function saveProjectSbx(
   status?: Pick<SbxStatus, "organization">
 ): Promise<SbxSaveResult> {
   const worktrees = project.worktrees.flatMap((worktree): SbxSaveTarget[] =>
-    worktree.key === undefined ? [] : [{ ref: checkoutRef(project.id, worktree.key), path: worktree.path }]
+    worktree.key === undefined ? [] : [{ ref: projectRef(project.id, worktree.key), path: worktree.path }]
   );
-  const nameOf = (ref: CheckoutRef): string => checkoutName(project, ref);
+  const nameOf = (ref: ProjectRef): string => projectRefName(project, ref);
   const stored = sbxLocal.encrypted(project.id);
   const previous = sbxLocal.knowledge(project.id);
   try {

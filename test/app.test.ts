@@ -231,13 +231,13 @@ ${stderr.slice(uncaught)}`);
     const [main] = (await ctl("projects-list")).result as Project[];
     const added = await ctl("worktree-add", "in-worktree", "--project", main.id);
     assert.equal(added.status, 0, added.stderr);
-    const { worktree, path: checkout } = added.result as { worktree: string; path: string };
+    const { worktree, path: files } = added.result as { worktree: string; path: string };
     // By its key: the branch that names it is what changes.
     const head = async (): Promise<string | undefined> =>
       ((await ctl("repo-state", "--project", main.id, "--worktree", worktree)).result as RepositoryState).head;
     try {
       await eventually("the first read", async () => (await head()) === "in-worktree", STARTUP_MS);
-      assert.equal(spawnSync("git", ["switch", "-q", "-c", "switched"], { cwd: checkout }).status, 0);
+      assert.equal(spawnSync("git", ["switch", "-q", "-c", "switched"], { cwd: files }).status, 0);
       await eventually("the switch seen", async () => (await head()) === "switched", 10_000);
       await eventually(
         "the row named by its new branch",
@@ -282,7 +282,7 @@ ${stderr.slice(uncaught)}`);
     assert.equal(added.status, 0, added.stderr);
     const worktree = added.result as { projectId: string; worktree: string; branch: string; path: string };
     // Named by its key, which never changes; the branch names only the row.
-    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "projects", main.id, "worktrees", worktree.worktree, "checkout"));
+    assert.equal(worktree.path, path.join(fs.realpathSync.native(userData), "projects", main.id, "worktrees", worktree.worktree, "files"));
     assert.equal(worktree.branch, "from/ctl");
     await eventually(
       "the new branch read",

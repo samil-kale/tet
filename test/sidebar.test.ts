@@ -5,12 +5,12 @@ import type { Project } from "../src/shared/types";
 
 const main: Project = { id: "main", path: "/repo", name: "repo", worktrees: [{ path: "/wt/feature", branch: "feature", key: "k1" }] };
 const other: Project = { id: "other", path: "/other", name: "other", worktrees: [] };
-/** A worktree of `main` TET made, as a checkout. */
+/** A worktree of `main` TET made. */
 const worktree = { projectId: "main", worktree: "k1" };
 const worktreeKey = "main-k1";
 
-describe("the checkout in front after the list changed", () => {
-  it("gives a deleted worktree's place to its project's main worktree, not the first", () => {
+describe("the repository or worktree in front after the list changed", () => {
+  it("gives a deleted worktree's place to its project's repository, not the first", () => {
     assert.equal(activeAfterChange(worktreeKey, [other, main], [worktree], undefined), "main");
   });
 
@@ -24,12 +24,12 @@ describe("the checkout in front after the list changed", () => {
     assert.equal(activeAfterChange(null, [main], undefined, { projectId: "main" }), "main");
   });
 
-  it("leaves the front alone when a checkout out of sight is removed", () => {
+  it("leaves the front alone when one out of sight is removed", () => {
     assert.equal(activeAfterChange("other", [other, main], [worktree], undefined), "other");
   });
 });
 
-describe("the checkout in front at startup", () => {
+describe("the repository or worktree in front at startup", () => {
   const storage = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {
     getItem: (key: string) => storage.get(key) ?? null,

@@ -20,7 +20,8 @@ import { renameDir, sessionsDir, type SessionRecord } from "./plugin";
  * until a resume fails.
  */
 
-/** Each checkout's host agentDir, registered by prepareSpawn (a provider only gets a cwd). Never cleared. */
+/** Each repository's or worktree's host agentDir, registered by prepareSpawn (a provider only gets
+ *  a cwd). Never cleared. */
 const agentDirs = new Map<string, string>();
 
 export function registerAgentDir(cwd: string, agentDir: string): void {

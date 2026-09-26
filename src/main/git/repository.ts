@@ -3,9 +3,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
-import { EMPTY_REPOSITORY_STATE, checkoutKey, defaultRemote, headRemote } from "../../shared/types";
+import { EMPTY_REPOSITORY_STATE, projectRefKey, defaultRemote, headRemote } from "../../shared/types";
 import type {
-  CheckoutRef,
+  ProjectRef,
   CheckoutTarget,
   ExplorerListing,
   ExplorerSettings,
@@ -22,7 +22,7 @@ import type {
   StashCommand
 } from "../../shared/types";
 import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
-import type { Checkout } from "../checkout";
+import type { ResolvedRef } from "../resolved-ref";
 import { countActivity, logSlow } from "../event-loop-monitor";
 import { worktreeKeyOf } from "../project-dirs";
 import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
@@ -153,8 +153,8 @@ export class Repository {
   private disposed = false;
 
   constructor(
-    /** The checkout it reads and runs git in. */
-    readonly at: Checkout,
+    /** The repository or worktree it reads and runs git in. */
+    readonly at: ResolvedRef,
     /** TET's key of a worktree of this repository, by its path (project-dirs.ts's worktreeKeyOf). */
     private readonly worktreeKeyOf: (worktreePath: string) => string | undefined,
     private readonly onState: (state: RepositoryState) => void,
@@ -1026,29 +1026,29 @@ export class Repository {
   }
 }
 
-/** The open checkouts' repositories, by `checkoutKey`. */
+/** A Repository per open repository and worktree, by `projectRefKey`. */
 export class RepositoryManager {
   private readonly repositories = new Map<string, Repository>();
 
   constructor(
     private readonly dataRoot: string,
-    private readonly onState: (ref: CheckoutRef, state: RepositoryState) => void,
+    private readonly onState: (ref: ProjectRef, state: RepositoryState) => void,
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
-    /** The project's tet.json changed (only its main worktree's counts: tet-json.ts's configRoot). */
+    /** The project's tet.json changed (only the repository's counts: tet-json.ts's configRoot). */
     private readonly onCommandsChanged: (projectId: string) => void,
-    private readonly onFilesChanged: (ref: CheckoutRef) => void,
-    private readonly onFileChanged: (ref: CheckoutRef, filePath: string) => void,
+    private readonly onFilesChanged: (ref: ProjectRef) => void,
+    private readonly onFileChanged: (ref: ProjectRef, filePath: string) => void,
     private readonly logins: GitLoginStore
   ) {}
 
-  open(checkout: Checkout): Repository {
-    const { ref } = checkout;
-    const existing = this.repositories.get(checkoutKey(ref));
+  open(resolved: ResolvedRef): Repository {
+    const { ref } = resolved;
+    const existing = this.repositories.get(projectRefKey(ref));
     if (existing) {
       return existing;
     }
     const repository = new Repository(
-      checkout,
+      resolved,
       (worktreePath) => worktreeKeyOf(this.dataRoot, ref.projectId, worktreePath),
       (state) => this.onState(ref, state),
       this.onNotice,
@@ -1062,19 +1062,19 @@ export class RepositoryManager {
       (filePath) => this.onFileChanged(ref, filePath),
       this.logins
     );
-    this.repositories.set(checkoutKey(ref), repository);
+    this.repositories.set(projectRefKey(ref), repository);
     void repository.start();
     return repository;
   }
 
-  get(ref: CheckoutRef): Repository | undefined {
-    return this.repositories.get(checkoutKey(ref));
+  get(ref: ProjectRef): Repository | undefined {
+    return this.repositories.get(projectRefKey(ref));
   }
 
   /** Resolves once its git commands have ended (Repository.dispose); it is gone at once. */
-  close(ref: CheckoutRef): Promise<void> {
-    const closing = this.repositories.get(checkoutKey(ref))?.dispose();
-    this.repositories.delete(checkoutKey(ref));
+  close(ref: ProjectRef): Promise<void> {
+    const closing = this.repositories.get(projectRefKey(ref))?.dispose();
+    this.repositories.delete(projectRefKey(ref));
     return closing ?? Promise.resolve();
   }
 

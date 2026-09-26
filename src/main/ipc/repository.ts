@@ -3,7 +3,7 @@ import { AGENTS, findAskableAgent } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { errorMessage } from "../../shared/errors";
 import type {
-  CheckoutRef,
+  ProjectRef,
   CheckoutTarget,
   ExplorerListing,
   ExplorerSettings,
@@ -28,26 +28,28 @@ export function registerRepositoryIpc({
   settings,
   repositories
 }: Pick<IpcDeps, "settings" | "repositories">): void {
-  ipcMain.handle("repository:state", (_event, checkout: CheckoutRef): RepositoryState => {
-    return repositories.get(checkout)?.getState() ?? MISSING_REPOSITORY;
+  ipcMain.handle("repository:state", (_event, ref: ProjectRef): RepositoryState => {
+    return repositories.get(ref)?.getState() ?? MISSING_REPOSITORY;
   });
 
-  ipcMain.handle("repository:refresh", (_event, checkout: CheckoutRef): void => {
-    repositories.get(checkout)?.refreshSoon();
+  ipcMain.handle("repository:refresh", (_event, ref: ProjectRef): void => {
+    repositories.get(ref)?.refreshSoon();
   });
 
-  /** A repository command answering a GitActionResult, or an error when the checkout is not open. */
+  /** A repository command answering a GitActionResult, or an error when the repository or worktree
+   *  is not open. */
   const onRepository = <A extends unknown[]>(
     channel: string,
     run: (repository: Repository, ...args: A) => Promise<GitActionResult>
   ): void => {
-    ipcMain.handle(channel, async (_event, checkout: CheckoutRef, ...args: A): Promise<GitActionResult> => {
-      const repository = repositories.get(checkout);
+    ipcMain.handle(channel, async (_event, ref: ProjectRef, ...args: A): Promise<GitActionResult> => {
+      const repository = repositories.get(ref);
       return repository ? run(repository, ...args) : { ok: false, error: MISSING_REPOSITORY.error };
     });
   };
 
-  /** A write to the project's tet.json, which only its main worktree has (tet-json.ts's configRoot). */
+  /** A write to the project's tet.json, which only its repository has (tet-json.ts's
+   *  configRoot). */
   const onProjectFile = <A extends unknown[]>(
     channel: string,
     run: (repository: Repository, ...args: A) => Promise<GitActionResult>
@@ -93,8 +95,8 @@ export function registerRepositoryIpc({
   onRepository("repository:commit-paths", (repository, message: string, paths: string[]) =>
     repository.commitPaths(message, paths)
   );
-  ipcMain.handle("repository:suggest-commit-message", async (_event, checkout: CheckoutRef, paths?: string[]): Promise<SuggestionResult> => {
-    const repository = repositories.get(checkout);
+  ipcMain.handle("repository:suggest-commit-message", async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
+    const repository = repositories.get(ref);
     if (!repository) {
       return {};
     }
@@ -143,9 +145,9 @@ export function registerRepositoryIpc({
       repository.setExplorerSetting(key, value)
   );
 
-  ipcMain.handle("repository:list-explorer", async (_event, checkout: CheckoutRef): Promise<ExplorerListing> => {
+  ipcMain.handle("repository:list-explorer", async (_event, ref: ProjectRef): Promise<ExplorerListing> => {
     return (
-      (await repositories.get(checkout)?.listExplorer()) ?? {
+      (await repositories.get(ref)?.listExplorer()) ?? {
         files: [],
         emptyDirs: [],
         compactFolders: DEFAULT_EXPLORER_VIEW.compactFolders,
@@ -154,8 +156,8 @@ export function registerRepositoryIpc({
     );
   });
 
-  ipcMain.handle("repository:search-files", async (_event, checkout: CheckoutRef, query: FileSearchQuery): Promise<FileSearchResult> => {
-    return (await repositories.get(checkout)?.searchFiles(query)) ?? { files: [], truncated: false };
+  ipcMain.handle("repository:search-files", async (_event, ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult> => {
+    return (await repositories.get(ref)?.searchFiles(query)) ?? { files: [], truncated: false };
   });
 
   // The settings Files tab: tet.json's view settings only, no walk.
@@ -163,12 +165,12 @@ export function registerRepositoryIpc({
     return (await repositories.get({ projectId })?.readExplorerSettings()) ?? DEFAULT_EXPLORER_VIEW;
   });
 
-  ipcMain.handle("repository:watch-files", (_event, checkout: CheckoutRef, paths: string[]): void => {
-    repositories.get(checkout)?.watchFiles(paths);
+  ipcMain.handle("repository:watch-files", (_event, ref: ProjectRef, paths: string[]): void => {
+    repositories.get(ref)?.watchFiles(paths);
   });
 
-  ipcMain.handle("repository:read-file", async (_event, checkout: CheckoutRef, filePath: string): Promise<FileContent> => {
-    const repository = repositories.get(checkout);
+  ipcMain.handle("repository:read-file", async (_event, ref: ProjectRef, filePath: string): Promise<FileContent> => {
+    const repository = repositories.get(ref);
     if (!repository) {
       return { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false, error: MISSING_REPOSITORY.error };
     }
@@ -177,8 +179,8 @@ export function registerRepositoryIpc({
 
   ipcMain.handle(
     "repository:write-file",
-    async (_event, checkout: CheckoutRef, filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> => {
-      const repository = repositories.get(checkout);
+    async (_event, ref: ProjectRef, filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> => {
+      const repository = repositories.get(ref);
       if (!repository) {
         return { ok: false, error: MISSING_REPOSITORY.error };
       }

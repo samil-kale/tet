@@ -41,7 +41,7 @@ import {
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
-import { hostDir, newWorktreeKey, ownedWorktreeKeys, sandboxDir, worktreeCheckout, worktreeKeyOf } from "../src/main/project-dirs";
+import { hostDir, newWorktreeKey, ownedWorktreeKeys, sandboxDir, worktreeFiles, worktreeKeyOf } from "../src/main/project-dirs";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
 import { fetchHttpsImage } from "../src/main/ipc/shell";
@@ -776,32 +776,32 @@ describe("a sandboxed tab's variables", () => {
 });
 
 describe("a project's folder under ~/.tet", () => {
-  it("lays out a checkout's data: main or a worktree's key, a side per agent", () => {
+  it("lays out the data of the repository or a worktree: repository/ or worktrees/<key>/, a side per agent", () => {
     const root = path.join(os.tmpdir(), "tet-data");
-    const main = { projectId: "p" };
+    const repository = { projectId: "p" };
     const worktree = { projectId: "p", worktree: "k1" };
-    assert.equal(hostDir(root, main, "claude"), path.join(root, "projects", "p", "main", "host", "claude"));
+    assert.equal(hostDir(root, repository, "claude"), path.join(root, "projects", "p", "repository", "host", "claude"));
     assert.equal(sandboxDir(root, worktree, "codex"), path.join(root, "projects", "p", "worktrees", "k1", "sandbox", "codex"));
-    assert.equal(sandboxSessionDir(sandboxDir(root, main, "pi")), path.join(root, "projects", "p", "main", "sandbox", "pi", "sessions"));
+    assert.equal(sandboxSessionDir(sandboxDir(root, repository, "pi")), path.join(root, "projects", "p", "repository", "sandbox", "pi", "sessions"));
   });
 
   it("knows a worktree TET made by its path, and no other", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
-    const checkout = worktreeCheckout(root, "p", "k1");
-    assert.equal(worktreeKeyOf(root, "p", checkout), "k1");
-    assert.equal(worktreeKeyOf(root, "q", checkout), undefined, "another project's");
-    assert.equal(worktreeKeyOf(root, "p", path.dirname(checkout)), undefined, "not the checkout itself");
+    const files = worktreeFiles(root, "p", "k1");
+    assert.equal(worktreeKeyOf(root, "p", files), "k1");
+    assert.equal(worktreeKeyOf(root, "q", files), undefined, "another project's");
+    assert.equal(worktreeKeyOf(root, "p", path.dirname(files)), undefined, "not the worktree's folder itself");
     assert.equal(worktreeKeyOf(root, "p", path.join(os.tmpdir(), "elsewhere")), undefined, "one made elsewhere");
   });
 
-  it("gives a new worktree a key no other of the project has, and lists those with a checkout", () => {
+  it("gives a new worktree a key no other of the project has, and lists those with their files", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
     const key = newWorktreeKey(root, "p");
     assert.match(key, /^[0-9a-f]{8}$/);
-    fs.mkdirSync(worktreeCheckout(root, "p", key), { recursive: true });
-    fs.writeFileSync(path.join(worktreeCheckout(root, "p", key), ".git"), "gitdir: x");
+    fs.mkdirSync(worktreeFiles(root, "p", key), { recursive: true });
+    fs.writeFileSync(path.join(worktreeFiles(root, "p", key), ".git"), "gitdir: x");
     fs.mkdirSync(path.join(root, "projects", "p", "worktrees", "halfway"), { recursive: true });
-    assert.deepEqual(ownedWorktreeKeys(root, "p"), [key], "one left without its checkout is none");
+    assert.deepEqual(ownedWorktreeKeys(root, "p"), [key], "one left without its files is none");
     assert.notEqual(newWorktreeKey(root, "p"), key);
   });
 });
@@ -1122,8 +1122,8 @@ describe("sbx's filesystem policy", () => {
 
   it("lets an organization granting write alone mount read-write and read-only, as measured", () => {
     const measured = parseFilesystemRules(governed);
-    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\main\\sandbox\\claude", "rw", win32));
-    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\worktrees\\k1\\checkout", "ro", win32));
+    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\repository\\sandbox\\claude", "rw", win32));
+    assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\worktrees\\k1\\files", "ro", win32));
     assert.ok(!isMountAllowed(measured, "D:\\work", "rw", win32), "another drive matches no rule: default deny");
     assert.ok(isMountAllowed(measured, "/home/saka/work", "rw", posix));
   });
@@ -1728,8 +1728,8 @@ describe("opencode's plugin", () => {
   });
 
   it("leaves a rename request its own database has no session for", async () => {
-    // Two tabs of one checkout on one side poll the same folder, each holding only its own
-    // sessions: neither may drop the other's request.
+    // Two tabs of one repository or worktree on one side poll the same folder, each holding only
+    // its own sessions: neither may drop the other's request.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-oc-plugin-"));
     process.env.TET_PROJECT_ROOT = dir;
     const { renames } = await load(dir, true, { error: { name: "NotFoundError" } });

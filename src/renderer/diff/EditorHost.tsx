@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
-import type { CheckoutRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types";
 import { ImageView } from "./ImageView";
 import { isMarkdown } from "./diff-highlight";
 import {
@@ -13,7 +13,7 @@ import {
   showDiff,
   showMarkdownPreview,
   subscribeEditor,
-  subscribeCheckoutEditors,
+  subscribeRefEditors,
   type EditorSnapshot
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
@@ -39,11 +39,11 @@ export function useEditorPreview(tabId: string): boolean {
 
 /**
  * Any editor tab among `tabs` reading, building or saving — shown by the progress bar of the pane
- * holding them. One subscription for the checkout: a pane's tabs come and go, and hooks can't
- * follow them.
+ * holding them. One subscription for the repository or worktree: a pane's tabs come and go, and
+ * hooks can't follow them.
  */
-export function useEditorBusy(checkout: CheckoutRef, tabs: PaneTab[]): boolean {
-  const subscribe = useCallback((listener: () => void) => subscribeCheckoutEditors(checkout, listener), [checkout]);
+export function useEditorBusy(ref: ProjectRef, tabs: PaneTab[]): boolean {
+  const subscribe = useCallback((listener: () => void) => subscribeRefEditors(ref, listener), [ref]);
   return useSyncExternalStore(subscribe, () => tabs.some((tab) => isEditorTab(tab) && busy(getEditorSnapshot(tab.tabId))));
 }
 
@@ -51,9 +51,9 @@ interface EditorHostProps {
   tabId: string;
   /** On screen in its pane; otherwise hidden but laid out. */
   active: boolean;
-  /** The checkout is the one selected. */
+  /** The repository or worktree is the one selected. */
   visible: boolean;
-  /** In the checkout's focused pane, which gets keyboard focus. */
+  /** In the repository's or worktree's focused pane, which gets keyboard focus. */
   focused: boolean;
 }
 

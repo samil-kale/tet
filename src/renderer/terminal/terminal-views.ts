@@ -4,8 +4,8 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import type { OpenEditor } from "./editor-tab";
 import { Terminal } from "@xterm/xterm";
-import { checkoutKey } from "../../shared/types";
-import type { AgentInfo, CheckoutRef } from "../../shared/types";
+import { projectRefKey } from "../../shared/types";
+import type { AgentInfo, ProjectRef } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover, type WrappedUrlResolver } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
@@ -31,12 +31,12 @@ interface TerminalView {
  */
 const views = new Map<string, TerminalView>();
 
-/** Per checkout (`checkoutKey`), opens a file inside it in the preview tab, a Markdown file with
- *  its preview beside the editor if asked. Set by the pane. */
+/** Per repository or worktree (`projectRefKey`), opens a file inside it in the preview tab, a
+ *  Markdown file with its preview beside the editor if asked. Set by the pane. */
 const revealHandlers = new Map<string, (path: string, how: OpenEditor) => void>();
 
-function viewKey(checkout: CheckoutRef, tabId: string): string {
-  return `${checkoutKey(checkout)} ${tabId}`;
+function viewKey(ref: ProjectRef, tabId: string): string {
+  return `${projectRefKey(ref)} ${tabId}`;
 }
 
 /**
@@ -71,8 +71,8 @@ const MAX_EARLY_OUTPUT = 64 * 1024;
 
 // Output arrives batched: one message, and one flush, for every terminal.
 window.tet.terminals.onOutput((batch) => {
-  for (const { checkout, tabId, data } of batch) {
-    const key = viewKey(checkout, tabId);
+  for (const { ref, tabId, data } of batch) {
+    const key = viewKey(ref, tabId);
     const view = views.get(key);
     if (!view) {
       earlyOutput.set(key, ((earlyOutput.get(key) ?? "") + data).slice(-MAX_EARLY_OUTPUT));
@@ -89,10 +89,10 @@ window.tet.terminals.onOutput((batch) => {
 });
 
 export function setRevealHandler(
-  checkout: CheckoutRef,
+  ref: ProjectRef,
   handler: (path: string, how: OpenEditor) => void
 ): () => void {
-  const key = checkoutKey(checkout);
+  const key = projectRefKey(ref);
   revealHandlers.set(key, handler);
   return () => revealHandlers.delete(key);
 }
@@ -108,10 +108,10 @@ function openUrl(url: string): void {
 
 /** A ctrl-clicked path or a Markdown preview's link: main finds it, opens one outside the
  *  repository itself, and says when there is none. */
-export function openFile(checkout: CheckoutRef, filePath: string, markdownPreview = false): void {
-  void window.tet.shell.openFile(checkout, filePath).then((repoPath) => {
+export function openFile(ref: ProjectRef, filePath: string, markdownPreview = false): void {
+  void window.tet.shell.openFile(ref, filePath).then((repoPath) => {
     if (repoPath) {
-      revealHandlers.get(checkoutKey(checkout))?.(repoPath, { markdownPreview });
+      revealHandlers.get(projectRefKey(ref))?.(repoPath, { markdownPreview });
     }
   });
 }
@@ -146,8 +146,8 @@ function forgetUrls(prefix: string): void {
   }
 }
 
-function createWrappedUrlResolver(checkout: CheckoutRef, tabId: string): WrappedUrlResolver {
-  const cacheKey = (fragment: string): string => `${viewKey(checkout, tabId)} ${fragment}`;
+function createWrappedUrlResolver(ref: ProjectRef, tabId: string): WrappedUrlResolver {
+  const cacheKey = (fragment: string): string => `${viewKey(ref, tabId)} ${fragment}`;
   return {
     lookup: (fragment) => {
       const key = cacheKey(fragment);
@@ -165,7 +165,7 @@ function createWrappedUrlResolver(checkout: CheckoutRef, tabId: string): Wrapped
         return;
       }
       pendingUrlRequests.add(key);
-      void window.tet.terminals.resolveUrl(checkout, tabId, fragment).then((url) => {
+      void window.tet.terminals.resolveUrl(ref, tabId, fragment).then((url) => {
         // Gone in flight: the terminal closed (forgetUrls); don't put an entry back.
         if (!pendingUrlRequests.delete(key)) {
           return;
@@ -329,8 +329,8 @@ function releaseWebgl(view: TerminalView): void {
  * Puts the terminal on WebGL if allowed. Before a fit: WebGL floors the cell width to whole device
  * pixels, so a renderer changed after the fit would resize the pty again.
  */
-function acquireWebgl(checkout: CheckoutRef, tabId: string, view: TerminalView): void {
-  const key = viewKey(checkout, tabId);
+function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void {
+  const key = viewKey(ref, tabId);
   if (view.webgl || !view.term.element || !webglPool.mayRetry(key, Date.now())) {
     return;
   }
@@ -353,7 +353,7 @@ function acquireWebgl(checkout: CheckoutRef, tabId: string, view: TerminalView):
       // DOM cells measure differently: refit an on-screen terminal next frame, after the addon's
       // teardown. A hidden one is fitted on show, after `showTerminal` retries WebGL.
       if (inFront.has(key)) {
-        requestAnimationFrame(() => fitTerminal(checkout, tabId));
+        requestAnimationFrame(() => fitTerminal(ref, tabId));
       }
     });
     view.term.loadAddon(attached);
@@ -371,7 +371,7 @@ function acquireWebgl(checkout: CheckoutRef, tabId: string, view: TerminalView):
   }
 }
 
-function createView(checkout: CheckoutRef, tabId: string, agent: AgentInfo): TerminalView {
+function createView(ref: ProjectRef, tabId: string, agent: AgentInfo): TerminalView {
   const term = new Terminal({
     fontFamily: editorFontFamily(),
     fontSize: defaultFontSize(),
@@ -406,10 +406,10 @@ function createView(checkout: CheckoutRef, tabId: string, agent: AgentInfo): Ter
   // columns where Unicode 6 counts one, and the cursor drifts off what it drew.
   term.loadAddon(new Unicode11Addon());
   term.unicode.activeVersion = "11";
-  term.registerLinkProvider(createUrlLinkProvider(term, openUrl, createWrappedUrlResolver(checkout, tabId)));
-  term.registerLinkProvider(createFileLinkProvider(term, (filePath) => openFile(checkout, filePath)));
+  term.registerLinkProvider(createUrlLinkProvider(term, openUrl, createWrappedUrlResolver(ref, tabId)));
+  term.registerLinkProvider(createFileLinkProvider(term, (filePath) => openFile(ref, filePath)));
 
-  term.onData((data) => window.tet.terminals.input(checkout, tabId, data));
+  term.onData((data) => window.tet.terminals.input(ref, tabId, data));
 
   // Runs before xterm encodes the key. Takes nothing an agent could receive (see `shortcuts.ts`):
   // the three below are handled *for* the terminal, not taken from it.
@@ -420,7 +420,7 @@ function createView(checkout: CheckoutRef, tabId: string, agent: AgentInfo): Ter
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) {
-        window.tet.terminals.input(checkout, tabId, "\x1b\r");
+        window.tet.terminals.input(ref, tabId, "\x1b\r");
       }
       return false;
     }
@@ -446,7 +446,7 @@ function createView(checkout: CheckoutRef, tabId: string, agent: AgentInfo): Ter
   });
 
   const view: TerminalView = { term, fit, agent };
-  const key = viewKey(checkout, tabId);
+  const key = viewKey(ref, tabId);
   views.set(key, view);
   const buffered = earlyOutput.get(key);
   if (buffered) {
@@ -457,13 +457,13 @@ function createView(checkout: CheckoutRef, tabId: string, agent: AgentInfo): Ter
 }
 
 /** Whether this tab has been attached before — its xterm exists, wherever it is mounted now. */
-export function hasTerminal(checkout: CheckoutRef, tabId: string): boolean {
-  return views.has(viewKey(checkout, tabId));
+export function hasTerminal(ref: ProjectRef, tabId: string): boolean {
+  return views.has(viewKey(ref, tabId));
 }
 
-export function attachTerminal(checkout: CheckoutRef, tabId: string, agent: AgentInfo, container: HTMLElement): void {
+export function attachTerminal(ref: ProjectRef, tabId: string, agent: AgentInfo, container: HTMLElement): void {
   // Only the first attach reads the agent; the view outlives every mount.
-  const view = views.get(viewKey(checkout, tabId)) ?? createView(checkout, tabId, agent);
+  const view = views.get(viewKey(ref, tabId)) ?? createView(ref, tabId, agent);
   if (view.term.element?.parentElement === container) {
     return;
   }
@@ -475,7 +475,7 @@ export function attachTerminal(checkout: CheckoutRef, tabId: string, agent: Agen
     view.term.open(container);
     // A first open is a tab coming in front, before Pane's fit (acquireWebgl). A moved tab keeps
     // its renderer: the canvas moves with the element.
-    acquireWebgl(checkout, tabId, view);
+    acquireWebgl(ref, tabId, view);
   }
 
   // On the container, not the document: a drop belongs to the terminal it lands on. Files only.
@@ -526,8 +526,8 @@ export function attachTerminal(checkout: CheckoutRef, tabId: string, agent: Agen
  * CLI's cursor-relative redraw, corrupting it (microsoft/vscode#230852, #260038). Reflow and
  * notify go together once activity settles (`RESIZE_DEBOUNCE_MS` in `Pane.tsx`).
  */
-export function fitTerminal(checkout: CheckoutRef, tabId: string): void {
-  const view = views.get(viewKey(checkout, tabId));
+export function fitTerminal(ref: ProjectRef, tabId: string): void {
+  const view = views.get(viewKey(ref, tabId));
   if (!view) {
     return;
   }
@@ -542,17 +542,17 @@ export function fitTerminal(checkout: CheckoutRef, tabId: string): void {
     return;
   }
   view.sent = { cols, rows };
-  window.tet.terminals.resize(checkout, tabId, cols, rows);
+  window.tet.terminals.resize(ref, tabId, cols, rows);
 }
 
 /** In front of the user; called before its fit, which then measures WebGL cells. */
-export function showTerminal(checkout: CheckoutRef, tabId: string): void {
-  const key = viewKey(checkout, tabId);
+export function showTerminal(ref: ProjectRef, tabId: string): void {
+  const key = viewKey(ref, tabId);
   inFront.add(key);
   webglPool.show(key);
   const view = views.get(key);
   if (view) {
-    acquireWebgl(checkout, tabId, view);
+    acquireWebgl(ref, tabId, view);
   }
 }
 
@@ -563,8 +563,8 @@ let trimQueued = false;
  * commit's `showTerminal` calls (`WebglPool.trim`). A released one is not refitted: `showTerminal`
  * restores WebGL before its next fit, so columns and pty stay.
  */
-export function hideTerminal(checkout: CheckoutRef, tabId: string): void {
-  const key = viewKey(checkout, tabId);
+export function hideTerminal(ref: ProjectRef, tabId: string): void {
+  const key = viewKey(ref, tabId);
   inFront.delete(key);
   if (!views.get(key)?.webgl) {
     return;
@@ -585,8 +585,8 @@ export function hideTerminal(checkout: CheckoutRef, tabId: string): void {
   });
 }
 
-export function focusTerminal(checkout: CheckoutRef, tabId: string): void {
-  views.get(viewKey(checkout, tabId))?.term.focus();
+export function focusTerminal(ref: ProjectRef, tabId: string): void {
+  views.get(viewKey(ref, tabId))?.term.focus();
 }
 
 /** Repaints every built terminal in the root element's current theme. Colors only: no resize. */
@@ -598,12 +598,12 @@ export function rethemeTerminals(): void {
 
 /** Wipes scrollback and screen, for a restart. Written as a reset (RIS) rather than `clear()`, so it
  *  lands after output xterm has queued but not parsed yet, and takes the cursor line too. */
-export function clearTerminal(checkout: CheckoutRef, tabId: string): void {
-  views.get(viewKey(checkout, tabId))?.term.write("\x1bc");
+export function clearTerminal(ref: ProjectRef, tabId: string): void {
+  views.get(viewKey(ref, tabId))?.term.write("\x1bc");
 }
 
-export function disposeTerminal(checkout: CheckoutRef, tabId: string): void {
-  const key = viewKey(checkout, tabId);
+export function disposeTerminal(ref: ProjectRef, tabId: string): void {
+  const key = viewKey(ref, tabId);
   earlyOutput.delete(key);
   const view = views.get(key);
   if (!view) {
@@ -631,10 +631,10 @@ function dropView(key: string, view: TerminalView): void {
  *
  * The ptys are already dead (the host disposed the session manager); only buffers and DOM go.
  */
-export function disposeCheckoutTerminals(checkout: CheckoutRef): void {
-  // A checkout's key holds no space: no other checkout's starts with it plus the separator
-  // (shared/types.ts's checkoutKey).
-  const prefix = viewKey(checkout, "");
+export function disposeRefTerminals(ref: ProjectRef): void {
+  // A repository's or worktree's key holds no space: no other key starts with it plus the separator
+  // (shared/types.ts's projectRefKey).
+  const prefix = viewKey(ref, "");
   deletePrefixed(earlyOutput, prefix);
 
   for (const [key, view] of [...views]) {

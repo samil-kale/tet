@@ -10,17 +10,17 @@ import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
 import { isSbxAgent } from "../../shared/types";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
-import { checkoutKey } from "../../shared/types";
+import { projectRefKey } from "../../shared/types";
 import type {
   AgentId,
-  CheckoutRef,
+  ProjectRef,
   NoticeSeverity,
   ProjectCommand,
   TerminalDescriptor,
   TerminalStatus
 } from "../../shared/types";
 import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
-import type { Checkout } from "../checkout";
+import type { ResolvedRef } from "../resolved-ref";
 import { hostDir, sandboxDir } from "../project-dirs";
 import { readSbxConfig } from "../tet-json";
 import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
@@ -50,7 +50,8 @@ const MAX_RECORDED_EVENTS = 200;
 const CONTROL_START_SIZE = { cols: 120, rows: 30 };
 // Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
-// Across managers, so a checkout reopened in this run never reuses a closed tab's id — and token.
+// Across managers, so a repository or worktree reopened in this run never reuses a closed tab's
+// id — and token.
 let newTabCounter = 0;
 /**
  * A shell-only token, refused in a saved command (no shell runs it). Whole tokens only — `2>&1`
@@ -90,22 +91,23 @@ interface TabState extends TerminalDescriptor {
   executable?: string;
   /** A saved command's arguments — its program's, or a shell's when it asked for one. */
   runArgs?: string[];
-  /** The process's folder, when not the checkout root. */
+  /** The process's folder, when not the repository or worktree root. */
   cwd?: string;
   /** A saved command's variables, outranking the machine's. */
   env?: Record<string, string>;
 }
 
-/** Per-agent state within one checkout. */
+/** Per-agent state within one repository or worktree. */
 interface AgentRuntime {
   agent: AgentDefinition;
   executable: string;
-  /** Startable here: the host executable, or the checkout's sandbox standing in (sbxOnly). */
+  /** Startable here: the host executable, or the repository's or worktree's sandbox standing in
+   *  (sbxOnly). */
   startable: boolean;
   /**
-   * No host executable — startable only through the checkout's sandbox, with nothing to fall back
-   * to. Decided with the project's config; whether the sandbox is *reachable* is resolveSbxRun's
-   * question, per spawn.
+   * No host executable — startable only through the repository's or worktree's sandbox, with
+   * nothing to fall back to. Decided with the project's config; whether the sandbox is *reachable*
+   * is resolveSbxRun's question, per spawn.
    */
   sbxOnly: boolean;
   /** Resolves once the version check, spawn preparation and initial listing are done. */
@@ -129,11 +131,12 @@ interface AgentRuntime {
 }
 
 export interface SessionManagerCallbacks {
-  onTabs: (ref: CheckoutRef, tabs: TerminalDescriptor[]) => void;
-  onOutput: (ref: CheckoutRef, tabId: string, data: string) => void;
-  onStatus: (ref: CheckoutRef, tabId: string, status: TerminalStatus) => void;
-  /** Whether anything in this checkout is still starting — drives the tab strip's bar. */
-  onStartupProgress: (ref: CheckoutRef, show: boolean) => void;
+  onTabs: (ref: ProjectRef, tabs: TerminalDescriptor[]) => void;
+  onOutput: (ref: ProjectRef, tabId: string, data: string) => void;
+  onStatus: (ref: ProjectRef, tabId: string, status: TerminalStatus) => void;
+  /** Whether anything in this repository or worktree is still starting — drives the tab strip's
+   *  bar. */
+  onStartupProgress: (ref: ProjectRef, show: boolean) => void;
   onNotice: (severity: NoticeSeverity, message: string) => void;
 }
 
@@ -232,11 +235,11 @@ function resumeArgsOf(tab: TabState, agent: AgentDefinition): string[] {
 }
 
 /**
- * One checkout's terminal tabs — a project's main worktree or one of its worktrees — mirroring the
+ * The terminal tabs of a project's repository or one of its worktrees, mirroring the
  * agents' persisted sessions: each session found at open becomes a tab, and closing a tab deletes
  * its session.
  */
-export class CheckoutSessionManager {
+export class TabSessionManager {
   private tabs: TabState[] = [];
   private readonly sessions = new Map<string, TerminalSession>();
   private readonly runtimes = new Map<AgentId, AgentRuntime>();
@@ -272,9 +275,9 @@ export class CheckoutSessionManager {
   private inFront: ReadonlySet<string> = new Set();
 
   constructor(
-    /** The checkout its tabs run in. Its sandboxes take the project's sbx values (sbx-local.ts), as
-     *  it takes the project's tet.json (tet-json.ts's configRoot). */
-    readonly at: Checkout,
+    /** The repository or worktree its tabs run in. Its sandboxes take the project's sbx values
+     *  (sbx-local.ts), as it takes the project's tet.json (tet-json.ts's configRoot). */
+    readonly at: ResolvedRef,
     private readonly storageRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
@@ -339,7 +342,7 @@ export class CheckoutSessionManager {
   }
 
   private postTabs(): void {
-    // A late post would revive a closed checkout in the renderer.
+    // A late post would revive a closed repository or worktree in the renderer.
     if (this.disposed) {
       return;
     }
@@ -401,8 +404,9 @@ export class CheckoutSessionManager {
   }
 
   /**
-   * A checkout with no restored session opens one tab of the first installed agent with sessions
-   * (never the shell). Nothing spawns until the first resize; unused, it persists nothing.
+   * A repository or worktree with no restored session opens one tab of the first installed agent
+   * with sessions (never the shell). Nothing spawns until the first resize; unused, it persists
+   * nothing.
    */
   private openFirstAgentTab(): void {
     if (this.disposed || this.tabs.length > 0) {
@@ -691,8 +695,8 @@ export class CheckoutSessionManager {
     );
   }
 
-  /** Whether the checkout still has this tab: main drops output it batched for one that closed
-   *  before the batch was flushed (main.ts's flushOutput). */
+  /** Whether the repository or worktree still has this tab: main drops output it batched for one
+   *  that closed before the batch was flushed (main.ts's flushOutput). */
   hasTab(tabId: string): boolean {
     return this.tabs.some((tab) => tab.tabId === tabId);
   }
@@ -818,8 +822,8 @@ export class CheckoutSessionManager {
   }
 
   /**
-   * The `sbx run` arguments if this tab runs in the checkout's sandbox; tet.json is read fresh per
-   * spawn. Only plain tabs of sbx agents (isSbxAgent), never a saved command's.
+   * The `sbx run` arguments if this tab runs in the repository's or worktree's sandbox; tet.json is
+   * read fresh per spawn. Only plain tabs of sbx agents (isSbxAgent), never a saved command's.
    *
    * A session runs where it lives: a host session fails to resume in a sandbox ("No conversation
    * found with session ID: …", measured). A tab with no `sessionId` yet is sandboxed.
@@ -886,7 +890,7 @@ export class CheckoutSessionManager {
     const { args, env, problems } = await prepareSbxRun({
       agentId: tab.agentId,
       ref: this.at.ref,
-      checkoutPath: this.at.path,
+      projectRefPath: this.at.path,
       config,
       knowledge: this.sbxLocal.knowledge(this.at.ref.projectId),
       sandboxes: ready.sandboxes,
@@ -1362,8 +1366,8 @@ export class CheckoutSessionManager {
     }
     const name = getAgent(tab.agentId).displayName;
     // The tab's title too, or two tabs of one agent would toast identically.
-    const checkout = this.at.name();
-    const where = tab.title ? `${checkout} - ${tab.title}` : checkout;
+    const placeName = this.at.name();
+    const where = tab.title ? `${placeName} - ${tab.title}` : placeName;
     switch (kind) {
       case "finished":
         return { title: `${name}: Finished`, body: `Finished in ${where}` };
@@ -1538,11 +1542,12 @@ export class CheckoutSessionManager {
   }
 }
 
-/** The open checkouts' session managers, by `checkoutKey`. */
+/** A session manager per open repository and worktree, by `projectRefKey`. */
 export class SessionManagerRegistry {
-  private readonly managers = new Map<string, CheckoutSessionManager>();
+  private readonly managers = new Map<string, TabSessionManager>();
 
-  /** The renderer's last report, sent only on change — for a checkout opened after it. */
+  /** The renderer's last report, sent only on change — for a repository or worktree opened after
+   *  it. */
   private inFront: { key: string | null; tabIds: readonly string[] } = { key: null, tabIds: [] };
 
   constructor(
@@ -1552,57 +1557,58 @@ export class SessionManagerRegistry {
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
-  open(checkout: Checkout): CheckoutSessionManager {
-    const key = checkoutKey(checkout.ref);
+  open(resolved: ResolvedRef): TabSessionManager {
+    const key = projectRefKey(resolved.ref);
     const existing = this.managers.get(key);
     if (existing) {
       return existing;
     }
-    const manager = new CheckoutSessionManager(checkout, this.storageRoot, this.settings, this.sbxLocal, this.callbacks);
+    const manager = new TabSessionManager(resolved, this.storageRoot, this.settings, this.sbxLocal, this.callbacks);
     manager.setInFront(key === this.inFront.key ? this.inFront.tabIds : []);
     this.managers.set(key, manager);
     manager.bootstrap().catch((error: unknown) => {
-      this.callbacks.onNotice("error", `${checkout.name()} could not be opened: ${errorMessage(error)}`);
+      this.callbacks.onNotice("error", `${resolved.name()} could not be opened: ${errorMessage(error)}`);
     });
     return manager;
   }
 
-  get(ref: CheckoutRef): CheckoutSessionManager | undefined {
-    return this.managers.get(checkoutKey(ref));
+  get(ref: ProjectRef): TabSessionManager | undefined {
+    return this.managers.get(projectRefKey(ref));
   }
 
-  /** Every open checkout's of the project: its main worktree's and its worktrees'. */
-  forProject(projectId: string): CheckoutSessionManager[] {
+  /** Those of the project's repository and worktrees that are open. */
+  forProject(projectId: string): TabSessionManager[] {
     return [...this.managers.values()].filter((manager) => manager.at.ref.projectId === projectId);
   }
 
-  /** The tabs in front belong to one checkout at most. */
-  setInFront(ref: CheckoutRef | null, tabIds: readonly string[]): void {
-    const key = ref && checkoutKey(ref);
+  /** The tabs in front belong to one repository or worktree at most. */
+  setInFront(ref: ProjectRef | null, tabIds: readonly string[]): void {
+    const key = ref && projectRefKey(ref);
     this.inFront = { key, tabIds };
     for (const [id, manager] of this.managers) {
       manager.setInFront(id === key ? tabIds : []);
     }
   }
 
-  /** See CheckoutSessionManager.themeChanged. */
+  /** See TabSessionManager.themeChanged. */
   themeChanged(): void {
     for (const manager of this.managers.values()) {
       manager.themeChanged();
     }
   }
 
-  /** See CheckoutSessionManager.idleReminderChanged. */
+  /** See TabSessionManager.idleReminderChanged. */
   idleReminderChanged(): void {
     for (const manager of this.managers.values()) {
       manager.idleReminderChanged();
     }
   }
 
-  async close(ref: CheckoutRef): Promise<void> {
-    const manager = this.managers.get(checkoutKey(ref));
-    // Dropped before the wait, so a checkout closed and reopened at once never has two.
-    this.managers.delete(checkoutKey(ref));
+  async close(ref: ProjectRef): Promise<void> {
+    const manager = this.managers.get(projectRefKey(ref));
+    // Dropped before the wait, so a repository or worktree closed and reopened at once never has
+    // two.
+    this.managers.delete(projectRefKey(ref));
     await manager?.dispose();
   }
 

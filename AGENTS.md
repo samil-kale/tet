@@ -37,13 +37,18 @@ project's terminals.
   registry entry, its id in `AGENT_IDS` (and `SBX_AGENT_IDS`, `src/shared/types.ts`), and one case
   in `AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only agent-specific code outside
   `agents/`; user-facing text may name agents).
-- A project is a git repository — a folder without one is refused. Its id is `tet.id` in the
-  repository's own git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees, and
-  everything TET keeps of it lies in `~/.tet/projects/<id>/` (`project-dirs.ts`: `main/` and
-  `worktrees/<key>/`, each with `host/<agent>` and `sandbox/<agent>`). Nothing a sandbox must not
-  see ever goes there: sbx is granted the folder whole. Where something runs — the main worktree
-  or a worktree — is a `CheckoutRef`, never an id of its own; one string (`checkoutKey`) only
-  where a single key is unavoidable.
+- **A project is its repository and its worktrees** — the words for them, in code, texts and
+  comments alike. The repository is the folder the user opened, holding `.git`; never call it a
+  worktree (nor "main worktree"), and there is no noun for both: where one of them is meant — where
+  tabs, git and the Explorer run — it is addressed by a `ProjectRef { projectId, worktree? }`
+  (without `worktree`: the repository), resolved to its folder and name as a `ResolvedRef`, and
+  said as "the repository or a worktree". A worktree has no id of its own; one string
+  (`projectRefKey`) only where a single key is unavoidable.
+- A project needs git — a folder without it is refused. Its id is `tet.id` in the repository's own
+  git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees, and everything TET keeps
+  of it lies in `~/.tet/projects/<id>/` (`project-dirs.ts`: `repository/` and `worktrees/<key>/`,
+  each with `host/<agent>` and `sandbox/<agent>`, a worktree's files in `worktrees/<key>/files`).
+  Nothing a sandbox must not see ever goes there: sbx is granted the folder whole.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
   the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing or malformed
   means nothing configured. A worktree has none of its own: it takes its project's (`configRoot`)
@@ -64,8 +69,8 @@ exception is the right mouse button, decided per click by the terminal's mouse m
 ## Never touch the user's agent configuration
 
 Everything TET generates for an agent lives under `~/.tet` (`data-root.ts`) and is pointed at from
-outside — what belongs to a checkout in its `host/<agent>` or `sandbox/<agent>` folder
-(`project-dirs.ts`), each side handed only its own; only pasted or dropped files go to the OS temp
+outside — what belongs to the repository or a worktree in its `host/<agent>` or `sandbox/<agent>`
+folder (`project-dirs.ts`), each side handed only its own; only pasted or dropped files go to the OS temp
 directory (`ipc/files.ts`).
 `prepareSpawn` and `prepareSandboxSpawn` are the only places an agent writes configuration;
 beyond them it touches only its own sessions: when the user renames or deletes one, and the one a
@@ -107,7 +112,7 @@ others.
 - tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
 - **A linked worktree is a worktree and belongs to its project; it is not a project.** It only
   behaves like one in places (its own row, tabs and git pane) — never design from "a worktree is a
-  project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>/checkout`; the key is
+  project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>/files`; the key is
   given once and never changes, and every worktree TET made opens with its project, listed under
   its row (`Project.worktrees`) and in the branch tree's WORKTREES (`RepositoryState.worktrees`,
   `WorktreeInfo.key`), both read off the disk. One made elsewhere (plain `git worktree add`, an
@@ -134,9 +139,9 @@ or a per-line decision is for an agent.
 
 ## UI rules
 
-- **Layout**: projects in the left sidebar, each with its worktrees; the tab strip is one
-  checkout's terminals plus its editor tabs — VS Code's preview rule, one preview tab per checkout
-  (`editor-tab.ts`). Git and
+- **Layout**: projects in the left sidebar, each with its worktrees; the tab strip is the
+  terminals and editor tabs of the repository or a worktree — VS Code's preview rule, one preview
+  tab each (`editor-tab.ts`). Git and
   files are not tabs but one side pane toggled from the strip.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/terminal/pane-layout.ts`, the state in
@@ -216,7 +221,7 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
   command, opencode's plugin and pi's extension by posting the same request. The one exception: no
   agent's hook fires for a turn the user cut short, so reconcile ends a turn by the agent's own
   session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
-- The main process sets the state (`CheckoutSessionManager.hookEvent`); the renderer decides what is
+- The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
   shown (`App.markedTabs`) and clears what was seen (`terminals.seen`).
 - A session is asked to quit (`quitPresses`) before it is killed — a hard kill skips a CLI's exit
   handlers.
@@ -242,10 +247,11 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   system prompt.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`control-token.ts`): a terminal gets its tab's token, never the run's.
-  Without flags a verb acts on the caller's checkout, `--project` alone on a project's main
-  worktree, `--worktree` on one of its worktrees (`resolveCheckout`).
-- `tabs-send` and `tabs-output` answer only for a tab of the caller's own project, any of its
-  checkouts (`ownProjectOnly`); from a sandbox, every verb only for the caller's own checkout.
+  Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
+  project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
+- `tabs-send` and `tabs-output` answer only for a tab of the caller's own project, its repository
+  or any worktree (`ownProjectOnly`); from a sandbox, every verb only for the caller's own
+  repository or worktree.
   `tabs-send` never from inside a sandbox. `tabs-output`, `tabs-close` and `tabs-rename` from a
   sandbox reach only tabs running there: a host tab is the machine's, and its output may print the
   host's control token.
@@ -263,8 +269,8 @@ the `sbx` CLI; its comments are the record of what was measured.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox
   (`AgentRuntime.sbxOnly`).
 - The sandbox never sees the agent's own config directory; sessions are read through host mounts,
-  so the same listing code serves both. Of `~/.tet` it sees only its checkout's `sandbox/<agent>`
-  folder, and a worktree's sandbox is its own (its workspace is fixed at `sbx create`); under
+  so the same listing code serves both. Of `~/.tet` it sees only the `sandbox/<agent>` folder of
+  its repository or worktree, and a worktree's sandbox is its own (its workspace is fixed at `sbx create`); under
   governance one rule, `~/.tet/projects/**`, allows TET's folders and its worktrees.
 - Generated setup targets where it runs, not `process.platform` (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through

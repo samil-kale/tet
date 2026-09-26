@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from "react";
-import { checkoutKey, checkoutRef, worktreeName } from "../../shared/types";
-import type { CheckoutRef, Project, ProjectWorktree } from "../../shared/types";
-import type { Checkout } from "../checkout";
+import { projectRefKey, projectRef, worktreeName } from "../../shared/types";
+import type { ProjectRef, Project, ProjectWorktree } from "../../shared/types";
+import type { ResolvedRef } from "../resolved-ref";
 import type { GitRun } from "../git/run-action";
 import {
   askDeleteWorktree,
@@ -22,7 +22,8 @@ import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";
 
-/** One action in a row; its click must not reach the row, which selects its checkout. */
+/** One action in a row; its click must not reach the row, which selects its repository or
+ *  worktree. */
 function rowButton(title: string, run: () => void, icon: ReactNode) {
   return (
     <button
@@ -38,11 +39,11 @@ function rowButton(title: string, run: () => void, icon: ReactNode) {
   );
 }
 
-/** A checkout's marked sessions by tab id, oldest first: finished out of sight, waiting on an
- *  answer, and starting (so the pane a new agent opens in shows the bar, `TerminalsPane`'s
- *  `startingHere`). `busy` excludes a session stopped on a question. Decided in `App`, which alone
- *  knows what is on screen. */
-export interface CheckoutMarks {
+/** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,
+ *  waiting on an answer, and starting (so the pane a new agent opens in shows the bar,
+ *  `TerminalsPane`'s `startingHere`). `busy` excludes a session stopped on a question. Decided in
+ *  `App`, which alone knows what is on screen. */
+export interface RefMarks {
   finished: string[];
   waiting: string[];
   starting: string[];
@@ -50,7 +51,7 @@ export interface CheckoutMarks {
 }
 
 /** A row's repository facts: HEAD, first remote, dirty. */
-export interface CheckoutHead {
+export interface RefHead {
   head?: string;
   /** `head` is a commit, not a branch. */
   detached?: boolean;
@@ -70,8 +71,8 @@ export interface CheckoutHead {
 
 interface ProjectListProps {
   projects: Project[];
-  /** Every open checkout by key, identity-stable (App's `checkoutsByKey`). */
-  checkouts: Record<string, Checkout>;
+  /** Every open repository and worktree by key, identity-stable (App's `resolvedByKey`). */
+  resolvedRefs: Record<string, ResolvedRef>;
   activeKey: string | null;
   onSelect: (key: string) => void;
   /** Removes the project, once this list asked about its worktrees. */
@@ -79,36 +80,36 @@ interface ProjectListProps {
   /** The full list in the new order. */
   onReorder: (projects: Project[]) => void;
   onAdd: () => void;
-  /** By checkout key, with a new identity only where the answer changed (`App` ensures it).
-   *  Records, not lookup callbacks: a callback closing over every checkout's state changes on every
-   *  push and breaks the memo. */
-  heads: Record<string, CheckoutHead>;
-  marks: Record<string, CheckoutMarks>;
+  /** By `projectRefKey`, with a new identity only where the answer changed (`App` ensures it).
+   *  Records, not lookup callbacks: a callback closing over every repository's and worktree's state
+   *  changes on every push and breaks the memo. */
+  heads: Record<string, RefHead>;
+  marks: Record<string, RefMarks>;
   /** Which projects run their agents in sbx, by project id: a worktree runs as its project does. */
   sandboxed: Record<string, boolean>;
-  /** Opens a shell tab in that checkout ("open in terminal"). */
-  onOpenTerminal: (checkout: CheckoutRef) => void;
+  /** Opens a shell tab in that repository or worktree ("open in terminal"). */
+  onOpenTerminal: (ref: ProjectRef) => void;
   /** Opens the first working session. */
   onShowBusy: (key: string) => void;
   /** Opens the oldest finished session; pressing again moves to the next. */
   onShowFinished: (key: string) => void;
   /** The same, for the longest-waiting session. */
   onShowWaiting: (key: string) => void;
-  /** Shows the checkout, toggling the git pane when it is already selected. */
+  /** Shows the repository or worktree, toggling the git pane when it is already selected. */
   onShowChanges: (key: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
-  /** `App.runIn`: how a command runs in one of these checkouts — `run` on this list's bar and
-   *  failing as a notice, `ask` on the bar of the question that asked for it. */
+  /** `App.runIn`: how a command runs in one of these repositories and worktrees — `run` on this
+   *  list's bar and failing as a notice, `ask` on the bar of the question that asked for it. */
   runIn: (key: string) => GitRun;
-  /** A command started here runs, in any checkout. */
+  /** A command started here runs, in any repository or worktree. */
   gitBusy: boolean;
   /** git creates worktrees (Requirements.worktrees); else "New worktree" says why not. */
   worktreesSupported: boolean;
 }
 
-/** The row a menu was opened on: a checkout, or a worktree made elsewhere. */
-type RowTarget = { kind: "checkout"; checkout: Checkout } | { kind: "foreign"; worktree: ProjectWorktree };
+/** The row a menu was opened on: the repository or a worktree TET made, or one made elsewhere. */
+type RowTarget = { kind: "ref"; resolved: ResolvedRef } | { kind: "foreign"; worktree: ProjectWorktree };
 
 /** A remote's web page, or null. Takes both git spellings: "git@host:owner/repo.git" and a url
  *  with a scheme. */
@@ -141,7 +142,7 @@ function hostName(url: string): string {
 
 export const ProjectList = memo(function ProjectList({
   projects,
-  checkouts,
+  resolvedRefs,
   activeKey,
   onSelect,
   onRemove,
@@ -172,7 +173,7 @@ export const ProjectList = memo(function ProjectList({
     onMove: (from, to) => onReorder(reorder(projects, from, to))
   });
 
-  const askRemoteUrl = async (checkout: Checkout, remote: string, current: string | undefined): Promise<void> => {
+  const askRemoteUrl = async (resolved: ResolvedRef, remote: string, current: string | undefined): Promise<void> => {
     await prompt({
       title: "Change remote URL",
       value: current ?? "",
@@ -182,8 +183,8 @@ export const ProjectList = memo(function ProjectList({
       submit: async (url) =>
         url.trim() === current
           ? undefined
-          : runIn(checkout.key).ask(`Changing the URL of ${remote}...`, () =>
-              window.tet.repository.setRemoteUrl(checkout.ref, remote, url.trim())
+          : runIn(resolved.key).ask(`Changing the URL of ${remote}...`, () =>
+              window.tet.repository.setRemoteUrl(resolved.ref, remote, url.trim())
             )
     });
   };
@@ -209,54 +210,54 @@ export const ProjectList = memo(function ProjectList({
   };
 
   /** A row's close: a repository is removed, a worktree deleted — asked first (askDeleteWorktree). */
-  const close = (checkout: Checkout): void => {
-    if (checkout.worktree === undefined) {
-      const project = projects.find((entry) => entry.id === checkout.ref.projectId);
+  const close = (resolved: ResolvedRef): void => {
+    if (resolved.worktree === undefined) {
+      const project = projects.find((entry) => entry.id === resolved.ref.projectId);
       if (project) {
         void remove(project);
       }
       return;
     }
-    const { upstream } = heads[checkout.key] ?? {};
-    void askDeleteWorktree(checkout.ref, worktreeName(checkout.worktree), upstream, runIn(checkout.key));
+    const { upstream } = heads[resolved.key] ?? {};
+    void askDeleteWorktree(resolved.ref, worktreeName(resolved.worktree), upstream, runIn(resolved.key));
   };
 
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
    *  pane, where its target is on screen — but for a worktree's own row, which is that tree, and
    *  its merge into the base, run where the base is checked out. */
-  const checkoutEntries = (checkout: Checkout): ContextMenuEntry[] => {
-    const { worktree } = checkout;
-    const { projectId } = checkout.ref;
-    const { detached, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[checkout.key] ?? {};
+  const refEntries = (resolved: ResolvedRef): ContextMenuEntry[] => {
+    const { worktree } = resolved;
+    const { projectId } = resolved.ref;
+    const { detached, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[resolved.key] ?? {};
     const web = remoteUrl ? webUrl(remoteUrl) : null;
     // The base is recorded at creation (git.ts's worktreeAdd); run where it is checked out.
-    const baseCheckout =
+    const baseResolved =
       baseAt === undefined
         ? undefined
-        : Object.values(checkouts).find((entry) => entry.ref.projectId === projectId && entry.path === baseAt);
+        : Object.values(resolvedRefs).find((entry) => entry.ref.projectId === projectId && entry.path === baseAt);
     const branch = worktree?.branch;
     const own: ContextMenuEntry[] = worktree
       ? [
           {
             label: base ? `Merge into ${base}` : "Merge into its base",
             run:
-              base && baseCheckout && branch && !detached
+              base && baseResolved && branch && !detached
                 ? () =>
-                    runIn(baseCheckout.key).run(`Merging ${branch} into ${base}...`, () =>
-                      window.tet.repository.merge(baseCheckout.ref, branch)
+                    runIn(baseResolved.key).run(`Merging ${branch} into ${base}...`, () =>
+                      window.tet.repository.merge(baseResolved.ref, branch)
                     )
                 : undefined
           },
           SEPARATOR,
-          // Run in the main worktree, whose state lists the worktrees.
+          // Run in the repository, whose state lists the worktrees.
           worktreeEntry(
             "Rename worktree",
             undefined,
-            branch ? () => void askRenameWorktree(projectId, branch, runIn(checkoutKey(checkoutRef(projectId)))) : undefined
+            branch ? () => void askRenameWorktree(projectId, branch, runIn(projectRefKey(projectRef(projectId)))) : undefined
           )
         ]
       : [];
-    // The repository's, offered on its main worktree's row only.
+    // The repository's, offered on its own row only.
     const repository: ContextMenuEntry[] = worktree
       ? []
       : [
@@ -266,38 +267,38 @@ export const ProjectList = memo(function ProjectList({
           },
           {
             label: "Change remote URL...",
-            run: remoteName ? () => void askRemoteUrl(checkout, remoteName, remoteUrl) : undefined
+            run: remoteName ? () => void askRemoteUrl(resolved, remoteName, remoteUrl) : undefined
           },
           SEPARATOR,
           worktreeEntry(
             "New worktree",
             newWorktreeRefusal(worktreesSupported),
-            defaultBranch ? () => void askNewWorktree(projectId, runIn(checkout.key), defaultBranch) : undefined
+            defaultBranch ? () => void askNewWorktree(projectId, runIn(resolved.key), defaultBranch) : undefined
           )
         ];
     // A worktree takes its project's (tet-json.ts's configRoot).
     const sbx: ContextMenuEntry[] = worktree ? [] : [{ label: "SBX Settings", run: () => onSbxSettings(projectId) }, SEPARATOR];
     return [
-      { label: "Open in terminal", run: () => onOpenTerminal(checkout.ref) },
-      { label: revealLabel(), run: () => void window.tet.shell.openProject(checkout.ref) },
-      { label: worktree ? "Copy path" : "Copy repository path", run: () => void navigator.clipboard.writeText(checkout.path) },
+      { label: "Open in terminal", run: () => onOpenTerminal(resolved.ref) },
+      { label: revealLabel(), run: () => void window.tet.shell.openProject(resolved.ref) },
+      { label: worktree ? "Copy path" : "Copy repository path", run: () => void navigator.clipboard.writeText(resolved.path) },
       SEPARATOR,
       ...repository,
       ...own,
       SEPARATOR,
       ...sbx,
-      { label: worktree ? "Delete worktree..." : "Remove repository", run: () => close(checkout) }
+      { label: worktree ? "Delete worktree..." : "Remove repository", run: () => close(resolved) }
     ];
   };
 
   const menuEntries = (target: RowTarget): ContextMenuEntry[] =>
-    target.kind === "checkout"
-      ? checkoutEntries(target.checkout)
+    target.kind === "ref"
+      ? refEntries(target.resolved)
       : [{ label: "Copy path", run: () => void navigator.clipboard.writeText(target.worktree.path) }];
 
-  const checkoutRow = (checkout: Checkout): ReactNode => {
-    const { key, worktree } = checkout;
-    const { projectId } = checkout.ref;
+  const refRow = (resolved: ResolvedRef): ReactNode => {
+    const { key, worktree } = resolved;
+    const { projectId } = resolved.ref;
     // HEAD, as context rather than name; for a worktree, whose branch is its name, the branch it
     // was made from.
     const extra = worktree ? heads[key]?.base : heads[key]?.head;
@@ -307,11 +308,11 @@ export const ProjectList = memo(function ProjectList({
         key={key}
         className={classes.join(" ")}
         onClick={() => onSelect(key)}
-        title={checkout.path}
-        onContextMenu={(event) => menu.open(event, { kind: "checkout", checkout })}
+        title={resolved.path}
+        onContextMenu={(event) => menu.open(event, { kind: "ref", resolved })}
       >
         <span className="project-main">
-          <span className="project-label">{worktree ? worktreeName(worktree) : checkout.name}</span>
+          <span className="project-label">{worktree ? worktreeName(worktree) : resolved.name}</span>
           {extra && <span className="project-extra">({extra})</span>}
         </span>
         {/* All three session states can hold at once, each a button to a session. No ranking as
@@ -336,7 +337,7 @@ export const ProjectList = memo(function ProjectList({
           ) : (
             rowButton("SBX enabled", () => onSbxSettings(projectId), <ShieldIcon />)
           ))}
-        {rowButton(worktree ? "Delete worktree" : "Remove repository", () => close(checkout), <CloseIcon />)}
+        {rowButton(worktree ? "Delete worktree" : "Remove repository", () => close(resolved), <CloseIcon />)}
       </div>
     );
   };
@@ -368,14 +369,14 @@ export const ProjectList = memo(function ProjectList({
     >
       <div className="project-list" {...listProps}>
         {projects.map((project, index) => {
-          const main = checkouts[checkoutKey(checkoutRef(project.id))];
+          const main = resolvedRefs[projectRefKey(projectRef(project.id))];
           return (
             <div key={project.id} className={["project-group", ...rowClasses(index)].join(" ")} {...rowProps(index)}>
-              {main && checkoutRow(main)}
+              {main && refRow(main)}
               {project.worktrees.map((worktree) => {
                 const own =
-                  worktree.key === undefined ? undefined : checkouts[checkoutKey(checkoutRef(project.id, worktree.key))];
-                return own ? checkoutRow(own) : foreignRow(worktree);
+                  worktree.key === undefined ? undefined : resolvedRefs[projectRefKey(projectRef(project.id, worktree.key))];
+                return own ? refRow(own) : foreignRow(worktree);
               })}
             </div>
           );

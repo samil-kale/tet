@@ -5,7 +5,7 @@ import type {
   AgentInfo,
   AppInfo,
   AppSettings,
-  CheckoutRef,
+  ProjectRef,
   CheckoutTarget,
   EditorReport,
   EnvAnswer,
@@ -153,7 +153,7 @@ export interface TETApi {
     addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
     /** Unless `force`, answers `uncommitted` for a worktree with changes, closing nothing; else closes
      *  it and deletes its folder, then its branch — with `onRemote` the branch's upstream too. */
-    deleteWorktree(worktree: CheckoutRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult>;
+    deleteWorktree(worktree: ProjectRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult>;
     /** The full dragged order of ids. */
     reorder(projectIds: string[]): Promise<void>;
     /** A project or worktree was opened or closed, or a worktree's branch changed. `show` is what the
@@ -183,64 +183,64 @@ export interface TETApi {
     onWithdrawn(listener: (id: number) => void): Unsubscribe;
   };
   repository: {
-    state(checkout: CheckoutRef): Promise<RepositoryState>;
+    state(ref: ProjectRef): Promise<RepositoryState>;
     /** Schedules a refresh, for changes the watcher may have missed; the state arrives as a push. */
-    refresh(checkout: CheckoutRef): Promise<void>;
-    checkout(checkout: CheckoutRef, target: CheckoutTarget): Promise<GitActionResult>;
+    refresh(ref: ProjectRef): Promise<void>;
+    checkout(ref: ProjectRef, target: CheckoutTarget): Promise<GitActionResult>;
     /** `git fetch --prune`. Also runs quietly every ten minutes. Each command reaching a remote
      *  takes the `login` typed after it answered `loginUrl`. */
-    fetch(checkout: CheckoutRef, login?: GitLogin): Promise<GitActionResult>;
-    pull(checkout: CheckoutRef, login?: GitLogin): Promise<GitActionResult>;
+    fetch(ref: ProjectRef, login?: GitLogin): Promise<GitActionResult>;
+    pull(ref: ProjectRef, login?: GitLogin): Promise<GitActionResult>;
     /** Sets the upstream when there is none ("publish"). */
-    push(checkout: CheckoutRef, login?: GitLogin): Promise<GitActionResult>;
+    push(ref: ProjectRef, login?: GitLogin): Promise<GitActionResult>;
     /** The new url shows in the next state. */
-    setRemoteUrl(checkout: CheckoutRef, remote: string, url: string): Promise<GitActionResult>;
+    setRemoteUrl(ref: ProjectRef, remote: string, url: string): Promise<GitActionResult>;
     /** Creates the branch off `startPoint` and switches to it. */
-    createBranch(checkout: CheckoutRef, name: string, startPoint: string): Promise<GitActionResult>;
-    renameBranch(checkout: CheckoutRef, from: string, to: string): Promise<GitActionResult>;
+    createBranch(ref: ProjectRef, name: string, startPoint: string): Promise<GitActionResult>;
+    renameBranch(ref: ProjectRef, from: string, to: string): Promise<GitActionResult>;
     /** The caller confirms first. The checked-out branch gives way to the default branch; `onRemote`
      *  deletes its upstream. */
-    deleteBranch(checkout: CheckoutRef, name: string, onRemote: boolean): Promise<GitActionResult>;
+    deleteBranch(ref: ProjectRef, name: string, onRemote: boolean): Promise<GitActionResult>;
     /** A branch on a remote alone. The caller confirms first. */
-    deleteRemoteBranch(checkout: CheckoutRef, remote: string, name: string, login?: GitLogin): Promise<GitActionResult>;
+    deleteRemoteBranch(ref: ProjectRef, remote: string, name: string, login?: GitLogin): Promise<GitActionResult>;
     /** Into the current branch. A conflict is reported and left in the tree. */
-    merge(checkout: CheckoutRef, ref: string): Promise<GitActionResult>;
+    merge(ref: ProjectRef, gitRef: string): Promise<GitActionResult>;
     /** Unless `confirmed`, answers `rewrites-pushed` instead where commits on the upstream would be
      *  rewritten; the caller asks and calls again. */
-    rebase(checkout: CheckoutRef, ref: string, confirmed: boolean): Promise<GitActionResult>;
+    rebase(ref: ProjectRef, gitRef: string, confirmed: boolean): Promise<GitActionResult>;
     /** Aborts `RepositoryState.operation`. */
-    abort(checkout: CheckoutRef): Promise<GitActionResult>;
+    abort(ref: ProjectRef): Promise<GitActionResult>;
     /** Always annotated, as in GitHub Desktop. */
-    createTag(checkout: CheckoutRef, name: string, target: string, message: string): Promise<GitActionResult>;
-    pushTag(checkout: CheckoutRef, name: string, login?: GitLogin): Promise<GitActionResult>;
-    deleteTag(checkout: CheckoutRef, name: string, onRemote: boolean): Promise<GitActionResult>;
+    createTag(ref: ProjectRef, name: string, target: string, message: string): Promise<GitActionResult>;
+    pushTag(ref: ProjectRef, name: string, login?: GitLogin): Promise<GitActionResult>;
+    deleteTag(ref: ProjectRef, name: string, onRemote: boolean): Promise<GitActionResult>;
     /** The tag on the remote alone: a `deleteTag` whose remote half wanted a login, again. */
-    deleteRemoteTag(checkout: CheckoutRef, name: string, login?: GitLogin): Promise<GitActionResult>;
+    deleteRemoteTag(ref: ProjectRef, name: string, login?: GitLogin): Promise<GitActionResult>;
     /** Leaves HEAD detached. */
-    checkoutTag(checkout: CheckoutRef, name: string): Promise<GitActionResult>;
+    checkoutTag(ref: ProjectRef, name: string): Promise<GitActionResult>;
     /** Everything the changes list shows, untracked included. */
-    commitAll(checkout: CheckoutRef, message: string): Promise<GitActionResult>;
+    commitAll(ref: ProjectRef, message: string): Promise<GitActionResult>;
     /** These files alone, untracked included; nothing else staged goes with them. */
-    commitPaths(checkout: CheckoutRef, message: string, paths: string[]): Promise<GitActionResult>;
+    commitPaths(ref: ProjectRef, message: string, paths: string[]): Promise<GitActionResult>;
     /** An installed agent suggests one subject for all changes, or only `paths`. */
-    suggestCommitMessage(checkout: CheckoutRef, paths?: string[]): Promise<SuggestionResult>;
+    suggestCommitMessage(ref: ProjectRef, paths?: string[]): Promise<SuggestionResult>;
     /** Everything the changes list shows, untracked included. */
-    stashPush(checkout: CheckoutRef, message: string): Promise<GitActionResult>;
+    stashPush(ref: ProjectRef, message: string): Promise<GitActionResult>;
     /** By `StashEntry.sha`, looked up when it runs. */
-    stash(checkout: CheckoutRef, command: StashCommand, sha: string): Promise<GitActionResult>;
+    stash(ref: ProjectRef, command: StashCommand, sha: string): Promise<GitActionResult>;
     /** The caller confirms first. Files go to the trash; where that fails the answer is `trash-failed`,
      *  and `permanently` deletes them instead. */
-    discard(checkout: CheckoutRef, paths: string[], permanently: boolean): Promise<GitActionResult>;
+    discard(ref: ProjectRef, paths: string[], permanently: boolean): Promise<GitActionResult>;
     /** Appends the file, or its extension, to .gitignore. */
-    ignore(checkout: CheckoutRef, path: string, scope: "file" | "extension"): Promise<GitActionResult>;
+    ignore(ref: ProjectRef, path: string, scope: "file" | "extension"): Promise<GitActionResult>;
     /** With parent directories — the Explorer's "New File...". */
-    createFile(checkout: CheckoutRef, path: string): Promise<GitActionResult>;
+    createFile(ref: ProjectRef, path: string): Promise<GitActionResult>;
     /** The Explorer's "New Folder...". */
-    createDirectory(checkout: CheckoutRef, path: string): Promise<GitActionResult>;
+    createDirectory(ref: ProjectRef, path: string): Promise<GitActionResult>;
     /** To the trash — the Explorer's "Delete...". */
-    deletePath(checkout: CheckoutRef, path: string): Promise<GitActionResult>;
+    deletePath(ref: ProjectRef, path: string): Promise<GitActionResult>;
     /** The Explorer's "Rename...". */
-    renamePath(checkout: CheckoutRef, from: string, to: string): Promise<GitActionResult>;
+    renamePath(ref: ProjectRef, from: string, to: string): Promise<GitActionResult>;
     /** tet.json's `folders` — "Add Folder to Workspace". */
     addFolder(projectId: string, path: string): Promise<GitActionResult>;
     /** Removing the last one restores the whole repository as one tree. */
@@ -253,30 +253,30 @@ export interface TETApi {
       key: K,
       value: ExplorerSettings[K]
     ): Promise<GitActionResult>;
-    listExplorer(checkout: CheckoutRef): Promise<ExplorerListing>;
+    listExplorer(ref: ProjectRef): Promise<ExplorerListing>;
     /** The Explorer search field's matches, in the files the tree lists minus what git ignores. */
-    searchFiles(checkout: CheckoutRef, query: FileSearchQuery): Promise<FileSearchResult>;
+    searchFiles(ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult>;
     /** tet.json alone, no filesystem walk. */
     explorerSettings(projectId: string): Promise<ExplorerSettings>;
-    readFile(checkout: CheckoutRef, path: string): Promise<FileContent>;
+    readFile(ref: ProjectRef, path: string): Promise<FileContent>;
     /** Nothing is written unless `expectedMtimeMs` matches the disk. */
-    writeFile(checkout: CheckoutRef, path: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult>;
+    writeFile(ref: ProjectRef, path: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult>;
     /** Git command, file watcher or refresh. */
-    onState(listener: (payload: { checkout: CheckoutRef; state: RepositoryState }) => void): Unsubscribe;
+    onState(listener: (payload: { ref: ProjectRef; state: RepositoryState }) => void): Unsubscribe;
     /** A working-tree entry appeared or vanished — ignored ones included, which no state reports. */
-    onFilesChanged(listener: (payload: { checkout: CheckoutRef }) => void): Unsubscribe;
+    onFilesChanged(listener: (payload: { ref: ProjectRef }) => void): Unsubscribe;
     /** The editor tabs' files, for `onFileChanged`; the whole set each time. */
-    watchFiles(checkout: CheckoutRef, paths: string[]): Promise<void>;
+    watchFiles(ref: ProjectRef, paths: string[]): Promise<void>;
     /** A `watchFiles` file was written, by anyone. */
-    onFileChanged(listener: (payload: { checkout: CheckoutRef; path: string }) => void): Unsubscribe;
+    onFileChanged(listener: (payload: { ref: ProjectRef; path: string }) => void): Unsubscribe;
     /** For `tet-ctl editor-state` and `editor-list`; null once the tab is closed. */
-    reportEditor(checkout: CheckoutRef, tabId: string, report: EditorReport | null): void;
+    reportEditor(ref: ProjectRef, tabId: string, report: EditorReport | null): void;
     /** The project's active editor tab, which `editor-state` answers for — the window's layout knows. */
-    reportActiveEditor(checkout: CheckoutRef, tabId: string): void;
+    reportActiveEditor(ref: ProjectRef, tabId: string): void;
     /** `tet-ctl editor-state` asks for the active editor tab's text; the listener answers. */
-    onEditorContentRequest(listener: (checkout: CheckoutRef) => string | undefined): Unsubscribe;
+    onEditorContentRequest(listener: (ref: ProjectRef) => string | undefined): Unsubscribe;
     /** `tet-ctl editor-open`: in the preview tab, or kept with `--keep`. */
-    onOpenEditor(listener: (payload: { checkout: CheckoutRef; path: string; keep: boolean }) => void): Unsubscribe;
+    onOpenEditor(listener: (payload: { ref: ProjectRef; path: string; keep: boolean }) => void): Unsubscribe;
   };
   /** Saved shell commands, in the project root's tet.json so they travel with it. */
   commands: {
@@ -285,43 +285,43 @@ export interface TETApi {
      *  the question that is still up to show it at its field. */
     save(projectId: string, commands: ProjectCommand[]): Promise<GitActionResult>;
     /** A tab whose process is the command; null when nothing can run it. */
-    run(checkout: CheckoutRef, command: ProjectCommand): Promise<TerminalDescriptor | null>;
+    run(ref: ProjectRef, command: ProjectCommand): Promise<TerminalDescriptor | null>;
     /** tet.json changed on disk, whoever wrote it. */
     onChanged(listener: (payload: { projectId: string }) => void): Unsubscribe;
   };
   terminals: {
-    list(checkout: CheckoutRef): Promise<TerminalDescriptor[]>;
+    list(ref: ProjectRef): Promise<TerminalDescriptor[]>;
     /** The session starts on first resize. */
-    create(checkout: CheckoutRef, agentId: AgentId): Promise<TerminalDescriptor>;
+    create(ref: ProjectRef, agentId: AgentId): Promise<TerminalDescriptor>;
     /** Also deletes the sessions behind them. */
-    close(checkout: CheckoutRef, tabIds: string[]): Promise<void>;
+    close(ref: ProjectRef, tabIds: string[]): Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
-    rename(checkout: CheckoutRef, tabId: string, title: string): Promise<GitActionResult>;
+    rename(ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult>;
     /** Respawns a saved command in the same tab. */
-    restart(checkout: CheckoutRef, tabId: string): Promise<void>;
+    restart(ref: ProjectRef, tabId: string): Promise<void>;
     /** Clears `finishedAt` — only the renderer knows which tab is in front. */
-    seen(checkout: CheckoutRef, tabId: string): void;
+    seen(ref: ProjectRef, tabId: string): void;
     /** The shown project's tabs in front of the user (on screen, focused window, no dialog); a turn
      *  there raises no toast. Sent whenever the set changes. */
-    inFront(checkout: CheckoutRef | null, tabIds: string[]): void;
-    input(checkout: CheckoutRef, tabId: string, data: string): void;
+    inFront(ref: ProjectRef | null, tabIds: string[]): void;
+    input(ref: ProjectRef, tabId: string, data: string): void;
     /** The first resize starts the process (lazy spawn). */
-    resize(checkout: CheckoutRef, tabId: string, cols: number, rows: number): void;
+    resize(ref: ProjectRef, tabId: string, cols: number, rows: number): void;
     /** The full url of a wrapped fragment; null means no answer — do not re-ask. */
-    resolveUrl(checkout: CheckoutRef, tabId: string, fragment: string): Promise<string | null>;
+    resolveUrl(ref: ProjectRef, tabId: string, fragment: string): Promise<string | null>;
     /** The project's full tab list on every change. */
-    onTabs(listener: (payload: { checkout: CheckoutRef; tabs: TerminalDescriptor[] }) => void): Unsubscribe;
+    onTabs(listener: (payload: { ref: ProjectRef; tabs: TerminalDescriptor[] }) => void): Unsubscribe;
     /** One message per flush for all terminals. */
     onOutput(listener: (batch: TerminalOutput[]) => void): Unsubscribe;
     onStatus(
-      listener: (payload: { checkout: CheckoutRef; tabId: string; status: TerminalStatus }) => void
+      listener: (payload: { ref: ProjectRef; tabId: string; status: TerminalStatus }) => void
     ): Unsubscribe;
     /** Anything in the project still starting (a CLI booting, sessions listing). */
-    onStartupProgress(listener: (payload: { checkout: CheckoutRef; show: boolean }) => void): Unsubscribe;
+    onStartupProgress(listener: (payload: { ref: ProjectRef; show: boolean }) => void): Unsubscribe;
     /** A tab the control channel opened, to bring to front. */
-    onShow(listener: (payload: { checkout: CheckoutRef; tabId: string }) => void): Unsubscribe;
+    onShow(listener: (payload: { ref: ProjectRef; tabId: string }) => void): Unsubscribe;
     /** onStartupProgress's current value: a project restored at start bootstraps before the window. */
-    starting(checkout: CheckoutRef): Promise<boolean>;
+    starting(ref: ProjectRef): Promise<boolean>;
   };
   agents: {
     list(): Promise<AgentInfo[]>;
@@ -340,13 +340,13 @@ export interface TETApi {
     fetchImage(url: string): Promise<string | null>;
     /** A path activated in a terminal: the repository-relative path for a file inside the
      *  repository, null when handed to the OS. */
-    openFile(checkout: CheckoutRef, path: string): Promise<string | null>;
+    openFile(ref: ProjectRef, path: string): Promise<string | null>;
     /** Selected in the OS file manager. */
-    revealFile(checkout: CheckoutRef, path: string): Promise<void>;
+    revealFile(ref: ProjectRef, path: string): Promise<void>;
     /** With the OS's default app for the type. */
-    openFileExternally(checkout: CheckoutRef, path: string): Promise<void>;
+    openFileExternally(ref: ProjectRef, path: string): Promise<void>;
     /** In the OS file manager. */
-    openProject(checkout: CheckoutRef): Promise<void>;
+    openProject(ref: ProjectRef): Promise<void>;
   };
   /** What the main process wants said — see Notice. */
   onNotice(listener: (payload: Notice) => void): Unsubscribe;

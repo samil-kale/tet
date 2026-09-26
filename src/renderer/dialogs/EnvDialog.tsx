@@ -34,14 +34,14 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   useEscape(cancel);
 
   const complete = rows.every((row) => row.value !== "");
-  const tab = request.checkout && request.tabId ? { checkout: request.checkout, tabId: request.tabId } : undefined;
+  const tab = request.ref && request.tabId ? { ref: request.ref, tabId: request.tabId } : undefined;
 
   // The asking tab restarts once saved, so it takes up the values (pty.ts).
   const { busy, refused, submit: save, clear } = useSubmit(
     () => window.tet.environment.answer(request.id, rows.map((row) => ({ name: row.name, value: row.value }))),
     () => {
       if (tab) {
-        void window.tet.terminals.restart(tab.checkout, tab.tabId);
+        void window.tet.terminals.restart(tab.ref, tab.tabId);
       }
       onClose();
     }

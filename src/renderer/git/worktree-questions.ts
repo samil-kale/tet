@@ -1,6 +1,6 @@
 import { WORKTREES_NEED_GIT } from "../../shared/types";
-import type { CheckoutRef, GitActionResult } from "../../shared/types";
-import { canDiscardCheckoutEdits } from "../diff/editor-views";
+import type { ProjectRef, GitActionResult } from "../../shared/types";
+import { canDiscardRefEdits } from "../diff/editor-views";
 import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, questionUp } from "../ui/Dialog";
@@ -43,7 +43,7 @@ export async function askNewWorktree(projectId: string, run: GitRun, base: strin
 }
 
 /** Renames the worktree's branch, which names it; the folder stays, and so do its terminals. Run in
- *  the main worktree, whose state lists the worktrees. */
+ *  the repository, whose state lists the worktrees. */
 export async function askRenameWorktree(projectId: string, branch: string, run: GitRun): Promise<void> {
   await askName({
     title: "Rename worktree",
@@ -60,7 +60,7 @@ export async function askRenameWorktree(projectId: string, branch: string, run: 
  * checkbox, as on a branch's own delete. Its unsaved editor edits get a say, as on a close.
  */
 export async function askDeleteWorktree(
-  worktree: CheckoutRef,
+  worktree: ProjectRef,
   branch: string,
   upstream: string | undefined,
   run: GitRun
@@ -72,7 +72,7 @@ export async function askDeleteWorktree(
     confirmLabel: "Delete worktree",
     checkboxLabel: upstream ? `Also delete ${upstream} on the remote` : undefined
   });
-  if (!answer.confirmed || !(await canDiscardCheckoutEdits(worktree))) {
+  if (!answer.confirmed || !(await canDiscardRefEdits(worktree))) {
     return;
   }
   const options = { force: false, onRemote: answer.checked };

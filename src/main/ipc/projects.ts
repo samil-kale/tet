@@ -10,7 +10,7 @@ import type {
   ListRepositoriesResult,
   Project,
   ProviderAccount,
-  CheckoutRef,
+  ProjectRef,
   ProviderId
 } from "../../shared/types";
 import { urlOrigin } from "../../shared/git-url";
@@ -162,7 +162,7 @@ export function registerProjectsIpc({
   );
   ipcMain.handle(
     "projects:delete-worktree",
-    (_event, worktree: CheckoutRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult> =>
+    (_event, worktree: ProjectRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult> =>
       deleteWorktree(projectDeps, worktree, options)
   );
 }

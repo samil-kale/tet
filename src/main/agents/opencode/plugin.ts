@@ -215,9 +215,9 @@ export const TETPlugin = async (input: any) => {
       } catch {
         continue;
       }
-      // Every opencode of the checkout on this side polls this one folder, and only the process
-      // whose database holds the session can apply it: a request another process could not apply is
-      // left for that one, and withdrawn by tet's own timeout when there is none.
+      // Every opencode of the repository or worktree on this side polls this one folder, and only
+      // the process whose database holds the session can apply it: a request another process could
+      // not apply is left for that one, and withdrawn by tet's own timeout when there is none.
       let applied = !title;
       try {
         if (title) {

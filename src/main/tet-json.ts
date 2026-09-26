@@ -59,7 +59,7 @@ export interface ExplorerView extends ExplorerSettings {
 /** `read`'s answer for a file that doesn't parse; `patch` must never write over it. */
 const UNREADABLE: ProjectFile = {};
 
-/** Where a project's tet.json lives: a linked worktree takes its main worktree's, read and never
+/** Where a project's tet.json lives: a linked worktree takes its repository's, read and never
  *  written from the worktree. The copy git checks out in the worktree is ignored. */
 export function configRoot(root: string): string {
   return readMainWorktree(root) ?? root;
@@ -69,7 +69,7 @@ export function isWorktree(root: string): boolean {
   return configRoot(root) !== root;
 }
 
-/** Throws for a worktree: everything that changes its settings changes its main worktree's, there. */
+/** Throws for a worktree: everything that changes its settings changes its repository's, there. */
 export function assertOwnConfig(root: string): void {
   if (isWorktree(root)) {
     throw new Error(`A worktree takes its settings from ${path.basename(configRoot(root))}: change them there`);
@@ -447,7 +447,7 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
  *  hosts and the variables' names. Never holds a token: each sandboxed agent signs in with its own
  *  `/login` inside the sandbox, and a secret's or variable's value stays on this machine, as does
  *  the knowledge (sbx-local.ts). A worktree forwards no ports: a port of this machine reaches one
- *  sandbox, and its main worktree's has it. */
+ *  sandbox, and its repository's has it. */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const sbx = sbxSection((await read(root)) ?? {});
   const paths = toSbxPaths(sbx.paths)
