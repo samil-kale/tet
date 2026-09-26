@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.12.1 (2026-09-26)
+
+- **Dialogs keep the keyboard.** Tab no longer leaves an open dialog for the terminal or editor
+  behind it, and closing a dialog hands the focus back to where it was. Notices show above a dialog
+  instead of under its dim.
+- **Fixes.** Emoji and symbols such as ⏺ take the width the agents give them, so the cursor no
+  longer drifts off the text. Paths dropped or pasted into a shell tab arrive as they are, even with
+  `$`, backticks or quotes in them. Suggesting a commit message shows the dialog's progress bar.
+
 ## 0.12.0 (2026-09-26)
 
 - **Worktrees belong to their repository.** A worktree takes its main worktree's `tet.json` and
