@@ -10,6 +10,7 @@ import type { UpdateResult } from "../shared/release";
 import type { NoticeSeverity } from "../shared/types";
 import { readJson } from "./json-file";
 import { resumableDownload } from "./resumable-download";
+import { runProcess } from "./run-process";
 
 /** Not urgent: an update installs only once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
@@ -109,16 +110,13 @@ async function latestVersion(releasesUrl: string): Promise<string | undefined> {
 }
 
 /** Also unpacks the zip: Windows' tar (since 10 1803) is bsdtar. */
-function unpack(archive: string, into: string): Promise<void> {
+async function unpack(archive: string, into: string): Promise<void> {
   const tar =
     process.platform === "win32" ? path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
-  return new Promise((resolve, reject) => {
-    const child = spawn(tar, ["-xf", archive, "-C", into], { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
-    let stderr = "";
-    child.stderr.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
-    child.on("error", reject);
-    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`tar exited with ${code}: ${stderr}`))));
-  });
+  const result = await runProcess(tar, ["-xf", archive, "-C", into]);
+  if (result.code !== 0) {
+    throw result.error ?? new Error(`tar exited with ${result.code}: ${result.stderr}`);
+  }
 }
 
 /** The install root inside an unpacked archive: at its top, or one folder down. */

@@ -1,10 +1,10 @@
-import { spawn } from "node:child_process";
 import type { IPty } from "node-pty";
 import { errorMessage } from "../../shared/errors";
 import type { TerminalStatus } from "../../shared/types";
-import { killProcessTree, resolveCommand, spawnAgentProcess, type SpawnOptions } from "./pty";
+import { spawnAgentProcess, type SpawnOptions } from "./pty";
 import { timeStartup } from "../event-loop-monitor";
 import { isSimulatedMissing } from "../simulate";
+import { runProcess } from "../run-process";
 
 interface SessionCallbacks {
   onOutput: (data: string) => void;
@@ -52,42 +52,17 @@ const VERSION_CHECK_TIMEOUT_MS = 10_000;
 /**
  * Always spawns (the requirements re-check needs that) and remembers the answer.
  *
- * stdin is closed, as at every other spawn here: with the default pipe it stays open, and a
- * `--version` that reads a line (an interactive shim, a login prompt, cmd.exe's "Terminate batch
- * job (Y/N)?") waits for input nobody sends. stdout and stderr are ignored rather than piped —
- * nothing reads them, and an unread pipe fills and blocks the program it was meant to measure.
+ * stdin is closed (runProcess): with the default pipe it stays open, and a `--version` that reads
+ * a line (an interactive shim, a login prompt, cmd.exe's "Terminate batch job (Y/N)?") waits for
+ * input nobody sends. stdout and stderr are not opened (`ignoreOutput`) — nothing reads them.
  */
 export function checkAgentInstalled(executable: string, versionArgs: string[], cwd: string): Promise<boolean> {
-  const check = new Promise<boolean>((resolve) => {
-    // Missing for the whole app, not only the requirements dialog, so a simulation holds everywhere.
-    if (isSimulatedMissing(executable)) {
-      resolve(false);
-      return;
-    }
-    const command = resolveCommand(executable, versionArgs);
-    const child = spawn(command.command, command.args, {
-      cwd,
-      windowsHide: true,
-      windowsVerbatimArguments: command.windowsVerbatimArguments,
-      stdio: ["ignore", "ignore", "ignore"]
-    });
-    let resolved = false;
-    const finish = (installed: boolean) => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timer);
-        resolve(installed);
-      }
-    };
-    // With its children: on win32 the program sits behind a cmd.exe that `kill()` alone would leave
-    // it running under (killProcessTree).
-    const timer = setTimeout(() => {
-      killProcessTree(child);
-      finish(false);
-    }, VERSION_CHECK_TIMEOUT_MS);
-    child.on("error", () => finish(false));
-    child.on("exit", (code) => finish(code === 0));
-  });
+  // Missing for the whole app, not only the requirements dialog, so a simulation holds everywhere.
+  const check = isSimulatedMissing(executable)
+    ? Promise.resolve(false)
+    : runProcess(executable, versionArgs, { cwd, timeoutMs: VERSION_CHECK_TIMEOUT_MS, ignoreOutput: true }).then(
+        (result) => result.code === 0
+      );
   installedChecks.set(checkKey(executable, versionArgs), check);
   return check;
 }

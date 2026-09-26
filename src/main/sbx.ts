@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import * as crypto from "node:crypto";
 import { statSync, type Stats } from "node:fs";
 import * as fs from "node:fs/promises";
@@ -45,8 +45,8 @@ import { agentDataDir, agentDirFor } from "./terminals/agent-data";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/hook-target";
 import { isSimulatedMissing } from "./simulate";
-import { resolveCommand } from "./terminals/pty";
 import { checkAgentInstalled, isAgentInstalled } from "./terminals/terminal-session";
+import { runProcess } from "./run-process";
 
 /**
  * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy
@@ -101,52 +101,25 @@ function sbxRefusal(result: RunResult): string {
   return sbxError(result) || SBX_PROBLEM.refused;
 }
 
-/** Every `sbx` invocation: a plain spawn through `resolveCommand`, no shell, from the temp
- *  directory so the working directory never reads as a workspace. */
-function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
-  return new Promise((resolve) => {
-    const resolved = resolveCommand("sbx", args);
-    const child = spawn(resolved.command, resolved.args, {
-      cwd: os.tmpdir(),
-      windowsHide: true,
-      windowsVerbatimArguments: resolved.windowsVerbatimArguments,
-      stdio: [options.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"]
-    });
-    if (options.cancellable) {
-      currentChild = child;
-    }
-    let stdout = "";
-    let stderr = "";
-    const forward = (chunk: Buffer): void => options.onData?.(chunk.toString().replace(/\n/g, "\r\n"));
-    child.stdout?.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString();
-      forward(chunk);
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-      forward(chunk);
-    });
-    let settled = false;
-    const timer = options.timeoutMs === undefined ? undefined : setTimeout(() => child.kill(), options.timeoutMs);
-    const finish = (result: RunResult) => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        if (currentChild === child) {
-          currentChild = undefined;
-        }
-        resolve(result);
+/** Every `sbx` invocation: a plain spawn through `resolveCommand` (runProcess), no shell, from the
+ *  temp directory so the working directory never reads as a workspace. */
+async function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
+  let cancellable: ChildProcess | undefined;
+  const result = await runProcess("sbx", args, {
+    cwd: os.tmpdir(),
+    stdin: options.stdin,
+    timeoutMs: options.timeoutMs,
+    onData: options.onData && ((chunk) => options.onData?.(chunk.replace(/\n/g, "\r\n"))),
+    onSpawn: (child) => {
+      if (options.cancellable) {
+        cancellable = currentChild = child;
       }
-    };
-    child.on("error", () => finish({ ok: false, stdout, stderr }));
-    child.on("exit", (code) => finish({ ok: code === 0, stdout, stderr }));
-    if (options.stdin !== undefined) {
-      // A command gone before reading it fails the write (EPIPE, measured on Linux); unhandled, that
-      // stream error raises Electron's modal crash dialog. The exit reports the failure.
-      child.stdin?.on("error", () => undefined);
-      child.stdin?.end(options.stdin);
     }
   });
+  if (cancellable && currentChild === cancellable) {
+    currentChild = undefined;
+  }
+  return { ok: result.code === 0, stdout: result.stdout, stderr: result.stderr };
 }
 
 /**
@@ -183,7 +156,7 @@ async function sbxJson<T>(args: string[]): Promise<T | undefined> {
 }
 
 /** For the dialog's Cancel. Plain `kill()` suffices: `sbx.exe` is native, no cmd.exe shim (unlike
- *  `ask.ts`). */
+ *  an agent's, whose timeout kills the tree: runProcess). */
 export function cancelSbxSetup(): void {
   currentChild?.kill();
   currentChild = undefined;
