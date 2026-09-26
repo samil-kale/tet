@@ -301,7 +301,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       title={dialog.title}
       confirmLabel={dialog.confirmLabel}
       disabled={running || held || !dialog.ready(value)}
-      busy={running}
+      busy={running || held}
       onSubmit={() => void submit()}
       onCancel={dialog.cancel}
     >

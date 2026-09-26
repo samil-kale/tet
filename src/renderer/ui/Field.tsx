@@ -200,8 +200,8 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
 
   return (
     <Field label={label} error={refused ?? error}>
-      {/* Paired like a path field and its Browse button; the spinner replaces the wand while
-          suggesting. */}
+      {/* Paired like a path field and its Browse button; while suggesting, the dialog's bar runs
+          (`onSuggesting`). */}
       <div className="dialog-field-row">
         <input
           type="text"
