@@ -3,6 +3,18 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.12.0 (2026-09-26)
+
+- **Worktrees belong to their repository.** A worktree takes its main worktree's `tet.json` and
+  sandbox settings. Opening a worktree's folder opens its repository too, and closing the
+  repository closes its worktrees; a worktree's row deletes it instead of closing it.
+- **Docker sign-in with access tokens.** The sandbox settings keep Docker access tokens and sign
+  in with one at a click, beside the sign-in through the browser.
+- **Restart picks up where you left.** tet reopens the last project and each pane's active tab.
+- **Fixes.** Claude Code tabs stay working while background agents run. Saving sandbox settings
+  checks every row before changing anything, and stops when sbx can't answer. The sandbox dialog keeps its
+  height across tabs.
+
 ## 0.11.7 (2026-09-25)
 
 - **Codex and pi run fullscreen.** Resizing their tab redraws in place instead of reprinting the
