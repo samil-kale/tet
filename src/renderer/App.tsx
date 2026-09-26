@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { projectRefKey, projectRefsOf, EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
 import type { AgentInfo, ProjectRef, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
@@ -25,7 +25,6 @@ import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList, stableRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
-import { reportSlow } from "./slow-report";
 import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
 import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./terminal/editor-tab";
@@ -63,16 +62,8 @@ const NO_IDS: string[] = [];
 
 const DEFAULT_LAYOUT = defaultLayout();
 
-let renderStartedAt = 0;
-
 /** `worktreesSupported`: git creates them (Requirements.worktrees). */
 export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
-  renderStartedAt = performance.now();
-  // App's render to commit: what a state change here costs across the tree (React's Profiler is
-  // silent in production). A subtree re-rendering alone is not seen.
-  useLayoutEffect(() => {
-    reportSlow("render", performance.now() - renderStartedAt);
-  });
   const [projects, setProjects] = useState<Project[]>([]);
   /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useRef(projects);

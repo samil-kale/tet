@@ -11,7 +11,7 @@ import "./themes/light-modern.css";
 import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import { Startup } from "./Startup";
-import { rethemeTerminals, takeOutputStats } from "./terminal/terminal-views";
+import { rethemeTerminals } from "./terminal/terminal-views";
 import { switchEditorTheme } from "./diff/editor";
 
 /**
@@ -26,32 +26,6 @@ function swallowStrayDrop(event: DragEvent): void {
 
 document.addEventListener("dragover", swallowStrayDrop);
 document.addEventListener("drop", swallowStrayDrop);
-
-// The renderer's half of event-loop.log (src/main/event-loop-monitor.ts), whose sampler cannot see
-// this thread. Chromium reports tasks past 50ms. Each report carries the terminals' recent output
-// (takeOutputStats), over the window this sweep sets.
-const OUTPUT_STATS_WINDOW_MS = 2000;
-
-/** Chromium's non-standard heap usage, so a long task that is a major GC shows as one. */
-function rendererHeap(): string {
-  const { memory } = performance as Performance & { memory?: { usedJSHeapSize: number; totalJSHeapSize: number } };
-  return memory ? `${Math.round(memory.usedJSHeapSize / 1_048_576)}/${Math.round(memory.totalJSHeapSize / 1_048_576)}MB` : "?";
-}
-
-try {
-  new PerformanceObserver((list) => {
-    for (const entry of list.getEntries()) {
-      const { writes, tabs, hidden, largest } = takeOutputStats();
-      window.tet.app.reportLongTask(
-        entry.duration,
-        `${tabs} tabs writing, ${hidden} hidden, ${writes} writes, largest ${largest} chars, heap ${rendererHeap()}`
-      );
-    }
-  }).observe({ entryTypes: ["longtask"] });
-  setInterval(takeOutputStats, OUTPUT_STATS_WINDOW_MS);
-} catch {
-  // A Chromium without the entry type still starts.
-}
 
 const container = document.getElementById("root");
 if (!container) {

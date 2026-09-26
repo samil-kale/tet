@@ -18,7 +18,6 @@ import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
 import { EnvRequests, EnvStore } from "./environment";
-import { countActivity, markStartup, startEventLoopMonitor, timeStartup } from "./event-loop-monitor";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { resolveProjectRef } from "./resolved-ref";
@@ -124,7 +123,6 @@ function flushOutput(): void {
 }
 
 function queueOutput(ref: ProjectRef, tabId: string, data: string): void {
-  countActivity("output");
   const key = `${projectRefKey(ref)}\u0000${tabId}`;
   const pending = pendingOutput.get(key);
   if (pending) {
@@ -329,10 +327,10 @@ function openWorkspace(): Promise<void> {
     await resolveStoredIds(projectDeps);
     for (const project of store.list()) {
       for (const ref of projectRefsOf(project)) {
-        timeStartup(`open ${projectRefKey(ref)}`, () => openProjectRef(ref));
+        openProjectRef(ref);
       }
     }
-    void markStartup("control", startControl);
+    void startControl();
   })();
   return workspaceOpened;
 }
@@ -604,7 +602,6 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
-    startEventLoopMonitor(path.join(dataRoot, "event-loop.log"));
     // Before anything reads PATH, add the agents' install dirs to the OS's bare GUI PATH. Awaited
     // only after the window: on macOS/Linux it asks the login shell, which with nvm takes most of a
     // second. The requirements re-check (ipc/app.ts) joins the same run.
@@ -649,12 +646,12 @@ if (!app.requestSingleInstanceLock()) {
       applyTheme,
       shutdown
     });
-    timeStartup("window", createWindow);
+    createWindow();
     // The git process inherits its environment at the fork, so it waits for PATH; started up front
     // while the renderer loads.
     await pathReady;
-    timeStartup("git-process", startGitProcess);
-    timeStartup("auto-update", () => startAutoUpdate(installed, releasesUrl, dataRoot, notice));
+    startGitProcess();
+    startAutoUpdate(installed, releasesUrl, dataRoot, notice);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

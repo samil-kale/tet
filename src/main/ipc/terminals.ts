@@ -1,7 +1,6 @@
 import { ipcMain } from "electron";
 import { projectRefKey } from "../../shared/types";
 import type { AgentId, ProjectRef, EditorReport, GitActionResult, NoticeReport, TerminalDescriptor } from "../../shared/types";
-import { countActivity } from "../event-loop-monitor";
 import type { IpcDeps } from "./deps";
 
 /** The tab strip: the terminals themselves, plus what only the renderer knows about its editor
@@ -62,7 +61,6 @@ export function registerTerminalsIpc({
   });
 
   ipcMain.on("terminals:input", (_event, ref: ProjectRef, tabId: string, data: string) => {
-    countActivity("input");
     sessions.get(ref)?.write(tabId, data);
   });
 

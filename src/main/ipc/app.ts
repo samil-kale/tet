@@ -1,7 +1,6 @@
 import { app, ipcMain } from "electron";
 import { listAgents } from "../agents";
 import type { AppInfo, AppSettings, Requirements, SettingsEdits } from "../../shared/types";
-import { markStartup, reportRendererSlow, reportRendererTask } from "../event-loop-monitor";
 import { anyAgentInstalled, checkRequirements } from "../requirements";
 import { augmentAgentPath } from "../terminals/agent-path";
 import type { IpcDeps } from "./deps";
@@ -17,8 +16,8 @@ export function registerAppIpc({
   /** The startup gate, asked on every re-check; passing opens the workspace. */
   ipcMain.handle("startup:check", async (): Promise<Requirements> => {
     // Re-scans for manager bin dirs created since startup, so "Check again" finds them.
-    await markStartup("path", augmentAgentPath);
-    const requirements = await markStartup("requirements", checkRequirements);
+    await augmentAgentPath();
+    const requirements = await checkRequirements();
     if (requirements.met) {
       await openWorkspace();
     }
@@ -44,18 +43,6 @@ export function registerAppIpc({
       os: `${process.platform} ${process.arch}`
     })
   );
-
-  ipcMain.on("app:long-task", (_event, ms: number, context: string) => {
-    if (typeof ms === "number" && Number.isFinite(ms)) {
-      reportRendererTask(ms, typeof context === "string" ? context : "");
-    }
-  });
-
-  ipcMain.on("app:slow", (_event, label: string, ms: number) => {
-    if (typeof label === "string" && typeof ms === "number" && Number.isFinite(ms)) {
-      reportRendererSlow(label, ms);
-    }
-  });
 
   ipcMain.handle("settings:get", (): AppSettings => settings.get());
 

@@ -69,7 +69,7 @@ exception is the right mouse button, decided per click by the terminal's mouse m
 ## Never touch the user's agent configuration
 
 Everything TET generates for an agent lives under `~/.tet` (`data-root.ts`) and is pointed at from
-outside — a host tab's setup once per agent in `~/.tet/agent-config/<agent>` (`data-root.ts`), a
+outside — a host tab's setup once per agent in `~/.tet/config/<agent>` (`data-root.ts`), a
 sandboxed tab's in the `sandboxes/…/<agent>` folder of its repository or worktree
 (`project-dirs.ts`), each side handed only its own; only pasted or dropped files go to the OS temp
 directory (`ipc/files.ts`).

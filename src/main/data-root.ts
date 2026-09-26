@@ -18,5 +18,5 @@ export function resolveDataRoot(userDataArg: string | undefined): string {
 /** One agent's setup for its host tabs (AgentPaths.agentDir), the same for every project, so kept
  *  once. A sandboxed tab gets its own copy under its project (project-dirs.ts's sandboxDir). */
 export function agentConfigDir(dataRoot: string, agentId: AgentId): string {
-  return path.join(dataRoot, "agent-config", agentId);
+  return path.join(dataRoot, "config", agentId);
 }

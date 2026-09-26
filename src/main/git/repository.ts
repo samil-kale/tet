@@ -23,7 +23,6 @@ import type {
 } from "../../shared/types";
 import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
 import type { ResolvedRef } from "../resolved-ref";
-import { countActivity, logSlow } from "../event-loop-monitor";
 import { worktreeKeyOf } from "../project-dirs";
 import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
 import { git } from "./git-client";
@@ -288,7 +287,6 @@ export class Repository {
     if (!this.isGit || this.disposed) {
       return Promise.resolve(this.state);
     }
-    countActivity("git");
     this.inflight = (async () => {
       if (this.configStale) {
         await this.loadConfig();
@@ -333,11 +331,8 @@ export class Repository {
     const next: RepositoryState = { ...read, remotes, defaultBranch, worktrees };
     this.reportError(next);
     // Only on an actual change: the watcher fires for edits leaving the state identical, and every
-    // emit re-renders the views. Labeled "emit", not "git": this runs after git has finished.
-    const stringifyStart = performance.now();
+    // emit re-renders the views.
     const nextJson = JSON.stringify(next);
-    countActivity("emit");
-    logSlow("emit", performance.now() - stringifyStart);
     if (!this.disposed && nextJson !== this.stateJson) {
       this.state = next;
       this.stateJson = nextJson;

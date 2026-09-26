@@ -29,7 +29,7 @@ const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
 /**
  * Checking an agent spawns it, on win32 mostly via cmd.exe, whose process creation blocks the event
  * loop (antivirus included). In one tick, four such blocks merge into a multi-second startup freeze
- * (measured in event-loop.log); a tick between each keeps them apart.
+ * (measured); a tick between each keeps them apart.
  */
 function yieldToLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));

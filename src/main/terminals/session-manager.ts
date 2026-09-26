@@ -19,7 +19,6 @@ import type {
   TerminalDescriptor,
   TerminalStatus
 } from "../../shared/types";
-import { countActivity, logSlow, markStartup } from "../event-loop-monitor";
 import type { ResolvedRef } from "../resolved-ref";
 import { HostSetups } from "./host-setup";
 import { sandboxDir } from "../project-dirs";
@@ -444,7 +443,7 @@ export class TabSessionManager {
     if (!sandbox || !isSbxAgent(agent.id)) {
       return onHost;
     }
-    // In parallel: the bootstrap listing, and what `logSlow` times on every reconcile.
+    // In parallel: the bootstrap listing, and every reconcile.
     const [host, inSandbox] = await Promise.all([
       onHost,
       sandbox.list(this.sandboxSessionRoot(agent.id), toContainerPath(this.at.path))
@@ -504,8 +503,7 @@ export class TabSessionManager {
     if (!runtime.startable || !agent.sessions) {
       return;
     }
-    // Not in bringUp: sbxConfigChanged runs that mid-session, which is no startup phase.
-    await markStartup(`list ${agent.id}`, () => this.bringUp(runtime));
+    await this.bringUp(runtime);
   }
 
   /** A startable agent's setup, its existing sessions as tabs, and the watch keeping them current. */
@@ -1351,15 +1349,11 @@ export class TabSessionManager {
   }
 
   private async doReconcile(runtime: AgentRuntime): Promise<void> {
-    countActivity("reconcile");
     const { agent } = runtime;
     if (this.disposed || !agent.sessions || !this.canStart(runtime)) {
       return;
     }
-    // Wall time; for local transcript files a slow listing is the per-line JSON.parse.
-    const listStart = performance.now();
     const infos = await this.listSessions(runtime);
-    logSlow("reconcile", performance.now() - listStart);
     const ownTabs = this.tabsOf(runtime);
     const claimed = new Set([
       ...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined),

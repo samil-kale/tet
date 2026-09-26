@@ -10,7 +10,6 @@ import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isLinux, isMac, isModifierHeld, isWindows } from "../platform";
-import { reportSlow } from "../slow-report";
 import { buildXtermTheme, editorFontFamily } from "./theme";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
@@ -40,27 +39,6 @@ function viewKey(ref: ProjectRef, tabId: string): string {
 }
 
 /**
- * The output path since the last `takeOutputStats`: writes, distinct terminals, and hidden ones —
- * a hidden xterm parses and draws every batch like a visible one. For main.tsx's long-task report.
- * Counting only: it runs per batch and may not cost more than the write.
- */
-let outputWrites = 0;
-/** The longest write, in characters: xterm parses a write in one piece, so a huge one can hold
- *  the thread. */
-let largestWrite = 0;
-const writingTabs = new Set<string>();
-const writingHiddenTabs = new Set<string>();
-
-export function takeOutputStats(): { writes: number; tabs: number; hidden: number; largest: number } {
-  const stats = { writes: outputWrites, tabs: writingTabs.size, hidden: writingHiddenTabs.size, largest: largestWrite };
-  outputWrites = 0;
-  largestWrite = 0;
-  writingTabs.clear();
-  writingHiddenTabs.clear();
-  return stats;
-}
-
-/**
  * Output arriving before a tab's view exists — a saved command's process starts with its tab and
  * can write before attachTerminal builds the xterm. Replayed once in createView. Capped per tab,
  * for one never attached.
@@ -77,12 +55,6 @@ window.tet.terminals.onOutput((batch) => {
     if (!view) {
       earlyOutput.set(key, ((earlyOutput.get(key) ?? "") + data).slice(-MAX_EARLY_OUTPUT));
       continue;
-    }
-    outputWrites += 1;
-    largestWrite = Math.max(largestWrite, data.length);
-    writingTabs.add(key);
-    if (view.term.element?.parentElement?.classList.contains("hidden")) {
-      writingHiddenTabs.add(key);
     }
     view.term.write(data);
   }
@@ -477,10 +449,7 @@ export function fitTerminal(ref: ProjectRef, tabId: string): void {
   if (!view) {
     return;
   }
-  // Timed: a column change reflows the whole scrollback synchronously.
-  const fitStart = performance.now();
   view.fit.fit();
-  reportSlow("fit", performance.now() - fitStart);
   // Every switch fits twice (the selection effect, the ResizeObserver's first notification), and
   // a same-size resize still repaints the CLI.
   const { cols, rows } = view.term;

@@ -782,7 +782,7 @@ describe("a project's folder under ~/.tet", () => {
     const worktree = { projectId: "p", worktree: "k1" };
     assert.equal(sandboxDir(root, worktree, "codex"), path.join(root, "projects", "p", "sandboxes", "k1", "codex"));
     assert.equal(sandboxSessionDir(sandboxDir(root, repository, "pi")), path.join(root, "projects", "p", "sandboxes", "repository", "pi", "sessions"));
-    assert.equal(agentConfigDir(root, "claude"), path.join(root, "agent-config", "claude"));
+    assert.equal(agentConfigDir(root, "claude"), path.join(root, "config", "claude"));
   });
 
   it("knows a worktree TET made by its path, and no other", () => {

@@ -17,7 +17,7 @@ import { onDisk, relativeInside } from "./path-inside";
  *   worktrees/<key>/               a git worktree TET made; the key never changes
  * ```
  *
- * A host tab's setup is the same for every project and lies once in `agent-config/<agent>/`
+ * A host tab's setup is the same for every project and lies once in `config/<agent>/`
  * (data-root.ts's agentConfigDir); only a sandbox, which sees nothing but its own folder, needs its
  * copy here.
  *

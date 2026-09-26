@@ -66,10 +66,6 @@ export interface TETApi {
   app: {
     /** The settings dialog's Info tab. */
     info(): Promise<AppInfo>;
-    /** A task that held the renderer's thread — into the main process's event loop log. */
-    reportLongTask(ms: number, context: string): void;
-    /** A named renderer block that ran long — into the same log. */
-    reportSlow(label: string, ms: number): void;
     /** For `tet-ctl notices-list`. */
     reportNotice(report: NoticeReport): void;
     /** Ends every session and starts tet again, as `tet-ctl restart-app` does. */

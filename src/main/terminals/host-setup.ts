@@ -3,7 +3,6 @@ import { errorMessage } from "../../shared/errors";
 import type { AgentId, NoticeSeverity } from "../../shared/types";
 import type { AgentDefinition, SpawnPreparation } from "../agents/agent";
 import { agentConfigDir } from "../data-root";
-import { markStartup } from "../event-loop-monitor";
 import type { SettingsStore } from "../settings";
 import { currentTheme } from "../theme";
 
@@ -103,9 +102,7 @@ export class HostSetups {
       fs.mkdirSync(agentDir, { recursive: true });
       const theme = currentTheme(this.settings);
       const { idleReminder } = this.settings.get().notifications;
-      setup.preparation = await markStartup(`prepare ${agent.id}`, () =>
-        agent.prepareSpawn!(agent.executable(), { agentDir, idleReminder, theme })
-      );
+      setup.preparation = await agent.prepareSpawn(agent.executable(), { agentDir, idleReminder, theme });
       setup.theme = theme.id;
       setup.idleReminder = idleReminder;
       // Nothing else clears an earlier failure.
