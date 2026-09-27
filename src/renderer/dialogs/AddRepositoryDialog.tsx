@@ -469,8 +469,10 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
     clear();
   };
 
-  const busy = adding || listing || accountForm?.busy === true;
-  const close = useCancel(onClose, busy);
+  // The listing only reads, and its late answer is dropped (RemoteTab): it holds no Cancel.
+  const locked = adding || accountForm?.busy === true;
+  const busy = locked || listing;
+  const close = useCancel(onClose, locked);
 
   /** A remote row's Clone: the clone tab filled in, with the row's account. */
   const cloneFromRemote = (repo: RemoteRepository, fromAccountId: string): void => {
@@ -488,6 +490,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       error={refused}
       className="add-repository-dialog"
       busy={busy}
+      locked={locked}
       onSubmit={() => {
         if (busy) {
           return;
@@ -502,7 +505,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       }}
       buttons={
         <>
-          <button type="button" className="button secondary" disabled={busy} onClick={close}>
+          <button type="button" className="button secondary" disabled={locked} onClick={close}>
             Cancel
           </button>
           {accountForm ? (

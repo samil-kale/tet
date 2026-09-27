@@ -209,11 +209,20 @@ or a per-line decision is for an agent.
   while the action runs, so what runs it hands the failure back instead of notifying it
   (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than sending
   `app:notice`.
-- **What a dialog runs finishes before it goes**: while its bar runs, Cancel and × are disabled and
-  Escape does nothing (`DialogFrame`'s `locked`, `useCancel`), so nothing is left half done and
-  nothing answers into a dialog already closed. Every new dialog does the same. The exceptions,
-  which Cancel kills (`useCancel`'s `abort`), change nothing: the SBX dialog's setup (`sbx login`,
-  `policy init`) and the commit prompt's suggested message; their Saves hold like any other.
+- **What a dialog runs finishes before it goes — unless stopping it leaves nothing behind.** Each
+  run is one of two kinds, decided by what a stop would leave:
+  - *Held* (the default; `DialogFrame`'s `locked`): anything that changes state in steps or is
+    not killed — a Save, a git command, a store, a sign-out. Cancel and × are disabled and Escape
+    does nothing (`useCancel`), so nothing is left half done and nothing answers into a closed
+    dialog.
+  - *Stopped*: a run a stop leaves as if it never started — it changes nothing, or what it
+    changes happens whole or not at all — and that waits on something outside TET (a browser, an
+    agent, a provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
+    (`useCancel`'s `abort`) and its answer is dropped. Today: the SBX dialog's setup and sign-in
+    (`sbx login`, `policy init`), the commit prompt's suggested message, and the Add Repository
+    dialog's listing.
+
+  A new run is held unless it meets both conditions; a dialog's Save is always held.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out and the Add Repository dialog's account removal and
   namespace pick, which act at once. A setting reaches an agent at its setup

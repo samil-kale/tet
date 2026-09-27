@@ -95,6 +95,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const [signedInUser, setSignedInUser] = useState<string | undefined>(undefined);
   /** A sign-in, sign-out or "Check again" running, and the check after it (`recheck`). */
   const [rechecking, setRechecking] = useState(false);
+  /** `sbx logout` running: it is not killed, so Cancel waits for it (`holding`). */
+  const [signingOut, setSigningOut] = useState(false);
   /** Why the browser's sign-in or the sign-out failed: no row to mark, so the button row says it. */
   const [accountError, setAccountError] = useState<string | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
@@ -191,9 +193,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
     return refusal(result, "Could not save the SBX configuration");
   }, onClose);
-  // The one dialog cancelled while something runs: its setup (`sbx login`, `policy init`) is
-  // aborted with it, a no-op when none runs; a Save is not, so it finishes first (`locked`).
-  const cancel = useCancel(onClose, saving, window.tet.sbx.cancelSetup);
+  // Its setup (`sbx login`, `policy init`) is aborted with Cancel, a no-op when none runs; a Save
+  // or a sign-out is not, so it finishes first.
+  const holding = saving || signingOut;
+  const cancel = useCancel(onClose, holding, window.tet.sbx.cancelSetup);
   const editState: typeof setState = (update) => {
     setState(update);
     clear();
@@ -254,9 +257,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       return;
     }
     await recheck(async () => {
-      const failed = await window.tet.sbx.logout();
-      if (failed !== undefined) {
-        setAccountError(`Could not sign out of Docker: ${failed}`);
+      setSigningOut(true);
+      try {
+        const failed = await window.tet.sbx.logout();
+        if (failed !== undefined) {
+          setAccountError(`Could not sign out of Docker: ${failed}`);
+        }
+      } finally {
+        setSigningOut(false);
       }
     });
   };
@@ -306,12 +314,12 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       }
       className={showsAccount ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
-      locked={saving}
+      locked={holding}
       error={refused ?? accountError}
       message={phase.kind === "ready" && needsRestart(loaded, stored.knowledge, state) && <RestartNote />}
       buttons={
         <>
-          <button type="button" className="button secondary" disabled={saving} onClick={cancel}>
+          <button type="button" className="button secondary" disabled={holding} onClick={cancel}>
             Cancel
           </button>
           {(phase.kind === "not-installed" || phase.kind === "blocked" || phase.kind === "failed") && (
