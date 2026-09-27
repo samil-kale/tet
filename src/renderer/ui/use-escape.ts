@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 /** Who closes on Escape, the last to open last: an agent's credential dialog can open over the
- *  Settings, and one keystroke must not close both. */
+ *  Settings, a question over either, and one keystroke must not close both. */
 const closers: { current: () => void }[] = [];
 
 function onCapture(event: KeyboardEvent): void {
@@ -29,9 +29,8 @@ export function holdEscape(close: { current: () => void }): () => void {
 
 /**
  * Closes what is over the window on Escape, caught in the capture phase and swallowed so it never
- * reaches the terminal that had focus. On `document`, so a question (`Dialog.tsx`), which listens
- * on `window` and can be asked from one of these, is not answered by the same keystroke. Only the
- * last one opened, which is also the one drawn on top.
+ * reaches the terminal that had focus. Only the last one opened, which is also the one drawn on
+ * top.
  */
 export function useEscape(onClose: () => void): void {
   // A ref, as in `ContextMenu`: dialogs pass inline arrows and re-render on every keystroke.

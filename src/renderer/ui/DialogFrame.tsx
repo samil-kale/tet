@@ -109,8 +109,7 @@ interface DialogFrameProps<T extends string> {
  * The shell of every card dialog — the questions in `Dialog.tsx` and everything under `dialogs/`:
  * overlay, card, header, body, button row.
  *
- * Escape is the caller's: a question listens on `window`, the others on `document` (`useEscape`),
- * RequirementsDialog on neither. While one is up, no tab is in front (`window-covered.ts`).
+ * Escape is the caller's (`useCancel`), RequirementsDialog's none. While one is up, no tab is in front (`window-covered.ts`).
  *
  * A modal `<dialog>`: the rest of the window is inert, so Tab cannot leave for the terminal or the
  * editor behind, and a question over another dialog is the one on top. `closedby="none"`, since

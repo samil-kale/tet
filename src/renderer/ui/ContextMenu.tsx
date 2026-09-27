@@ -71,8 +71,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
-        // Captured and swallowed so the ESC never reaches the still-focused terminal. On `window`,
-        // like a question: a `Dropdown` sits in dialogs that capture Escape on `document`, and
+        // Captured and swallowed so the ESC never reaches the still-focused terminal. On `window`:
+        // a `Dropdown` sits in dialogs that capture Escape on `document` (`useEscape`), and
         // `stopPropagation` does not stop listeners on the same node.
         event.preventDefault();
         event.stopPropagation();

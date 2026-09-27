@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { GitActionResult } from "../../shared/types";
-import { DialogFrame, useSubmit } from "./DialogFrame";
+import { DialogFrame, useCancel, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
 import { createStore, useStore } from "./store";
 
@@ -192,27 +192,12 @@ interface FrameProps {
   children: React.ReactNode;
 }
 
-function Frame({ title, confirmLabel, disabled, busy, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        // Captured and swallowed so the ESC never reaches the terminal. On `window`, not
-        // `document`: dialogs a question is asked from capture on `document`, and
-        // `stopPropagation` does not stop listeners on the same node.
-        event.preventDefault();
-        event.stopPropagation();
-        if (!busy) {
-          onCancel();
-        }
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [busy, onCancel]);
+function Frame({ title, confirmLabel, disabled, busy = false, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
+  const cancel = useCancel(onCancel, busy);
 
   return (
     <DialogFrame
-      header={{ title, onClose: onCancel }}
+      header={{ title, onClose: cancel }}
       busy={busy}
       // A form, so Enter answers from the field or the checkbox alike.
       onSubmit={() => {
@@ -222,7 +207,7 @@ function Frame({ title, confirmLabel, disabled, busy, focusSubmit, onSubmit, onC
       }}
       buttons={
         <>
-          <button type="button" className="button secondary" disabled={busy} onClick={onCancel}>
+          <button type="button" className="button secondary" disabled={busy} onClick={cancel}>
             Cancel
           </button>
           <button type="submit" className="button" disabled={disabled} autoFocus={focusSubmit}>
