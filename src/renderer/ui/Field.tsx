@@ -1,7 +1,8 @@
-import { useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types";
 import { SparkleIcon } from "./icons";
+import { useRunning } from "./use-running";
 
 /**
  * What refused an answer, where the answer was given: under the field to blame (`Field`), in a
@@ -163,39 +164,38 @@ interface SuggestFieldProps {
   ref: RefObject<HTMLInputElement | null>;
   /** See `Field`. */
   error?: string;
-  /** Told while a suggestion is fetched, for the dialog to hold its answer back (`PromptFields`). */
+  /** Told while a suggestion is fetched, for the dialog to hold its answer back (`PromptFields`).
+   *  Stable, as a state setter is. */
   onSuggesting?: (suggesting: boolean) => void;
 }
 
 /** A text field with a wand beside it that fills it, e.g. a model's commit message. */
 export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting }: SuggestFieldProps) {
-  const [suggesting, setSuggesting] = useState(false);
+  const { running: suggesting, run } = useRunning();
   const [refused, setRefused] = useState<string>();
+  useEffect(() => onSuggesting?.(suggesting), [suggesting, onSuggesting]);
 
   const suggest = async (): Promise<void> => {
     if (suggesting) {
       return;
     }
-    setSuggesting(true);
     setRefused(undefined);
-    onSuggesting?.(true);
-    try {
-      const result = await suggestion.run();
-      const suggested = result.value?.trim() ?? "";
-      if (suggested.length > 0) {
-        onChange(suggested);
-        requestAnimationFrame(() => {
-          ref.current?.focus();
-          ref.current?.select();
-        });
+    await run(async () => {
+      try {
+        const result = await suggestion.run();
+        const suggested = result.value?.trim() ?? "";
+        if (suggested.length > 0) {
+          onChange(suggested);
+          requestAnimationFrame(() => {
+            ref.current?.focus();
+            ref.current?.select();
+          });
+        }
+        setRefused(result.error);
+      } catch (error) {
+        setRefused(`Could not suggest a value: ${errorMessage(error)}`);
       }
-      setRefused(result.error);
-    } catch (error) {
-      setRefused(`Could not suggest a value: ${errorMessage(error)}`);
-    } finally {
-      setSuggesting(false);
-      onSuggesting?.(false);
-    }
+    });
   };
 
   return (

@@ -3,6 +3,7 @@ import { DialogError } from "./Field";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
 import { useEscape } from "./use-escape";
+import { useRunning } from "./use-running";
 import { useCoversWindow } from "./window-covered";
 
 /**
@@ -16,20 +17,14 @@ export function useSubmit(
   run: () => Promise<string | undefined>,
   onDone?: () => void
 ): { busy: boolean; refused: string | undefined; submit: () => Promise<void>; clear: () => void } {
-  const [busy, setBusy] = useState(false);
+  const { running: busy, run: holdBusy } = useRunning();
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const submit = async (): Promise<void> => {
     if (busy) {
       return;
     }
-    setBusy(true);
     setRefused(undefined);
-    let message: string | undefined;
-    try {
-      message = await run();
-    } finally {
-      setBusy(false);
-    }
+    const message = await holdBusy(run);
     if (message === undefined) {
       onDone?.();
     } else {
@@ -52,6 +47,22 @@ export function useCancel(cancel: () => void, locked: boolean, abort?: () => voi
   };
   useEscape(guarded);
   return guarded;
+}
+
+/** A card dialog's Save, `blocked` by why it cannot go yet: by class, not `disabled`, so that reason
+ *  shows as its tooltip (.button.disabled). `disabled` while something runs. */
+export function SaveButton({ blocked, disabled, onSave }: { blocked: string | undefined; disabled: boolean; onSave: () => void }) {
+  return (
+    <button
+      type="button"
+      className={blocked === undefined ? "button" : "button disabled"}
+      disabled={disabled}
+      title={blocked}
+      onClick={() => blocked === undefined && onSave()}
+    >
+      Save
+    </button>
+  );
 }
 
 interface DialogTab<T extends string> {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLatest } from "./ui/use-latest";
 import { projectRefKey, projectRefsOf, EMPTY_REPOSITORY_STATE, isWorking, refName, worktreeBase } from "../shared/types";
 import type { AgentInfo, ProjectRef, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
 import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
@@ -66,20 +67,15 @@ const DEFAULT_LAYOUT = defaultLayout();
 export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const [projects, setProjects] = useState<Project[]>([]);
   /** The list after an await: the control channel can add a project meanwhile. */
-  const projectsRef = useRef(projects);
-  projectsRef.current = projects;
+  const projectsRef = useLatest(projects);
   /** Each project's repository and the worktrees TET made, by the key every
    *  record below is kept under (`projectRefKey`). Identity-stable where unchanged. */
   const refsHeld = useRef<Record<string, ResolvedRef>>({});
   const resolvedRefs = useMemo(() => resolvedByKey(refsHeld, projects), [projects]);
-  /** For callbacks that only need it on a click: see `tabsRef`. */
-  const resolvedRefsRef = useRef(resolvedRefs);
-  resolvedRefsRef.current = resolvedRefs;
   /** The repository or worktree in front, by key. */
   const [activeKey, setActiveKey] = useState<string | null>(null);
   /** For callbacks the project list gets, read on a click: see `tabsRef`. */
-  const activeKeyRef = useRef(activeKey);
-  activeKeyRef.current = activeKey;
+  const activeKeyRef = useLatest(activeKey);
   useEffect(() => rememberActive(activeKey), [activeKey]);
   /** Each repository's or worktree's repository state; everything below is by `projectRefKey` too,
    *  but `sandboxed`. */
@@ -90,15 +86,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * For callbacks that read it only on a click: depending on `tabs` would remake them, and every
    * pane's props, on every push.
    */
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
+  const tabsRef = useLatest(tabs);
   /**
    * Renderer-only, see `editor-tab.ts`; a repository or worktree with none has no entry. Untouched
    * tabs keep their instance across updates: `stripTabs` compares items.
    */
   const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab[]>>({});
-  const editorTabsRef = useRef(editorTabs);
-  editorTabsRef.current = editorTabs;
+  const editorTabsRef = useLatest(editorTabs);
   /**
    * Each repository's or worktree's tab strip: its terminals, then its editor tabs. The layout
    * reconciles against it, panes draw it, next/previous step through it; marks and `seen` stay on
@@ -152,8 +146,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const sideView: SideView | null = sidePaneOpen ? (filesShown ? "files" : "git") : null;
   /** Read on a click, so `toggleSideView` — and every view handed it — stays the same across a
    *  toggle. */
-  const sideViewRef = useRef(sideView);
-  sideViewRef.current = sideView;
+  const sideViewRef = useLatest(sideView);
   /**
    * Gates `.side-pane.sliding`'s width transition to the slide alone — the pane stays in the DOM
    * at width 0 while in, so opening and closing both transition — and the sash sets the same
@@ -168,7 +161,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     if (activeKeyRef.current !== null) {
       setSideSliding(true);
     }
-  }, [setSidePaneOpen]);
+  }, [activeKeyRef, setSidePaneOpen]);
   /** Shows that view, or slides the pane in when that view is already out. */
   const toggleSideView = useCallback(
     (view: SideView) => {
@@ -181,7 +174,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         slidePane(true);
       }
     },
-    [setFilesShown, slidePane]
+    [setFilesShown, sideViewRef, slidePane]
   );
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */
@@ -258,7 +251,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     })();
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, []);
+  }, [projectsRef, tabsRef]);
 
   useEffect(
     () => window.tet.onNotice(({ severity, message }) => notify(severity, message)),
@@ -300,7 +293,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     if (!result.ok) {
       notify("error", result.error ?? `Could not remove ${project.name}`);
     }
-  }, []);
+  }, [projectsRef]);
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git pane's
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
@@ -498,7 +491,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       busyCursor.current[key] = next.tabId;
       showTab(key, next.tabId);
     },
-    [showTab]
+    [showTab, tabsRef]
   );
 
   /** The project row's marks: the oldest finished session first, and the longest-waiting question. */
@@ -598,8 +591,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    * xterm never encodes any of them — see `shortcuts.ts`.
    */
   // A ref: the actions are remade on every tab push, the listener is registered once.
-  const shortcutActions = useRef({ toggleSideView, showNeedsAttention, cycleTab, newShellTab });
-  shortcutActions.current = { toggleSideView, showNeedsAttention, cycleTab, newShellTab };
+  const shortcutActions = useLatest({ toggleSideView, showNeedsAttention, cycleTab, newShellTab });
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const actions = shortcutActions.current;
@@ -629,7 +621,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, []);
+  }, [shortcutActions]);
 
   const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
 
@@ -659,7 +651,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         }
       }
     },
-    [toggleSideView, setFilesShown, slidePane]
+    [activeKeyRef, toggleSideView, setFilesShown, sideViewRef, slidePane]
   );
   /**
    * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), the way `how` asks for
@@ -710,7 +702,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }
       activateTab(key, tabId);
     },
-    [activateTab]
+    [activateTab, editorTabsRef]
   );
   // A file the control channel asked for, brought to front.
   useEffect(

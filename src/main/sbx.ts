@@ -47,13 +47,13 @@ import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/hook-target";
 import { isSimulatedMissing } from "./simulate";
 import { checkAgentInstalled, isAgentInstalled } from "./terminals/terminal-session";
-import { runProcess } from "./run-process";
+import { runProcess, stoppable } from "./run-process";
 
 /**
  * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy
- * init` register (`RunOptions.cancellable`): a spawn's `sbx ls` or `create` must survive Cancel.
+ * init` run here (`RunOptions.cancellable`): a spawn's `sbx ls` or `create` must survive Cancel.
  */
-let currentChild: ChildProcess | undefined;
+const setup = stoppable();
 
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
  *  from main.ts. Unset without a control channel, and then nothing of it reaches a sandbox. */
@@ -104,21 +104,15 @@ function sbxRefusal(result: RunResult): string {
 /** Every `sbx` invocation: a plain spawn through `resolveCommand` (runProcess), no shell, from the
  *  temp directory so the working directory never reads as a workspace. */
 async function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
-  let cancellable: ChildProcess | undefined;
-  const result = await runProcess("sbx", args, {
-    cwd: os.tmpdir(),
-    stdin: options.stdin,
-    timeoutMs: options.timeoutMs,
-    onData: options.onData && ((chunk) => options.onData?.(chunk.replace(/\n/g, "\r\n"))),
-    onSpawn: (child) => {
-      if (options.cancellable) {
-        cancellable = currentChild = child;
-      }
-    }
-  });
-  if (cancellable && currentChild === cancellable) {
-    currentChild = undefined;
-  }
+  const run = (onSpawn?: (child: ChildProcess) => void) =>
+    runProcess("sbx", args, {
+      cwd: os.tmpdir(),
+      stdin: options.stdin,
+      timeoutMs: options.timeoutMs,
+      onData: options.onData && ((chunk) => options.onData?.(chunk.replace(/\n/g, "\r\n"))),
+      onSpawn
+    });
+  const result = options.cancellable ? await setup.run(run) : await run();
   return { ok: result.code === 0, stdout: result.stdout, stderr: result.stderr };
 }
 
@@ -141,11 +135,9 @@ async function sbxJson<T>(args: string[]): Promise<T | undefined> {
   return jsonOf<T>(await runSbx(args));
 }
 
-/** For the dialog's Cancel. Plain `kill()` suffices: `sbx.exe` is native, no cmd.exe shim (unlike
- *  an agent's, whose timeout kills the tree: runProcess). */
+/** For the dialog's Cancel. */
 export function cancelSbxSetup(): void {
-  currentChild?.kill();
-  currentChild = undefined;
+  setup.stop();
 }
 
 /** The sbx version test/agents.test.ts last passed against (TET_SBX_TEST=1); read by nothing in the

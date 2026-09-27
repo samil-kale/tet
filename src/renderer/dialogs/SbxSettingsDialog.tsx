@@ -15,10 +15,11 @@ import {
   type FieldsState
 } from "./SbxSettingsFields";
 import { SbxAccounts, accountsBlocked, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
-import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, SaveButton, useCancel, useSubmit } from "../ui/DialogFrame";
 import { confirm, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox, DialogError } from "../ui/Field";
+import { useRunning } from "../ui/use-running";
 import { LandmarkIcon } from "../ui/icons";
 import { patched } from "../ui/RowSection";
 
@@ -94,9 +95,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** Who sbx says is signed in, however it happened. */
   const [signedInUser, setSignedInUser] = useState<string | undefined>(undefined);
   /** A sign-in, sign-out or "Check again" running, and the check after it (`recheck`). */
-  const [rechecking, setRechecking] = useState(false);
+  const { running: rechecking, run: runRecheck } = useRunning();
   /** `sbx logout` running: it is not killed, so Cancel waits for it (`holding`). */
-  const [signingOut, setSigningOut] = useState(false);
+  const { running: signingOut, run: runSignOut } = useRunning();
   /** Why the browser's sign-in or the sign-out failed: no row to mark, so the button row says it. */
   const [accountError, setAccountError] = useState<string | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
@@ -213,16 +214,12 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
 
   /** "Check again", or after a sign-in or sign-out (`run`), whatever its outcome: the policy and
    *  its blockers are the account's, and a sign-in whose token could not be kept went through. */
-  const recheck = async (run?: () => Promise<void>): Promise<void> => {
-    setRechecking(true);
-    setAccountError(undefined);
-    try {
+  const recheck = (run?: () => Promise<void>): Promise<void> =>
+    runRecheck(async () => {
+      setAccountError(undefined);
       await run?.();
       await setup();
-    } finally {
-      setRechecking(false);
-    }
-  };
+    });
   /** At once, not on Save: sbx has taken the token, so the row is kept (sbx:sign-in). What sbx
    *  said on refusing marks the row. */
   const signIn = (row: AccountRow): void =>
@@ -257,14 +254,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       return;
     }
     await recheck(async () => {
-      setSigningOut(true);
-      try {
-        const failed = await window.tet.sbx.logout();
-        if (failed !== undefined) {
-          setAccountError(`Could not sign out of Docker: ${failed}`);
-        }
-      } finally {
-        setSigningOut(false);
+      const failed = await runSignOut(() => window.tet.sbx.logout());
+      if (failed !== undefined) {
+        setAccountError(`Could not sign out of Docker: ${failed}`);
       }
     });
   };
@@ -327,18 +319,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               Check again
             </button>
           )}
-          {showsAccount && (
-            // Blocked by class: its tooltip is the reason (.button.disabled).
-            <button
-              type="button"
-              className={blocked === undefined ? "button" : "button disabled"}
-              disabled={busy}
-              title={blocked}
-              onClick={() => blocked === undefined && void save()}
-            >
-              Save
-            </button>
-          )}
+          {showsAccount && <SaveButton blocked={blocked} disabled={busy} onSave={() => void save()} />}
         </>
       }
     >

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Requirements } from "../shared/types";
 import { App } from "./App";
 import { RequirementsDialog } from "./dialogs/RequirementsDialog";
+import { useRunning } from "./ui/use-running";
 
 /**
  * The app, once its requirements are met. Main opens the stored projects only after the check
@@ -9,16 +10,12 @@ import { RequirementsDialog } from "./dialogs/RequirementsDialog";
  */
 export function Startup() {
   const [requirements, setRequirements] = useState<Requirements | null>(null);
-  const [checking, setChecking] = useState(true);
+  const { running: checking, run } = useRunning(true);
 
-  const check = useCallback(async (): Promise<void> => {
-    setChecking(true);
-    try {
-      setRequirements(await window.tet.startup.check());
-    } finally {
-      setChecking(false);
-    }
-  }, []);
+  const check = useCallback(
+    () => run(async () => setRequirements(await window.tet.startup.check())),
+    [run]
+  );
 
   useEffect(() => {
     void check();

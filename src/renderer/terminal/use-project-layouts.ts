@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLatest } from "../ui/use-latest";
 import {
   activateTab as activateTabLayout,
   collapseClosed,
@@ -52,8 +53,7 @@ export function useProjectLayouts(
    *  `normalizeLayout`. */
   const previousTabsRef = useRef<Record<string, LayoutTab[]>>({});
   /** Read by the callbacks: depending on `tabs` would remake every pane's props on every push. */
-  const tabsRef = useRef(tabs);
-  tabsRef.current = tabs;
+  const tabsRef = useLatest(tabs);
 
   /**
    * Reconciles every layout with its tab list (`collapseClosed`).
@@ -109,7 +109,7 @@ export function useProjectLayouts(
         return collapsed === layout ? current : { ...current, [key]: collapsed };
       });
     }
-  }, [starting]);
+  }, [starting, tabsRef]);
   useEffect(() => {
     for (const [key, layout] of Object.entries(layouts)) {
       if (!settledProjects.current.has(key)) {
@@ -138,7 +138,7 @@ export function useProjectLayouts(
         [key]: activateTabLayout(layout, tabId, target, tabsRef.current[key] ?? [])
       };
     });
-  }, []);
+  }, [tabsRef]);
 
   /** A tab dropped on a snap zone — see `snapTab`. */
   const snapTab = useCallback((key: string, tabId: string, transition: SnapTransition) => {
@@ -146,7 +146,7 @@ export function useProjectLayouts(
       ...current,
       [key]: snapTabLayout(layoutOf(current, key), tabId, transition, tabsRef.current[key] ?? [])
     }));
-  }, []);
+  }, [tabsRef]);
 
   /** A pane taking focus without its active tab changing — a click on its terminal. */
   const focusPane = useCallback((key: string, paneId: PaneId) => {
@@ -173,7 +173,7 @@ export function useProjectLayouts(
         [key]: placeCommandTab(layoutOf(current, key), tabId, line, tabsRef.current[key] ?? [])
       }));
     },
-    [activateTab]
+    [activateTab, tabsRef]
   );
 
   /** Lets go of a removed repository's or worktree's state, what is stored of it too. */

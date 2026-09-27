@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEscape } from "./use-escape";
+import { useLatest } from "./use-latest";
 
 /** One entry of a context menu; an action without a `run` renders disabled. */
 interface ContextMenuAction {
@@ -58,9 +60,10 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     element.style.top = `${Math.max(0, Math.min(y, window.innerHeight - height))}px`;
   }, [x, y]);
 
-  // A ref: callers pass inline arrows, and the listeners must not re-attach on every parent render.
-  const close = useRef(onClose);
-  close.current = onClose;
+  // Opened last, so over a dialog a `Dropdown` sits in: Escape closes the menu alone.
+  useEscape(onClose);
+  // Callers pass inline arrows, and the listeners must not re-attach on every parent render.
+  const close = useLatest(onClose);
 
   useEffect(() => {
     const onClose = (): void => close.current();
@@ -69,28 +72,16 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
         onClose();
       }
     };
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        // Captured and swallowed so the ESC never reaches the still-focused terminal. On `window`:
-        // a `Dropdown` sits in dialogs that capture Escape on `document` (`useEscape`), and
-        // `stopPropagation` does not stop listeners on the same node.
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
-      }
-    };
     document.addEventListener("mousedown", onMouseDown, true);
-    window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("blur", onClose);
     // Anchored to pointer coordinates, so after a resize it points at nothing.
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("mousedown", onMouseDown, true);
-      window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("blur", onClose);
       window.removeEventListener("resize", onClose);
     };
-  }, []);
+  }, [close]);
 
   return (
     <div

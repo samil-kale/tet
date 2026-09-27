@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { useLatest } from "./use-latest";
 
 /** Who closes on Escape, the last to open last: an agent's credential dialog can open over the
- *  Settings, a question over either, and one keystroke must not close both. */
+ *  Settings, a question over either, a menu (`ContextMenu`) over any, and one keystroke must not
+ *  close both. */
 const closers: { current: () => void }[] = [];
 
 function onCapture(event: KeyboardEvent): void {
@@ -33,8 +35,7 @@ export function holdEscape(close: { current: () => void }): () => void {
  * top.
  */
 export function useEscape(onClose: () => void): void {
-  // A ref, as in `ContextMenu`: dialogs pass inline arrows and re-render on every keystroke.
-  const close = useRef(onClose);
-  close.current = onClose;
-  useEffect(() => holdEscape(close), []);
+  // Dialogs pass inline arrows and re-render on every keystroke.
+  const close = useLatest(onClose);
+  useEffect(() => holdEscape(close), [close]);
 }

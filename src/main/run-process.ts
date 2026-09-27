@@ -27,6 +27,38 @@ export interface ProcessResult {
   error?: Error;
 }
 
+/** One run at a time a dialog's Cancel may kill (the renderer's `useCancel` `abort`). */
+export interface Stoppable {
+  /** Runs `start`, whose process — handed to the `onSpawn` it is given — `stop` kills until it ends. */
+  run<T>(start: (onSpawn: (child: ChildProcess) => void) => Promise<T>): Promise<T>;
+  /** Kills the running one with its children (killProcessTree); a no-op when none runs. */
+  stop(): void;
+}
+
+export function stoppable(): Stoppable {
+  let current: ChildProcess | undefined;
+  return {
+    async run(start) {
+      let own: ChildProcess | undefined;
+      try {
+        return await start((child) => {
+          own = current = child;
+        });
+      } finally {
+        if (own && current === own) {
+          current = undefined;
+        }
+      }
+    },
+    stop() {
+      if (current) {
+        killProcessTree(current);
+        current = undefined;
+      }
+    }
+  };
+}
+
 /**
  * Runs a command to completion through `resolveCommand`, without a shell, and never rejects. It
  * answers on `close`, once every pipe is drained, so no output is cut off. The timeout does not wait

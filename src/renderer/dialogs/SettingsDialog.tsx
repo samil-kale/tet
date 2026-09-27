@@ -17,7 +17,7 @@ import type {
   SettingsEdits
 } from "../../shared/types";
 import { confirm, refusal } from "../ui/Dialog";
-import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, SaveButton, useCancel, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field, FieldGroup } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
@@ -292,16 +292,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <button type="button" className="button secondary" disabled={saving} onClick={close}>
             Cancel
           </button>
-          {/* Blocked by class: its tooltip is the reason (.button.disabled). */}
-          <button
-            type="button"
-            className={blocked === undefined ? "button" : "button disabled"}
-            disabled={saving}
-            title={blocked}
-            onClick={() => blocked === undefined && void save()}
-          >
-            Save
-          </button>
+          <SaveButton blocked={blocked} disabled={saving} onSave={() => void save()} />
         </>
       }
     >

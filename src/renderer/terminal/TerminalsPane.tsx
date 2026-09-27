@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLatest } from "../ui/use-latest";
 import type { AgentInfo, ProjectRef } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
@@ -175,8 +176,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   }, []);
 
   /** A ref so the drag callbacks stay stable. */
-  const presetRef = useRef(layout.preset);
-  presetRef.current = layout.preset;
+  const presetRef = useLatest(layout.preset);
 
   const onDragStart = useCallback((paneId: PaneId) => {
     dragSource.current = paneId;
@@ -213,7 +213,7 @@ export const TerminalsPane = memo(function TerminalsPane({
       }
       setDragTarget({ paneId, zone, transition: hit?.transition ?? null });
     },
-    [setDragTarget]
+    [presetRef, setDragTarget]
   );
 
   // `dragover` never sees the tab id, so the drop joins it with the zone.

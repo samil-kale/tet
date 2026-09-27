@@ -1,6 +1,5 @@
-import type { ChildProcess } from "node:child_process";
 import { askAgent } from "../agents/ask";
-import { killProcessTree } from "../terminals/pty";
+import { stoppable } from "../run-process";
 
 /** Takes the first subject out of an otherwise well-formed answer, tolerating a fenced reply. */
 export function commitMessageFrom(reply: string): string {
@@ -20,7 +19,7 @@ export function commitMessageFrom(reply: string): string {
 
 /** The agent the commit prompt waits on, for `cancelCommitSuggestion`: one question is up at a
  *  time. */
-let currentChild: ChildProcess | undefined;
+const suggestion = stoppable();
 
 /** The commit prompt's suggest button, asked of the first installed agent with `askArgs`
  *  (`findAskableAgent`). `prompt` (`effectivePrompt`) and `context` (`readCommitContext`) are handed
@@ -35,25 +34,12 @@ export async function suggestCommitMessage(
   if (context.trim() === "") {
     return "";
   }
-  let child: ChildProcess | undefined;
-  try {
-    return commitMessageFrom(
-      await askAgent(root, executable, args, `${prompt}\n\n${context}`, (spawned) => {
-        child = currentChild = spawned;
-      })
-    );
-  } finally {
-    if (child && currentChild === child) {
-      currentChild = undefined;
-    }
-  }
+  return commitMessageFrom(
+    await suggestion.run((onSpawn) => askAgent(root, executable, args, `${prompt}\n\n${context}`, onSpawn))
+  );
 }
 
-/** For the commit prompt's Cancel, a no-op when nothing runs. With its children: an npm CLI is a
- *  cmd.exe shim on win32 (killProcessTree). The caller's `cleanupAsk` still runs. */
+/** For the commit prompt's Cancel. The caller's `cleanupAsk` still runs. */
 export function cancelCommitSuggestion(): void {
-  if (currentChild) {
-    killProcessTree(currentChild);
-    currentChild = undefined;
-  }
+  suggestion.stop();
 }

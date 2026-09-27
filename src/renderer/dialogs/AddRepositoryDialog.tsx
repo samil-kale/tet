@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLatest } from "../ui/use-latest";
 import type { AddRepositoryResult, GitLogin, ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types";
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { ActionLink } from "../ui/ActionLink";
@@ -87,12 +88,11 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
 
   const ready = host.trim() !== "" && token.trim() !== "";
   // The latest, for a submit the frame holds from an earlier render.
-  const submitRef = useRef(submit);
-  submitRef.current = submit;
+  const submitRef = useLatest(submit);
   useEffect(() => {
     onForm({ ready, busy, submit: () => void submitRef.current() });
     return () => onForm(null);
-  }, [ready, busy, onForm]);
+  }, [ready, busy, onForm, submitRef]);
 
   return (
     <div className="account-form">
