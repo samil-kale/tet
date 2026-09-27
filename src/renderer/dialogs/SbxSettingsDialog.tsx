@@ -81,11 +81,6 @@ function tabBlocked(id: SbxSettingsTab, signedIn: boolean, enabled: boolean): st
  * authenticates inside the sandbox.
  */
 export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) {
-  // What Save's end and `cancel` close with; `cancelSbxSetup` is a no-op when nothing runs.
-  const close = (): void => {
-    window.tet.sbx.cancelSetup();
-    onClose();
-  };
   const [enabled, setEnabled] = useState(false);
   /** No agent on this machine, so sandboxing cannot be switched off. Derived on every open, not
    *  stored. */
@@ -195,10 +190,10 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     }
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
     return refusal(result, "Could not save the SBX configuration");
-  }, close);
-  // The one dialog cancelled while something runs, since its setup (`sbx login`, `policy init`) is
-  // cancelled with it; a Save is not, so it finishes first (`locked`).
-  const cancel = useCancel(close, saving);
+  }, onClose);
+  // The one dialog cancelled while something runs: its setup (`sbx login`, `policy init`) is
+  // aborted with it, a no-op when none runs; a Save is not, so it finishes first (`locked`).
+  const cancel = useCancel(onClose, saving, window.tet.sbx.cancelSetup);
   const editState: typeof setState = (update) => {
     setState(update);
     clear();

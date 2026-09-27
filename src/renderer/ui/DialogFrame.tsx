@@ -41,10 +41,12 @@ export function useSubmit(
 }
 
 /** A card dialog's cancel for ×, its Cancel button and Escape alike: nothing while `locked` (the
- *  frame's), so what runs finishes before the dialog goes. */
-export function useCancel(cancel: () => void, locked: boolean): () => void {
+ *  frame's), so what runs finishes before the dialog goes. What runs and may be cut short instead
+ *  is `abort`ed first (the SBX dialog's setup). */
+export function useCancel(cancel: () => void, locked: boolean, abort?: () => void): () => void {
   const guarded = (): void => {
     if (!locked) {
+      abort?.();
       cancel();
     }
   };
