@@ -41,7 +41,7 @@ export const codexAgent: AgentDefinition = {
   displayName: "Codex",
   executable: () => "codex",
   versionArgs: ["--version"],
-  verifiedVersion: "0.156.1",
+  verifiedVersion: "0.157.1",
   // `--ephemeral` writes no rollout, so no cleanupAsk.
   askArgs: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
   // The positional prompt of an interactive session, after the `-c` options.

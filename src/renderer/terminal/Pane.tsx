@@ -358,6 +358,22 @@ export const Pane = memo(function Pane({
         ...moveEntries
       ];
     }
+    // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
+    // before the session is persisted.
+    const handOffAgents = agents.filter((agent) => agent.takesPrompt && agent.id !== terminal.agentId);
+    const handOffEntries: ContextMenuEntry[] =
+      handOffAgents.length > 0
+        ? [
+            SEPARATOR,
+            ...handOffAgents.map(
+              (agent): ContextMenuEntry => ({
+                label: `Hand over to ${agent.displayName}`,
+                icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
+                run: withSession ? () => void handOff(withSession.tabId, agent.id) : undefined
+              })
+            )
+          ]
+        : [];
     return [
       {
         label: "Restart",
@@ -371,16 +387,7 @@ export const Pane = memo(function Pane({
         label: "Rename...",
         run: withSession ? () => void askRename(withSession) : undefined
       },
-      // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
-      // before the session is persisted.
-      {
-        label: "Hand over to",
-        entries: withSession
-          ? agents
-              .filter((agent) => agent.takesPrompt && agent.id !== withSession.agentId)
-              .map((agent) => agentEntry(agent, () => void handOff(withSession.tabId, agent.id)))
-          : undefined
-      },
+      ...handOffEntries,
       ...moveEntries
     ];
   };
@@ -471,7 +478,6 @@ export const Pane = memo(function Pane({
                 onDragStart(paneId);
               }}
               onClick={() => onActivate(tab.tabId, paneId)}
-              onDoubleClick={() => !isEditorTab(tab) && tab.sessionId !== undefined && void askRename(tab)}
               // Keeps the terminal focused across a right-click: mousedown would blur xterm's
               // textarea to <body>, leaving no typing once the menu closes.
               onMouseDown={(event) => {
@@ -573,7 +579,6 @@ export const Pane = memo(function Pane({
           y={plusMenu.y}
           entries={newSessionEntries()}
           onClose={() => setPlusMenu(null)}
-          className="new-session-menu"
         />
       )}
     </div>

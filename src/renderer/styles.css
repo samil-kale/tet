@@ -1003,7 +1003,6 @@ textarea:focus,
 .context-menu {
   position: fixed;
   z-index: 20;
-  min-width: 160px;
   padding: 4px 0;
   font-size: var(--vscode-font-size);
   background: var(--vscode-menu-background);
@@ -1018,7 +1017,7 @@ textarea:focus,
   align-items: center;
   gap: 6px;
   height: 2em;
-  padding: 0 26px;
+  padding: 0 24px 0 20px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -1034,7 +1033,7 @@ textarea:focus,
   flex: none;
   width: var(--icon-size);
   height: var(--icon-size);
-  margin: 0 -18px 0 auto;
+  margin: 0 -16px 0 auto;
   padding-left: 12px;
   box-sizing: content-box;
 }
@@ -1044,22 +1043,13 @@ textarea:focus,
   cursor: default;
 }
 
-/* Compact, icon-less lists of choices: the context menu without its padding. */
-.new-session-menu,
+/* A compact, icon-less list of choices: the context menu without its padding. Its height is capped
+   by `Dropdown` to the room below the trigger. */
 .dropdown-menu {
   border-radius: 3px;
-}
-
-.new-session-menu {
-  min-width: 140px;
-}
-
-/* Its height is capped by `Dropdown` to the room below the trigger. */
-.dropdown-menu {
   overflow-y: auto;
 }
 
-.new-session-menu .context-menu-item,
 .dropdown-menu .context-menu-item {
   height: auto;
   padding: 5px 12px;

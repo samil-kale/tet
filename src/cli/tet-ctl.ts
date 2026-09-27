@@ -10,19 +10,12 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
  * stderr on failure, and an exit code to branch on.
  */
 
-/** When tet-ctl is the right tool at all. systemPrompt's one line sends an agent here, so this
- *  sits beside the verbs: nothing installed into an agent's configuration, and every agent reads it
- *  alike. It does not repeat that prompt. */
+/** What systemPrompt's one line leaves to this page: it says when to reach for tet-ctl, this when
+ *  not to, and how a missing variable is asked for. Beside the verbs, so nothing is installed into
+ *  an agent's configuration and every agent reads it alike. */
 function whenToUse(sandboxed: boolean): string[] {
   return [
-    "This terminal is one tab of one project in TET; other tabs run other agents, shells and saved",
-    "commands, and the user watches them all. Reach for tet-ctl when the user asks about TET itself,",
-    "means something they ran or saw in another tab (\"the error in the shell\", \"what did codex",
-    "say\"), wants something put in front of them rather than in your answer, or when another agent",
-    // A sandboxed tab is not offered tabs-run-command, so it is not sent looking for one.
-    sandboxed ? "should do the job." : "or a saved command should do the job.",
-    "",
-    "Leave it alone for files and git: read the repository and run git yourself.",
+    "Leave it alone for files and git, worktrees aside: read the repository and run git yourself.",
     // Never offered in a sandbox (ControlVerb.sandbox absent), so not mentioned there either.
     ...(sandboxed
       ? []
