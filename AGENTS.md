@@ -202,10 +202,10 @@ or a per-line decision is for an agent.
   (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than sending
   `app:notice`.
 - **What a dialog runs finishes before it goes**: while its bar runs, Cancel and × are disabled and
-  Escape does nothing (`DialogFrame`'s `locked`), so nothing is left half done and nothing answers
-  into a dialog already closed. Every new dialog does the same. The one exception is the SBX
-  dialog's setup (`sbx login`, `policy init`), which Cancel kills (`cancelSbxSetup`); its Save
-  holds like any other.
+  Escape does nothing (`DialogFrame`'s `locked`, `useCancel`), so nothing is left half done and
+  nothing answers into a dialog already closed. Every new dialog does the same. The one exception
+  is the SBX dialog's setup (`sbx login`, `policy init`), which Cancel kills (`cancelSbxSetup`);
+  its Save holds like any other.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out and the Add Repository dialog's account removal and
   namespace pick, which act at once. A setting reaches an agent at its setup

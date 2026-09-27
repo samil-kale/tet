@@ -15,13 +15,12 @@ import {
   type FieldsState
 } from "./SbxSettingsFields";
 import { SbxAccounts, accountsBlocked, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
-import { DialogFrame, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
 import { confirm, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox, DialogError } from "../ui/Field";
 import { LandmarkIcon } from "../ui/icons";
 import { patched } from "../ui/RowSection";
-import { useEscape } from "../ui/use-escape";
 
 interface SbxSettingsDialogProps {
   project: Project;
@@ -197,14 +196,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
     return refusal(result, "Could not save the SBX configuration");
   }, close);
-  // × / Escape / Cancel: the one dialog they close while something runs, since its setup (`sbx
-  // login`, `policy init`) is cancelled with it; a Save is not, so it finishes first.
-  const cancel = (): void => {
-    if (!saving) {
-      close();
-    }
-  };
-  useEscape(cancel);
+  // The one dialog cancelled while something runs, since its setup (`sbx login`, `policy init`) is
+  // cancelled with it; a Save is not, so it finishes first (`locked`).
+  const cancel = useCancel(close, saving);
   const editState: typeof setState = (update) => {
     setState(update);
     clear();

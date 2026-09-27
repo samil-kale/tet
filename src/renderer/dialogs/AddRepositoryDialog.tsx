@@ -3,13 +3,12 @@ import type { AddRepositoryResult, GitLogin, ProviderAccount, ProviderId, Remote
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
-import { DialogFrame, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, FieldGroup, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
-import { useEscape } from "../ui/use-escape";
 
 /** Picked off an account's list, cloned from a url, added from disk, or created empty. Not in
  *  Dialog.tsx, which asks one question. */
@@ -463,13 +462,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   };
 
   const busy = adding || listing || accountForm?.busy === true;
-  // What runs finishes before the dialog goes (DialogFrame's `locked`).
-  const close = (): void => {
-    if (!busy) {
-      onClose();
-    }
-  };
-  useEscape(close);
+  const close = useCancel(onClose, busy);
 
   /** A remote row's Clone: the clone tab filled in, with the row's account. */
   const cloneFromRemote = (repo: RemoteRepository, fromAccountId: string): void => {

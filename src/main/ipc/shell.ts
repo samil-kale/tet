@@ -62,6 +62,16 @@ export function registerShellIpc({
     }
   };
 
+  /** A file the same way, or shown in the file manager where its default app would run it. */
+  const openFile = async (target: string, shown: string): Promise<void> => {
+    const stat = await fs.promises.stat(target).catch(() => null);
+    if (stat && isExecutableFile(target, stat.mode)) {
+      shell.showItemInFolder(target);
+      return;
+    }
+    await openWithNotice(target, "file", shown);
+  };
+
   ipcMain.handle("shell:open-url", async (_event, url: string): Promise<void> => {
     if (!isOpenableUrl(url)) {
       notice("error", `Only http, https and mailto links are opened: ${url}`);
@@ -131,11 +141,7 @@ export function registerShellIpc({
     if (relative !== undefined) {
       return relative;
     }
-    if (isExecutableFile(resolved, stat.mode)) {
-      shell.showItemInFolder(resolved);
-      return null;
-    }
-    await openWithNotice(resolved, "file", rawPath);
+    await openFile(resolved, rawPath);
     return null;
   });
 
@@ -147,20 +153,13 @@ export function registerShellIpc({
     }
   });
 
-  /** "Open in external editor": no editor setting, so the OS default for the type — or the file
-   *  manager where that default would run it. */
+  /** "Open in external editor": no editor setting, so the OS default for the type. */
   ipcMain.handle("shell:open-file-externally", async (_event, ref: ProjectRef, filePath: string): Promise<void> => {
     const repository = repositories.get(ref);
     if (!repository) {
       return;
     }
-    const resolved = path.join(repository.at.path, filePath);
-    const stat = await fs.promises.stat(resolved).catch(() => null);
-    if (stat && isExecutableFile(resolved, stat.mode)) {
-      shell.showItemInFolder(resolved);
-      return;
-    }
-    await openWithNotice(resolved, "file", filePath);
+    await openFile(path.join(repository.at.path, filePath), filePath);
   });
 
   ipcMain.handle("shell:open-project", async (_event, ref: ProjectRef): Promise<void> => {

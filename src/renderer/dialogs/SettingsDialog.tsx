@@ -17,7 +17,7 @@ import type {
   SettingsEdits
 } from "../../shared/types";
 import { confirm, refusal } from "../ui/Dialog";
-import { DialogFrame, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, Field, FieldGroup } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
@@ -27,7 +27,6 @@ import { ActionLink } from "../ui/ActionLink";
 import { isWindows } from "../platform";
 import { atLeastOne, EditRow, OverridesMachine, patched, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
-import { useEscape } from "../ui/use-escape";
 
 interface SettingsDialogProps {
   /** Whose tet.json the Files tab's Explorer settings edit; null hides them. */
@@ -238,13 +237,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     }
   );
 
-  // What runs finishes before the dialog goes (DialogFrame's `locked`).
-  const close = (): void => {
-    if (!saving) {
-      onClose();
-    }
-  };
-  useEscape(close);
+  const close = useCancel(onClose, saving);
 
   /** Edits the shown copy and records the change for Save. */
   const edit = (change: SettingsEdits): void => {

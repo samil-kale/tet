@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { EnvRequest } from "../../shared/types";
-import { DialogFrame, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
 import { EditRow, OverridesMachine, RowSection, SecretInput } from "../ui/RowSection";
-import { useEscape } from "../ui/use-escape";
 
 interface EnvDialogProps {
   request: EnvRequest;
@@ -41,15 +40,10 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
     }
   );
 
-  // What runs finishes before the dialog goes (DialogFrame's `locked`).
-  const cancel = (): void => {
-    if (busy) {
-      return;
-    }
+  const cancel = useCancel(() => {
     void window.tet.environment.answer(request.id, null);
     onClose();
-  };
-  useEscape(cancel);
+  }, busy);
 
   const edit = (name: string, value: string): void => {
     setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)));

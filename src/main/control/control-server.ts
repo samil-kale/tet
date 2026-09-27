@@ -803,11 +803,7 @@ export async function startControlServer(
       }
       const allowed = own !== undefined && target !== undefined && (ownOnly ? sameProjectRef(target, own) : target.projectId === own.projectId);
       if (!allowed) {
-        const whose = ownOnly
-          ? "the caller's own repository or worktree"
-          : sandboxed
-            ? "the caller's own project"
-            : "a tab of the caller's own project";
+        const whose = ownOnly ? "the caller's own repository or worktree" : "the caller's own project";
         return { response: reject("unauthorized", `${request.verb} only answers for ${whose}`) };
       }
     }

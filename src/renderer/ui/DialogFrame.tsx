@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { DialogError } from "./Field";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
+import { useEscape } from "./use-escape";
 import { useCoversWindow } from "./window-covered";
 
 /**
@@ -37,6 +38,18 @@ export function useSubmit(
   };
   const clear = useCallback(() => setRefused(undefined), []);
   return { busy, refused, submit, clear };
+}
+
+/** A card dialog's cancel for ×, its Cancel button and Escape alike: nothing while `locked` (the
+ *  frame's), so what runs finishes before the dialog goes. */
+export function useCancel(cancel: () => void, locked: boolean): () => void {
+  const guarded = (): void => {
+    if (!locked) {
+      cancel();
+    }
+  };
+  useEscape(guarded);
+  return guarded;
 }
 
 interface DialogTab<T extends string> {
