@@ -8,10 +8,10 @@ changed for the user, not the commit list.
 > **Breaking changes.** opencode is no longer supported, and tet's own folder `~/.tet` has a new
 > layout. Read the first two points before updating.
 
-- **opencode removed.** opencode keeps its sessions in a database tet cannot read, so listing
-  them needed session records kept by tet itself and a running opencode for every action on
-  them. That fits neither how tet keeps its data nor how it treats the agents' own sessions, so
-  opencode tabs and sessions are gone from tet; opencode itself is untouched.
+- **opencode removed.** opencode behaves fundamentally differently from the other agents, which
+  makes it impossible to integrate without a lot of workarounds. With opencode 2 already on its
+  way, I decided to drop its support. As nobody but me uses tet anyway, this shouldn't be a
+  problem. opencode itself is untouched.
 - **New layout of `~/.tet`.** Everything tet keeps of a project now lies in
   `~/.tet/projects/<id>`, the id stored as `tet.id` in the repository's git config, and a host
   tab's agent setup once per agent in `~/.tet/config`. What that means for an update:
