@@ -362,6 +362,43 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
   });
 });
 
+describe("more paths than a command line holds", () => {
+  // 1500 paths of 40 characters: 60 000, twice Windows' cap on a command line.
+  const names = Array.from({ length: 1500 }, (_, index) => `a-folder-name/file-number-${String(index).padStart(10, "0")}.txt`);
+
+  before(() => {
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-many-"));
+    run("init", "-q");
+    run("symbolic-ref", "HEAD", "refs/heads/main");
+    write("base.txt", "base\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "base");
+    fs.mkdirSync(path.join(cwd, "a-folder-name"));
+    for (const name of names) {
+      write(name, "new\n");
+    }
+  });
+
+  it("commits them, untracked as they are", async () => {
+    assert.deepEqual(await commitPaths(cwd, "many", names, names), { ok: true });
+    assert.deepEqual(await changed(), []);
+  });
+
+  it("reads which of them HEAD has, and the context of all of them", async () => {
+    assert.deepEqual(await readHeadPaths(cwd, [...names, "missing.txt"]), names);
+    for (const name of names) {
+      write(name, "changed\n");
+    }
+    // Cut at its budget long before the last file; that it answers at all is the point.
+    assert.match(await readCommitContext(cwd, names), /file-number-0000000000\.txt/);
+  });
+
+  it("discards them", async () => {
+    assert.deepEqual(await discard(cwd, { restore: names, drop: [] }), { ok: true });
+    assert.deepEqual(await changed(), []);
+  });
+});
+
 describe("a merge stopped on conflicts, discarded file by file", () => {
   before(async () => {
     cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-conflicts-"));

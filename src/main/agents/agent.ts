@@ -59,7 +59,8 @@ export interface SessionProvider {
   list(cwd: string): Promise<AgentSessionInfo[]>;
   resumeArgs(sessionId: string): string[];
   /** Deletes the session; rejects on failure. An already-gone session must resolve: a tab whose
-   *  removal rejects is put back (TabSessionManager.destroyTab) and could never be closed. */
+   *  removal rejects is put back (TabSessionManager.destroyTab) and could never be closed. `cwd`
+   *  may be gone: a deleted worktree's sessions go after its folder (`removeAllSessions`). */
   remove(executable: string, cwd: string, sessionId: string): Promise<void>;
   /** Renames the persisted title; rejects on failure. */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;

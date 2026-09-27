@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { errorMessage, failure } from "../shared/errors";
+import { removeAllSessions } from "./agents";
 import { projectRef, projectRefsOf, worktreeBase, worktreeOf, worktreesSupported, WORKTREES_NEED_GIT } from "../shared/types";
 import type {
   AddRepositoryResult,
@@ -193,6 +194,12 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
       }
     }
     await dropRefData(closing, [projectDir(deps.dataRoot, projectId)]);
+    if (!there) {
+      // Their folders went with TET's; with the repository there, deleteWorktree took them.
+      for (const worktree of project.worktrees.filter((entry) => entry.key !== undefined)) {
+        void removeAllSessions(worktree.path);
+      }
+    }
     return { ok: true };
   });
 }
@@ -284,6 +291,9 @@ export async function deleteWorktree(
       return result;
     }
     await dropRefData([], worktreeFolders(deps.dataRoot, ref.projectId, ref.worktree!));
+    // Only once it is gone: a worktree that stays keeps its sessions. Not waited on — each may
+    // start its agent's CLI, and nothing here needs them gone.
+    void removeAllSessions(worktree.path);
     const left = deps.store.get(ref.projectId)?.worktrees.filter((entry) => entry.key !== ref.worktree) ?? [];
     deps.store.setWorktrees(ref.projectId, left);
     deps.projectsChanged({ removed: [ref] });
@@ -310,17 +320,18 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
     (worktree) => worktree.key !== undefined && !listed.some((entry) => entry.key === worktree.key)
   );
   const stillThere = unlisted.filter((worktree) => fs.existsSync(path.join(worktree.path, ".git")));
-  const gone = unlisted
-    .filter((worktree) => !stillThere.includes(worktree))
-    .map((worktree) => projectRef(projectId, worktree.key));
+  const gone = unlisted.filter((worktree) => !stillThere.includes(worktree));
   const changed = deps.store.setWorktrees(projectId, [...listed, ...stillThere]);
   if (!changed && gone.length === 0) {
     return;
   }
-  for (const ref of gone) {
-    void closeProjectRef(deps, ref).then(() => dropRefData([ref], worktreeFolders(deps.dataRoot, projectId, ref.worktree!)));
+  for (const worktree of gone) {
+    const ref = projectRef(projectId, worktree.key);
+    void closeProjectRef(deps, ref)
+      .then(() => dropRefData([ref], worktreeFolders(deps.dataRoot, projectId, worktree.key!)))
+      .then(() => removeAllSessions(worktree.path));
   }
-  deps.projectsChanged({ removed: gone });
+  deps.projectsChanged({ removed: gone.map((worktree) => projectRef(projectId, worktree.key)) });
 }
 
 /** Finding a project, all either transport needs to answer *about* one; the store's own edits

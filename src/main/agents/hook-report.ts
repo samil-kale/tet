@@ -26,7 +26,11 @@ function report(event: string, sessionId: string | undefined): void {
     token,
     verb: "hook",
     args: { event, payload },
-    caller: { projectId: process.env[CONTROL.projectId], tabId: process.env[CONTROL.tabId] },
+    caller: {
+      projectId: process.env[CONTROL.projectId],
+      worktree: process.env[CONTROL.worktree] || undefined,
+      tabId: process.env[CONTROL.tabId]
+    },
     // Now, not when it arrives: nothing here is awaited, so two reports of one turn race.
     at: Date.now()
   });

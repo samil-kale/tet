@@ -33,6 +33,25 @@ export function getAgent(id: AgentId): AgentDefinition {
   return agent;
 }
 
+/** Deletes every session the agents keep on this machine for `cwd`: a worktree TET deleted, whose
+ *  sandboxes' sessions went with its folder in `~/.tet`. What fails is logged — the worktree is
+ *  gone either way. */
+export async function removeAllSessions(cwd: string): Promise<void> {
+  await Promise.all(
+    AGENTS.map(async (agent) => {
+      const sessions = agent.sessions;
+      if (!sessions) {
+        return;
+      }
+      for (const { id } of await sessions.list(cwd)) {
+        await sessions
+          .remove(agent.executable(), cwd, id)
+          .catch((error: unknown) => console.error(`[tet] could not delete ${agent.displayName} session ${id}:`, error));
+      }
+    })
+  );
+}
+
 export function listAgents(): AgentInfo[] {
   return AGENTS.map((agent) => ({
     id: agent.id,

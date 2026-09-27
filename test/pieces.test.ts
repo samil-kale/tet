@@ -1556,7 +1556,13 @@ describe("pi's extension", () => {
         channel.reports.every((report) => typeof report.at === "number" && report.at > 0),
         "every report says when it was made"
       );
+      // A worktree's tab: its token is made with the key, so a report without it is refused.
+      process.env[CONTROL_ENV.worktree] = "k1";
+      handlers.agent_start({}, ctx);
+      await eventually("the worktree's report", () => channel.reports.length === 4, 3000);
+      assert.deepEqual(channel.reports[3].caller, { projectId: "p1", worktree: "k1", tabId: "tab-1" });
     } finally {
+      delete process.env[CONTROL_ENV.worktree];
       await channel.close();
     }
   });

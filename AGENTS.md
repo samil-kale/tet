@@ -106,8 +106,9 @@ Everything TET generates for an agent lives under `~/.tet` (the data model above
 at from outside, each side — host and sandbox — handed only its own folder; only pasted or dropped
 files go to the OS temp directory (`ipc/files.ts`).
 `prepareSpawn` and `prepareSandboxSpawn` are the only places an agent writes configuration;
-beyond them it touches only its own sessions: when the user renames or deletes one, and the one a
-background question leaves (`cleanupAsk`).
+beyond them it touches only its own sessions: when the user renames or deletes one, the one a
+background question leaves (`cleanupAsk`), and every one of a worktree it deleted, once its folder
+is gone (`removeAllSessions`).
 
 - Claude Code: a generated `--settings` file; never `~/.claude/settings.json`.
 - Codex: `-c key=value` for that one process; never `~/.codex/config.toml` or `hooks.json`.

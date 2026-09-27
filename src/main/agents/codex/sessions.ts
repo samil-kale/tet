@@ -239,10 +239,11 @@ export const codexSessionProvider: SessionProvider = {
 
   /** `codex delete` drops the rollout, the index lines and the db rows; `--force` asks nothing,
    *  taking only a UUID. An unknown id fails like any other failure, so the rollout files say
-   *  whether it is gone: a thread without a rollout resolves (SessionProvider.remove). */
+   *  whether it is gone: a thread without a rollout resolves (SessionProvider.remove). Run from
+   *  the home folder where `cwd` is gone: the id alone names the thread. */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     try {
-      await runCodex(executable, cwd, ["delete", "--force", sessionId]);
+      await runCodex(executable, fs.existsSync(cwd) ? cwd : os.homedir(), ["delete", "--force", sessionId]);
     } catch (error) {
       if ((await rolloutFilesOf(codexHome(), sessionId)).length > 0) {
         throw error;

@@ -32,12 +32,19 @@ interface GitResult {
   code: number;
 }
 
+interface GitOptions {
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+  /** Written to git's stdin: a list of paths (`runOnPaths`). */
+  input?: string;
+}
+
 /**
  * Runs the local git CLI. Resolves for any exit code; rejects only when git could not be started.
  * Past `timeoutMs` git is killed and this resolves at once as a failure — not on the callback,
  * which waits for every pipe, and a credential helper or ssh started by git holds them past git's end.
  */
-function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: number): Promise<GitResult> {
+function git(cwd: string, args: string[], { env, timeoutMs, input }: GitOptions = {}): Promise<GitResult> {
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const child = execFile(
@@ -58,6 +65,11 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: n
         resolve({ stdout, stderr, code: error ? Number(error.code) : 0 });
       }
     );
+    if (input !== undefined) {
+      // A git that fails before reading closes the pipe: its exit code says why, not EPIPE.
+      child.stdin?.on("error", () => undefined);
+      child.stdin?.end(input);
+    }
     if (timeoutMs !== undefined) {
       timer = setTimeout(() => {
         child.kill();
@@ -568,9 +580,9 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
 }
 
 /** One git command for the UI: a non-zero exit carries git's message, a failed start the error's. */
-async function run(cwd: string, args: string[], env?: NodeJS.ProcessEnv, timeoutMs?: number): Promise<GitActionResult> {
+async function run(cwd: string, args: string[], options?: GitOptions): Promise<GitActionResult> {
   try {
-    const result = await git(cwd, args, env, timeoutMs);
+    const result = await git(cwd, args, options);
     if (result.code === 0) {
       return { ok: true };
     }
@@ -676,7 +688,7 @@ async function loginEnv(cwd: string, login?: NetworkLogin): Promise<NodeJS.Proce
 }
 
 async function runNetwork(cwd: string, args: string[], { login, timeoutMs }: NetworkOptions = {}): Promise<GitActionResult> {
-  const result = await run(cwd, args, await loginEnv(cwd, login), timeoutMs);
+  const result = await run(cwd, args, { env: await loginEnv(cwd, login), timeoutMs });
   if (result.ok || !AUTH_FAILURES.some((pattern) => pattern.test(result.error ?? ""))) {
     return result;
   }
@@ -723,7 +735,7 @@ export async function fastForwardBranches(cwd: string): Promise<void> {
     .filter(([refname, upstream, trackshort, worktree]) => refname && upstream && trackshort === "<" && !worktree)
     .map(([refname, upstream]) => `${upstream}:${refname}`);
   if (refs.code === 0 && refspecs.length > 0) {
-    await git(cwd, ["fetch", "--no-write-fetch-head", ".", ...refspecs], { GIT_REFLOG_ACTION: "pull" });
+    await git(cwd, ["fetch", "--no-write-fetch-head", ".", ...refspecs], { env: { GIT_REFLOG_ACTION: "pull" } });
   }
 }
 
@@ -879,7 +891,7 @@ export async function deleteRemoteBranch(
   if (deleted.ok || deleted.authRequired) {
     return deleted;
   }
-  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], await loginEnv(cwd, login));
+  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], { env: await loginEnv(cwd, login) });
   if (listed.code !== 2) {
     return deleted;
   }
@@ -947,17 +959,61 @@ export async function commitPaths(
   untracked: string[]
 ): Promise<GitActionResult> {
   if (untracked.length > 0) {
-    const added = await run(cwd, [LITERAL_PATHSPECS, "add", "--", ...untracked]);
+    const added = await runOnPaths(cwd, ["add"], untracked);
     if (!added.ok) {
       return added;
     }
   }
-  return run(cwd, [LITERAL_PATHSPECS, "commit", "--message", message, "--", ...paths]);
+  return runOnPaths(cwd, ["commit", "--message", message], paths);
 }
 
-/** For every command given paths from the changes list: otherwise git reads `*`, `?` and `[…]` as
- *  a pattern, and discarding `app/[id]/page.tsx` also resets `app/i/page.tsx`. */
+/*
+ * Paths from the changes list reach git two ways, both literal — otherwise git reads `*`, `?` and
+ * `[…]` as a pattern, and discarding `app/[id]/page.tsx` also resets `app/i/page.tsx` — and never
+ * as one long command line, which Windows caps at 32 767 characters, a thousand paths or so.
+ */
 const LITERAL_PATHSPECS = "--literal-pathspecs";
+
+/** `run` with the paths on stdin, NUL-separated so any name survives: GitHub Desktop's way, for
+ *  every command that reads them there. */
+function runOnPaths(cwd: string, args: string[], paths: string[]): Promise<GitActionResult> {
+  return run(cwd, [LITERAL_PATHSPECS, ...args, "--pathspec-from-file=-", "--pathspec-file-nul"], {
+    input: paths.join("\0")
+  });
+}
+
+/** A batch's paths stay under this, well inside the cap with the rest of the command line. */
+const MAX_BATCH_CHARS = 24_000;
+
+/** `git` for a command that cannot read its paths from stdin: once per batch short enough, the
+ *  outputs joined, stopped at the first failure. Without paths once, over everything. */
+async function gitOnPaths(cwd: string, args: string[], paths?: string[]): Promise<GitResult> {
+  const literal = [LITERAL_PATHSPECS, ...args];
+  if (paths === undefined) {
+    return git(cwd, literal);
+  }
+  const batches: string[][] = [[]];
+  let length = 0;
+  for (const entry of paths) {
+    // Its separator and the quotes a space brings.
+    const cost = entry.length + 3;
+    if (length + cost > MAX_BATCH_CHARS && batches[batches.length - 1].length > 0) {
+      batches.push([]);
+      length = 0;
+    }
+    batches[batches.length - 1].push(entry);
+    length += cost;
+  }
+  let stdout = "";
+  for (const batch of batches) {
+    const result = await git(cwd, [...literal, "--", ...batch]);
+    if (result.code !== 0) {
+      return result;
+    }
+    stdout += result.stdout;
+  }
+  return { stdout, stderr: "", code: 0 };
+}
 
 /** Enough subjects to read the repository's commit style off. */
 const RECENT_SUBJECTS = 20;
@@ -978,13 +1034,12 @@ function capped(text: string, budget: number): string {
  * file added before the first commit is neither untracked nor in a diff against HEAD.
  */
 export async function readCommitContext(cwd: string, selection?: string[]): Promise<string> {
-  const pathspec = selection ? ["--", ...selection] : [];
   const [subjects, againstHead, untracked] = await Promise.all([
     git(cwd, ["log", `-${RECENT_SUBJECTS}`, "--format=%s"]),
-    git(cwd, [LITERAL_PATHSPECS, "diff", "HEAD", ...pathspec]),
-    git(cwd, [LITERAL_PATHSPECS, "ls-files", "--others", "--exclude-standard", "-z", ...pathspec])
+    gitOnPaths(cwd, ["diff", "HEAD"], selection),
+    gitOnPaths(cwd, ["ls-files", "--others", "--exclude-standard", "-z"], selection)
   ]);
-  const diff = againstHead.code === 0 ? againstHead : await git(cwd, [LITERAL_PATHSPECS, "diff", "--cached", ...pathspec]);
+  const diff = againstHead.code === 0 ? againstHead : await gitOnPaths(cwd, ["diff", "--cached"], selection);
   const sections: string[] = [];
   if (subjects.code === 0 && subjects.stdout.trim() !== "") {
     sections.push(`=== recent commit subjects ===\n${subjects.stdout.trim()}`);
@@ -1088,12 +1143,14 @@ async function readStashes(cwd: string): Promise<StashEntry[]> {
 /**
  * Which of these paths HEAD has, for a discard: a conflict may be one side's addition, and a file
  * untracked by `git rm --cached` has HEAD's version to restore — the status tells neither. At
- * discard time only, never on the refresh path. `ls-tree` takes paths literally, never as globs.
+ * discard time only, never on the refresh path. All of HEAD read once and matched here, as GitHub
+ * Desktop reads the index: `ls-tree` takes no paths on stdin, and they may be thousands.
  */
 export async function readHeadPaths(cwd: string, paths: string[]): Promise<string[]> {
-  const listed = await git(cwd, [LITERAL_PATHSPECS, "ls-tree", "-z", "--name-only", "HEAD", "--", ...paths]);
+  const listed = await git(cwd, ["ls-tree", "-r", "-z", "--name-only", "HEAD"]);
   if (listed.code === 0) {
-    return listed.stdout.split("\0").filter((entry) => entry !== "");
+    const inHead = new Set(listed.stdout.split("\0"));
+    return paths.filter((entry) => inHead.has(entry));
   }
   // An unborn branch has nothing in HEAD. Asked only after the failure, so a repository with
   // commits pays one process.
@@ -1117,7 +1174,7 @@ export interface DiscardTargets {
 export async function discard(cwd: string, targets: DiscardTargets): Promise<GitActionResult> {
   if (targets.drop.length > 0) {
     // --ignore-unmatch: a never-staged path has no index entry, which is fine.
-    const dropped = await run(cwd, [LITERAL_PATHSPECS, "rm", "--cached", "--force", "--ignore-unmatch", "--", ...targets.drop]);
+    const dropped = await runOnPaths(cwd, ["rm", "--cached", "--force", "--ignore-unmatch"], targets.drop);
     if (!dropped.ok) {
       return dropped;
     }
@@ -1125,7 +1182,7 @@ export async function discard(cwd: string, targets: DiscardTargets): Promise<Git
   if (targets.restore.length === 0) {
     return { ok: true };
   }
-  return run(cwd, [LITERAL_PATHSPECS, "restore", "--source=HEAD", "--staged", "--worktree", "--", ...targets.restore]);
+  return runOnPaths(cwd, ["restore", "--source=HEAD", "--staged", "--worktree"], targets.restore);
 }
 
 /** Escapes what a gitignore line reads as syntax. */
