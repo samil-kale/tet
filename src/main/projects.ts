@@ -24,6 +24,7 @@ import { newWorktreeKey, ownedWorktreeKeys, projectDir, worktreeDir, worktreeFol
 import { removeRefSandboxes } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
+import { tetJsonProblem } from "./tet-json";
 
 /** What opening and closing projects and their worktrees takes — the same singletons ipc/ holds. */
 export interface ProjectDeps {
@@ -79,13 +80,22 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
   let project = store.list().find((entry) => entry.path === mainPath);
   const added: ProjectRef[] = [];
   if (!project) {
-    let stored: string | undefined;
-    try {
-      stored = await git.readProjectId(mainPath);
-    } catch (error) {
-      return { error: `${mainPath}'s git config could not be read: ${errorMessage(error)}` };
+    // A project opens only with a tet.json it can use (openStoredProjects).
+    const problem = await tetJsonProblem(mainPath);
+    if (problem !== undefined) {
+      return { error: `${path.basename(mainPath)} was not added: ${problem}` };
     }
-    project = store.add(mainPath, await resolveProjectId(deps, mainPath, stored));
+    // One held at the start comes back as it was, worktrees and sessions alike.
+    project = store.release(mainPath);
+    if (!project) {
+      let stored: string | undefined;
+      try {
+        stored = await git.readProjectId(mainPath);
+      } catch (error) {
+        return { error: `${mainPath}'s git config could not be read: ${errorMessage(error)}` };
+      }
+      project = store.add(mainPath, await resolveProjectId(deps, mainPath, stored));
+    }
     added.push(...projectRefsOf(project));
     added.forEach((ref) => deps.openProjectRef(ref));
   }
@@ -105,7 +115,7 @@ async function resolveProjectId(
   mainPath: string,
   stored: string | undefined
 ): Promise<string> {
-  if (stored !== undefined && !deps.store.list().some((project) => project.id === stored && project.path !== mainPath)) {
+  if (stored !== undefined && !deps.store.all().some((project) => project.id === stored && project.path !== mainPath)) {
     return stored;
   }
   const id = randomUUID();
@@ -138,6 +148,27 @@ export async function resolveStoredIds(deps: Pick<ProjectDeps, "store" | "notice
     const answer = read[index];
     if (answer !== undefined) {
       deps.store.setId(project.id, await resolveProjectId(deps, project.path, answer.id));
+    }
+  }
+}
+
+/**
+ * Opens the stored projects, the repository and every worktree of each. One whose tet.json is
+ * broken stays closed this run, as adding it would be refused, and is said: nothing of it is used
+ * without that file, and nothing of it is lost — added again once the file is fixed, it opens.
+ */
+export async function openStoredProjects(deps: ProjectDeps): Promise<void> {
+  const projects = deps.store.list();
+  const problems = await Promise.all(projects.map((project) => tetJsonProblem(project.path)));
+  for (const [index, project] of projects.entries()) {
+    const problem = problems[index];
+    if (problem !== undefined) {
+      deps.store.hold(project.id);
+      deps.notice("error", `${project.name} was not opened: ${problem}. Fix it, then add the repository again.`);
+      continue;
+    }
+    for (const ref of projectRefsOf(project)) {
+      deps.openProjectRef(ref);
     }
   }
 }
@@ -345,6 +376,9 @@ export interface ProjectLookup {
 export class ProjectStore implements ProjectLookup {
   private readonly file: string;
   private projects: Project[] = [];
+  /** Left closed this run, their tet.json broken at opening (openStoredProjects): stored with all
+   *  TET keeps of them, worktrees and sessions alike, but listed nowhere until added again. */
+  private readonly held = new Set<string>();
 
   constructor(private readonly dataRoot: string) {
     this.file = path.join(dataRoot, "projects.json");
@@ -352,11 +386,29 @@ export class ProjectStore implements ProjectLookup {
   }
 
   list(): Project[] {
-    return this.projects;
+    return this.projects.filter((project) => !this.held.has(project.id));
   }
 
   get(projectId: string): Project | undefined {
-    return this.projects.find((project) => project.id === projectId);
+    return this.list().find((project) => project.id === projectId);
+  }
+
+  /** Every stored project, held ones too: an id is taken by either. */
+  all(): Project[] {
+    return this.projects;
+  }
+
+  hold(projectId: string): void {
+    this.held.add(projectId);
+  }
+
+  /** The held project at `mainPath`, listed again (addProject). */
+  release(mainPath: string): Project | undefined {
+    const project = this.projects.find((entry) => entry.path === mainPath && this.held.has(entry.id));
+    if (project) {
+      this.held.delete(project.id);
+    }
+    return project;
   }
 
   /** Adds the repository at `mainPath` (in on-disk spelling) under `id`, with the worktrees TET

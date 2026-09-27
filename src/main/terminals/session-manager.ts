@@ -915,12 +915,17 @@ export class TabSessionManager {
           this.scheduleReconcile(runtime);
         },
         onStatusChange: (status) => {
-          tab.status = status;
-          this.callbacks.onStatus(this.at.ref, tabId, status);
+          // A process whose exit came after `stop()` gave up waiting may have been replaced by a
+          // restart: its status is no longer the tab's. The indicator and reconcile are still its.
+          const current = this.sessions.get(tabId) === session;
+          if (current) {
+            tab.status = status;
+            this.callbacks.onStatus(this.at.ref, tabId, status);
+          }
           if (status === "stopped" || status === "error" || status === "missing") {
             this.scheduleReconcile(runtime);
             // A CLI killed mid-turn never reports its end.
-            if (tab.busy || tab.waitingAt !== undefined) {
+            if (current && (tab.busy || tab.waitingAt !== undefined)) {
               tab.busy = false;
               tab.waitingAt = undefined;
               this.postTabs();

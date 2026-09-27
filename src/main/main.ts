@@ -10,10 +10,10 @@ import { WINDOW_ARGS } from "../shared/api";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
-import { projectRefKey, projectRefsOf, overridesMachineNote } from "../shared/types";
+import { projectRefKey, overridesMachineNote } from "../shared/types";
 import type { ProjectRef, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
-import { readCommands, readSbxConfig } from "./tet-json";
+import { readCommands, readSbxConfig, tetJsonProblem } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
@@ -22,7 +22,17 @@ import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepTempFiles } from "./ipc";
 import { resolveProjectRef } from "./resolved-ref";
 import { projectRefPath } from "./project-dirs";
-import { addProject, addWorktree, deleteWorktree, ProjectStore, removeProject, resolveStoredIds, syncWorktrees, type ProjectDeps } from "./projects";
+import {
+  addProject,
+  addWorktree,
+  deleteWorktree,
+  openStoredProjects,
+  ProjectStore,
+  removeProject,
+  resolveStoredIds,
+  syncWorktrees,
+  type ProjectDeps
+} from "./projects";
 import { configureSandboxes, readSbxStatus, readSbxUser } from "./sbx";
 import { SbxAccountStore, signInToSbx } from "./sbx-accounts";
 import { SbxLocalStore } from "./sbx-local";
@@ -260,6 +270,15 @@ const repositories = new RepositoryManager(
   },
   notice,
   (projectId) => {
+    // Written broken, it still counts as its last readable version (tet-json.ts's `read`).
+    const project = store.get(projectId);
+    if (project) {
+      void tetJsonProblem(project.path).then((problem) => {
+        if (problem !== undefined) {
+          notice("warning", `${project.name} keeps its last readable tet.json until it is fixed: ${problem}`);
+        }
+      });
+    }
     send("commands:changed", { projectId });
     // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged) — in
     // every repository and worktree of the project.
@@ -318,18 +337,13 @@ const projectDeps: ProjectDeps = {
 let workspaceOpened: Promise<void> | undefined;
 
 /**
- * Opens the stored projects once the requirements check passes, the repository and every worktree
- * of each. Idempotent: the check reruns. First each project's id as its repository says
- * (resolveStoredIds).
+ * Opens the stored projects once the requirements check passes (openStoredProjects). Idempotent:
+ * the check reruns. First each project's id as its repository says (resolveStoredIds).
  */
 function openWorkspace(): Promise<void> {
   workspaceOpened ??= (async () => {
     await resolveStoredIds(projectDeps);
-    for (const project of store.list()) {
-      for (const ref of projectRefsOf(project)) {
-        openProjectRef(ref);
-      }
-    }
+    await openStoredProjects(projectDeps);
     void startControl();
   })();
   return workspaceOpened;

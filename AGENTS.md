@@ -52,10 +52,13 @@ project's terminals.
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees; what TET keeps of it is
   laid out in the data model below.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing or malformed
-  means nothing configured. A worktree has none of its own: it takes its project's (`configRoot`)
-  and its sbx values, forwards none of the ports, and changes nothing of it — its row, Explorer and
-  COMMANDS offer no settings, `tet-ctl` refuses them.
+  the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing means nothing
+  configured, broken never does — a project whose file is broken is neither added nor opened at
+  start (kept, with all TET has of it, until added again), and one broken while open counts as its
+  last readable version, said in a notice. Nothing writes over a broken file. A worktree has none
+  of its own: it takes its project's (`configRoot`) and its sbx values, forwards none of the ports,
+  and changes nothing of it — its row, Explorer and COMMANDS offer no settings, `tet-ctl` refuses
+  them.
 
 ## Data model: `~/.tet`
 

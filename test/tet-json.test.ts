@@ -11,6 +11,7 @@ import {
   readExplorerView,
   readSbxConfig,
   removeFolder,
+  tetJsonProblem,
   writeCommands,
   writeSbxConfig
 } from "../src/main/tet-json";
@@ -74,11 +75,22 @@ describe("readCommands", () => {
     ]);
   });
 
-  it("reads a broken file as no commands, and refuses to write over it", async () => {
+  it("reads a file broken since as its last readable version, and refuses to write over it", async () => {
+    put(JSON.stringify({ commands: ["npm test"], sbx: { enabled: true } }));
+    assert.equal(await tetJsonProblem(root), undefined);
     put("{ not json");
-    assert.deepEqual(await readCommands(root), []);
+    assert.equal(await tetJsonProblem(root), "tet.json is not valid JSON");
+    assert.deepEqual(await readCommands(root), [{ command: "npm test" }]);
+    assert.equal((await readSbxConfig(root)).enabled, true, "sandboxing is never taken for off");
     await assert.rejects(writeCommands(root, [{ command: "x" }]), /not valid JSON/);
     assert.equal(fs.readFileSync(file(), "utf8"), "{ not json", "untouched");
+    put(JSON.stringify({ commands: ["npm run lint"] }));
+    assert.deepEqual(await readCommands(root), [{ command: "npm run lint" }], "fixed, it is read again");
+  });
+
+  it("refuses to read a file broken before it was ever readable", async () => {
+    put("{ not json");
+    await assert.rejects(readCommands(root), /not valid JSON/);
   });
 
   it("writes over an empty file as if there were none", async () => {

@@ -14,6 +14,7 @@ import {
   addProject,
   addWorktree,
   deleteWorktree,
+  openStoredProjects,
   ProjectStore,
   removeProject,
   resolveStoredIds,
@@ -154,6 +155,36 @@ describe("a project added", () => {
     assert.deepEqual(
       store.list().map((project) => project.id),
       [held, kept]
+    );
+  });
+
+  it("is refused with a broken tet.json, and held at start with all it keeps until added again", async () => {
+    const repo = repository();
+    const { deps, store, dataRoot, add } = open();
+    const tetJson = path.join(repo.main, "tet.json");
+    fs.writeFileSync(tetJson, "{ not json");
+    assert.match((await addProject(deps, repo.main)).error ?? "", /was not added: tet\.json is not valid JSON/);
+    assert.deepEqual(store.list(), []);
+    fs.writeFileSync(tetJson, "{}");
+    const id = await add(repo.main);
+
+    // The next start, the file broken meanwhile.
+    fs.writeFileSync(tetJson, "{ not json");
+    const notices: string[] = [];
+    const later = { ...deps, store: new ProjectStore(dataRoot), notice: (_severity: string, message: string) => notices.push(message) };
+    await openStoredProjects(later);
+    assert.deepEqual(later.store.list(), [], "not opened");
+    assert.match(notices.join("\n"), /was not opened: tet\.json is not valid JSON/);
+    assert.deepEqual(
+      new ProjectStore(dataRoot).all().map((project) => project.id),
+      [id],
+      "still stored"
+    );
+    fs.writeFileSync(tetJson, "{}");
+    assert.equal((await addProject(later, repo.main)).project?.id, id, "added again, it is the same project");
+    assert.deepEqual(
+      later.store.list().map((project) => project.id),
+      [id]
     );
   });
 

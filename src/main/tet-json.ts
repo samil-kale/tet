@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
 import writeFileAtomic from "write-file-atomic";
 import { isEnvName, isReservedName } from "../shared/env-rules";
+import { errorMessage } from "../shared/errors";
 import { COMMAND_COLORS, EXPLORER_SORT_ORDERS, SBX_ACCESS } from "../shared/types";
 import type {
   CommandColor,
@@ -22,8 +23,9 @@ import { isRecord } from "./json-file";
 
 /** A project's saved commands, Explorer view and sbx settings, in its own root so it travels with
  *  the repository; a linked worktree has none of its own (configRoot). Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
- *  their VS Code name (`readExplorerView`). A file missing, unparseable or oddly shaped is no
- *  commands and the default view. The watcher reports every write of it as `commands:changed`. */
+ *  their VS Code name (`readExplorerView`). A file missing or oddly shaped is no commands and the
+ *  default view; a broken one its last readable version (`read`). The watcher reports every write
+ *  of it as `commands:changed`. */
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
@@ -56,9 +58,6 @@ export interface ExplorerView extends ExplorerSettings {
   exclude: string[];
 }
 
-/** `read`'s answer for a file that doesn't parse; `patch` must never write over it. */
-const UNREADABLE: ProjectFile = {};
-
 /** Where a project's tet.json lives: a linked worktree takes its repository's, read and never
  *  written from the worktree. The copy git checks out in the worktree is ignored. */
 export function configRoot(root: string): string {
@@ -80,36 +79,56 @@ function file(root: string): string {
   return path.join(configRoot(root), PROJECT_FILE);
 }
 
-/** The file's text, or **null** when there is none. Any other failure throws: a file there but
- *  unreadable for the moment (EPERM while another process renames over it on win32) is not a
- *  missing one, which `patch` would write over. */
-async function readText(root: string): Promise<string | null> {
+/**
+ * The file as it is on disk: its text and contents — both null where there is none, or only
+ * whitespace — or why it cannot be used. Parsed like a `.code-workspace`: comments and trailing
+ * commas allowed. A file there but unreadable for the moment (EPERM while another process renames
+ * over it on win32) is broken, not missing, which `patch` would write over.
+ */
+async function readNow(root: string): Promise<{ text: string | null; content: ProjectFile | null } | { problem: string }> {
+  let text: string;
   try {
-    return await fs.readFile(file(root), "utf8");
+    text = await fs.readFile(file(root), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
+      return { text: null, content: null };
     }
-    throw error;
+    return { problem: `${PROJECT_FILE} could not be read: ${errorMessage(error)}` };
   }
-}
-
-/** Parsed like a `.code-workspace`: comments and trailing commas allowed. */
-function parse(text: string): ProjectFile {
+  if (text.trim() === "") {
+    return { text: null, content: null };
+  }
   const errors: ParseError[] = [];
   const content: unknown = parseJsonc(text, errors, { allowTrailingComma: true });
-  return errors.length > 0 || !isRecord(content) ? UNREADABLE : (content as ProjectFile);
+  return errors.length > 0 || !isRecord(content) ? { problem: `${PROJECT_FILE} is not valid JSON` } : { text, content };
 }
 
-/** The file's contents, or **null** when there is none. A write may create a missing file but never
- *  replaces a broken one — it is a file in the user's repository. */
-async function read(root: string): Promise<ProjectFile | null> {
-  const text = await readText(root).catch(() => undefined);
-  if (text === undefined) {
-    // Unreadable reads as a broken file: nothing configured, and nothing written over it.
-    return UNREADABLE;
+/** Each file's contents as last read whole: what it counts as while broken (`read`). */
+const lastReadable = new Map<string, ProjectFile | null>();
+
+/**
+ * Why the project's tet.json cannot be used, or nothing, keeping it as the last readable when it
+ * can. Asked before a project opens — one whose file is broken is not opened (projects.ts) — and
+ * after each write of it, so a project always has a last readable version while it is open.
+ */
+export async function tetJsonProblem(root: string): Promise<string | undefined> {
+  const reading = await readNow(root);
+  if ("problem" in reading) {
+    return reading.problem;
   }
-  return text === null ? null : parse(text);
+  lastReadable.set(file(root), reading.content);
+  return undefined;
+}
+
+/** The file's contents, or **null** when there is none. A broken file counts as its last readable
+ *  version, never as none: an sbx project would run its agents on this machine. */
+async function read(root: string): Promise<ProjectFile | null> {
+  const problem = await tetJsonProblem(root);
+  const last = lastReadable.get(file(root));
+  if (last === undefined) {
+    throw new Error(problem);
+  }
+  return last;
 }
 
 /** A value to set at a path inside the file; undefined removes the key. */
@@ -139,14 +158,12 @@ function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<
 
 async function patchNow(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
   assertOwnConfig(root);
-  // An empty file holds nothing to keep: written like a missing one.
-  const existing = await readText(root);
-  const text = existing?.trim() === "" ? null : existing;
-  const content = text === null ? {} : parse(text);
-  if (content === UNREADABLE) {
-    throw new Error(`${PROJECT_FILE} is not valid JSON`);
+  const reading = await readNow(root);
+  if ("problem" in reading) {
+    throw new Error(reading.problem);
   }
-  const changes = edit(content);
+  const { text } = reading;
+  const changes = edit(reading.content ?? {});
   if (changes.length === 0) {
     return;
   }
