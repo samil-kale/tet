@@ -100,6 +100,7 @@ const api: TETApi = {
     commitAll: (ref, message) => ipcRenderer.invoke("repository:commit-all", ref, message),
     commitPaths: (ref, message, paths) => ipcRenderer.invoke("repository:commit-paths", ref, message, paths),
     suggestCommitMessage: (ref, paths) => ipcRenderer.invoke("repository:suggest-commit-message", ref, paths),
+    cancelCommitSuggestion: () => ipcRenderer.send("repository:cancel-commit-suggestion"),
     stashPush: (ref, message) => ipcRenderer.invoke("repository:stash-push", ref, message),
     stash: (ref, command, sha) => ipcRenderer.invoke("repository:stash", ref, command, sha),
     discard: (ref, paths, permanently) => ipcRenderer.invoke("repository:discard", ref, paths, permanently),

@@ -42,7 +42,7 @@ export function useSubmit(
 
 /** A card dialog's cancel for ×, its Cancel button and Escape alike: nothing while `locked` (the
  *  frame's), so what runs finishes before the dialog goes. What runs and may be cut short instead
- *  is `abort`ed first (the SBX dialog's setup). */
+ *  is `abort`ed first (the SBX dialog's setup, a suggested commit message). */
 export function useCancel(cancel: () => void, locked: boolean, abort?: () => void): () => void {
   const guarded = (): void => {
     if (!locked) {
@@ -86,7 +86,7 @@ interface DialogFrameProps<T extends string> {
   /** Draws the header's progress bar, the dialog's one indicator. */
   busy?: boolean;
   /** × is disabled while it holds, and the caller's Cancel and Escape with it. Defaults to `busy`:
-   *  what runs finishes before the dialog goes (only the SBX dialog's setup excepted). */
+   *  what runs finishes before the dialog goes, unless it is aborted (`useCancel`). */
   locked?: boolean;
   /** What refused the dialog's Save, on the button row's left (`DialogError`): for a card whose
    *  fields — several, or across tabs — no one of them can be blamed. A field that can writes it

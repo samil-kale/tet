@@ -59,6 +59,9 @@ export interface PromptOptions<T> {
    * means done, and it closes. Left out, the answer is simply handed back.
    */
   submit?: (value: T) => Promise<string | undefined>;
+  /** Cuts short what a field runs (`hold`), so Cancel is not held back by it: a suggestion changes
+   *  nothing. Left out, Cancel waits for it like for `submit` (`useCancel`). */
+  abort?: () => void;
 }
 
 type Question =
@@ -185,6 +188,10 @@ interface FrameProps {
   disabled?: boolean;
   /** `PromptOptions.submit` is underway: the header's bar, as everywhere else. */
   busy?: boolean;
+  /** Cancel, × and Escape wait (`useCancel`). Defaults to `busy`. */
+  locked?: boolean;
+  /** What Cancel cuts short first (`PromptOptions.abort`). */
+  abort?: () => void;
   /** The confirm button takes the focus, for a dialog with no field. */
   focusSubmit?: boolean;
   onSubmit: () => void;
@@ -192,13 +199,25 @@ interface FrameProps {
   children: React.ReactNode;
 }
 
-function Frame({ title, confirmLabel, disabled, busy = false, focusSubmit, onSubmit, onCancel, children }: FrameProps) {
-  const cancel = useCancel(onCancel, busy);
+function Frame({
+  title,
+  confirmLabel,
+  disabled,
+  busy = false,
+  locked = busy,
+  abort,
+  focusSubmit,
+  onSubmit,
+  onCancel,
+  children
+}: FrameProps) {
+  const cancel = useCancel(onCancel, locked, abort);
 
   return (
     <DialogFrame
       header={{ title, onClose: cancel }}
       busy={busy}
+      locked={locked}
       // A form, so Enter answers from the field or the checkbox alike.
       onSubmit={() => {
         if (!disabled) {
@@ -207,7 +226,7 @@ function Frame({ title, confirmLabel, disabled, busy = false, focusSubmit, onSub
       }}
       buttons={
         <>
-          <button type="button" className="button secondary" disabled={busy} onClick={cancel}>
+          <button type="button" className="button secondary" disabled={locked} onClick={cancel}>
             Cancel
           </button>
           <button type="submit" className="button" disabled={disabled} autoFocus={focusSubmit}>
@@ -287,6 +306,8 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       confirmLabel={dialog.confirmLabel}
       disabled={running || held || !dialog.ready(value)}
       busy={running || held}
+      locked={running || (held && !dialog.abort)}
+      abort={dialog.abort}
       onSubmit={() => void submit()}
       onCancel={dialog.cancel}
     >

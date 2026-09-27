@@ -18,7 +18,7 @@ import type {
   SuggestionResult
 } from "../../shared/types";
 import { DEFAULT_EXPLORER_VIEW } from "../tet-json";
-import { suggestCommitMessage } from "../git/commit-message";
+import { cancelCommitSuggestion, suggestCommitMessage } from "../git/commit-message";
 import { git } from "../git/git-client";
 import type { Repository } from "../git/repository";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
@@ -122,6 +122,7 @@ export function registerRepositoryIpc({
       await agent.cleanupAsk?.(executable, cwd).catch(() => undefined);
     }
   });
+  ipcMain.on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
   onRepository("repository:stash-push", (repository, message: string) => repository.stashPush(message));
   onRepository("repository:stash", (repository, command: StashCommand, sha: string) => repository.stash(command, sha));
   onRepository("repository:discard", async (repository, paths: string[], permanently: boolean) =>

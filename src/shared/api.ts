@@ -221,6 +221,8 @@ export interface TETApi {
     commitPaths(ref: ProjectRef, message: string, paths: string[]): Promise<GitActionResult>;
     /** An installed agent suggests one subject for all changes, or only `paths`. */
     suggestCommitMessage(ref: ProjectRef, paths?: string[]): Promise<SuggestionResult>;
+    /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
+    cancelCommitSuggestion(): void;
     /** Everything the changes list shows, untracked included. */
     stashPush(ref: ProjectRef, message: string): Promise<GitActionResult>;
     /** By `StashEntry.sha`, looked up when it runs. */

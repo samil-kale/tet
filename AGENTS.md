@@ -211,9 +211,9 @@ or a per-line decision is for an agent.
   `app:notice`.
 - **What a dialog runs finishes before it goes**: while its bar runs, Cancel and × are disabled and
   Escape does nothing (`DialogFrame`'s `locked`, `useCancel`), so nothing is left half done and
-  nothing answers into a dialog already closed. Every new dialog does the same. The one exception
-  is the SBX dialog's setup (`sbx login`, `policy init`), which Cancel kills (`useCancel`'s `abort`);
-  its Save holds like any other.
+  nothing answers into a dialog already closed. Every new dialog does the same. The exceptions,
+  which Cancel kills (`useCancel`'s `abort`), change nothing: the SBX dialog's setup (`sbx login`,
+  `policy init`) and the commit prompt's suggested message; their Saves hold like any other.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out and the Add Repository dialog's account removal and
   namespace pick, which act at once. A setting reaches an agent at its setup
