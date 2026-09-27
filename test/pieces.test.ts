@@ -1291,9 +1291,9 @@ describe("the stores", () => {
     assert.equal(settings.darkTheme, "solarized", "an unknown id is left standing for the readers to fall back from");
     assert.equal(settings.lightTheme, "light-modern");
     assert.equal(settings.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
-    assert.deepEqual(settings.prompts, { commitMessage: "" }, "tet's own text spelled out is stored as none");
+    assert.deepEqual(settings.prompts, { commitMessage: "", handoff: "" }, "tet's own text spelled out is stored as none");
     assert.equal(effectivePrompt(settings.prompts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
-    assert.equal(effectivePrompt({ commitMessage: "write a subject" }, "commitMessage"), "write a subject");
+    assert.equal(effectivePrompt({ commitMessage: "write a subject", handoff: "" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
     store.patch({ colorScheme: "light" });
     assert.equal(new SettingsStore(dir).get().colorScheme, "light", "written and read back");

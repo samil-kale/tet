@@ -1,19 +1,28 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronIcon } from "./icons";
 import { useEscape } from "./use-escape";
 import { useLatest } from "./use-latest";
 
-/** One entry of a context menu; an action without a `run` renders disabled. */
+/** One entry of a context menu; an action with neither `run` nor `entries` renders disabled. */
 interface ContextMenuAction {
   label: string;
   /** Leads the label, e.g. an agent's icon in the new-session menu. */
   icon?: ReactNode;
   run?: () => void;
+  /** A submenu, opened on hover or click, in place of a `run`. */
+  entries?: ContextMenuEntry[];
 }
 
 /** Divides the menu's action groups. */
 export const SEPARATOR = "separator";
 
 export type ContextMenuEntry = ContextMenuAction | typeof SEPARATOR;
+
+/** How long the pointer rests on an entry before its submenu opens or another one closes, so a
+ *  pointer crossing entries on its way into an open submenu leaves it open (VS Code's delay). */
+const SUBMENU_DELAY_MS = 250;
+/** The menu's top padding and border: a submenu's first entry lines up with its parent entry. */
+const SUBMENU_OFFSET = 5;
 
 interface ContextMenuProps {
   /** Where the pointer was; the menu is clamped to the window from there. */
@@ -27,6 +36,9 @@ interface ContextMenuProps {
   width?: number;
   /** Caps the height, which then scrolls; kept within the window, it is never clamped upward. */
   maxHeight?: number;
+  /** A submenu's: its parent entry's left edge, which it ends at when the window has no room right
+   *  of `x`. */
+  flipX?: number;
 }
 
 /**
@@ -46,8 +58,10 @@ export function useContextMenu<T>() {
   return { open, close, render, target: menu?.target };
 }
 
-export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight }: ContextMenuProps) {
+export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
+  const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Clamped into the window, written to the node rather than state so nothing paints unclamped.
   useLayoutEffect(() => {
@@ -56,9 +70,10 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
       return;
     }
     const { width, height } = element.getBoundingClientRect();
-    element.style.left = `${Math.max(0, Math.min(x, window.innerWidth - width))}px`;
+    const left = flipX !== undefined && x + width > window.innerWidth ? flipX - width : x;
+    element.style.left = `${Math.max(0, Math.min(left, window.innerWidth - width))}px`;
     element.style.top = `${Math.max(0, Math.min(y, window.innerHeight - height))}px`;
-  }, [x, y]);
+  }, [x, y, flipX]);
 
   // Opened last, so over a dialog a `Dropdown` sits in: Escape closes the menu alone.
   useEscape(onClose);
@@ -83,6 +98,30 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     };
   }, [close]);
 
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+
+  const openSubmenu = (index: number, item: HTMLElement): void => {
+    const rect = item.getBoundingClientRect();
+    setSubmenu({ index, x: rect.right, y: rect.top - SUBMENU_OFFSET, flipX: rect.left });
+  };
+
+  // Hovering an entry opens its submenu, or closes another's, once the pointer rests there.
+  const hover = (index: number, entry: ContextMenuAction, item: HTMLElement): void => {
+    clearTimeout(hoverTimer.current);
+    if (!entry.entries?.length && submenu === null) {
+      return;
+    }
+    hoverTimer.current = setTimeout(() => {
+      if (entry.entries?.length) {
+        openSubmenu(index, item);
+      } else {
+        setSubmenu(null);
+      }
+    }, SUBMENU_DELAY_MS);
+  };
+
+  const opened = submenu && entries[submenu.index];
+
   return (
     <div
       ref={menu}
@@ -100,9 +139,13 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
         ) : (
           <div
             key={index}
-            className={`context-menu-item${entry.run ? "" : " disabled"}`}
-            onClick={() => {
-              if (entry.run) {
+            className={`context-menu-item${entry.run || entry.entries?.length ? "" : " disabled"}${submenu?.index === index ? " open" : ""}`}
+            onMouseEnter={(event) => hover(index, entry, event.currentTarget)}
+            onClick={(event) => {
+              if (entry.entries?.length) {
+                clearTimeout(hoverTimer.current);
+                openSubmenu(index, event.currentTarget);
+              } else if (entry.run) {
                 onClose();
                 entry.run();
               }
@@ -110,8 +153,33 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
           >
             {entry.icon}
             {entry.label}
+            {entry.entries?.length ? <ChevronIcon expanded={false} className="context-menu-chevron" /> : null}
           </div>
         )
+      )}
+      {submenu && opened !== SEPARATOR && opened?.entries && (
+        // Inside this menu's node, so a click in it is no click outside; the pointer reaching it
+        // keeps a pending hover elsewhere from closing it.
+        <div onMouseEnter={() => clearTimeout(hoverTimer.current)}>
+          <ContextMenu
+            x={submenu.x}
+            y={submenu.y}
+            flipX={submenu.flipX}
+            // Escape or a click elsewhere closes the submenu alone; a choice in it closes both.
+            onClose={() => setSubmenu(null)}
+            entries={opened.entries.map((child) =>
+              child === SEPARATOR || !child.run
+                ? child
+                : {
+                    ...child,
+                    run: () => {
+                      onClose();
+                      child.run?.();
+                    }
+                  }
+            )}
+          />
+        </div>
       )}
     </div>
   );

@@ -1,6 +1,14 @@
 import { ipcMain } from "electron";
 import { projectRefKey } from "../../shared/types";
-import type { AgentId, ProjectRef, EditorReport, GitActionResult, NoticeReport, TerminalDescriptor } from "../../shared/types";
+import type {
+  AgentId,
+  ProjectRef,
+  EditorReport,
+  GitActionResult,
+  HandoffResult,
+  NoticeReport,
+  TerminalDescriptor
+} from "../../shared/types";
 import type { IpcDeps } from "./deps";
 
 /** The tab strip: the terminals themselves, plus what only the renderer knows about its editor
@@ -30,6 +38,14 @@ export function registerTerminalsIpc({
     async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
       const refused = await sessions.get(ref)?.renameTab(tabId, title);
       return refused === undefined ? { ok: true } : { ok: false, error: refused };
+    }
+  );
+
+  ipcMain.handle(
+    "terminals:handoff",
+    async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoffResult> => {
+      const handed = (await sessions.get(ref)?.handOff(tabId, agentId)) ?? `Not open: ${projectRefKey(ref)}`;
+      return typeof handed === "string" ? { ok: false, error: handed } : { ok: true, tab: handed };
     }
   );
 

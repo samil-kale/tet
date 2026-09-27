@@ -255,6 +255,11 @@ export const codexSessionProvider: SessionProvider = {
     return renameIn(executable, cwd, sessionId, title);
   },
 
+  /** Every rollout of the thread: a resumed one may continue in a file of its own. */
+  files(_cwd: string, sessionId: string): Promise<string[]> {
+    return rolloutFilesOf(codexHome(), sessionId);
+  },
+
   /**
    * The sandbox's `~/.codex/sessions` plus `session_index.jsonl`, where names live outside the
    * rollout; `auth.json` stays unmounted. Rename and delete edit the mounted files (removeInHome,
@@ -267,7 +272,8 @@ export const codexSessionProvider: SessionProvider = {
     ],
     list: (root, cwd) => listIn(root, cwd),
     remove: (root, _cwd, sessionId) => removeInHome(root, sessionId),
-    rename: (root, _cwd, sessionId, title) => renameInHome(root, sessionId, title)
+    rename: (root, _cwd, sessionId, title) => renameInHome(root, sessionId, title),
+    files: (root, _cwd, sessionId) => rolloutFilesOf(root, sessionId)
   },
 
   /**

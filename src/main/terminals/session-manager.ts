@@ -27,9 +27,10 @@ import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
-import { sandboxSessionDir, toContainerPath } from "./hook-target";
+import { sandboxHandoffDir, sandboxSessionDir, toContainerPath } from "./hook-target";
 import { reportApplies } from "./turn-order";
 import { currentTheme } from "../theme";
+import { effectivePrompt } from "../../shared/prompts";
 
 const RECONCILE_DEBOUNCE_MS = 5000;
 // A CLI can persist a generated title well after its output went idle.
@@ -95,6 +96,23 @@ interface TabState extends TerminalDescriptor {
   cwd?: string;
   /** A saved command's variables, outranking the machine's. */
   env?: Record<string, string>;
+  /** The prompt a new tab starts with (AgentDefinition.initialPromptArgs), on its first start only:
+   *  a restart would submit it again. */
+  initialPrompt?: string;
+  /** The session this tab takes over (handOff), made its first prompt on its first start, once it
+   *  is known whether the tab runs in a sandbox. Dropped then, like `initialPrompt`. */
+  handoff?: Handoff;
+  /** Where a sandboxed handoff's copy lies (copyHandoff), deleted with the tab. */
+  handoffDir?: string;
+}
+
+/** Another agent's session, handed to a new tab as it is: never converted, so no format change of
+ *  the agent's breaks it. */
+interface Handoff {
+  from: AgentId;
+  sessionId: string;
+  /** Its transcript on the host (SessionProvider.files). */
+  files: string[];
 }
 
 /** Per-agent state within one repository or worktree. */
@@ -222,6 +240,21 @@ function isSavedCommandTab(tab: TabState): boolean {
 /** Resumes this tab's session, on the host or in its sandbox alike. */
 function resumeArgsOf(tab: TabState, agent: AgentDefinition): string[] {
   return tab.sessionId && agent.sessions ? agent.sessions.resumeArgs(tab.sessionId) : [];
+}
+
+/** A handoff's first prompt: the settings' text, then whose transcript it is and where this start
+ *  sees it. */
+function handoffPrompt(text: string, handoff: Handoff, files: string[]): string {
+  return `${text}\n\nThe previous agent: ${getAgent(handoff.from).displayName}. Its session files: ${files.join(", ")}`;
+}
+
+/** One line, as cmd.exe passes a multi-line argument cut short (ask.ts puts its question on stdin). */
+function singleLine(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .join(" ");
 }
 
 /**
@@ -466,20 +499,26 @@ export class TabSessionManager {
     tab: TabState,
     runtime: AgentRuntime,
     sessions: SessionProvider
-  ): { remove: (sessionId: string) => Promise<void>; rename: (sessionId: string, title: string) => Promise<void> } {
+  ): {
+    remove: (sessionId: string) => Promise<void>;
+    rename: (sessionId: string, title: string) => Promise<void>;
+    files: (sessionId: string) => Promise<string[]>;
+  } {
     const { agent, executable } = runtime;
     const sandbox = tab.sandbox ? sessions.sandbox : undefined;
     if (!sandbox) {
       return {
         remove: (sessionId) => sessions.remove(executable, this.at.path, sessionId),
-        rename: (sessionId, title) => sessions.rename(executable, this.at.path, sessionId, title)
+        rename: (sessionId, title) => sessions.rename(executable, this.at.path, sessionId, title),
+        files: (sessionId) => sessions.files(this.at.path, sessionId)
       };
     }
     const root = this.sandboxSessionRoot(agent.id);
     const cwd = toContainerPath(this.at.path);
     return {
       remove: (sessionId) => sandbox.remove(root, cwd, sessionId),
-      rename: (sessionId, title) => sandbox.rename(root, cwd, sessionId, title)
+      rename: (sessionId, title) => sandbox.rename(root, cwd, sessionId, title),
+      files: (sessionId) => sandbox.files(root, cwd, sessionId)
     };
   }
 
@@ -616,8 +655,57 @@ export class TabSessionManager {
     return this.tabs.some((tab) => tab.tabId === tabId);
   }
 
-  createTab(agentId: AgentId, sandboxOnly = false): TerminalDescriptor {
-    return this.addTab(agentId, sandboxOnly ? { sandboxOnly } : {});
+  /** `prompt` only for an agent with initialPromptArgs; the caller checks. */
+  createTab(agentId: AgentId, sandboxOnly = false, prompt?: string): TerminalDescriptor {
+    return this.addTab(agentId, { ...(sandboxOnly && { sandboxOnly }), ...(prompt !== undefined && { initialPrompt: prompt }) });
+  }
+
+  /**
+   * A tab of `agentId` taking over this tab's session: the session's files as the agent keeps them,
+   * and a prompt to read them (prompts.ts). This tab stays as it is. Answers what went wrong
+   * rather than notifying it, as renameTab does: `tabs-handoff` fails with it, the window notifies.
+   */
+  async handOff(tabId: string, agentId: AgentId, sandboxOnly = false): Promise<TerminalDescriptor | string> {
+    const tab = this.tabOf(tabId);
+    if (!tab) {
+      return "The tab is closed";
+    }
+    const runtime = this.runtimeFor(tab.agentId);
+    const { agent } = runtime;
+    if (!tab.sessionId || !agent.sessions) {
+      return `This ${agent.displayName} tab has no session yet`;
+    }
+    const target = getAgent(agentId);
+    if (agentId === tab.agentId || !target.initialPromptArgs) {
+      return `${target.displayName} cannot take over a ${agent.displayName} session`;
+    }
+    const sessionId = tab.sessionId;
+    const files = await this.sessionActions(tab, runtime, agent.sessions).files(sessionId);
+    if (files.length === 0) {
+      return `The ${agent.displayName} session's files were not found`;
+    }
+    return this.addTab(agentId, { handoff: { from: tab.agentId, sessionId, files }, ...(sandboxOnly && { sandboxOnly }) });
+  }
+
+  /** A sandboxed handoff's files, copied into `dir` (sandboxHandoffDir); answers the copies' host
+   *  paths. */
+  private async copyHandoff(handoff: Handoff, dir: string): Promise<string[]> {
+    await fs.promises.mkdir(dir, { recursive: true });
+    return Promise.all(
+      handoff.files.map(async (file) => {
+        const copy = path.join(dir, path.basename(file));
+        await fs.promises.copyFile(file, copy);
+        return copy;
+      })
+    );
+  }
+
+  /** The first prompt's arguments, a handoff's naming `files` as this start sees them. */
+  private promptArgs(tab: TabState, agent: AgentDefinition, files = tab.handoff?.files ?? []): string[] {
+    const prompt = tab.handoff
+      ? handoffPrompt(effectivePrompt(this.settings.get().prompts, "handoff"), tab.handoff, files)
+      : tab.initialPrompt;
+    return prompt !== undefined && agent.initialPromptArgs ? agent.initialPromptArgs(singleLine(prompt)) : [];
   }
 
   /**
@@ -802,6 +890,11 @@ export class TabSessionManager {
     const paths = this.sandboxPaths(runtime);
     const hooks = agent.prepareSandboxSpawn?.(paths) ?? { args: [] };
     const sessionRoot = this.sandboxSessionRoot(tab.agentId);
+    let handoffCopies: string[] | undefined;
+    if (tab.handoff) {
+      tab.handoffDir = sandboxHandoffDir(paths.agentDir, tab.handoff.from, tab.handoff.sessionId);
+      handoffCopies = await this.copyHandoff(tab.handoff, tab.handoffDir);
+    }
     const { args, env, problems } = await prepareSbxRun({
       agentId: tab.agentId,
       ref: this.at.ref,
@@ -813,7 +906,12 @@ export class TabSessionManager {
       rules: ready.rules,
       warm,
       paths,
-      agentArgs: [...hooks.args, ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])],
+      agentArgs: [
+        ...hooks.args,
+        ...resumeArgsOf(tab, agent),
+        ...(tab.runArgs ?? []),
+        ...this.promptArgs(tab, agent, handoffCopies?.map(toContainerPath))
+      ],
       env: agent.sandboxEnv ?? [],
       sessionMounts: (agent.sessions?.sandbox?.mounts ?? []).map((mount) => ({
         host: path.join(sessionRoot, mount.sub),
@@ -884,10 +982,18 @@ export class TabSessionManager {
     };
 
     // The preparation's host-only executable/args/env apply to neither a saved command nor a
-    // sandboxed tab, whose `sbxRun.args` is the full `sbx run` line, resumeArgs included.
+    // sandboxed tab, whose `sbxRun.args` is the full `sbx run` line, resumeArgs and prompt included.
     const args = tab.executable
       ? (tab.runArgs ?? [])
-      : (sbxRun?.args ?? [...(preparation?.args ?? []), ...resumeArgsOf(tab, agent), ...(tab.runArgs ?? [])]);
+      : (sbxRun?.args ?? [
+          ...(preparation?.args ?? []),
+          ...resumeArgsOf(tab, agent),
+          ...(tab.runArgs ?? []),
+          ...this.promptArgs(tab, agent)
+        ]);
+    // Given once: a restart resumes the session the prompt began.
+    tab.initialPrompt = undefined;
+    tab.handoff = undefined;
 
     const session = new TerminalSession(
       sbxRun ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),
@@ -1043,6 +1149,12 @@ export class TabSessionManager {
     } finally {
       if (detached) {
         this.detachedTabs.splice(this.detachedTabs.indexOf(tab), 1);
+      }
+      if (tab.handoffDir !== undefined) {
+        // Not awaited: nothing reads the copy once its tab is gone.
+        fs.promises
+          .rm(tab.handoffDir, { recursive: true, force: true })
+          .catch((error: unknown) => console.error("[tet] could not delete a handoff's copy:", error));
       }
     }
     const sessionId = tab.sessionId;

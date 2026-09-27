@@ -21,6 +21,9 @@ const ENVIRONMENT_SENTENCE =
 /** A bare git worktree lands outside TET's worktrees, which TET shows greyed and never opens. */
 const WORKTREE_SENTENCE = " To create or delete a git worktree, use tet-ctl rather than git: TET opens only the worktrees it made.";
 
+/** In a sandbox too: tabs-create opens an sbx agent's tab there. */
+const TASK_SENTENCE = " To start another agent on a task, open a tab for it with tet-ctl.";
+
 export function systemPrompt(sandboxed: boolean): string {
-  return TET_SYSTEM_PROMPT + WORKTREE_SENTENCE + (sandboxed ? "" : ENVIRONMENT_SENTENCE);
+  return TET_SYSTEM_PROMPT + WORKTREE_SENTENCE + TASK_SENTENCE + (sandboxed ? "" : ENVIRONMENT_SENTENCE);
 }

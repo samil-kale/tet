@@ -75,6 +75,7 @@ change, and every agent added, fits it.
   projects/<id>/                   id: the repository's `tet.id`
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
+      handoffs/                    another agent's session a tab here takes over, copied
     sandboxes/<key>/<agent>/       a worktree's
     worktrees/<key>/               a worktree TET made
 ```
@@ -301,13 +302,13 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   the token made for them (`control-token.ts`): a terminal gets its tab's token, never the run's.
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
-- `tabs-send` and `tabs-output` answer only for a tab of the caller's own project, its repository
+- `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository
   or any worktree (`ownProjectOnly`); from a sandbox, every verb only for the caller's own
   repository or worktree, except `worktree-add` and `worktree-delete`, which reach every worktree
   of its project (`ownProject`).
-  `tabs-send` never from inside a sandbox. `tabs-output`, `tabs-close` and `tabs-rename` from a
-  sandbox reach only tabs running there: a host tab is the machine's, and its output may print the
-  host's control token.
+  `tabs-keys` never from inside a sandbox. `tabs-output`, `tabs-close`, `tabs-rename` and
+  `tabs-handoff` from a sandbox reach only tabs running there: a host tab is the machine's, and its
+  output may print the host's control token.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.

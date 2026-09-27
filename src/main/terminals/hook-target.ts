@@ -47,3 +47,9 @@ export const SANDBOX_HOME = "/home/agent";
 export function sandboxSessionDir(sandboxDir: string): string {
   return path.join(sandboxDir, "sessions");
 }
+
+/** Where a sandboxed tab finds another agent's session it takes over, copied into the same
+ *  mounted folder: that agent's own store is out of the sandbox's sight. */
+export function sandboxHandoffDir(sandboxDir: string, from: string, sessionId: string): string {
+  return path.join(sandboxDir, "handoffs", `${from}-${sessionId}`);
+}

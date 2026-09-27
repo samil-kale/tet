@@ -108,7 +108,7 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   worktree: "value",
   agent: "value",
   confirm: "switch",
-  enter: "switch",
+  prompt: "value",
   session: "switch",
   busy: "switch",
   idle: "switch",
@@ -118,6 +118,18 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   timeout: "value",
   keep: "switch",
   force: "switch"
+};
+
+/** What `tabs-keys` presses, as a terminal sends each key. Single keys only: a burst of text is a
+ *  paste to an agent's TUI. */
+export const TAB_KEYS: Readonly<Record<string, string>> = {
+  enter: "\r",
+  esc: "\x1b",
+  tab: "\t",
+  up: "\x1b[A",
+  down: "\x1b[B",
+  right: "\x1b[C",
+  left: "\x1b[D"
 };
 
 /** An `events-tail` entry: what the session manager heard, in arrival order. */
@@ -169,7 +181,8 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     verb: "settings-set-prompt",
     group: "TET itself",
     usage: `settings-set-prompt <${PROMPT_IDS.join("|")}> [text]`,
-    summary: "Set the text of a background question; no text puts TET's own back. Applies to the next press.",
+    summary:
+      "Set the text of what TET asks of an agent: a background question, or a handoff's first prompt. No text puts TET's own back. Applies from the next use.",
     positionals: ["id", "text"]
   },
   { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownRef" },
@@ -361,19 +374,31 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     sandbox: "ownRef"
   },
   {
-    verb: "tabs-send",
+    verb: "tabs-keys",
     group: "The other tabs",
-    usage: "tabs-send <tab-id> <text> [--enter] [--project <id>]",
-    summary: "Type text into a tab, then Enter with --enter, as if the user had typed it there.",
-    positionals: ["tabId", "text"],
+    usage: `tabs-keys <tab-id> <${Object.keys(TAB_KEYS).join("|")}>... [--project <id>]`,
+    summary:
+      "Press keys in a tab, one after another, e.g. to answer a question tabs-output shows on its screen. No text: an agent's TUI takes typed text as a paste and its Enter as a newline.",
+    positionals: ["tabId", "keys"],
+    variadic: true,
     ownProjectOnly: true
   },
   {
     verb: "tabs-create",
     group: "The other tabs",
-    usage: `tabs-create --agent <${AGENT_IDS.join("|")}> [--project <id>]`,
-    summary: "Open a new terminal tab for that agent.",
+    usage: `tabs-create --agent <${AGENT_IDS.join("|")}> [--prompt <text>] [--project <id>]`,
+    summary:
+      "Open a new terminal tab for that agent. With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
     positionals: [],
+    sandbox: "ownRef"
+  },
+  {
+    verb: "tabs-handoff",
+    group: "The other tabs",
+    usage: `tabs-handoff <tab-id> --agent <${AGENT_IDS.join("|")}> [--project <id>]`,
+    summary:
+      "Open a tab of another agent that takes over the tab's session: it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
+    positionals: ["tabId"],
     sandbox: "ownRef"
   },
   {

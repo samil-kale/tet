@@ -103,6 +103,13 @@ describe("Claude Code's transcripts", () => {
     assert.deepEqual(fs.readdirSync(dir), []);
   });
 
+  it("hands over a session's transcript alone, not its sidecar", async () => {
+    const dir = transcripts({ s: [prompt("p")] });
+    fs.mkdirSync(path.join(dir, "s", "subagents"), { recursive: true });
+    assert.deepEqual(await claudeSessionProvider.files(cwd, "s"), [path.join(dir, "s.jsonl")]);
+    assert.deepEqual(await claudeSessionProvider.files(cwd, "gone"), []);
+  });
+
   it("reports when a turn ended without its Stop hooks, and only then", async () => {
     const turn = (parentUuid: string, extra: Record<string, unknown> = {}): unknown => ({
       type: "system",
@@ -238,6 +245,13 @@ describe("Codex's rollouts", () => {
     assert.equal((await codexSessionProvider.list(cwd))[0].turnEndedAt, ms(LATER));
   });
 
+  it("hands over every rollout of a session", async () => {
+    rollouts({ one: [meta("s1"), typed("p")], resumed: [meta("s1", "cli", LATER), typed("more")], other: [meta("s2"), typed("q")] });
+    const files = await codexSessionProvider.files(cwd, "s1");
+    assert.deepEqual(files.map((file) => path.basename(file)).sort(), ["rollout-one.jsonl", "rollout-resumed.jsonl"]);
+    assert.deepEqual(await codexSessionProvider.files(cwd, "gone"), []);
+  });
+
   it("lists nothing where Codex has never run", async () => {
     process.env.CODEX_HOME = path.join(os.tmpdir(), "tet-codex-never");
     assert.deepEqual(await codexSessionProvider.list(cwd), []);
@@ -332,6 +346,13 @@ describe("pi's transcripts", () => {
     await piSessionProvider.remove("pi", cwd, "s1");
   });
 
+  it("hands over a session's transcript, found by its header where pi renamed the file", async () => {
+    const dir = transcripts({ s1: [header("s1"), user("p")], forked: [header("s2"), user("q")] });
+    assert.deepEqual(await piSessionProvider.files(cwd, "s1"), [path.join(dir, fileName("s1"))]);
+    assert.deepEqual(await piSessionProvider.files(cwd, "s2"), [path.join(dir, fileName("forked"))]);
+    assert.deepEqual(await piSessionProvider.files(cwd, "gone"), []);
+  });
+
   it("skips a .jsonl that is no pi transcript, and reads past a broken line", async () => {
     transcripts({
       other: [{ type: "message", id: "x" }],
@@ -377,6 +398,7 @@ describe("sessions written inside a sandbox", () => {
     const [session] = await sandbox.list(dir, cwd);
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
+    assert.deepEqual(await sandbox.files(dir, cwd, "s1"), [path.join(projectDir, "s1.jsonl")], "on the host side");
     await sandbox.rename(dir, cwd, "s1", "Renamed");
     assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
     await sandbox.remove(dir, cwd, "s1");
@@ -412,6 +434,7 @@ describe("sessions written inside a sandbox", () => {
     assert.match(String(appended.updated_at), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{7}Z$/, "Codex's seven fractional digits");
     await assert.rejects(sandbox.rename(dir, cwd, "s2", "  "), /non-empty/);
 
+    assert.deepEqual(await sandbox.files(dir, cwd, "s1"), [path.join(day, "rollout-s1.jsonl")], "on the host side");
     const indexBefore = fs.readFileSync(index, "utf8");
     await sandbox.remove(dir, cwd, "s1");
     assert.deepEqual(fs.readdirSync(day), ["rollout-s2.jsonl"]);
@@ -442,6 +465,11 @@ describe("sessions written inside a sandbox", () => {
     const [session] = await sandbox.list(dir, cwd);
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
+    assert.deepEqual(
+      await sandbox.files(dir, cwd, "s1"),
+      [path.join(sessionDir, `${AT.replace(/[:.]/g, "-")}_s1.jsonl`)],
+      "on the host side"
+    );
     await sandbox.rename(dir, cwd, "s1", "Renamed");
     assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
     await sandbox.remove(dir, cwd, "s1");
@@ -452,6 +480,7 @@ describe("sessions written inside a sandbox", () => {
     const dir = path.join(os.tmpdir(), "tet-sbx-never");
     for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider]) {
       assert.deepEqual(await provider.sandbox?.list(dir, cwd), []);
+      assert.deepEqual(await provider.sandbox?.files(dir, cwd, "s1"), []);
     }
   });
 });

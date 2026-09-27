@@ -7,6 +7,7 @@ import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, refusal } from "../ui/Dialog";
+import { notify } from "../ui/Notices";
 import { baseName } from "../files/explorer-tree";
 import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
@@ -30,6 +31,11 @@ function formatIso(ms: number): string {
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
     ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
   );
+}
+
+/** An agent as a menu entry: its icon, then its name. */
+function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
+  return { label: agent.displayName, icon: <AgentIcon agentId={agent.id} className="tab-icon" />, run };
 }
 
 /** The side pane's view: one of two, never both. */
@@ -233,6 +239,19 @@ export const Pane = memo(function Pane({
     [at]
   );
 
+  /** The new tab opens beside this one; no question is up to show a refusal, so it is a notice. */
+  const handOff = useCallback(
+    async (tabId: string, agentId: AgentId) => {
+      const result = await window.tet.terminals.handOff(at, tabId, agentId);
+      if (result.tab) {
+        onActivate(result.tab.tabId, paneId);
+      } else {
+        notify("error", result.error ?? "Could not hand the session over");
+      }
+    },
+    [at, paneId, onActivate]
+  );
+
   // The menu's tab closed or moved away under it (`tet-ctl`, another pane): its close entries,
   // counted from that tab's index, would close the whole pane. Not drawn until the effect closes it.
   const tabMenuOpen = tabMenu.target !== undefined && tabs.some((tab) => tab.tabId === tabMenu.target);
@@ -299,7 +318,7 @@ export const Pane = memo(function Pane({
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
     const terminal = tabs.find((tab): tab is TerminalDescriptor => tab.tabId === tabId && !isEditorTab(tab));
-    const renamable = terminal?.sessionId !== undefined ? terminal : undefined;
+    const withSession = terminal?.sessionId !== undefined ? terminal : undefined;
     // A saved command restarts anytime; an agent once started — a running one quits first and its
     // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
     const restartable =
@@ -350,7 +369,17 @@ export const Pane = memo(function Pane({
       // No persisted session, nothing to rename: the host would revert the label.
       {
         label: "Rename...",
-        run: renamable ? () => void askRename(renamable) : undefined
+        run: withSession ? () => void askRename(withSession) : undefined
+      },
+      // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
+      // before the session is persisted.
+      {
+        label: "Hand over to",
+        entries: withSession
+          ? agents
+              .filter((agent) => agent.takesPrompt && agent.id !== withSession.agentId)
+              .map((agent) => agentEntry(agent, () => void handOff(withSession.tabId, agent.id)))
+          : undefined
       },
       ...moveEntries
     ];
@@ -358,11 +387,7 @@ export const Pane = memo(function Pane({
 
   // Built only while the menu is open: a pane re-renders on every tab push, and icons are elements.
   const newSessionEntries = (): ContextMenuEntry[] =>
-    agents.map((agent) => ({
-      label: agent.displayName,
-      icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
-      run: () => void createTab(agent.id)
-    }));
+    agents.map((agent) => agentEntry(agent, () => void createTab(agent.id)));
 
   return (
     <div

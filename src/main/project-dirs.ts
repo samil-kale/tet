@@ -13,6 +13,7 @@ import { onDisk, relativeInside } from "./path-inside";
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
  *       sessions/                  the host side of the agent's session mounts
+ *       handoffs/                  another agent's session a tab takes over, copied (handOff)
  *     <key>/<agent>/               a worktree's
  *   worktrees/<key>/               a git worktree TET made; the key never changes
  * ```

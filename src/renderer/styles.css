@@ -1023,9 +1023,20 @@ textarea:focus,
   cursor: pointer;
 }
 
-.context-menu-item:not(.disabled):hover {
+.context-menu-item:not(.disabled):hover,
+.context-menu-item.open {
   background: var(--vscode-menu-selectionBackground);
   color: var(--vscode-menu-selectionForeground);
+}
+
+/* A submenu's arrow, at the entry's right edge as in VS Code's menus. */
+.context-menu-chevron {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  margin: 0 -18px 0 auto;
+  padding-left: 12px;
+  box-sizing: content-box;
 }
 
 .context-menu-item.disabled {

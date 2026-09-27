@@ -56,6 +56,7 @@ export function listAgents(): AgentInfo[] {
   return AGENTS.map((agent) => ({
     id: agent.id,
     displayName: agent.displayName,
-    hasSessions: agent.sessions !== undefined
+    hasSessions: agent.sessions !== undefined,
+    takesPrompt: agent.initialPromptArgs !== undefined
   }));
 }

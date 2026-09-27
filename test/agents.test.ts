@@ -69,12 +69,12 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
 
   /**
    * The question a CLI asks in a folder it has not been trusted with, as `tabs-output` shows
-   * it (spaces may be gone), and the keys answering "trust". Claude Code preselects "No, exit",
-   * Codex "1. Yes, continue"; pi asks nothing.
+   * it (spaces may be gone), and the keys answering "trust" (`tabs-keys`). Claude Code preselects
+   * "No, exit", Codex "1. Trust and continue"; pi asks nothing.
    */
   const TRUST_QUESTIONS: Partial<Record<SbxAgentId, { asked: RegExp; keys: string[] }>> = {
-    claude: { asked: /Yes,\s*I\s*trust\s*this\s*folder/, keys: ["\x1b[B", "\r"] },
-    codex: { asked: /Do\s*you\s*trust\s*the\s*contents\s*of\s*this\s*directory/, keys: ["\r"] }
+    claude: { asked: /Yes,\s*I\s*trust\s*this\s*folder/, keys: ["down", "enter"] },
+    codex: { asked: /Trust\s*this\s*folder\?/, keys: ["enter"] }
   };
   /** How long a CLI's first frame is watched for that question. */
   const TRUST_WAIT_MS = 15_000;
@@ -121,10 +121,10 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     return started().output(currentProject().id, tabId);
   }
 
-  /** Typed as that tab: `tabs-send` answers only within its project. `--enter` presses Enter. */
-  async function send(tabId: string, text: string): Promise<void> {
-    const sent = await tetCtl(["tabs-send", tabId, text], started().asTab(currentProject().id, tabId));
-    assert.equal(sent.status, 0, sent.stderr);
+  /** Pressed as that tab: `tabs-keys` answers only within its project. */
+  async function press(tabId: string, key: string): Promise<void> {
+    const pressed = await tetCtl(["tabs-keys", tabId, key], started().asTab(currentProject().id, tabId));
+    assert.equal(pressed.status, 0, pressed.stderr);
   }
 
   async function hookEventsOf(tabId: string, since: number): Promise<ControlEvent[]> {
@@ -170,7 +170,8 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
 
     // One tab's life, in order: each step needs the one before.
     describe(agent.displayName, () => {
-      const state: { tabId?: string; sessionId?: string } = {};
+      /** `since`: when the tab was opened with its prompt, which its first turn is. */
+      const state: { tabId?: string; sessionId?: string; since?: number } = {};
       const startedTab = (): string => {
         assert.ok(state.tabId, "the tab started");
         return state.tabId;
@@ -186,8 +187,10 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
         }
       });
 
-      it("starts, draws its first frame and is trusted with the repository", { timeout: STARTUP_MS + TRUST_WAIT_MS + 30_000 }, async (t) => {
-        const created = await ctl("tabs-create", "--agent", agentId, "--project", currentProject().id);
+      it("starts on a prompt, draws its first frame and is trusted with the repository", { timeout: STARTUP_MS + TRUST_WAIT_MS + 30_000 }, async (t) => {
+        state.since = Date.now();
+        // The prompt as the CLI's own argument, submitted once it is up, past the trust question.
+        const created = await ctl("tabs-create", "--agent", agentId, "--prompt", PROMPT, "--project", currentProject().id);
         assert.equal(created.status, 0, created.stderr);
         const tabId = (created.result as TerminalDescriptor).tabId;
         state.tabId = tabId;
@@ -213,7 +216,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
           }
           if (trust.asked.test(await outputOf(tabId))) {
             for (const key of trust.keys) {
-              await send(tabId, key);
+              await press(tabId, key);
               await sleep(300);
             }
             t.diagnostic(`answered ${agent.displayName}'s trust question`);
@@ -225,11 +228,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
 
       it("reports both ends of a turn, names its session and knows TET's system prompt", { timeout: TURN_MS + 30_000 }, async () => {
         const tabId = startedTab();
-        const since = Date.now();
-        await send(tabId, PROMPT);
-        // Apart from the text: typed in one write, a TUI may take the Enter as part of a paste.
-        await sleep(500);
-        await send(tabId, "--enter");
+        const since = state.since ?? 0;
         let last: ListedTab | undefined;
         let events: ControlEvent[] = [];
         let output = "";

@@ -39,6 +39,10 @@ export const claudeSessionProvider: SessionProvider = {
     return renameIn(projectsRoot(), cwd, sessionId, title);
   },
 
+  files(cwd: string, sessionId: string): Promise<string[]> {
+    return filesIn(projectsRoot(), cwd, sessionId);
+  },
+
   /** watchTranscriptDir handles a project directory that doesn't exist yet and ignores a
    *  session's `subagents/` subdirectory. */
   watch(cwd: string, onChange: () => void): () => void {
@@ -55,9 +59,30 @@ export const claudeSessionProvider: SessionProvider = {
     mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
     list: (root, cwd) => listIn(path.join(root, "projects"), cwd),
     remove: (root, cwd, sessionId) => removeIn(path.join(root, "projects"), cwd, sessionId),
-    rename: (root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title)
+    rename: (root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title),
+    files: (root, cwd, sessionId) => filesIn(path.join(root, "projects"), cwd, sessionId)
   }
 };
+
+/** The transcript alone: the subagent transcripts and tool results beside it are not the
+ *  conversation. */
+async function filesIn(root: string, cwd: string, sessionId: string): Promise<string[]> {
+  const projectDir = await findProjectDir(root, cwd);
+  if (!projectDir) {
+    return [];
+  }
+  const filePath = transcriptPath(projectDir, sessionId);
+  try {
+    await fs.promises.access(filePath);
+    return [filePath];
+  } catch {
+    return [];
+  }
+}
+
+function transcriptPath(projectDir: string, sessionId: string): string {
+  return path.join(projectDir, `${sessionId}.jsonl`);
+}
 
 function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
   return listTranscriptDir(
@@ -88,7 +113,7 @@ async function removeIn(root: string, cwd: string, sessionId: string): Promise<v
   if (!projectDir) {
     return;
   }
-  const filePath = path.join(projectDir, `${sessionId}.jsonl`);
+  const filePath = transcriptPath(projectDir, sessionId);
   await fs.promises.rm(filePath, { force: true });
   // Subagent transcripts and tool results sit beside it under the same id.
   await fs.promises.rm(path.join(projectDir, sessionId), { recursive: true, force: true });
@@ -107,7 +132,7 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   // Appended to, never created: a transcript gone would come back as a session of one title line,
   // listed and never resumable.
   try {
-    await fs.promises.appendFile(path.join(projectDir, `${sessionId}.jsonl`), line, {
+    await fs.promises.appendFile(transcriptPath(projectDir, sessionId), line, {
       flag: fs.constants.O_WRONLY | fs.constants.O_APPEND
     });
   } catch (error) {

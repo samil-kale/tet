@@ -4,7 +4,7 @@ import * as http from "node:http";
 import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
 import { errorMessage } from "../../shared/errors";
-import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS } from "../../shared/control";
+import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
 import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isSbxAgent, isWorking, sameProjectRef } from "../../shared/types";
@@ -32,6 +32,7 @@ import type {
   SbxValueKind,
   TerminalDescriptor
 } from "../../shared/types";
+import { getAgent } from "../agents";
 import { systemPrompt } from "../agents/system-prompt";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
@@ -41,7 +42,7 @@ import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
 import { sbxVerbs } from "./control-sbx-verbs";
-import { ControlError, count, text, type Caller, type Handler } from "./control-verb";
+import { ControlError, count, list, text, type Caller, type Handler } from "./control-verb";
 import { canBind } from "../can-bind";
 import { isRecord } from "../json-file";
 
@@ -162,8 +163,11 @@ export interface ControlTerminals {
   write(tabId: string, data: string): void;
   /** Oldest first. */
   events(): ControlEvent[];
-  /** `sandboxOnly`: opened from a sandbox, so it never runs on this machine. */
-  createTab(agentId: AgentId, sandboxOnly: boolean): TerminalDescriptor;
+  /** `sandboxOnly`: opened from a sandbox, so it never runs on this machine. `prompt`: its first,
+   *  for an agent that takes one. */
+  createTab(agentId: AgentId, sandboxOnly: boolean, prompt?: string): TerminalDescriptor;
+  /** The new tab taking over the tab's session, or why there is none. */
+  handOff(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TerminalDescriptor | string>;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   /** The agent's refusal, or nothing when it went through. */
@@ -221,6 +225,8 @@ const WAIT_POLL_MS = 100;
 const EVENTS_TAIL = 50;
 /** `tabs-output` default. */
 const OUTPUT_KB = 16;
+/** What `tabs-keys` presses, for its refusals. */
+const KEY_NAMES = Object.keys(TAB_KEYS).join(", ");
 
 /**
  * What a hook prints back into its agent. `{}` rather than nothing: Codex parses its Stop hook's
@@ -363,6 +369,19 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       throw new ControlError("bad_args", `${known.tabId} runs on this machine, not in the sandbox`);
     }
     return known;
+  };
+
+  /** `--agent`, one the caller may open a tab of: a shell would run on this machine, so a sandbox
+   *  opens only an sbx agent's tab, held to the sandbox (createTab, handOff). */
+  const openableAgent = (args: Record<string, unknown>, caller: Caller): AgentId => {
+    const agent = text(args, "agent", "agent: pass --agent <id> (see list-agents)");
+    if (!deps.agentIds.includes(agent)) {
+      throw new ControlError("bad_args", `unknown agent: ${agent} (see list-agents)`);
+    }
+    if (caller.sandboxed && !isSbxAgent(agent)) {
+      throw new ControlError("unauthorized", `a ${agent} tab does not run in a sandbox, so a sandbox cannot open one`);
+    }
+    return agent as AgentId;
   };
 
   return {
@@ -592,14 +611,21 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       throw new ControlError("timeout", `stopped waiting for tab ${tabId}: the caller is gone`);
     },
 
-    "tabs-send": (args, caller) => {
+    // One write per key: a TUI reads a burst of them as a paste.
+    "tabs-keys": (args, caller) => {
       const { tabs, tabId } = knownTab(args, caller);
-      const value = args.text;
-      if (typeof value !== "string" && args.enter !== true) {
-        throw new ControlError("bad_args", "missing text (or --enter for Enter alone)");
+      const keys = list(args, "keys");
+      if (keys.length === 0) {
+        throw new ControlError("bad_args", `missing keys: one or more of ${KEY_NAMES}`);
       }
-      tabs.write(tabId, `${typeof value === "string" ? value : ""}${args.enter === true ? "\r" : ""}`);
-      return { result: { sent: tabId } };
+      const unknown = keys.find((key) => !Object.hasOwn(TAB_KEYS, key));
+      if (unknown !== undefined) {
+        throw new ControlError("bad_args", `unknown key: ${unknown} (one of ${KEY_NAMES})`);
+      }
+      for (const key of keys) {
+        tabs.write(tabId, TAB_KEYS[key]);
+      }
+      return { result: { pressed: tabId } };
     },
 
     "tabs-output": (args, caller) => {
@@ -642,17 +668,28 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "tabs-create": (args, caller) => {
       const { ref } = refFrom(args, caller);
-      const agent = text(args, "agent", "agent: pass --agent <id> (see list-agents)");
-      if (!deps.agentIds.includes(agent)) {
-        throw new ControlError("bad_args", `unknown agent: ${agent} (see list-agents)`);
+      const agent = openableAgent(args, caller);
+      const prompt = args.prompt;
+      if (prompt !== undefined && (typeof prompt !== "string" || prompt.trim() === "")) {
+        throw new ControlError("bad_args", "missing text after --prompt");
       }
-      // A shell would run on this machine; an sbx agent's tab is held to the sandbox (createTab).
-      if (caller.sandboxed && !isSbxAgent(agent)) {
-        throw new ControlError("unauthorized", `a ${agent} tab does not run in a sandbox, so a sandbox cannot open one`);
+      if (prompt !== undefined && !getAgent(agent).initialPromptArgs) {
+        throw new ControlError("bad_args", `a ${agent} tab takes no prompt`);
       }
-      const tab = terminals(ref).createTab(agent as AgentId, caller.sandboxed);
+      const tab = terminals(ref).createTab(agent, caller.sandboxed, prompt);
       deps.showTab(ref, tab.tabId);
       return { result: tab };
+    },
+
+    "tabs-handoff": async (args, caller) => {
+      const { tabs, tabId, ref } = ownedTab(args, caller);
+      const handed = await tabs.handOff(tabId, openableAgent(args, caller), caller.sandboxed);
+      if (typeof handed === "string") {
+        // A state the tab is in, not a mistyped call — as tabs-rename's refusal.
+        throw new ControlError("internal", handed);
+      }
+      deps.showTab(ref, handed.tabId);
+      return { result: handed };
     },
 
     "tabs-run-command": async (args, caller) => {
@@ -846,7 +883,7 @@ export async function startControlServer(
       body += chunk;
       // The token is only checked once the body is whole, so an unauthenticated caller would
       // otherwise decide how much of this process's memory to take. Well past the longest real
-      // request (`tabs-send`'s text) and nowhere near what would hurt.
+      // request (`tabs-create`'s prompt) and nowhere near what would hurt.
       //
       // Nothing is kept from here on, but the rest is still read and dropped, and the answer waits
       // for `end` like any other: closing the connection early (`req.destroy()`, or answering while

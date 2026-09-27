@@ -93,7 +93,8 @@ const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
 };
 
 const PROMPT_LABELS: Record<PromptId, string> = {
-  commitMessage: "Commit message"
+  commitMessage: "Commit message",
+  handoff: "Session handoff"
 };
 
 const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [

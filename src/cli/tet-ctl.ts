@@ -65,14 +65,14 @@ function limits(sandboxed: boolean): string[] {
     ? [
         ...own,
         "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",
-        "restarting TET, starting or typing into a tab — is refused there and is not listed above.",
+        "restarting TET, starting a tab or pressing keys in one — is refused there and is not listed above.",
         "What is listed answers for the tabs of this repository or worktree only (exit 2, the reason on stderr)."
       ]
     : [
         ...own,
         "restartRequired in an answer means the change waits for a restart — tell the user, never",
         "restart for them. A terminal of another project is refused, exit 2 with the reason on stderr",
-        "(tabs-output, tabs-send)."
+        "(tabs-output, tabs-keys)."
       ];
 }
 

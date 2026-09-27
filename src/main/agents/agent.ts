@@ -51,6 +51,8 @@ interface SandboxSessions {
   list(root: string, cwd: string): Promise<AgentSessionInfo[]>;
   remove(root: string, cwd: string, sessionId: string): Promise<void>;
   rename(root: string, cwd: string, sessionId: string, title: string): Promise<void>;
+  /** SessionProvider.files against the mounted root, as host paths. */
+  files(root: string, cwd: string, sessionId: string): Promise<string[]>;
 }
 
 /** Agent-specific session enumeration/resume/deletion. */
@@ -64,6 +66,9 @@ export interface SessionProvider {
   remove(executable: string, cwd: string, sessionId: string): Promise<void>;
   /** Renames the persisted title; rejects on failure. */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;
+  /** The files holding the session's transcript, as the agent keeps them, for another agent to
+   *  read (a handoff). [] where there are none. */
+  files(cwd: string, sessionId: string): Promise<string[]>;
   /** Calls `onChange` when this repository's sessions change, so the manager re-lists without
    *  waiting for its poll. Returns a stop function. */
   watch?(cwd: string, onChange: () => void): () => void;
@@ -133,6 +138,12 @@ export interface AgentDefinition {
   askArgs?: string[];
   /** One command run in a terminal; only the shell has it, for a saved command with `"shell": true`. */
   runArgs?: (command: string) => string[];
+  /**
+   * A first prompt, as the last arguments of a new session's first start: the CLI submits it once
+   * it is up, past a trust question. Typed into the terminal instead, it can land before the CLI
+   * reads input or be taken as a paste, its Enter as a newline. Omitted by the shell.
+   */
+  initialPromptArgs?: (prompt: string) => string[];
   /**
    * Removes what `askArgs` left behind, for an agent that persists a session either way — a
    * background question must not come back as a tab.

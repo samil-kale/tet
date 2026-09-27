@@ -68,6 +68,8 @@ interface Calls {
   closed: string[];
   renamed: [string, string][];
   created: string[];
+  /** `[tabId, agentId, sandboxOnly]` per handoff. */
+  handedOff: [string, string, boolean][];
   commands: string[];
   added: string[];
   removed: string[];
@@ -159,9 +161,14 @@ function terminalsOf(key: string): ControlTerminals {
       calls.written.push([tabId, data]);
     },
     events: () => [1, 2, 3].map((at) => ({ at, tabId: "tab-2", kind: "hook" as const, event: "stop" as const })),
-    createTab: (agentId, sandboxOnly) => {
-      calls.created.push(sandboxOnly ? `${agentId} (sandbox only)` : agentId);
+    createTab: (agentId, sandboxOnly, prompt) => {
+      calls.created.push(`${agentId}${sandboxOnly ? " (sandbox only)" : ""}${prompt === undefined ? "" : ` starting on "${prompt}"`}`);
       return tab("tab-new");
+    },
+    // The caller's own tab has no session to hand over, as a fresh one has none.
+    handOff: async (tabId, agentId, sandboxOnly) => {
+      calls.handedOff.push([tabId, agentId, sandboxOnly]);
+      return tabId === OWN_TAB ? "This Shell tab has no session yet" : tab("tab-handoff");
     },
     createCommandTab: (command: ProjectCommand) => {
       calls.commands.push(command.command);
@@ -360,6 +367,7 @@ describe("tet-ctl against the control server", () => {
       closed: [],
       renamed: [],
       created: [],
+      handedOff: [],
       commands: [],
       added: [],
       removed: [],
@@ -394,7 +402,7 @@ describe("tet-ctl against the control server", () => {
       colorScheme: "system",
       darkTheme: "dark-modern",
       lightTheme: "light-modern",
-      prompts: { commitMessage: "" }
+      prompts: { commitMessage: "", handoff: "" }
     };
     for (const list of Object.values(calls)) {
       list.length = 0;
@@ -647,6 +655,31 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.created, []);
   });
 
+  it("opens an agent's tab starting on a prompt, and refuses one to a shell or an empty one", async () => {
+    assert.equal((await tetCtl(["tabs-create", "--agent", "claude", "--prompt", "fix the build"])).status, EXIT_CODES.ok);
+    assert.deepEqual(calls.created, ['claude starting on "fix the build"']);
+    const shell = await tetCtl(["tabs-create", "--agent", "shell", "--prompt", "ls"]);
+    assert.equal(shell.status, EXIT_CODES.usage);
+    assert.match(shell.stderr, /takes no prompt/);
+    assert.equal((await tetCtl(["tabs-create", "--agent", "claude", "--prompt", " "])).status, EXIT_CODES.usage, "an empty one");
+    assert.equal(calls.created.length, 1);
+  });
+
+  it("hands a tab's session to another agent and brings the new tab to the front", async () => {
+    assert.deepEqual((await tetCtl(["tabs-handoff", "tab-2", "--agent", "claude"])).result, tab("tab-handoff"));
+    assert.deepEqual(calls.handedOff, [["tab-2", "claude", false]]);
+    assert.deepEqual(calls.shown, [[PROJECT.id, "tab-handoff"]]);
+  });
+
+  it("says why a session cannot be handed over, and refuses an agent it does not know", async () => {
+    const fresh = await tetCtl(["tabs-handoff", OWN_TAB, "--agent", "claude"]);
+    assert.equal(fresh.status, EXIT_CODES.internal);
+    assert.match(fresh.stderr, /no session yet/);
+    assert.equal((await tetCtl(["tabs-handoff", "tab-2", "--agent", "gpt"])).status, EXIT_CODES.usage);
+    assert.equal((await tetCtl(["tabs-handoff", "tab-2"])).status, EXIT_CODES.usage, "no agent");
+    assert.deepEqual(calls.shown, []);
+  });
+
   it("runs a saved command by name, and by its command line", async () => {
     assert.equal(((await tetCtl(["tabs-run-command", "build"])).result as TerminalDescriptor).tabId, "tab-cmd");
     assert.equal((await tetCtl(["tabs-run-command", "npm run build"])).status, EXIT_CODES.ok);
@@ -751,18 +784,25 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["tabs-wait", "tab-2", "--status", "runing"])).status, EXIT_CODES.usage);
   });
 
-  it("types into a tab, with Enter when asked", async () => {
-    assert.deepEqual((await tetCtl(["tabs-send", "tab-2", "hello", "--enter"])).result, { sent: "tab-2" });
-    assert.deepEqual((await tetCtl(["tabs-send", "tab-2", "--enter"])).result, { sent: "tab-2" });
+  it("presses keys in a tab, one write each", async () => {
+    assert.deepEqual((await tetCtl(["tabs-keys", "tab-2", "down", "enter"])).result, { pressed: "tab-2" });
     assert.deepEqual(calls.written, [
-      ["tab-2", "hello\r"],
+      ["tab-2", "\x1b[B"],
       ["tab-2", "\r"]
     ]);
   });
 
-  it("types into no tab of another project, nor from outside a project", async () => {
-    assertRefused(await tetCtl(["tabs-send", OWN_TAB, "x", "--project", OTHER.id]), /own project/, "another project");
-    const outside = await tetCtl(["tabs-send", "tab-2", "x", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
+  it("presses no key it does not know, and types no text", async () => {
+    assert.equal((await tetCtl(["tabs-keys", "tab-2"])).status, EXIT_CODES.usage, "no key");
+    const text = await tetCtl(["tabs-keys", "tab-2", "enter", "hello"]);
+    assert.equal(text.status, EXIT_CODES.usage);
+    assert.match(text.stderr, /unknown key: hello/);
+    assert.deepEqual(calls.written, [], "not even the keys before it");
+  });
+
+  it("presses keys in no tab of another project, nor from outside a project", async () => {
+    assertRefused(await tetCtl(["tabs-keys", OWN_TAB, "enter", "--project", OTHER.id]), /own project/, "another project");
+    const outside = await tetCtl(["tabs-keys", "tab-2", "enter", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
     assertRefused(outside, /own project/, "no project of its own");
     assert.deepEqual(calls.written, []);
   });
@@ -790,7 +830,7 @@ describe("tet-ctl against the control server", () => {
       ["projects-remove", OTHER.id],
       ["tabs-start", "tab-2"],
       ["tabs-restart", "tab-2"],
-      ["tabs-send", "tab-2", "x"],
+      ["tabs-keys", "tab-2", "enter"],
       ["settings-set-theme", "dark-modern"],
       ["settings-set-prompt", "commitMessage", "x"],
       ["restart-app", "--confirm"],
@@ -936,13 +976,20 @@ describe("tet-ctl against the control server", () => {
 
   it("closes, renames and reads from a sandbox only a tab running there", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    for (const args of [["tabs-close", OWN_TAB], ["tabs-rename", OWN_TAB, "x"], ["tabs-output", OWN_TAB]]) {
+    for (const args of [
+      ["tabs-close", OWN_TAB],
+      ["tabs-rename", OWN_TAB, "x"],
+      ["tabs-output", OWN_TAB],
+      ["tabs-handoff", OWN_TAB, "--agent", "claude"]
+    ]) {
       const run = await tetCtl(args, fromSandbox);
       assert.equal(run.status, EXIT_CODES.usage, args[0]);
       assert.match(run.stderr, /runs on this machine/, args[0]);
     }
     assert.equal((await tetCtl(["tabs-rename", "tab-2", "x"], fromSandbox)).status, EXIT_CODES.ok, "tab-2 runs in the sandbox");
     assert.deepEqual((await tetCtl(["tabs-output", "tab-2"], fromSandbox)).result, { output: "bold line\nnext" });
+    assert.equal((await tetCtl(["tabs-handoff", "tab-2", "--agent", "claude"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.deepEqual(calls.handedOff, [["tab-2", "claude", true]], "held to the sandbox");
   });
 
   it("creates and deletes a sandboxed tab's worktrees of its own project only", async () => {

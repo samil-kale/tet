@@ -49,6 +49,10 @@ export const piSessionProvider: SessionProvider = {
     return renameIn(sessionsRoot(), cwd, sessionId, title);
   },
 
+  files(cwd: string, sessionId: string): Promise<string[]> {
+    return filesIn(sessionsRoot(), cwd, sessionId);
+  },
+
   /** The session directory may not exist yet — watchTranscriptDir handles that. */
   watch(cwd: string, onChange: () => void): () => void {
     return watchTranscriptDir(
@@ -66,9 +70,16 @@ export const piSessionProvider: SessionProvider = {
     list: (root, cwd) => listIn(path.join(root, "sessions"), cwd, path.posix),
     remove: (root, cwd, sessionId) => removeIn(path.join(root, "sessions"), cwd, sessionId, path.posix),
     rename: (root, cwd, sessionId, title) =>
-      renameIn(path.join(root, "sessions"), cwd, sessionId, title, path.posix)
+      renameIn(path.join(root, "sessions"), cwd, sessionId, title, path.posix),
+    files: (root, cwd, sessionId) => filesIn(path.join(root, "sessions"), cwd, sessionId, path.posix)
   }
 };
+
+async function filesIn(root: string, cwd: string, sessionId: string, paths = path): Promise<string[]> {
+  const dir = await findSessionDir(root, cwd, paths);
+  const filePath = dir && (await findSessionFile(dir, sessionId));
+  return filePath ? [filePath] : [];
+}
 
 function listIn(root: string, cwd: string, paths = path): Promise<AgentSessionInfo[]> {
   return listTranscriptDir(

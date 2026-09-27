@@ -6,6 +6,9 @@ export interface AgentInfo {
   displayName: string;
   /** False for the shell, whose tabs are plain terminals. */
   hasSessions: boolean;
+  /** Starts on a first prompt (AgentDefinition.initialPromptArgs), so it can take over another
+   *  agent's session. */
+  takesPrompt: boolean;
 }
 
 /** A program tet needs, and whether the startup check found it. */
@@ -139,8 +142,8 @@ export interface AppSettings {
   prompts: PromptSettings;
 }
 
-/** A question tet asks an agent in the background, in the Prompts tab's picker. */
-export const PROMPT_IDS = ["commitMessage"] as const;
+/** What tet asks of an agent (prompts.ts), in the Prompts tab's picker. */
+export const PROMPT_IDS = ["commitMessage", "handoff"] as const;
 export type PromptId = (typeof PROMPT_IDS)[number];
 
 export type PromptSettings = Record<PromptId, string>;
@@ -654,6 +657,11 @@ export interface FileContent {
   /** Missing from the working tree; the editor is read-only. */
   deleted?: boolean;
   error?: string;
+}
+
+/** The tab taking over a session, or why there is none. */
+export interface HandoffResult extends GitActionResult {
+  tab?: TerminalDescriptor;
 }
 
 /** Written, or why not — a stale `mtimeMs` never overwrites silently. */

@@ -143,6 +143,7 @@ const api: TETApi = {
     create: (ref, agentId) => ipcRenderer.invoke("terminals:create", ref, agentId),
     close: (ref, tabIds) => ipcRenderer.invoke("terminals:close", ref, tabIds),
     rename: (ref, tabId, title) => ipcRenderer.invoke("terminals:rename", ref, tabId, title),
+    handOff: (ref, tabId, agentId) => ipcRenderer.invoke("terminals:handoff", ref, tabId, agentId),
     restart: (ref, tabId) => ipcRenderer.invoke("terminals:restart", ref, tabId),
     seen: (ref, tabId) => ipcRenderer.send("terminals:seen", ref, tabId),
     inFront: (ref, tabIds) => ipcRenderer.send("terminals:in-front", ref, tabIds),

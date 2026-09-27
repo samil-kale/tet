@@ -24,6 +24,8 @@ export const claudeAgent: AgentDefinition = {
   verifiedVersion: "2.1.282",
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   askArgs: ["-p", "--no-session-persistence"],
+  // The positional prompt of an interactive session.
+  initialPromptArgs: (prompt) => [prompt],
   sessions: claudeSessionProvider,
   sessionIdOf: hookSessionId,
   workOutlivesStop: claudeWorkOutlivesStop,

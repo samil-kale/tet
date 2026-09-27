@@ -40,6 +40,8 @@ export const piAgent: AgentDefinition = {
   // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript, so
   // no cleanupAsk.
   askArgs: ["-p", "--no-session"],
+  // A positional message, submitted as the first prompt.
+  initialPromptArgs: (prompt) => [prompt],
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
   sessionIdOf: hookSessionId,

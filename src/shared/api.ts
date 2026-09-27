@@ -20,6 +20,7 @@ import type {
   FileWriteResult,
   GitActionResult,
   GitLogin,
+  HandoffResult,
   ListRepositoriesResult,
   Notice,
   NoticeReport,
@@ -296,6 +297,8 @@ export interface TETApi {
     close(ref: ProjectRef, tabIds: string[]): Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
     rename(ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult>;
+    /** A tab of `agentId` taking over this tab's session; this tab stays. */
+    handOff(ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoffResult>;
     /** Respawns a saved command in the same tab. */
     restart(ref: ProjectRef, tabId: string): Promise<void>;
     /** Clears `finishedAt` — only the renderer knows which tab is in front. */
