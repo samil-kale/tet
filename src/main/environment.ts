@@ -4,7 +4,7 @@ import { errorMessage } from "../shared/errors";
 import type { ProjectRef, EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
-import { isRecord, saveJson } from "./json-file";
+import { isRecord, writeJson } from "./json-file";
 
 /** What the file holds: the variable plus its value in the clear, as every tab gets it anyway. */
 interface StoredVar {
@@ -142,7 +142,7 @@ export class EnvStore {
 
   private write({ variables, others }: Contents): void {
     // Renamed into place: never half a file for `read` to refuse.
-    saveJson(this.file, [...others, ...variables], "the environment variables");
+    writeJson(this.file, [...others, ...variables]);
   }
 }
 

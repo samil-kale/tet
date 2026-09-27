@@ -7,6 +7,7 @@ import * as path from "node:path";
 import { before, describe, it } from "node:test";
 import {
   abortOperation,
+  checkout,
   commitAll,
   commitPaths,
   createBranch,
@@ -359,6 +360,32 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
     assert.equal(fs.readFileSync(path.join(cwd, "renamed.txt"), "utf8"), "a changed\n");
     assert.equal(fs.readFileSync(path.join(trash, "renamed.txt"), "utf8"), "edited\n");
     assert.deepEqual(await changed(), ["modified b.txt", "modified i/page.txt", "untracked other.txt"]);
+  });
+});
+
+describe("a remote branch checked out", () => {
+  it("fails with what stopped it, not with what a local branch of its name would say", async () => {
+    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-checkout-"));
+    run("init", "-q");
+    run("symbolic-ref", "HEAD", "refs/heads/main");
+    write("f.txt", "base\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "base");
+    run("switch", "-q", "--create", "x");
+    write("f.txt", "x\n");
+    run("commit", "-q", "--all", "--message", "x");
+    // On two remotes: a bare `switch x` would not know which to track.
+    for (const name of ["origin", "upstream"]) {
+      run("remote", "add", name, initBare(`tet-git-checkout-${name}-`));
+      run("push", "-q", name, "x");
+    }
+    run("switch", "-q", "main");
+    run("branch", "-q", "-D", "x");
+    run("fetch", "-q", "--all");
+    write("f.txt", "local\n");
+    const result = await checkout(cwd, { name: "x", remote: "origin" }, ["main"]);
+    assert.equal(result.ok, false);
+    assert.match(result.error ?? "", /local changes/);
   });
 });
 

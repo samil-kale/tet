@@ -160,7 +160,8 @@ export interface TETApi {
     accounts(): Promise<ProviderAccount[]>;
     /** Validates the token against the host and stores it main-side. */
     addAccount(provider: ProviderId, host: string, token: string): Promise<AddAccountResult>;
-    removeAccount(accountId: string): Promise<void>;
+    /** Why it could not be removed; undefined once it is gone. */
+    removeAccount(accountId: string): Promise<string | undefined>;
     /** The remote tab's group filter; "" (all) is a choice too. */
     setNamespace(accountId: string, namespace: string): Promise<void>;
     /** Most recently active first. */

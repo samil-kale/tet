@@ -3,7 +3,7 @@ import { DEFAULT_THEME_IDS, THEMES, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../shared/types";
 import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../shared/types";
-import { isRecord, readJson, saveJson } from "./json-file";
+import { isRecord, readJson, writeJson } from "./json-file";
 
 const DEFAULTS: AppSettings = {
   notifications: {
@@ -47,16 +47,17 @@ export class SettingsStore implements SettingsAccess {
   /**
    * Writes the settings `edits` names and leaves the rest as stored. The single place the merge
    * happens: a caller that read, changed and wrote the whole thing would take back whatever was
-   * set between its read and its write.
+   * set between its read and its write. Throws when the file cannot be written, nothing changed.
    */
   patch(edits: SettingsEdits): void {
     this.save(withSettings(this.settings, edits));
   }
 
   private save(settings: AppSettings): void {
-    this.settings = normalize(settings);
+    const next = normalize(settings);
     // Renamed into place: `load` reads a half-written file as the defaults.
-    saveJson(this.file, this.settings, "settings");
+    writeJson(this.file, next);
+    this.settings = next;
   }
 
   private load(): void {

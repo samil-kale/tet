@@ -82,6 +82,10 @@ change, and every agent added, fits it.
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
   `projects/<id>/` only what a sandbox may see, since sbx is granted it whole — never a setting, a
   token or an sbx value. Removing a project deletes its folder.
+- **A store written by a Save someone waits on writes before it changes** (`writeJson`,
+  `json-file.ts`): a failure reaches the one who saved — in the dialog, or `tet-ctl`'s answer —
+  and the store keeps what the disk has. Only a write nobody waits on, or a cleanup that must not
+  stop what it cleans up after, logs instead (`logFailure`).
 - **A host setup knows no project.** `prepareSpawn` is handed no project path and writes only into
   `config/<agent>`: one set of files serves every repository and worktree, rewritten once when a
   setting in it changes.

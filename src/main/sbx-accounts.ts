@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import { errorMessage } from "../shared/errors";
 import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../shared/types";
-import { isRecord, readJson, saveJson } from "./json-file";
+import { isRecord, readJson, writeJson } from "./json-file";
 import { readSbxUser, runSbxTokenLogin } from "./sbx";
 import { seal, unseal } from "./sealed";
 
@@ -46,16 +46,9 @@ export class SbxAccountStore {
     const encrypted = seal(token);
     const existing =
       this.accounts.find((account) => account.user === user) ?? this.accounts.find((account) => account.id === replacing);
-    this.accounts = this.accounts.filter((account) => account === existing || account.id !== replacing);
-    if (existing) {
-      existing.user = user;
-      existing.token = encrypted;
-      this.save();
-      return toAccount(existing);
-    }
-    const stored: StoredSbxAccount = { id: randomUUID(), user, token: encrypted };
-    this.accounts.push(stored);
-    this.save();
+    const others = this.accounts.filter((account) => account === existing || account.id !== replacing);
+    const stored: StoredSbxAccount = existing ? { ...existing, user, token: encrypted } : { id: randomUUID(), user, token: encrypted };
+    this.save(existing ? others.map((account) => (account === existing ? stored : account)) : [...others, stored]);
     return toAccount(stored);
   }
 
@@ -77,8 +70,7 @@ export class SbxAccountStore {
     const accounts = [...next.values()];
     // Written only on a change: every SBX Save passes through here.
     if (JSON.stringify(accounts) !== JSON.stringify(this.accounts)) {
-      this.accounts = accounts;
-      this.save();
+      this.save(accounts);
     }
   }
 
@@ -92,9 +84,11 @@ export class SbxAccountStore {
     }
   }
 
-  private save(): void {
+  /** Throws when the file cannot be written, the accounts unchanged. */
+  private save(accounts: StoredSbxAccount[]): void {
     // Renamed into place: `load` reads a half-written file as no accounts, and the next save would keep that.
-    saveJson(this.file, this.accounts, "sbx-accounts.json");
+    writeJson(this.file, accounts);
+    this.accounts = accounts;
   }
 }
 

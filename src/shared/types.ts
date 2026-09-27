@@ -297,7 +297,7 @@ export interface SbxStatus {
   loggedIn: boolean;
   /** sbx's own error when it failed for a reason other than being signed out (a hung daemon), or
    *  that it is older than tet drives (sbx.ts's sbxVersionSupported), with `loggedIn` false;
-   *  signing in would not help. */
+   *  signing in would not help. Or, signed in, that its policy could not be read (readSbxStatus). */
   failure?: string;
   policyInitialized: boolean;
   /** The organization managing the account's policies, when one does; local allow rules then do

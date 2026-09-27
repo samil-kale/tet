@@ -13,6 +13,7 @@ import type {
   SbxStatus
 } from "../shared/types";
 import { getAgent } from "./agents";
+import { logFailure } from "./json-file";
 import { readGovernance, readSbxProblems, saveSbxConfig, type SbxSaveTarget } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
 
@@ -148,7 +149,8 @@ async function saveNow(
     const unexpected = [...sbxProblemNotices(refused), ...failures];
     return unexpected.length > 0 ? { ok: false, error: unexpected.join("\n\n"), problems: left } : { ok: true, problems: left };
   } catch (error) {
-    sbxLocal.restore(project.id, stored);
+    // What was stored before; failing that too, the first failure is still the one to tell.
+    logFailure("restore the sbx values", () => sbxLocal.restore(project.id, stored));
     return { ok: false, error: errorMessage(error) };
   }
 }

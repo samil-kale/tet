@@ -50,6 +50,9 @@ export const GitPane = memo(function GitPane({
   // Fetch, pull and push share the one action slot with discard and stash.
   const { remote, canSync } = syncRemote(state);
   const locked = branch.busy || acting;
+  // Named as GitHub Desktop names them: by the remote, not the branch. A local upstream is pulled
+  // from, named by its branch, but pushed to the remote like any other.
+  const pullFrom = state.branchUpstreams[state.head]?.remote ?? state.upstream;
 
   return (
     <div className={`side-pane-content${shown ? "" : " hidden"}`}>
@@ -62,7 +65,7 @@ export const GitPane = memo(function GitPane({
           <>
             <button
               className="icon-button"
-              title={remote ? `Fetch from ${remote}` : "This repository has no remote"}
+              title={remote ? `Fetch ${remote}` : "This repository has no remote"}
               disabled={locked || !canSync}
               onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(resolved.ref, login))}
             >
@@ -70,7 +73,7 @@ export const GitPane = memo(function GitPane({
             </button>
             <button
               className="icon-button"
-              title={state.upstream ? `Pull from ${state.upstream}` : "No upstream to pull from"}
+              title={pullFrom ? `Pull ${pullFrom}` : "No upstream to pull from"}
               disabled={locked || !canSync || state.upstream === undefined}
               onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(resolved.ref, login))}
             >
@@ -78,11 +81,7 @@ export const GitPane = memo(function GitPane({
             </button>
             <button
               className="icon-button"
-              title={
-                state.upstream === undefined
-                  ? `Push ${state.head} to ${remote} and track it`
-                  : `Push to ${state.upstream}`
-              }
+              title={state.upstream === undefined ? "Publish branch" : `Push ${remote}`}
               disabled={locked || !canSync}
               onClick={() =>
                 branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", (login) =>

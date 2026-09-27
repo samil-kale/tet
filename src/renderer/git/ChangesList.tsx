@@ -88,12 +88,8 @@ export async function askCommit(
   ask: FileAsk
 ): Promise<void> {
   const { remote, canSync } = syncRemote(state);
-  // No checkbox without a remote or on a detached HEAD.
-  const pushLabel = canSync
-    ? state.upstream === undefined
-      ? `Also push ${state.head} to ${remote} and track it`
-      : `Also push to ${state.upstream}`
-    : undefined;
+  // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitPane).
+  const pushLabel = canSync ? (state.upstream === undefined ? "Also publish branch" : `Also push ${remote}`) : undefined;
   /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
    *  question is gone — only one question is up at a time, and Escape may have closed it while the
    *  push still ran. */

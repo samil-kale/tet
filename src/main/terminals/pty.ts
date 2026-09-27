@@ -113,7 +113,8 @@ function isCmdShim(file: string): boolean {
  *  once, `a"&b` ends the quote cmd.exe sees and `&b` runs as a command. Only there — a batch file
  *  reading `%~1` itself keeps the second carets (Maven's `if "%~1" == "-f"`: a syntax error). */
 function escapeCmdArgument(arg: string, shim: boolean): string {
-  const quoted = `"${arg.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"').replace(/(?=(\\+?)?)\1$/, "$1$1")}"`;
+  // Every backslash before a quote, or before the closing one, doubled: the C runtime halves a run.
+  const quoted = `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
   const escaped = quoted.replace(CMD_META_CHARS, "^$1");
   return shim ? escaped.replace(CMD_META_CHARS, "^$1") : escaped;
 }

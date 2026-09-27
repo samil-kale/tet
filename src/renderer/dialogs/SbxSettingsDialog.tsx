@@ -319,7 +319,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           <button type="button" className="button secondary" disabled={saving} onClick={cancel}>
             Cancel
           </button>
-          {(phase.kind === "not-installed" || phase.kind === "blocked") && (
+          {(phase.kind === "not-installed" || phase.kind === "blocked" || phase.kind === "failed") && (
             <button type="button" className="button" disabled={busy} onClick={() => void recheck()}>
               Check again
             </button>

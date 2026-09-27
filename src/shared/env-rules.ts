@@ -18,14 +18,20 @@ export function isReservedName(name: string): boolean {
   return upper === "PATH" || upper.startsWith("TET_");
 }
 
+/** Why a name cannot be set — the Settings' Environment rows and a saved command's alike. */
+export function reservedRefusal(name: string): string | undefined {
+  return isReservedName(name) ? `${name} is TET's own to set in a tab (PATH, TET_*)` : undefined;
+}
+
 /** Why the row cannot be saved beside those before it, or undefined. */
 export function envRowRefusal(row: EnvEdit, before: EnvEdit[], ignoreCase: boolean): string | undefined {
   const same = (name: string): string => (ignoreCase ? name.toUpperCase() : name);
   if (!isEnvName(row.name)) {
     return `${row.name || "A variable"} is not an environment variable name: letters, digits and _, not starting with a digit`;
   }
-  if (isReservedName(row.name)) {
-    return `${row.name} is TET's own to set in a tab (PATH, TET_*)`;
+  const reserved = reservedRefusal(row.name);
+  if (reserved) {
+    return reserved;
   }
   if (before.some((other) => same(other.name) === same(row.name))) {
     return `${row.name} is there twice`;

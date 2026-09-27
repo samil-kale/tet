@@ -104,7 +104,18 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
     throw new Error("Claude project directory not found");
   }
   const line = JSON.stringify({ type: "custom-title", customTitle: trimmed, sessionId }) + "\n";
-  await fs.promises.appendFile(path.join(projectDir, `${sessionId}.jsonl`), line);
+  // Appended to, never created: a transcript gone would come back as a session of one title line,
+  // listed and never resumable.
+  try {
+    await fs.promises.appendFile(path.join(projectDir, `${sessionId}.jsonl`), line, {
+      flag: fs.constants.O_WRONLY | fs.constants.O_APPEND
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error("Claude session not found", { cause: error });
+    }
+    throw error;
+  }
 }
 
 /** Claude Code's config root, where its sessions and knowledge live; tet never overrides it. */

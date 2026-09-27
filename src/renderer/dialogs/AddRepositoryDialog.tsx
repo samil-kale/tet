@@ -9,6 +9,7 @@ import { DialogError, FieldGroup, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
+import { RowMark } from "../ui/RowSection";
 
 /** Picked off an account's list, cloned from a url, added from disk, or created empty. Not in
  *  Dialog.tsx, which asks one question. */
@@ -171,6 +172,8 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
   const [repos, setRepos] = useState<Record<string, RemoteRepository[]>>({});
   /** Why the list is empty, in the list's own place. */
   const [listError, setListError] = useState<string | undefined>(undefined);
+  /** Why an account could not be removed, beside its row until the next try. */
+  const [removeError, setRemoveError] = useState<{ accountId: string; message: string } | undefined>(undefined);
   const [filter, setFilter] = useState("");
   /** The group picked in this dialog, "" for all; null while none was picked here. */
   const [namespace, setNamespace] = useState<string | null>(null);
@@ -256,7 +259,11 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
     if (!answer.confirmed) {
       return;
     }
-    await window.tet.providers.removeAccount(account.id);
+    const failed = await window.tet.providers.removeAccount(account.id);
+    setRemoveError(failed === undefined ? undefined : { accountId: account.id, message: failed });
+    if (failed !== undefined) {
+      return;
+    }
     const remaining = (accounts ?? []).filter((entry) => entry.id !== account.id);
     setAccounts(remaining);
     setSelectedId((current) => (current === account.id ? (remaining[0]?.id ?? null) : current));
@@ -303,6 +310,7 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
                 {PROVIDER_LABEL[account.provider]} · {account.host}
               </span>
             </div>
+            <RowMark title={removeError?.accountId === account.id ? removeError.message : undefined} />
             <button
               type="button"
               className="icon-button"

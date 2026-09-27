@@ -136,7 +136,9 @@ describe("resolveCommand", () => {
       // A quote cmd.exe sees as closing, then an operator: the shim's `%*` parses the line again.
       // First, since an argument with an odd count of quotes (`a\"b`) would hide what follows.
       'a"&echo INJECTED&"b', 'a">out.txt"', '{"k": 1}', "%VAR%",
-      "plain", "", "a b", "a&b", "a>b", "a|b", "%PATH%", "a^b", 'say "hi"', "(x)", "!x!", "C:\\dir\\", "a\\\"b", "x;y,z", "ä€"
+      "plain", "", "a b", "a&b", "a>b", "a|b", "%PATH%", "a^b", 'say "hi"', "(x)", "!x!", "C:\\dir\\", "a\\\"b", "x;y,z", "ä€",
+      // Runs of backslashes before a quote and at the end, each one halved by the C runtime.
+      "C:\\out\\\\", "a\\\\\"b", "x\\\\\\", "a\\\\\\\"b"
     ];
     const originalPath = process.env.PATH;
     process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
@@ -1295,6 +1297,15 @@ describe("the stores", () => {
     const store = new SettingsStore(dir);
     store.patch({ colorScheme: "light" });
     assert.equal(new SettingsStore(dir).get().colorScheme, "light", "written and read back");
+  });
+
+  it("say when a Save could not be written, and keep what they had", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-settings-"));
+    // A folder where the file goes: no platform renames a file over it.
+    fs.mkdirSync(path.join(dir, "settings.json"));
+    const store = new SettingsStore(dir);
+    assert.throws(() => store.patch({ colorScheme: "light" }));
+    assert.equal(store.get().colorScheme, "system", "unchanged, as the disk is");
   });
 
   it("read the one theme of an older settings file as its kind and that kind's theme", () => {

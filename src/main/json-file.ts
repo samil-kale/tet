@@ -16,12 +16,19 @@ export function readJson(file: string): unknown {
   }
 }
 
-/** Writes one of tet's own files as indented JSON, renamed into place; a failure is logged as
- *  "could not persist <what>", never thrown. */
-export function saveJson(file: string, value: unknown, what: string): void {
+/** Writes one of tet's own files as indented JSON, renamed into place; throws when it cannot. For a
+ *  store written from a Save someone waits on: its failure is theirs to see, and the store changes
+ *  its contents only once the file has them. */
+export function writeJson(file: string, value: unknown): void {
+  writeFileAtomic.sync(file, JSON.stringify(value, null, 2), "utf8");
+}
+
+/** A store's write nobody waits on, or a cleanup that must not stop what it cleans up after: a
+ *  failure is logged as "could not <what>", never thrown. */
+export function logFailure(what: string, write: () => void): void {
   try {
-    writeFileAtomic.sync(file, JSON.stringify(value, null, 2), "utf8");
+    write();
   } catch (error) {
-    console.error(`[tet] could not persist ${what}:`, error);
+    console.error(`[tet] could not ${what}:`, error);
   }
 }

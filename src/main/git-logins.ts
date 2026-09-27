@@ -3,7 +3,7 @@ import { urlOrigin, urlUsername } from "../shared/git-url";
 import type { GitActionResult, GitLogin } from "../shared/types";
 import { git } from "./git/git-client";
 import type { NetworkLogin } from "./git/git";
-import { isRecord, readJson, saveJson } from "./json-file";
+import { isRecord, logFailure, readJson, writeJson } from "./json-file";
 import { seal, unseal } from "./sealed";
 
 /** What the file holds: one login per origin and username, its password encrypted by the OS and
@@ -122,6 +122,6 @@ export class GitLoginStore {
   }
 
   private save(): void {
-    saveJson(this.file, this.logins, "git logins");
+    logFailure("persist git logins", () => writeJson(this.file, this.logins));
   }
 }

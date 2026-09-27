@@ -15,6 +15,7 @@ import type {
 } from "../../shared/types";
 import { urlOrigin } from "../../shared/git-url";
 import { git } from "../git/git-client";
+import { logFailure } from "../json-file";
 import { addProject, addWorktree, deleteWorktree, removeProject } from "../projects";
 import { PROVIDERS } from "../providers";
 import type { IpcDeps } from "./deps";
@@ -131,10 +132,19 @@ export function registerProjectsIpc({
     }
   );
 
-  ipcMain.handle("providers:remove-account", (_event, accountId: string): void => accounts.remove(accountId));
+  // Why it could not be removed, for the dialog to tell; nothing once it went.
+  ipcMain.handle("providers:remove-account", (_event, accountId: string): string | undefined => {
+    try {
+      accounts.remove(accountId);
+      return undefined;
+    } catch (error) {
+      return errorMessage(error);
+    }
+  });
 
+  // A convenience remembered for the next opening: not kept, the tab only opens unfiltered.
   ipcMain.handle("providers:set-namespace", (_event, accountId: string, namespace: string): void =>
-    accounts.setNamespace(accountId, namespace)
+    logFailure("remember the namespace", () => accounts.setNamespace(accountId, namespace))
   );
 
   ipcMain.handle("providers:repos", async (_event, accountId: string): Promise<ListRepositoriesResult> => {
@@ -150,7 +160,10 @@ export function registerProjectsIpc({
     }
   });
 
-  ipcMain.handle("projects:reorder", (_event, projectIds: string[]): void => store.reorder(projectIds));
+  // The sidebar's order, kept for the next start: not kept, only the order is lost.
+  ipcMain.handle("projects:reorder", (_event, projectIds: string[]): void =>
+    logFailure("keep the projects' order", () => store.reorder(projectIds))
+  );
 
   ipcMain.handle("projects:remove", (_event, projectId: string): Promise<GitActionResult> => removeProject(projectDeps, projectId));
 

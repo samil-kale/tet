@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../shared/types";
 import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
-import { isRecord, readJson, saveJson } from "./json-file";
+import { isRecord, logFailure, readJson, writeJson } from "./json-file";
 import { seal, unseal } from "./sealed";
 
 /** What the file holds per project id: each kind's values by env name, encrypted by the OS and
@@ -137,9 +137,10 @@ export class SbxLocalStore {
     return values;
   }
 
-  /** A removed project's values: its sandboxes' names (sbx.ts's sandboxName) never come back. */
+  /** A removed project's values: its sandboxes' names (sbx.ts's sandboxName) never come back. Left
+   *  behind, they are only unused, so a failure is logged: the removal is not undone for it. */
   forgetProject(projectId: string): void {
-    this.setProject(projectId, emptyLocal());
+    logFailure("forget the project's sbx values", () => this.setProject(projectId, emptyLocal()));
   }
 
   /** The project's values as stored, still encrypted — for `restore` when a Save fails
@@ -152,17 +153,19 @@ export class SbxLocalStore {
     this.setProject(projectId, local);
   }
 
-  /** Written only on a change: every SBX Save passes through `update`. */
+  /** Written only on a change: every SBX Save passes through `update`. Throws when the file cannot
+   *  be written, nothing changed. */
   private setProject(projectId: string, local: StoredSbxLocal): void {
     if (JSON.stringify(local) === JSON.stringify(this.projects[projectId] ?? emptyLocal())) {
       return;
     }
-    if (Object.keys(local.secrets).length > 0 || Object.keys(local.variables).length > 0 || local.knowledge) {
-      this.projects[projectId] = local;
-    } else {
-      delete this.projects[projectId];
+    const next = { ...this.projects, [projectId]: local };
+    if (Object.keys(local.secrets).length === 0 && Object.keys(local.variables).length === 0 && !local.knowledge) {
+      delete next[projectId];
     }
-    this.save();
+    // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
+    writeJson(this.file, next);
+    this.projects = next;
   }
 
   private load(file: string): void {
@@ -176,8 +179,4 @@ export class SbxLocalStore {
     }
   }
 
-  private save(): void {
-    // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
-    saveJson(this.file, this.projects, "sbx-local.json");
-  }
 }

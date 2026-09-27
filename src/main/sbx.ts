@@ -270,7 +270,10 @@ export async function checkSbxReady(
   if (notReady !== undefined || !sandboxes) {
     return { notReady: notReady ?? "SBX is not signed in to Docker" };
   }
-  const { blockers, rules } = await readSbxBlockers(projectRefPath, ref);
+  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref);
+  if (failure !== undefined) {
+    return { notReady: `SBX failed: ${failure}` };
+  }
   if (blockers.length > 0) {
     const policy = status.organization ? "your organization's SBX policy" : "SBX's policy";
     return { notReady: `${policy} does not allow ${blockers.map((blocker) => blocker.allow).join("; ")}` };
@@ -285,7 +288,9 @@ export async function checkSbxReady(
 export async function readSbxStatus(projectRefPath: string, ref: ProjectRef): Promise<SbxStatus> {
   const { status } = await probeSbx(true);
   if (status.policyInitialized) {
-    status.blockers = (await readSbxBlockers(projectRefPath, ref)).blockers;
+    const { blockers, failure } = await readSbxBlockers(projectRefPath, ref);
+    status.blockers = blockers;
+    status.failure = failure;
   }
   return status;
 }
@@ -304,18 +309,22 @@ function folderRule(folder: string): string {
  * projectsDir, which covers a worktree TET made as well, read and write. Rules come from one
  * `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
  * for — a tab starts without them. Both questions are asked at once; the rules are returned too,
- * for a spawn's readSbxProblems.
+ * for a spawn's readSbxProblems. Either unanswered is a `failure`, never a blocker: could-not-say
+ * is no refusal, and the rules it would ask for may well be there.
  */
 async function readSbxBlockers(
   projectRefPath: string,
   ref: ProjectRef
-): Promise<{ blockers: SbxBlocker[]; rules?: FilesystemRule[] }> {
+): Promise<{ blockers: SbxBlocker[]; rules?: FilesystemRule[]; failure?: string }> {
   const [channelAllowed, rules] = await Promise.all([isControlChannelAllowed(), readFilesystemRules()]);
+  if (channelAllowed === undefined || rules === undefined) {
+    return { blockers: [], failure: "its policy could not be read" };
+  }
   const blockers: SbxBlocker[] = [];
   if (!channelAllowed) {
     blockers.push({ what: "tet's hooks", allow: "localhost (network, no port)" });
   }
-  const mountable = mountableBy(rules ?? []);
+  const mountable = mountableBy(rules);
   const projects = storageRoot === undefined ? undefined : projectsDir(storageRoot);
   // A worktree TET made lies under projectsDir, which the rule below covers.
   const ownWorktree = ref.worktree !== undefined;
@@ -420,8 +429,9 @@ export async function readGovernance(): Promise<string | undefined> {
   return policy.ok ? parseGovernance(policy.stdout) : undefined;
 }
 
-/** A yes is kept for the run; a no is asked again next spawn, as the policy may change. */
-let controlAllowed: Promise<boolean> | undefined;
+/** A yes is kept for the run; a no, or no answer, is asked again next spawn, as the policy may
+ *  change. */
+let controlAllowed: Promise<boolean | undefined> | undefined;
 
 /**
  * `sbx policy check` asks the same authorizer the sandbox's proxy does, so no matching is
@@ -443,18 +453,22 @@ async function isNetworkAllowed(target: string): Promise<boolean | undefined> {
  * since sbx's proxy rewrites `host.docker.internal` to `localhost` before the policy. Rechecked
  * after the allow, which a deny rule outranks. On a governed account every local `policy allow`
  * fails, so only the organization can allow it — without a port, as the port is probed per run
- * (findControlPort). True without a control channel.
+ * (findControlPort). True without a control channel; undefined where sbx could not say.
  */
-async function isControlChannelAllowed(): Promise<boolean> {
+async function isControlChannelAllowed(): Promise<boolean | undefined> {
   if (!control) {
     return true;
   }
   const resource = `localhost:${control.port}`;
-  controlAllowed ??= (async () =>
-    (await isNetworkAllowed(resource)) === true ||
-    ((await runSbx(["policy", "allow", "network", resource])).ok && (await isNetworkAllowed(resource)) === true))();
+  controlAllowed ??= (async () => {
+    const allowed = await isNetworkAllowed(resource);
+    if (allowed !== false) {
+      return allowed;
+    }
+    return (await runSbx(["policy", "allow", "network", resource])).ok ? isNetworkAllowed(resource) : false;
+  })();
   const allowed = await controlAllowed;
-  if (!allowed) {
+  if (allowed !== true) {
     controlAllowed = undefined;
   }
   return allowed;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import type { ProviderAccount, ProviderId } from "../../shared/types";
-import { isRecord, readJson, saveJson } from "../json-file";
+import { isRecord, readJson, writeJson } from "../json-file";
 import { seal, unseal } from "../sealed";
 import { PROVIDERS } from "./index";
 
@@ -47,14 +47,8 @@ export class AccountStore {
     const existing = this.accounts.find(
       (account) => account.provider === provider && account.host === host && account.user === user
     );
-    if (existing) {
-      existing.token = encrypted;
-      this.save();
-      return toAccount(existing);
-    }
-    const stored: StoredAccount = { id: randomUUID(), provider, host, user, token: encrypted };
-    this.accounts.push(stored);
-    this.save();
+    const stored: StoredAccount = existing ? { ...existing, token: encrypted } : { id: randomUUID(), provider, host, user, token: encrypted };
+    this.save(existing ? this.accounts.map((account) => (account === existing ? stored : account)) : [...this.accounts, stored]);
     return toAccount(stored);
   }
 
@@ -62,14 +56,12 @@ export class AccountStore {
   setNamespace(accountId: string, namespace: string): void {
     const entry = this.find(accountId);
     if (entry) {
-      entry.namespace = namespace;
-      this.save();
+      this.save(this.accounts.map((account) => (account === entry ? { ...entry, namespace } : account)));
     }
   }
 
   remove(accountId: string): void {
-    this.accounts = this.accounts.filter((account) => account.id !== accountId);
-    this.save();
+    this.save(this.accounts.filter((account) => account.id !== accountId));
   }
 
   /** The decrypted token; undefined when it cannot be decrypted. */
@@ -99,8 +91,10 @@ export class AccountStore {
     }
   }
 
-  private save(): void {
+  /** Throws when the file cannot be written, the accounts unchanged. */
+  private save(accounts: StoredAccount[]): void {
     // Renamed into place: `load` reads a half-written file as no accounts, and the next save would keep that.
-    saveJson(this.file, this.accounts, "accounts");
+    writeJson(this.file, accounts);
+    this.accounts = accounts;
   }
 }

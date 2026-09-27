@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
+import { reservedRefusal } from "../../shared/env-rules";
 import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
 import { useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { notifying } from "../git/run-action";
@@ -40,6 +41,18 @@ interface CommandAnswer {
   color: string;
 }
 
+/** Why the typed environment cannot be saved, checked as it is typed: a name TET sets itself. */
+function envRefusal(env: string): string | undefined {
+  return Object.keys(parseEnv(env.trim()) ?? {})
+    .map(reservedRefusal)
+    .find((refused) => refused !== undefined);
+}
+
+/** A dialog's answer that can be saved: a command, and nothing the environment may not set. */
+function commandReady({ command, env }: CommandAnswer): boolean {
+  return filled(command) && envRefusal(env) === undefined;
+}
+
 /** The add and edit dialogs' fields: the command is the one required. */
 const renderCommandFields: PromptOptions<CommandAnswer>["render"] = ({ value, onChange, error, busy, field }) => (
   <>
@@ -68,6 +81,7 @@ const renderCommandFields: PromptOptions<CommandAnswer>["render"] = ({ value, on
       value={value.env}
       placeholder="PROFILE=DEVELOPMENT PORT=8080"
       onChange={(env) => onChange({ ...value, env })}
+      error={envRefusal(value.env)}
     />
     <ColorField
       label="Color (optional)"
@@ -217,7 +231,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
       detail: COMMAND_DETAIL,
       value: { command: "", name: "", cwd: "", env: "", color: "" },
       confirmLabel: "Save",
-      ready: ({ command }) => filled(command),
+      ready: commandReady,
       render: renderCommandFields,
       submit: async (answer) => {
         const command = toCommand(answer);
@@ -249,7 +263,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
         color: command.color ?? ""
       },
       confirmLabel: "Save",
-      ready: ({ command: typed }) => filled(typed),
+      ready: commandReady,
       render: renderCommandFields,
       submit: async (answer) => {
         const current = latestCommands();

@@ -18,7 +18,7 @@ import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import { readHeadBranch, readMainWorktree } from "./git/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
-import { isRecord, readJson, saveJson } from "./json-file";
+import { isRecord, logFailure, readJson, writeJson } from "./json-file";
 import { onDisk } from "./path-inside";
 import { newWorktreeKey, ownedWorktreeKeys, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./project-dirs";
 import { removeRefSandboxes } from "./sbx";
@@ -94,7 +94,12 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
       } catch (error) {
         return { error: `${mainPath}'s git config could not be read: ${errorMessage(error)}` };
       }
-      project = store.add(mainPath, await resolveProjectId(deps, mainPath, stored));
+      const id = await resolveProjectId(deps, mainPath, stored);
+      try {
+        project = store.add(mainPath, id);
+      } catch (error) {
+        return { error: `${path.basename(mainPath)} could not be added: ${errorMessage(error)}` };
+      }
     }
     added.push(...projectRefsOf(project));
     added.forEach((ref) => deps.openProjectRef(ref));
@@ -147,7 +152,9 @@ export async function resolveStoredIds(deps: Pick<ProjectDeps, "store" | "notice
   for (const [index, project] of projects.entries()) {
     const answer = read[index];
     if (answer !== undefined) {
-      deps.store.setId(project.id, await resolveProjectId(deps, project.path, answer.id));
+      const id = await resolveProjectId(deps, project.path, answer.id);
+      // Not kept, it is read from the repository again at the next start.
+      logFailure(`store the id of ${project.name}`, () => deps.store.setId(project.id, id));
     }
   }
 }
@@ -214,7 +221,11 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
       }
     }
     const closing = there ? [main] : [main, ...worktrees];
-    deps.store.remove(projectId);
+    try {
+      deps.store.remove(projectId);
+    } catch (error) {
+      return { ok: false, error: `${project.name} could not be removed: ${errorMessage(error)}` };
+    }
     deps.projectsChanged({ removed: closing });
     await Promise.all(closing.map((ref) => closeProjectRef(deps, ref)));
     deps.sbxLocal.forgetProject(projectId);
@@ -415,8 +426,7 @@ export class ProjectStore implements ProjectLookup {
    *  made for it. */
   add(mainPath: string, id: string): Project {
     const project: Project = { id, path: mainPath, name: path.basename(mainPath), worktrees: this.ownWorktrees(id) };
-    this.projects.push(project);
-    this.save();
+    this.save([...this.projects, project]);
     return project;
   }
 
@@ -426,8 +436,7 @@ export class ProjectStore implements ProjectLookup {
     if (!project || project.id === id) {
       return;
     }
-    this.projects = this.projects.map((entry) => (entry === project ? { ...project, id, worktrees: this.ownWorktrees(id) } : entry));
-    this.save();
+    this.save(this.projects.map((entry) => (entry === project ? { ...project, id, worktrees: this.ownWorktrees(id) } : entry)));
   }
 
   /** Replaces the project's worktrees; whether anything changed. Never stored. */
@@ -441,8 +450,7 @@ export class ProjectStore implements ProjectLookup {
   }
 
   remove(projectId: string): void {
-    this.projects = this.projects.filter((project) => project.id !== projectId);
-    this.save();
+    this.save(this.projects.filter((project) => project.id !== projectId));
   }
 
   /** Unknown ids are dropped, missing ones kept at the end: the renderer's list may lag behind. */
@@ -452,8 +460,7 @@ export class ProjectStore implements ProjectLookup {
       .map((projectId) => known.get(projectId))
       .filter((project): project is Project => project !== undefined);
     const seen = new Set(ordered.map((project) => project.id));
-    this.projects = [...ordered, ...this.projects.filter((project) => !seen.has(project.id))];
-    this.save();
+    this.save([...ordered, ...this.projects.filter((project) => !seen.has(project.id))]);
   }
 
   /** The worktrees TET made for the project, off the disk without git: the first frame has their
@@ -487,12 +494,13 @@ export class ProjectStore implements ProjectLookup {
       });
   }
 
-  private save(): void {
+  /** Throws when the file cannot be written, the projects unchanged. */
+  private save(projects: Project[]): void {
     // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
-    saveJson(
+    writeJson(
       this.file,
-      this.projects.map(({ id, path: mainPath, name }) => ({ id, path: mainPath, name })),
-      "projects"
+      projects.map(({ id, path: mainPath, name }) => ({ id, path: mainPath, name }))
     );
+    this.projects = projects;
   }
 }

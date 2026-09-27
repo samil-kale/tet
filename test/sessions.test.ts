@@ -98,6 +98,9 @@ describe("Claude Code's transcripts", () => {
     // A session that is already gone resolves — see SessionProvider.remove.
     await claudeSessionProvider.remove("claude", cwd, "s");
     await assert.rejects(claudeSessionProvider.rename("claude", cwd, "s", "  "), /non-empty/);
+    // Gone, it is not written back as a session of one title line.
+    await assert.rejects(claudeSessionProvider.rename("claude", cwd, "s", "Renamed"), /Claude session not found/);
+    assert.deepEqual(fs.readdirSync(dir), []);
   });
 
   it("reports when a turn ended without its Stop hooks, and only then", async () => {

@@ -42,7 +42,7 @@ describe("readCommands", () => {
         commands: [
           "npm run build",
           "   ",
-          { command: "npm test", name: " unit ", cwd: "web", env: { A: "1", B: 2 }, shell: true },
+          { command: "npm test", name: " unit ", cwd: "web", env: { A: "1", B: 2, PATH: "/bin", TET_TAB_ID: "x" }, shell: true },
           { command: "", name: "empty" },
           { name: "no command" },
           42,

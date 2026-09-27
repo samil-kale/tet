@@ -175,13 +175,16 @@ async function patchNow(root: string, edit: (content: ProjectFile) => Change[]):
   await writeFileAtomic(file(root), text === null ? `${next}\n` : next, "utf8");
 }
 
-/** Only the string values of an `env`, which outranks the inherited environment. */
+/** Only the string values of an `env`, which outranks the inherited environment — but for the names
+ *  TET sets itself (isReservedName): tet-ctl's PATH and its control channel. */
 function toEnv(value: unknown): Record<string, string> | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
   const env = Object.fromEntries(
-    Object.entries(value).filter((pair): pair is [string, string] => typeof pair[1] === "string")
+    Object.entries(value).filter(
+      (pair): pair is [string, string] => typeof pair[1] === "string" && !isReservedName(pair[0])
+    )
   );
   return Object.keys(env).length > 0 ? env : undefined;
 }

@@ -1093,8 +1093,13 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
     return run(cwd, ["switch", target.name]);
   }
   const tracked = await run(cwd, ["switch", "--track", refName(target)]);
-  // The local branch may have appeared since the last refresh.
-  return tracked.ok ? tracked : run(cwd, ["switch", target.name]);
+  if (tracked.ok) {
+    return tracked;
+  }
+  // The local branch may have appeared since the last refresh. Any other failure is the switch's
+  // own — local changes in the way — and said as git said it.
+  const local = await git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${target.name}`]);
+  return local.code === 0 ? run(cwd, ["switch", target.name]) : tracked;
 }
 
 /**
