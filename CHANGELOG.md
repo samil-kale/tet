@@ -3,6 +3,46 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.13.0 (2026-09-27)
+
+> **Breaking changes.** opencode is no longer supported, and tet's own folder `~/.tet` has a new
+> layout. Read the first two points before updating.
+
+- **opencode removed.** opencode keeps its sessions in a database tet cannot read, so listing
+  them needed session records kept by tet itself and a running opencode for every action on
+  them. That fits neither how tet keeps its data nor how it treats the agents' own sessions, so
+  opencode tabs and sessions are gone from tet; opencode itself is untouched.
+- **New layout of `~/.tet`.** Everything tet keeps of a project now lies in
+  `~/.tet/projects/<id>`, the id stored as `tet.id` in the repository's git config, and a host
+  tab's agent setup once per agent in `~/.tet/config`. What that means for an update:
+  - Worktrees tet made before, under `~/.tet/worktrees`, are no longer its own: they show greyed,
+    don't open, and can't be renamed or deleted from tet. Your files and branches stay.
+  - Sandboxed tabs start in new sandboxes. Sessions run in the old ones are no longer listed, and
+    the old sandboxes stay in sbx until removed (`sbx ls`, `sbx rm`).
+  - `~/.tet/agent-data` is no longer used.
+
+  To move your old worktrees over, start tet 0.13.0, open a shell or agent tab in the project and
+  give an agent this prompt:
+
+  ```
+  tet changed its data folder. For every worktree of this repository under ~/.tet/worktrees
+  (git worktree list): read the project id with `git config tet.id` in the repository, pick a
+  new key of 8 random hex digits, and move it with `git worktree move <old path>
+  ~/.tet/projects/<id>/worktrees/<key>`. Stop and ask me if one is locked or git refuses. Once
+  none is left, delete ~/.tet/worktrees and ~/.tet/agent-data, then tell me to restart tet.
+  ```
+- **Worktrees go with their project.** Renaming a worktree renames its branch and keeps its
+  folder and terminals running. Removing a project deletes the worktrees tet made, with their
+  branches, after asking.
+- **A broken `tet.json` is never overwritten.** A project whose `tet.json` can't be read isn't
+  opened until it is fixed; one broken while open keeps its last readable version, said in a
+  notice.
+- **Dialogs finish what they run.** A dialog stays up until its save or git command is done.
+  Cancel stops what waits on something else: a suggested commit message, the repository listing
+  and the sandbox setup and sign-in.
+- **Fixes.** Deleting a worktree removes its agents' sessions. Worktrees of one project share
+  one periodic fetch, and sandbox saves of one project no longer run over each other.
+
 ## 0.12.1 (2026-09-26)
 
 - **Dialogs keep the keyboard.** Tab no longer leaves an open dialog for the terminal or editor
