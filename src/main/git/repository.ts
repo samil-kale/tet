@@ -166,7 +166,10 @@ export class Repository {
      *  refresh reports, so the editor tab would go stale. */
     private readonly onFileChanged: (filePath: string) => void,
     /** The logins for the remotes, typed or kept (`network`). */
-    private readonly logins: GitLoginStore
+    private readonly logins: GitLoginStore,
+    /** The project's other open repository and worktrees: one git directory, so the periodic fetch
+     *  skips a turn while a command runs in any of them, and a command in any waits for it. */
+    private readonly siblings: () => Repository[] = () => []
   ) {}
 
   /** The files the project's editor tabs show. A pending report for a file just closed is
@@ -210,7 +213,10 @@ export class Repository {
       return;
     }
     this.startWatching();
-    this.autoFetchTimer = setInterval(() => void this.autoFetch(), AUTO_FETCH_INTERVAL_MS);
+    // The repository's alone: its worktrees share its refs, and their watchers see a fetch land.
+    if (this.at.ref.worktree === undefined) {
+      this.autoFetchTimer = setInterval(() => void this.autoFetch(), AUTO_FETCH_INTERVAL_MS);
+    }
   }
 
   /** Everything read out of the repository's config rather than per refresh. */
@@ -226,9 +232,11 @@ export class Repository {
   }
 
   /** The periodic fetch. Silent on failure, or an offline machine gets a notice every ten minutes.
-   *  It doesn't take the action slot — a click during it waits. */
+   *  It doesn't take the action slot — a click during it waits, in a worktree too — and skips a
+   *  turn while a command runs anywhere in the project. */
   private async autoFetch(): Promise<void> {
-    if (this.actionRunning || this.autoFetching || this.state.remotes.length === 0) {
+    const running = this.actionRunning || this.siblings().some((sibling) => sibling.actionRunning);
+    if (running || this.autoFetching || this.state.remotes.length === 0) {
       return;
     }
     // With a kept login, never a typed one: nothing is asked in the background.
@@ -359,9 +367,10 @@ export class Repository {
       // Within `exclusive`: its hold is this command's, and it refreshes once all have run.
       return action().catch(failure);
     }
-    // The periodic fetch holds the lock too; a click waits for it rather than fails.
-    while (this.autoFetching) {
-      await this.autoFetching;
+    // The periodic fetch holds the lock too, the repository's for its worktrees as well; a click
+    // waits for it rather than fails.
+    for (let fetching = this.fetchUnderway(); fetching; fetching = this.fetchUnderway()) {
+      await fetching;
     }
     // Closed meanwhile: dispose() resolved once the fetch ended, and a worktree's folder may now be
     // being removed — git started in it would fail it on win32 ("Permission denied").
@@ -381,6 +390,11 @@ export class Repository {
     } finally {
       this.actionRunning = false;
     }
+  }
+
+  /** The periodic fetch underway in this project, its own or the repository's. */
+  private fetchUnderway(): Promise<void> | undefined {
+    return this.autoFetching ?? this.siblings().find((sibling) => sibling.autoFetching)?.autoFetching;
   }
 
   /**
@@ -1040,7 +1054,7 @@ export class RepositoryManager {
     if (existing) {
       return existing;
     }
-    const repository = new Repository(
+    const repository: Repository = new Repository(
       resolved,
       (worktreePath) => worktreeKeyOf(this.dataRoot, ref.projectId, worktreePath),
       (state) => this.onState(ref, state),
@@ -1053,7 +1067,8 @@ export class RepositoryManager {
       },
       () => this.onFilesChanged(ref),
       (filePath) => this.onFileChanged(ref, filePath),
-      this.logins
+      this.logins,
+      () => [...this.repositories.values()].filter((other) => other !== repository && other.at.ref.projectId === ref.projectId)
     );
     this.repositories.set(projectRefKey(ref), repository);
     void repository.start();

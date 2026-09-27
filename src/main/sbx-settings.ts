@@ -61,6 +61,9 @@ export async function readProjectSbxProblems(
   return checkProject(project, config, knowledge, values, await organizationOf(status));
 }
 
+/** The Save underway per project (saveProjectSbx). */
+const saves = new Map<string, Promise<unknown>>();
+
 /**
  * The SBX Settings' Save, for both transports: the dialog (ipc/sbx.ts) and `tet-ctl`'s `sbx-set-*`
  * verbs. Stores the typed values first, so a machine without a keyring changes nothing. A row that
@@ -69,9 +72,31 @@ export async function readProjectSbxProblems(
  * keep a value here. `problems` says what was left out; sbx's refusals are the error as well, as
  * nothing marked them before. Notices for the sandboxes it removed. `status`: the caller's, when it
  * read one. The project's worktrees take its tet.json (tet-json.ts's configRoot), so their
- * sandboxes are saved along.
+ * sandboxes are saved along. One Save at a time per project, each after the last however that one
+ * ended: two at once would apply their rows to the same sandboxes interleaved, and leave them
+ * matching neither's tet.json.
  */
-export async function saveProjectSbx(
+export function saveProjectSbx(
+  deps: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
+  project: Project,
+  request: SbxProjectConfig,
+  local: SbxLocalSave,
+  status?: Pick<SbxStatus, "organization">
+): Promise<SbxSaveResult> {
+  const turn = (saves.get(project.id) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => saveNow(deps, project, request, local, status));
+  saves.set(project.id, turn);
+  const forget = (): void => {
+    if (saves.get(project.id) === turn) {
+      saves.delete(project.id);
+    }
+  };
+  turn.then(forget, forget);
+  return turn;
+}
+
+async function saveNow(
   { sbxLocal, notice }: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
   project: Project,
   request: SbxProjectConfig,
