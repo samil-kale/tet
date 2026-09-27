@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.14.0 (2026-09-27)
+
+- **Hand a session over to another agent.** An agent tab's menu offers "Hand over to …" for every
+  other installed agent: a new tab of that agent reads the session so far and carries on, e.g.
+  when the first one reached its usage limit. The first tab stays.
+- **Agents give each other work.** Through `tet-ctl`, an agent can open another agent's tab with
+  a first prompt (`tabs-create --prompt`), hand a tab's session over (`tabs-handoff`), and press
+  keys in another tab to answer its questions (`tabs-keys`, replacing `tabs-send`).
+
 ## 0.13.0 (2026-09-27)
 
 > **Breaking changes.** opencode is no longer supported, and tet's own folder `~/.tet` has a new
