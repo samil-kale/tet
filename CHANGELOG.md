@@ -11,7 +11,7 @@ changed for the user, not the commit list.
 - **opencode removed.** opencode behaves fundamentally differently from the other agents, which
   makes it impossible to integrate without a lot of workarounds. With opencode 2 already on its
   way, I decided to drop its support. As nobody but me uses tet anyway, this shouldn't be a
-  problem. opencode itself is untouched.
+  problem.
 - **New layout of `~/.tet`.** Everything tet keeps of a project now lies in
   `~/.tet/projects/<id>`, the id stored as `tet.id` in the repository's git config, and a host
   tab's agent setup once per agent in `~/.tet/config`. What that means for an update:
