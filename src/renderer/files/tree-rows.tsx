@@ -1,3 +1,4 @@
+import type { MouseEvent, ReactNode, Ref } from "react";
 import { FILE_EXTENSIONS, FILE_NAMES, type FileMark } from "./file-icons";
 import { ChevronIcon, TREE_CHEVRON } from "../ui/icons";
 
@@ -42,6 +43,53 @@ const TWISTIE_GAP = 4;
 /** A match row starts a pixel past its file row's label (`INDENT_BASE` plus the twistie and its
  *  gap): the line it found gets the width the rest of the nesting would have eaten. */
 export const MATCH_INDENT = INDENT_BASE + TWISTIE_WIDTH + TWISTIE_GAP + 1;
+
+/**
+ * A row of a tree or list (`.tree-item`), in the branch tree, the Explorer, SEARCH and LOCAL
+ * CHANGES alike: what leads it (`icon`: an icon, a twistie, a status letter), its label, then what
+ * trails it (`children`: counts, a folder, a branch's base). `indent` is its left padding.
+ */
+export function TreeRow({
+  icon,
+  label,
+  children,
+  className,
+  indent,
+  title,
+  onClick,
+  onDoubleClick,
+  onContextMenu,
+  ref
+}: {
+  icon?: ReactNode;
+  label: ReactNode;
+  children?: ReactNode;
+  /** Beside `tree-item`: `current`, `selected`, the view's own. */
+  className?: string;
+  indent?: number;
+  title?: string;
+  onClick?: (event: MouseEvent) => void;
+  onDoubleClick?: () => void;
+  onContextMenu?: (event: MouseEvent) => void;
+  ref?: Ref<HTMLButtonElement>;
+}) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={className ? `tree-item ${className}` : "tree-item"}
+      style={indent === undefined ? undefined : { paddingLeft: indent }}
+      title={title}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onContextMenu={onContextMenu}
+    >
+      {icon}
+      <span className="tree-label">{label}</span>
+      {children}
+    </button>
+  );
+}
 
 /** A folder's or a result file's chevron, in the box the labels are measured against. */
 export function Twistie({ open }: { open: boolean }) {

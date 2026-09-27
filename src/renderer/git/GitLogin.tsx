@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import { urlUsername } from "../../shared/git-url";
 import type { GitLogin } from "../../shared/types";
-import { filled, prompt, questionUp } from "../ui/Dialog";
+import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
 import { TextField } from "../ui/Field";
 import { notify } from "../ui/Notices";
 
@@ -72,8 +72,7 @@ export async function askLogin(
   refused: string,
   retry: (login: GitLogin) => Promise<string | undefined>
 ): Promise<void> {
-  if (questionUp()) {
-    notify("error", refused);
+  if (followUpHeldBack(refused)) {
     return;
   }
   // Escape while the second try runs closes the question too: that try's outcome is then the

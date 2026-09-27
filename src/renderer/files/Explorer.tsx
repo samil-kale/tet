@@ -17,9 +17,9 @@ import {
   rootIndexFor,
   type TreeNode
 } from "./explorer-tree";
-import { FileMarkIcon, INDENT_BASE, INDENT_STEP, Twistie } from "./tree-rows";
+import { FileMarkIcon, INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "./tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirm } from "../ui/Dialog";
+import { askName, confirmed } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 
 interface RowsProps {
@@ -42,7 +42,7 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
         const open = forceExpanded || isOpen(node, expanded);
         return (
           <div key={node.id}>
-            <button
+            <TreeRow
               ref={(element) => {
                 if (element) {
                   rows.set(node.id, element);
@@ -50,18 +50,17 @@ function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen,
                   rows.delete(node.id);
                 }
               }}
-              className={`tree-item${!isFolder && selected === node.path ? " selected" : ""}`}
-              style={{ paddingLeft: INDENT_BASE + depth * INDENT_STEP }}
+              className={!isFolder && selected === node.path ? "selected" : undefined}
+              indent={INDENT_BASE + depth * INDENT_STEP}
               title={node.path || "."}
               onClick={() => (isFolder ? toggle(node) : onOpen(node.path))}
               // VS Code: a single click previews, a double click keeps. The clicks before it
               // already opened the file, so this only keeps.
               onDoubleClick={() => !isFolder && onOpen(node.path, { keep: true })}
               onContextMenu={(event) => onContextMenu(event, node)}
-            >
-              {isFolder ? <Twistie open={open} /> : <FileMarkIcon name={node.name} />}
-              <span className="tree-label">{node.name}</span>
-            </button>
+              icon={isFolder ? <Twistie open={open} /> : <FileMarkIcon name={node.name} />}
+              label={node.name}
+            />
             {isFolder && open && (
               <Rows
                 nodes={node.children!}
@@ -270,13 +269,13 @@ export const Explorer = memo(function Explorer({
   // menu would otherwise take a folder out from under a running agent.
   const askDelete = async (node: TreeNode): Promise<void> => {
     const isFolder = node.children !== undefined;
-    const answer = await confirm({
+    const answer = await confirmed({
       title: isFolder ? "Delete folder" : "Delete file",
       message: `Are you sure you want to delete ${node.path}?`,
       detail: "Goes to the trash and can be restored from there.",
       confirmLabel: "Delete"
     });
-    if (answer.confirmed) {
+    if (answer) {
       run(() => window.tet.repository.deletePath(resolved.ref, node.path));
     }
   };

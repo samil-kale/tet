@@ -12,6 +12,7 @@ import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../diff/editor-views";
+import { IconButton } from "../ui/IconButton";
 import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon } from "../ui/icons";
 import { SessionMark } from "../ui/SessionMark";
 import { ProgressBar } from "../ui/ProgressBar";
@@ -406,23 +407,23 @@ export const Pane = memo(function Pane({
         {/* Window chrome, on pane "a" alone. */}
         {chrome && (
           <div className="tab-strip-actions">
-            <button
-              className={`icon-button${chrome.sideView === "git" ? " active" : ""}`}
+            <IconButton
+              active={chrome.sideView === "git"}
               onClick={() => chrome.onToggleSideView("git")}
               title={chrome.sideView === "git" ? "Hide the repository" : "Show the repository"}
             >
               <GitIcon />
-            </button>
-            <button
-              className={`icon-button${chrome.sideView === "files" ? " active" : ""}`}
+            </IconButton>
+            <IconButton
+              active={chrome.sideView === "files"}
               onClick={() => chrome.onToggleSideView("files")}
               title={chrome.sideView === "files" ? "Hide the files" : "Show the files"}
             >
               <FilesIcon />
-            </button>
-            <button className="icon-button" title="Settings" onClick={chrome.onOpenSettings}>
+            </IconButton>
+            <IconButton title="Settings" onClick={chrome.onOpenSettings}>
               <GearIcon />
-            </button>
+            </IconButton>
           </div>
         )}
         <div className="tabs" ref={strip}>
@@ -478,8 +479,7 @@ export const Pane = memo(function Pane({
               ) : (
                 <span className="tab-label">{tabLabel(tab)}</span>
               )}
-              <button
-                className="icon-button"
+              <IconButton
                 title={
                   isEditorTab(tab)
                     ? "Close file"
@@ -487,13 +487,11 @@ export const Pane = memo(function Pane({
                       ? "Close tab and delete its session"
                       : "Close tab"
                 }
-                onClick={(event) => {
-                  event.stopPropagation();
-                  closeTabs([tab.tabId]);
-                }}
+                isolated
+                onClick={() => closeTabs([tab.tabId])}
               >
                 <CloseIcon />
-              </button>
+              </IconButton>
             </div>
           ))}
         </div>

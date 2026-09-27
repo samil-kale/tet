@@ -1,6 +1,8 @@
 import type { ReactNode, Ref } from "react";
 import { overridesMachineNote } from "../../shared/types";
+import { ActionLink } from "./ActionLink";
 import { FieldGroup } from "./Field";
+import { IconButton } from "./IconButton";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 
 /** A row as a dialog's fields hold it: the saved shape plus a local React key, never sent anywhere. */
@@ -29,6 +31,22 @@ export function atLeastOne<T>(rows: Row<T>[], blank: T): Row<T>[] {
 }
 
 /**
+ * What a section of typed rows adds and removes, named by `noun` ("+ Add port", "Remove port"):
+ * `add` for `RowSection`, `remove(id)` spread onto each `EditRow`. A removed last row leaves `blank`
+ * in its place (`atLeastOne`), the row "+ Add" makes too. `change` edits the rows.
+ */
+export function typedRows<T>(
+  noun: string,
+  blank: T,
+  change: (update: (rows: Row<T>[]) => Row<T>[]) => void
+): { add: ReactNode; remove: (id: string) => { remove: string; onRemove: () => void } } {
+  return {
+    add: <ActionLink onClick={() => change((rows) => [...rows, withId(blank)])}>+ Add {noun}</ActionLink>,
+    remove: (id) => ({ remove: `Remove ${noun}`, onRemove: () => change((rows) => atLeastOne(without(rows, id), blank)) })
+  };
+}
+
+/**
  * A section's row: its fields, then the mark saying what is wrong with it, then its remove button —
  * none for a row that is asked for rather than kept (EnvDialog). The mark takes its room from the
  * field before it (styles.css), so nothing else in the row moves.
@@ -46,8 +64,44 @@ export function EditRow({
     <div className="edit-row">
       {children}
       <RowMark title={mark} />
-      {onRemove && <RemoveRow title={remove} onClick={onRemove} />}
+      {onRemove && (
+        <IconButton title={remove} onClick={onRemove}>
+          <CloseIcon />
+        </IconButton>
+      )}
     </div>
+  );
+}
+
+/** A row's text field: taking the row's free room, a fixed width (`fixed`), or a port's (`port`,
+ *  digits on a touch keyboard). */
+export function RowInput({
+  width = "fill",
+  placeholder,
+  title,
+  disabled,
+  value,
+  onChange
+}: {
+  width?: "fill" | "fixed" | "port";
+  placeholder?: string;
+  title?: string;
+  disabled?: boolean;
+  value: string;
+  /** Left out for a field that only shows (`disabled`). */
+  onChange?: (value: string) => void;
+}) {
+  return (
+    <input
+      className={width === "port" ? "sbx-port-input" : `row-${width}-input`}
+      type="text"
+      inputMode={width === "port" ? "numeric" : undefined}
+      placeholder={placeholder}
+      title={title}
+      disabled={disabled}
+      value={value}
+      onChange={onChange && ((event) => onChange(event.target.value))}
+    />
   );
 }
 
@@ -104,14 +158,6 @@ export function RowMark({ title }: { title: string | undefined }) {
     <span className="row-mark" title={title}>
       <CircleAlertIcon />
     </span>
-  );
-}
-
-function RemoveRow({ title, onClick }: { title: string; onClick: () => void }) {
-  return (
-    <button type="button" className="icon-button" title={title} onClick={onClick}>
-      <CloseIcon />
-    </button>
   );
 }
 

@@ -4,8 +4,9 @@ import { projectRefKey, projectRef, defaultRemote, refName, upstreamName, worktr
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import type { GitRun } from "./run-action";
+import { TreeRow } from "../files/tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirm, filled, prompt, questionUp } from "../ui/Dialog";
+import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
@@ -207,13 +208,14 @@ export const BranchTree = memo(function BranchTree({
   };
 
   const askDeleteRemoteBranch = async (from: string, name: string): Promise<void> => {
-    const answer = await confirm({
-      title: "Delete remote branch",
-      message: `Are you sure you want to delete ${name} on ${from}?`,
-      detail: COMMITS_LOST,
-      confirmLabel: "Delete branch"
-    });
-    if (answer.confirmed) {
+    if (
+      await confirmed({
+        title: "Delete remote branch",
+        message: `Are you sure you want to delete ${name} on ${from}?`,
+        detail: COMMITS_LOST,
+        confirmLabel: "Delete branch"
+      })
+    ) {
       branch.run(`Deleting ${from}/${name}...`, (login) => repository.deleteRemoteBranch(at, from, name, login));
     }
   };
@@ -232,17 +234,17 @@ export const BranchTree = memo(function BranchTree({
   const askRebasePushed = async (ref: string): Promise<void> => {
     const message = `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream}.`;
     // Not asked while another question is up (`askLogin`): the rebase's refusal is told instead.
-    if (questionUp()) {
-      notify("error", message);
-      return;
-    }
-    const answer = await confirm({
-      title: "Rebase",
-      message,
-      detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
-      confirmLabel: "Rebase"
-    });
-    if (answer.confirmed) {
+    if (
+      await confirmedFollowUp(
+        {
+          title: "Rebase",
+          message,
+          detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
+          confirmLabel: "Rebase"
+        },
+        message
+      )
+    ) {
       rebaseOnto(ref, true);
     }
   };
@@ -296,13 +298,14 @@ export const BranchTree = memo(function BranchTree({
   };
 
   const askDropStash = async (stash: StashEntry): Promise<void> => {
-    const answer = await confirm({
-      title: "Drop stash",
-      message: `Are you sure you want to drop ${stash.ref}?`,
-      detail: stash.message,
-      confirmLabel: "Drop stash"
-    });
-    if (answer.confirmed) {
+    if (
+      await confirmed({
+        title: "Drop stash",
+        message: `Are you sure you want to drop ${stash.ref}?`,
+        detail: stash.message,
+        confirmLabel: "Drop stash"
+      })
+    ) {
       branch.run(`Dropping ${stash.ref}...`, () => repository.stash(at, "drop", stash.sha));
     }
   };
@@ -462,15 +465,15 @@ export const BranchTree = memo(function BranchTree({
             localBranches.map((localBranch) => {
               const status = track(localBranch);
               return (
-                <button
+                <TreeRow
                   key={localBranch}
-                  className={`tree-item${isCurrent(localBranch) ? " current" : ""}`}
+                  className={isCurrent(localBranch) ? "current" : undefined}
                   title="Double-click to check out"
                   onDoubleClick={() => checkout({ name: localBranch })}
                   onContextMenu={(event) => menu.open(event, { kind: "branch", name: localBranch })}
+                  icon={<BranchIcon className="tree-icon" />}
+                  label={localBranch}
                 >
-                  <BranchIcon className="tree-icon" />
-                  <span className="tree-label">{localBranch}</span>
                   {status && (status.ahead > 0 || status.behind > 0) && (
                     <span className="tree-track">
                       {status.ahead > 0 && (
@@ -487,7 +490,7 @@ export const BranchTree = memo(function BranchTree({
                       )}
                     </span>
                   )}
-                </button>
+                </TreeRow>
               );
             })}
         />
@@ -499,19 +502,19 @@ export const BranchTree = memo(function BranchTree({
           onToggle={() => toggle("worktrees")}
           rows={() =>
             worktrees.map((worktree) => (
-              <button
+              <TreeRow
                 key={worktree.path}
-                className={`tree-item${worktree.current ? " current" : ""}`}
+                className={worktree.current ? "current" : undefined}
                 title={`${worktree.path}${worktree.key === undefined ? `\nA worktree ${NOT_MADE_BY_TET}` : worktree.current ? "" : "\nDouble-click to open"}`}
                 onDoubleClick={() => !worktree.current && worktree.key !== undefined && openWorktree(worktree)}
                 onContextMenu={(event) => menu.open(event, { kind: "worktree", worktree })}
+                icon={<WorktreeIcon className="tree-icon" />}
+                label={worktreeName(worktree)}
               >
-                <WorktreeIcon className="tree-icon" />
-                <span className="tree-label">{worktreeName(worktree)}</span>
                 {(worktree.branch === undefined || worktree.base) && (
                   <span className="tree-extra">{worktree.branch === undefined ? "detached" : worktree.base}</span>
                 )}
-              </button>
+              </TreeRow>
             ))}
         />
 
@@ -523,26 +526,32 @@ export const BranchTree = memo(function BranchTree({
           rows={() =>
             remotes.map((entry) => (
               <div key={entry.name}>
-                <button className="tree-item remote" onClick={() => toggle(`remote:${entry.name}`)}>
-                  <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} className="tree-icon" scale={TREE_CHEVRON} />
-                  <RemoteIcon className="tree-icon" />
-                  <span className="tree-label">{entry.name}</span>
+                <TreeRow
+                  className="remote"
+                  onClick={() => toggle(`remote:${entry.name}`)}
+                  icon={
+                    <>
+                      <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} className="tree-icon" scale={TREE_CHEVRON} />
+                      <RemoteIcon className="tree-icon" />
+                    </>
+                  }
+                  label={entry.name}
+                >
                   <span className="count-badge">({entry.branches.length})</span>
-                </button>
+                </TreeRow>
                 {!isCollapsed(`remote:${entry.name}`) &&
                   entry.branches.map((remoteBranch) => (
-                    <button
+                    <TreeRow
                       key={remoteBranch}
-                      className="tree-item nested"
+                      className="nested"
                       title="Double-click to check out"
                       onDoubleClick={() => checkout({ name: remoteBranch, remote: entry.name })}
                       onContextMenu={(event) =>
                         menu.open(event, { kind: "branch", name: remoteBranch, remote: entry.name })
                       }
-                    >
-                      <BranchIcon className="tree-icon" />
-                      <span className="tree-label">{remoteBranch}</span>
-                    </button>
+                      icon={<BranchIcon className="tree-icon" />}
+                      label={remoteBranch}
+                    />
                   ))}
               </div>
             ))}
@@ -555,16 +564,14 @@ export const BranchTree = memo(function BranchTree({
           onToggle={() => toggle("tags")}
           rows={() =>
             tags.map((tag) => (
-              <button
+              <TreeRow
                 key={tag}
-                className="tree-item"
                 title="Double-click to check out"
                 onDoubleClick={() => checkoutTag(tag)}
                 onContextMenu={(event) => menu.open(event, { kind: "tag", name: tag })}
-              >
-                <TagIcon className="tree-icon" />
-                <span className="tree-label">{tag}</span>
-              </button>
+                icon={<TagIcon className="tree-icon" />}
+                label={tag}
+              />
             ))}
         />
 
@@ -575,16 +582,14 @@ export const BranchTree = memo(function BranchTree({
           onToggle={() => toggle("stashes")}
           rows={() =>
             state.stashes.map((stash) => (
-              <button
+              <TreeRow
                 key={stash.ref}
-                className="tree-item"
                 // No double-click: apply and drop sit one right-click apart, and a drop is final.
                 title={`${stash.ref}: ${stash.message}\nRight-click to apply, pop or drop it`}
                 onContextMenu={(event) => menu.open(event, { kind: "stash", stash })}
-              >
-                <StashIcon className="tree-icon" />
-                <span className="tree-label">{stash.message}</span>
-              </button>
+                icon={<StashIcon className="tree-icon" />}
+                label={stash.message}
+              />
             ))}
         />
       </div>

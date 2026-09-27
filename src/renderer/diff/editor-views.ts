@@ -2,7 +2,7 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import { projectRefKey } from "../../shared/types";
 import type { ProjectRef, FileContent } from "../../shared/types";
 import { isMac } from "../platform";
-import { confirm, questionUp } from "../ui/Dialog";
+import { confirmed, confirmedFollowUp } from "../ui/Dialog";
 import { layoutKey } from "../ui/layout-storage";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
@@ -535,17 +535,20 @@ export async function saveEditorFile(tabId: string): Promise<void> {
     return;
   }
   // Changed on disk meanwhile (an agent wrote it): overwritten only once asked — the other version
-  // is gone then. With another question up, told as before.
-  if (!result.ok && result.diskMtimeMs !== undefined && !questionUp()) {
-    const answer = await confirm({
-      title: "File changed on disk",
-      message: `${path} changed on disk since it was opened. Overwrite it with your changes?`,
-      confirmLabel: "Overwrite"
-    });
+  // is gone then. With another question up, told instead.
+  if (!result.ok && result.diskMtimeMs !== undefined) {
+    const overwrite = await confirmedFollowUp(
+      {
+        title: "File changed on disk",
+        message: `${path} changed on disk since it was opened. Overwrite it with your changes?`,
+        confirmLabel: "Overwrite"
+      },
+      result.error ?? "Could not save the file"
+    );
     if (views.get(tabId) !== view || view.readSeq !== seq) {
       return;
     }
-    if (!answer.confirmed) {
+    if (!overwrite) {
       publish(view, { saving: false });
       return;
     }
@@ -579,12 +582,11 @@ export async function canDiscardEdits(tabIds: string[]): Promise<boolean> {
   if (paths.length === 0) {
     return true;
   }
-  const answer = await confirm({
+  return confirmed({
     title: "Unsaved changes",
     message: `Discard unsaved changes to ${paths.join(", ")}?`,
     confirmLabel: "Discard changes"
   });
-  return answer.confirmed;
 }
 
 /** `canDiscardEdits` over every editor tab of the repositories and worktrees. */

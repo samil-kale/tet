@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { errorMessage } from "../../shared/errors";
 import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../../shared/types";
 import type { Project, SbxBlocker, SbxKnowledgeSource, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
@@ -16,7 +16,7 @@ import {
 } from "./SbxSettingsFields";
 import { SbxAccounts, accountsBlocked, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
 import { DialogFrame, SaveButton, useCancel, useSubmit } from "../ui/DialogFrame";
-import { confirm, refusal } from "../ui/Dialog";
+import { confirmed, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox, DialogError } from "../ui/Field";
 import { useRunning } from "../ui/use-running";
@@ -183,7 +183,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  the marked ones left out (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx
    *  refuses only then goes in the button row: the rows it is about may be on another tab, and
    *  their own marks say which (`tabMarks`). Not signed in, or blocked, only the tokens are saved. */
-  const { busy: saving, refused, submit: save, clear } = useSubmit(async () => {
+  const { busy: saving, refused, submit: save, changing } = useSubmit(async () => {
     const tokensRefused = await window.tet.sbx.saveAccounts(toAccountEdits(accounts));
     if (tokensRefused !== undefined) {
       return tokensRefused;
@@ -198,19 +198,12 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   // or a sign-out is not, so it finishes first.
   const holding = saving || signingOut;
   const cancel = useCancel(onClose, holding, window.tet.sbx.cancelSetup);
-  const editState: typeof setState = (update) => {
-    setState(update);
-    clear();
-  };
-  const editEnabled = (next: boolean): void => {
-    setEnabled(next);
-    clear();
-  };
-  const editAccounts: typeof setAccounts = (update) => {
+  const editState = changing(setState);
+  const editEnabled = changing(setEnabled);
+  const editAccounts = changing((update: SetStateAction<AccountRow[]>) => {
     setAccounts(update);
     setAccountError(undefined);
-    clear();
-  };
+  });
 
   /** "Check again", or after a sign-in or sign-out (`run`), whatever its outcome: the policy and
    *  its blockers are the account's, and a sign-in whose token could not be kept went through. */
@@ -244,13 +237,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       }
     });
   const signOut = async (): Promise<void> => {
-    const answer = await confirm({
+    const answer = await confirmed({
       title: "Sign out of Docker",
       message: "Sign out of Docker?",
       detail: "Every running sandbox stops, in every project.",
       confirmLabel: "Sign out"
     });
-    if (!answer.confirmed) {
+    if (!answer) {
       return;
     }
     await recheck(async () => {

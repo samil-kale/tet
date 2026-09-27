@@ -7,6 +7,7 @@ import { FileSearch, searchSummary, type FileSearchHandle } from "./FileSearch";
 import { useFileAct } from "../git/run-action";
 import { useFileSearch } from "./use-file-search";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
+import { IconButton } from "../ui/IconButton";
 import { ClearIcon, CollapseAllIcon, ExpandAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
 import { Section } from "../ui/Section";
 
@@ -82,38 +83,34 @@ export const FilesPane = memo(function FilesPane({
         busy={showProgress}
         actions={
           <>
-            <button
-              className="icon-button"
+            <IconButton
               title="New File..."
               disabled={acting || !explorerListing}
               onClick={() => explorerRef.current?.newFile()}
             >
               <NewFileIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title="New Folder..."
               disabled={acting || !explorerListing}
               onClick={() => explorerRef.current?.newFolder()}
             >
               <NewFolderIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title="Clear Filter"
               disabled={!filtering}
               onClick={() => explorerRef.current?.clearFilter()}
             >
               <ClearIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title="Collapse Folders in Explorer"
               disabled={!explorerListing}
               onClick={() => explorerRef.current?.collapseAll()}
             >
               <CollapseAllIcon />
-            </button>
+            </IconButton>
           </>
         }
       >
@@ -150,22 +147,20 @@ export const FilesPane = memo(function FilesPane({
         height={searchHeight}
         actions={
           <>
-            <button
-              className="icon-button"
+            <IconButton
               title="Clear Search Results"
               disabled={searchResult === undefined}
               onClick={() => searchRef.current?.clear()}
             >
               <ClearIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title={allFolded ? "Expand All" : "Collapse All"}
               disabled={searchResult === undefined || searchResult.files.length === 0}
               onClick={() => searchRef.current?.toggleAll()}
             >
               {allFolded ? <ExpandAllIcon /> : <CollapseAllIcon />}
-            </button>
+            </IconButton>
           </>
         }
       >

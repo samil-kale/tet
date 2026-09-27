@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { DialogError } from "./Field";
+import { IconButton } from "./IconButton";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
 import { useEscape } from "./use-escape";
@@ -10,13 +11,18 @@ import { useCoversWindow } from "./window-covered";
  * A dialog's answer as it runs (`PromptOptions.submit`): `run` answers what refused it, or nothing
  * once it went through, and `onDone` follows (closing the dialog). `busy` is the frame's bar
  * meanwhile; `refused` is the frame's `error` (or a field's), held so what was typed can be
- * corrected, and cleared by `clear` on the next change — which is about to make it wrong. The one
- * rule for every dialog, question and card alike.
+ * corrected, and cleared by the next change — which is about to make it wrong: every edit goes
+ * through a setter wrapped in `changing`. The one rule for every dialog, question and card alike.
  */
 export function useSubmit(
   run: () => Promise<string | undefined>,
   onDone?: () => void
-): { busy: boolean; refused: string | undefined; submit: () => Promise<void>; clear: () => void } {
+): {
+  busy: boolean;
+  refused: string | undefined;
+  submit: () => Promise<void>;
+  changing: <A extends unknown[]>(set: (...args: A) => void) => (...args: A) => void;
+} {
   const { running: busy, run: holdBusy } = useRunning();
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const submit = async (): Promise<void> => {
@@ -31,8 +37,13 @@ export function useSubmit(
       setRefused(message);
     }
   };
-  const clear = useCallback(() => setRefused(undefined), []);
-  return { busy, refused, submit, clear };
+  const changing =
+    <A extends unknown[]>(set: (...args: A) => void) =>
+    (...args: A): void => {
+      set(...args);
+      setRefused(undefined);
+    };
+  return { busy, refused, submit, changing };
 }
 
 /** A card dialog's cancel for ×, its Cancel button and Escape alike: nothing while `locked` (the
@@ -191,15 +202,9 @@ export function DialogFrame<T extends string>({
             </button>
           ))}
           {header.onClose && (
-            <button
-              type="button"
-              className="icon-button dialog-tabs-close"
-              title="Close"
-              disabled={locked}
-              onClick={header.onClose}
-            >
+            <IconButton className="dialog-tabs-close" title="Close" disabled={locked} onClick={header.onClose}>
               <CloseIcon />
-            </button>
+            </IconButton>
           )}
           {busy && <ProgressBar />}
         </div>
@@ -207,9 +212,9 @@ export function DialogFrame<T extends string>({
         <div className="dialog-bar">
           <span className="dialog-title">{header.title}</span>
           {header.onClose && (
-            <button type="button" className="icon-button" title="Close" disabled={locked} onClick={header.onClose}>
+            <IconButton title="Close" disabled={locked} onClick={header.onClose}>
               <CloseIcon />
-            </button>
+            </IconButton>
           )}
           {busy && <ProgressBar />}
         </div>

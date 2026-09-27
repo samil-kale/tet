@@ -3,11 +3,12 @@ import { useLatest } from "../ui/use-latest";
 import type { AddRepositoryResult, GitLogin, ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types";
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { ActionLink } from "../ui/ActionLink";
-import { confirm } from "../ui/Dialog";
+import { confirmed } from "../ui/Dialog";
 import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, FieldGroup, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
+import { IconButton } from "../ui/IconButton";
 import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RowMark } from "../ui/RowSection";
@@ -67,7 +68,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   const [host, setHost] = useState(DEFAULT_HOST.github);
   const [token, setToken] = useState("");
   /** What the host refused, under the token field: that is what it checks ("Bad credentials"). */
-  const { busy, refused, submit, clear } = useSubmit(async () => {
+  const { busy, refused, submit, changing } = useSubmit(async () => {
     const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
     if (!result.account) {
       return result.error ?? "The account could not be added";
@@ -97,24 +98,8 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   return (
     <div className="account-form">
       <ProviderPicker provider={provider} onPick={pick} />
-      <TextField
-        label="Host"
-        value={host}
-        onChange={(next) => {
-          setHost(next);
-          clear();
-        }}
-      />
-      <TextField
-        label="Personal access token"
-        type="password"
-        value={token}
-        onChange={(next) => {
-          setToken(next);
-          clear();
-        }}
-        error={refused}
-      />
+      <TextField label="Host" value={host} onChange={changing(setHost)} />
+      <TextField label="Personal access token" type="password" value={token} onChange={changing(setToken)} error={refused} />
     </div>
   );
 }
@@ -250,13 +235,13 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
   };
 
   const removeAccount = async (account: ProviderAccount): Promise<void> => {
-    const answer = await confirm({
+    const answer = await confirmed({
       title: "Remove account",
       message: `Remove ${account.user} on ${account.host}?`,
       detail: "The stored token is deleted with it.",
       confirmLabel: "Remove"
     });
-    if (!answer.confirmed) {
+    if (!answer) {
       return;
     }
     const failed = await window.tet.providers.removeAccount(account.id);
@@ -311,17 +296,9 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
               </span>
             </div>
             <RowMark title={removeError?.accountId === account.id ? removeError.message : undefined} />
-            <button
-              type="button"
-              className="icon-button"
-              title="Remove account"
-              onClick={(event) => {
-                event.stopPropagation();
-                void removeAccount(account);
-              }}
-            >
+            <IconButton title="Remove account" isolated onClick={() => void removeAccount(account)}>
               <CloseIcon />
-            </button>
+            </IconButton>
           </div>
         ))}
         <div className="account-add">
@@ -435,7 +412,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
 
   /** What refused the add goes beside the buttons: which field is to blame depends on the tab — a
    *  url, a path, a folder name — so none of them carries it. */
-  const { busy: adding, refused, submit, clear } = useSubmit(async () => {
+  const { busy: adding, refused, submit, changing } = useSubmit(async () => {
     const result =
       mode === "add"
         ? await window.tet.projects.open(directory.trim())
@@ -454,20 +431,12 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
     }
     return result.error ?? "The repository could not be added";
   }, onClose);
-  /** A field's change clears the refusal, which it is about to make wrong. */
-  const changing =
-    <T,>(set: (next: T) => void) =>
-    (next: T): void => {
-      set(next);
-      clear();
-    };
 
   // Fields survive a tab switch; only the name resets, since only clone derives it.
-  const switchMode = (next: Mode): void => {
+  const switchMode = changing((next: Mode): void => {
     setMode(next);
     setName(null);
-    clear();
-  };
+  });
 
   // The listing only reads, and its late answer is dropped (RemoteTab): it holds no Cancel.
   const locked = adding || accountForm?.busy === true;

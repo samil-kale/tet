@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import type { GitActionResult } from "../../shared/types";
 import { DialogFrame, useCancel, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
+import { notify } from "./Notices";
 import { createStore, useStore } from "./store";
 
 interface ConfirmOptions {
@@ -85,10 +86,17 @@ type Pending = Question & { cancel: () => void };
  */
 const pending = createStore<Pending | null>(null);
 
-/** Whether a question is up, which a new one would then not be: its caller tells its news another
- *  way (a notice). */
-export function questionUp(): boolean {
-  return pending.get() !== null;
+/**
+ * Whether a follow-up — a question asked once a command came back (a rebase that rewrites pushed
+ * commits, a login) — is held back by another question up, which a new one would not be: then
+ * `told`, what it was about, is a notice instead.
+ */
+export function followUpHeldBack(told: string): boolean {
+  if (pending.get() === null) {
+    return false;
+  }
+  notify("error", told);
+  return true;
 }
 
 /** One at a time: the overlay swallows the clicks that could start a second question. */
@@ -117,6 +125,16 @@ export function confirm(options: ConfirmOptions): Promise<ConfirmAnswer> {
     (answer) => ({ kind: "confirm", ...options, answer }),
     { confirmed: false, checked: false }
   );
+}
+
+/** Whether the user went through, for a question without a checkbox. */
+export async function confirmed(options: Omit<ConfirmOptions, "checkboxLabel">): Promise<boolean> {
+  return (await confirm(options)).confirmed;
+}
+
+/** `confirmed` as a follow-up (`followUpHeldBack`): false, `told` notified, when not asked. */
+export async function confirmedFollowUp(options: Omit<ConfirmOptions, "checkboxLabel">, told: string): Promise<boolean> {
+  return !followUpHeldBack(told) && (await confirmed(options));
 }
 
 /** Resolves to what the user entered, or null when they cancelled. */
@@ -281,7 +299,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   }, []);
 
   /** What `submit` refused is handed to the fields (`error`). */
-  const { busy: running, refused, submit, clear } = useSubmit(
+  const { busy: running, refused, submit, changing } = useSubmit(
     async () => {
       if (!dialog.submit) {
         return undefined;
@@ -295,10 +313,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     () => dialog.answer(value)
   );
 
-  const onChange = (next: unknown): void => {
-    setValue(next);
-    clear();
-  };
+  const onChange = changing((next: unknown) => setValue(next));
 
   return (
     <Frame

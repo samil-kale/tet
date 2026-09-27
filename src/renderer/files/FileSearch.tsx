@@ -1,8 +1,9 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
 import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types";
 import { baseName, parentOf } from "./explorer-tree";
-import { FileMarkIcon, INDENT_BASE, MATCH_INDENT, Twistie } from "./tree-rows";
+import { FileMarkIcon, INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "./tree-rows";
 import { FilterField } from "../ui/FilterField";
+import { IconButton } from "../ui/IconButton";
 import { CaseSensitiveIcon, type IconProps, RegexIcon, WholeWordIcon } from "../ui/icons";
 
 /** An empty search field: nothing typed, every toggle off. */
@@ -83,14 +84,9 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onAllFol
         <FilterField placeholder="Search" value={search.text} onChange={(text) => setSearch({ ...search, text })}>
           <span className="filter-toggles">
             {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
-              <button
-                key={key}
-                className={`icon-button${search[key] ? " active" : ""}`}
-                title={title}
-                onClick={() => setSearch({ ...search, [key]: !search[key] })}
-              >
+              <IconButton key={key} active={search[key]} title={title} onClick={() => setSearch({ ...search, [key]: !search[key] })}>
                 <Icon />
-              </button>
+              </IconButton>
             ))}
           </span>
         </FilterField>
@@ -102,33 +98,37 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onAllFol
           const dir = parentOf(file.path);
           return (
             <div key={file.path}>
-              <button
-                className="tree-item"
-                style={{ paddingLeft: INDENT_BASE }}
+              <TreeRow
+                indent={INDENT_BASE}
                 title={file.path}
                 onClick={() => setOpened((current) => ({ ...current, [file.path]: !open }))}
+                icon={
+                  <>
+                    <Twistie open={open} />
+                    <FileMarkIcon name={name} />
+                  </>
+                }
+                label={name}
               >
-                <Twistie open={open} />
-                <FileMarkIcon name={name} />
-                <span className="tree-label">{name}</span>
                 {dir && <span className="search-dir">{dir}</span>}
                 <span className="count-badge search-count">{file.matches.length}</span>
-              </button>
+              </TreeRow>
               {open &&
                 file.matches.map((match) => (
-                  <button
+                  <TreeRow
                     key={`${match.line}:${match.column}`}
-                    className="tree-item search-match"
-                    style={{ paddingLeft: MATCH_INDENT }}
+                    className="search-match"
+                    indent={MATCH_INDENT}
                     title={`${file.path}:${match.line}`}
                     onClick={() => onOpenMatch(file.path, match)}
-                  >
-                    <span className="tree-label">
-                      {match.text.slice(0, match.textColumn)}
-                      <span className="search-hit">{match.text.slice(match.textColumn, match.textColumn + match.length)}</span>
-                      {match.text.slice(match.textColumn + match.length)}
-                    </span>
-                  </button>
+                    label={
+                      <>
+                        {match.text.slice(0, match.textColumn)}
+                        <span className="search-hit">{match.text.slice(match.textColumn, match.textColumn + match.length)}</span>
+                        {match.text.slice(match.textColumn + match.length)}
+                      </>
+                    }
+                  />
                 ))}
             </div>
           );

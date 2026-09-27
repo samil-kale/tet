@@ -7,6 +7,7 @@ import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
 import { useFileAct } from "./run-action";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
+import { IconButton } from "../ui/IconButton";
 import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIcon } from "../ui/icons";
 import { Section } from "../ui/Section";
 
@@ -63,24 +64,21 @@ export const GitPane = memo(function GitPane({
         height={treeHeight}
         actions={
           <>
-            <button
-              className="icon-button"
+            <IconButton
               title={remote ? `Fetch ${remote}` : "This repository has no remote"}
               disabled={locked || !canSync}
               onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(resolved.ref, login))}
             >
               <SyncIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title={pullFrom ? `Pull ${pullFrom}` : "No upstream to pull from"}
               disabled={locked || !canSync || state.upstream === undefined}
               onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(resolved.ref, login))}
             >
               <ArrowDownIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title={state.upstream === undefined ? "Publish branch" : `Push ${remote}`}
               disabled={locked || !canSync}
               onClick={() =>
@@ -90,7 +88,7 @@ export const GitPane = memo(function GitPane({
               }
             >
               <ArrowUpIcon />
-            </button>
+            </IconButton>
           </>
         }
       >
@@ -118,31 +116,28 @@ export const GitPane = memo(function GitPane({
         busy={acting}
         actions={
           <>
-            <button
-              className="icon-button"
+            <IconButton
               title="Commit all changes"
               disabled={locked || state.changes.length === 0}
               onClick={() => void askCommit(resolved.ref, state, undefined, ask)}
             >
               <CommitIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title="Stash all changes"
               disabled={locked || state.changes.length === 0}
               // `act`, not `branch.run`: it belongs to this section, whose bar shows it.
               onClick={() => act(() => window.tet.repository.stashPush(resolved.ref, ""))}
             >
               <StashIcon />
-            </button>
-            <button
-              className="icon-button"
+            </IconButton>
+            <IconButton
               title="Discard all changes"
               disabled={locked || state.changes.length === 0}
               onClick={() => void confirmDiscard(resolved.ref, state.changes.map((change) => change.path), act)}
             >
               <DiscardIcon />
-            </button>
+            </IconButton>
           </>
         }
       >

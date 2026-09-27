@@ -4,9 +4,10 @@ import { reservedRefusal } from "../../shared/env-rules";
 import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
 import { useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { notifying } from "../git/run-action";
-import { confirm, filled, prompt, refusal, type PromptOptions } from "../ui/Dialog";
+import { confirmed, filled, prompt, refusal, type PromptOptions } from "../ui/Dialog";
 import { ColorField, TextField } from "../ui/Field";
 import { reorder, useDragReorder } from "./drag-reorder";
+import { IconButton } from "../ui/IconButton";
 import { PlayIcon, PlusIcon } from "../ui/icons";
 import { Section } from "../ui/Section";
 import type { ResolvedRef } from "../resolved-ref";
@@ -277,13 +278,13 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
   };
 
   const askRemove = async (command: ProjectCommand): Promise<void> => {
-    const answer = await confirm({
+    const answer = await confirmed({
       title: "Delete command",
       message: `Delete "${command.command}"?`,
       detail: "It is removed from the project's tet.json.",
       confirmLabel: "Delete"
     });
-    if (answer.confirmed) {
+    if (answer) {
       const index = indexOf(command);
       if (index !== -1) {
         save(latestCommands().filter((_entry, position) => position !== index));
@@ -321,9 +322,9 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
       height={height}
       actions={
         editable && (
-          <button className="icon-button" title="New command" disabled={!projectId} onClick={() => void askAdd()}>
+          <IconButton title="New command" disabled={!projectId} onClick={() => void askAdd()}>
             <PlusIcon />
-          </button>
+          </IconButton>
         )
       }
     >
@@ -350,9 +351,9 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
                 <span className="command-extra">({formatEnv(command.env)})</span>
               )}
             </span>
-            <button className="icon-button" title={`Run ${command.command} in a new tab`} onClick={() => run(command)}>
+            <IconButton title={`Run ${command.command} in a new tab`} onClick={() => run(command)}>
               <PlayIcon />
-            </button>
+            </IconButton>
           </div>
         ))}
         {projectId && held?.projectId === projectId && commands.length === 0 &&<div className="placeholder">No commands yet.</div>}

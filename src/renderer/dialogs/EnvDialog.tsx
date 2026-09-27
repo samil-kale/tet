@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { EnvRequest } from "../../shared/types";
 import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
-import { EditRow, OverridesMachine, RowSection, SecretInput } from "../ui/RowSection";
+import { EditRow, OverridesMachine, RowInput, RowSection, SecretInput } from "../ui/RowSection";
 
 interface EnvDialogProps {
   request: EnvRequest;
@@ -30,7 +30,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   const tab = request.ref && request.tabId ? { ref: request.ref, tabId: request.tabId } : undefined;
 
   // The asking tab restarts once saved, so it takes up the values (pty.ts).
-  const { busy, refused, submit: save, clear } = useSubmit(
+  const { busy, refused, submit: save, changing } = useSubmit(
     () => window.tet.environment.answer(request.id, rows.map((row) => ({ name: row.name, value: row.value }))),
     () => {
       if (tab) {
@@ -45,10 +45,9 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
     onClose();
   }, busy);
 
-  const edit = (name: string, value: string): void => {
-    setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)));
-    clear();
-  };
+  const edit = changing((name: string, value: string): void =>
+    setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)))
+  );
 
   return (
     <DialogFrame
@@ -82,7 +81,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
         renderRow={(row) => (
           // The Settings' Environment rows, the name fixed: it is the agent's.
           <EditRow key={row.id}>
-            <input className="row-fill-input" type="text" value={row.name} disabled />
+            <RowInput value={row.name} disabled />
             {row.overridesMachine && <OverridesMachine name={row.name} />}
             <SecretInput
               ref={row === rows[0] ? firstValue : undefined}

@@ -6,8 +6,9 @@ import type { OpenEditor } from "../terminal/editor-tab";
 import type { FileAct, FileAsk } from "./run-action";
 import { baseName } from "../files/explorer-tree";
 import { openEntries, pathEntries } from "../files/file-menu";
+import { TreeRow } from "../files/tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, filled, prompt, questionUp } from "../ui/Dialog";
+import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
@@ -39,13 +40,14 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
  *  action, and a click on a row's × would otherwise empty the list. */
 export async function confirmDiscard(ref: ProjectRef, paths: string[], act: FileAct): Promise<void> {
   const what = paths.length === 1 ? paths[0] : `${paths.length} files`;
-  const answer = await confirm({
-    title: "Discard changes",
-    message: `Are you sure you want to discard all changes to ${what}?`,
-    detail: "The changed files go to the trash and can be restored from there.",
-    confirmLabel: "Discard changes"
-  });
-  if (answer.confirmed) {
+  if (
+    await confirmed({
+      title: "Discard changes",
+      message: `Are you sure you want to discard all changes to ${what}?`,
+      detail: "The changed files go to the trash and can be restored from there.",
+      confirmLabel: "Discard changes"
+    })
+  ) {
     act(async () => {
       const result = await window.tet.repository.discard(ref, paths, false);
       if (result.needsConfirmation !== "trash-failed") {
@@ -64,17 +66,17 @@ async function confirmDiscardPermanently(
   act: FileAct
 ): Promise<void> {
   // Not asked while another question is up (`askLogin`): the trash's refusal is told instead.
-  if (questionUp()) {
-    notify("error", reason ?? "The files could not be moved to the trash");
-    return;
-  }
-  const answer = await confirm({
-    title: "Discard changes permanently",
-    message: "The files could not be moved to the trash. Discard the changes permanently?",
-    detail: reason,
-    confirmLabel: "Discard permanently"
-  });
-  if (answer.confirmed) {
+  if (
+    await confirmedFollowUp(
+      {
+        title: "Discard changes permanently",
+        message: "The files could not be moved to the trash. Discard the changes permanently?",
+        detail: reason,
+        confirmLabel: "Discard permanently"
+      },
+      reason ?? "The files could not be moved to the trash"
+    )
+  ) {
     act(() => window.tet.repository.discard(ref, paths, true));
   }
 }
@@ -254,9 +256,9 @@ export const ChangesList = memo(function ChangesList({ resolved, state, act, ask
       <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
       <div className="changes-list-items">
         {visible.map((change) => (
-          <button
+          <TreeRow
             key={change.path}
-            className={`tree-item change-item${selectedSet.has(change.path) ? " selected" : ""}`}
+            className={selectedSet.has(change.path) ? "change-item selected" : "change-item"}
             onClick={(event) => select(event, change.path)}
             onDoubleClick={() => onOpenDiff(change.path)}
             onContextMenu={(event) => {
@@ -267,10 +269,9 @@ export const ChangesList = memo(function ChangesList({ resolved, state, act, ask
               menu.open(event, change);
             }}
             title={`${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`}
-          >
-            <span className={`change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>
-            <span className="tree-label">{change.path}</span>
-          </button>
+            icon={<span className={`change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>}
+            label={change.path}
+          />
         ))}
         {changes.length === 0 && <div className="placeholder">No local changes.</div>}
       </div>

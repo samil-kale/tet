@@ -3,7 +3,7 @@ import type { ProjectRef, GitActionResult } from "../../shared/types";
 import { canDiscardRefEdits } from "../diff/editor-views";
 import type { GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirm, questionUp } from "../ui/Dialog";
+import { askName, confirm, confirmedFollowUp } from "../ui/Dialog";
 
 /**
  * The worktree questions, asked alike from a sidebar row and from the branch tree's WORKTREES:
@@ -88,15 +88,15 @@ export async function askDeleteWorktree(
       return result;
     }
     // Not asked while another question is up (`askLogin`): the refusal is notified instead.
-    if (questionUp()) {
-      return { ok: false, error: `${branch} has uncommitted changes` };
-    }
-    const forced = await confirm({
-      title: "Delete worktree",
-      message: `${branch} has uncommitted changes. Delete them too?`,
-      detail: "Its changed and untracked files are lost.",
-      confirmLabel: "Delete worktree"
-    });
-    return forced.confirmed ? deleted(true) : { ok: true };
+    const forced = await confirmedFollowUp(
+      {
+        title: "Delete worktree",
+        message: `${branch} has uncommitted changes. Delete them too?`,
+        detail: "Its changed and untracked files are lost.",
+        confirmLabel: "Delete worktree"
+      },
+      `${branch} has uncommitted changes`
+    );
+    return forced ? deleted(true) : { ok: true };
   });
 }

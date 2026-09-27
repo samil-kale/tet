@@ -17,6 +17,7 @@ import {
   type EditorSnapshot
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
+import { IconButton } from "../ui/IconButton";
 import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
 import { usePaneShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
@@ -116,31 +117,30 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       <div className="editor-bar">
         {/* Always there, so the path doesn't shift for a read-only file. */}
         <div className="editor-bar-actions">
-          <button
-            className="icon-button"
+          <IconButton
             title={`Save (${modifierLabel()}+S)`}
             disabled={isReadOnly(file) || !dirty || saving}
             onClick={() => void saveEditorFile(tabId)}
           >
             <SaveIcon />
-          </button>
+          </IconButton>
           {/* The file against HEAD, or on its own in a plain editor — a diff only a text file has. */}
-          <button
-            className={`icon-button${diff ? " active" : ""}`}
+          <IconButton
+            active={diff}
             title={`${diff ? "Hide" : "Show"} Changes`}
             disabled={kind !== "text"}
             onClick={() => showDiff(tabId, !diff)}
           >
             <CompareIcon />
-          </button>
+          </IconButton>
           {isMarkdown(path) && (
-            <button
-              className={`icon-button${markdownPreview ? " active" : ""}`}
+            <IconButton
+              active={markdownPreview}
               title={`${markdownPreview ? "Hide" : "Show"} Preview (${modifierLabel()}+Shift+V)`}
               onClick={() => showMarkdownPreview(tabId, !markdownPreview)}
             >
               <EyeIcon />
-            </button>
+            </IconButton>
           )}
         </div>
         {dirty && <span className="editor-dirty">●</span>}

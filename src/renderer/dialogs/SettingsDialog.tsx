@@ -23,9 +23,8 @@ import { Checkbox, Field, FieldGroup } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
-import { ActionLink } from "../ui/ActionLink";
 import { isWindows } from "../platform";
-import { atLeastOne, EditRow, OverridesMachine, patched, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
+import { atLeastOne, EditRow, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 
 interface SettingsDialogProps {
@@ -183,7 +182,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
    *  settings.json write — last, since it applies at once (the theme among it) and Cancel could not
    *  take it back after a later write refused. What refuses it goes in the button row: it is about
    *  tet.json, not about one of the switches on the Files tab. */
-  const { busy: saving, refused, submit: save, clear } = useSubmit(
+  const { busy: saving, refused, submit: save, changing } = useSubmit(
     async () => {
       try {
         if (variablesEdited.current) {
@@ -240,11 +239,10 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const close = useCancel(onClose, saving);
 
   /** Edits the shown copy and records the change for Save. */
-  const edit = (change: SettingsEdits): void => {
+  const edit = changing((change: SettingsEdits): void => {
     edits.current = withSettings(edits.current, change);
     setSettings((current) => (current ? withSettings(current, change) : current));
-    clear();
-  };
+  });
 
   const flip = (key: keyof NotificationSettings, value: boolean): void => edit({ notifications: { [key]: value } });
 
@@ -264,16 +262,15 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } });
 
-  const editExplorerSetting = <K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void => {
+  const editExplorerSetting = changing(<K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void => {
     setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
-    clear();
-  };
+  });
 
-  const editVariables = (change: (rows: typeof variables) => typeof variables): void => {
+  const editVariables = changing((change: (rows: typeof variables) => typeof variables): void => {
     variablesEdited.current = true;
     setVariables(change);
-    clear();
-  };
+  });
+  const envRows = typedRows("variable", BLANK_ENV_ROW, editVariables);
 
   const envRowMarks = useMemo(() => envMarks(variables), [variables]);
   // As in the sbx dialog: Save waits for every marked row, and the tab repeats the mark.
@@ -406,19 +403,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             label="Environment variables"
             rows={variables}
             renderRow={(row) => (
-              <EditRow
-                key={row.id}
-                mark={envRowMarks.get(row.id)}
-                remove="Remove variable"
-                onRemove={() => editVariables((rows) => atLeastOne(without(rows, row.id), BLANK_ENV_ROW))}
-              >
-                <input
-                  className="row-fill-input"
-                  type="text"
+              <EditRow key={row.id} mark={envRowMarks.get(row.id)} {...envRows.remove(row.id)}>
+                <RowInput
                   placeholder="GITLAB_TOKEN"
                   title="The name every tab sees"
                   value={row.name}
-                  onChange={(event) => editVariables((rows) => patched(rows, row.id, { name: event.target.value }))}
+                  onChange={(name) => editVariables((rows) => patched(rows, row.id, { name }))}
                 />
                 {row.overridesMachine && <OverridesMachine name={row.name} />}
                 <SecretInput
@@ -428,13 +418,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 />
               </EditRow>
             )}
-            add={
-              <ActionLink
-                onClick={() => editVariables((rows) => [...rows, withId(BLANK_ENV_ROW)])}
-              >
-                + Add variable
-              </ActionLink>
-            }
+            add={envRows.add}
           />
         </div>
       )}

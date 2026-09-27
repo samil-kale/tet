@@ -13,10 +13,11 @@ import {
 } from "../git/worktree-questions";
 import { revealLabel } from "../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirm, filled, prompt, singleField } from "../ui/Dialog";
+import { confirmed, filled, prompt, singleField } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
 import { Section } from "../ui/Section";
 import { SessionMark } from "../ui/SessionMark";
+import { IconButton } from "../ui/IconButton";
 import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
@@ -26,16 +27,9 @@ const DRAG_TYPE = "application/x-tet-project";
  *  worktree. */
 function rowButton(title: string, run: () => void, icon: ReactNode) {
   return (
-    <button
-      className="icon-button"
-      title={title}
-      onClick={(event) => {
-        event.stopPropagation();
-        run();
-      }}
-    >
+    <IconButton title={title} isolated onClick={run}>
       {icon}
-    </button>
+    </IconButton>
   );
 }
 
@@ -193,7 +187,7 @@ export const ProjectList = memo(function ProjectList({
   const remove = async (project: Project): Promise<void> => {
     const count = project.worktrees.filter((worktree) => worktree.key !== undefined).length;
     if (count > 0) {
-      const answer = await confirm({
+      const answer = await confirmed({
         title: "Remove repository",
         message: `Remove ${project.name}?`,
         detail:
@@ -202,7 +196,7 @@ export const ProjectList = memo(function ProjectList({
             : `Its ${count} worktrees are deleted with their branches: uncommitted changes and commits only there are lost. The repository's folder stays.`,
         confirmLabel: "Remove repository"
       });
-      if (!answer.confirmed) {
+      if (!answer) {
         return;
       }
     }
@@ -362,9 +356,9 @@ export const ProjectList = memo(function ProjectList({
       count={projects.length}
       busy={gitBusy}
       actions={
-        <button className="icon-button" title="Add repository" onClick={onAdd}>
+        <IconButton title="Add repository" onClick={onAdd}>
           <PlusIcon />
-        </button>
+        </IconButton>
       }
     >
       <div className="project-list" {...listProps}>

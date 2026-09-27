@@ -16,7 +16,7 @@ import type {
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { isWindows } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
-import { atLeastOne, EditRow, patched, RowMark, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
+import { atLeastOne, EditRow, patched, RowInput, RowMark, RowSection, SecretInput, typedRows, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, FieldGroup, PathInput } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
@@ -413,45 +413,23 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
   }
 
   if (section === "ports") {
+    const ports = typedRows("port", BLANK_PORT, (change) => update("ports", change));
     return (
       <RowSection
         label="Port forwarding"
         rows={state.ports}
         renderRow={(port) => {
           const setPort = (change: Partial<typeof port>): void =>
-            update("ports", (ports) => patched(ports, port.id, change));
+            update("ports", (rows) => patched(rows, port.id, change));
           return (
-            <EditRow
-              key={port.id}
-              mark={portMark(port, problems)}
-              remove="Remove port"
-              onRemove={() => update("ports", (ports) => atLeastOne(without(ports, port.id), BLANK_PORT))}
-            >
-              <input
-                className="sbx-port-input"
-                type="text"
-                inputMode="numeric"
-                placeholder="3000"
-                value={port.host}
-                onChange={(event) => setPort({ host: event.target.value })}
-              />
+            <EditRow key={port.id} mark={portMark(port, problems)} {...ports.remove(port.id)}>
+              <RowInput width="port" placeholder="3000" value={port.host} onChange={(host) => setPort({ host })} />
               <span className="sbx-arrow">→</span>
-              <input
-                className="sbx-port-input"
-                type="text"
-                inputMode="numeric"
-                placeholder="3000"
-                value={port.container}
-                onChange={(event) => setPort({ container: event.target.value })}
-              />
+              <RowInput width="port" placeholder="3000" value={port.container} onChange={(container) => setPort({ container })} />
             </EditRow>
           );
         }}
-        add={
-          <ActionLink onClick={() => update("ports", (ports) => [...ports, withId(BLANK_PORT)])}>
-            + Add port
-          </ActionLink>
-        }
+        add={ports.add}
       />
     );
   }
@@ -495,36 +473,29 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
   }
 
   if (section === "secrets") {
+    const secrets = typedRows("secret", BLANK_SECRET, (change) => update("secrets", change));
     return (
       <RowSection
         label="Secrets"
         rows={state.secrets}
         renderRow={(row) => {
           const setSecret = (change: Partial<typeof row>): void =>
-            update("secrets", (secrets) => patched(secrets, row.id, change));
+            update("secrets", (rows) => patched(rows, row.id, change));
           const valueStored = holdsValue(row, stored.secrets);
           return (
-            <EditRow
-              key={row.id}
-              mark={secretMark(row, state.secrets, problems)}
-              remove="Remove secret"
-              onRemove={() => update("secrets", (secrets) => atLeastOne(without(secrets, row.id), BLANK_SECRET))}
-            >
-              <input
-                className="row-fixed-input"
-                type="text"
+            <EditRow key={row.id} mark={secretMark(row, state.secrets, problems)} {...secrets.remove(row.id)}>
+              <RowInput
+                width="fixed"
                 placeholder="GITLAB_TOKEN"
                 title="The environment variable the sandbox sees, holding a placeholder instead of the value"
                 value={row.env}
-                onChange={(event) => setSecret({ env: event.target.value })}
+                onChange={(env) => setSecret({ env })}
               />
-              <input
-                className="row-fill-input"
-                type="text"
+              <RowInput
                 placeholder="gitlab.example.com"
                 title="Where sbx puts the value in place of the placeholder, in request headers only: exact host or *.example.com, comma-separated, no scheme or port"
                 value={row.hosts}
-                onChange={(event) => setSecret({ hosts: event.target.value })}
+                onChange={(hosts) => setSecret({ hosts })}
               />
               <SecretInput
                 stored={valueStored}
@@ -536,40 +507,28 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
             </EditRow>
           );
         }}
-        add={
-          <ActionLink
-            onClick={() => update("secrets", (secrets) => [...secrets, withId(BLANK_SECRET)])}
-          >
-            + Add secret
-          </ActionLink>
-        }
+        add={secrets.add}
       />
     );
   }
 
   if (section === "variables") {
+    const variables = typedRows("variable", BLANK_VARIABLE, (change) => update("variables", change));
     return (
       <RowSection
         label="Variables"
         rows={state.variables}
         renderRow={(row) => {
           const setVariable = (change: Partial<typeof row>): void =>
-            update("variables", (variables) => patched(variables, row.id, change));
+            update("variables", (rows) => patched(rows, row.id, change));
           const valueStored = holdsValue(row, stored.variables);
           return (
-            <EditRow
-              key={row.id}
-              mark={variableMark(row, state, problems)}
-              remove="Remove variable"
-              onRemove={() => update("variables", (variables) => atLeastOne(without(variables, row.id), BLANK_VARIABLE))}
-            >
-              <input
-                className="row-fill-input"
-                type="text"
+            <EditRow key={row.id} mark={variableMark(row, state, problems)} {...variables.remove(row.id)}>
+              <RowInput
                 placeholder="NPM_TOKEN"
                 title="The environment variable the sandbox sees, holding the value itself"
                 value={row.env}
-                onChange={(event) => setVariable({ env: event.target.value })}
+                onChange={(env) => setVariable({ env })}
               />
               <SecretInput
                 stored={valueStored}
@@ -581,39 +540,27 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
             </EditRow>
           );
         }}
-        add={
-          <ActionLink onClick={() => update("variables", (variables) => [...variables, withId(BLANK_VARIABLE)])}>
-            + Add variable
-          </ActionLink>
-        }
+        add={variables.add}
       />
     );
   }
 
+  const hosts = typedRows("host", BLANK_HOST, (change) => update("hosts", change));
   return (
     <RowSection
       label="Allowed hosts"
       rows={state.hosts}
       renderRow={(row) => (
-        <EditRow
-          key={row.id}
-          mark={problems.hosts?.[row.host.trim()]}
-          remove="Remove host"
-          onRemove={() => update("hosts", (hosts) => atLeastOne(without(hosts, row.id), BLANK_HOST))}
-        >
-          <input
-            className="row-fill-input"
-            type="text"
+        <EditRow key={row.id} mark={problems.hosts?.[row.host.trim()]} {...hosts.remove(row.id)}>
+          <RowInput
             placeholder="api.example.com"
             title="Exact host, *.example.com, or host:443"
             value={row.host}
-            onChange={(event) => update("hosts", (hosts) => patched(hosts, row.id, { host: event.target.value }))}
+            onChange={(host) => update("hosts", (rows) => patched(rows, row.id, { host }))}
           />
         </EditRow>
       )}
-      add={
-        <ActionLink onClick={() => update("hosts", (hosts) => [...hosts, withId(BLANK_HOST)])}>+ Add host</ActionLink>
-      }
+      add={hosts.add}
     />
   );
 }

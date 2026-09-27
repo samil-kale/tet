@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { SbxAccount, SbxAccountEdit } from "../../shared/types";
-import { ActionLink } from "../ui/ActionLink";
-import { atLeastOne, EditRow, patched, RowSection, SecretInput, withId, without, type Row } from "../ui/RowSection";
+import { atLeastOne, EditRow, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
+import { IconButton } from "../ui/IconButton";
 import { CheckIcon, LogInIcon } from "../ui/icons";
 
 /** An access token row: `account` the stored one it was opened as, `token` only what was typed
@@ -85,6 +85,7 @@ export function SbxAccounts({
   const setRow = (row: AccountRow, change: Partial<AccountRow>): void =>
     setRows((current) => patched(current, row.id, { ...change, mark: undefined }));
   const marks = useMemo(() => accountMarks(rows), [rows]);
+  const tokens = typedRows("access token", BLANK_ACCOUNT, setRows);
   return (
     <div className="sbx-account">
       <div className="sbx-account-status">
@@ -116,21 +117,14 @@ export function SbxAccounts({
           const user = row.user.trim();
           const current = row.account !== undefined && user === signedInUser;
           return (
-            <EditRow
-              key={row.id}
-              mark={marks.get(row.id) ?? row.mark}
-              remove="Remove access token"
-              onRemove={() => setRows((list) => atLeastOne(without(list, row.id), BLANK_ACCOUNT))}
-            >
-              <input
-                className="row-fill-input"
-                type="text"
+            <EditRow key={row.id} mark={marks.get(row.id) ?? row.mark} {...tokens.remove(row.id)}>
+              <RowInput
                 placeholder="Docker username"
                 // A kept token belongs to its user: another user is another row.
                 disabled={row.account !== undefined}
                 title={row.account !== undefined ? "The Docker account this token belongs to" : undefined}
                 value={row.user}
-                onChange={(event) => setRow(row, { user: event.target.value })}
+                onChange={(user) => setRow(row, { user })}
               />
               <SecretInput
                 stored={row.account !== undefined}
@@ -144,24 +138,18 @@ export function SbxAccounts({
                   <CheckIcon />
                 </span>
               ) : (
-                <button
-                  type="button"
-                  className="icon-button"
+                <IconButton
                   title={user ? `Sign in as ${user}` : "Sign in"}
                   disabled={busy || user === "" || (row.token === "" && row.account === undefined)}
                   onClick={() => onSignIn(row)}
                 >
                   <LogInIcon />
-                </button>
+                </IconButton>
               )}
             </EditRow>
           );
         }}
-        add={
-          <ActionLink onClick={() => setRows((current) => [...current, withId(BLANK_ACCOUNT)])}>
-            + Add access token
-          </ActionLink>
-        }
+        add={tokens.add}
       />
     </div>
   );
