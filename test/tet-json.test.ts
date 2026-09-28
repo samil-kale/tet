@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, it } from "node:test";
 import { EMPTY_SBX_CONFIG } from "../src/shared/types";
+import { PLATFORM } from "../src/main/host-platform";
 import {
   addExclude,
   addFolder,
@@ -283,11 +284,11 @@ describe("readSbxConfig", () => {
   });
 
   it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's paths alongside it", async () => {
-    const otherOs = process.platform === "win32" ? "linux" : "win32";
+    const otherOs = PLATFORM.id === "win32" ? "linux" : "win32";
     const theirs = { path: "/their/data", access: "ro", os: otherOs };
     const stale = [
       { path: "~/stale", access: "ro" },
-      { path: "/stale/absolute", access: "ro", os: process.platform }
+      { path: "/stale/absolute", access: "ro", os: PLATFORM.id }
     ];
     put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, knowledge: { skills: "rw" }, ports: [], paths: [theirs, ...stale] } }));
     const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
@@ -315,7 +316,7 @@ describe("readSbxConfig", () => {
       [
         theirs,
         { path: "~/data", access: "rw" },
-        { path: elsewhere, access: "ro", os: process.platform },
+        { path: elsewhere, access: "ro", os: PLATFORM.id },
         { path: "~/.npmrc", access: "ro" }
       ],
       "the other OS's row survives; a ~ row is everyone's, an absolute one this platform's; the stale ones are replaced"
@@ -330,9 +331,9 @@ describe("readSbxConfig", () => {
           knowledge: { skills: "not-a-real-access", plugins: true, instructions: "ro" },
           ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
           paths: [
-            { path: "", os: process.platform },
-            { path: "~/data", access: "not-a-real-access", os: process.platform },
-            { path: "/elsewhere", access: "ro", os: process.platform === "win32" ? "linux" : "win32" }
+            { path: "", os: PLATFORM.id },
+            { path: "~/data", access: "not-a-real-access", os: PLATFORM.id },
+            { path: "/elsewhere", access: "ro", os: PLATFORM.id === "win32" ? "linux" : "win32" }
           ],
           hosts: ["ok.example.com", 42, "", "  spaced.example.com  "],
           secrets: [

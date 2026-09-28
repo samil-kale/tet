@@ -7,8 +7,8 @@ import type { AgentPaths } from "../agent";
 import type { HookEvent } from "../../../shared/control";
 
 /**
- * Writes the settings file registering Claude Code's hooks into `agentDir` (the host tabs' one,
- * or a sandbox folder's); returns the `--settings` args. Layered over the user's config;
+ * Writes the settings file registering Claude Code's hooks into `paths.agentDir` (the host tabs'
+ * one, or a sandbox folder's); returns the `--settings` args. Layered over the user's config;
  * `~/.claude/settings.json` is never touched.
  *
  * Every hook is a bare `tet-ctl hook <event>`, independent of Claude Code's shell (on win32 a bash,

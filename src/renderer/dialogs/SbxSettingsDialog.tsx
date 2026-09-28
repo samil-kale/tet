@@ -20,6 +20,7 @@ import { confirmed, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox, DialogError } from "../ui/Field";
 import { useRunning } from "../ui/use-running";
+import { useAgents } from "../ui/use-agents";
 import { LandmarkIcon } from "../ui/icons";
 import { patched } from "../ui/RowSection";
 
@@ -83,6 +84,7 @@ function tabBlocked(id: SbxSettingsTab, signedIn: boolean, enabled: boolean): st
  */
 export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) {
   const [enabled, setEnabled] = useState(false);
+  const agents = useAgents();
   /** No agent on this machine, so sandboxing cannot be switched off. Derived on every open, not
    *  stored. */
   const [locked, setLocked] = useState(false);
@@ -352,7 +354,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               <>
                 <strong>Enable SBX sandboxing for this project</strong>
                 <p className="dialog-detail">
-                  Claude, Codex and Pi tabs run in their own isolated Docker sandbox.
+                  {new Intl.ListFormat("en").format(agents.filter((agent) => agent.sandboxed).map((agent) => agent.displayName))}{" "}
+                  tabs run in their own isolated Docker sandbox.
                   {locked && " No agent is installed on this machine, so this is the only way to run one here."}
                 </p>
               </>

@@ -39,12 +39,12 @@ project's terminals.
   documents every field), grouped by what it can do — `install`, `terminal`, `ask`, `sessions`,
   `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent can do
   something is whether it has the group (`hasSandbox`), never a list of ids. Shared code imports
-  only the registry (`agents/index.ts`), `agent.ts`'s types and the agent-neutral `ask.ts` and
-  `system-prompt.ts`. A new agent must fit the data model (below) and is a new folder and one
-  registry entry, nothing else: its icon is data in its definition (`icon`), which the window
-  draws, and no code outside `agents/` names an agent (user-facing text may) but the shell, which
-  TET itself runs saved commands and plain terminals in. What a new agent
-  needs that no group covers extends the groups, never a branch on its id.
+  only the registry (`agents/index.ts`), `agent.ts`'s types and `hasSandbox`, and the agent-neutral
+  `ask.ts` and `system-prompt.ts`. A new agent must fit the data model (below) and is a new folder
+  and one registry entry, nothing else: its icon is data in its definition (`icon`), which the
+  window draws, and no code outside `agents/` names an agent (user-facing text may) but the shell,
+  which TET itself runs saved commands and plain terminals in. What a new agent needs that no group
+  covers extends the groups, never a branch on its id.
 - **A project is its repository and its worktrees** — the words for them, in code, texts and
   comments alike. The repository is the folder the user opened, holding `.git`; never call it a
   worktree (nor "main worktree"), and there is no noun for both: where one of them is meant — where
@@ -72,6 +72,7 @@ change, and every agent added, fits it.
 ```
 ~/.tet/
   settings.json  environment.json  projects.json  sbx-local.json  *-accounts.json  git-logins.json
+  errors.log
   bin/                             tet-ctl, first on every tab's PATH
   askpass/                         for TET's own git runs only
   update/
@@ -124,11 +125,12 @@ change, and every agent added, fits it.
 ## Never assume the agents behave alike
 
 Claude Code, Codex and pi are three products in the same kind of tab, alike in nothing:
-readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw. So
-anything about how a CLI is driven is an `AgentDefinition` field with a value per agent (or what
-its `host.prepare` returns, e.g. the fullscreen args that make a resize redraw in place), found
-through this same pty for that agent, never taken from another. The one exception is the right
-mouse button, decided per click by the terminal's mouse mode (`terminal-views.ts`), not per agent.
+readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw, how a
+pasted path is quoted (`quotePath`). So anything about how a CLI is driven is an `AgentDefinition`
+field with a value per agent (or what its `host.prepare` returns, e.g. the fullscreen args that
+make a resize redraw in place), found through this same pty for that agent, never taken from
+another. The one exception is the right mouse button, decided per click by the terminal's mouse
+mode (`terminal-views.ts`), not per agent.
 
 ## Never touch the user's agent configuration
 
@@ -153,9 +155,12 @@ others.
   `LINUX`), named by what it means (`ignoresCase`, `spawnsThroughCmd`, `appBundle`), never by
   which OS it is. Main reads `PLATFORM` (`host-platform.ts`), the window its own
   (`renderer/platform.ts`); nothing else asks for `process.platform` or `navigator.platform`, and
-  the id is data alone (tet.json's `os`, a release asset). A new difference extends the interface.
-- Paths through `path.join`; every agent, shell and `sbx` spawn through `resolveCommand`
+  the id is data alone (tet.json's `os`, the app's info). A new difference extends the interface.
+- Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
   (`src/main/terminals/pty.ts`), never `shell: true`.
+- Every HTTP request goes through Electron's `net.fetch`, never the global `fetch`: only
+  Chromium's stack applies the machine's proxy and certificate store. Code the tests run under
+  node takes it as a parameter defaulting to `net.fetch` (`fetchHttpsImage`).
 - A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`
   (`src/main/script-text.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
@@ -233,27 +238,27 @@ or a per-line decision is for an agent.
   e.g. `RestartNote` while they reach running tabs only once restarted. A notice is for what has
   no dialog up to carry it; a `confirm`
   has no field, so it notifies.
-- To get this, **a question runs its own answer** (`PromptOptions.submit`): the dialog stays up
-  while the action runs, so what runs it hands the failure back instead of notifying it
-  (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than sending
-  `app:notice`.
+- To get this, **a question runs its own answer** (`useSubmit`; a prompt's `PromptOptions.submit`):
+  the dialog stays up while the action runs, so what runs it hands the failure back instead of
+  notifying it (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than
+  sending `app:notice`.
 - **What a dialog runs finishes before it goes — unless stopping it leaves nothing behind.** Each
   run is one of two kinds, decided by what a stop would leave:
   - *Held* (the default; `DialogFrame`'s `locked`): anything that changes state in steps or is
     not killed — a Save, a git command, a store, a sign-out. Cancel and × are disabled and Escape
     does nothing (`useCancel`), so nothing is left half done and nothing answers into a closed
     dialog.
-  - *Stopped*: a run a stop leaves as if it never started — it changes nothing, or what it
-    changes happens whole or not at all — and that waits on something outside TET (a browser, an
-    agent, a provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
-    (`useCancel`'s `abort`) and its answer is dropped. Today: the SBX dialog's setup and sign-in
-    (`sbx login`, `policy init`), the commit prompt's suggested message, and the Add Repository
-    dialog's listing.
+  - *Stopped*: a run a stop leaves as if it never started — it changes nothing, or what it changes
+    happens whole or not at all — and that waits on something outside TET (a browser, an agent, a
+    provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
+    (`useCancel`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today: the
+    SBX dialog's setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
+    message, and the Add Repository dialog's listing.
 
   A new run is held unless it meets both conditions; a dialog's Save is always held.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
-  dialog's Docker sign-in and sign-out and the Add Repository dialog's account removal and
-  namespace pick, which act at once. A setting reaches an agent at its setup
+  dialog's Docker sign-in and sign-out and the Add Repository dialog's account adding and
+  removal and namespace pick, which act at once. A setting reaches an agent at its setup
   (`AgentPaths`), so it applies to tabs started afterwards; the theme and the idle reminder
   redo the host setup, once per agent (`HostSetups`).
 - **A section of typed rows never says it is empty** (`RowSection`): it shows one blank row to
@@ -277,7 +282,7 @@ or a per-line decision is for an agent.
 - Colors only from `--vscode-*` variables under VS Code's own names (`src/renderer/themes/`),
   except shiki's syntax colors and the dialog overlay's fixed dim. A theme is one stylesheet
   (imported in `main.tsx`) plus an entry in `src/shared/themes.ts`; a syntax theme shiki lacks adds
-  its JSON beside it and a line in `diff-highlight.ts`.
+  its JSON beside it, a line in `diff-highlight.ts` and a `shikiTheme` member.
 - A color VS Code has no name for is a `--tet-*` variable, always used with its `--vscode-*`
   fallback and set only by the theme that needs it — the exception, not the way to theme.
 - Shared sizes are stated once, in `styles.css`'s `.app`; check the neighbouring view before
@@ -285,7 +290,8 @@ or a per-line decision is for an agent.
 - Icons come from Lucide first (`icons.tsx`). The Explorer's file icons are generated by
   `scripts/file-icons.js` — re-run, never edit.
 - Icons and marks are monochrome. The one accent is `--vscode-focusBorder`, 1px for anything that
-  marks or points. Exceptions: git status letters, the error mark, the Explorer's file icons.
+  marks or points. Exceptions: git status letters, the error mark, a notice's severity icon, an
+  editor tab's unsaved dot, the Explorer's file icons.
 - Row hover is `--vscode-list-hoverBackground`, action button hover
   `--vscode-toolbar-hoverBackground`.
 - When two things that should look identical don't, measure them (`getComputedStyle` on the built
@@ -334,13 +340,12 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   caller is sandboxed; a new difference extends the side.
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
-- `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository
-  or any worktree (`ownProjectOnly`); from a sandbox, every verb only for the caller's own
-  repository or worktree, except `worktree-add` and `worktree-delete`, which reach every worktree
-  of its project (`ownProject`).
-  `tabs-keys` never from inside a sandbox. `tabs-output`, `tabs-close`, `tabs-rename` and
-  `tabs-handoff` from a sandbox reach only tabs running there: a host tab is the machine's, and its
-  output may print the host's control token.
+- `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository or
+  any worktree (`ownProjectOnly`); from a sandbox, every verb naming one only for the caller's own
+  repository or worktree, except `worktree-add` and `worktree-delete`, which reach every worktree of
+  its project (`ownProject`). `tabs-keys` never from inside a sandbox. `tabs-output`, `tabs-close`,
+  `tabs-rename` and `tabs-handoff` from a sandbox reach only tabs running there: a host tab is the
+  machine's, and its output may print the host's control token.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.
@@ -350,12 +355,12 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx.ts` drives
 the `sbx` CLI.
 
-- **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): decided at each
-  start (`resolvePlace`), until then by where its session lives; each agent's runtime holds one
-  of each (`host`, `sandbox`). Everything that differs between host and sandbox — paths as the tab
-  sees them, drops, listing and operating on sessions, the side it calls from, the spawn — is a
-  member of it, implemented by `HostPlace` and `SandboxPlace`; nothing else asks where a tab runs,
-  and a new difference extends the interface.
+- **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): decided at each start
+  (`resolvePlace`), until then by where its session lives; each agent's runtime holds a `host` one,
+  and a `sandbox` one where it has the sandbox group. Everything that differs between host and
+  sandbox — paths as the tab sees them, drops, listing and operating on sessions, the side it calls
+  from, the spawn — is a member of it, implemented by `HostPlace` and `SandboxPlace`; nothing else
+  asks where a tab runs, and a new difference extends the interface.
 - **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error` — the
   host would bypass an organization's policy.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox
@@ -368,7 +373,7 @@ the `sbx` CLI.
   exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails there.
   The user's grants (Allowed paths, knowledge) and a path the user drops (data model) are theirs,
   not TET's.
-- Generated setup targets where it runs, not `process.platform` (`HookTarget`).
+- Generated setup targets where it runs, not the host's platform (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`
   evaluates) and against this machine (a path exists, a port is free, a value is stored). A row
@@ -386,9 +391,9 @@ the `sbx` CLI.
 ## Startup
 
 `src/main/requirements.ts` checks git, the agents and sbx before the workspace opens; without git,
-or with neither an agent nor sbx, `RequirementsDialog` is a wall and **installs nothing**.
-`process.env.PATH` is rewritten before that check (`augmentAgentPath`) and everything spawned
-inherits it.
+or with neither an agent nor sbx (`--allow-shell-only` lets the shell suffice), `RequirementsDialog`
+is a wall and **installs nothing**. `process.env.PATH` is rewritten before that check
+(`augmentAgentPath`) and everything spawned inherits it.
 
 ## npm scripts
 
@@ -399,7 +404,8 @@ inherits it.
   (on Windows it writes shortcuts and the PATH entry for the account).
 - `npm start` — typecheck, compile, launch (see "Do not restart the app yourself").
   `npm start -- --simulate=git,claude` shows the requirements dialog, `--simulate=sbx-mode` a
-  machine with only git and sbx; `--user-data-dir=<dir>` gives a run its own profile.
+  machine with only git and sbx; `--user-data-dir=<dir>` gives a run its own profile;
+  `--hide-window` never shows the window (local test runs).
 - `npm run dist` — package this platform's archives into `release/`.
 - The Linux side is testable from Windows in WSL: clone onto the Linux filesystem, `npm install`
   there, drive the app through `tet-ctl`.

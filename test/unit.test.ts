@@ -7,6 +7,7 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
 import { LINUX, MAC, WINDOWS } from "../src/shared/platform";
+import { PLATFORM } from "../src/main/host-platform";
 import { HOST_CALLER, SANDBOX_CALLER } from "../src/main/control/caller-side";
 import { writeLaunchers } from "../src/main/control/control-launcher";
 import { ControlRecords } from "../src/main/control/control-records";
@@ -238,7 +239,7 @@ describe("a terminal's environment", () => {
     }
   });
 
-  it("replaces the machine's variable spelled in another case, where names ignore case", { skip: process.platform !== "win32" }, () => {
+  it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.ignoresCase }, () => {
     process.env.TET_TEST_CASE = "machine";
     setStoredEnv(() => ({ tet_test_case: "stored" }));
     try {
@@ -299,7 +300,7 @@ describe("a terminal's environment", () => {
     assert.equal(Object.keys(env).filter((name) => name.toUpperCase() === "PATH").length, 1, "one PATH, not two");
   });
 
-  it("lets a saved command's PATH replace one spelled Path, where names ignore case", { skip: process.platform !== "win32" }, () => {
+  it("lets a saved command's PATH replace one spelled Path, where names ignore case", { skip: !PLATFORM.ignoresCase }, () => {
     setControlEnv({}, "");
     // A tet started from the desktop inherits `Path`; the spelling a tet.json uses is its own.
     const env = buildEnv({ own: { Path: "inherited" }, envOverride: { PATH: "command" } });
@@ -315,10 +316,10 @@ describe("the tet-ctl launcher", () => {
     const bin = writeLaunchers(dir, CLI);
     const run = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
       // cmd.exe resolves a .cmd on PATH and takes the line whole; a POSIX script needs no shell.
-      const win32 = process.platform === "win32";
-      const child = spawn(win32 ? "tet-ctl help" : "tet-ctl", win32 ? [] : ["help"], {
+      const viaCmd = PLATFORM.cmdLauncher;
+      const child = spawn(viaCmd ? "tet-ctl help" : "tet-ctl", viaCmd ? [] : ["help"], {
         env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined },
-        shell: win32
+        shell: viaCmd
       });
       let stdout = "";
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
@@ -329,7 +330,7 @@ describe("the tet-ctl launcher", () => {
     assert.match(run.stdout, /tet-ctl — control the TET app/);
   });
 
-  it("leaves nothing set in the cmd.exe that ran it", { skip: process.platform !== "win32" }, async () => {
+  it("leaves nothing set in the cmd.exe that ran it", { skip: !PLATFORM.cmdLauncher }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-launcher-"));
     const bin = writeLaunchers(dir, CLI);
     const after = await new Promise<string>((resolve) => {
@@ -435,7 +436,7 @@ describe("the agent PATH", () => {
 
   // The login shell is asked to be interactive, and an interactive shell ignores SIGTERM: the
   // timeout must not rely on it, or the requirements check waits forever and the app never opens.
-  it("gives up on a login shell that ignores being asked to stop", { skip: process.platform === "win32" && "posix only", timeout: 30_000 }, async () => {
+  it("gives up on a login shell that ignores being asked to stop", { skip: PLATFORM.agentDirsKnown && "posix only", timeout: 30_000 }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-shell-"));
     const shell = path.join(dir, "hanging-shell");
     // Ignores SIGTERM and blocks in the shell itself, with no child to kill in its place.
@@ -543,7 +544,7 @@ describe("an update's download, continued after it was cut short", () => {
     const server = await releaseServer({});
     try {
       const file = archive();
-      await resumableDownload(server.url, file, signal());
+      await resumableDownload(server.url, file, signal(), fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
       assert.deepEqual(server.ranges, [undefined]);
     } finally {
@@ -555,10 +556,10 @@ describe("an update's download, continued after it was cut short", () => {
     const server = await releaseServer({ cutAt: 200 * 1024 });
     try {
       const file = archive();
-      await assert.rejects(resumableDownload(server.url, file, signal()));
+      await assert.rejects(resumableDownload(server.url, file, signal(), fetch));
       const part = fs.statSync(file).size;
       assert.ok(part > 0 && part <= 200 * 1024, `part of ${part} bytes`);
-      await resumableDownload(server.url, file, signal());
+      await resumableDownload(server.url, file, signal(), fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
       assert.deepEqual(server.ranges, [undefined, `bytes=${part}-`]);
     } finally {
@@ -571,7 +572,7 @@ describe("an update's download, continued after it was cut short", () => {
     try {
       const file = archive();
       fs.writeFileSync(file, BODY.subarray(0, 1000));
-      await resumableDownload(server.url, file, signal());
+      await resumableDownload(server.url, file, signal(), fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
       assert.deepEqual(server.ranges, ["bytes=1000-"]);
     } finally {
@@ -584,7 +585,7 @@ describe("an update's download, continued after it was cut short", () => {
     try {
       const file = archive();
       fs.writeFileSync(file, BODY);
-      await resumableDownload(server.url, file, signal());
+      await resumableDownload(server.url, file, signal(), fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
     } finally {
       server.close();
@@ -596,7 +597,7 @@ describe("an update's download, continued after it was cut short", () => {
     try {
       const file = archive();
       fs.writeFileSync(file, BODY.subarray(0, 1000));
-      await assert.rejects(resumableDownload(server.url, file, signal()), /bytes 0-/);
+      await assert.rejects(resumableDownload(server.url, file, signal(), fetch), /bytes 0-/);
       assert.equal(fs.existsSync(file), false);
     } finally {
       server.close();

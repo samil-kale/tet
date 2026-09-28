@@ -117,7 +117,7 @@ export function sbxVerbs(
   };
 
   return {
-    // Not a project's, but asked of one: its status carries the sign-in.
+    // The machine's, not a project's: one sbx ls says whether it is signed in (readSbxSignedIn).
     "sbx-accounts": async () => {
       const loggedIn = await deps.sbx.signedIn();
       const account = loggedIn ? await deps.sbx.signedInUser() : undefined;

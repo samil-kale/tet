@@ -163,7 +163,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     });
   }, []);
 
-  // Read once, on open; Save goes through patchSetting (commands.ts), which reads the file fresh
+  // Read once, on open; Save goes through setExplorerSetting (tet-json.ts), which reads the file fresh
   // and leaves other keys alone. Keyed by id: the project list is rebuilt whole when a project is
   // added elsewhere, and a new object for the same project must not discard the edits.
   const activeProjectId = activeProject?.id;

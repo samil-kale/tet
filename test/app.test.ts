@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
+import { PLATFORM } from "../src/main/host-platform";
 import { resolveRoot } from "../src/main/git/git";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
@@ -155,9 +156,9 @@ ${stderr.slice(uncaught)}`);
   it("runs a saved command in a tab that ends the way the command did", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     // node is what runs this very test, so it is on the app's PATH too.
-    const relative = path.join("bin", process.platform === "win32" ? "tool.exe" : "tool");
+    const relative = path.join("bin", PLATFORM.executableByExtension ? "tool.exe" : "tool");
     fs.mkdirSync(path.join(repo, "bin"), { recursive: true });
-    if (process.platform === "win32") {
+    if (PLATFORM.executableByExtension) {
       // A native program: node-pty takes it directly.
       fs.copyFileSync(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "whoami.exe"), path.join(repo, relative));
     } else {

@@ -194,7 +194,7 @@ export interface AgentHost {
 /** Everything the agent needs to run in an sbx sandbox (SandboxPlace, sbx.ts). */
 export interface AgentSandbox {
   /**
-   * AgentHost.prepare for the sandbox: generated for POSIX regardless of `process.platform`, paths
+   * AgentHost.prepare for the sandbox: generated for POSIX regardless of the host's platform, paths
    * in the sandbox's view (`SANDBOX_TARGET`, hook-target.ts). Hooks report over the control
    * channel, so the host shows the toast.
    *

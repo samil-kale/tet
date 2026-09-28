@@ -9,9 +9,9 @@ import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import * as semver from "semver";
 import { findControlPort } from "../src/main/control/control-server";
+import { PLATFORM } from "../src/main/host-platform";
 import { CONTROL_ENV } from "../src/shared/control";
 import { assetName, rootExecutable, rootIn } from "../src/shared/release";
-import { platformOf } from "../src/shared/platform";
 import type { UpdateResult } from "../src/shared/release";
 import { eventually, killApp, processAlive, tetCtl, WINDOW_ARGS } from "./helpers";
 
@@ -29,7 +29,6 @@ const ENABLED = process.env.TET_INSTALL_TEST === "1";
 const ROOT = path.join(__dirname, "..");
 const STARTUP_MS = 120_000;
 const TOKEN = "install-test-token";
-const PLATFORM = platformOf(process.platform);
 const ASSET = assetName(PLATFORM, process.arch) as string;
 
 let work: string;
@@ -51,7 +50,7 @@ let port: number;
 
 /** Where the script puts tet, under the throwaway home. */
 function installedRoot(): string {
-  switch (process.platform) {
+  switch (PLATFORM.id) {
     case "win32":
       return path.join(home, "Programs", "TET");
     case "darwin":
@@ -64,7 +63,7 @@ function installedRoot(): string {
 /** Async because the releases it fetches are served from this event loop. */
 async function install(): Promise<void> {
   const [command, args] =
-    process.platform === "win32"
+    PLATFORM.id === "win32"
       ? ["powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path.join(ROOT, "scripts", "install.ps1")]]
       : ["sh", [path.join(ROOT, "scripts", "install.sh")]];
   const child = spawn(command, args, { env });
@@ -92,7 +91,7 @@ function withLog(what: string): () => string {
 /** Started directly: `open` on macOS would not pass this environment. */
 function startTet(): void {
   const args = [`--user-data-dir=${userData}`, "--allow-shell-only", ...WINDOW_ARGS];
-  if (process.platform === "linux") {
+  if (PLATFORM.id === "linux") {
     args.push("--no-sandbox");
   }
   const log = fs.openSync(path.join(work, "tet.log"), "a");
@@ -133,9 +132,9 @@ async function version(): Promise<{ version: string; pid: number } | undefined> 
 
 /** A user's quit per platform: closing the window, SIGTERM, Cmd+Q's Apple Event. */
 function quit(pid: number): void {
-  if (process.platform === "win32") {
+  if (PLATFORM.id === "win32") {
     spawnSync("taskkill", ["/pid", String(pid)], { stdio: "ignore" });
-  } else if (process.platform === "darwin") {
+  } else if (PLATFORM.id === "darwin") {
     spawnSync("osascript", ["-e", 'tell application id "com.samilkale.tet" to quit'], { stdio: "ignore" });
   } else {
     process.kill(pid, "SIGTERM");
@@ -148,8 +147,8 @@ function quit(pid: number): void {
  */
 function packageNext(): string {
   const output = path.join(work, "next");
-  const platformFlag = { win32: "--win", darwin: "--mac", linux: "--linux" }[process.platform as "win32" | "darwin" | "linux"];
-  const target = process.platform === "win32" ? "zip" : "tar.gz";
+  const platformFlag = { win32: "--win", darwin: "--mac", linux: "--linux" }[PLATFORM.id];
+  const target = PLATFORM.assetExtension;
   const result = spawnSync(
     process.execPath,
     [
@@ -206,7 +205,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
       ...process.env,
       TET_RELEASES_URL: releasesUrl,
       [CONTROL_ENV.token]: TOKEN,
-      ...(process.platform === "win32" ? { LOCALAPPDATA: home } : { HOME: home })
+      ...(PLATFORM.id === "win32" ? { LOCALAPPDATA: home } : { HOME: home })
     };
     port = await findControlPort(userData);
   });
@@ -236,7 +235,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
   it("installs through the script and starts", async () => {
     await install();
     assert.ok(fs.existsSync(rootExecutable(installedRoot(), PLATFORM)), "the executable in place");
-    if (process.platform === "win32") {
+    if (PLATFORM.id === "win32") {
       const startMenu = path.join(process.env.APPDATA ?? "", "Microsoft", "Windows", "Start Menu", "Programs", "TET.lnk");
       const link = spawnSync(
         "powershell.exe",
@@ -251,7 +250,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
     } else {
       assert.ok(fs.existsSync(path.join(home, ".local", "bin", "tet")), "the tet command");
     }
-    if (process.platform === "linux") {
+    if (PLATFORM.id === "linux") {
       assert.ok(fs.existsSync(path.join(home, ".local", "share", "applications", "tet.desktop")), "the desktop entry");
     }
     served = next;

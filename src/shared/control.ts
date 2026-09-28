@@ -70,9 +70,9 @@ export interface ControlVerb {
    * What a caller running in an sbx sandbox may do; absent means refused, so a new verb is closed
    * to it until decided. `ownRef` answers only for the caller's own repository or worktree, the one
    * its sandbox mounts; `ownProject` for its project's repository and every worktree, for a verb
-   * whose target is by nature another one of them. The sandbox is the organization's policy: a verb
-   * that starts a process on this machine, or reads outside the project it mounts, would walk
-   * around it.
+   * whose target is by nature another one of them; `any` as far as from a host tab
+   * (HOST_SIDE.reach). The sandbox is the organization's policy: a verb that starts a process on
+   * this machine, or reads outside the project it mounts, would walk around it.
    */
   sandbox?: "any" | "ownRef" | "ownProject";
   /**

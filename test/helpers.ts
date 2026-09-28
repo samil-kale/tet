@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { safeStorage, utilityProcess } from "electron";
+import { PLATFORM } from "../src/main/host-platform";
 import { findControlPort } from "../src/main/control/control-server";
 import { tabControlToken } from "../src/main/control/control-token";
 import * as gitModule from "../src/main/git/git";
@@ -131,7 +132,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     [CONTROL_ENV.tabId]: undefined
   };
   const args = [path.join(__dirname, ".."), `--user-data-dir=${userData}`, "--allow-shell-only"];
-  if (process.platform === "linux") {
+  if (PLATFORM.id === "linux") {
     // ubuntu-latest ships chrome-sandbox without the setuid bit and AppArmor blocks the userns
     // fallback, so Electron aborts on launch. The installed `tet` passes it too (install.sh).
     args.push("--no-sandbox");
@@ -182,7 +183,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
 
 /** Ends the app; on win32 always by force, as the signal is not a thing there. */
 export function killApp(target: number, signal: "SIGTERM" | "SIGKILL" = "SIGTERM"): void {
-  if (process.platform === "win32") {
+  if (PLATFORM.killsWithTaskkill) {
     // The whole tree: a shell tab is a process of its own under the app.
     spawnSync("taskkill", ["/pid", String(target), "/t", "/f"], { stdio: "ignore" });
   } else {

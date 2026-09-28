@@ -10,6 +10,7 @@ import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
 import { LINUX, WINDOWS } from "../src/shared/platform";
 import * as esbuild from "esbuild";
 import { holdEscape } from "../src/renderer/ui/use-escape";
+import { PLATFORM } from "../src/main/host-platform";
 import { claudeAgent } from "../src/main/agents/claude";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { hookSessionId } from "../src/main/agents/hook-payload";
@@ -113,7 +114,7 @@ describe("resolveCommand", () => {
     });
   };
 
-  it("spawns a native executable directly and routes a shim through cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, () => {
+  it("spawns a native executable directly and routes a shim through cmd.exe", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     assert.deepEqual(resolveCommand("C:\\tools\\run.exe", ["-v"]), { command: "C:\\tools\\run.exe", args: ["-v"] });
     assert.deepEqual(resolveCommand("C:\\tools\\run.cmd", ["-v"]), {
       command: "cmd.exe",
@@ -122,7 +123,7 @@ describe("resolveCommand", () => {
     });
   });
 
-  it("hands every character to a shim literally, through cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, () => {
+  it("hands every character to a shim literally, through cmd.exe", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     // A global npm shim's shape (cmd-shim), in a folder whose name cmd.exe would otherwise split and
     // group; node by its path, where cmd-shim looks beside the shim or on PATH.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet shim (x)-"));
@@ -157,7 +158,7 @@ describe("resolveCommand", () => {
     assert.deepEqual(fs.readdirSync(dir).sort(), ["argv.js", "echo-args.cmd"], "nothing redirected into a file");
   });
 
-  it("hands a batch file reading its own arguments each one once escaped", { skip: process.platform !== "win32" && "win32 only" }, () => {
+  it("hands a batch file reading its own arguments each one once escaped", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     // Maven's `mvn.cmd` shape: `%~1` compared in an `if`, where a second escape's carets are a
     // syntax error ("[tet] mvn exited with code 255").
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet batch (x)-"));
@@ -180,7 +181,7 @@ describe("resolveCommand", () => {
     }
   });
 
-  it("finds a native executable named by its path without an extension", { skip: process.platform !== "win32" && "win32 only" }, () => {
+  it("finds a native executable named by its path without an extension", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-native-"));
     try {
       fs.writeFileSync(path.join(dir, "build.exe"), "");
@@ -190,7 +191,7 @@ describe("resolveCommand", () => {
     }
   });
 
-  it("kills the program behind a shim along with its cmd.exe", { skip: process.platform !== "win32" && "win32 only" }, async () => {
+  it("kills the program behind a shim along with its cmd.exe", { skip: !PLATFORM.killsWithTaskkill && "win32 only" }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-kill-"));
     const pidFile = path.join(dir, "pid");
     const script = path.join(dir, "wait.js");
@@ -205,7 +206,7 @@ describe("resolveCommand", () => {
     await eventually("the program behind the shim exited", () => !processAlive(pid), 10_000);
   });
 
-  it("takes a name's first folder on PATH, its extension second", { skip: process.platform !== "win32" && "win32 only" }, () => {
+  it("takes a name's first folder on PATH, its extension second", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     // A shim put in front of an installed program: cmd.exe resolves per folder, every PATHEXT
     // extension before the next folder, so the earlier .cmd runs and not the later .exe.
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-path-"));
@@ -226,7 +227,7 @@ describe("resolveCommand", () => {
     }
   });
 
-  it("changes nothing elsewhere", { skip: process.platform === "win32" && "not win32" }, () => {
+  it("changes nothing elsewhere", { skip: PLATFORM.spawnsThroughCmd && "not win32" }, () => {
     assert.deepEqual(resolveCommand("npm", ["-v"]), { command: "npm", args: ["-v"] });
   });
 });
@@ -242,13 +243,13 @@ describe("sbx sandbox naming and mounts", () => {
   });
 
   it("mounts a Windows path the way sbx does inside the sandbox, verified live 2026-09-08", {
-    skip: process.platform !== "win32" && "win32 only"
+    skip: !PLATFORM.driveLetters && "win32 only"
   }, () => {
     assert.equal(toContainerPath("C:\\Users\\saka\\Documents\\Workspace\\Private\\tet"), "/c/Users/saka/Documents/Workspace/Private/tet");
   });
 
   it("spells a Windows path the way it is on disk, since sbx mounts it that way, verified live 2026-09-14", {
-    skip: process.platform !== "win32" && "win32 only"
+    skip: !PLATFORM.driveLetters && "win32 only"
   }, () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-case-"));
     try {
@@ -262,7 +263,7 @@ describe("sbx sandbox naming and mounts", () => {
   });
 
   it("leaves a macOS/Linux path untouched — already the same path inside and out", {
-    skip: process.platform === "win32" && "not win32"
+    skip: PLATFORM.driveLetters && "not win32"
   }, () => {
     assert.equal(toContainerPath("/Users/saka/project"), "/Users/saka/project");
   });
@@ -421,7 +422,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 }
 `
     );
-    if (process.platform === "win32") {
+    if (PLATFORM.executableByExtension) {
       fs.writeFileSync(path.join(dir, "sbx.cmd"), `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
     } else {
       fs.writeFileSync(path.join(dir, "sbx"), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
@@ -927,7 +928,7 @@ describe("the environment variables kept in TET", () => {
     assert.deepEqual(store.values(), { GITLAB_TOKEN: "new" }, "a change from outside is seen, not overwritten");
   });
 
-  it("take a name in another case for the same variable where the machine does", { skip: process.platform !== "win32" }, () => {
+  it("take a name in another case for the same variable where the machine does", { skip: !PLATFORM.ignoresCase }, () => {
     const store = new EnvStore(tempRoot());
     store.set([row("gitlab_token", "old")]);
     store.set([row("GITLAB_TOKEN", "new")]);

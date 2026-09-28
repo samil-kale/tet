@@ -5,6 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
+import { PLATFORM } from "../src/main/host-platform";
 import { claudeAgent } from "../src/main/agents/claude";
 import { codexHookReply } from "../src/main/agents/codex/hooks";
 import { shellAgent } from "../src/main/agents/shell";
@@ -1251,7 +1252,7 @@ describe("tet-ctl against the control server", () => {
     // On win32 one variable, as the machine counts them.
     calls.envAsks.length = 0;
     await tetCtl(["env-request", "GITHUB_TOKEN", "github_token"]);
-    assert.deepEqual(calls.envAsks[0].names, process.platform === "win32" ? ["GITHUB_TOKEN"] : ["GITHUB_TOKEN", "github_token"]);
+    assert.deepEqual(calls.envAsks[0].names, PLATFORM.ignoresCase ? ["GITHUB_TOKEN"] : ["GITHUB_TOKEN", "github_token"]);
   });
 
   it("takes the environment dialog down once the asking CLI is gone", async () => {

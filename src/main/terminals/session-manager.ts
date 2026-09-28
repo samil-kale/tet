@@ -542,7 +542,7 @@ export class TabSessionManager {
   }
 
   /**
-   * tet.json was written, by anyone (repository.ts's COMMANDS_FILE). Picked up now, not at the next
+   * tet.json was written, by anyone (tet-json.ts's PROJECT_FILE). Picked up now, not at the next
    * start: `addProject` opens the project before the dialog switching sandboxing on shows, and a
    * machine with no agent would sit at an empty project. Only unstartable runtimes are acted on.
    */

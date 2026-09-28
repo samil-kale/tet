@@ -173,7 +173,7 @@ export function sbxVersionSupported(version: string): boolean {
  * sbx shows a one-time wizard on a machine's first interactive `sbx run` (a tet tab is one). Any
  * valid JSON at `%LOCALAPPDATA%\DockerSandboxes\sandboxes\config\first-run-import.json` suppresses
  * it; an existing file is kept. Loses the wizard's MCP-server import (`sbx mcp add` by hand).
- * Windows only, a no-op elsewhere. Best-effort.
+ * Only where sbx shows the wizard (Platform.sbxFirstRunWizard), a no-op elsewhere. Best-effort.
  */
 async function suppressSbxFirstRunWizard(): Promise<void> {
   if (!PLATFORM.sbxFirstRunWizard || !process.env.LOCALAPPDATA) {

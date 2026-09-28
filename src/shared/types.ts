@@ -26,6 +26,8 @@ export interface AgentInfo {
   /** Starts on a first prompt (AgentTerminal.initialPromptArgs), so it can take over another
    *  agent's session. */
   takesPrompt: boolean;
+  /** Can run in an sbx sandbox (the agent's `sandbox` group). */
+  sandboxed: boolean;
 }
 
 /** A program tet needs, and whether the startup check found it. */

@@ -46,10 +46,11 @@ export interface Launch {
 
 /**
  * Where a tab's process runs — this machine, or the repository's or worktree's sandbox — and
- * everything that differs between the two. One of each per agent and repository or worktree (the
- * session manager's AgentRuntime); a tab's is where its latest start ran it (resolvePlace), until
- * then where its session lives. Nothing outside a place asks which one it is: a new difference is
- * a member here, implemented by both (HostPlace, SandboxPlace).
+ * everything that differs between the two. Per agent and repository or worktree a host place, and
+ * a sandbox place where the agent has the sandbox group (the session manager's AgentRuntime); a
+ * tab's is where its latest start ran it (resolvePlace), until then where its session lives.
+ * Nothing outside a place asks which one it is: a new difference is a member here, implemented by
+ * both (HostPlace, SandboxPlace).
  */
 export interface TabPlace {
   /** What the tab's process may do through the control channel and gets at its start (pty.ts). */

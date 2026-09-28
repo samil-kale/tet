@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { app } from "electron";
+import { app, net } from "electron";
 import * as originalFs from "original-fs";
 import * as semver from "semver";
 import writeFileAtomic from "write-file-atomic";
@@ -101,7 +101,7 @@ function isWritable(dir: string): boolean {
 /** Read off the redirect of `<releases>/latest` — no API request, no rate limit. */
 async function latestVersion(releasesUrl: string): Promise<string | undefined> {
   try {
-    const response = await fetch(`${releasesUrl}/latest`, { redirect: "manual", signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
+    const response = await net.fetch(`${releasesUrl}/latest`, { redirect: "manual", signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
     const tag = /\/tag\/v?([^/?#]+)$/.exec(response.headers.get("location") ?? "")?.[1];
     return tag && semver.valid(tag) ? tag : undefined;
   } catch {

@@ -676,7 +676,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   }
   // One model per URI or monaco throws; the repository or worktree is the authority, as two can
   // show one path. Within a repository or worktree a path is open in one tab at most
-  // (App.openDiff), and the previous models are cleared before the next open.
+  // (App's openEditor), and the previous models are cleared before the next open.
   const uri = (scheme: string): ReturnType<typeof monaco.Uri.from> =>
     monaco.Uri.from({ scheme, authority: projectRefKey(view.ref), path: `/${file.path}` });
   const models = {

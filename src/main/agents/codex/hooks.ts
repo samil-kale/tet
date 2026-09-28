@@ -43,7 +43,7 @@ function sortKeysDeep(value: unknown): unknown {
 
 /**
  * The synthetic config path Codex assigns command-line hooks, used only in trust keys. A sandboxed
- * Codex runs on Linux whatever the host, hence `target.posix`, not `process.platform` — the win32
+ * Codex runs on Linux whatever the host, hence `target.posix`, not the host's platform — the win32
  * form would reopen the review screen in a Windows host's sandbox.
  */
 function sessionFlagsSource(target: HookTarget): string {

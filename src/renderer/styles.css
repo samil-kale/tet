@@ -1846,8 +1846,9 @@ textarea:focus,
   font-family: var(--vscode-editor-font-family);
 }
 
-/* A row Save or sbx's policy refuses: the error mark's colour, as .session-mark-error. Scoped to
-   `.dialog-field` to outrank `.dialog-field span`, which would grey it. */
+/* A row Save, sbx's policy or an action refuses: the error mark's colour, as .session-mark-error,
+   in any row. Also scoped to `.dialog-field` to outrank `.dialog-field span`, which would grey it. */
+.row-mark,
 .dialog-field .row-mark {
   display: flex;
   flex: none;
@@ -2049,6 +2050,7 @@ textarea:focus,
 .settings-dialog {
   width: var(--dialog-wide-width);
   height: 420px;
+  max-height: calc(100vh - 32px);
 }
 
 .settings-dialog .dialog-body {
@@ -2271,6 +2273,7 @@ textarea:focus,
 .add-repository-dialog {
   width: 700px;
   height: 440px;
+  max-height: calc(100vh - 32px);
 }
 
 .add-repository-dialog .dialog-body {

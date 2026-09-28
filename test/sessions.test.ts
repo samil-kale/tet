@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import { PLATFORM } from "../src/main/host-platform";
 import { claudeSandboxSessions, claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSandboxSessions, codexSessionProvider } from "../src/main/agents/codex/sessions";
 import { encodeCwd, piSandboxSessions, piSessionProvider } from "../src/main/agents/pi/sessions";
@@ -18,7 +19,7 @@ const ms = (iso: string): number => Date.parse(iso);
 const line = (entry: unknown): string => (typeof entry === "string" ? entry : JSON.stringify(entry)) + "\n";
 
 describe("Claude Code's transcripts", () => {
-  const cwd = process.platform === "win32" ? "C:\\work\\Repo One" : "/work/repo one";
+  const cwd = PLATFORM.driveLetters ? "C:\\work\\Repo One" : "/work/repo one";
   const encoded = cwd.replace(/[^a-zA-Z0-9]/g, "-");
 
   /** A fresh config dir per case: the provider caches by path. */
@@ -188,7 +189,7 @@ describe("Claude Code's transcripts", () => {
 });
 
 describe("Codex's rollouts", () => {
-  const cwd = process.platform === "win32" ? "C:\\work\\Repo" : "/work/repo";
+  const cwd = PLATFORM.driveLetters ? "C:\\work\\Repo" : "/work/repo";
 
   function rollouts(files: Record<string, unknown[]>, index: unknown[] = []): void {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "tet-codex-"));
@@ -259,7 +260,7 @@ describe("Codex's rollouts", () => {
 });
 
 describe("pi's transcripts", () => {
-  const cwd = process.platform === "win32" ? "C:\\work\\Repo One" : "/work/repo one";
+  const cwd = PLATFORM.driveLetters ? "C:\\work\\Repo One" : "/work/repo one";
   const fileName = (id: string, at = AT): string => `${at.replace(/[:.]/g, "-")}_${id}.jsonl`;
 
   /** A fresh config dir per case: the provider caches by path. */
@@ -362,7 +363,7 @@ describe("pi's transcripts", () => {
     assert.deepEqual(sessions.map((s) => [s.id, s.title]), [["s1", "Still listed"]]);
   });
 
-  it("finds the directory whatever case pi was spawned with", { skip: process.platform !== "win32" && "win32 only" }, async () => {
+  it("finds the directory whatever case pi was spawned with", { skip: !PLATFORM.ignoresCase && "win32 only" }, async () => {
     transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] }, encodeCwd(cwd).toLowerCase());
     assert.equal((await piSessionProvider.list(cwd))[0]?.id, "s1");
   });

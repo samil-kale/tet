@@ -139,7 +139,6 @@ async function pasteClipboardImage(view: TerminalView): Promise<boolean> {
   if (file === null) {
     return false;
   }
-  // The drops folder is under the profile, whose name can hold a space.
   await handPaths(view, [file]);
   return true;
 }
