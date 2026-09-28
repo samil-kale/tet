@@ -6,6 +6,7 @@ import * as http from "node:http";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
+import { after } from "node:test";
 import { safeStorage, utilityProcess } from "electron";
 import { PLATFORM } from "../src/main/host-platform";
 import { findControlPort } from "../src/main/control/control-server";
@@ -44,6 +45,29 @@ export function processAlive(pid: number): boolean {
     return false;
   }
 }
+
+const tempDirs: string[] = [];
+
+/**
+ * A new folder in the OS's temp folder, named after `prefix` and removed once the test file is
+ * done: a test run must leave nothing behind there. Each test file runs in a process of its own,
+ * so this root hook runs once per file, after all its tests.
+ */
+export function tempDir(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+after(() => {
+  for (const dir of tempDirs) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // On win32 a process may still hold a file; what is left stays in the temp folder.
+    }
+  }
+});
 
 /** The built CLI — the tests run what ships, not the source. */
 export const CLI = path.join(__dirname, "..", "dist", "tet-ctl.js");
@@ -219,19 +243,22 @@ export function git(cwd: string, ...args: string[]): string {
   return result.stdout.trim();
 }
 
-/** A repository on main with one commit of a.txt, in a temporary folder named after `prefix`. */
-export function initRepository(prefix: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+/** A repository on main with one commit, "base", of `files` (name to content), in a temporary
+ *  folder named after `prefix`. */
+export function initRepository(prefix: string, files: Record<string, string> = { "a.txt": "committed\n" }): string {
+  const dir = tempDir(prefix);
   git(dir, "init", "-q", "--initial-branch=main");
-  fs.writeFileSync(path.join(dir, "a.txt"), "committed\n");
-  git(dir, "add", "a.txt");
+  for (const [name, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, name), content);
+  }
+  git(dir, "add", "--", ...Object.keys(files));
   git(dir, "commit", "-q", "-m", "base");
   return dir;
 }
 
 /** A bare repository on main, for a test that needs something to push to. */
 export function initBare(prefix: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const dir = tempDir(prefix);
   git(dir, "init", "-q", "--bare", "--initial-branch=main");
   return dir;
 }

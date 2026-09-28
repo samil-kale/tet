@@ -1,10 +1,8 @@
 import * as path from "node:path";
-import type { ControlRequest } from "../../shared/control";
+import type { ControlRequest, ControlVerbName } from "../../shared/control";
 import type {
-  ProjectRef,
   Project,
   SbxKnowledgeConfig,
-  SbxKnowledgeKind,
   SbxProjectConfig,
   SbxSecret,
   SbxVariable
@@ -22,7 +20,7 @@ import {
 import { sbxBlocked, sbxNotReady } from "../sbx-policy";
 import type { ControlDeps } from "./control-server";
 import type { SbxReading } from "../sbx-status";
-import { ControlError, list, text, type Answer, type Handler } from "./control-verb";
+import { ControlError, list, oneOf, optionalText, text, type Answer, type Handler, type RefFrom } from "./control-verb";
 import { PLATFORM } from "../host-platform";
 
 /**
@@ -32,8 +30,8 @@ import { PLATFORM } from "../host-platform";
  */
 export function sbxVerbs(
   deps: ControlDeps,
-  refFrom: (args: Record<string, unknown>, caller: ControlRequest["caller"]) => { project: Project; ref: ProjectRef }
-): Record<string, Handler> {
+  refFrom: RefFrom
+): Record<Extract<ControlVerbName, `sbx-${string}`>, Handler> {
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
    *  which only the user can set up there. Returns what it read, for the Save to reuse. */
@@ -159,10 +157,7 @@ export function sbxVerbs(
     },
 
     "sbx-set-enabled": async (args, caller) => {
-      const value = text(args, "value", "on or off");
-      if (value !== "on" && value !== "off") {
-        throw new ControlError("bad_args", `not on or off: ${value}`);
-      }
+      const value = oneOf(args, "value", "value", ["on", "off"]);
       // As the dialog's switch, locked where no agent runs on this machine.
       if (value === "off" && !(await deps.sbx.anyAgentInstalled())) {
         throw new ControlError("bad_args", "no agent is installed on this machine, so sandboxing cannot be switched off");
@@ -239,21 +234,16 @@ export function sbxVerbs(
     },
 
     "sbx-set-knowledge": (args, caller) => {
-      const kind = text(args, "kind", "kind");
-      const access = text(args, "access", "off, ro or rw");
-      if (!SBX_KNOWLEDGE_KINDS.some((candidate) => candidate === kind)) {
-        throw new ControlError("bad_args", `unknown kind: ${kind} (one of ${SBX_KNOWLEDGE_KINDS.join(", ")})`);
-      }
-      if (access !== "off" && access !== "ro" && access !== "rw") {
-        throw new ControlError("bad_args", `not off, ro or rw: ${access}`);
-      }
+      const kind = oneOf(args, "kind", "kind", SBX_KNOWLEDGE_KINDS);
+      const access = oneOf(args, "access", "access", ["off", ...SBX_ACCESS]);
       return editSbx(args, caller, ({ knowledge }) => ({
-        knowledge: { ...knowledge, [kind as SbxKnowledgeKind]: access === "off" ? false : access }
+        knowledge: { ...knowledge, [kind]: access === "off" ? false : access }
       }));
     },
 
     "sbx-set-skills-folder": (args, caller) => {
-      const folder = typeof args.path === "string" && args.path !== "" ? absolute(args.path) : undefined;
+      const typed = optionalText(args, "path");
+      const folder = typed === undefined ? undefined : absolute(typed);
       return editSbx(args, caller, ({ knowledge }) => {
         const next = { ...knowledge, skillsFolder: folder };
         if (folder === undefined) {

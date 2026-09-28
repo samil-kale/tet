@@ -1,14 +1,13 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { PLATFORM } from "../src/main/host-platform";
 import { resolveRoot } from "../src/main/git/git";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
-import { eventually, killApp, startApp, tetCtl, type TestApp } from "./helpers";
+import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "./helpers";
 
 /**
  * The real app, driven through tet-ctl alone, on a profile of its own (`--user-data-dir`) with a
@@ -42,10 +41,10 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
   before(async () => {
     // Through a link, as macOS's /var or a Windows 8.3 %TEMP% reach a folder: a path tet makes under
     // the profile still has to match the on-disk spelling git and the project list use.
-    profileDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-app-"));
+    profileDir = tempDir("tet-app-");
     userData = `${profileDir}-link`;
     fs.symlinkSync(profileDir, userData, "junction");
-    repo = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repo-"));
+    repo = tempDir("tet-repo-");
     spawnSync("git", ["init", "-q"], { cwd: repo });
     app = await startApp(userData, TOKEN, STARTUP_MS);
     pid = await app.alive();

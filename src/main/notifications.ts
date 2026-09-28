@@ -2,9 +2,14 @@ import * as crypto from "node:crypto";
 import { app, Notification } from "electron";
 import { projectRefKey, projectRef } from "../shared/types";
 import type { ProjectRef } from "../shared/types";
-import type { ToastTarget } from "./control/control-server";
 import { logError } from "./uncaught";
 import { PLATFORM } from "./host-platform";
+
+/** The tab a toast is about, which a click shows. */
+export interface ToastTarget {
+  ref: ProjectRef;
+  tabId: string;
+}
 
 /** What the desktop toasts need of the app around them (main.ts owns all of it). */
 interface NotificationDeps {

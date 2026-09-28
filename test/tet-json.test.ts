@@ -16,6 +16,7 @@ import {
   writeCommands,
   writeSbxConfig
 } from "../src/main/tet-json";
+import { tempDir } from "./helpers";
 
 /** tet.json: the user's file, read defensively and written back with nothing of theirs lost. */
 
@@ -25,7 +26,7 @@ const put = (content: string): void => fs.writeFileSync(file(), content);
 const stored = (): unknown => JSON.parse(fs.readFileSync(file(), "utf8"));
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-json-"));
+  root = tempDir("tet-json-");
 });
 
 describe("readCommands", () => {

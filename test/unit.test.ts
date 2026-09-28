@@ -24,7 +24,7 @@ import { TabSessionManager, type SessionManagerCallbacks } from "../src/main/ter
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
 import type { TerminalDescriptor } from "../src/shared/types";
-import { CLI, eventually } from "./helpers";
+import { CLI, eventually, tempDir } from "./helpers";
 
 /** Pieces of the main process needing no app and no server: the session manager's turns and
  *  reports, the control records and launchers, the agent PATH, and what the shell may open. */
@@ -33,7 +33,7 @@ describe("a turn's toast", () => {
   // A shell tab stands in for an agent: no version check and no sessions, so the manager starts
   // nothing.
   it("is left out for a tab in front of the user, and only while it is", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-toast-"));
+    const root = tempDir("tet-toast-");
     const settings = new SettingsStore(root);
     settings.patch({ notifications: { finished: true, needsYou: true, idleReminder: true } });
     let pushed: TerminalDescriptor[] = [];
@@ -72,7 +72,6 @@ describe("a turn's toast", () => {
       }
     } finally {
       await manager.dispose();
-      fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
     }
   });
 });
@@ -93,7 +92,7 @@ async function withEmptyPath(
   callbacks: Partial<SessionManagerCallbacks>,
   use: (manager: TabSessionManager, project: string) => Promise<void> | void
 ): Promise<void> {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-empty-path-"));
+  const root = tempDir("tet-empty-path-");
   const project = path.join(root, "repo");
   fs.mkdirSync(project);
   const originalPath = process.env.PATH;
@@ -108,7 +107,6 @@ async function withEmptyPath(
   } finally {
     await manager.dispose();
     process.env.PATH = originalPath;
-    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 }
 
@@ -311,7 +309,7 @@ describe("a terminal's environment", () => {
 
 describe("the tet-ctl launcher", () => {
   it("is found on PATH and runs the CLI", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-launcher-"));
+    const dir = tempDir("tet-launcher-");
     // Here `process.execPath` is node, which ignores ELECTRON_RUN_AS_NODE; the app writes electron.
     const bin = writeLaunchers(dir, CLI);
     const run = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
@@ -325,13 +323,12 @@ describe("the tet-ctl launcher", () => {
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
       child.on("close", (status) => resolve({ status, stdout }));
     });
-    fs.rmSync(dir, { recursive: true, force: true });
     assert.equal(run.status, 0);
     assert.match(run.stdout, /tet-ctl — control the TET app/);
   });
 
   it("leaves nothing set in the cmd.exe that ran it", { skip: !PLATFORM.cmdLauncher }, async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-launcher-"));
+    const dir = tempDir("tet-launcher-");
     const bin = writeLaunchers(dir, CLI);
     const after = await new Promise<string>((resolve) => {
       // One cmd.exe session: the launcher, then a look at the variable.
@@ -343,7 +340,6 @@ describe("the tet-ctl launcher", () => {
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
       child.on("close", () => resolve(stdout));
     });
-    fs.rmSync(dir, { recursive: true, force: true });
     assert.doesNotMatch(after, /ELECTRON_RUN_AS_NODE=1/);
   });
 });
@@ -437,7 +433,7 @@ describe("the agent PATH", () => {
   // The login shell is asked to be interactive, and an interactive shell ignores SIGTERM: the
   // timeout must not rely on it, or the requirements check waits forever and the app never opens.
   it("gives up on a login shell that ignores being asked to stop", { skip: PLATFORM.agentDirsKnown && "posix only", timeout: 30_000 }, async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-shell-"));
+    const dir = tempDir("tet-shell-");
     const shell = path.join(dir, "hanging-shell");
     // Ignores SIGTERM and blocks in the shell itself, with no child to kill in its place.
     fs.writeFileSync(shell, ["#!/bin/sh", 'trap "" TERM', "read ignored", ""].join("\n"), { mode: 0o755 });
@@ -453,7 +449,6 @@ describe("the agent PATH", () => {
       } else {
         process.env.SHELL = shellBefore;
       }
-      fs.rmSync(dir, { recursive: true, force: true });
     }
     const took = Date.now() - started;
     assert.ok(took < 20_000, `it waited ${took}ms on a shell it had given up on`);
@@ -537,7 +532,7 @@ describe("an update's download, continued after it was cut short", () => {
     return { url: `http://127.0.0.1:${port}/TET.zip`, ranges, close: () => server.close() };
   }
 
-  const archive = (): string => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-download-test-")), "TET.zip");
+  const archive = (): string => path.join(tempDir("tet-download-test-"), "TET.zip");
   const signal = (): AbortSignal => AbortSignal.timeout(10_000);
 
   it("fetches the whole file when there is no part", async () => {

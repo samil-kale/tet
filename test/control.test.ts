@@ -1,7 +1,6 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as http from "node:http";
-import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
@@ -11,7 +10,8 @@ import { codexHookReply } from "../src/main/agents/codex/hooks";
 import { shellAgent } from "../src/main/agents/shell";
 import { systemPrompt } from "../src/main/agents/system-prompt";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
-import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
+import type { ControlDeps, ControlTerminals } from "../src/main/control/control-server";
+import type { ToastTarget } from "../src/main/notifications";
 import type { EnvAsk } from "../src/main/environment";
 import { tabControlToken } from "../src/main/control/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
@@ -29,7 +29,7 @@ import type {
   TerminalDescriptor,
   WorktreeInfo
 } from "../src/shared/types";
-import { eventually, tetCtl as runCli } from "./helpers";
+import { eventually, tempDir, tetCtl as runCli } from "./helpers";
 import type { Run } from "./helpers";
 
 /**
@@ -113,7 +113,7 @@ let editorListing = EDITOR_LISTING;
 /** The session "tab-2" reports once set — what tabs-wait waits on. */
 let tab2Session: string | undefined;
 
-let tempDir: string;
+let workDir: string;
 let port: number;
 let server: { close: () => Promise<void> };
 let settings: AppSettings;
@@ -368,8 +368,8 @@ function helpLines(stdout: string, usage: string): number {
 
 describe("tet-ctl against the control server", () => {
   before(async () => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-control-"));
-    port = await findControlPort(tempDir);
+    workDir = tempDir("tet-control-");
+    port = await findControlPort(workDir);
     calls = {
       shown: [],
       closed: [],
@@ -400,7 +400,6 @@ describe("tet-ctl against the control server", () => {
 
   after(async () => {
     await server.close();
-    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
   beforeEach(() => {
@@ -834,7 +833,7 @@ describe("tet-ctl against the control server", () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     const refused = [
       ["tabs-run-command", "build"],
-      ["projects-add", tempDir],
+      ["projects-add", workDir],
       ["projects-remove", OTHER.id],
       ["tabs-start", "tab-2"],
       ["tabs-restart", "tab-2"],
@@ -1030,8 +1029,8 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("shows a sandboxed tab no file reached through a link out of the repository", async (t) => {
-    const root = fs.mkdtempSync(path.join(tempDir, "repo-"));
-    const outside = fs.mkdtempSync(path.join(tempDir, "outside-"));
+    const root = fs.mkdtempSync(path.join(workDir, "repo-"));
+    const outside = fs.mkdtempSync(path.join(workDir, "outside-"));
     fs.writeFileSync(path.join(root, "a.txt"), "inside");
     fs.writeFileSync(path.join(outside, "secret.txt"), "host");
     // A junction on win32, where a file symlink needs developer mode; ignored elsewhere.
@@ -1077,9 +1076,9 @@ describe("tet-ctl against the control server", () => {
 
   // Telling the window is projects.ts's own doing (projects.test.ts), the same for both transports.
   it("adds a project", async () => {
-    const run = await tetCtl(["projects-add", tempDir]);
+    const run = await tetCtl(["projects-add", workDir]);
     assert.equal((run.result as Project).id, "p3");
-    assert.deepEqual(calls.added, [tempDir]);
+    assert.deepEqual(calls.added, [workDir]);
   });
 
   it("passes on what adding a project had to say", async () => {

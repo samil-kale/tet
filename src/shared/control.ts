@@ -56,7 +56,7 @@ export interface ControlVerb {
   usage: string;
   summary: string;
   /** Argument names for the positionals, in order; flags keep their own name (CONTROL_FLAGS). */
-  positionals: string[];
+  positionals: readonly string[];
   /** Only from a tab of the project it targets: the verb reads a terminal, and one project's
    *  agent has no business in another project's. */
   ownProjectOnly?: true;
@@ -147,9 +147,7 @@ export interface ControlEvent {
   sessionId?: string;
 }
 
-/** Every verb with its `tet-ctl help` line. The CLI answers `help` itself; the server refuses
- *  anything else not listed as `unknown_verb`. */
-export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
+const VERBS = [
   // The CLI answers it and never asks the server, sandbox included.
   { verb: "help", usage: "help", summary: "Print this list.", positionals: [], sandbox: "any", unlisted: true },
   { verb: "version", group: "TET itself", usage: "version", summary: "TET's version.", positionals: [], sandbox: "any" },
@@ -499,7 +497,15 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
     stdout: true,
     sandbox: "any"
   }
-];
+] as const satisfies readonly ControlVerb[];
+
+/** Every verb with its `tet-ctl help` line. The CLI answers `help` itself; the server refuses
+ *  anything else not listed as `unknown_verb`. */
+export const CONTROL_VERBS: readonly ControlVerb[] = VERBS;
+
+/** A verb's name: the server's handlers are keyed by it, so a verb without one, or a handler
+ *  without a verb, does not compile. */
+export type ControlVerbName = (typeof VERBS)[number]["verb"];
 
 export const HELP_VERB = "help";
 

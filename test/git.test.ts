@@ -37,7 +37,7 @@ import {
   version
 } from "../src/main/git/git";
 import { worktreesSupported } from "../src/shared/types";
-import { git, initBare, initRepository, isolateGitConfig } from "./helpers";
+import { git, initBare, initRepository, isolateGitConfig, tempDir } from "./helpers";
 
 /**
  * git.ts against the real git, in a repository built up step by step. It imports nothing from
@@ -76,7 +76,7 @@ describe("git's version", () => {
 
 describe("a repository, from init on", () => {
   before(() => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-"));
+    cwd = tempDir("tet-git-");
     run("init", "-q");
     run("symbolic-ref", "HEAD", "refs/heads/main");
   });
@@ -284,13 +284,7 @@ describe("a repository, from init on", () => {
 
 describe("a selection of the changes, as the list's menu hands it over", () => {
   before(() => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-selection-"));
-    run("init", "-q");
-    run("symbolic-ref", "HEAD", "refs/heads/main");
-    write("a.txt", "a\n");
-    write("b.txt", "b\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "base");
+    cwd = initRepository("tet-git-selection-", { "a.txt": "a\n", "b.txt": "b\n" });
   });
 
   it("reads the commit context of the selection alone", async () => {
@@ -354,7 +348,7 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
     // Only HEAD knows it is more than an untracked file.
     assert.deepEqual(await readHeadPaths(cwd, ["renamed.txt", "other.txt"]), ["renamed.txt"]);
     // What Repository.discard does for it: the edits go to the trash first.
-    const trash = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-trash-"));
+    const trash = tempDir("tet-git-trash-");
     fs.renameSync(path.join(cwd, "renamed.txt"), path.join(trash, "renamed.txt"));
     assert.deepEqual(await discard(cwd, { restore: ["renamed.txt"], drop: [] }), { ok: true });
     assert.equal(fs.readFileSync(path.join(cwd, "renamed.txt"), "utf8"), "a changed\n");
@@ -365,12 +359,7 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
 
 describe("a remote branch checked out", () => {
   it("fails with what stopped it, not with what a local branch of its name would say", async () => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-checkout-"));
-    run("init", "-q");
-    run("symbolic-ref", "HEAD", "refs/heads/main");
-    write("f.txt", "base\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "base");
+    cwd = initRepository("tet-git-checkout-", { "f.txt": "base\n" });
     run("switch", "-q", "--create", "x");
     write("f.txt", "x\n");
     run("commit", "-q", "--all", "--message", "x");
@@ -394,12 +383,7 @@ describe("more paths than a command line holds", () => {
   const names = Array.from({ length: 1500 }, (_, index) => `a-folder-name/file-number-${String(index).padStart(10, "0")}.txt`);
 
   before(() => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-many-"));
-    run("init", "-q");
-    run("symbolic-ref", "HEAD", "refs/heads/main");
-    write("base.txt", "base\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "base");
+    cwd = initRepository("tet-git-many-", { "base.txt": "base\n" });
     fs.mkdirSync(path.join(cwd, "a-folder-name"));
     for (const name of names) {
       write(name, "new\n");
@@ -428,13 +412,7 @@ describe("more paths than a command line holds", () => {
 
 describe("a merge stopped on conflicts, discarded file by file", () => {
   before(async () => {
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-conflicts-"));
-    run("init", "-q");
-    run("symbolic-ref", "HEAD", "refs/heads/main");
-    write("gone.txt", "gone\n");
-    write("m.txt", "m\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "base");
+    cwd = initRepository("tet-git-conflicts-", { "gone.txt": "gone\n", "m.txt": "m\n" });
     run("switch", "-q", "-c", "feature");
     write("both.txt", "feature\n");
     write("gone.txt", "gone on feature\n");
@@ -464,7 +442,7 @@ describe("a merge stopped on conflicts, discarded file by file", () => {
 
   it("resets each conflict to HEAD, trashes the one HEAD lacks, and leaves the merge in progress", async () => {
     // What Repository.discard does: the conflict HEAD lacks goes to the trash first.
-    const trash = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-trash-"));
+    const trash = tempDir("tet-git-trash-");
     fs.renameSync(path.join(cwd, "gone.txt"), path.join(trash, "gone.txt"));
     assert.deepEqual(await discard(cwd, { restore: ["both.txt", "m.txt"], drop: ["gone.txt"] }), { ok: true });
     assert.deepEqual(await changed(), []);
@@ -483,9 +461,8 @@ describe("a network command's ssh", () => {
     delete process.env.GIT_SSH_COMMAND;
     // Not Object.assign: process.env would take an unset one as the string "undefined".
     t.after(() => Object.entries(inherited).forEach(([key, value]) => value !== undefined && (process.env[key] = value)));
-    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-ssh-"));
-    git(bare, "init", "-q", "--bare");
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-ssh-"));
+    const bare = initBare("tet-bare-ssh-");
+    cwd = tempDir("tet-git-ssh-");
     run("init", "-q");
     run("remote", "add", "origin", bare);
     // Without core.sshCommand, over no ssh at all.
@@ -502,9 +479,8 @@ describe("a network command's ssh", () => {
 
 describe("remotes the tree has to read carefully", () => {
   it("names the branch of a clone of an empty repository, not its whole header", async () => {
-    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-empty-"));
-    assert.equal(spawnSync("git", ["init", "-q", "--bare", bare]).status, 0);
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-clone-"));
+    const bare = initBare("tet-bare-empty-");
+    cwd = tempDir("tet-git-clone-");
     run("clone", "-q", bare, ".");
     run("symbolic-ref", "HEAD", "refs/heads/main");
     run("config", "branch.main.remote", "origin");
@@ -517,7 +493,7 @@ describe("remotes the tree has to read carefully", () => {
 
   it("keeps a remote whose name holds a slash as one remote", async () => {
     const bare = initBare("tet-bare-fork-");
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-fork-"));
+    cwd = tempDir("tet-git-fork-");
     run("init", "-q");
     run("symbolic-ref", "HEAD", "refs/heads/main");
     write("a.txt", "a\n");
@@ -560,16 +536,15 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
   };
 
   before(() => {
-    bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-bare-shared-"));
-    git(bare, "init", "-q", "--bare", "--initial-branch=main");
-    cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-shared-"));
+    bare = initBare("tet-bare-shared-");
+    cwd = tempDir("tet-git-shared-");
     run("clone", "-q", bare, ".");
     run("symbolic-ref", "HEAD", "refs/heads/main");
     write("a.txt", "a\n");
     run("add", "a.txt");
     run("commit", "-q", "-m", "base");
     run("push", "-q", "--set-upstream", "origin", "main");
-    other = fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-other-"));
+    other = tempDir("tet-git-other-");
     assert.equal(spawnSync("git", ["clone", "-q", bare, other]).status, 0);
   });
 
@@ -662,7 +637,7 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
 describe("the askpass script handing git a login", () => {
   /** git asking the script for what no helper answers, as a command over https does. */
   async function fill(question: string, origin: string, config: string[] = []): Promise<ReturnType<typeof spawnSync>> {
-    const dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-askpass-test-")), "askpass");
+    const dir = path.join(tempDir("tet-askpass-test-"), "askpass");
     const askpass = await ensureAskpass(dir);
     assert.equal(path.dirname(askpass), dir);
     return spawnSync("git", ["-c", "credential.helper=", ...config, "credential", "fill"], {
@@ -739,13 +714,13 @@ describe("a login for an http remote", () => {
   }
 
   function repositoryWithRemote(url: string): string {
-    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "tet-login-test-"));
+    const cwd = tempDir("tet-login-test-");
     git(cwd, "init", "-q");
     git(cwd, "remote", "add", "origin", url);
     return cwd;
   }
 
-  const askpassDir = (): string => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-askpass-test-")), "askpass");
+  const askpassDir = (): string => path.join(tempDir("tet-askpass-test-"), "askpass");
 
   it("hands git the login through askpass, and says a refused one wanted a login", async () => {
     const remote = await refusingRemote();

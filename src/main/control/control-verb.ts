@@ -1,4 +1,5 @@
 import type { ControlErrorCode, ControlRequest } from "../../shared/control";
+import type { Project, ProjectRef } from "../../shared/types";
 import type { CallerSide } from "./caller-side";
 
 /** What a verb's handler is made of, shared by control-server.ts and the verb files beside it. */
@@ -38,6 +39,25 @@ export function text(args: Record<string, unknown>, name: string, what: string):
   }
   return value;
 }
+
+/** One of `values`, typed as it: anything else is refused with the list to pick from. */
+export function oneOf<T extends string>(args: Record<string, unknown>, name: string, what: string, values: readonly T[]): T {
+  const value = text(args, name, what);
+  const known = values.find((candidate) => candidate === value);
+  if (known === undefined) {
+    throw new ControlError("bad_args", `unknown ${what}: ${value} (one of ${values.join(", ")})`);
+  }
+  return known;
+}
+
+/** A text flag or positional, undefined when absent or empty. */
+export function optionalText(args: Record<string, unknown>, name: string): string | undefined {
+  const value = args[name];
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** The server's lookup of the repository or worktree a verb acts on (resolveCallerRef). */
+export type RefFrom = (args: Record<string, unknown>, caller: ControlRequest["caller"]) => { project: Project; ref: ProjectRef };
 
 /** A positive integer flag, or `fallback` when absent. */
 export function count(args: Record<string, unknown>, name: string, fallback: number): number {

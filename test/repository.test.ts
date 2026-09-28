@@ -11,7 +11,7 @@ import { Repository } from "../src/main/git/repository";
 import { readMainWorktree } from "../src/main/git/linked-git-dir";
 import { worktreeBase } from "../src/shared/types";
 import type { FileSearchQuery, FileSearchResult } from "../src/shared/types";
-import { fakeSafeStorage, forkGitInProcess, git, initBare, initRepository, isolateGitConfig, serveOverHttp, type HttpRemote } from "./helpers";
+import { fakeSafeStorage, forkGitInProcess, git, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir, type HttpRemote } from "./helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
@@ -22,7 +22,7 @@ import { fakeSafeStorage, forkGitInProcess, git, initBare, initRepository, isola
 isolateGitConfig("tet-repository-noglobal");
 forkGitInProcess();
 
-const trash = fs.mkdtempSync(path.join(os.tmpdir(), "tet-trash-"));
+const trash = tempDir("tet-trash-");
 /** Which paths the trash refuses. */
 let trashRefuses: (absolute: string) => boolean = () => false;
 let trashed = 0;
@@ -49,7 +49,7 @@ const opened: Repository[] = [];
 async function open(
   dir: string,
   // The remotes are mostly folders, which take no login.
-  logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-"))),
+  logins = new GitLoginStore(tempDir("tet-logins-")),
   worktreeKeyOf: (worktreePath: string) => string | undefined = () => undefined
 ): Promise<Repository> {
   const repository = new Repository(
@@ -150,7 +150,7 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
   let repository: Repository;
 
   before(async () => {
-    bare = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-bare-"));
+    bare = tempDir("tet-repository-bare-");
     git(bare, "init", "-q", "--bare", "--initial-branch=main");
     dir = initRepository("tet-repository-remote-");
     fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
@@ -159,7 +159,7 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
     git(dir, "remote", "add", "origin", bare);
     git(dir, "push", "-q", "--set-upstream", "origin", "main");
     git(dir, "remote", "set-head", "origin", "main");
-    other = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-other-"));
+    other = tempDir("tet-repository-other-");
     git(other, "clone", "-q", bare, ".");
     repository = await open(dir);
   });
@@ -243,7 +243,7 @@ describe("worktrees, each with a branch of its own", () => {
     fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
     git(dir, "add", "b.txt");
     git(dir, "commit", "-q", "-m", "ahead of base");
-    worktrees = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-wts-"));
+    worktrees = tempDir("tet-repository-wts-");
     // "second" stands for one TET made, the others for ones made elsewhere.
     repository = await open(dir, undefined, (worktreePath) => (path.basename(worktreePath) === "second" ? "k2" : undefined));
   });
@@ -318,7 +318,7 @@ describe("where a worktree starts without a remote HEAD", () => {
   it("is the repository's branch when no default branch is known", async () => {
     // No remote, and a branch other than init.defaultBranch's ("main" while unset): as `git init`
     // with an older git or another default leaves it.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-trunk-"));
+    const dir = tempDir("tet-repository-trunk-");
     git(dir, "init", "-q", "--initial-branch=trunk");
     git(dir, "commit", "-q", "--allow-empty", "-m", "base");
     const repository = await open(dir);
@@ -395,7 +395,7 @@ describe("the Explorer's search, VS Code's search in files", () => {
   it("stops at the match cap without listing a file it then has no match for", async () => {
     // Three files read at once, each more than half the cap: the two that land after it is reached
     // are cut, and a file cut to nothing is no result.
-    const capped = fs.mkdtempSync(path.join(os.tmpdir(), "tet-repository-capped-"));
+    const capped = tempDir("tet-repository-capped-");
     git(capped, "init", "-q", "--initial-branch=main");
     for (const name of ["a.txt", "b.txt", "c.txt"]) {
       fs.writeFileSync(path.join(capped, name), "needle\n".repeat(1500));
@@ -433,7 +433,7 @@ describe("a remote over http that wants a login", () => {
     const remote = await serveOverHttp(bare, login);
     const dir = initRepository("tet-http-work-");
     git(dir, "remote", "add", "origin", remote.url);
-    const logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-")));
+    const logins = new GitLoginStore(tempDir("tet-logins-"));
     const repository = await open(dir, logins);
     return { dir, bare, repository, logins, remote };
   }
@@ -484,7 +484,7 @@ describe("a remote over http that wants a login", () => {
 
   it("leaves a login to the credential helper where there is one", async () => {
     const { dir, repository, logins, remote } = await openWithHttpRemote();
-    const helperFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-helper-")), "credentials");
+    const helperFile = path.join(tempDir("tet-helper-"), "credentials");
     git(dir, "config", "credential.helper", `store --file=${helperFile.replace(/\\/g, "/")}`);
     try {
       assert.equal((await repository.push()).loginUrl, remote.url);
@@ -532,8 +532,8 @@ describe("a remote over http that wants a login", () => {
     const seed = initRepository("tet-http-seed-");
     git(seed, "push", "-q", bare, "main");
     const remote = await serveOverHttp(bare, login);
-    const logins = new GitLoginStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-logins-")));
-    const target = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-http-clone-")), "app");
+    const logins = new GitLoginStore(tempDir("tet-logins-"));
+    const target = path.join(tempDir("tet-http-clone-"), "app");
     const clone = (typed?: typeof login) =>
       logins.run(os.homedir(), remote.url, typed, (networkLogin) => git_.clone(remote.url, target, networkLogin));
     try {

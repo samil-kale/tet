@@ -7,6 +7,7 @@ import { PLATFORM } from "../src/main/host-platform";
 import { claudeSandboxSessions, claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSandboxSessions, codexSessionProvider } from "../src/main/agents/codex/sessions";
 import { encodeCwd, piSandboxSessions, piSessionProvider } from "../src/main/agents/pi/sessions";
+import { tempDir } from "./helpers";
 
 /**
  * The session providers against transcripts written the way the CLIs write them. A regression in the title rules or turn forensics shows a
@@ -24,7 +25,7 @@ describe("Claude Code's transcripts", () => {
 
   /** A fresh config dir per case: the provider caches by path. */
   function transcripts(files: Record<string, unknown[]>): string {
-    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-claude-"));
+    const configDir = tempDir("tet-claude-");
     process.env.CLAUDE_CONFIG_DIR = configDir;
     const projectDir = path.join(configDir, "projects", encoded);
     fs.mkdirSync(projectDir, { recursive: true });
@@ -192,7 +193,7 @@ describe("Codex's rollouts", () => {
   const cwd = PLATFORM.driveLetters ? "C:\\work\\Repo" : "/work/repo";
 
   function rollouts(files: Record<string, unknown[]>, index: unknown[] = []): void {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "tet-codex-"));
+    const home = tempDir("tet-codex-");
     process.env.CODEX_HOME = home;
     const day = path.join(home, "sessions", "2026", "03", "04");
     fs.mkdirSync(day, { recursive: true });
@@ -265,7 +266,7 @@ describe("pi's transcripts", () => {
 
   /** A fresh config dir per case: the provider caches by path. */
   function transcripts(files: Record<string, unknown[]>, dirName = encodeCwd(cwd)): string {
-    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-"));
+    const agentDir = tempDir("tet-pi-");
     process.env.PI_CODING_AGENT_DIR = agentDir;
     const sessionDir = path.join(agentDir, "sessions", dirName);
     fs.mkdirSync(sessionDir, { recursive: true });
@@ -382,12 +383,8 @@ describe("pi's transcripts", () => {
 describe("sessions written inside a sandbox", () => {
   const cwd = "/c/work/Repo One";
 
-  function root(prefix: string): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  }
-
   it("lists, renames and deletes Claude's sandboxed transcripts", async () => {
-    const dir = root("tet-sbx-claude-");
+    const dir = tempDir("tet-sbx-claude-");
     const projectDir = path.join(dir, "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
     fs.mkdirSync(projectDir, { recursive: true });
     fs.writeFileSync(
@@ -406,7 +403,7 @@ describe("sessions written inside a sandbox", () => {
   });
 
   it("lists, renames and deletes Codex's sandboxed rollouts on the mounted files", async () => {
-    const dir = root("tet-sbx-codex-");
+    const dir = tempDir("tet-sbx-codex-");
     const day = path.join(dir, "sessions", "2026", "03", "04");
     fs.mkdirSync(day, { recursive: true });
     for (const [id, at] of [["s1", AT], ["s2", LATER]]) {
@@ -444,7 +441,7 @@ describe("sessions written inside a sandbox", () => {
   });
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {
-    const dir = root("tet-sbx-pi-");
+    const dir = tempDir("tet-sbx-pi-");
     // Spelled out, not encodeCwd: pi on the sandbox's Linux encodes the container path, which a
     // win32 host would resolve as `C:\c\work\...`.
     const sessionDir = path.join(dir, "sessions", "--c-work-Repo One--");

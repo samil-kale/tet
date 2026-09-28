@@ -49,7 +49,7 @@ import { CONTROL_ENV } from "../src/shared/control";
 import type { ControlRequest } from "../src/shared/control";
 import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
 import type { SbxPath, SbxPort, SbxProjectConfig } from "../src/shared/types";
-import { eventually, fakeSafeStorage, processAlive } from "./helpers";
+import { eventually, fakeSafeStorage, processAlive, tempDir } from "./helpers";
 
 /** The small pieces, each one edit away from silently wrong. */
 
@@ -117,7 +117,7 @@ describe("resolveCommand", () => {
   it("hands every character to a shim literally, through cmd.exe", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     // A global npm shim's shape (cmd-shim), in a folder whose name cmd.exe would otherwise split and
     // group; node by its path, where cmd-shim looks beside the shim or on PATH.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet shim (x)-"));
+    const dir = tempDir("tet shim (x)-");
     const script = path.join(dir, "argv.js");
     fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
     const shim = path.join(dir, "echo-args.cmd");
@@ -152,38 +152,30 @@ describe("resolveCommand", () => {
   it("hands a batch file reading its own arguments each one once escaped", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     // Maven's `mvn.cmd` shape: `%~1` compared in an `if`, where a second escape's carets are a
     // syntax error ("[tet] mvn exited with code 255").
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet batch (x)-"));
-    try {
-      const script = path.join(dir, "argv.js");
-      fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
-      const batch = path.join(dir, "mvn.cmd");
-      fs.writeFileSync(
-        batch,
-        '@ECHO off\r\nIF "%~1" == "-f" (SET "kind=file") ELSE (SET "kind=other")\r\n' +
-          `"${process.execPath}" "${script}" %kind% %*\r\n`
-      );
-      for (const [args, kind] of [[["process-classes", "exec:java", "a b"], "other"], [["-f", "pom.xml"], "file"]] as const) {
-        const run = runResolved(batch, [...args], dir);
-        assert.equal(run.status, 0, `${run.stdout} ${run.stderr}`);
-        assert.deepEqual(JSON.parse(run.stdout), [kind, ...args]);
-      }
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+    const dir = tempDir("tet batch (x)-");
+    const script = path.join(dir, "argv.js");
+    fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
+    const batch = path.join(dir, "mvn.cmd");
+    fs.writeFileSync(
+      batch,
+      '@ECHO off\r\nIF "%~1" == "-f" (SET "kind=file") ELSE (SET "kind=other")\r\n' +
+        `"${process.execPath}" "${script}" %kind% %*\r\n`
+    );
+    for (const [args, kind] of [[["process-classes", "exec:java", "a b"], "other"], [["-f", "pom.xml"], "file"]] as const) {
+      const run = runResolved(batch, [...args], dir);
+      assert.equal(run.status, 0, `${run.stdout} ${run.stderr}`);
+      assert.deepEqual(JSON.parse(run.stdout), [kind, ...args]);
     }
   });
 
   it("finds a native executable named by its path without an extension", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-native-"));
-    try {
-      fs.writeFileSync(path.join(dir, "build.exe"), "");
-      assert.deepEqual(resolveCommand(path.join(dir, "build"), ["-v"]), { command: path.join(dir, "build.exe"), args: ["-v"] });
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+    const dir = tempDir("tet-native-");
+    fs.writeFileSync(path.join(dir, "build.exe"), "");
+    assert.deepEqual(resolveCommand(path.join(dir, "build"), ["-v"]), { command: path.join(dir, "build.exe"), args: ["-v"] });
   });
 
   it("kills the program behind a shim along with its cmd.exe", { skip: !PLATFORM.killsWithTaskkill && "win32 only" }, async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-kill-"));
+    const dir = tempDir("tet-kill-");
     const pidFile = path.join(dir, "pid");
     const script = path.join(dir, "wait.js");
     fs.writeFileSync(script, `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
@@ -200,7 +192,7 @@ describe("resolveCommand", () => {
   it("takes a name's first folder on PATH, its extension second", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     // A shim put in front of an installed program: cmd.exe resolves per folder, every PATHEXT
     // extension before the next folder, so the earlier .cmd runs and not the later .exe.
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-path-"));
+    const dir = tempDir("tet-path-");
     const [first, second] = [path.join(dir, "first"), path.join(dir, "second")];
     fs.mkdirSync(first);
     fs.mkdirSync(second);
@@ -214,7 +206,6 @@ describe("resolveCommand", () => {
       assert.equal(resolveCommand("tool", []).command, path.join(second, "tool.exe"), "the .exe where its folder comes first");
     } finally {
       process.env.PATH = originalPath;
-      fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
@@ -242,15 +233,11 @@ describe("sbx sandbox naming and mounts", () => {
   it("spells a Windows path the way it is on disk, since sbx mounts it that way, verified live 2026-09-14", {
     skip: !PLATFORM.driveLetters && "win32 only"
   }, () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-case-"));
-    try {
-      fs.mkdirSync(path.join(root, "tet"));
-      const onDisk = toContainerPath(path.join(root, "tet", "not-yet-written.json"));
-      assert.equal(toContainerPath(path.join(root, "TET", "not-yet-written.json")), onDisk);
-      assert.match(onDisk, /\/tet\/not-yet-written\.json$/);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    const root = tempDir("tet-case-");
+    fs.mkdirSync(path.join(root, "tet"));
+    const onDisk = toContainerPath(path.join(root, "tet", "not-yet-written.json"));
+    assert.equal(toContainerPath(path.join(root, "TET", "not-yet-written.json")), onDisk);
+    assert.match(onDisk, /\/tet\/not-yet-written\.json$/);
   });
 
   it("leaves a macOS/Linux path untouched — already the same path inside and out", {
@@ -361,7 +348,7 @@ describe("saving an sbx config", () => {
     /** Calls that fail with nothing on stdout, by how their arguments start: sbx that cannot say. */
     fail?: string[];
   }): { dir: string; projectPath: string } {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-save-"));
+    const dir = tempDir("tet-sbx-save-");
     const projectPath = path.join(dir, "repo");
     fs.mkdirSync(projectPath);
     const answerFile = path.join(dir, "answers.json");
@@ -783,7 +770,7 @@ describe("a project's folder under ~/.tet", () => {
   });
 
   it("knows a worktree TET made by its path, and no other", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
+    const root = tempDir("tet-data-");
     const files = worktreeDir(root, "p", "k1");
     assert.equal(worktreeKeyOf(root, "p", files), "k1");
     assert.equal(worktreeKeyOf(root, "q", files), undefined, "another project's");
@@ -792,7 +779,7 @@ describe("a project's folder under ~/.tet", () => {
   });
 
   it("gives a new worktree a key no other of the project has, and lists those with their files", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-data-"));
+    const root = tempDir("tet-data-");
     const key = newWorktreeKey(root, "p");
     assert.match(key, /^[0-9a-f]{8}$/);
     fs.mkdirSync(worktreeDir(root, "p", key), { recursive: true });
@@ -806,7 +793,7 @@ describe("a project's folder under ~/.tet", () => {
 describe("what sbx keeps on this machine", () => {
   it("counts a value as stored only where it can still be decrypted", () => {
     fakeSafeStorage();
-    const store = new SbxLocalStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
+    const store = new SbxLocalStore(tempDir("tet-secrets-"));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
       secrets: { READABLE: base64("sealed:value"), LOST: base64("under another keychain") },
@@ -819,7 +806,7 @@ describe("what sbx keeps on this machine", () => {
 
   it("takes over sbx-secrets.json, read as secrets alone, and drops a project left with none", () => {
     fakeSafeStorage();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-"));
+    const root = tempDir("tet-secrets-");
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     fs.writeFileSync(path.join(root, "sbx-secrets.json"), JSON.stringify({ p: { TOKEN: base64("sealed:old") } }));
     const store = new SbxLocalStore(root);
@@ -838,7 +825,7 @@ describe("what sbx keeps on this machine", () => {
 
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
     fakeSafeStorage();
-    const store = new SbxLocalStore(fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-")));
+    const store = new SbxLocalStore(tempDir("tet-secrets-"));
     const none = { values: {}, from: {} };
     store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, knowledge: EMPTY_SBX_KNOWLEDGE });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
@@ -848,7 +835,7 @@ describe("what sbx keeps on this machine", () => {
 
   it("keeps the knowledge on this machine, and no entry once it is all off", () => {
     fakeSafeStorage(false);
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-secrets-"));
+    const root = tempDir("tet-secrets-");
     const store = new SbxLocalStore(root);
     const none = { values: {}, from: {} };
     const knowledge = { skills: "ro" as const, plugins: false as const, instructions: "rw" as const, skillsFolder: "/skills" };
@@ -862,7 +849,7 @@ describe("what sbx keeps on this machine", () => {
 describe("the Docker access tokens of the SBX Settings", () => {
   it("keep one row per user and carry a stored token along Save", () => {
     fakeSafeStorage();
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tet-sbx-accounts-"));
+    const root = tempDir("tet-sbx-accounts-");
     const store = new SbxAccountStore(root);
     const first = store.add("skale", "old");
     assert.equal(store.add("skale", "new").id, first.id, "the same user's token is replaced, not added");
@@ -891,7 +878,7 @@ describe("the Docker access tokens of the SBX Settings", () => {
 });
 
 describe("the environment variables kept in TET", () => {
-  const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-environment-"));
+  const tempRoot = (): string => tempDir("tet-environment-");
   const row = (name: string, value: string): { name: string; value: string } => ({ name, value });
 
   it("keep one row per name, hand out their values, and read the file fresh every time", () => {
@@ -1201,7 +1188,7 @@ describe("the quoting helpers", () => {
 });
 
 describe("the git logins kept in TET", () => {
-  const tempRoot = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "tet-git-logins-"));
+  const tempRoot = (): string => tempDir("tet-git-logins-");
 
   it("keep one login per origin, never in the clear", () => {
     fakeSafeStorage(true);
@@ -1266,7 +1253,7 @@ describe("the git logins kept in TET", () => {
 
 describe("the stores", () => {
   it("read a hand-edited settings file field by field", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-settings-"));
+    const dir = tempDir("tet-settings-");
     const file = path.join(dir, "settings.json");
     fs.writeFileSync(file, "{ nope");
     assert.equal(new SettingsStore(dir).get().colorScheme, "system");
@@ -1295,7 +1282,7 @@ describe("the stores", () => {
   });
 
   it("say when a Save could not be written, and keep what they had", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-settings-"));
+    const dir = tempDir("tet-settings-");
     // A folder where the file goes: no platform renames a file over it.
     fs.mkdirSync(path.join(dir, "settings.json"));
     const store = new SettingsStore(dir);
@@ -1304,7 +1291,7 @@ describe("the stores", () => {
   });
 
   it("read the one theme of an older settings file as its kind and that kind's theme", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-settings-"));
+    const dir = tempDir("tet-settings-");
     const file = path.join(dir, "settings.json");
     fs.writeFileSync(file, JSON.stringify({ theme: "dark-slate" }));
     const picked = new SettingsStore(dir).get();
@@ -1319,7 +1306,7 @@ describe("the stores", () => {
   });
 
   it("keep only well-formed projects, never a worktree stored as one, and reorder what they know", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-"));
+    const dir = tempDir("tet-projects-");
     const pathOf = (name: string): string => path.resolve(path.sep, name);
     fs.writeFileSync(
       path.join(dir, "projects.json"),
@@ -1532,7 +1519,7 @@ describe("pi's extension", () => {
   });
 
   it("reports both ends of a turn and a question", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-ext-"));
+    const dir = tempDir("tet-pi-ext-");
     const channel = await controlChannel();
     try {
       const source = renderPiExtension();
@@ -1575,7 +1562,7 @@ describe("pi's extension", () => {
 
   // Written on the host, read inside a container too: nothing in it may depend on where it runs.
   it("writes one file that reads the channel from its environment", () => {
-    const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-pi-sbx-"));
+    const storageDir = tempDir("tet-pi-sbx-");
     const file = writePiExtension(storageDir);
     const source = fs.readFileSync(file, "utf8");
 
@@ -1626,7 +1613,7 @@ describe("the color themes", () => {
 /** The net under an unhandled fault — see uncaught.ts for why the main process survives one. */
 describe("an uncaught exception", () => {
   it("logs the whole stack, tells the user once, and lets the process live", () => {
-    const logFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "tet-uncaught-")), "errors.log");
+    const logFile = path.join(tempDir("tet-uncaught-"), "errors.log");
     const notices: string[] = [];
     const before = process.listenerCount("uncaughtException");
     installUncaughtHandler(logFile, (_severity, message) => notices.push(message));

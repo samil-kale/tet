@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
-import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
+import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, ControlVerbName, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
 import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isWorking, sameProjectRef } from "../../shared/types";
 import type {
@@ -31,6 +31,7 @@ import type {
   TerminalDescriptor
 } from "../../shared/types";
 import type { AgentDefinition } from "../agents/agent";
+import type { ToastTarget } from "../notifications";
 import type { SbxReading } from "../sbx-status";
 import { CALLER_SIDES, HOST_CALLER, type CallerSide } from "./caller-side";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
@@ -41,7 +42,7 @@ import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
 import { sbxVerbs } from "./control-sbx-verbs";
-import { ControlError, count, list, text, type Caller, type Handler } from "./control-verb";
+import { ControlError, count, list, oneOf, optionalText, text, type Caller, type Handler, type RefFrom } from "./control-verb";
 import { canBind } from "../can-bind";
 import { isRecord } from "../json-file";
 
@@ -128,11 +129,6 @@ export interface ControlDeps {
     /** sbx-accounts.ts's signInToSbx with the token kept for that account. */
     signIn(account: SbxAccount): Promise<SbxSignInResult>;
   };
-}
-
-export interface ToastTarget {
-  ref: ProjectRef;
-  tabId: string;
 }
 
 /** See ControlTerminals.hookEvent. */
@@ -241,23 +237,30 @@ function callerRef(caller: ControlRequest["caller"]): ProjectRef | undefined {
   return caller.projectId === undefined ? undefined : projectRef(caller.projectId, caller.worktree);
 }
 
-/** A worktree of the project named as `tet-ctl` names one: by its branch, or else by its key. */
-function findWorktree(project: Project, name: string): Project["worktrees"][number] | undefined {
-  return project.worktrees.find((entry) => entry.branch === name) ?? project.worktrees.find((entry) => entry.key === name);
+/** A worktree of the project TET made, named as `tet-ctl` names one: by its branch, or else by
+ *  its key. One made elsewhere cannot be addressed: TET never opens it. */
+function tetWorktree(project: Project, name: string): { worktree: Project["worktrees"][number]; ref: ProjectRef } {
+  const worktree = project.worktrees.find((entry) => entry.branch === name) ?? project.worktrees.find((entry) => entry.key === name);
+  if (!worktree) {
+    throw new ControlError("not_found", `${project.name} has no worktree ${name} (see projects-list)`);
+  }
+  if (worktree.key === undefined) {
+    throw new ControlError("bad_args", `the worktree of ${name} was not made by TET, which cannot reach it: use git`);
+  }
+  return { worktree, ref: projectRef(project.id, worktree.key) };
 }
 
 /**
  * The repository or worktree a verb acts on: without flags the caller's own; `--project` alone that
- * project's repository; `--worktree` one of its worktrees TET made, by branch or else by key. One
- * made elsewhere cannot be addressed: TET never opens it. Also the gate's answer to "is this the
- * caller's own".
+ * project's repository; `--worktree` one of its worktrees TET made (tetWorktree). Also the gate's
+ * answer to "is this the caller's own".
  */
 function resolveCallerRef(
   store: ProjectLookup,
   args: Record<string, unknown>,
   caller: ControlRequest["caller"]
 ): { project: Project; ref: ProjectRef } {
-  const askedProject = typeof args.project === "string" && args.project ? args.project : undefined;
+  const askedProject = optionalText(args, "project");
   const projectId = askedProject ?? caller.projectId;
   if (!projectId) {
     throw new ControlError("bad_args", "no project: pass --project <id> (see projects-list)");
@@ -266,21 +269,17 @@ function resolveCallerRef(
   if (!project) {
     throw new ControlError("not_found", `unknown project: ${projectId}`);
   }
-  const asked = typeof args.worktree === "string" && args.worktree ? args.worktree : undefined;
+  const asked = optionalText(args, "worktree");
   if (asked === undefined) {
     return { project, ref: projectRef(projectId, askedProject === undefined ? caller.worktree : undefined) };
   }
-  const worktree = findWorktree(project, asked);
-  if (!worktree) {
-    throw new ControlError("not_found", `${project.name} has no worktree ${asked} (see projects-list)`);
-  }
-  if (worktree.key === undefined) {
-    throw new ControlError("bad_args", `the worktree of ${asked} was not made by TET, which cannot open it`);
-  }
-  return { project, ref: projectRef(projectId, worktree.key) };
+  return { project, ref: tetWorktree(project, asked).ref };
 }
 
-function verbs(deps: ControlDeps): Record<string, Handler> {
+/** Every verb's handler but `help`, which the CLI answers itself. */
+type Handlers = Record<Exclude<ControlVerbName, typeof HELP_VERB>, Handler>;
+
+function verbs(deps: ControlDeps): Handlers {
   const { store, settings, sessions } = deps;
 
   const projectById = (id: string): Project => {
@@ -291,7 +290,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     return found;
   };
 
-  const refFrom = (args: Record<string, unknown>, caller: ControlRequest["caller"]) => resolveCallerRef(store, args, caller);
+  const refFrom: RefFrom = (args, caller) => resolveCallerRef(store, args, caller);
 
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
 
@@ -327,7 +326,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
   /** `knownTab` for a verb reaching into the tab (its output, its session): from a sandbox, only its
    *  own tab or one known to run there — a host tab is this machine's, which a sandbox never reaches,
-   *  and its output may print the host's control token. */
+   *  and its output may print the host's control token. `own`: the caller's own tab. */
   const ownedTab = (args: Record<string, unknown>, caller: Caller) => {
     const known = knownTab(args, caller);
     const own = sameProjectRef(known.ref, callerRef(caller)) && known.tabId === caller.tabId;
@@ -335,7 +334,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     if (!caller.side.reachesTab(tab, own)) {
       throw new ControlError("bad_args", `${known.tabId} runs on this machine, not in the sandbox`);
     }
-    return known;
+    return { ...known, own };
   };
 
   /** `--agent`, one the caller may open a tab of: a shell would run on this machine, so a sandbox
@@ -377,21 +376,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "settings-set-color-scheme": (args) => {
-      const value = text(args, "scheme", "color scheme");
-      const colorScheme = COLOR_SCHEMES.find((candidate) => candidate === value);
-      if (!colorScheme) {
-        throw new ControlError("bad_args", `unknown color scheme: ${value} (one of ${COLOR_SCHEMES.join(", ")})`);
-      }
+      const colorScheme = oneOf(args, "scheme", "color scheme", COLOR_SCHEMES);
       settings.patch({ colorScheme });
       // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
       return { result: { saved: true, restartRequired: deps.applyTheme() } };
     },
 
     "settings-set-prompt": (args) => {
-      const id = text(args, "id", "prompt id");
-      if (!PROMPT_IDS.some((candidate) => candidate === id)) {
-        throw new ControlError("bad_args", `unknown prompt: ${id} (one of ${PROMPT_IDS.join(", ")})`);
-      }
+      const id = oneOf(args, "id", "prompt", PROMPT_IDS);
       // No text resets: "" means tet's own prompt, read by ipc/repository.ts when asking.
       const value = args.text;
       settings.patch({ prompts: { [id]: typeof value === "string" ? value : "" } });
@@ -455,14 +447,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "worktree-delete": async (args, caller) => {
       const found = project(args, caller);
       const branch = text(args, "branch", "branch");
-      const worktree = findWorktree(found, branch);
-      if (!worktree) {
-        throw new ControlError("not_found", `${found.name} has no worktree of branch ${branch}`);
-      }
-      if (worktree.key === undefined) {
-        throw new ControlError("bad_args", `the worktree of ${branch} was not made by TET: delete it with git`);
-      }
-      const ref = projectRef(found.id, worktree.key);
+      const { ref } = tetWorktree(found, branch);
       if (sameProjectRef(ref, callerRef(caller))) {
         throw new ControlError("bad_args", "a worktree cannot delete itself: run this from another tab of its project");
       }
@@ -528,7 +513,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
     "tabs-wait": async (args, caller, _at, gone) => {
       const { tabs, tabId } = knownTab(args, caller);
-      const status = args.status;
+      const status = args.status === undefined ? undefined : oneOf(args, "status", "status", TERMINAL_STATUSES);
       const conditions: [string, (tab: InspectedTab) => boolean][] = [];
       if (args.session === true) {
         conditions.push(["bound to a session", (tab) => tab.sessionId !== undefined]);
@@ -539,10 +524,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (args.idle === true) {
         conditions.push(["idle", (tab) => !isWorking(tab)]);
       }
-      if (typeof status === "string") {
-        if (!TERMINAL_STATUSES.some((candidate) => candidate === status)) {
-          throw new ControlError("bad_args", `unknown status: ${status} (one of ${TERMINAL_STATUSES.join(", ")})`);
-        }
+      if (status !== undefined) {
         conditions.push([status, (tab) => tab.status === status]);
       }
       if (conditions.length === 0) {
@@ -667,10 +649,10 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     "tabs-close": (args, caller) => {
-      const { tabs, tabId, ref } = ownedTab(args, caller);
+      const { tabs, tabId, own } = ownedTab(args, caller);
       const close = (): void => void tabs.closeTabs([tabId]);
       // Closing the tab the CLI runs in kills the CLI — answer first.
-      if (sameProjectRef(ref, callerRef(caller)) && tabId === caller.tabId) {
+      if (own) {
         return { result: { closed: tabId }, after: close };
       }
       close();
@@ -706,10 +688,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     },
 
     hook: (args, caller, at) => {
-      const event = text(args, "event", "hook event");
-      if (!HOOK_EVENTS.some((candidate) => candidate === event)) {
-        throw new ControlError("bad_args", `unknown hook event: ${event} (one of ${HOOK_EVENTS.join(", ")})`);
-      }
+      const event = oneOf(args, "event", "hook event", HOOK_EVENTS);
       if (!caller.tabId) {
         throw new ControlError("bad_args", "a hook reports for the tab it runs in, and this is not one");
       }
@@ -717,7 +696,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       // The caller's own, never `--project`: the token vouches for its tab in its repository or
       // worktree only, and tab ids like `new-1` repeat across repositories and worktrees.
       const where = refFrom({}, caller).ref;
-      const outcome = terminals(where).hookEvent(caller.tabId, event as HookEvent, payload, at, caller.side);
+      const outcome = terminals(where).hookEvent(caller.tabId, event, payload, at, caller.side);
       if (outcome.toast) {
         deps.notify(outcome.toast.title, outcome.toast.body, { ref: where, tabId: caller.tabId });
       }
@@ -780,7 +759,8 @@ export async function startControlServer(
       return { response: reject("unauthorized", "not a terminal of this TET") };
     }
     const entry = request.verb === HELP_VERB ? undefined : CONTROL_VERBS.find((candidate) => candidate.verb === request.verb);
-    const handler = entry && handlers[entry.verb];
+    // Widened to look up by the request's name: every listed verb has its handler (Handlers).
+    const handler = entry && (handlers as Record<string, Handler | undefined>)[entry.verb];
     if (!entry || !handler) {
       return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
     }
@@ -789,10 +769,10 @@ export async function startControlServer(
     }
     // A host tab reaches every repository and worktree of its project (a worktree belongs to it); a
     // sandboxed one only its own, the one its sandbox mounts — but for an `ownProject` verb.
+    const own = callerRef(caller);
     const reach = side.reach(entry);
     if (reach !== "any") {
       const ownOnly = reach === "ownRef";
-      const own = callerRef(caller);
       let target: ProjectRef | undefined;
       try {
         target = own && resolveCallerRef(deps.store, request.args ?? {}, caller).ref;
@@ -807,7 +787,6 @@ export async function startControlServer(
     }
     try {
       const answer = await handler(request.args ?? {}, { ...caller, side }, request.at, gone);
-      const own = callerRef(caller);
       await side.checkAnswer(entry, answer.result, own && deps.projectRefPath(own));
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {

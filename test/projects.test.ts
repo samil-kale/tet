@@ -25,7 +25,7 @@ import { SbxLocalStore } from "../src/main/sbx-local";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import { readCommands, readSbxConfig, writeCommands } from "../src/main/tet-json";
 import type { ProjectRef, ProjectsChange } from "../src/shared/types";
-import { eventually, forkGitInProcess, git, initBare, isolateGitConfig } from "./helpers";
+import { eventually, forkGitInProcess, git, initBare, isolateGitConfig, tempDir } from "./helpers";
 
 /**
  * projects.ts against the real git and real Repositories, the sessions faked: a project's id in its
@@ -48,12 +48,12 @@ function tetId(folder: string): string | undefined {
 /** A repository with a remote; `foreign` worktrees made with plain git, each on a published branch. */
 function repository(foreign: string[] = []) {
   const bare = initBare("tet-projects-bare-");
-  const main = real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-main-")));
+  const main = real(tempDir("tet-projects-main-"));
   git(main, "init", "-q", "--initial-branch=main");
   git(main, "commit", "-q", "--allow-empty", "-m", "base");
   git(main, "remote", "add", "origin", bare);
   git(main, "push", "-q", "-u", "origin", "main");
-  const elsewhere = real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-elsewhere-")));
+  const elsewhere = real(tempDir("tet-projects-elsewhere-"));
   const at = (name: string): string => path.join(elsewhere, name);
   for (const name of foreign) {
     git(main, "worktree", "add", "-q", "--relative-paths", "-b", name, at(name));
@@ -70,7 +70,7 @@ after(() => managers.forEach((manager) => manager.disposeAll()));
  * worktree end — where a quitting agent could still write.
  */
 function open(onClose: (ref: ProjectRef) => void = () => undefined) {
-  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-data-"));
+  const dataRoot = tempDir("tet-projects-data-");
   const store = new ProjectStore(dataRoot);
   const told: string[] = [];
   const repositories = new RepositoryManager(
@@ -135,7 +135,7 @@ describe("a project added", () => {
     const repo = repository();
     const { add } = open();
     const id = await add(repo.main);
-    const copy = path.join(real(fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-copy-"))), "copy");
+    const copy = path.join(real(tempDir("tet-projects-copy-")), "copy");
     fs.cpSync(repo.main, copy, { recursive: true });
     const copied = await add(copy);
     assert.notEqual(copied, id);
@@ -190,7 +190,7 @@ describe("a project added", () => {
 
   it("refuses a folder that is no git repository", async () => {
     const { deps, store } = open();
-    const plain = fs.mkdtempSync(path.join(os.tmpdir(), "tet-projects-plain-"));
+    const plain = tempDir("tet-projects-plain-");
     const result = await addProject(deps, plain);
     assert.match(result.error ?? "", /is not a git repository/);
     assert.deepEqual(store.list(), []);

@@ -4,7 +4,6 @@ import type { ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
-import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import * as semver from "semver";
@@ -13,7 +12,7 @@ import { PLATFORM } from "../src/main/host-platform";
 import { CONTROL_ENV } from "../src/shared/control";
 import { assetName, rootExecutable, rootIn } from "../src/shared/release";
 import type { UpdateResult } from "../src/shared/release";
-import { eventually, killApp, processAlive, tetCtl, WINDOW_ARGS } from "./helpers";
+import { eventually, killApp, processAlive, tempDir, tetCtl, WINDOW_ARGS } from "./helpers";
 
 /**
  * Install with the script, start, find a newer version, quit, start the update. Releases are
@@ -170,7 +169,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
   before(async () => {
     const built = path.join(ROOT, "release", ASSET);
     assert.ok(fs.existsSync(built), `${built} — run \`npm run dist\` first`);
-    work = fs.mkdtempSync(path.join(os.tmpdir(), "tet-install-"));
+    work = tempDir("tet-install-");
     home = path.join(work, "home");
     userData = path.join(work, "user-data");
     fs.mkdirSync(home);

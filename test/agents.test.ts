@@ -17,7 +17,7 @@ import { resolveCommand } from "../src/main/terminals/pty";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import type { ControlEvent } from "../src/shared/control";
 import type { AgentId, Project, TerminalDescriptor } from "../src/shared/types";
-import { eventually, killApp, startApp, tetCtl, type TestApp } from "./helpers";
+import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "./helpers";
 
 /**
  * The agents' CLIs and sbx as installed on this machine, driven the way tet drives them — what the
@@ -140,7 +140,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   }
 
   before(async () => {
-    userData = fs.mkdtempSync(path.join(os.tmpdir(), "tet-agents-"));
+    userData = tempDir("tet-agents-");
     fs.rmSync(AGENT_REPO, { recursive: true, force: true, maxRetries: 5 });
     fs.mkdirSync(AGENT_REPO, { recursive: true });
     spawnSync("git", ["init", "-q"], { cwd: AGENT_REPO });
