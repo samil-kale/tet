@@ -60,8 +60,7 @@ export class HostSetups {
     return this.setups.get(agentId)?.failed ?? false;
   }
 
-  /** Redoes every setup written for another theme (AgentPaths.theme — Codex's win32 launcher
-   *  carries the colors). */
+  /** Redoes every setup written for another theme (AgentPaths.theme). */
   themeChanged(): void {
     const { id } = currentTheme(this.settings);
     this.redoStale((setup) => setup.theme !== id);

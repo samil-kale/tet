@@ -161,7 +161,7 @@ async function walkExplorer(
 }
 
 /**
- * The Explorer search field's matches, VS Code's "search in files": every line of every listed
+ * The SEARCH pane's matches, VS Code's "search in files": every line of every listed
  * file the query matches. The Explorer's own file set, always without what git ignores — VS
  * Code's `search.useIgnoreFiles`, which the tree's `excludeGitIgnore` does not decide, and a
  * search must not read `node_modules`. The files are read a few at a time (more only costs file

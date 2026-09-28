@@ -437,7 +437,7 @@ describe("sessions written inside a sandbox", () => {
     assert.deepEqual(fs.readdirSync(day), ["rollout-s2.jsonl"]);
     assert.equal(fs.readFileSync(index, "utf8"), indexBefore, "the index is left as it is");
     assert.deepEqual(await titles(), [["s2", "Renamed"]], "a name without its rollout lists nothing");
-    // A session that is already gone resolves — see SessionProvider.remove.
+    // A session that is already gone resolves, as SessionProvider.remove does.
     await sandbox.remove("s1");
   });
 

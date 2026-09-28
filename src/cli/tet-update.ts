@@ -59,7 +59,7 @@ function install(pid: number, version: string, staged: string, root: string, res
 
   // Complete beside the install before the install is touched: moving it aside and this into
   // place are two renames, and nothing ever removes the install. A tet started meanwhile holds
-  // its TET.exe and app.asar open: removing the install under it once left just those two files.
+  // its TET.exe and app.asar open, which removing the install under it would leave behind.
   const fresh = `${root}.new`;
   try {
     fs.rmSync(fresh, { recursive: true, force: true });

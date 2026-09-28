@@ -292,7 +292,7 @@ function parseSandboxes(result: RunResult): SandboxList | undefined {
 }
 
 /**
- * The inverse, for tet.json: under home as `~/…` with forward slashes, so a row serves another user
+ * `normalizeHostPath`'s inverse, for tet.json: under home as `~/…` with forward slashes, so a row serves another user
  * on the same OS; else as typed. Case-insensitive on win32 through `path.relative`.
  */
 export function contractHome(hostPath: string): string {

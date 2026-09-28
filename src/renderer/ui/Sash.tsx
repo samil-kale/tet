@@ -20,7 +20,7 @@ interface SashProps {
   min: number;
   /** How much of the container must be left for the pane on the other side. */
   minOther: number;
-  /** Sizes the pane *behind* it rather than in front — the commands list's case. */
+  /** Sizes the pane *behind* it rather than in front, e.g. the commands list. */
   reverse?: boolean;
   onResize: (size: number) => void;
 }

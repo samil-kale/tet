@@ -32,22 +32,24 @@ project's terminals.
   registrars by area, each taking only the singletons it touches), `agents/`, `providers/`; flat
   is the app itself — `main.ts` (window, startup), settings, projects, requirements, sbx.
 - Every IPC channel is typed in `src/shared/ipc.ts`, off `TETApi`, and used only through its
-  wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) in main, `invoke`/`send`/`subscribe`
-  in the preload — never a bare `ipcMain` or `ipcRenderer` call with a string.
+  wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `main.ts`'s `send` in main,
+  `invoke`/`send`/`subscribe` in the preload — never a bare `ipcMain`, `ipcRenderer` or
+  `webContents.send` call with a string.
 - `src/renderer/`: `terminal/` (xterm, split view, link providers), `git/` (the side pane's git
   view), `files/` (its other one: the Explorer tree, the SEARCH pane, Seti's file icons),
-  `diff/` (the editor tab: monaco + shiki), `sidebar/`, `dialogs/`, `ui/`, `themes/`; flat is the
-  shell — `App`, `Startup`, `styles.css`, `shortcuts.ts`.
+  `diff/` (the editor tab: monaco + shiki), `sidebar/`, `dialogs/`, `ui/`, `themes/`, `assets/`
+  (the app icon, for the window and the packages); flat is the shell — `App`, `Startup`,
+  `styles.css`, `shortcuts.ts`.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
-  documents every field), grouped by what it can do — `install`, `terminal`, `ask`, `sessions`,
-  `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent can do
-  something is whether it has the group (`hasSandbox`), never a list of ids. Shared code imports
-  only the registry (`agents/index.ts`), `agent.ts`'s types and `hasSandbox`, and the agent-neutral
-  `ask.ts` and `system-prompt.ts`. A new agent must fit the data model (below) and is a new folder
-  and one registry entry, nothing else: its icon is data in its definition (`icon`), which the
-  window draws, and no code outside `agents/` names an agent (user-facing text may) but the shell,
-  which TET itself runs saved commands and plain terminals in. What a new agent needs that no group
-  covers extends the groups, never a branch on its id.
+  documents every field), grouped by what it can do — `install`, `terminal`, `run`, `ask`,
+  `sessions`, `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent
+  can do something is whether it has the group (`hasSandbox`), never a list of ids. Shared code
+  imports only the registry (`agents/index.ts`), `agent.ts`'s types and `hasSandbox`, and the
+  agent-neutral `ask.ts` and `system-prompt.ts`. A new agent must fit the data model (below) and is
+  a new folder and one registry entry, nothing else: its icon is data in its definition (`icon`),
+  which the window draws, and no code outside `agents/` names an agent (user-facing text may) but
+  the shell, which TET itself runs saved commands and plain terminals in. What a new agent needs
+  that no group covers extends the groups, never a branch on its id.
 - **A project is its repository and its worktrees** — the words for them, in code, texts and
   comments alike. The repository is the folder the user opened, holding `.git`; never call it a
   worktree (nor "main worktree"), and there is no noun for both: where one of them is meant — where
@@ -157,7 +159,7 @@ others.
   `LINUX`), named by what it means (`pathsIgnoreCase`, `spawnsThroughCmd`, `appBundle`), never by
   which OS it is. Main reads `PLATFORM` (`host-platform.ts`), the window its own
   (`renderer/platform.ts`); nothing else asks for `process.platform` or `navigator.platform`, and
-  the id is data alone (tet.json's `os`, the app's info) � `install.test.ts`, testing each OS's own
+  the id is data alone (tet.json's `os`, the app's info) — `install.test.ts`, testing each OS's own
   installer, alone branches on it. A new difference extends the interface.
 - Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
   (`src/main/terminals/pty.ts`), never `shell: true`.

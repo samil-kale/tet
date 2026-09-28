@@ -191,7 +191,7 @@ describe("a sandboxed tab's control token", () => {
     const host = tabControlToken("run-token", { projectId: "p" }, "tab-1", HOST_SIDE);
     const sandboxed = tabControlToken("run-token", { projectId: "p" }, "tab-1", SANDBOX_SIDE);
     assert.notEqual(host, sandboxed);
-    // Nothing is kept per tab: the control server reads the flag back off whichever of the two
+    // Nothing is kept per tab: the control server reads the side back off whichever of the two
     // matches, so a process left in the sandbox is answered by the rules its tab started under
     // even once the tab and its project are closed.
   });

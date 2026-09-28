@@ -75,8 +75,7 @@ export async function askLogin(
   if (followUpHeldBack(refused)) {
     return;
   }
-  // Escape while the second try runs closes the question too: that try's outcome is then the
-  // question's own to tell (a notice for a refusal), not the first try's.
+  // Once a try ran, its refusal stood at the field: a cancel afterwards tells nothing more.
   let tried = false;
   const answered = await prompt({
     title: "Authentication failed",

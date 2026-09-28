@@ -101,8 +101,8 @@ const PROMPT_LABELS: Record<PromptId, string> = {
 const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
   { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
-  // Not live: its hook is registered per tab only when on, since only a toast comes of it
-  // (AgentPaths.idleReminder).
+  // Not live: its hook is in the agent's host setup only when on, redone on a change (HostSetups),
+  // so it reaches tabs started afterwards (AgentPaths.idleReminder).
   { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only, from the next tab on)" }
 ];
 
@@ -256,7 +256,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyTheme = (kind: ThemeKind, id: string): void => edit({ [themeKey(kind)]: id });
 
   // The kind shown now, and the one Save asks for — "system" resolved by the OS now (Electron's
-  // prefers-color-scheme follows nativeTheme, which main.ts's currentTheme reads).
+  // prefers-color-scheme follows nativeTheme, which theme.ts's currentTheme reads).
   const shownKind = resolveTheme(document.documentElement.dataset.theme).kind;
   const scheme = settings?.colorScheme ?? "system";
   const chosenKind = schemeKind(scheme, window.matchMedia("(prefers-color-scheme: dark)").matches);

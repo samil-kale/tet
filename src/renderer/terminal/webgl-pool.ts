@@ -57,7 +57,7 @@ export class WebglPool {
     this.forgetWhere((candidate) => candidate === key);
   }
 
-  /** Every terminal of a closed project: the keys starting with its view-key prefix. */
+  /** Every terminal of a closed repository or worktree: the keys starting with its view-key prefix. */
   forgetPrefix(prefix: string): void {
     this.forgetWhere((candidate) => candidate.startsWith(prefix));
   }

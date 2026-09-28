@@ -25,7 +25,7 @@ interface FilesPaneProps {
   onSearchHeight: (size: number) => void;
 }
 
-/** The listing is re-read on every show and usually lands in milliseconds; no flashing bar. */
+/** The listing is re-read on every show and is usually quick; the bar waits so it does not flash. */
 const PROGRESS_DELAY_MS = 500;
 
 /** `active` once it has held for `delayMs`; false the moment it ends. */

@@ -258,7 +258,7 @@ export interface SbxVariable {
 }
 
 /** Per project, for every sandboxed tab whatever its agent. No authentication: each agent signs in
- *  inside the sandbox, pi excepted (a credential from sbx's own store, see sbx.ts). */
+ *  inside the sandbox, pi excepted (a credential from sbx's own store, see pi's `sandbox.kit`). */
 export interface SbxProjectConfig {
   enabled: boolean;
   ports: SbxPort[];
@@ -381,7 +381,7 @@ export interface AppInfo {
   electron: string;
   chromium: string;
   node: string;
-  /** `process.platform` and `process.arch`. */
+  /** `PLATFORM.id` and `process.arch`. */
   os: string;
 }
 

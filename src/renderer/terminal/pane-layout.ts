@@ -138,7 +138,7 @@ function pickActive(
  * "closed" from "not created yet" (`pickActive`).
  *
  * An entry for a tab in neither list is kept: sessions arrive agent by agent at startup. One that
- * never comes lasts until the next `saveLayout`, which writes only what exists.
+ * never comes lasts until the next `serializeLayout`, which writes only what exists.
  *
  * Returns `layout` itself when nothing changed: a new object re-renders every memoized view.
  */
@@ -380,7 +380,7 @@ export interface FractionBox {
  * Where a dragged tab asks for a pane at that position. The same for every preset: the right
  * quarter in thirds, the lower half of the left quarter; top left is "a", never a zone. Without a
  * `SNAP_TRANSITIONS` entry it is a plain drop. A quarter, not a half: in cols2 a half would cover
- * all of b. Tuned by hand against the real drag.
+ * all of b.
  */
 export type SnapZone = "right" | "top-right" | "bottom-right" | "bottom-left";
 const SNAP_ZONES: Record<SnapZone, FractionBox> = {
@@ -523,7 +523,6 @@ export function placeCommandTab(
 
 /**
  * How far past its zone the pointer may stray; stops the preview flickering between two zones.
- * Tuned by hand against the real drag.
  */
 const SNAP_STICKY = 0.03;
 

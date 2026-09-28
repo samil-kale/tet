@@ -349,7 +349,7 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
   it("shows a file untracked by `rm --cached` as one untracked row, not a deletion beside it", async () => {
     run("rm", "-q", "--cached", "renamed.txt");
     write("renamed.txt", "edited\n");
-    // git reports both, "D  renamed.txt" and "?? renamed.txt"; GitHub Desktop shows the second.
+    // git reports both, a staged deletion and an untracked file; GitHub Desktop shows the second.
     assert.deepEqual(await changed(), [
       "modified b.txt",
       "modified i/page.txt",
@@ -499,7 +499,7 @@ describe("remotes the tree has to read carefully", () => {
     run("symbolic-ref", "HEAD", "refs/heads/main");
     run("config", "branch.main.remote", "origin");
     run("config", "branch.main.merge", "refs/heads/main");
-    // The header reads "No commits yet on main...origin/main [gone]".
+    // Unborn, tracking a branch the remote lacks: the headers name the upstream but give no branch.ab.
     const state = await readState(cwd, ["origin"]);
     assert.equal(state.head, "main");
     assert.equal(state.upstream, undefined);

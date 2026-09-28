@@ -14,7 +14,7 @@ import { buildXtermTheme, editorFontFamily } from "./theme";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
 interface TerminalView {
-  /** The tab, whose drops folder and sandbox a drop or paste goes through. */
+  /** The tab's repository or worktree, whose drops folder and sandbox a drop or paste goes through. */
   ref: ProjectRef;
   tabId: string;
   term: Terminal;
@@ -514,7 +514,7 @@ function dropView(key: string, view: TerminalView): void {
 }
 
 /**
- * Every terminal of a closed project; `disposeTerminal` only covers tabs gone from a list the host
+ * Every terminal of a closed repository or worktree; `disposeTerminal` only covers tabs gone from a list the host
  * still reports.
  *
  * From the close path, never a pane's unmount: a meaningless remount (changed key, error boundary,

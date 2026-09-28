@@ -24,10 +24,10 @@ import {
 } from "../ui/icons";
 import { askDeleteWorktree, askRenameWorktree, NOT_MADE_BY_TET, worktreeEntry } from "./worktree-questions";
 
-/** One git command at a time per project, labelled while it runs (`GitRun`). The tree asks its
+/** One git command at a time per repository or worktree, labelled while it runs (`GitRun`). The tree asks its
  *  questions itself, knowing which remote holds a branch and where HEAD is. */
 export interface BranchActions extends GitRun {
-  /** A command runs in this project; no second one is offered. */
+  /** A command runs in this repository or worktree; no second one is offered. */
   busy: boolean;
   /** That command was started here, so this pane's bar shows it; one started from the project
    *  list shows in that list's bar instead. */

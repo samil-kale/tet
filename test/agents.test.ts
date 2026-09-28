@@ -21,7 +21,7 @@ import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "./
 
 /**
  * The agents' CLIs and sbx as installed on this machine, driven the way tet drives them — what the
- * AgentDefinitions and sbx.ts rely on. Run it before relying on an update.
+ * AgentDefinitions, sbx.ts and the sbx-*.ts beside it rely on. Run it before relying on an update.
  *
  * Only on a machine where they are installed and signed in, each part on its own switch:
  * - TET_AGENT_TEST=1: every agent in a tab of the real app, driven through tet-ctl. Spends model

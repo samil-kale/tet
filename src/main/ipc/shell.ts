@@ -145,7 +145,7 @@ export function registerShellIpc({
     return null;
   });
 
-  /** The git pane's "show in file manager". */
+  /** A file menu's reveal, in the Explorer and the changes list (file-menu.ts's pathEntries). */
   handle("shell:reveal-file", (_event, ref: ProjectRef, filePath: string): void => {
     const repository = repositories.get(ref);
     if (repository) {

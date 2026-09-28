@@ -102,7 +102,7 @@ export function notifying<A extends unknown[]>(
 }
 
 /**
- * Runs a file action. The running mark is per project, since one side pane serves all; called once
+ * Runs a file action. The running mark is per repository or worktree, since one side pane serves all; called once
  * per section, each with its own bar, and raised by `act` alone. Counted, not flagged: an action
  * the main process refuses while another runs (a context menu entry during a commit) ends first,
  * and must not clear the mark of the one still running.
@@ -140,7 +140,7 @@ export function useFileAct(key: string): { acting: boolean; act: FileAct; ask: F
 }
 
 /**
- * The same for a branch command, which App runs (`runBranchAction`: one per project, whatever
+ * The same for a branch command, which App runs (`runBranchAction`: one per repository or worktree, whatever
  * started it) while the bar belongs to the view that offered it — the git pane and the project
  * list each have one. Counted for the same reason as above, and wrapped around `run` alone: what a
  * question asked for runs on the question's bar.
@@ -154,19 +154,19 @@ function useStartedHere<A extends unknown[], R>(
 }
 
 /**
- * App's gate for the branch commands: one per project at a time, whoever started it — a second
+ * App's gate for the branch commands: one per repository or worktree at a time, whoever started it — a second
  * click mid-switch would stack two `git switch`. Mirrors `Repository.runAction`; `BranchActions.run`
  * is the one way in for them, a view asking its own question first (`ask`). Hands out the git pane's actions for
- * the project on screen (`activeBranch`, its bar showing what it started, `ask` excepted: the
+ * the repository or worktree on screen (`activeBranch`, its bar showing what it started, `ask` excepted: the
  * question that asked for it shows that one) and the project list's way of running a command in
- * any of its projects (`runIn`, on the list's bar, `projectListBusy`).
+ * any repository or worktree it lists (`runIn`, on the list's bar, `projectListBusy`).
  */
 export function useBranchActions(activeKey: string | null): {
   activeBranch: BranchActions;
   projectListBusy: boolean;
   runIn: (key: string) => GitRun;
 } {
-  /** Projects with a branch command in flight: a fetch ending in A must not free B. */
+  /** Repositories and worktrees with a branch command in flight: a fetch ending in A must not free B. */
   const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Read synchronously: a second double-click can land before a re-render. */
   const branchActionsRef = useRef(new Set<string>());

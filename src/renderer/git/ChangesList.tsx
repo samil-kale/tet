@@ -80,8 +80,7 @@ export async function askCommit(
   // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitPane).
   const pushLabel = canSync ? (state.upstream === undefined ? "Also publish branch" : `Also push ${remote}`) : undefined;
   /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
-   *  question is gone — only one question is up at a time, and Escape may have closed it while the
-   *  push still ran. */
+   *  question is gone — only one question is up at a time. */
   const running: { submitted?: Promise<{ committed: GitActionResult; pushed?: GitActionResult }> } = {};
   const commitAndPush = async (message: string, push: boolean) => {
     const committed = await (paths
@@ -225,7 +224,7 @@ export const ChangesList = memo(function ChangesList({ resolved, state, act, ask
     return entries;
   };
 
-  // Asked per row: `includes` made a long list with a long selection quadratic.
+  // Asked per row: `includes` would make a long list with a long selection quadratic.
   const selectedSet = new Set(selected);
 
   return (

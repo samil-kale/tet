@@ -34,8 +34,7 @@ let deps: NotificationDeps;
  */
 let toastTargetAwaited: (ToastTarget & { sessionId?: string }) | undefined;
 
-/** Like notices (Notices.tsx), an identical toast within this span is dropped, without extending
- *  it. The target tab is part of the identity: two untitled tabs of one agent read the same, and
+/** An identical toast within this span is dropped, without extending it. The target tab is part of the identity: two untitled tabs of one agent read the same, and
  *  dropping the second would point its click at the first's tab. */
 const TOAST_REPEAT_MS = 8000;
 const recentToasts = new Map<string, number>();

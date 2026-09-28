@@ -125,7 +125,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git pane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
-  // Pane defaults and limits; both side-pane views share the two below.
+  // Pane defaults and limits; both side-pane views share its width ("git-panels").
   const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
   const [sidePaneWidth, setSidePaneWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);

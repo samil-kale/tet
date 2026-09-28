@@ -49,7 +49,7 @@ export function registerTerminalsIpc({
     }
   );
 
-  // The tab menu offers it only for a tab with no process; the environment dialog for a running one.
+  // The window's restart (the tab menu, the environment dialog): a running tab quits first.
   handle("terminals:restart", (_event, ref: ProjectRef, tabId: string): void => {
     sessions.get(ref)?.restartTab(tabId, true);
   });

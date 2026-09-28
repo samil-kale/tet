@@ -290,7 +290,7 @@ export function ChevronIcon({ expanded, scale, ...props }: IconProps & { expande
 }
 
 /**
- * A gapped ring, used with the `spinning` class in place of the running action's icon. The dash
+ * A gapped ring, spun (`spinning`) as a session's working mark (`SessionMark`). The dash
  * pattern splits the circumference 2π·r into arc and gap; re-cut it if the radius moves.
  */
 export function SpinnerIcon(props: IconProps) {
@@ -367,7 +367,7 @@ export function QuestionIcon(props: IconProps) {
 
 /**
  * Lucide's `circle-alert` — what cannot work as it stands: a tab whose agent cannot start, a
- * sbx-settings row or tab. Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
+ * dialog's row or tab (`RowMark`, `DialogTab.mark`). Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
  */
 export function CircleAlertIcon(props: IconProps) {
   return <Lucide {...props} icon={CircleAlert} extent={22} />;

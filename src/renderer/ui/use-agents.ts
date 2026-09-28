@@ -3,7 +3,7 @@ import type { AgentId, AgentInfo } from "../../shared/types";
 
 /**
  * Asked once per window, not per view: the list (agents and their flags, `AgentInfo`)
- * cannot change while the process runs, and a `TerminalHost` cannot attach until it has landed.
+ * cannot change while the process runs.
  */
 let agentsPromise: Promise<AgentInfo[]> | undefined;
 let agentsList: AgentInfo[] = [];

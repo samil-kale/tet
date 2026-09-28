@@ -355,7 +355,7 @@ export async function deleteWorktree(
  * branch name as it now is. One TET made that git no longer lists and whose folder is gone was
  * deleted outside TET: it closes, and its data and sandboxes go. One still on disk stays whatever a
  * read says — another repository's or worktree's refresh may predate its add. It never opens one:
- * only the start and addWorktree do. Not on a failed read, which lists none.
+ * only the start, addProject and addWorktree do. Not on a failed read, which lists none.
  */
 export function syncWorktrees(deps: ProjectDeps, projectId: string, state: RepositoryState): void {
   const project = deps.store.get(projectId);

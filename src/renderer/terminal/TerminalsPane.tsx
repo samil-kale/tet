@@ -14,7 +14,7 @@ import { isEditorTab, type PaneTab } from "./editor-tab";
 import { NO_TABS } from "./use-project-layouts";
 
 /**
- * A divider's position as a *share* of its room (`usePersistedShare`): `renderGrid` multiplies it
+ * A divider's position as a *share* of its room (`usePersistedShare`): `pixelsFor` multiplies it
  * by `.panes-grid`'s live measurement, so an undragged divider is an even split at any size. A
  * drag, in `Sash`'s pixels, is turned back into a fraction (`divider` below). Persisted per
  * repository or worktree (`layoutStorageKey`).

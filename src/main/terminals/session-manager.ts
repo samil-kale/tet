@@ -270,7 +270,7 @@ export class TabSessionManager {
   private readonly recorded: ControlEvent[] = [];
   /** Closed; nothing still in flight may start anything back up. */
   private disposed = false;
-  /** Said once per project — see resolvePlace's own-session-id fallback. */
+  /** Said once per repository or worktree — see resolvePlace's host-session branch. */
   private sbxPreexistingSaid = false;
   private readonly indicators = new StartIndicators(
     (show) => this.callbacks.onStartupProgress(this.at.ref, show),

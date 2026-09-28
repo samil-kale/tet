@@ -128,7 +128,7 @@
   --vscode-editor-selectionBackground: #273a50;
   --vscode-editor-inactiveSelectionBackground: #232830;
   --vscode-editor-lineHighlightBorder: #232830;
-  /* GitHub Dark Default's find colors: the screenshot has no counterpart for them. */
+  /* GitHub Dark Default's find colors. */
   --vscode-editor-findMatchBackground: #9e6a03;
   --vscode-editor-findMatchHighlightBackground: #f2cc6080;
   --vscode-editorIndentGuide-background1: #2a2d35;
@@ -138,7 +138,7 @@
   --vscode-terminal-selectionBackground: #273a50;
   --vscode-terminal-inactiveSelectionBackground: #232830;
 
-  /* Red, green, yellow (the modified mark), blue, cyan and white are the screenshot's; the rest
+  /* Red, green, yellow (the modified mark), blue, cyan and white are the theme's own; the rest
      GitHub Dark Default's. */
   --vscode-terminal-ansiBlack: #484f58;
   --vscode-terminal-ansiRed: #db5761;

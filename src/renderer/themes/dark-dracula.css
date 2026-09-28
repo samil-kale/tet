@@ -87,8 +87,8 @@
   --vscode-button-secondaryForeground: #f8f8f2;
   --vscode-button-secondaryHoverBackground: #3e4254;
 
-  /* The theme's is #21222c, which draws the dialogs darker than the editor behind them; the
-     theme's dropdown and menu background. */
+  /* The theme's is #21222c, darker than the editor it sits over; the theme's dropdown and menu
+     background. */
   --vscode-editorWidget-background: #343746;
   /* Unset; the theme's border. */
   --vscode-editorWidget-border: #191a21;

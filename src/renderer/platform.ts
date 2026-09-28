@@ -11,7 +11,7 @@ function detect(reported: string): string {
   return reported.includes("win") ? "win32" : "linux";
 }
 
-/** Gates link activation and paste: the platform's modifier held (Platform.modifierKey). */
+/** The platform's modifier held (Platform.modifierKey), for shortcuts, links, copy and paste. */
 export function isModifierHeld(event: { ctrlKey: boolean; metaKey: boolean }): boolean {
   return PLATFORM.modifierKey === "Meta" ? event.metaKey : event.ctrlKey;
 }

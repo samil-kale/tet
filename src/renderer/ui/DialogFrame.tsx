@@ -94,8 +94,8 @@ interface DialogTab<T extends string> {
 }
 
 /**
- * What heads the dialog, one of two shapes: a title bar, optionally with a close button, or a tab
- * strip in place of the title for a dialog with several panes.
+ * What heads the dialog, one of two shapes: a title bar, or a tab strip in place of the title for a
+ * dialog with several panes. Either carries × when `onCancel` is given.
  */
 type DialogHeader<T extends string> =
   | { title: string }

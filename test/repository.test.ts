@@ -15,8 +15,9 @@ import { fakeSafeStorage, forkGitInProcess, git, initBare, initRepository, isola
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
- * switches to, the question it hands back. electron's two pieces are faked: `utilityProcess` runs
- * git.ts in this process as git-host.ts would, `shell.trashItem` moves a file into a folder or fails.
+ * switches to, the question it hands back. electron's three pieces are faked: `utilityProcess` runs
+ * git.ts in this process as git-host.ts would, `shell.trashItem` moves a file into a folder or fails,
+ * and `safeStorage` (helpers.ts's fakeSafeStorage).
  */
 
 isolateGitConfig("tet-repository-noglobal");
@@ -300,7 +301,7 @@ describe("worktrees, each with a branch of its own", () => {
     assert.ok(!repository.getState().worktrees.some((worktree) => worktree.branch === "second"));
   });
 
-  // A worktree's rename: its folder stays (projects.ts).
+  // A worktree's rename: its folder stays (worktree-questions.ts).
   it("renames a branch checked out in a worktree, which follows it with its base", async () => {
     assert.deepEqual(await repository.renameBranch("fresh", "renamed"), { ok: true });
     assert.equal(git(at("fresh"), "branch", "--show-current"), "renamed");

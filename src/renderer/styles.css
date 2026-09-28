@@ -238,7 +238,7 @@ textarea:focus,
   -webkit-app-region: drag;
 }
 
-/* icon.png scaled down; the taskbar uses icon.ico. */
+/* icon.png scaled down. */
 .titlebar-icon {
   width: 18px;
   height: 18px;
@@ -478,7 +478,7 @@ textarea:focus,
   bottom: 0;
 }
 
-/* Takes the leftover width, so the close button stays at the row's right edge. */
+/* Takes the leftover width, so the row's buttons stay at its right edge. */
 .command-main,
 .project-main {
   flex: 1;
@@ -497,7 +497,8 @@ textarea:focus,
   white-space: nowrap;
 }
 
-/* A command's variables, a repository's branch. Declared together so the two cannot drift. */
+/* A command's variables, a repository's branch, a worktree's base. Declared together so they
+   cannot drift. */
 .command-extra,
 .project-extra,
 .tree-extra {
@@ -1058,7 +1059,7 @@ textarea:focus,
   cursor: default;
 }
 
-/* Compact, icon-less lists of choices: the context menu without its padding. */
+/* Compact lists of choices: the context menu without its padding. */
 .new-session-menu,
 .dropdown-menu {
   border-radius: 3px;
@@ -1848,7 +1849,7 @@ textarea:focus,
   margin: 8px 0;
 }
 
-/* The Environment tab's word for a variable this machine sets too, in the row's font
+/* The word for a variable this machine sets too, in the row's font
    (.sbx-path-value) and colour (.dialog-field span). */
 .env-overrides {
   flex: none;
@@ -2220,7 +2221,7 @@ textarea:focus,
   align-self: center;
 }
 
-/* Labels vary and may gain a spinner; a floor keeps the row from shifting. */
+/* Labels vary; a floor keeps a short one from shrinking its button. */
 .dialog-buttons .button {
   min-width: 76px;
   justify-content: center;
@@ -2254,7 +2255,7 @@ textarea:focus,
   min-width: 80px;
 }
 
-/* What to try in a terminal to see the same thing the check saw. */
+/* What to try in a terminal to see what the check saw, or the rule to allow. */
 .requirement-command {
   flex: 1;
   font-family: var(--vscode-editor-font-family);

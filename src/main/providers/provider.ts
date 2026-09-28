@@ -34,8 +34,8 @@ export async function getJson(url: string, headers: Record<string, string>): Pro
 }
 
 /**
- * Every page of a listing, up to the cap. With `rel="last"` the rest are fetched in parallel — a
- * page costs about a second, and following `rel="next"` one by one adds that up. Else `rel="next"`.
+ * Every page of a listing, up to the cap. With `rel="last"` the rest are fetched in parallel, as
+ * following `rel="next"` one by one adds up each page's wait. Else `rel="next"`.
  */
 export async function getPaged(first: string, headers: Record<string, string>): Promise<unknown[]> {
   const response = await fetchOk(first, headers);

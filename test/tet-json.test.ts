@@ -300,7 +300,7 @@ describe("readSbxConfig", () => {
   });
 
   it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's paths alongside it", async () => {
-    const otherOs = PLATFORM.id === "win32" ? "linux" : "win32";
+    const otherOs = "aix";
     const theirs = { path: "/their/data", access: "ro", os: otherOs };
     const stale = [
       { path: "~/stale", access: "ro" },
@@ -349,7 +349,7 @@ describe("readSbxConfig", () => {
           paths: [
             { path: "", os: PLATFORM.id },
             { path: "~/data", access: "not-a-real-access", os: PLATFORM.id },
-            { path: "/elsewhere", access: "ro", os: PLATFORM.id === "win32" ? "linux" : "win32" }
+            { path: "/elsewhere", access: "ro", os: "aix" }
           ],
           hosts: ["ok.example.com", 42, "", "  spaced.example.com  "],
           secrets: [

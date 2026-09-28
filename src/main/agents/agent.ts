@@ -25,7 +25,7 @@ export interface AgentSessionInfo {
   turnEndedAt?: number;
   /**
    * The sbx sandbox this session lives in; unset on the host. Resumable only there (resolvePlace).
-   * Set by the manager on an `AgentSandbox.sessions` listing.
+   * Set by the sandbox's place on its listing (`SandboxPlace.listSessions`).
    */
   sandbox?: string;
 }
@@ -55,7 +55,7 @@ export interface SandboxSessions {
 
 /** One sandbox's sessions (SandboxSessions.at). */
 export interface SandboxSessionStore {
-  /** SessionProvider.list against the mounted root; the manager names the sandbox on the result. */
+  /** SessionProvider.list against the mounted root; SandboxPlace names the sandbox on the result. */
   list(): Promise<AgentSessionInfo[]>;
   remove(sessionId: string): Promise<void>;
   rename(sessionId: string, title: string): Promise<void>;
@@ -65,7 +65,7 @@ export interface SandboxSessionStore {
 
 /** Agent-specific session enumeration/resume/deletion, on this machine. */
 export interface SessionProvider {
-  /** All sessions of this repository, oldest first. Must resolve [] on any failure. */
+  /** All sessions of this repository or worktree, oldest first. Must resolve [] on any failure. */
   list(cwd: string): Promise<AgentSessionInfo[]>;
   resumeArgs(sessionId: string): string[];
   /** Deletes the session; rejects on failure. An already-gone session must resolve: a tab whose
@@ -77,8 +77,8 @@ export interface SessionProvider {
   /** The files holding the session's transcript, as the agent keeps them, for another agent to
    *  read (a handoff). [] where there are none. */
   files(cwd: string, sessionId: string): Promise<string[]>;
-  /** Calls `onChange` when this repository's sessions change, so the manager re-lists without
-   *  waiting for a tab's output. */
+  /** Calls `onChange` when this repository's or worktree's sessions change, so the manager
+   *  re-lists without waiting for a tab's output. */
   watch?(cwd: string, onChange: () => void): SessionWatch;
 }
 
@@ -105,7 +105,7 @@ export interface AgentPaths {
    * registered when wanted — which is why this switch applies only to tabs started after it.
    */
   idleReminder: boolean;
-  /** The window's theme, for an agent that cannot read the terminal's colors (Codex on win32). */
+  /** The window's theme, for agents that are told it rather than reading the terminal's colors. */
   theme: ThemeDefinition;
 }
 
@@ -251,8 +251,9 @@ export interface AgentSandbox {
 export type AgentDefinition = AgentBase &
   (
     | {
-        /** Listing, resume args, rename, delete, optional watch. */
+        /** Listing, resume args, rename, delete, files, optional watch. */
         sessions: SessionProvider;
+        /** Omitted by an agent whose turns TET does not follow. */
         turns?: AgentTurns;
       }
     /** An agent with no sessions. */
@@ -260,7 +261,10 @@ export type AgentDefinition = AgentBase &
   );
 
 interface AgentBase {
+  /** Its registry key, which names its folders under `~/.tet` (`config/<agent>`, a sandbox's
+   *  `<agent>`) and its tabs' `agentId`: never changed once released. */
   id: AgentId;
+  /** Its name wherever the user reads it: menus, notices, dialogs. */
   displayName: string;
   /** Drawn by the window beside its tabs and menu entries (AgentInfo.icon). */
   icon: AgentIcon;

@@ -6,7 +6,7 @@ function apiBase(host: string): string {
   return host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`;
 }
 
-/** GitHub rejects requests without a User-Agent, and Node's fetch does not send one. */
+/** GitHub rejects requests without a User-Agent. */
 function headers(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,

@@ -176,8 +176,8 @@ try {
  * Windows remembers what it decided about an id, so `npm start` gets its own id — else one dev
  * toast leaves the installed tet reading "Electron". The CLSID is fixed, not Electron's per-run
  * random one, so a toast clicked after tet quit starts the COM server the entry names. Both are set
- * before the workspace: a hook can report a turn once the first terminal is up. The id is the old
- * installers' `appId`, kept so Windows' existing decisions about it stay.
+ * before the workspace: a hook can report a turn once the first terminal is up. The id is
+ * electron-builder.yml's `appId`, which Windows' existing decisions about it are keyed on.
  */
 const APP_USER_MODEL_ID = "com.samilkale.tet";
 const TOAST_ACTIVATOR_CLSID = "{8DA9BB54-C0A5-4BEC-AF76-BE3568344852}";

@@ -59,8 +59,8 @@ interface EditorHostProps {
 }
 
 /**
- * The editor tab: a bar naming the file, then the diff editor — a Markdown file's preview beside
- * it — the image view or a placeholder, all drawn off the editor's snapshot. The editor and the
+ * The editor tab: a bar naming the file, then the editor, diff or plain — a Markdown file's
+ * preview beside it — the image view or a placeholder, all drawn off the editor's snapshot. The editor and the
  * preview live outside React in `editor-views.ts`, each attached to a childless frame; on a pane
  * move React removes a frame with it inside, and the next host's attach takes it out again.
  */

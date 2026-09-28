@@ -69,7 +69,7 @@ export function sandboxDir(dataRoot: string, ref: ProjectRef, agentId: AgentId):
 }
 
 /** The host side of an agent's session mounts (AgentSandbox.sessions): inside its sandbox folder
- *  (sandboxDir), which sbx.ts mounts whole. */
+ *  (sandboxDir), which sbx-mounts.ts mounts whole. */
 export function sandboxSessionDir(sandboxDir: string): string {
   return path.join(sandboxDir, "sessions");
 }

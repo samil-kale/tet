@@ -1,8 +1,8 @@
 /**
  * What differs between the operating systems TET runs on, each as what it means rather than which
  * one it is — so a place that needs a difference names it, and a platform is these values and
- * nothing else. Main (`process.platform`), the window (`navigator`) and the CLIs each take theirs
- * through `platformOf`. The id is data alone: stored (tet.json's `os`), shown, or a file name.
+ * nothing else. Main (`process.platform`) and the window (`navigator`) each take theirs through
+ * `platformOf`. The id is data alone: stored (tet.json's `os`), shown, or a file name.
  */
 export interface Platform {
   readonly id: "win32" | "darwin" | "linux";

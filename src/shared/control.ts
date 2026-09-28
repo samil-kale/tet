@@ -94,7 +94,8 @@ export interface ControlVerb {
 }
 
 /**
- * Hook events in tet's own vocabulary; each agent's hooks.ts maps its events onto these.
+ * Hook events in tet's own vocabulary; each agent's hooks (pi: its extension) map its events onto
+ * these.
  * `permission` and `question` are one mark with two toast wordings; `session-start` marks nothing.
  */
 export const HOOK_EVENTS = ["session-start", "prompt-submit", "stop", "permission", "question", "idle"] as const;

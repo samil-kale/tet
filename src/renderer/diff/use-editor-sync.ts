@@ -113,7 +113,7 @@ export function useEditorSync(
     []
   );
   // Reloads an open file only when its diffVersion changes, not on every push: a reload re-reads
-  // and recolours the whole diff, hundreds of ms for a long file.
+  // and recolours the whole diff.
   useEffect(() => {
     for (const [key, editors] of Object.entries(editorTabs)) {
       for (const { tabId, path } of editors) {

@@ -157,7 +157,7 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
   /** Why an account could not be removed, beside its row until the next try. */
   const [removeError, setRemoveError] = useState<{ accountId: string; message: string } | undefined>(undefined);
   const [filter, setFilter] = useState("");
-  /** The group picked in this dialog, "" for all; null while none was picked here. Tagged with its
+  /** The group picked in this dialog, "" for all; undefined while none was picked here. Tagged with its
    *  account: groups are per account, so a pick would filter another's list to nothing. */
   const [picked, setPicked] = useState<{ accountId: string; namespace: string } | undefined>(undefined);
   const namespace = picked?.accountId === selectedId ? picked.namespace : null;

@@ -256,7 +256,7 @@ export interface TETApi {
       value: ExplorerSettings[K]
     ): Promise<GitActionResult>;
     listExplorer(ref: ProjectRef): Promise<ExplorerListing>;
-    /** The Explorer search field's matches, in the files the tree lists minus what git ignores. */
+    /** The SEARCH pane's matches, in the files the tree lists minus what git ignores. */
     searchFiles(ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult>;
     /** tet.json alone, no filesystem walk. */
     explorerSettings(projectId: string): Promise<ExplorerSettings>;

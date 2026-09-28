@@ -8,7 +8,7 @@ import { rotateLog } from "./rotate-log";
  * EAGAIN` on a socket the other side dropped. The user gets a notice; the stack goes to `errors.log`.
  */
 
-/** Rotated like the event loop's log. */
+/** Past this size errors.log is rotated. */
 const MAX_LOG_BYTES = 512 * 1024;
 
 /** Starts every report; test/app.test.ts fails a run on it. */

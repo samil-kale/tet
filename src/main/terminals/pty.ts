@@ -14,9 +14,11 @@ export interface SpawnOptions {
   cols: number;
   rows: number;
   env?: Record<string, string>;
-  /** Variables that win over the machine's own, unlike `env` — only a saved command's. */
+  /** Variables that win over the machine's own, unlike `env`: a saved command's, or those `sbx run
+   *  -e` passes on. */
   envOverride?: Record<string, string>;
-  /** This process's project and tab for the control channel (`TET_PROJECT_ID`, `TET_TAB_ID`).
+  /** This process's project, worktree and tab for the control channel (`TET_PROJECT_ID`,
+   *  `TET_WORKTREE`, `TET_TAB_ID`).
    *  Above the machine's, like `controlEnv`. */
   own?: Record<string, string>;
   /** Where the tab runs (TabPlace): whether TET's stored variables reach it, and part of its control
@@ -94,7 +96,7 @@ interface ResolvedCommand {
   windowsVerbatimArguments?: true;
 }
 
-/** Every character cmd.exe gives a meaning, `^`-escaped — cross-spawn's `lib/util/escape.js`. */
+/** Every character cmd.exe gives a meaning, `^`-escaped. */
 const CMD_META_CHARS = /([()\][%!^"`<>&|;, *?])/g;
 
 /** The line of an npm, pnpm or yarn cmd-shim that runs the package: a script by its path beside the
@@ -165,7 +167,7 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), the
  *  variables kept in tet over it where its side takes them (CallerSide.storedEnv), then tet's own
  *  (controlEnv, options.own) with the tab's own control token in place of the run's
- *  (control-token.ts), then a saved command's envOverride. Testable without a pty. */
+ *  (control-token.ts), then options.envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">): Record<string, string> {
   const side = options.side ?? HOST_CALLER;
   const stored = side.storedEnv ? storedEnv() : {};

@@ -4,7 +4,7 @@ import { createStore, useStore } from "./store";
 /** Layout describes the window, not a repository, so it lives in renderer storage. */
 const STORAGE_PREFIX = "tet.layout.";
 
-/** A key in that storage, for what is persisted outside these hooks (pane-layout.ts). */
+/** A key in that storage, for what is persisted outside these hooks. */
 export function layoutKey(key: string): string {
   return STORAGE_PREFIX + key;
 }

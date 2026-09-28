@@ -54,8 +54,7 @@ import { eventually, fakeSafeStorage, processAlive, tempDir } from "./helpers";
 /** The small pieces, each one edit away from silently wrong. */
 
 describe("Codex's hook trust", () => {
-  // Verified against a real Codex install (see hooks.ts): a change here brings back the "Hooks
-  // need review" screen.
+  // Codex's own hash (codex/hooks.ts): a change here brings back the "Hooks need review" screen.
   it("hashes the normalized hook the way Codex does", () => {
     assert.equal(
       hookTrustedHash("stop", "sh /tet/stop.sh"),
@@ -224,13 +223,13 @@ describe("sbx sandbox naming and mounts", () => {
     assert.notEqual(name, sandboxName({ ...project, worktree: "k1" }, "claude"), "one per worktree: its workspace is its own");
   });
 
-  it("mounts a Windows path the way sbx does inside the sandbox, verified live 2026-09-08", {
+  it("mounts a Windows path the way sbx does inside the sandbox", {
     skip: !PLATFORM.driveLetters && "win32 only"
   }, () => {
     assert.equal(toContainerPath("C:\\Users\\saka\\Documents\\Workspace\\Private\\tet"), "/c/Users/saka/Documents/Workspace/Private/tet");
   });
 
-  it("spells a Windows path the way it is on disk, since sbx mounts it that way, verified live 2026-09-14", {
+  it("spells a Windows path the way it is on disk, since sbx mounts it that way", {
     skip: !PLATFORM.driveLetters && "win32 only"
   }, () => {
     const root = tempDir("tet-case-");
@@ -332,7 +331,7 @@ describe("saving an sbx config", () => {
   /**
    * A stand-in `sbx` first on PATH (a `.cmd` on win32, an `sh` script elsewhere): it appends every
    * invocation to a log, one line each, and answers the subcommands Save runs. It lists one
-   * sandbox, this project's Claude one, so the other three agents are skipped; `policy ls` answers
+   * sandbox, this project's Claude one, so the other two agents are skipped; `policy ls` answers
    * no rules, so hosts add nothing to the log.
    */
   function fakeSbx(answers: {
@@ -1081,7 +1080,7 @@ describe("sbx's filesystem policy", () => {
     assert.deepEqual(parseFilesystemRules("Not authenticated"), []);
   });
 
-  it("lets an organization granting write alone mount read-write and read-only, as measured", () => {
+  it("lets an organization granting write alone mount read-write and read-only", () => {
     const measured = parseFilesystemRules(governed);
     assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\repository\\sandbox\\claude", "rw", win32));
     assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\worktrees\\k1\\files", "ro", win32));
@@ -1407,8 +1406,8 @@ describe("an agent's version check", () => {
 });
 
 /**
- * A stand-in control server plus a tab's environment, for a generated plugin or extension to
- * report to. Reports are fire-and-forget, so a test waits for them rather than awaiting the call.
+ * A stand-in control server plus a tab's environment, for pi's generated extension to report
+ * to. Reports are fire-and-forget, so a test waits for them rather than awaiting the call.
  */
 async function controlChannel(): Promise<{ reports: ControlRequest[]; close: () => Promise<void> }> {
   const reports: ControlRequest[] = [];
@@ -1463,8 +1462,7 @@ describe("which of two turn reports counts", () => {
 });
 
 describe("TET's system prompt", () => {
-  // It crosses cmd.exe, `sbx run` and a TOML basic string, safe only as a plain line
-  // (system-prompt.ts).
+  // It crosses cmd.exe and `sbx run`, safe only as a plain line (system-prompt.ts).
   it("stays one line of letters, digits and plain punctuation", () => {
     for (const side of [HOST_SIDE, SANDBOX_SIDE]) {
       assert.match(systemPrompt(side), /^[A-Za-z0-9 .,;:'-]+$/);

@@ -65,7 +65,7 @@ export interface RefHead {
 
 interface ProjectListProps {
   projects: Project[];
-  /** Every open repository and worktree by key, identity-stable (App's `resolvedByKey`). */
+  /** Every open repository and worktree by key, identity-stable (resolved-ref.ts's `resolvedByKey`). */
   resolvedRefs: Record<string, ResolvedRef>;
   activeKey: string | null;
   onSelect: (key: string) => void;
@@ -83,7 +83,7 @@ interface ProjectListProps {
   sandboxed: Record<string, boolean>;
   /** Opens a shell tab in that repository or worktree ("open in terminal"). */
   onOpenTerminal: (ref: ProjectRef) => void;
-  /** Opens the first working session. */
+  /** Opens the next working session, one per press. */
   onShowBusy: (key: string) => void;
   /** Opens the oldest finished session; pressing again moves to the next. */
   onShowFinished: (key: string) => void;
@@ -93,7 +93,7 @@ interface ProjectListProps {
   onShowChanges: (key: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
-  /** `App.runIn`: how a command runs in one of these repositories and worktrees — `run` on this
+  /** `useBranchActions`'s `runIn`: how a command runs in one of these repositories and worktrees — `run` on this
    *  list's bar and failing as a notice, `ask` on the bar of the question that asked for it. */
   runIn: (key: string) => GitRun;
   /** A command started here runs, in any repository or worktree. */
