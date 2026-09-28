@@ -155,6 +155,8 @@ const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.s
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
 }
+/** For tests run locally (test/helpers.ts): the window is drawn but never shown. */
+const HIDE_WINDOW = process.argv.includes("--hide-window");
 /** tet's own data; `userData` is left to Chromium's profile. */
 const dataRoot = resolveDataRoot(userDataArg);
 try {
@@ -551,7 +553,9 @@ function createWindow(): void {
       send("app:theme", shownTheme.id);
     }
   });
-  window.once("ready-to-show", () => window?.show());
+  if (!HIDE_WINDOW) {
+    window.once("ready-to-show", () => window?.show());
+  }
   // Ends attractAttention's flash.
   window.on("focus", () => window?.flashFrame(false));
   window.on("closed", () => {

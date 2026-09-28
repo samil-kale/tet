@@ -13,7 +13,7 @@ import { CONTROL_ENV } from "../src/shared/control";
 import { assetName, rootExecutable, rootIn } from "../src/shared/release";
 import { platformOf } from "../src/shared/platform";
 import type { UpdateResult } from "../src/shared/release";
-import { eventually, killApp, processAlive, tetCtl } from "./helpers";
+import { eventually, killApp, processAlive, tetCtl, WINDOW_ARGS } from "./helpers";
 
 /**
  * Install with the script, start, find a newer version, quit, start the update. Releases are
@@ -91,7 +91,7 @@ function withLog(what: string): () => string {
 
 /** Started directly: `open` on macOS would not pass this environment. */
 function startTet(): void {
-  const args = [`--user-data-dir=${userData}`, "--allow-shell-only"];
+  const args = [`--user-data-dir=${userData}`, "--allow-shell-only", ...WINDOW_ARGS];
   if (process.platform === "linux") {
     args.push("--no-sandbox");
   }

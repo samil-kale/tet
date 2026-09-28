@@ -117,6 +117,9 @@ export interface TestApp {
   alive(): Promise<number | undefined>;
 }
 
+/** Hidden when run locally, so no window takes the screen; CI runs it shown. */
+export const WINDOW_ARGS: string[] = process.env.CI ? [] : ["--hide-window"];
+
 /** Starts tet and resolves once it answers; a start that never answers is killed before rejecting. */
 export async function startApp(userData: string, token: string, startupMs: number): Promise<TestApp> {
   // Speaks for no tab: the run's token takes no caller ids, and a run from a TET tab inherits some.
@@ -133,6 +136,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     // fallback, so Electron aborts on launch. The installed `tet` passes it too (install.sh).
     args.push("--no-sandbox");
   }
+  args.push(...WINDOW_ARGS);
   const electronPath: string = createRequire(__filename)("electron");
   // Not a Claude Code session's own variables, when the tests run inside one (an agent tab): an
   // interactive `claude` started with them answers but writes no transcript.
