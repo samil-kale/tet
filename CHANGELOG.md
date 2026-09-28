@@ -3,6 +3,18 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.14.1 (2026-09-29)
+
+- **Drop files into sandboxed tabs.** A path dropped into a sandboxed tab that the sandbox can't
+  see is mounted into it for the rest of the session; a notice says so, or that governance
+  refuses it.
+- **The Explorer follows the disk.** It re-lists as soon as files change, not only on refresh.
+- **Dialogs finish what they started.** While a Save or a git command runs, the dialog's fields
+  and Cancel are locked, and a follow-up question is asked only once the run has ended.
+- **Fixes.** Updates are downloaded through the machine's proxy and certificate store; the sbx
+  check at start gives up on a stuck Docker daemon instead of hanging; focus outlines in the file
+  tree and the changes list are no longer cut off; sbx path rules ignore case only on Windows.
+
 ## 0.14.0 (2026-09-27)
 
 - **Hand a session over to another agent.** An agent tab's menu offers "Hand over to …" for every
