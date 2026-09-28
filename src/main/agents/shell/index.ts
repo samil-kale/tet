@@ -9,5 +9,5 @@ export const shellAgent: AgentDefinition = {
   icon: shellIcon,
   quotePath: (path) => PLATFORM.shellQuotePath(path),
   executable: () => PLATFORM.shellExecutable(process.env),
-  runArgs: (command) => PLATFORM.shellCommandArgs(command)
+  run: { args: (command) => PLATFORM.shellCommandArgs(command) }
 };

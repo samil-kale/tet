@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, Menu, shell } from "electron";
 import { AGENTS, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { GitLoginStore } from "./git-logins";
@@ -105,15 +105,14 @@ function editorContent(ref: ProjectRef): Promise<string | undefined> {
   editorContentRequests += 1;
   const reply: EditorContentReply = `editor:content:${editorContentRequests}`;
   return new Promise((resolve) => {
-    const answer = (_event: Electron.IpcMainEvent, content: string | undefined): void => {
-      clearTimeout(timer);
-      resolve(content);
-    };
     const timer = setTimeout(() => {
-      ipcMain.removeListener(reply, answer);
+      off();
       resolve(undefined);
     }, EDITOR_CONTENT_TIMEOUT_MS);
-    once(reply, answer);
+    const off = once(reply, (_event, content) => {
+      clearTimeout(timer);
+      resolve(content);
+    });
     send("editor:content-request", { ref, reply });
   });
 }

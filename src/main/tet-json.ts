@@ -31,7 +31,7 @@ import { PLATFORM } from "./host-platform";
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
- *  shell. `"shell": true` hands the line to `AgentDefinition.runArgs`, so it only works where it was
+ *  shell. `"shell": true` hands the line to `AgentDefinition.run`, so it only works where it was
  *  written. */
 type StoredCommand =
   | string

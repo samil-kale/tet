@@ -640,7 +640,7 @@ export class TabSessionManager {
       env: command.env
     };
     if (command.shell) {
-      const runArgs = getAgent("shell").runArgs?.(command.command);
+      const runArgs = getAgent("shell").run?.args(command.command);
       return runArgs ? this.addTab("shell", { ...shared, runArgs }) : undefined;
     }
     const [executable, ...runArgs] = splitCommand(command.command);

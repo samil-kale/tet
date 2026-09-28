@@ -20,10 +20,12 @@ export function on<C extends keyof SendChannels>(
   ipcMain.on(channel, listener as (event: IpcMainEvent, ...args: unknown[]) => void);
 }
 
-/** `ipcMain.once` held to `SendChannels`; the listener is registered as given, for `removeListener`. */
+/** `ipcMain.once` held to `SendChannels`; returns the removal, for a listener never called. */
 export function once<C extends keyof SendChannels>(
   channel: C,
   listener: (event: IpcMainEvent, ...args: Parameters<SendChannels[C]>) => void
-): void {
-  ipcMain.once(channel, listener as (event: IpcMainEvent, ...args: unknown[]) => void);
+): () => void {
+  const registered = listener as (event: IpcMainEvent, ...args: unknown[]) => void;
+  ipcMain.once(channel, registered);
+  return () => ipcMain.removeListener(channel, registered);
 }

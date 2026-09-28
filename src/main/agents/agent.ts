@@ -165,6 +165,11 @@ export interface AgentAsk {
   args: string[];
 }
 
+/** One command line run in a terminal, for a saved command with `"shell": true`. */
+export interface AgentRun {
+  args(command: string): string[];
+}
+
 /** How the agent's hook reports (`tet-ctl hook <event>`) are read. */
 export interface AgentTurns {
   /** The session a hook report is about — the only thing binding a new tab to its session: a
@@ -240,9 +245,21 @@ export interface AgentSandbox {
 /**
  * Everything the shared terminal layer needs to run one agent, so it never imports an agent's
  * own code. Each group is present whole or not at all: what an agent can do is which groups it
- * has, and the shell has none but `runArgs`.
+ * has, and the shell has none but `run`. `turns` only with `sessions`: a hook report binds a tab to
+ * a session.
  */
-export interface AgentDefinition {
+export type AgentDefinition = AgentBase &
+  (
+    | {
+        /** Listing, resume args, rename, delete, optional watch. */
+        sessions: SessionProvider;
+        turns?: AgentTurns;
+      }
+    /** An agent with no sessions. */
+    | { sessions?: undefined; turns?: undefined }
+  );
+
+interface AgentBase {
   id: AgentId;
   displayName: string;
   /** Drawn by the window beside its tabs and menu entries (AgentInfo.icon). */
@@ -256,14 +273,10 @@ export interface AgentDefinition {
   install?: AgentInstall;
   /** Omitted by the shell. */
   terminal?: AgentTerminal;
-  /** One command run in a terminal; only the shell has it, for a saved command with `"shell": true`. */
-  runArgs?: (command: string) => string[];
+  /** Only the shell has it. */
+  run?: AgentRun;
   /** Omitted by an agent that cannot answer without a terminal. */
   ask?: AgentAsk;
-  /** Listing, resume args, rename, delete, optional watch. Missing means "this agent has no sessions". */
-  sessions?: SessionProvider;
-  /** Omitted without sessions. */
-  turns?: AgentTurns;
   /** Omitted by an agent needing no setup (the shell). */
   host?: AgentHost;
   /** Omitted by an agent that never runs in a sandbox (the shell). */
