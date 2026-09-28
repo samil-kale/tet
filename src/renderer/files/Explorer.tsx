@@ -7,16 +7,15 @@ import type { FileAct, FileAsk } from "../git/run-action";
 import { openEntries, pathEntries } from "./file-menu";
 import {
   ancestorsOf,
-  baseName,
   buildForest,
   compactTree,
   filterTree,
   hasExpandedRootChild,
   isOpen,
-  parentOf,
   rootIndexFor,
   type TreeNode
 } from "./explorer-tree";
+import { baseName, parentOf } from "../paths";
 import { FileMarkIcon, INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "./tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";

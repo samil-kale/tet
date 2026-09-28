@@ -49,12 +49,9 @@ export function buildXtermTheme(): ITheme {
     scrollbarSliderActiveBackground: "#00000000",
     // The ruler outlines itself every frame (`_renderRulerOutline`); xterm's default draws a
     // white line down the right of every terminal.
-    overviewRulerBorder: "#00000000"
+    overviewRulerBorder: "#00000000",
+    ...readCssVars(ANSI_CSS_VARS)
   };
-
-  for (const [key, cssVar] of Object.entries(ANSI_CSS_VARS)) {
-    (theme as Record<string, string | undefined>)[key] = read(cssVar);
-  }
 
   return theme;
 }

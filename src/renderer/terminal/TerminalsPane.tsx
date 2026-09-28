@@ -1,10 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
-import type { AgentInfo, ProjectRef } from "../../shared/types";
+import type { AgentInfo } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
-import type { OpenEditor } from "./editor-tab";
-import { disposeTerminal, setRevealHandler } from "./terminal-views";
+import { disposeTerminal } from "./terminal-views";
 import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { usePersistedShare } from "../ui/layout-storage";
@@ -65,9 +64,6 @@ interface TerminalsPaneProps {
   agents: AgentInfo[];
   /** Bootstrap's session listing: strip-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
-  /** Opens a path ctrl-clicked in a terminal, or linked from a Markdown preview, in the project's
-   *  preview tab. */
-  onOpenFile: (ref: ProjectRef, path: string, how?: OpenEditor) => void;
   /** By `projectRefKey`, as the layout callbacks below. */
   onCloseEditors: (key: string, tabIds: string[]) => void;
   layout: ProjectLayout;
@@ -92,7 +88,6 @@ export const TerminalsPane = memo(function TerminalsPane({
   onToggleSideView,
   agents,
   externalBusy,
-  onOpenFile,
   onCloseEditors,
   layout,
   onActivateTab,
@@ -111,11 +106,6 @@ export const TerminalsPane = memo(function TerminalsPane({
   const dragTargetRef = useRef<DragTarget | null>(null);
   const dragSource = useRef<PaneId | null>(null);
   const knownTabs = useRef<PaneTab[]>([]);
-
-  useEffect(
-    () => setRevealHandler(resolved.ref, (path, how) => onOpenFile(resolved.ref, path, how)),
-    [resolved.ref, onOpenFile]
-  );
 
   const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(resolved.key, tabIds), [onCloseEditors, resolved.key]);
 

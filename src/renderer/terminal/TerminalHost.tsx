@@ -1,6 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { ProjectRef } from "../../shared/types";
-import { attachTerminal, fitTerminal, hasTerminal } from "./terminal-views";
+import { attachTerminal, fitTerminal, focusTerminal, hasTerminal, hideTerminal, showTerminal } from "./terminal-views";
+
+/** A window-edge drag fires dozens of observations; every pty resize repaints the TUI. */
+const RESIZE_DEBOUNCE_MS = 100;
 
 interface TerminalHostProps {
   at: ProjectRef;
@@ -9,6 +12,8 @@ interface TerminalHostProps {
   active: boolean;
   /** Whether the pane itself is on screen — the repository or worktree is the one selected. */
   visible: boolean;
+  /** In the repository's or worktree's focused pane, which gets keyboard focus. */
+  focused: boolean;
 }
 
 /**
@@ -22,21 +27,53 @@ interface TerminalHostProps {
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm
  * follows at once, active or not: an unmounted container has no layout to take output into.
  */
-export function TerminalHost({ at, tabId, active, visible }: TerminalHostProps) {
+export function TerminalHost({ at, tabId, active, visible, focused }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
+  const shown = active && visible;
+
+  // Refit on coming in front: hidden, its size went stale. The resize also starts its process.
+  // Shown before the fit, since the renderer decides the cell width the fit measures
+  // (`showTerminal`).
+  useEffect(() => {
+    if (!container.current || (!shown && !hasTerminal(at, tabId))) {
+      return;
+    }
+    attachTerminal(at, tabId, container.current);
+    if (!shown) {
+      return;
+    }
+    showTerminal(at, tabId);
+    fitTerminal(at, tabId);
+    return () => hideTerminal(at, tabId);
+  }, [at, tabId, shown]);
+
+  // Keyboard focus follows the focused pane's active tab — only that one, or the last effect wins.
+  // Apart from the refit: a focus change alone must not resize the pty (repaints the CLI).
+  useEffect(() => {
+    if (shown && focused) {
+      focusTerminal(at, tabId);
+    }
+  }, [at, tabId, shown, focused]);
 
   useEffect(() => {
-    if (container.current && ((active && visible) || hasTerminal(at, tabId))) {
-      const created = !hasTerminal(at, tabId);
-      attachTerminal(at, tabId, container.current);
-      // Pane's fit may have come first, with no view to fit (the tab pushed late),
-      // and nothing reruns it. The first fit starts the process; in the same commit, Pane's own
-      // follows and reports nothing new (`fitTerminal`).
-      if (created && active && visible) {
-        fitTerminal(at, tabId);
-      }
+    const element = container.current;
+    if (!element || !shown) {
+      return;
     }
-  }, [at, tabId, active, visible]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Only the debounced pty resize, never an immediate local reflow: xterm reflowed ahead of the
+    // pty has a CLI's redraw land on a ConPTY buffer reflowed for a size it doesn't know yet
+    // (`fitTerminal`). The trade: a dragged sash shows background until it settles.
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fitTerminal(at, tabId), RESIZE_DEBOUNCE_MS);
+    });
+    observer.observe(element);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [at, tabId, shown]);
 
   // "hidden" is visibility, not display — xterm needs a laid-out element to measure itself.
   return <div ref={container} className={`terminal-host${active ? "" : " hidden"}`} />;

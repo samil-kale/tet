@@ -4,7 +4,7 @@ import type { ChangeStatus, ProjectRef, FileChange, GitActionResult, RepositoryS
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { runWithFollowUp, type FileAct, type FileAsk } from "./run-action";
-import { baseName } from "../files/explorer-tree";
+import { baseName, extensionOf } from "../paths";
 import { openEntries, pathEntries } from "../files/file-menu";
 import { TreeRow } from "../files/tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -202,9 +202,7 @@ export const ChangesList = memo(function ChangesList({ resolved, state, act, ask
       ? selected.filter((path) => visible.some((entry) => entry.path === path))
       : [change.path];
     const one = paths.length === 1;
-    // path.extname's rule, as git.ts's ignorePath applies it: a dotfile has none.
-    const name = baseName(change.path);
-    const extension = name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : undefined;
+    const extension = extensionOf(baseName(change.path));
     const discard = (targets: string[]) => () => void confirmDiscard(resolved.ref, targets, act);
     const ignore = (scope: "file" | "extension") => () =>
       act(() => window.tet.repository.ignore(resolved.ref, change.path, scope));

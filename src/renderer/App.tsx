@@ -21,7 +21,7 @@ import { usePaneSize } from "./ui/layout-storage";
 import { useSidePane } from "./ui/use-side-pane";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
 import { TerminalsPane } from "./terminal/TerminalsPane";
-import { clearTerminal, disposeRefTerminals } from "./terminal/terminal-views";
+import { clearTerminal, disposeRefTerminals, setRevealHandler } from "./terminal/terminal-views";
 import { NO_IDS, useSessionMarks } from "./terminal/use-session-marks";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
@@ -516,6 +516,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }),
     [openEditor]
   );
+  // A path ctrl-clicked in a terminal, or linked from a Markdown preview.
+  useEffect(() => setRevealHandler(openEditor), [openEditor]);
   useEffect(() => {
     const offRequest = window.tet.environment.onRequest(setEnvRequest);
     const offWithdrawn = window.tet.environment.onWithdrawn((id) =>
@@ -657,7 +659,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[resolved.key] === true && (marks[resolved.key]?.starting ?? NO_IDS).length === 0}
-              onOpenFile={openEditor}
               onCloseEditors={closeEditors}
               layout={layouts[resolved.key] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}

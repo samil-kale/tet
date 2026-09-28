@@ -8,7 +8,7 @@ import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
-import { createPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine } from "./markdown";
+import { createPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
 import type { EditorReveal, OpenEditor } from "../terminal/editor-tab";
 import { openFile } from "../terminal/terminal-views";
 import { editorFontFamily } from "../terminal/theme";
@@ -79,6 +79,8 @@ interface PreviewView {
   /** The images the file shows, by repository path or URL, until the file or its version changes.
    *  A source that loaded nothing is not kept: it may be there next time. */
   images: Map<string, Promise<string | undefined>>;
+  /** Its last render's code blocks, handed to the next (`ColoredBlocks`). */
+  colored: ColoredBlocks;
   timer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by every render: one overtaken is dropped. */
   renderSeq: number;
@@ -735,7 +737,7 @@ function makePreview(view: EditorView): PreviewView {
     }
   });
   scroller.addEventListener("scroll", () => followPreview(view));
-  return { scroller, body, images: new Map(), timer: undefined, renderSeq: 0, scrolledBy: undefined };
+  return { scroller, body, images: new Map(), colored: new Map(), timer: undefined, renderSeq: 0, scrolledBy: undefined };
 }
 
 /**
@@ -777,8 +779,9 @@ function renderPreview(view: EditorView, delay: number): void {
       }
       return image;
     };
-    renderMarkdown(text, view.snapshot.path, loadImage).then(
-      (doc) => {
+    renderMarkdown(text, view.snapshot.path, loadImage, preview.colored).then(
+      ({ doc, colored }) => {
+        preview.colored = colored;
         if (views.get(view.tabId) === view && preview.renderSeq === seq) {
           preview.body.replaceChildren(...doc.body.childNodes);
           followEditor(view);

@@ -129,6 +129,73 @@ ${stderr.slice(uncaught)}`);
     }
   });
 
+  // The pty's size as its program sees it, the only size tet-ctl can reach: the window's fit is
+  // what sets it, so a tab fitted while hidden, or never, shows here as a size of its own.
+  it("fits every tab of a pane to the same size, whether shown new, again or for the first time", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    // Prints its size at start and on every change, and runs until its tab is closed.
+    const probe = path.join(tempDir("tet-size-"), "size.js");
+    fs.writeFileSync(
+      probe,
+      "let last = '';\n" +
+        "const report = () => {\n" +
+        "  const size = process.stdout.getWindowSize().join('x');\n" +
+        "  if (size !== last) { last = size; console.log('tet-size ' + size); }\n" +
+        "};\n" +
+        "report();\n" +
+        "setInterval(report, 50);\n"
+    );
+    fs.writeFileSync(path.join(repo, "tet.json"), JSON.stringify({ commands: [{ command: `node "${probe}"`, name: "size" }] }));
+    const run = async (): Promise<string> => ((await ctl("tabs-run-command", "size", "--project", project.id)).result as TerminalDescriptor).tabId;
+    // Every size the tab's program saw, in order; a repaint repeating a line is not a new size.
+    const sizes = async (tabId: string): Promise<string[]> => [
+      ...new Set([...(await started().output(project.id, tabId)).matchAll(/tet-size (\d+x\d+)/g)].map((match) => match[1]))
+    ];
+    const reported = async (tabId: string): Promise<string[]> => {
+      await eventually(`tab ${tabId}'s size`, async () => (await sizes(tabId)).length > 0, STARTUP_MS);
+      return sizes(tabId);
+    };
+    const close = async (tabId: string): Promise<void> => {
+      assert.equal((await ctl("tabs-close", tabId, "--project", project.id)).status, 0);
+    };
+
+    const first = await run();
+    const [size] = await reported(first);
+    const [cols, rows] = size.split("x").map(Number);
+    // Neither unfitted (0, one column) nor tet-ctl's start size for a tab no window fitted.
+    assert.ok(cols >= 40 && rows >= 10, `a window's size, not ${size}`);
+    assert.notEqual(size, "120x30", "fitted by the window, not started by tet-ctl's default");
+
+    // Shown in front of the first, which stays as it was while hidden.
+    const second = await run();
+    assert.deepEqual(await reported(second), [size]);
+
+    // Closing the tab in front shows its left neighbour again.
+    await close(second);
+    // Four at once: the window renders once for several of their shows, so one behind the last may
+    // never have been drawn — still "ready", as a process starts on its tab's first fit. The server
+    // takes them in any order; its list is the strip's.
+    const burst = new Set(await Promise.all([run(), run(), run(), run()]));
+    const listed = async (): Promise<TerminalDescriptor[]> =>
+      ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).filter((entry) => burst.has(entry.tabId));
+    const inFront = (await listed()).at(-1)!.tabId;
+    assert.deepEqual(await reported(inFront), [size]);
+    const behind = (await listed()).filter((entry) => entry.tabId !== inFront);
+    const unseen = [...behind].reverse().find((entry) => entry.status === "ready") ?? behind.at(-1)!;
+    // Closing a hidden tab shows nothing; closing the one in front shows its left neighbour.
+    for (const entry of behind.slice(behind.indexOf(unseen) + 1)) {
+      await close(entry.tabId);
+    }
+    await close(inFront);
+    assert.deepEqual(await reported(unseen.tabId), [size], unseen.status === "ready" ? "shown for the first time" : "shown again");
+
+    // By now every fit of the switches above has settled, the debounced one included.
+    assert.deepEqual(await sizes(first), [size], "the first tab, hidden and shown again, never refitted");
+    for (const tabId of [first, ...behind.slice(0, behind.indexOf(unseen) + 1).map((entry) => entry.tabId)]) {
+      await close(tabId);
+    }
+  });
+
   it("answers a shell tab's lines", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     // A saved command printing a whole line, not a plain shell: whether a shell prints more at

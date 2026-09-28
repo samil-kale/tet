@@ -52,6 +52,12 @@ export function useProjectLayouts(
   /** The tab list `layouts` was last normalized against, per repository or worktree — see
    *  `normalizeLayout`. */
   const previousTabsRef = useRef<Record<string, LayoutTab[]>>({});
+  /**
+   * The tab list each layout was reconciled against: reconciling it again against the same list
+   * returns it unchanged, so a push for another repository or worktree skips it. Only a cache, so
+   * safe to write in the updater.
+   */
+  const reconciledRef = useRef(new WeakMap<ProjectLayout, LayoutTab[]>());
   /** Read by the callbacks: depending on `tabs` would remake every pane's props on every push. */
   const tabsRef = useLatest(tabs);
 
@@ -66,15 +72,18 @@ export function useProjectLayouts(
     // Outside the updater, which may run late and must have no side effect.
     const previousTabs = previousTabsRef.current;
     previousTabsRef.current = tabs;
+    const reconciled = reconciledRef.current;
     setLayouts((current) => {
       let next: Record<string, ProjectLayout> | undefined;
       for (const key of Object.keys(tabs)) {
+        const list = tabs[key] ?? NO_TABS;
+        const held = current[key];
+        if (held && list === previousTabs[key] && reconciled.get(held) === list) {
+          continue;
+        }
         // The close trigger of the collapse; the move trigger is `activateTab` below.
-        const layout = collapseClosed(
-          layoutOf(current, key),
-          tabs[key] ?? NO_TABS,
-          previousTabs[key] ?? NO_TABS
-        );
+        const layout = collapseClosed(layoutOf(current, key), list, previousTabs[key] ?? NO_TABS);
+        reconciled.set(layout, list);
         if (layout !== current[key]) {
           next ??= { ...current };
           next[key] = layout;
@@ -90,6 +99,9 @@ export function useProjectLayouts(
    * change `tabs` often.
    */
   const savedLayoutsRef = useRef<Record<string, string>>({});
+  /** The layout and tab list last serialized per repository or worktree: the same pair serializes
+   *  the same, so a push for another one skips it. */
+  const serializedRef = useRef<Record<string, { layout: ProjectLayout; tabs: LayoutTab[] }>>({});
   /**
    * Projects whose bootstrap has once finished. Before that, `serializeLayout` would drop every
    * pane whose sessions were not listed yet. From then on written regardless: a CLI booting is not
@@ -115,7 +127,13 @@ export function useProjectLayouts(
       if (!settledProjects.current.has(key)) {
         continue;
       }
-      const serialized = serializeLayout(layout, tabs[key] ?? NO_TABS);
+      const list = tabs[key] ?? NO_TABS;
+      const last = serializedRef.current[key];
+      if (last?.layout === layout && last.tabs === list) {
+        continue;
+      }
+      serializedRef.current[key] = { layout, tabs: list };
+      const serialized = serializeLayout(layout, list);
       if (savedLayoutsRef.current[key] !== serialized) {
         savedLayoutsRef.current[key] = serialized;
         saveLayout(key, serialized);
@@ -182,6 +200,7 @@ export function useProjectLayouts(
     dropStoredLayout(key);
     delete previousTabsRef.current[key];
     delete savedLayoutsRef.current[key];
+    delete serializedRef.current[key];
     settledProjects.current.delete(key);
   }, []);
 

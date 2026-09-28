@@ -83,7 +83,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     }
   }, [tabId, path, markdownPreview]);
 
-  // As `Pane`'s terminal focus rule: the focused pane's active tab, once the file is in the editor.
+  // As `TerminalHost`'s focus rule: the focused pane's active tab, once the file is in the editor.
   const ready = kind === "text" && !building;
   useEffect(() => {
     if (visible && active && focused && ready) {

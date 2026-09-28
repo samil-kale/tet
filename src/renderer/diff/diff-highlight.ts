@@ -6,7 +6,7 @@ import {
 } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
-import { baseName } from "../files/explorer-tree";
+import { baseName } from "../paths";
 import { buildShikiColors } from "../terminal/theme";
 
 /** The shiki theme coloring the editor (monaco has no grammars, see monaco-core.ts). Token colors

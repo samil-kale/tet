@@ -55,13 +55,15 @@ export function createPreview(): { scroller: HTMLDivElement; body: HTMLDivElemen
  * The preview of the Markdown file at `path`, in an inert document that has loaded nothing: code
  * blocks colored by shiki, images replaced by `loadImage`'s data URL — asked for a repository path
  * or an https URL, which main fetches, so the page's CSP keeps it off the network. Any other image
- * source is dropped: `file:` never reaches the disk.
+ * source is dropped: `file:` never reaches the disk. `previous` is the preview's last render's
+ * `colored`; the one returned is what its next render is handed.
  */
 export async function renderMarkdown(
   text: string,
   path: string,
-  loadImage: (source: string) => Promise<string | undefined>
-): Promise<Document> {
+  loadImage: (source: string) => Promise<string | undefined>,
+  previous: ColoredBlocks
+): Promise<{ doc: Document; colored: ColoredBlocks }> {
   const html = DOMPurify.sanitize(markdown.render(text), SANITIZE);
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const element of doc.body.querySelectorAll("*")) {
@@ -72,14 +74,12 @@ export async function renderMarkdown(
       }
     }
   }
-  const previous = colored;
-  const current = new Map<string, string>();
+  const colored: ColoredBlocks = new Map();
   await Promise.all([
-    ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code, previous, current)),
+    ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code, previous, colored)),
     ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage))
   ]);
-  colored = current;
-  return doc;
+  return { doc, colored };
 }
 
 interface Mark {
@@ -137,14 +137,15 @@ export function lineAtScroll(scroller: HTMLElement, body: HTMLElement): number |
 }
 
 /**
- * The colored HTML of the last render's code blocks, by theme, language and text. The preview is
- * rendered again on every keystroke, and shiki would tokenize every block of the file each time,
- * though only the one being typed in changed. Carried one render forward, so it holds a document
- * rather than the history of one being written; a theme change misses every key and falls out.
+ * The colored HTML of a render's code blocks, by theme, language and text. The preview is rendered
+ * again on every keystroke, and shiki would tokenize every block of the file each time, though only
+ * the one being typed in changed. Carried one render forward, so it holds a document rather than
+ * the history of one being written; a theme change misses every key and falls out. Held per
+ * preview, so two previews never evict each other's.
  */
-let colored = new Map<string, string>();
+export type ColoredBlocks = Map<string, string>;
 
-async function highlightBlock(code: Element, previous: Map<string, string>, current: Map<string, string>): Promise<void> {
+async function highlightBlock(code: Element, previous: ColoredBlocks, current: ColoredBlocks): Promise<void> {
   const fence = [...code.classList].find((name) => name.startsWith("language-"));
   const language = fence && languageForFence(fence.slice("language-".length));
   if (!language) {

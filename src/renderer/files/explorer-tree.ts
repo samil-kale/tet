@@ -1,4 +1,5 @@
 import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder } from "../../shared/types";
+import { extensionOf } from "../paths";
 
 export interface TreeNode {
   /** Key for `expanded`, the row map and React. The path; with `folders`, prefixed by the root's
@@ -26,11 +27,6 @@ function compareGrouped(a: TreeNode, b: TreeNode, foldersFirst: boolean): number
   return compareNames(a, b);
 }
 
-function extensionOf(name: string): string {
-  const index = name.lastIndexOf(".");
-  return index > 0 ? name.slice(index + 1).toLowerCase() : "";
-}
-
 /** `explorer.sortOrder`: `default` (and `foldersNestsFiles`) folders first, then name; `mixed` name
  *  alone; `filesFirst` files first; `type` by extension, then name; `modified` newest first. */
 function comparatorFor(order: ExplorerSortOrder, mtimes: Record<string, number>): (a: TreeNode, b: TreeNode) => number {
@@ -44,7 +40,8 @@ function comparatorFor(order: ExplorerSortOrder, mtimes: Record<string, number>)
         if (a.children || b.children) {
           return compareGrouped(a, b, true);
         }
-        return extensionOf(a.name).localeCompare(extensionOf(b.name)) || compareNames(a, b);
+        const type = (node: TreeNode): string => extensionOf(node.name).slice(1).toLowerCase();
+        return type(a).localeCompare(type(b)) || compareNames(a, b);
       };
     case "modified":
       return (a, b) => (mtimes[b.path] ?? 0) - (mtimes[a.path] ?? 0) || compareNames(a, b);
@@ -158,17 +155,6 @@ export function rootIndexFor(roots: ExplorerRoot[], filePath: string): number | 
     }
   });
   return best;
-}
-
-/** The last segment of a repository-relative path. */
-export function baseName(entryPath: string): string {
-  return entryPath.slice(entryPath.lastIndexOf("/") + 1);
-}
-
-/** "" at the root. */
-export function parentOf(entryPath: string): string {
-  const index = entryPath.lastIndexOf("/");
-  return index === -1 ? "" : entryPath.slice(0, index);
 }
 
 /** A matching folder keeps its whole subtree; otherwise only matches survive, with their ancestors. */

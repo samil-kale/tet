@@ -31,9 +31,9 @@ interface TerminalView {
  */
 const views = new Map<string, TerminalView>();
 
-/** Per repository or worktree (`projectRefKey`), opens a file inside it in the preview tab, a
- *  Markdown file with its preview beside the editor if asked. Set by the pane. */
-const revealHandlers = new Map<string, (path: string, how: OpenEditor) => void>();
+/** Opens a file of the repository or worktree in its preview tab, a Markdown file with its preview
+ *  beside the editor if asked. Set by App. */
+let revealHandler: ((ref: ProjectRef, path: string, how: OpenEditor) => void) | undefined;
 
 function viewKey(ref: ProjectRef, tabId: string): string {
   return `${projectRefKey(ref)} ${tabId}`;
@@ -61,13 +61,13 @@ window.tet.terminals.onOutput((batch) => {
   }
 });
 
-export function setRevealHandler(
-  ref: ProjectRef,
-  handler: (path: string, how: OpenEditor) => void
-): () => void {
-  const key = projectRefKey(ref);
-  revealHandlers.set(key, handler);
-  return () => revealHandlers.delete(key);
+export function setRevealHandler(handler: (ref: ProjectRef, path: string, how: OpenEditor) => void): () => void {
+  revealHandler = handler;
+  return () => {
+    if (revealHandler === handler) {
+      revealHandler = undefined;
+    }
+  };
 }
 
 function openUrl(url: string): void {
@@ -79,7 +79,7 @@ function openUrl(url: string): void {
 export function openFile(ref: ProjectRef, filePath: string, markdownPreview = false): void {
   void window.tet.shell.openFile(ref, filePath).then((repoPath) => {
     if (repoPath) {
-      revealHandlers.get(projectRefKey(ref))?.(repoPath, { markdownPreview });
+      revealHandler?.(ref, repoPath, { markdownPreview });
     }
   });
 }
@@ -367,7 +367,7 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
     container.appendChild(view.term.element);
   } else {
     view.term.open(container);
-    // A first open is a tab coming in front, before Pane's fit (acquireWebgl). A moved tab keeps
+    // A first open is a tab coming in front, before its host's fit (acquireWebgl). A moved tab keeps
     // its renderer: the canvas moves with the element.
     acquireWebgl(ref, tabId, view);
   }
@@ -418,7 +418,7 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
  * Refits and reports the new size — which starts the process. Never an immediate local reflow
  * plus a debounced pty notify: a resize landing mid-redraw has ConPTY reflow its buffer under the
  * CLI's cursor-relative redraw, corrupting it. Reflow and notify go together once activity settles
- * (`RESIZE_DEBOUNCE_MS` in `Pane.tsx`).
+ * (`RESIZE_DEBOUNCE_MS` in `TerminalHost.tsx`).
  */
 export function fitTerminal(ref: ProjectRef, tabId: string): void {
   const view = views.get(viewKey(ref, tabId));
@@ -426,7 +426,7 @@ export function fitTerminal(ref: ProjectRef, tabId: string): void {
     return;
   }
   view.fit.fit();
-  // Every switch fits twice (the selection effect, the ResizeObserver's first notification), and
+  // Every switch fits twice (the host's show effect, the ResizeObserver's first notification), and
   // a same-size resize still repaints the CLI.
   const { cols, rows } = view.term;
   if (view.sent?.cols === cols && view.sent.rows === rows) {
@@ -482,8 +482,9 @@ export function focusTerminal(ref: ProjectRef, tabId: string): void {
 
 /** Repaints every built terminal in the root element's current theme. Colors only: no resize. */
 export function rethemeTerminals(): void {
+  const theme = buildXtermTheme();
   for (const view of views.values()) {
-    view.term.options.theme = buildXtermTheme();
+    view.term.options.theme = theme;
   }
 }
 

@@ -1,14 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { isWorking } from "../../shared/types";
 import type { AgentId, AgentInfo, ProjectRef, TerminalDescriptor } from "../../shared/types";
-import { fitTerminal, focusTerminal, hideTerminal, showTerminal } from "./terminal-views";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
 import { ContextMenu, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
-import { baseName } from "../files/explorer-tree";
+import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
@@ -18,8 +17,6 @@ import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon } from "../ui/icons";
 import { SessionMark } from "../ui/SessionMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
-/** A window-edge drag fires dozens of observations; every pty resize repaints the TUI. */
-const RESIZE_DEBOUNCE_MS = 100;
 /** What VS Code's own tab rename accepts. */
 const MAX_TITLE_LENGTH = 50;
 
@@ -127,7 +124,6 @@ export const Pane = memo(function Pane({
   const [plusMenu, setPlusMenu] = useState<{ x: number; y: number } | null>(null);
   const tabMenu = useContextMenu<string>();
   const closeTabMenu = tabMenu.close;
-  const stack = useRef<HTMLDivElement>(null);
   const strip = useRef<HTMLDivElement>(null);
   const tabElements = useRef(new Map<string, HTMLDivElement>());
 
@@ -157,56 +153,7 @@ export const Pane = memo(function Pane({
     tabElements.current.get(activeTabId)?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeTabId]);
 
-  // An editor tab has no pty and focuses and measures itself (`EditorHost`).
-  const activeTerminalId = activeTabId !== null && isEditorTabId(activeTabId) ? null : activeTabId;
   const editorBusy = useEditorBusy(at, tabs);
-
-  // Refit on becoming visible: hidden, its size went stale. The resize also starts its process.
-  // Shown before the fit, since the renderer decides the cell width the fit measures
-  // (`showTerminal`).
-  useEffect(() => {
-    if (!visible || !activeTerminalId) {
-      return;
-    }
-    showTerminal(at, activeTerminalId);
-    fitTerminal(at, activeTerminalId);
-    return () => hideTerminal(at, activeTerminalId);
-  }, [visible, activeTerminalId, at]);
-
-  // Keyboard focus follows the focused pane's active tab — only that pane's, or the last effect
-  // wins. Apart from the refit: a focus change alone must not resize the pty (repaints the CLI).
-  //
-  // A new tab is activated before its push arrives, with no view yet. `activeTabReady` retriggers
-  // once it is in `tabs`, without unrelated tab updates stealing focus back.
-  const activeTabReady = activeTerminalId !== null && tabs.some((tab) => tab.tabId === activeTerminalId);
-  useEffect(() => {
-    if (visible && focused && activeTerminalId) {
-      focusTerminal(at, activeTerminalId);
-    }
-  }, [visible, focused, activeTerminalId, at, activeTabReady]);
-
-  useEffect(() => {
-    const element = stack.current;
-    if (!element) {
-      return;
-    }
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    // Only the debounced pty resize, never an immediate local reflow: xterm reflowed ahead of the
-    // pty has a CLI's redraw land on a ConPTY buffer reflowed for a size it doesn't know yet
-    // (`fitTerminal`). The trade: a dragged sash shows background until it settles.
-    const observer = new ResizeObserver(() => {
-      if (!visible || !activeTerminalId) {
-        return;
-      }
-      clearTimeout(timer);
-      timer = setTimeout(() => fitTerminal(at, activeTerminalId), RESIZE_DEBOUNCE_MS);
-    });
-    observer.observe(element);
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, [visible, activeTerminalId, at]);
 
   const createTab = useCallback(
     async (agentId: AgentId) => {
@@ -548,7 +495,7 @@ export const Pane = memo(function Pane({
         </div>
       </div>
 
-      <div className="terminal-stack" ref={stack}>
+      <div className="terminal-stack">
         {tabs.map((tab) =>
           isEditorTab(tab) ? (
             <EditorHost
@@ -565,6 +512,7 @@ export const Pane = memo(function Pane({
               tabId={tab.tabId}
               active={tab.tabId === activeTabId}
               visible={visible}
+              focused={focused}
             />
           )
         )}
