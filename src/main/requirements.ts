@@ -1,16 +1,11 @@
 import * as os from "node:os";
-import { AGENTS } from "./agents";
-import type { AgentDefinition, AgentInstall } from "./agents/agent";
+import { AGENTS, agentInstalled } from "./agents";
 import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
 import { isSbxInstalled } from "./sbx-cli";
 import { isSimulatedMissing } from "./simulate";
 import { augmentAgentPath } from "./terminals/agent-path";
-import { checkAgentInstalled } from "./terminals/terminal-session";
-
-/** The shell has no `install`. */
-type InstallableAgent = AgentDefinition & { install: AgentInstall };
 
 const GIT: Omit<Requirement, "installed"> = {
   name: "Git",
@@ -37,15 +32,15 @@ function yieldToLoop(): Promise<void> {
 
 /** Checked one tick apart (yieldToLoop). */
 async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
-  const installable = AGENTS.filter((agent): agent is InstallableAgent => agent.install !== undefined);
+  // The shell has no `install`.
+  const installable = AGENTS.filter((agent) => agent.install !== undefined);
   const agentChecks: Promise<Requirement>[] = [];
   for (const agent of installable) {
-    const command = agent.executable();
     agentChecks.push(
       (async (): Promise<Requirement> => ({
         name: agent.displayName,
-        command,
-        installed: await checkAgentInstalled(command, agent.install.versionArgs, cwd)
+        command: agent.executable(),
+        installed: await agentInstalled(agent, cwd, true)
       }))()
     );
     await yieldToLoop();
@@ -58,7 +53,7 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
  * its container (session-manager's AgentRuntime.sbxOnly). Met, ipc/app.ts's `startup:check` opens the
  * workspace. Never answered from memory: each re-check
  * re-scans the managers' bin dirs (`augmentAgentPath`); an install elsewhere needs a restart.
- * Projects opened afterwards reuse this answer (`isAgentInstalled`).
+ * Projects opened afterwards reuse this answer (`agentInstalled`).
  */
 export async function checkRequirements(): Promise<Requirements> {
   // No repository's directory: the checks are about the programs.

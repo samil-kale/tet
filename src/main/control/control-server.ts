@@ -79,7 +79,7 @@ export interface ControlDeps {
   /** The active editor tab's text, asked of the window live — the one thing not kept as a report
    *  (see EditorReport). */
   editorContent(ref: ProjectRef): Promise<string | undefined>;
-  /** The requirements dialog's answer, by id. */
+  /** agents/index.ts's listInstalledAgents: the requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
   /** `AGENTS`, so a new agent needs nothing here. */
   agents: readonly AgentDefinition[];

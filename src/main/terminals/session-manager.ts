@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AGENTS, getAgent } from "../agents";
+import { AGENTS, agentInstalled, getAgent } from "../agents";
 
 import type { AgentDefinition, AgentSessionInfo } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
@@ -26,7 +26,7 @@ import { ensureRunning } from "../sbx-mounts";
 import { checkSbxReady } from "../sbx-status";
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
-import { isAgentInstalled, TerminalSession } from "./terminal-session";
+import { TerminalSession } from "./terminal-session";
 import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";
 import type { CallerSide } from "../control/caller-side";
 import type { HandoffFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
@@ -440,11 +440,11 @@ export class TabSessionManager {
   }
 
   private async prepareRuntime(runtime: AgentRuntime): Promise<void> {
-    const { agent, executable } = runtime;
+    const { agent } = runtime;
     const cwd = this.at.path;
 
     if (agent.install) {
-      runtime.startable = await isAgentInstalled(executable, agent.install.versionArgs, cwd);
+      runtime.startable = await agentInstalled(agent, cwd);
       // Not here, but the project's sandbox has the CLI. Only the config is read — checkSbxReady
       // talks to Docker and stays on the spawn (resolvePlace).
       if (!runtime.startable && runtime.sandbox && (await readSbxConfig(cwd)).enabled) {

@@ -26,13 +26,17 @@ export function readLinkedGitDir(root: string): { gitDir: string; commonDir?: st
   }
 }
 
+/** The branch a `HEAD` file's text names; undefined while detached. */
+export function headBranch(head: string): string | undefined {
+  return /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
+}
+
 /** The branch a linked worktree has checked out, off its git directory's HEAD; undefined while
  *  detached or unreadable. Synchronous, for the store's first frame and before a delete. */
 export function readHeadBranch(root: string): string | undefined {
   const gitDir = readLinkedGitDir(root)?.gitDir;
   try {
-    const head = gitDir === undefined ? "" : fs.readFileSync(path.join(gitDir, "HEAD"), "utf8");
-    return /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
+    return headBranch(gitDir === undefined ? "" : fs.readFileSync(path.join(gitDir, "HEAD"), "utf8"));
   } catch {
     return undefined;
   }

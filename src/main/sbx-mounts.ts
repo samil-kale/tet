@@ -4,13 +4,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { SBX_KNOWLEDGE_KINDS, addProblems, forbiddenBy } from "../shared/sbx-rules";
 import type { SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxPath, SbxProblems } from "../shared/types";
-import { SANDBOXED_AGENTS } from "./agents";
+import { agentInstalled, SANDBOXED_AGENTS } from "./agents";
 import type { AgentPaths, SandboxedAgent } from "./agents/agent";
 import { readLinkedGitDir } from "./git/linked-git-dir";
+import { inTurn } from "./in-turn";
 import { mapLimited } from "./map-limited";
 import { relativeInside } from "./path-inside";
 import { toContainerPath } from "./terminals/hook-target";
-import { isAgentInstalled } from "./terminals/terminal-session";
 import { runSbx, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
 import { mountableBy, normalizeHostPath, readFilesystemRules, readGovernance } from "./sbx-status";
 
@@ -78,11 +78,6 @@ export function worktreeMountSpecs(projectRefPath: string): MountSpec[] {
 /** An agent's host knowledge per kind, as sandboxKnowledgeFor resolves it. */
 type KnowledgeEntries = Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
 
-/** Cached (isAgentInstalled). */
-async function isInstalledHere(agent: SandboxedAgent): Promise<boolean> {
-  return agent.install !== undefined && (await isAgentInstalled(agent.executable(), agent.install.versionArgs, os.tmpdir()));
-}
-
 /** Where the sandboxed CLI reads its own skills, whether or not it is installed here. */
 function skillsTargets(agent: SandboxedAgent): string[] {
   return agent.sandbox.knowledge().skills.map((entry) => entry.target);
@@ -96,7 +91,7 @@ function skillsTargets(agent: SandboxedAgent): string[] {
  * the agent's own skills targets, installed or not: the user chose it.
  */
 export async function sandboxKnowledgeFor(agent: SandboxedAgent, skillsFolder?: string): Promise<KnowledgeEntries> {
-  const own = (await isInstalledHere(agent)) ? agent.sandbox.knowledge() : undefined;
+  const own = (await agentInstalled(agent, os.tmpdir())) ? agent.sandbox.knowledge() : undefined;
   const existing = (entries: SbxKnowledgeEntry[] = []): SbxKnowledgeEntry[] => entries.filter((entry) => statOf(entry.host));
   const rest = { plugins: existing(own?.plugins), instructions: existing(own?.instructions) };
   if (skillsFolder !== undefined) {
@@ -116,7 +111,7 @@ export async function sandboxKnowledgeFor(agent: SandboxedAgent, skillsFolder?: 
 export async function readKnowledgeSources(): Promise<SbxKnowledgeSource[]> {
   const sources = await Promise.all(
     SANDBOXED_AGENTS.map(async (agent): Promise<SbxKnowledgeSource | undefined> =>
-      (await isInstalledHere(agent))
+      (await agentInstalled(agent, os.tmpdir()))
         ? {
             agentId: agent.id,
             displayName: agent.displayName,
@@ -159,19 +154,6 @@ export async function grantsOf(agent: SandboxedAgent, knowledge: SbxKnowledgeCon
       .filter((entry) => statOf(normalizeHostPath(entry.path)))
       .map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path }))
   ];
-}
-
-/** Runs `action` once the one underway under `name` in `queue` is over, however that one ended. */
-export function inTurn<T>(queue: Map<string, Promise<unknown>>, name: string, action: () => Promise<T>): Promise<T> {
-  const turn = (queue.get(name) ?? Promise.resolve()).catch(() => undefined).then(action);
-  queue.set(name, turn);
-  const forget = (): void => {
-    if (queue.get(name) === turn) {
-      queue.delete(name);
-    }
-  };
-  turn.then(forget, forget);
-  return turn;
 }
 
 /**

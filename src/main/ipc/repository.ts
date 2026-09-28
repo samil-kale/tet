@@ -1,7 +1,7 @@
 import { ipcMain } from "electron";
 import { AGENTS, findAskableAgent } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
-import { errorMessage } from "../../shared/errors";
+import { errorMessage, failure } from "../../shared/errors";
 import type {
   ProjectRef,
   CheckoutTarget,
@@ -17,7 +17,14 @@ import type {
   StashCommand,
   SuggestionResult
 } from "../../shared/types";
-import { DEFAULT_EXPLORER_VIEW } from "../tet-json";
+import {
+  addExclude,
+  addFolder,
+  DEFAULT_EXPLORER_VIEW,
+  readExplorerView,
+  removeFolder,
+  setExplorerSetting
+} from "../tet-json";
 import { cancelCommitSuggestion, suggestCommitMessage } from "../git/commit-message";
 import { git } from "../git/git-client";
 import type { Repository } from "../git/repository";
@@ -26,8 +33,9 @@ import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 /** Everything the git pane and the editor ask of one repository. */
 export function registerRepositoryIpc({
   settings,
+  store,
   repositories
-}: Pick<IpcDeps, "settings" | "repositories">): void {
+}: Pick<IpcDeps, "settings" | "store" | "repositories">): void {
   ipcMain.handle("repository:state", (_event, ref: ProjectRef): RepositoryState => {
     return repositories.get(ref)?.getState() ?? MISSING_REPOSITORY;
   });
@@ -48,15 +56,14 @@ export function registerRepositoryIpc({
     });
   };
 
-  /** A write to the project's tet.json, which only its repository has (tet-json.ts's
-   *  configRoot). */
-  const onProjectFile = <A extends unknown[]>(
-    channel: string,
-    run: (repository: Repository, ...args: A) => Promise<GitActionResult>
-  ): void => {
+  /** A write to the project's tet.json, which only its repository has (tet-json.ts's configRoot),
+   *  reached through the store as the commands are; the watcher sees the write and re-lists. */
+  const onProjectFile = <A extends unknown[]>(channel: string, write: (root: string, ...args: A) => Promise<void>): void => {
     ipcMain.handle(channel, async (_event, projectId: string, ...args: A): Promise<GitActionResult> => {
-      const repository = repositories.get({ projectId });
-      return repository ? run(repository, ...args) : { ok: false, error: MISSING_REPOSITORY.error };
+      const project = store.get(projectId);
+      return project
+        ? write(project.path, ...args).then(() => ({ ok: true }), failure)
+        : { ok: false, error: MISSING_REPOSITORY.error };
     });
   };
 
@@ -135,13 +142,13 @@ export function registerRepositoryIpc({
   onRepository("repository:rename-path", (repository, fromPath: string, toPath: string) =>
     repository.renamePath(fromPath, toPath)
   );
-  onProjectFile("repository:add-folder", (repository, folderPath: string) => repository.addFolder(folderPath));
-  onProjectFile("repository:remove-folder", (repository, folderPath: string) => repository.removeFolder(folderPath));
-  onProjectFile("repository:exclude-path", (repository, relPath: string) => repository.excludePath(relPath));
+  onProjectFile("repository:add-folder", (root, folderPath: string) => addFolder(root, folderPath));
+  onProjectFile("repository:remove-folder", (root, folderPath: string) => removeFolder(root, folderPath));
+  onProjectFile("repository:exclude-path", (root, relPath: string) => addExclude(root, relPath));
   onProjectFile(
     "repository:set-explorer-setting",
-    (repository, key: keyof ExplorerSettings, value: ExplorerSettings[keyof ExplorerSettings]) =>
-      repository.setExplorerSetting(key, value)
+    (root, key: keyof ExplorerSettings, value: ExplorerSettings[keyof ExplorerSettings]) =>
+      setExplorerSetting(root, key, value)
   );
 
   ipcMain.handle("repository:list-explorer", async (_event, ref: ProjectRef): Promise<ExplorerListing> => {
@@ -159,9 +166,15 @@ export function registerRepositoryIpc({
     return (await repositories.get(ref)?.searchFiles(query)) ?? { files: [], truncated: false };
   });
 
-  // The settings Files tab: tet.json's view settings only, no walk.
+  // The settings Files tab: tet.json's view settings only, no walk; folders and exclude globs stay
+  // the tree's own.
   ipcMain.handle("repository:explorer-settings", async (_event, projectId: string): Promise<ExplorerSettings> => {
-    return (await repositories.get({ projectId })?.readExplorerSettings()) ?? DEFAULT_EXPLORER_VIEW;
+    const project = store.get(projectId);
+    if (!project) {
+      return DEFAULT_EXPLORER_VIEW;
+    }
+    const { excludeGitIgnore, compactFolders, sortOrder } = await readExplorerView(project.path);
+    return { excludeGitIgnore, compactFolders, sortOrder };
   });
 
   ipcMain.handle("repository:watch-files", (_event, ref: ProjectRef, paths: string[]): void => {

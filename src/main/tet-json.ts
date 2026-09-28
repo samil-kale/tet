@@ -60,20 +60,10 @@ export interface ExplorerView extends ExplorerSettings {
 }
 
 /** Where a project's tet.json lives: a linked worktree takes its repository's, read and never
- *  written from the worktree. The copy git checks out in the worktree is ignored. */
+ *  written from the worktree. The copy git checks out in the worktree is ignored. Resolved once per
+ *  public call and handed down: each resolution reads the `.git` file and resolves a real path. */
 export function configRoot(root: string): string {
   return readMainWorktree(root) ?? root;
-}
-
-export function isWorktree(root: string): boolean {
-  return configRoot(root) !== root;
-}
-
-/** Throws for a worktree: everything that changes its settings changes its repository's, there. */
-export function assertOwnConfig(root: string): void {
-  if (isWorktree(root)) {
-    throw new Error(`A worktree takes its settings from ${path.basename(configRoot(root))}: change them there`);
-  }
 }
 
 function file(root: string): string {
@@ -86,10 +76,10 @@ function file(root: string): string {
  * commas allowed. A file there but unreadable for the moment (EPERM while another process renames
  * over it on win32) is broken, not missing, which `patch` would write over.
  */
-async function readNow(root: string): Promise<{ text: string | null; content: ProjectFile | null } | { problem: string }> {
+async function readNow(filePath: string): Promise<{ text: string | null; content: ProjectFile | null } | { problem: string }> {
   let text: string;
   try {
-    text = await fs.readFile(file(root), "utf8");
+    text = await fs.readFile(filePath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return { text: null, content: null };
@@ -112,20 +102,24 @@ const lastReadable = new Map<string, ProjectFile | null>();
  * can. Asked before a project opens — one whose file is broken is not opened (projects.ts) — and
  * after each write of it, so a project always has a last readable version while it is open.
  */
-export async function tetJsonProblem(root: string): Promise<string | undefined> {
-  const reading = await readNow(root);
+export function tetJsonProblem(root: string): Promise<string | undefined> {
+  return problemAt(file(root));
+}
+
+async function problemAt(filePath: string): Promise<string | undefined> {
+  const reading = await readNow(filePath);
   if ("problem" in reading) {
     return reading.problem;
   }
-  lastReadable.set(file(root), reading.content);
+  lastReadable.set(filePath, reading.content);
   return undefined;
 }
 
 /** The file's contents, or **null** when there is none. A broken file counts as its last readable
  *  version, never as none: an sbx project would run its agents on this machine. */
-async function read(root: string): Promise<ProjectFile | null> {
-  const problem = await tetJsonProblem(root);
-  const last = lastReadable.get(file(root));
+async function read(filePath: string): Promise<ProjectFile | null> {
+  const problem = await problemAt(filePath);
+  const last = lastReadable.get(filePath);
   if (last === undefined) {
     throw new Error(problem);
   }
@@ -145,8 +139,11 @@ const patches = new Map<string, Promise<unknown>>();
  * One at a time per file, each after the last however that one ended.
  */
 function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
-  const key = file(root);
-  const turn = (patches.get(key) ?? Promise.resolve()).catch(() => undefined).then(() => patchNow(root, edit));
+  const own = configRoot(root);
+  const key = path.join(own, PROJECT_FILE);
+  const turn = (patches.get(key) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => patchNow(root, own, key, edit));
   patches.set(key, turn);
   const forget = (): void => {
     if (patches.get(key) === turn) {
@@ -157,9 +154,18 @@ function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<
   return turn;
 }
 
-async function patchNow(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
-  assertOwnConfig(root);
-  const reading = await readNow(root);
+/** Throws for a worktree (`own`, its config root, is another folder): everything that changes its
+ *  settings changes its repository's, there. */
+async function patchNow(
+  root: string,
+  own: string,
+  filePath: string,
+  edit: (content: ProjectFile) => Change[]
+): Promise<void> {
+  if (own !== root) {
+    throw new Error(`A worktree takes its settings from ${path.basename(own)}: change them there`);
+  }
+  const reading = await readNow(filePath);
   if ("problem" in reading) {
     throw new Error(reading.problem);
   }
@@ -173,7 +179,7 @@ async function patchNow(root: string, edit: (content: ProjectFile) => Change[]):
   for (const [jsonPath, value] of changes) {
     next = applyEdits(next, modify(next, jsonPath, value, { formattingOptions }));
   }
-  await writeFileAtomic(file(root), text === null ? `${next}\n` : next, "utf8");
+  await writeFileAtomic(filePath, text === null ? `${next}\n` : next, "utf8");
 }
 
 /** Only the string values of an `env`, which outranks the inherited environment — but for the names
@@ -221,7 +227,7 @@ function toCommand(entry: StoredCommand): ProjectCommand | undefined {
 
 /** In the array's order, which is the screen order. */
 export async function readCommands(root: string): Promise<ProjectCommand[]> {
-  const content = await read(root);
+  const content = await read(file(root));
   if (!content || !Array.isArray(content.commands)) {
     return [];
   }
@@ -292,7 +298,7 @@ function toExclude(value: unknown): string[] {
 }
 
 export async function readExplorerView(root: string): Promise<ExplorerView> {
-  const content = (await read(root)) ?? {};
+  const content = (await read(file(root))) ?? {};
   const settings = toSettings(content.settings);
   return {
     folders: toFolders(content.folders, root),
@@ -470,14 +476,15 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
  *  the knowledge (sbx-local.ts). A worktree forwards no ports: a port of this machine reaches one
  *  sandbox, and its repository's has it. */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
-  const sbx = sbxSection((await read(root)) ?? {});
+  const own = configRoot(root);
+  const sbx = sbxSection((await read(path.join(own, PROJECT_FILE))) ?? {});
   const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
     .map(({ path: hostPath, access }) => ({ path: hostPath, access }));
   const secrets = toSbxSecrets(sbx.secrets);
   return {
     enabled: sbx.enabled === true,
-    ports: isWorktree(root) ? [] : toSbxPorts(sbx.ports),
+    ports: own !== root ? [] : toSbxPorts(sbx.ports),
     paths,
     hosts: toSbxHosts(sbx.hosts),
     secrets,

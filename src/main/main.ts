@@ -1,9 +1,8 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { app, BrowserWindow, ipcMain, Menu, shell } from "electron";
-import { AGENTS } from "./agents";
+import { AGENTS, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { GitLoginStore } from "./git-logins";
 import { WINDOW_ARGS } from "../shared/api";
@@ -45,7 +44,6 @@ import { setControlEnv, setStoredEnv } from "./terminals/pty";
 import { installUncaughtHandler, logError } from "./uncaught";
 import { awaitedToastTab, showDesktopNotification, startNotifications } from "./notifications";
 import { isOpenableUrl } from "./shell-open";
-import { isAgentInstalled } from "./terminals/terminal-session";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
@@ -423,17 +421,7 @@ async function startControl(): Promise<void> {
         settings,
         sessions,
         repositories,
-        listAgents: async () =>
-          Promise.all(
-            AGENTS.map(async (agent) => ({
-              id: agent.id,
-              name: agent.displayName,
-              // The shell has no version check.
-              installed: agent.install
-                ? await isAgentInstalled(agent.executable(), agent.install.versionArgs, os.tmpdir())
-                : true
-            }))
-          ),
+        listAgents: listInstalledAgents,
         agents: AGENTS,
         addProject: (directory) => addProject(projectDeps, directory),
         removeProject: (projectId) => removeProject(projectDeps, projectId),

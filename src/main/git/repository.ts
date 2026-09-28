@@ -8,7 +8,6 @@ import type {
   ProjectRef,
   CheckoutTarget,
   ExplorerListing,
-  ExplorerSettings,
   FileChange,
   FileContent,
   FileSearchQuery,
@@ -21,7 +20,7 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { addExclude, addFolder, PROJECT_FILE, readExplorerView, removeFolder, setExplorerSetting } from "../tet-json";
+import { PROJECT_FILE } from "../tet-json";
 import type { ResolvedRef } from "../resolved-ref";
 import { worktreeKeyOf } from "../project-dirs";
 import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
@@ -245,7 +244,7 @@ export class Repository {
       return;
     }
     // With a kept login, never a typed one: nothing is asked in the background.
-    const remote = this.headRemote;
+    const remote = headRemote(this.state);
     this.autoFetching = this.network(remote, undefined, (login) =>
       git.fetch(this.at.path, remote, login, AUTO_FETCH_TIMEOUT_MS)
     )
@@ -419,7 +418,7 @@ export class Repository {
   fetch(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(async () => {
       // The remote whose login is looked up, named: git's default could be another host's.
-      const remote = this.headRemote;
+      const remote = headRemote(this.state);
       const fetched = await this.network(remote, login, (networkLogin) => git.fetch(this.at.path, remote, networkLogin));
       await git.fastForwardBranches(this.at.path);
       return fetched;
@@ -430,7 +429,7 @@ export class Repository {
    *  behind their upstreams are moved up. */
   pull(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const remote = this.headRemote;
+      const remote = headRemote(this.state);
       // The remote's HEAD with the same login: on a host that wants one, without it it always fails.
       const pulled = await this.network(remote, login, async (networkLogin) => {
         const result = await git.pull(this.at.path, networkLogin);
@@ -461,16 +460,6 @@ export class Repository {
     });
   }
 
-  /** shared/types.ts's `defaultRemote`, as the git pane names it. */
-  private get remote(): string | undefined {
-    return defaultRemote(this.state);
-  }
-
-  /** shared/types.ts's `headRemote`, as the git pane names it. */
-  private get headRemote(): string | undefined {
-    return headRemote(this.state);
-  }
-
   /** A command reaching `remote`, with the login typed for it or the one kept for its url
    *  (GitLoginStore.run); with no remote, or none whose url is known, the command as it is. */
   private network(
@@ -482,11 +471,11 @@ export class Repository {
     return url === undefined ? command() : this.logins.run(this.at.path, url, login, command);
   }
 
-  /** Re-reads the config after, since only this changes a url. */
+  /** The config is read again by the refresh after, since only this changes a url. */
   setRemoteUrl(remote: string, url: string): Promise<GitActionResult> {
     return this.runAction(async () => {
       const result = await git.setRemoteUrl(this.at.path, remote, url);
-      await this.loadConfig();
+      this.configStale = true;
       return result;
     });
   }
@@ -495,12 +484,12 @@ export class Repository {
     return this.runAction(() => git.createBranch(this.at.path, name, startPoint));
   }
 
-  /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). Re-reads the config
-   *  after: this is what records `branch.<name>.base`, and the new row shows it at once. */
+  /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). The refresh after reads
+   *  the config again: this is what records `branch.<name>.base`, and the new row shows it at once. */
   addWorktree(target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
     return this.runAction(async () => {
       const result = await git.worktreeAdd(this.at.path, target, branch, base);
-      await this.loadConfig();
+      this.configStale = true;
       return result;
     });
   }
@@ -514,11 +503,11 @@ export class Repository {
   }
 
   /** git moves the branch's whole config section with it, `branch.<name>.base` included, so the
-   *  config is read again. */
+   *  refresh after reads the config again. */
   renameBranch(from: string, to: string): Promise<GitActionResult> {
     return this.runAction(async () => {
       const result = await git.renameBranch(this.at.path, from, to);
-      await this.loadConfig();
+      this.configStale = true;
       return result;
     });
   }
@@ -588,7 +577,7 @@ export class Repository {
 
   pushTag(name: string, login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(() => {
-      const remote = this.remote;
+      const remote = defaultRemote(this.state);
       return remote
         ? this.network(remote, login, (networkLogin) => git.pushTag(this.at.path, remote, name, networkLogin))
         : Promise.resolve({ ok: false, error: "This repository has no remote to push the tag to" });
@@ -608,7 +597,7 @@ export class Repository {
   }
 
   private deleteTagOnRemote(name: string, login: GitLogin | undefined): Promise<GitActionResult> {
-    const remote = this.remote;
+    const remote = defaultRemote(this.state);
     return remote
       ? this.network(remote, login, (networkLogin) => git.deleteRemoteTag(this.at.path, remote, name, networkLogin))
       : Promise.resolve({ ok: false, error: "This repository has no remote to delete the tag from" });
@@ -793,30 +782,6 @@ export class Repository {
       await fs.promises.mkdir(path.dirname(to.absolute), { recursive: true });
       await fs.promises.rename(from, to.absolute);
     });
-  }
-
-  /** The Explorer's tet.json edits ("Add Folder to Workspace", "Remove Folder from Workspace",
-   *  "Exclude from Files"); the watcher sees the write and re-lists. */
-  addFolder(folderPath: string): Promise<GitActionResult> {
-    return attempt(() => addFolder(this.at.path, folderPath));
-  }
-
-  removeFolder(folderPath: string): Promise<GitActionResult> {
-    return attempt(() => removeFolder(this.at.path, folderPath));
-  }
-
-  excludePath(relPath: string): Promise<GitActionResult> {
-    return attempt(() => addExclude(this.at.path, relPath));
-  }
-
-  /** For the settings dialog's Files tab; folders and exclude globs stay the tree's own. */
-  async readExplorerSettings(): Promise<ExplorerSettings> {
-    const { excludeGitIgnore, compactFolders, sortOrder } = await readExplorerView(this.at.path);
-    return { excludeGitIgnore, compactFolders, sortOrder };
-  }
-
-  setExplorerSetting<K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): Promise<GitActionResult> {
-    return attempt(() => setExplorerSetting(this.at.path, key, value));
   }
 
   /** The absolute path, or undefined if it escapes the root. */

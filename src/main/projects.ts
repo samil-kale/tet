@@ -18,6 +18,7 @@ import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import { readHeadBranch, readMainWorktree } from "./git/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
+import { inTurn } from "./in-turn";
 import { isRecord, logFailure, readJson, writeJson } from "./json-file";
 import { onDisk } from "./path-inside";
 import { newWorktreeKey, ownedWorktreeKeys, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./project-dirs";
@@ -48,13 +49,9 @@ export interface ProjectDeps {
  * would each mint an id, and an add meeting a removal of the same folder would have its id unset and
  * its folder deleted underneath it.
  */
-let queue: Promise<unknown> = Promise.resolve();
-
-function inTurn<T>(change: () => Promise<T>): Promise<T> {
-  const turn = queue.then(change);
-  queue = turn.catch(() => undefined);
-  return turn;
-}
+const changes = new Map<string, Promise<unknown>>();
+/** The one key under `changes`: every change waits on every other. */
+const CHANGE = "projects";
 
 /**
  * Opens a repository as a project, shared by the add-repository dialog (`projects:open`, clone,
@@ -63,7 +60,7 @@ function inTurn<T>(change: () => Promise<T>): Promise<T> {
  * A worktree's folder opens its repository's project, and — one TET made — shows that worktree.
  */
 export function addProject(deps: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
-  return inTurn(() => addNow(deps, directory));
+  return inTurn(changes, CHANGE, () => addNow(deps, directory));
 }
 
 async function addNow(deps: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
@@ -217,7 +214,7 @@ async function dropWorktreeData(dataRoot: string, refs: ProjectRef[], projectId:
  * to ask: its worktrees are only closed, their folders going with TET's.
  */
 export function removeProject(deps: ProjectDeps, projectId: string): Promise<GitActionResult> {
-  return inTurn(async () => {
+  return inTurn(changes, CHANGE, async () => {
     const project = deps.store.get(projectId);
     if (!project) {
       return { ok: false, error: "Project not found" };
@@ -262,7 +259,7 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
  * starts at the default branch (`worktreeBase`), as most worktree tools start it.
  */
 export function addWorktree(deps: ProjectDeps, projectId: string, typed: string): Promise<AddRepositoryResult> {
-  return inTurn(async () => {
+  return inTurn(changes, CHANGE, async () => {
     const branch = typed.trim();
     const repository = deps.repositories.get(projectRef(projectId));
     if (!deps.store.get(projectId) || !repository) {

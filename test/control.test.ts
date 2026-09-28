@@ -1134,8 +1134,8 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("deletes only a worktree TET made of the project, and never the caller's own", async () => {
-    assert.match((await tetCtl(["worktree-delete", "main"])).stderr, /no worktree of branch main/);
-    assert.match((await tetCtl(["worktree-delete", "four", "--project", OTHER.id])).stderr, /no worktree of branch four/);
+    assert.match((await tetCtl(["worktree-delete", "main"])).stderr, /has no worktree main/);
+    assert.match((await tetCtl(["worktree-delete", "four", "--project", OTHER.id])).stderr, /has no worktree four/);
     assert.match((await tetCtl(["worktree-delete", "five"])).stderr, /not made by TET/);
     const own = await tetCtl(["worktree-delete", "four"], { [CONTROL_ENV.worktree]: WORKTREE.worktree });
     assert.match(own.stderr, /cannot delete itself/);

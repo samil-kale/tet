@@ -7,7 +7,7 @@ import { errorMessage, failure } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
 import { isImage, toDataUrl } from "./image-type";
-import { readLinkedGitDir } from "./linked-git-dir";
+import { headBranch, readLinkedGitDir } from "./linked-git-dir";
 import type {
   BranchUpstream,
   CheckoutTarget,
@@ -26,10 +26,12 @@ import type {
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
-interface GitResult {
-  stdout: string;
+interface GitResult<Output = string> {
+  stdout: Output;
   stderr: string;
   code: number;
+  /** Git's output passed `maxBuffer`: it was killed, and `stdout` is empty. */
+  overflowed?: true;
 }
 
 interface GitOptions {
@@ -37,6 +39,13 @@ interface GitOptions {
   timeoutMs?: number;
   /** Written to git's stdin: a list of paths (`runOnPaths`). */
   input?: string;
+  /** The output past which git is killed, in bytes; MAX_BUFFER unless given. */
+  maxBuffer?: number;
+}
+
+/** Output as bytes: utf8 replaces invalid bytes and would break an image (`readHeadBlob`). */
+interface GitBufferOptions extends GitOptions {
+  encoding: "buffer";
 }
 
 /**
@@ -44,25 +53,32 @@ interface GitOptions {
  * Past `timeoutMs` git is killed and this resolves at once as a failure — not on the callback,
  * which waits for every pipe, and a credential helper or ssh started by git holds them past git's end.
  */
-function git(cwd: string, args: string[], { env, timeoutMs, input }: GitOptions = {}): Promise<GitResult> {
+function git(cwd: string, args: string[], options: GitBufferOptions): Promise<GitResult<Buffer>>;
+function git(cwd: string, args: string[], options?: GitOptions): Promise<GitResult>;
+function git(
+  cwd: string,
+  args: string[],
+  { env, timeoutMs, input, maxBuffer = MAX_BUFFER, encoding }: GitOptions & { encoding?: "buffer" } = {}
+): Promise<GitResult<string | Buffer>> {
+  const empty = encoding === "buffer" ? Buffer.alloc(0) : "";
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const child = execFile(
       "git",
       args,
-      { cwd, maxBuffer: MAX_BUFFER, windowsHide: true, encoding: "utf8", env: env && { ...process.env, ...env } },
+      { cwd, maxBuffer, windowsHide: true, encoding: encoding ?? "utf8", env: env && { ...process.env, ...env } },
       (error, stdout, stderr) => {
         clearTimeout(timer);
-        // Git ran but exceeded MAX_BUFFER: a failed command, not one that never started.
+        // Git ran but exceeded maxBuffer: a failed command, not one that never started.
         if (error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
-          resolve({ stdout: "", stderr: `git's output exceeded ${MAX_BUFFER / (1024 * 1024)} MB`, code: 1 });
+          resolve({ stdout: empty, stderr: `git's output exceeded ${maxBuffer / (1024 * 1024)} MB`, code: 1, overflowed: true });
           return;
         }
         if (error && typeof error.code !== "number") {
           reject(new Error(`git could not be started (${error.code ?? error.message})`));
           return;
         }
-        resolve({ stdout, stderr, code: error ? Number(error.code) : 0 });
+        resolve({ stdout, stderr: stderr.toString(), code: error ? Number(error.code) : 0 });
       }
     );
     if (input !== undefined) {
@@ -73,7 +89,7 @@ function git(cwd: string, args: string[], { env, timeoutMs, input }: GitOptions 
     if (timeoutMs !== undefined) {
       timer = setTimeout(() => {
         child.kill();
-        resolve({ stdout: "", stderr: `git took longer than ${timeoutMs / 1000} s and was stopped`, code: 1 });
+        resolve({ stdout: empty, stderr: `git took longer than ${timeoutMs / 1000} s and was stopped`, code: 1 });
       }, timeoutMs);
     }
   });
@@ -484,11 +500,10 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
   const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
     const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
-    const branch = /^ref: refs\/heads\/(.+?)\s*$/m.exec(head)?.[1];
     return {
       // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
       path: await fs.realpath(worktreePath).catch(() => worktreePath),
-      branch,
+      branch: headBranch(head),
       main,
       current: adminDir === gitDir
     };
@@ -644,15 +659,18 @@ export function forget(cwd: string): void {
  * setting it blindly breaks a plink or `ssh -i work_key` setup; a non-OpenSSH program lacks the flag.
  * `core.sshCommand` is read per network command, not cached: the global config changes unwatched,
  * and a stale "none" would override the user's ssh. Off the refresh path, beside a remote round trip.
+ * `sshCommand` is its value where the caller read it already (`pull`), "" for none.
  */
-async function networkEnv(cwd: string): Promise<NodeJS.ProcessEnv> {
+async function networkEnv(cwd: string, sshCommand?: string): Promise<NodeJS.ProcessEnv> {
   if (process.env.GIT_SSH || process.env.GIT_SSH_COMMAND) {
     return NETWORK_ENV;
   }
-  const configured = await git(cwd, ["config", "--get", "core.sshCommand"]).then(
-    (result) => (result.code === 0 ? result.stdout.trim() : ""),
-    () => ""
-  );
+  const configured =
+    sshCommand ??
+    (await git(cwd, ["config", "--get", "core.sshCommand"]).then(
+      (result) => (result.code === 0 ? result.stdout.trim() : ""),
+      () => ""
+    ));
   return configured
     ? NETWORK_ENV
     : { ...NETWORK_ENV, GIT_SSH_COMMAND: "ssh -oBatchMode=yes -oServerAliveInterval=15 -oServerAliveCountMax=4" };
@@ -670,6 +688,9 @@ interface NetworkOptions {
   login?: NetworkLogin;
   /** For a command nobody waits on (see `git`). */
   timeoutMs?: number;
+  /** `loginEnv`'s environment, built already, in place of `login`: for a caller running more than
+   *  one command with it. */
+  env?: NodeJS.ProcessEnv;
 }
 
 /**
@@ -677,18 +698,18 @@ interface NetworkOptions {
  * user's own login still comes first. The helpers stay on, so git stores a login that worked in
  * the user's helper and erases one the host refused, as for any login typed at git's prompt.
  */
-async function loginEnv(cwd: string, login?: NetworkLogin): Promise<NodeJS.ProcessEnv> {
+async function loginEnv(cwd: string, login?: NetworkLogin, sshCommand?: string): Promise<NodeJS.ProcessEnv> {
   const askpass = login && {
     GIT_ASKPASS: await ensureAskpass(login.askpassDir),
     TET_ASKPASS_ORIGIN: login.origin,
     TET_ASKPASS_USER: login.username,
     TET_ASKPASS_TOKEN: login.password
   };
-  return { ...(await networkEnv(cwd)), ...askpass };
+  return { ...(await networkEnv(cwd, sshCommand)), ...askpass };
 }
 
-async function runNetwork(cwd: string, args: string[], { login, timeoutMs }: NetworkOptions = {}): Promise<GitActionResult> {
-  const result = await run(cwd, args, { env: await loginEnv(cwd, login), timeoutMs });
+async function runNetwork(cwd: string, args: string[], { login, timeoutMs, env }: NetworkOptions = {}): Promise<GitActionResult> {
+  const result = await run(cwd, args, { env: env ?? (await loginEnv(cwd, login)), timeoutMs });
   if (result.ok || !AUTH_FAILURES.some((pattern) => pattern.test(result.error ?? ""))) {
     return result;
   }
@@ -704,10 +725,22 @@ export function fetch(cwd: string, remote?: string, login?: NetworkLogin, timeou
 
 /** `git pull`, so the user's configured merge or rebase applies — plus `--ff` where `pull.ff` is
  *  unset, as GitHub Desktop does: without it git refuses to pull into a diverged branch until told
- *  how to reconcile. */
+ *  how to reconcile. `core.sshCommand` is read in the same process, for networkEnv. */
 export async function pull(cwd: string, login?: NetworkLogin): Promise<GitActionResult> {
-  const pullFF = await git(cwd, ["config", "--get", "pull.ff"]);
-  return runNetwork(cwd, pullFF.code === 0 ? ["pull"] : ["pull", "--ff"], { login });
+  // Exit 1 where neither is set; a broken config counts as neither, as a failed `--get` did.
+  const result = await git(cwd, ["config", "--get-regexp", "^(pull\\.ff|core\\.sshcommand)$"]);
+  let pullFF = false;
+  let sshCommand = "";
+  for (const line of result.code === 0 ? result.stdout.split("\n") : []) {
+    // A key without a value is set, as `--get` has it; the last one wins.
+    pullFF ||= /^pull\.ff(?: |$)/.test(line.trim());
+    const ssh = /^core\.sshcommand(?: (.*))?$/.exec(line.trim());
+    if (ssh) {
+      sshCommand = ssh[1]?.trim() ?? "";
+    }
+  }
+  const env = await loginEnv(cwd, login, sshCommand);
+  return runNetwork(cwd, pullFF ? ["pull"] : ["pull", "--ff"], { env });
 }
 
 /** Asks the remote for its HEAD branch again after a pull, as GitHub Desktop does: a clone's
@@ -887,11 +920,12 @@ export async function deleteRemoteBranch(
   name: string,
   login?: NetworkLogin
 ): Promise<GitActionResult> {
-  const deleted = await runNetwork(cwd, ["push", remote, "--delete", name], { login });
+  const env = await loginEnv(cwd, login);
+  const deleted = await runNetwork(cwd, ["push", remote, "--delete", name], { env });
   if (deleted.ok || deleted.authRequired) {
     return deleted;
   }
-  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], { env: await loginEnv(cwd, login) });
+  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], { env });
   if (listed.code !== 2) {
     return deleted;
   }
@@ -1243,42 +1277,31 @@ interface HeadBlobOptions {
 export async function readHeadBlob(cwd: string, filePath: string, options: HeadBlobOptions): Promise<HeadBlob> {
   // A rename is one entry over two paths, and only the old one is in HEAD.
   const at = (options.origPath ?? filePath).replace(/\\/g, "/");
-  const read = await new Promise<{ blob: Buffer | null; tooLarge: boolean }>((resolve) => {
-    execFile(
-      "git",
-      ["cat-file", "--filters", `HEAD:${at}`],
-      {
-        cwd,
-        // One byte over the cap: node kills the child with its own error code, which tells a blob
-        // too large from one HEAD lacks.
-        maxBuffer: options.maxBytes + 1,
-        windowsHide: true,
-        encoding: "buffer",
-        // `--filters` runs the repository's smudge filter, and an LFS one fetches: never ask for
-        // credentials without a terminal.
-        env: { ...process.env, ...NETWORK_ENV }
-      },
-      (error, stdout) =>
-        resolve({
-          blob: error ? null : stdout,
-          tooLarge: (error as NodeJS.ErrnoException | null)?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER"
-        })
-    );
-  });
+  const read = await git(cwd, ["cat-file", "--filters", `HEAD:${at}`], {
+    encoding: "buffer",
+    // One byte over the cap: git is killed and the result `overflowed`, which tells a blob too large
+    // from one HEAD lacks.
+    maxBuffer: options.maxBytes + 1,
+    // `--filters` runs the repository's smudge filter, and an LFS one fetches: never ask for
+    // credentials without a terminal.
+    env: NETWORK_ENV
+  }).catch(() => undefined);
   // Too large, an image, or a NUL byte: no text side, and the editor tab says so.
-  if (read.tooLarge) {
+  if (read?.overflowed) {
     return { content: "", binary: true, missing: false };
   }
-  if (read.blob === null) {
+  // Any failure, git not started included, is a path HEAD lacks.
+  if (read === undefined || read.code !== 0) {
     return { content: "", binary: false, missing: true };
   }
+  const blob = read.stdout;
   if (isImage(at)) {
-    return { content: "", binary: true, missing: false, image: toDataUrl(at, read.blob) };
+    return { content: "", binary: true, missing: false, image: toDataUrl(at, blob) };
   }
-  if (read.blob.includes(0)) {
+  if (blob.includes(0)) {
     return { content: "", binary: true, missing: false };
   }
-  return { content: read.blob.toString("utf8"), binary: false, missing: false };
+  return { content: blob.toString("utf8"), binary: false, missing: false };
 }
 
 /** Every path the exclude chain hides, repository-relative with forward slashes; `--directory`

@@ -28,7 +28,7 @@ export function sandboxControl(): { cliPath: string; port: number } | undefined 
 
 /** Whether sbx is signed in to Docker, as probeSbx tells it: its sandbox listing answers. */
 export async function readSbxSignedIn(): Promise<boolean> {
-  return parseSandboxes(await runSbx(["ls", "--json"])) !== undefined;
+  return (await listSandboxes()) !== undefined;
 }
 
 /** `sbx ls --json` as name → workspaces. */

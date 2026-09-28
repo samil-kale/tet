@@ -24,6 +24,7 @@ import type {
 } from "../shared/types";
 import { SANDBOXED_AGENTS } from "./agents";
 import { canBind } from "./can-bind";
+import { inTurn } from "./in-turn";
 import type { SandboxedAgent } from "./agents/agent";
 import type { FilesystemRule } from "./sbx-policy";
 import { runSbx, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
@@ -32,7 +33,6 @@ import {
   droppedMountSpecs,
   fixedMountSpecs,
   grantsOf,
-  inTurn,
   mountAll,
   sandboxKnowledgeFor,
   sessionMountSpecs,
