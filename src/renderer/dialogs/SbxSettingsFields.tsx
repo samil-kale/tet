@@ -16,7 +16,7 @@ import type {
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
-import { atLeastOne, EditRow, patched, RowInput, RowMark, RowSection, SecretInput, typedRows, withId, without, type Row } from "../ui/RowSection";
+import { atLeastOne, EditRow, firstMark, patched, RowInput, RowMark, RowSection, SecretInput, typedRows, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, FieldGroup, PathInput } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
@@ -135,7 +135,7 @@ function variableRefusal(row: VariableRow, state: FieldsState): string | undefin
         named(row),
         state.variables.filter((other) => other.id !== row.id).map(named),
         state.secrets.map(named),
-        PLATFORM.ignoresCase
+        PLATFORM.envNamesIgnoreCase
       );
 }
 
@@ -298,14 +298,13 @@ function variableMark(row: VariableRow, state: FieldsState, problems: SbxProblem
 
 /** Each tab's mark: its first marked row's, repeated on the tab so it shows from any pane. */
 export function tabMarks(state: FieldsState, problems: SbxProblems): Partial<Record<keyof FieldsState, string>> {
-  const first = (marks: (string | undefined)[]): string | undefined => marks.find((mark) => mark !== undefined);
   return {
-    knowledge: first(KNOWLEDGE_LABELS.map(({ kind }) => problems.knowledge?.[kind])),
-    ports: first(state.ports.map((row) => portMark(row, problems))),
-    paths: first(state.paths.map((row) => problems.paths?.[row.path])),
-    hosts: first(state.hosts.map((row) => problems.hosts?.[row.host.trim()])),
-    secrets: first(state.secrets.map((row) => secretMark(row, state.secrets, problems))),
-    variables: first(state.variables.map((row) => variableMark(row, state, problems)))
+    knowledge: firstMark(KNOWLEDGE_LABELS.map(({ kind }) => problems.knowledge?.[kind])),
+    ports: firstMark(state.ports.map((row) => portMark(row, problems))),
+    paths: firstMark(state.paths.map((row) => problems.paths?.[row.path])),
+    hosts: firstMark(state.hosts.map((row) => problems.hosts?.[row.host.trim()])),
+    secrets: firstMark(state.secrets.map((row) => secretMark(row, state.secrets, problems))),
+    variables: firstMark(state.variables.map((row) => variableMark(row, state, problems)))
   };
 }
 

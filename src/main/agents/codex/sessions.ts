@@ -222,9 +222,9 @@ async function safeReaddir(dir: string): Promise<string[]> {
   }
 }
 
-/** win32 paths are case-insensitive; Codex lower-cases them for its own `cwd` matching. */
+/** Where paths ignore case, so does the match; Codex lower-cases them for its own `cwd` matching. */
 function samePath(a: string, b: string): boolean {
-  return PLATFORM.ignoresCase ? a.toLowerCase() === b.toLowerCase() : a === b;
+  return PLATFORM.pathsIgnoreCase ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 export const codexSessionProvider: SessionProvider = {

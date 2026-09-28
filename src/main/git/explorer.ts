@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { Minimatch } from "minimatch";
 import { errorMessage } from "../../shared/errors";
 import type {
   ExplorerListing,
@@ -8,6 +9,7 @@ import type {
   FileSearchQuery,
   FileSearchResult
 } from "../../shared/types";
+import { PLATFORM } from "../host-platform";
 import { readExplorerView, type ExplorerView } from "../tet-json";
 import { git } from "./git-client";
 
@@ -48,6 +50,19 @@ function searchPattern(query: FileSearchQuery, flags: string): RegExp {
   return new RegExp(source, query.matchCase ? flags : `${flags}i`);
 }
 
+/** A `files.exclude` glob, compiled once per walk rather than per entry: `path.matchesGlob`'s options,
+ *  case as the platform's paths compare. */
+function excludeMatcher(pattern: string): Minimatch {
+  return new Minimatch(pattern, {
+    nocase: PLATFORM.pathsIgnoreCase,
+    nocaseMagicOnly: true,
+    windowsPathsNoEscape: true,
+    nonegate: true,
+    nocomment: true,
+    optimizationLevel: 2
+  });
+}
+
 /** Every file, plus empty directories — see `ExplorerListing`. The walk's own doc is
  *  `walkExplorer`; mtimes cost a `stat` per entry, so only `modified` asks for them. */
 export async function listExplorer(root: string): Promise<ExplorerListing> {
@@ -78,9 +93,9 @@ async function walkExplorer(
   const ignored = view.excludeGitIgnore ? await git.listIgnored(root).catch(() => []) : [];
   const ignoredFiles = new Set(ignored.filter((entry) => !entry.endsWith("/")));
   const ignoredDirs = new Set(ignored.filter((entry) => entry.endsWith("/")).map((entry) => entry.slice(0, -1)));
+  const excludes = view.exclude.map(excludeMatcher);
   const skip = (relativePath: string, isDirectory: boolean): boolean =>
-    (isDirectory ? ignoredDirs : ignoredFiles).has(relativePath) ||
-    view.exclude.some((pattern) => path.matchesGlob(relativePath, pattern));
+    (isDirectory ? ignoredDirs : ignoredFiles).has(relativePath) || excludes.some((exclude) => exclude.match(relativePath));
 
   const files: string[] = [];
   const emptyDirs: string[] = [];

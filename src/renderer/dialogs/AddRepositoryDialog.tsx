@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
 import type { AddRepositoryResult, GitLogin, ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types";
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
+import { forget } from "../identity";
+import { parentOf } from "../paths";
 import { ActionLink } from "../ui/ActionLink";
 import { confirmed } from "../ui/Dialog";
 import { DialogFrame, useSubmit, type DialogPrimary } from "../ui/DialogFrame";
@@ -102,12 +104,6 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   );
 }
 
-/** A full name's group or owner: everything before the last segment. */
-function namespaceOf(fullName: string): string {
-  const cut = fullName.lastIndexOf("/");
-  return cut === -1 ? "" : fullName.slice(0, cut);
-}
-
 interface Namespace {
   path: string;
   /** Repositories covered, subgroups included. */
@@ -121,7 +117,7 @@ interface Namespace {
 function namespacesOf(repos: RemoteRepository[]): Namespace[] {
   const counts = new Map<string, number>();
   for (const repo of repos) {
-    const segments = namespaceOf(repo.fullName).split("/").filter((segment) => segment !== "");
+    const segments = parentOf(repo.fullName).split("/").filter((segment) => segment !== "");
     for (let end = 1; end <= segments.length; end++) {
       const path = segments.slice(0, end).join("/");
       counts.set(path, (counts.get(path) ?? 0) + 1);
@@ -134,7 +130,7 @@ function namespacesOf(repos: RemoteRepository[]): Namespace[] {
 
 /** In the namespace or below it — not merely sharing its name as a prefix. */
 function inNamespace(fullName: string, namespace: string): boolean {
-  const own = namespaceOf(fullName);
+  const own = parentOf(fullName);
   return own === namespace || own.startsWith(`${namespace}/`);
 }
 
@@ -221,11 +217,7 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
       account
     ]);
     // A re-entered token may reach further, so the cached list is stale.
-    setRepos((current) => {
-      const next = { ...current };
-      delete next[account.id];
-      return next;
-    });
+    setRepos((current) => forget(current, account.id));
     setSelectedId(account.id);
     setAdding(false);
   };
@@ -267,7 +259,7 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
   /** The dropdown's value: this dialog's pick, else the stored group, else the first row's (the
    *  list is sorted by recent activity). "All" only when that group is gone from the list. */
   const stored = (accounts ?? []).find((entry) => entry.id === selectedId)?.namespace;
-  const wanted = namespace ?? stored ?? (list?.[0] ? namespaceOf(list[0].fullName) : "");
+  const wanted = namespace ?? stored ?? (list?.[0] ? parentOf(list[0].fullName) : "");
   const active = wanted === "" || groups.some((group) => group.path === wanted) ? wanted : "";
   const filtered = (list ?? []).filter(
     (repo) => repo.fullName.toLowerCase().includes(query) && (active === "" || inNamespace(repo.fullName, active))

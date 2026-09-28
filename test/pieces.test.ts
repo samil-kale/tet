@@ -31,7 +31,7 @@ import { parsePublishedPorts, readSbxProblems, sandboxEnv, sandboxName, secretPl
 import { parseSignedInUser, sbxVersionSupported } from "../src/main/sbx-cli";
 import { fixedMountSpecs, pathMountSpecs } from "../src/main/sbx-mounts";
 import { saveSbxConfig } from "../src/main/sbx-save";
-import { contractHome, readHostAllowed } from "../src/main/sbx-status";
+import { contractHome, listSandboxes, readHostAllowed } from "../src/main/sbx-status";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
@@ -423,12 +423,19 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     }
   }
 
+  /** saveSbxConfig as sbx-settings.ts runs it: with the listing taken for its check. */
+  async function saveListed(...args: Parameters<typeof saveSbxConfig> extends [...infer A, unknown] ? A : never) {
+    const sandboxes = await listSandboxes();
+    assert.ok(sandboxes, "sbx lists the sandboxes");
+    return saveSbxConfig(...args, sandboxes);
+  }
+
   /** Saves `now` over a tet.json holding `before`, against a sandbox that has `has` published. */
   async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
     const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxConfig(projectPath, config(setup.before.map(port)));
     const saved = await withSbx(dir, () =>
-      saveSbxConfig({ ref: main, path: projectPath }, [], config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: projectPath }, [], config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     return { ...saved, projectPath };
   }
@@ -451,7 +458,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const worktreeName = sandboxName(worktree.ref, "claude");
     const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig(
+      saveListed(
         { ref: main, path: projectPath },
         [worktree],
         { ...config([port(3000)]), hosts: ["example.com"] },
@@ -477,7 +484,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const worktreeName = sandboxName(worktree.ref, "claude");
     const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ ref: main, path: projectPath }, [worktree], EMPTY_SBX_CONFIG, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: projectPath }, [worktree], EMPTY_SBX_CONFIG, NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(result.removed, [
       { ref: main, agentId: "claude" },
@@ -515,7 +522,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const { dir, projectPath } = fakeSbx({ published: [], mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }] });
     await writeSbxConfig(projectPath, { ...config([]), paths: [held, unheld] });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
     assert.deepEqual([result.refused, result.config.paths], [{}, []]);
@@ -553,7 +560,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       ["ADDED", "v-added"]
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
+      saveListed({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -593,7 +600,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       ]
     });
     const { result, calls } = await withSbx(dir, () =>
-      saveSbxConfig({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(result.orphans, [{ ref: main, agentId: "codex" }]);
     assert.deepEqual(
@@ -608,7 +615,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const before = await readSbxConfig(projectPath);
     await assert.rejects(
       withSbx(dir, () =>
-        saveSbxConfig({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
+        saveListed({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
       ),
       /could not list the sandboxes' secrets/
     );
@@ -618,7 +625,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   });
 
   for (const [what, fail, message] of [
-    ["the sandboxes", "ls", /could not list the sandboxes\./],
     ["the sandboxes' allowed hosts", "policy ls --type network", /could not list the sandboxes' allowed hosts/]
   ] as const) {
     it(`stops a Save where sbx does not list ${what}, changing nothing`, async () => {
@@ -627,7 +633,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       const before = await readSbxConfig(projectPath);
       await assert.rejects(
         withSbx(dir, () =>
-          saveSbxConfig({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+          saveListed({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
         ),
         message
       );
@@ -804,25 +810,6 @@ describe("what sbx keeps on this machine", () => {
     assert.deepEqual([...store.values("p", "variables")], [["NPM_TOKEN", "npm"]]);
   });
 
-  it("takes over sbx-secrets.json, read as secrets alone, and drops a project left with none", () => {
-    fakeSafeStorage();
-    const root = tempDir("tet-secrets-");
-    const base64 = (text: string) => Buffer.from(text).toString("base64");
-    fs.writeFileSync(path.join(root, "sbx-secrets.json"), JSON.stringify({ p: { TOKEN: base64("sealed:old") } }));
-    const store = new SbxLocalStore(root);
-    assert.deepEqual([...store.values("p", "secrets")], [["TOKEN", "old"]]);
-    store.update("p", {
-      secrets: { values: {}, from: { TOKEN: "TOKEN" } },
-      variables: { values: { NPM_TOKEN: "npm" }, from: {} },
-      knowledge: EMPTY_SBX_KNOWLEDGE
-    });
-    assert.ok(!fs.existsSync(path.join(root, "sbx-secrets.json")), "the old file is renamed, not copied");
-    const reread = new SbxLocalStore(root);
-    assert.deepEqual(reread.stored("p"), { secrets: ["TOKEN"], variables: ["NPM_TOKEN"], knowledge: EMPTY_SBX_KNOWLEDGE });
-    reread.update("p", { secrets: { values: {}, from: {} }, variables: { values: {}, from: {} }, knowledge: EMPTY_SBX_KNOWLEDGE });
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "nothing left, no entry");
-  });
-
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
     fakeSafeStorage();
     const store = new SbxLocalStore(tempDir("tet-secrets-"));
@@ -906,7 +893,7 @@ describe("the environment variables kept in TET", () => {
     assert.deepEqual(store.values(), { GITLAB_TOKEN: "new" }, "a change from outside is seen, not overwritten");
   });
 
-  it("take a name in another case for the same variable where the machine does", { skip: !PLATFORM.ignoresCase }, () => {
+  it("take a name in another case for the same variable where the machine does", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
     const store = new EnvStore(tempRoot());
     store.set([row("gitlab_token", "old")]);
     store.set([row("GITLAB_TOKEN", "new")]);
@@ -930,16 +917,6 @@ describe("the environment variables kept in TET", () => {
         process.env.TET_KEPT_ENV = inherited;
       }
     }
-  });
-
-  it("drop a row from when the values were encrypted, never reading it as a value", () => {
-    const root = tempRoot();
-    const file = path.join(root, "environment.json");
-    fs.writeFileSync(file, JSON.stringify([{ name: "SEALED", value: Buffer.from("sealed:value").toString("base64") }]));
-    const store = new EnvStore(root);
-    assert.deepEqual(store.values(), {});
-    store.set([row("GITHUB_TOKEN", "token")]);
-    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), [{ name: "GITHUB_TOKEN", text: "token" }]);
   });
 
   it("write nothing over a file they cannot read, and drop no row they do not understand", () => {
@@ -1290,22 +1267,7 @@ describe("the stores", () => {
     assert.equal(store.get().colorScheme, "system", "unchanged, as the disk is");
   });
 
-  it("read the one theme of an older settings file as its kind and that kind's theme", () => {
-    const dir = tempDir("tet-settings-");
-    const file = path.join(dir, "settings.json");
-    fs.writeFileSync(file, JSON.stringify({ theme: "dark-slate" }));
-    const picked = new SettingsStore(dir).get();
-    assert.deepEqual(
-      [picked.colorScheme, picked.darkTheme, picked.lightTheme],
-      ["dark", "dark-slate", "light-modern"]
-    );
-    fs.writeFileSync(file, JSON.stringify({ theme: "system" }));
-    const system = new SettingsStore(dir).get();
-    assert.deepEqual([system.colorScheme, system.darkTheme, system.lightTheme], ["system", "dark-modern", "light-modern"]);
-    assert.equal("theme" in system, false, "not written back");
-  });
-
-  it("keep only well-formed projects, never a worktree stored as one, and reorder what they know", () => {
+  it("keep only well-formed projects and reorder what they know", () => {
     const dir = tempDir("tet-projects-");
     const pathOf = (name: string): string => path.resolve(path.sep, name);
     fs.writeFileSync(
@@ -1314,9 +1276,7 @@ describe("the stores", () => {
         { id: "a", path: pathOf("a"), name: "a" },
         { id: "b", path: pathOf("b") },
         "junk",
-        { id: "c", path: pathOf("c"), name: "c" },
-        // A worktree stored as a project of its own.
-        { id: "w", path: pathOf("w"), name: "w", mainPath: pathOf("a") }
+        { id: "c", path: pathOf("c"), name: "c" }
       ])
     );
     const store = new ProjectStore(dir);

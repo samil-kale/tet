@@ -153,7 +153,7 @@ export function killProcessTree(child: ChildProcess): void {
  *  name in another case would be a second variable, and of the two the child sees the inherited one
  *  — so a replacement removes its name in any spelling. */
 function withoutNames(env: Record<string, string>, names: string[]): Record<string, string> {
-  if (PLATFORM.ignoresCase) {
+  if (PLATFORM.envNamesIgnoreCase) {
     const replaced = new Set(names.map((name) => name.toUpperCase()));
     for (const name of Object.keys(env).filter((key) => replaced.has(key.toUpperCase()))) {
       delete env[name];

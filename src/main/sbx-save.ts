@@ -4,7 +4,7 @@ import { getAgent, SANDBOXED_AGENTS } from "./agents";
 import type { SandboxedAgent } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./tet-json";
 import { runSbx, sbxJson } from "./sbx-cli";
-import { contractHome, listSandboxes, normalizeHostPath, type SandboxList } from "./sbx-status";
+import { contractHome, normalizeHostPath, type SandboxList } from "./sbx-status";
 import { ensureRunning, grantsOf, revokeMounts } from "./sbx-mounts";
 import { allowHosts, applyPortChanges, applySecrets, readSandboxPorts, removeSandbox, sameSet, sandboxName, type LiveSecret } from "./sbx";
 
@@ -221,8 +221,8 @@ export async function saveSbxConfig(
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>,
   organization: string | undefined,
-  /** listSandboxes', when the caller has it already. */
-  listed?: SandboxList
+  /** listSandboxes', which the caller took for its check. */
+  sandboxes: SandboxList
 ): Promise<{
   removed: SbxRemoved[];
   orphans: SbxRemoved[];
@@ -233,10 +233,6 @@ export async function saveSbxConfig(
 }> {
   const previous = await readSbxConfig(project.path);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
-  const sandboxes = listed ?? (await listSandboxes());
-  if (!sandboxes) {
-    throw new Error("SBX could not list the sandboxes. Nothing was saved; try again.");
-  }
   const targets = [project, ...worktrees];
   const removed: SbxRemoved[] = [];
   const orphans: SbxRemoved[] = [];

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { GitActionResult, GitLogin } from "../../shared/types";
 import { refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
+import { useRunning } from "../ui/use-running";
 import type { BranchActions } from "./BranchTree";
 import { askLogin } from "./GitLogin";
 
@@ -147,19 +148,9 @@ export function useFileAct(key: string): { acting: boolean; act: FileAct; ask: F
 function useStartedHere<A extends unknown[], R>(
   run: (...args: A) => Promise<R>
 ): { startedHere: boolean; start: (...args: A) => Promise<R> } {
-  const [running, setRunning] = useState(0);
-  const start = useCallback(
-    async (...args: A) => {
-      setRunning((count) => count + 1);
-      try {
-        return await run(...args);
-      } finally {
-        setRunning((count) => count - 1);
-      }
-    },
-    [run]
-  );
-  return { startedHere: running > 0, start };
+  const { running, run: hold } = useRunning();
+  const start = useCallback((...args: A) => hold(() => run(...args)), [hold, run]);
+  return { startedHere: running, start };
 }
 
 /**

@@ -12,7 +12,7 @@ import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import { projectRefKey, overridesMachineNote } from "../shared/types";
 import type { ProjectRef, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
-import { readCommands, readSbxConfig, tetJsonProblem } from "./tet-json";
+import { readChanged, readCommands, readSbxConfig } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
@@ -47,6 +47,7 @@ import { isOpenableUrl } from "./shell-open";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
+import type { SettingsAccess } from "./settings";
 import { currentTheme } from "./theme";
 import { PLATFORM } from "./host-platform";
 
@@ -274,25 +275,26 @@ const repositories = new RepositoryManager(
   (projectId) => {
     // Written broken, it still counts as its last readable version (tet-json.ts's `read`).
     const project = store.get(projectId);
-    if (project) {
-      void tetJsonProblem(project.path).then((problem) => {
-        if (problem !== undefined) {
-          notice("warning", `${project.name} keeps its last readable tet.json until it is fixed: ${problem}`);
-        }
-      });
-      // Read once here for every listener; the repository's file serves its worktrees too.
-      void Promise.all([readCommands(project.path), readSbxConfig(project.path)]).then(
-        ([commands, sbx]) => send("commands:changed", { projectId, commands, sbxEnabled: sbx.enabled }),
-        (error: unknown) => console.error("[tet] could not read the changed tet.json:", error)
-      );
+    if (!project) {
+      return;
     }
-    // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged) — in
-    // every repository and worktree of the project.
-    for (const manager of sessions.forProject(projectId)) {
-      void manager
-        .sbxConfigChanged()
-        .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
-    }
+    // Read once here for every listener; the repository's file serves its worktrees too.
+    void readChanged(project.path).then(({ problem, commands, sbx }) => {
+      if (problem !== undefined) {
+        notice("warning", `${project.name} keeps its last readable tet.json until it is fixed: ${problem}`);
+      }
+      if (!commands || !sbx) {
+        return;
+      }
+      send("commands:changed", { projectId, commands, sbxEnabled: sbx.enabled });
+      // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged) — in
+      // every repository and worktree of the project.
+      for (const manager of sessions.forProject(projectId)) {
+        void manager
+          .sbxConfigChanged(sbx.enabled)
+          .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
+      }
+    });
   },
   (ref) => send("repository:files-changed", { ref }),
   (ref, path) => send("repository:file-changed", { ref, path }),
@@ -422,7 +424,7 @@ async function startControl(): Promise<void> {
         version: app.getVersion(),
         pid: process.pid,
         store,
-        settings,
+        settings: settingsAccess,
         sessions,
         repositories,
         listAgents: listInstalledAgents,
@@ -442,7 +444,6 @@ async function startControl(): Promise<void> {
         editorContent,
         showTab: (ref, tabId) => send("terminals:show", { ref, tabId }),
         notify: showDesktopNotification,
-        applyTheme,
         environment,
         envRequests,
         sbx: {
@@ -467,6 +468,20 @@ async function startControl(): Promise<void> {
     console.error("[tet] control channel not started:", error);
   }
 }
+
+/** Every settings change, from the window or tet-ctl: stored, then handed on at once to what shows
+ *  or reads it. */
+const settingsAccess: SettingsAccess = {
+  get: () => settings.get(),
+  patch(edits) {
+    settings.patch(edits);
+    const restartRequired = applyTheme();
+    if (edits.notifications?.idleReminder !== undefined) {
+      sessions.idleReminderChanged();
+    }
+    return restartRequired;
+  }
+};
 
 /** The theme on screen: the window's initial one or the last `applyTheme` took. */
 let shownTheme: ThemeDefinition | undefined;
@@ -643,7 +658,7 @@ if (!app.requestSingleInstanceLock()) {
     controlChannel = { token: controlToken, port };
     registerIpc({
       store,
-      settings,
+      settings: settingsAccess,
       accounts,
       logins,
       sbxLocal,
@@ -654,10 +669,8 @@ if (!app.requestSingleInstanceLock()) {
       sessions,
       records,
       projectDeps,
-      send,
       notice,
       openWorkspace,
-      applyTheme,
       shutdown
     });
     createWindow();

@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { SbxAccount, SbxAccountEdit } from "../../shared/types";
 import { atLeastOne, EditRow, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
@@ -49,14 +48,11 @@ export function accountMarks(rows: AccountRow[]): Map<string, string> {
   return marks;
 }
 
-/** The first row's mark, which Save waits for, as the Environment rows do (SettingsDialog). */
-export function accountsBlocked(rows: AccountRow[]): string | undefined {
-  return accountMarks(rows).values().next().value;
-}
-
 interface SbxAccountsProps {
   rows: AccountRow[];
   setRows: Dispatch<SetStateAction<AccountRow[]>>;
+  /** `accountMarks` of the rows, which the dialog's Save waits for as well. */
+  marks: ReadonlyMap<string, string>;
   /** Signed in to Docker; `signedInUser` whom sbx names, however signed in. */
   signedIn: boolean;
   signedInUser?: string;
@@ -75,6 +71,7 @@ interface SbxAccountsProps {
 export function SbxAccounts({
   rows,
   setRows,
+  marks,
   signedIn,
   signedInUser,
   busy,
@@ -84,7 +81,6 @@ export function SbxAccounts({
 }: SbxAccountsProps) {
   const setRow = (row: AccountRow, change: Partial<AccountRow>): void =>
     setRows((current) => patched(current, row.id, { ...change, mark: undefined }));
-  const marks = useMemo(() => accountMarks(rows), [rows]);
   const tokens = typedRows("access token", BLANK_ACCOUNT, setRows);
   return (
     <div className="sbx-account">

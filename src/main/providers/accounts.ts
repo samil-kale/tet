@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import type { ProviderAccount, ProviderId } from "../../shared/types";
-import { isRecord, readJson, writeJson } from "../json-file";
+import { readRows, writeJson } from "../json-file";
 import { seal, unseal } from "../sealed";
 import { PROVIDERS } from "./index";
 
@@ -75,20 +75,13 @@ export class AccountStore {
   }
 
   private load(): void {
-    const parsed = readJson(this.file);
-    if (Array.isArray(parsed)) {
-      this.accounts = parsed.filter(
-        (entry): entry is StoredAccount =>
-          isRecord(entry) &&
-          typeof entry.id === "string" &&
-          typeof entry.provider === "string" &&
-          Object.hasOwn(PROVIDERS, entry.provider) &&
-          typeof entry.host === "string" &&
-          typeof entry.user === "string" &&
-          typeof entry.token === "string" &&
-          (entry.namespace === undefined || typeof entry.namespace === "string")
-      );
-    }
+    this.accounts = readRows<StoredAccount>(
+      this.file,
+      ["id", "provider", "host", "user", "token"],
+      (entry) =>
+        Object.hasOwn(PROVIDERS, entry.provider as string) &&
+        (entry.namespace === undefined || typeof entry.namespace === "string")
+    );
   }
 
   /** Throws when the file cannot be written, the accounts unchanged. */

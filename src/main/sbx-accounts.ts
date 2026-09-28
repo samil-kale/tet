@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import { errorMessage } from "../shared/errors";
 import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../shared/types";
-import { isRecord, readJson, writeJson } from "./json-file";
+import { readRows, writeJson } from "./json-file";
 import { readSbxUser, runSbxTokenLogin } from "./sbx-cli";
 import { seal, unseal } from "./sealed";
 
@@ -75,13 +75,7 @@ export class SbxAccountStore {
   }
 
   private load(): void {
-    const parsed = readJson(this.file);
-    if (Array.isArray(parsed)) {
-      this.accounts = parsed.filter(
-        (entry): entry is StoredSbxAccount =>
-          isRecord(entry) && typeof entry.id === "string" && typeof entry.user === "string" && typeof entry.token === "string"
-      );
-    }
+    this.accounts = readRows<StoredSbxAccount>(this.file, ["id", "user", "token"]);
   }
 
   /** Throws when the file cannot be written, the accounts unchanged. */

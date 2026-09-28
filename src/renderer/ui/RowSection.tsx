@@ -157,6 +157,11 @@ export function RowMark({ title }: { title: string | undefined }) {
   );
 }
 
+/** The first of the rows' marks: Save waits for every marked row, and the dialog's tab repeats it. */
+export function firstMark(marks: Iterable<string | undefined>): string | undefined {
+  return Array.from(marks).find((mark) => mark !== undefined);
+}
+
 /**
  * The box a section's rows sit in: its label, the rows, and what adds one underneath — nothing for
  * rows that come from elsewhere. A section has rows to type into or none (`atLeastOne`); only one

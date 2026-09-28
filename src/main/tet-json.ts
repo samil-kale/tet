@@ -116,6 +116,23 @@ async function problemAt(filePath: string): Promise<string | undefined> {
   return undefined;
 }
 
+/**
+ * A write of the repository's file, as its watcher reports it, read once for every listener: why it
+ * cannot be used, and its commands and sbx settings — its last readable version's while broken,
+ * none where it never was readable.
+ */
+export async function readChanged(
+  root: string
+): Promise<{ problem: string | undefined; commands?: ProjectCommand[]; sbx?: SbxProjectConfig }> {
+  const own = configRoot(root);
+  const filePath = path.join(own, PROJECT_FILE);
+  const problem = await problemAt(filePath);
+  const content = lastReadable.get(filePath);
+  return content === undefined
+    ? { problem }
+    : { problem, commands: toCommands(content), sbx: toSbxConfig(content, own !== root) };
+}
+
 /** The file's contents, or **null** when there is none. A broken file counts as its last readable
  *  version, never as none: an sbx project would run its agents on this machine. */
 async function read(filePath: string): Promise<ProjectFile | null> {
@@ -218,7 +235,10 @@ function toCommand(entry: StoredCommand): ProjectCommand | undefined {
 
 /** In the array's order, which is the screen order. */
 export async function readCommands(root: string): Promise<ProjectCommand[]> {
-  const content = await read(file(root));
+  return toCommands(await read(file(root)));
+}
+
+function toCommands(content: ProjectFile | null): ProjectCommand[] {
   if (!content || !Array.isArray(content.commands)) {
     return [];
   }
@@ -468,14 +488,18 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
  *  sandbox, and its repository's has it. */
 export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
   const own = configRoot(root);
-  const sbx = sbxSection((await read(path.join(own, PROJECT_FILE))) ?? {});
+  return toSbxConfig(await read(path.join(own, PROJECT_FILE)), own !== root);
+}
+
+function toSbxConfig(content: ProjectFile | null, worktree: boolean): SbxProjectConfig {
+  const sbx = sbxSection(content ?? {});
   const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
     .map(({ path: hostPath, access }) => ({ path: hostPath, access }));
   const secrets = toSbxSecrets(sbx.secrets);
   return {
     enabled: sbx.enabled === true,
-    ports: own !== root ? [] : toSbxPorts(sbx.ports),
+    ports: worktree ? [] : toSbxPorts(sbx.ports),
     paths,
     hosts: toSbxHosts(sbx.hosts),
     secrets,

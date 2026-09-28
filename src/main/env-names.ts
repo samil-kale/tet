@@ -12,7 +12,7 @@ export const KEPT_ENV_NAME = "TET_KEPT_ENV";
 
 /** A variable's name as this machine compares it: win32 ignores case. */
 export function machineName(name: string): string {
-  return PLATFORM.ignoresCase ? name.toUpperCase() : name;
+  return PLATFORM.envNamesIgnoreCase ? name.toUpperCase() : name;
 }
 
 /** Whether the environment tet was started with — what every tab would inherit — has the name. One

@@ -8,8 +8,10 @@ export interface Platform {
   readonly id: "win32" | "darwin" | "linux";
 
   // Files and names
-  /** Paths and environment variable names compare regardless of case (NTFS, the win32 env). */
-  readonly ignoresCase: boolean;
+  /** Paths compare regardless of case, as NTFS and APFS take them by default. */
+  readonly pathsIgnoreCase: boolean;
+  /** Environment variable names compare regardless of case, as the win32 environment takes them. */
+  readonly envNamesIgnoreCase: boolean;
   /** The native path separator, for a path handed back to the user. */
   readonly pathSeparator: "\\" | "/";
   /** Absolute paths start with a drive letter (`C:\`), which a sandbox mounts as `/c/`. */
@@ -90,7 +92,8 @@ const POSIX = {
 
 export const WINDOWS: Platform = {
   id: "win32",
-  ignoresCase: true,
+  pathsIgnoreCase: true,
+  envNamesIgnoreCase: true,
   pathSeparator: "\\",
   driveLetters: true,
   executableByExtension: true,
@@ -130,7 +133,8 @@ const POSIX_INSTALL = "curl -fsSL https://raw.githubusercontent.com/samil-kale/t
 export const MAC: Platform = {
   ...POSIX,
   id: "darwin",
-  ignoresCase: false,
+  pathsIgnoreCase: true,
+  envNamesIgnoreCase: false,
   pathSeparator: "/",
   driveLetters: false,
   executableByExtension: false,
@@ -162,7 +166,8 @@ export const MAC: Platform = {
 export const LINUX: Platform = {
   ...POSIX,
   id: "linux",
-  ignoresCase: false,
+  pathsIgnoreCase: false,
+  envNamesIgnoreCase: false,
   pathSeparator: "/",
   driveLetters: false,
   executableByExtension: false,

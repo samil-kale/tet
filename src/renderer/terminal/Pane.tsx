@@ -1,10 +1,11 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { isWorking } from "../../shared/types";
 import type { AgentId, AgentInfo, ProjectRef, TerminalDescriptor } from "../../shared/types";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
-import { ContextMenu, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
+import { agentName } from "../ui/use-agents";
+import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { baseName } from "../paths";
@@ -121,7 +122,7 @@ export const Pane = memo(function Pane({
   onDropTab,
   onDragEnd
 }: PaneProps) {
-  const [plusMenu, setPlusMenu] = useState<{ x: number; y: number } | null>(null);
+  const plusMenu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom + 6 }));
   const tabMenu = useContextMenu<string>();
   const closeTabMenu = tabMenu.close;
   const strip = useRef<HTMLDivElement>(null);
@@ -222,9 +223,6 @@ export const Pane = memo(function Pane({
     [at]
   );
 
-  const agentName = (agentId: AgentId): string =>
-    agents.find((agent) => agent.id === agentId)?.displayName ?? agentId;
-
   /** The session title; a session-less agent's name; the editor tab's file name. */
   const tabLabel = (tab: PaneTab): string => {
     if (isEditorTab(tab)) {
@@ -234,7 +232,7 @@ export const Pane = memo(function Pane({
       return tab.title;
     }
     return agents.find((agent) => agent.id === tab.agentId)?.hasSessions === false
-      ? agentName(tab.agentId)
+      ? agentName(agents, tab.agentId)
       : "New session";
   };
 
@@ -244,8 +242,8 @@ export const Pane = memo(function Pane({
     }
     const lines =
       tab.status === "missing"
-        ? [`${agentName(tab.agentId)} was not found — install it and reopen the project`]
-        : [`${agentName(tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`];
+        ? [`${agentName(agents, tab.agentId)} was not found — install it and reopen the project`]
+        : [`${agentName(agents, tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`];
     if (tab.createdAt) {
       lines.push(`Created: ${formatIso(tab.createdAt)}`);
     }
@@ -480,15 +478,7 @@ export const Pane = memo(function Pane({
           <button
             className="icon-button"
             title="New session"
-            onMouseDown={(event) => {
-              event.stopPropagation();
-              // The menu's capture-phase outside-click handler already closed it; don't reopen.
-              if (plusMenu) {
-                return;
-              }
-              const rect = event.currentTarget.getBoundingClientRect();
-              setPlusMenu({ x: rect.left, y: rect.bottom + 6 });
-            }}
+            onMouseDown={plusMenu.open}
           >
             <PlusIcon />
           </button>
@@ -520,15 +510,7 @@ export const Pane = memo(function Pane({
       </div>
 
       {tabMenuOpen && tabMenu.render(tabMenuEntries)}
-      {plusMenu && (
-        <ContextMenu
-          x={plusMenu.x}
-          y={plusMenu.y}
-          entries={newSessionEntries()}
-          onClose={() => setPlusMenu(null)}
-          className="new-session-menu"
-        />
-      )}
+      {plusMenu.render(newSessionEntries, "new-session-menu")}
     </div>
   );
 });

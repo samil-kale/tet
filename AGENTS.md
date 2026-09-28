@@ -151,7 +151,7 @@ Must work on Windows, Linux and macOS; no OS-specific behaviour without an equiv
 others.
 
 - **What differs between them is a `Platform` member** (`src/shared/platform.ts`: `WINDOWS`, `MAC`,
-  `LINUX`), named by what it means (`ignoresCase`, `spawnsThroughCmd`, `appBundle`), never by
+  `LINUX`), named by what it means (`pathsIgnoreCase`, `spawnsThroughCmd`, `appBundle`), never by
   which OS it is. Main reads `PLATFORM` (`host-platform.ts`), the window its own
   (`renderer/platform.ts`); nothing else asks for `process.platform` or `navigator.platform`, and
   the id is data alone (tet.json's `os`, the app's info) — `install.test.ts`, testing each OS's own

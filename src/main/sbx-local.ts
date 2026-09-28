@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../shared/types";
 import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
@@ -42,17 +41,14 @@ function isEmptyKnowledge(knowledge: SbxKnowledgeConfig): boolean {
   return JSON.stringify(knowledge) === JSON.stringify(EMPTY_SBX_KNOWLEDGE);
 }
 
-/** A project's entry as read; one holding its secrets' values alone reads as those secrets. */
+/** A project's entry as read. */
 function toLocal(project: Record<string, unknown>): StoredSbxLocal {
-  if (isRecord(project.secrets) || isRecord(project.variables) || isRecord(project.knowledge)) {
-    const local: StoredSbxLocal = { secrets: stringsOf(project.secrets), variables: stringsOf(project.variables) };
-    const knowledge = toKnowledge(project.knowledge);
-    if (knowledge) {
-      local.knowledge = knowledge;
-    }
-    return local;
+  const local: StoredSbxLocal = { secrets: stringsOf(project.secrets), variables: stringsOf(project.variables) };
+  const knowledge = toKnowledge(project.knowledge);
+  if (knowledge) {
+    local.knowledge = knowledge;
   }
-  return { secrets: stringsOf(project), variables: {} };
+  return local;
 }
 
 /**
@@ -68,19 +64,7 @@ export class SbxLocalStore {
 
   constructor(dataRoot: string) {
     this.file = path.join(dataRoot, "sbx-local.json");
-    // The file under its other name, whose shape `toLocal` reads. Read in place where it cannot be
-    // renamed, so no value is lost; the next save writes the new file.
-    const legacy = path.join(dataRoot, "sbx-secrets.json");
-    if (!fs.existsSync(this.file) && fs.existsSync(legacy)) {
-      try {
-        fs.renameSync(legacy, this.file);
-      } catch (error) {
-        console.error("[tet] could not rename sbx-secrets.json:", error);
-        this.load(legacy);
-        return;
-      }
-    }
-    this.load(this.file);
+    this.load();
   }
 
   /** The env names holding a value for the project that can still be decrypted — the ones a spawn
@@ -168,8 +152,8 @@ export class SbxLocalStore {
     this.projects = next;
   }
 
-  private load(file: string): void {
-    const parsed = readJson(file);
+  private load(): void {
+    const parsed = readJson(this.file);
     if (isRecord(parsed)) {
       for (const [projectId, project] of Object.entries(parsed)) {
         if (isRecord(project)) {

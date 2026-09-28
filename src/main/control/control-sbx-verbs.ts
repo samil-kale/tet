@@ -101,7 +101,7 @@ export function sbxVerbs(
    *  (sbxVariableRefusal), names compared as this machine does. */
   const refuseVariables = (variables: SbxVariable[], secrets: SbxSecret[]): void => {
     variables.forEach((variable, index) => {
-      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), secrets, PLATFORM.ignoresCase);
+      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), secrets, PLATFORM.envNamesIgnoreCase);
       if (refusal) {
         throw new ControlError("bad_args", `${refusal}: ${variable.env}`);
       }

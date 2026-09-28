@@ -153,16 +153,8 @@ export const ChangesList = memo(function ChangesList({ resolved, state, act, ask
     [changes, query]
   );
 
-  // Reset on a repository or worktree switch, in render, so the previous selection never paints.
-  const [shownKey, setShownKey] = useState(resolved.key);
-  if (shownKey !== resolved.key) {
-    setShownKey(resolved.key);
-    setSelected([]);
-    setAnchor(null);
-  }
-
-  // Drop files no longer changed, or a later change reappears pre-selected. In render as well, and
-  // as an updater, so it queues behind the reset above.
+  // Drop files no longer changed, or a later change reappears pre-selected. In render, so the stale
+  // selection never paints.
   const [prunedFor, setPrunedFor] = useState(changes);
   if (prunedFor !== changes) {
     setPrunedFor(changes);

@@ -8,6 +8,7 @@ import { PLATFORM } from "../src/main/host-platform";
 import {
   addExclude,
   addFolder,
+  readChanged,
   readCommands,
   readExplorerView,
   readSbxConfig,
@@ -88,6 +89,20 @@ describe("readCommands", () => {
     assert.equal(fs.readFileSync(file(), "utf8"), "{ not json", "untouched");
     put(JSON.stringify({ commands: ["npm run lint"] }));
     assert.deepEqual(await readCommands(root), [{ command: "npm run lint" }], "fixed, it is read again");
+  });
+
+  it("answers a change with its problem and the last readable contents, none where it never was", async () => {
+    put("{ not json");
+    assert.deepEqual(await readChanged(root), { problem: "tet.json is not valid JSON" });
+    put(JSON.stringify({ commands: ["npm test"], sbx: { enabled: true } }));
+    const read = await readChanged(root);
+    assert.equal(read.problem, undefined);
+    assert.deepEqual(read.commands, [{ command: "npm test" }]);
+    assert.equal(read.sbx?.enabled, true);
+    put("{ not json");
+    const broken = await readChanged(root);
+    assert.equal(broken.problem, "tet.json is not valid JSON");
+    assert.deepEqual(broken.commands, [{ command: "npm test" }]);
   });
 
   it("refuses to read a file broken before it was ever readable", async () => {

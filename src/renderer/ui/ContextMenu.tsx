@@ -58,6 +58,29 @@ export function useContextMenu<T>() {
   return { open, close, render, target: menu?.target };
 }
 
+/** Where a menu opened from a button goes, worked out from the button's box. */
+type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight">;
+
+/**
+ * A menu opened from a button: `open` as the button's `onMouseDown`, `place` saying where from its
+ * box; `render` where the menu goes, with its entries. A press on the button while the menu is up
+ * leaves it closed: the menu's capture-phase outside-click handler closed it already.
+ */
+export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace) {
+  const [menu, setMenu] = useState<AnchoredPlace | null>(null);
+  const open = (event: React.MouseEvent<HTMLElement>): void => {
+    event.stopPropagation();
+    if (menu) {
+      return;
+    }
+    setMenu(place(event.currentTarget.getBoundingClientRect()));
+  };
+  const close = useCallback(() => setMenu(null), []);
+  const render = (entries: () => ContextMenuEntry[], className: string): ReactNode =>
+    menu && <ContextMenu {...menu} entries={entries()} onClose={close} className={className} />;
+  return { open, render, isOpen: menu !== null };
+}
+
 export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
   const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);

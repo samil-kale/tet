@@ -25,7 +25,7 @@ import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { useRunning } from "../ui/use-running";
 import { PLATFORM } from "../platform";
-import { atLeastOne, EditRow, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
+import { atLeastOne, EditRow, firstMark, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 
 interface SettingsDialogProps {
@@ -77,7 +77,7 @@ function envMarks(rows: EnvRow[]): Map<string, string> {
   for (const row of rows) {
     const edit = envEdit(row);
     if (edit) {
-      const refusal = envRowRefusal(edit, before, PLATFORM.ignoresCase);
+      const refusal = envRowRefusal(edit, before, PLATFORM.envNamesIgnoreCase);
       if (refusal) {
         marks.set(row.id, refusal);
       }
@@ -194,38 +194,33 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
    *  tet.json, not about one of the switches on the Files tab. */
   const { busy: saving, refused, submit: save, changing } = useSubmit(
     async () => {
-      try {
-        if (variablesEdited.current) {
-          const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
-          const refusal = await window.tet.environment.save(rows);
-          if (refusal) {
-            return refusal;
-          }
-          variablesEdited.current = false;
+      if (variablesEdited.current) {
+        const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
+        const refusal = await window.tet.environment.save(rows);
+        if (refusal) {
+          return refusal;
         }
-        const loaded = loadedExplorer.current;
-        if (activeProject && explorerSettings && loaded) {
-          for (const key of EXPLORER_KEYS) {
-            if (explorerSettings[key] === loaded[key]) {
-              continue;
-            }
-            const refused = refusal(
-              await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]),
-              "Could not update tet.json"
-            );
-            if (refused !== undefined) {
-              return refused;
-            }
-          }
-        }
-        if (Object.keys(edits.current).length > 0) {
-          await window.tet.settings.patch(edits.current);
-        }
-        return undefined;
-      } catch (error) {
-        // A throw would only clear the bar (useSubmit): said where a refusal is.
-        return errorMessage(error);
+        variablesEdited.current = false;
       }
+      const loaded = loadedExplorer.current;
+      if (activeProject && explorerSettings && loaded) {
+        for (const key of EXPLORER_KEYS) {
+          if (explorerSettings[key] === loaded[key]) {
+            continue;
+          }
+          const refused = refusal(
+            await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]),
+            "Could not update tet.json"
+          );
+          if (refused !== undefined) {
+            return refused;
+          }
+        }
+      }
+      if (Object.keys(edits.current).length > 0) {
+        await window.tet.settings.patch(edits.current);
+      }
+      return undefined;
     },
     () => {
       onClose();
@@ -281,8 +276,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const envRows = typedRows("variable", BLANK_ENV_ROW, editVariables);
 
   const envRowMarks = useMemo(() => envMarks(variables), [variables]);
-  // As in the sbx dialog: Save waits for every marked row, and the tab repeats the mark.
-  const blocked = envRowMarks.values().next().value;
+  const blocked = firstMark(envRowMarks.values());
   const tabs = useMemo(() => TABS.map((entry) => (entry.id === "environment" ? { ...entry, mark: blocked } : entry)), [blocked]);
 
   // Nothing of it shown while it could not be read.

@@ -14,7 +14,7 @@ import {
   useSbxProblems,
   type FieldsState
 } from "./SbxSettingsFields";
-import { SbxAccounts, accountsBlocked, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
+import { SbxAccounts, accountMarks, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { confirmed, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
@@ -22,7 +22,7 @@ import { Checkbox, DialogError } from "../ui/Field";
 import { useRunning } from "../ui/use-running";
 import { useAgents } from "../ui/use-agents";
 import { LandmarkIcon } from "../ui/icons";
-import { patched } from "../ui/RowSection";
+import { firstMark, patched } from "../ui/RowSection";
 
 interface SbxSettingsDialogProps {
   project: Project;
@@ -261,7 +261,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const tabbed = phase.kind === "ready" || phase.kind === "signed-out";
   const busy = phase.kind === "checking" || phase.kind === "initializing-policy" || saving || rechecking;
   // The access token rows count in every phase showing Save, signed out too.
-  const blocked = accountsBlocked(accounts) ?? (phase.kind === "ready" ? saveBlocked(state) : undefined);
+  const accountRowMarks = useMemo(() => accountMarks(accounts), [accounts]);
+  const blocked = firstMark(accountRowMarks.values()) ?? (phase.kind === "ready" ? saveBlocked(state) : undefined);
   const organization = phase.kind === "ready" ? phase.organization : undefined;
   // Asked from the moment the rows are loaded, not when their tab is opened; not while sandboxing
   // is off, which applies none of them.
@@ -282,6 +283,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     <SbxAccounts
       rows={accounts}
       setRows={editAccounts}
+      marks={accountRowMarks}
       signedIn={signedIn}
       signedInUser={signedInUser}
       busy={busy}

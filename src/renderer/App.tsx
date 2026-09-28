@@ -25,7 +25,7 @@ import { clearTerminal, disposeRefTerminals, setRevealHandler } from "./terminal
 import { NO_IDS, useSessionMarks } from "./terminal/use-session-marks";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
-import { useAgents } from "./ui/use-agents";
+import { agentName, useAgents } from "./ui/use-agents";
 import { forget, sameList, stableRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
 import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
@@ -55,7 +55,7 @@ function requesterOf(
 ): string {
   const resolved = request.ref && resolvedRefs[projectRefKey(request.ref)];
   const tab = resolved && tabs[resolved.key]?.find((entry) => entry.tabId === request.tabId);
-  const agent = tab && (agents.find((entry) => entry.id === tab.agentId)?.displayName ?? tab.agentId);
+  const agent = tab && agentName(agents, tab.agentId);
   const who = agent ? (tab.title ? `${agent} (${tab.title})` : agent) : "An agent";
   return resolved ? `${who} in ${resolved.name}` : who;
 }

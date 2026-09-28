@@ -37,6 +37,17 @@ const REFRESH_DEBOUNCE_MS = 250;
 /** Least time between two finished refreshes, or continuous change runs them back to back. The git
  *  starts are the cost (git.ts's `readState`). */
 const REFRESH_MIN_INTERVAL_MS = 2000;
+
+/** Replaces `timer` with one running `run` once events settle, and at least REFRESH_MIN_INTERVAL_MS
+ *  after `lastAt`, when it last ran. */
+function settle(
+  timer: ReturnType<typeof setTimeout> | undefined,
+  lastAt: number,
+  run: () => void
+): ReturnType<typeof setTimeout> {
+  clearTimeout(timer);
+  return setTimeout(run, Math.max(REFRESH_DEBOUNCE_MS, lastAt + REFRESH_MIN_INTERVAL_MS - Date.now()));
+}
 /** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
  *  from" merges what the last fetch brought, whatever the host. */
 const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
@@ -353,15 +364,13 @@ export class Repository {
   /** For the watcher: refreshes once events settle, at least REFRESH_MIN_INTERVAL_MS after the last
    *  one finished. A refresh underway is not joined — it reschedules when it read too early. */
   private scheduleRefresh(): void {
-    clearTimeout(this.debounceTimer);
-    const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastRefreshAt + REFRESH_MIN_INTERVAL_MS - Date.now());
-    this.debounceTimer = setTimeout(() => {
+    this.debounceTimer = settle(this.debounceTimer, this.lastRefreshAt, () => {
       if (this.inflight) {
         this.refreshPending = true;
         return;
       }
       void this.runRefresh();
-    }, delay);
+    });
   }
 
   /** One command at a time, refreshing after: two race for the index lock. Another arriving
@@ -868,53 +877,10 @@ export class Repository {
 
   private startWatching(): void {
     try {
-      this.watcher = fs.watch(this.at.path, { recursive: true }, (event, filename) => {
-        const name = filename?.toString();
-        if (name && isIgnoredEvent(name)) {
-          return;
-        }
-        // The retry loop picks the directory back up when it reappears.
-        if (watchedDirectoryGone(this.at.path, name)) {
-          this.closeWatchers();
-          this.retryWatching();
-          return;
-        }
-        // Events arrive, so the next failure backs off from the start.
-        this.watchRetryDelay = WATCH_RETRY_MS;
-        if (name && /^\.git[\\/]config$/.test(name)) {
-          this.configStale = true;
-        }
-        if (name === PROJECT_FILE) {
-          // Debounced: the file is written in place, and a read mid-write finds half of it.
-          clearTimeout(this.commandsTimer);
-          this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);
-        }
-        // A path appearing or going is "rename", a write only "change", so an edit never re-lists
-        // the tree. Nothing under .git is in it. An ignore file's edit re-lists whatever the event,
-        // as it hides or shows other paths (listIgnored).
-        if (name && ((event === "rename" && !/^\.git(?:[\\/]|$)/.test(name)) || isIgnoreFile(name))) {
-          this.scheduleFilesChanged();
-        }
-        // Any event: writing beside and renaming into place reports "rename", not "change". The
-        // size check first: this runs for every event under the root, mostly with no file open.
-        const watchedFile = this.watchedFiles.size > 0 ? name?.replace(/\\/g, "/") : undefined;
-        if (watchedFile !== undefined && this.watchedFiles.has(watchedFile)) {
-          clearTimeout(this.watchedFileTimers.get(watchedFile));
-          this.watchedFileTimers.set(
-            watchedFile,
-            setTimeout(() => {
-              this.watchedFileTimers.delete(watchedFile);
-              this.onFileChanged(watchedFile);
-            }, REFRESH_DEBOUNCE_MS)
-          );
-        }
-        this.scheduleRefresh();
-      });
-      this.watcher.on("error", (error) => {
-        console.error(`[tet] watcher failed for ${this.at.path}:`, error);
-        this.closeWatchers();
-        this.retryWatching();
-      });
+      this.watcher = fs.watch(this.at.path, { recursive: true }, (event, filename) =>
+        this.onGitEvent(filename?.toString(), event)
+      );
+      this.watcher.on("error", (error) => this.onWatchError(this.at.path, error));
       this.watchLinkedGitDir();
     } catch (error) {
       // A filesystem that can't watch recursively throws here instead of emitting an error. The
@@ -938,35 +904,76 @@ export class Repository {
     }
     const dir = linked.commonDir ?? linked.gitDir;
     const ownWorktree = linked.commonDir === undefined ? undefined : path.basename(linked.gitDir);
-    this.gitDirWatcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
-      const name = filename === null ? undefined : `.git/${filename.toString().replace(/\\/g, "/")}`;
-      if (name && isIgnoredEvent(name, ownWorktree)) {
+    this.gitDirWatcher = fs.watch(dir, { recursive: true }, (_event, filename) =>
+      this.onGitEvent(filename === null ? undefined : `.git/${filename.toString().replace(/\\/g, "/")}`, undefined, ownWorktree)
+    );
+    this.gitDirWatcher.on("error", (error) => this.onWatchError(dir, error));
+  }
+
+  /**
+   * An event of either watcher: `name` relative to the root, the linked git directory's as
+   * `.git/…`. `rootEvent` is the root watcher's event type, undefined for the git directory's;
+   * `ownWorktree` as `isIgnoredEvent` takes it.
+   */
+  private onGitEvent(name: string | undefined, rootEvent?: fs.WatchEventType, ownWorktree?: string): void {
+    if (name && isIgnoredEvent(name, ownWorktree)) {
+      return;
+    }
+    if (rootEvent !== undefined) {
+      // The retry loop picks the directory back up when it reappears.
+      if (watchedDirectoryGone(this.at.path, name)) {
+        this.onWatchError(this.at.path);
         return;
       }
-      if (name === ".git/config") {
-        this.configStale = true;
-      }
-      // A worktree's exclude file is the common one, which only this watcher sees.
-      if (name && isIgnoreFile(name)) {
-        this.scheduleFilesChanged();
-      }
-      this.scheduleRefresh();
-    });
-    this.gitDirWatcher.on("error", (error) => {
+      // Events arrive, so the next failure backs off from the start.
+      this.watchRetryDelay = WATCH_RETRY_MS;
+    }
+    if (name && /^\.git[\\/]config$/.test(name)) {
+      this.configStale = true;
+    }
+    if (name === PROJECT_FILE) {
+      // Debounced: the file is written in place, and a read mid-write finds half of it.
+      clearTimeout(this.commandsTimer);
+      this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);
+    }
+    // A path appearing or going is "rename", a write only "change", so an edit never re-lists the
+    // tree. Nothing under .git is in it. An ignore file's edit re-lists whatever the event, as it
+    // hides or shows other paths (listIgnored) — a worktree's exclude file is the common one, which
+    // only the git directory's watcher sees.
+    if (name && ((rootEvent === "rename" && !/^\.git(?:[\\/]|$)/.test(name)) || isIgnoreFile(name))) {
+      this.scheduleFilesChanged();
+    }
+    // Any event: writing beside and renaming into place reports "rename", not "change". The size
+    // check first: this runs for every event under the root, mostly with no file open.
+    const watchedFile = rootEvent !== undefined && this.watchedFiles.size > 0 ? name?.replace(/\\/g, "/") : undefined;
+    if (watchedFile !== undefined && this.watchedFiles.has(watchedFile)) {
+      clearTimeout(this.watchedFileTimers.get(watchedFile));
+      this.watchedFileTimers.set(
+        watchedFile,
+        setTimeout(() => {
+          this.watchedFileTimers.delete(watchedFile);
+          this.onFileChanged(watchedFile);
+        }, REFRESH_DEBOUNCE_MS)
+      );
+    }
+    this.scheduleRefresh();
+  }
+
+  /** A watcher failed, logged, or (no `error`) its directory went: both watchers are put back. */
+  private onWatchError(dir: string, error?: unknown): void {
+    if (error !== undefined) {
       console.error(`[tet] watcher failed for ${dir}:`, error);
-      this.closeWatchers();
-      this.retryWatching();
-    });
+    }
+    this.closeWatchers();
+    this.retryWatching();
   }
 
   /** Tells the Explorer to re-list, debounced and spaced like the refresh. */
   private scheduleFilesChanged(): void {
-    clearTimeout(this.filesTimer);
-    const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastFilesChangedAt + REFRESH_MIN_INTERVAL_MS - Date.now());
-    this.filesTimer = setTimeout(() => {
+    this.filesTimer = settle(this.filesTimer, this.lastFilesChangedAt, () => {
       this.lastFilesChangedAt = Date.now();
       this.onFilesChanged();
-    }, delay);
+    });
   }
 
   private closeWatchers(): void {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AgentInfo } from "../../shared/types";
+import type { AgentId, AgentInfo } from "../../shared/types";
 
 /**
  * Asked once per window, not per view: the list (agents and their flags, `AgentInfo`)
@@ -23,4 +23,9 @@ export function useAgents(): AgentInfo[] {
     };
   }, []);
   return agents;
+}
+
+/** An agent's name as the user reads it; its id while the list has not landed. */
+export function agentName(agents: readonly AgentInfo[], id: AgentId): string {
+  return agents.find((agent) => agent.id === id)?.displayName ?? id;
 }

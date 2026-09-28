@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { errorMessage } from "../../shared/errors";
 import { DialogError } from "./Field";
 import { IconButton } from "./IconButton";
 import { CircleAlertIcon, CloseIcon } from "./icons";
@@ -8,9 +9,9 @@ import { useRunning } from "./use-running";
 import { useCoversWindow } from "./window-covered";
 
 /**
- * A dialog's answer as it runs (`PromptOptions.submit`): `run` answers what refused it, or nothing
- * once it went through, and `onDone` follows (closing the dialog). `busy` is the frame's bar
- * meanwhile; `refused` is the frame's `error` (or a field's), held so what was typed can be
+ * A dialog's answer as it runs (`PromptOptions.submit`): `run` answers what refused it, or throws
+ * it, or nothing once it went through, and `onDone` follows (closing the dialog). `busy` is the
+ * frame's bar meanwhile; `refused` is the frame's `error` (or a field's), held so what was typed can be
  * corrected, and cleared by the next change — which is about to make it wrong: every edit goes
  * through a setter wrapped in `changing`. The one rule for every dialog, question and card alike.
  */
@@ -30,7 +31,7 @@ export function useSubmit(
       return;
     }
     setRefused(undefined);
-    const message = await holdBusy(run);
+    const message = await holdBusy(run).catch((error: unknown) => errorMessage(error));
     if (message === undefined) {
       onDone?.();
     } else {
@@ -72,7 +73,7 @@ export interface DialogPrimary {
 }
 
 /** A button beside the primary one, e.g. "Check again". */
-export interface DialogAction {
+interface DialogAction {
   label: string;
   run: () => void;
   disabled?: boolean;

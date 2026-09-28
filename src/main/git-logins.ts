@@ -3,7 +3,7 @@ import { urlOrigin, urlUsername } from "../shared/git-url";
 import type { GitActionResult, GitLogin } from "../shared/types";
 import { git } from "./git/git-client";
 import type { NetworkLogin } from "./git/git";
-import { isRecord, logFailure, readJson, writeJson } from "./json-file";
+import { logFailure, readRows, writeJson } from "./json-file";
 import { seal, unseal } from "./sealed";
 
 /** What the file holds: one login per origin and username, its password encrypted by the OS and
@@ -109,16 +109,7 @@ export class GitLoginStore {
   }
 
   private load(): void {
-    const parsed = readJson(this.file);
-    if (Array.isArray(parsed)) {
-      this.logins = parsed.filter(
-        (entry): entry is StoredLogin =>
-          isRecord(entry) &&
-          typeof entry.origin === "string" &&
-          typeof entry.username === "string" &&
-          typeof entry.password === "string"
-      );
-    }
+    this.logins = readRows<StoredLogin>(this.file, ["origin", "username", "password"]);
   }
 
   private save(): void {

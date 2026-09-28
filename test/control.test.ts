@@ -117,7 +117,7 @@ let workDir: string;
 let port: number;
 let server: { close: () => Promise<void> };
 let settings: AppSettings;
-/** What the faked applyTheme answers. */
+/** Whether the faked settings patch says a theme waits for a restart. */
 let themeWaits = false;
 /** What the faked renameTab answers: an agent's refusal, as a real one can give. */
 let refuseRename: string | undefined;
@@ -234,8 +234,10 @@ function deps(): ControlDeps {
     store: { list: () => projects, get: (id) => projects.find((project) => project.id === id) },
     settings: {
       get: () => settings,
+      // Stands in for main.ts's settingsAccess, which applies the theme and answers whether it waits.
       patch: (edits) => {
         settings = withSettings(settings, edits);
+        return themeWaits;
       }
     },
     sessions: {
@@ -286,8 +288,6 @@ function deps(): ControlDeps {
     notify: (title, body, target) => {
       calls.notified.push([title, body, target]);
     },
-    // Stands in for main.ts's applyTheme.
-    applyTheme: () => themeWaits,
     environment: {
       list: () => envNames.map((name) => ({ name, overridesMachine: name === "PATH" })),
       remove: (name) => {
@@ -1251,7 +1251,7 @@ describe("tet-ctl against the control server", () => {
     // On win32 one variable, as the machine counts them.
     calls.envAsks.length = 0;
     await tetCtl(["env-request", "GITHUB_TOKEN", "github_token"]);
-    assert.deepEqual(calls.envAsks[0].names, PLATFORM.ignoresCase ? ["GITHUB_TOKEN"] : ["GITHUB_TOKEN", "github_token"]);
+    assert.deepEqual(calls.envAsks[0].names, PLATFORM.envNamesIgnoreCase ? ["GITHUB_TOKEN"] : ["GITHUB_TOKEN", "github_token"]);
   });
 
   it("takes the environment dialog down once the asking CLI is gone", async () => {

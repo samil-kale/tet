@@ -19,7 +19,7 @@ import { git } from "./git/git-client";
 import { readHeadBranch, readMainWorktree } from "./git/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
 import { inTurn } from "./in-turn";
-import { isRecord, logFailure, readJson, writeJson } from "./json-file";
+import { logFailure, readRows, writeJson } from "./json-file";
 import { onDisk } from "./path-inside";
 import { newWorktreeKey, ownedWorktreeKeys, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./project-dirs";
 import { removeRefSandboxes } from "./sbx";
@@ -180,7 +180,7 @@ export async function openStoredProjects(deps: ProjectDeps): Promise<void> {
 /** Stops a repository's or worktree's terminals and git; resolves once its sessions and git
  *  commands have ended, so a worktree's folder is removed only then. Its records go once the
  *  sessions have ended: a stopping tab still prints. */
-export function closeProjectRef({ repositories, sessions, records }: ProjectDeps, ref: ProjectRef): Promise<void> {
+function closeProjectRef({ repositories, sessions, records }: ProjectDeps, ref: ProjectRef): Promise<void> {
   const sessionsEnded = sessions.close(ref).finally(() => records.forget(ref));
   return Promise.all([sessionsEnded, repositories.close(ref)]).then(() => undefined);
 }
@@ -480,25 +480,9 @@ export class ProjectStore implements ProjectLookup {
   }
 
   private load(): void {
-    const parsed = readJson(this.file);
-    if (!Array.isArray(parsed)) {
-      return;
-    }
-    this.projects = parsed
-      .filter(
-        (entry) =>
-          isRecord(entry) &&
-          typeof entry.id === "string" &&
-          typeof entry.path === "string" &&
-          typeof entry.name === "string" &&
-          // A worktree stored as a project of its own, with `mainPath` or without.
-          entry.mainPath === undefined &&
-          readMainWorktree(entry.path) === undefined
-      )
-      .map((entry) => {
-        const { id, path: mainPath, name } = entry as { id: string; path: string; name: string };
-        return { id, path: mainPath, name, worktrees: this.ownWorktrees(id) };
-      });
+    this.projects = readRows<{ id: string; path: string; name: string }>(this.file, ["id", "path", "name"]).map(
+      ({ id, path: mainPath, name }) => ({ id, path: mainPath, name, worktrees: this.ownWorktrees(id) })
+    );
   }
 
   /** Throws when the file cannot be written, the projects unchanged. */

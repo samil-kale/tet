@@ -256,6 +256,20 @@ describe("a repository, from init on", () => {
     run("branch", "-q", "-D", "from-remote");
   });
 
+  it("counts what its upstream has beyond it, and takes an upstream since deleted for none", async () => {
+    run("switch", "-q", "-c", "behind", "origin/main~1");
+    run("branch", "-q", "--set-upstream-to=origin/main");
+    let state = await readState(cwd);
+    assert.deepEqual([state.head, state.upstream, state.ahead, state.behind], ["behind", "origin/main", 0, 1]);
+    run("update-ref", "refs/remotes/origin/doomed", "HEAD");
+    run("branch", "-q", "--set-upstream-to=origin/doomed");
+    run("update-ref", "-d", "refs/remotes/origin/doomed");
+    state = await readState(cwd);
+    assert.deepEqual([state.upstream, state.ahead, state.behind], [undefined, 0, 0]);
+    run("switch", "-q", "main");
+    run("branch", "-q", "-D", "behind");
+  });
+
   it("hides what .gitignore hides, added the way the menu adds it", async () => {
     write("debug.log", "noise\n");
     assert.deepEqual(await ignorePath(cwd, "debug.log", "extension"), { ok: true });

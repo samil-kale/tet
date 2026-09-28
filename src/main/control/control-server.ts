@@ -6,7 +6,7 @@ import { errorMessage } from "../../shared/errors";
 import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, ControlVerbName, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isWorking, sameProjectRef } from "../../shared/types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isWorking, sameProjectRef, worktreeOf } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -34,7 +34,7 @@ import type { AgentDefinition } from "../agents/agent";
 import type { ToastTarget } from "../notifications";
 import type { SbxReading } from "../sbx-status";
 import { CALLER_SIDES, HOST_CALLER, type CallerSide } from "./caller-side";
-import { isEnvName, isReservedName } from "../../shared/env-rules";
+import { isEnvName, reservedRefusal } from "../../shared/env-rules";
 import { machineName } from "../env-names";
 import type { EnvRequests, EnvStore } from "../environment";
 import { repositoryRelative } from "../path-inside";
@@ -97,8 +97,6 @@ export interface ControlDeps {
    *  none). Must never throw: `hook` toasts on the way to answering a turn. A click brings
    *  `target` to the front. */
   notify(title: string, body: string, target?: ToastTarget): void;
-  /** main.ts's `applyTheme`: returns whether a restart is still needed. */
-  applyTheme(): boolean;
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;
@@ -370,17 +368,15 @@ function verbs(deps: ControlDeps): Handlers {
       if (!theme) {
         throw new ControlError("bad_args", `unknown theme: ${id} (see list-themes)`);
       }
-      settings.patch({ [themeKey(theme.kind)]: id });
       // Shown at once if the window is in that kind. The flag is for the agent to relay; restarting
       // is the user's call.
-      return { result: { saved: true, restartRequired: deps.applyTheme() } };
+      return { result: { saved: true, restartRequired: settings.patch({ [themeKey(theme.kind)]: id }) } };
     },
 
     "settings-set-color-scheme": (args) => {
       const colorScheme = oneOf(args, "scheme", "color scheme", COLOR_SCHEMES);
-      settings.patch({ colorScheme });
       // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
-      return { result: { saved: true, restartRequired: deps.applyTheme() } };
+      return { result: { saved: true, restartRequired: settings.patch({ colorScheme }) } };
     },
 
     "settings-set-prompt": (args) => {
@@ -435,7 +431,7 @@ function verbs(deps: ControlDeps): Handlers {
     "worktree-add": async (args, caller) => {
       const branch = text(args, "branch", "branch");
       const added = await deps.addWorktree(project(args, caller).id, branch);
-      const worktree = added.project?.worktrees.find((entry) => entry.key !== undefined && entry.key === added.worktree);
+      const worktree = added.project && worktreeOf(added.project, projectRef(added.project.id, added.worktree));
       if (!added.project || !worktree) {
         throw new ControlError("bad_args", added.error ?? "could not create the worktree");
       }
@@ -463,7 +459,7 @@ function verbs(deps: ControlDeps): Handlers {
     },
 
     "env-request": async (args, caller, _at, gone) => {
-      const names = Array.isArray(args.names) ? args.names.filter((name): name is string => typeof name === "string" && name !== "") : [];
+      const names = list(args, "names").filter((name) => name !== "");
       if (names.length === 0) {
         throw new ControlError("bad_args", "missing variable names: env-request NAME [NAME...]");
       }
@@ -471,9 +467,9 @@ function verbs(deps: ControlDeps): Handlers {
       if (invalid) {
         throw new ControlError("bad_args", `not an environment variable name: ${invalid}`);
       }
-      const reserved = names.find(isReservedName);
+      const reserved = names.map(reservedRefusal).find((refusal) => refusal !== undefined);
       if (reserved) {
-        throw new ControlError("bad_args", `${reserved} is TET's own to set in a tab (PATH, TET_*)`);
+        throw new ControlError("bad_args", reserved);
       }
       // Once per variable as the machine counts them: on win32 `a` and `A` are one.
       const unique = names.filter((name, index) => names.findIndex((other) => machineName(other) === machineName(name)) === index);

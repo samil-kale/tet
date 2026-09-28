@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { DEFAULT_THEME_IDS, THEMES, type ThemeKind } from "../shared/themes";
+import { DEFAULT_THEME_IDS, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../shared/types";
 import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../shared/types";
@@ -18,12 +18,12 @@ const DEFAULTS: AppSettings = {
   prompts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptSettings
 };
 
-/** Reading and editing the settings, all either transport does with them: `ControlDeps` takes
- *  this rather than the store, so `settings-get` and `settings-set` answer for the same contract
- *  the window's `settings:get`/`settings:patch` do. */
+/** Reading and editing the settings, all either transport does with them: both take this rather
+ *  than the store, so a change from `settings-set-*` reaches everything a change from the window's
+ *  `settings:patch` does (main.ts). `patch` returns whether a restart is still needed. */
 export interface SettingsAccess {
   get(): AppSettings;
-  patch(edits: SettingsEdits): void;
+  patch(edits: SettingsEdits): boolean;
 }
 
 /**
@@ -31,7 +31,7 @@ export interface SettingsAccess {
  * defensively: a key of the wrong type falls back to its default rather than reaching an agent as
  * `undefined`.
  */
-export class SettingsStore implements SettingsAccess {
+export class SettingsStore {
   private readonly file: string;
   private settings: AppSettings = DEFAULTS;
 
@@ -68,22 +68,14 @@ export class SettingsStore implements SettingsAccess {
   }
 }
 
-/** A single theme setting in the file: one theme id, or "system". */
-interface LegacyThemeSetting {
-  theme?: unknown;
-}
-
 /** Every key as the store holds it, from the dialog or the file. */
-function normalize(value: Partial<AppSettings> & LegacyThemeSetting): AppSettings {
-  // A single theme setting becomes its kind and that kind's theme; "system" or an unknown id
-  // does not.
-  const legacy = THEMES.find((theme) => theme.id === value.theme);
+function normalize(value: Partial<AppSettings>): AppSettings {
   return {
     notifications: booleans(value.notifications),
     editorKeybindingPreset: presetId(value.editorKeybindingPreset),
-    colorScheme: colorScheme(value.colorScheme ?? legacy?.kind),
-    darkTheme: themeId(value.darkTheme ?? (legacy?.kind === "dark" ? legacy.id : undefined), "dark"),
-    lightTheme: themeId(value.lightTheme ?? (legacy?.kind === "light" ? legacy.id : undefined), "light"),
+    colorScheme: colorScheme(value.colorScheme),
+    darkTheme: themeId(value.darkTheme, "dark"),
+    lightTheme: themeId(value.lightTheme, "light"),
     prompts: promptTexts(value.prompts)
   };
 }

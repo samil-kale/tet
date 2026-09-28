@@ -365,7 +365,7 @@ describe("pi's transcripts", () => {
     assert.deepEqual(sessions.map((s) => [s.id, s.title]), [["s1", "Still listed"]]);
   });
 
-  it("finds the directory whatever case pi was spawned with", { skip: !PLATFORM.ignoresCase && "win32 only" }, async () => {
+  it("finds the directory whatever case pi was spawned with", { skip: !PLATFORM.pathsIgnoreCase && "where paths ignore case" }, async () => {
     transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] }, encodeCwd(cwd).toLowerCase());
     assert.equal((await piSessionProvider.list(cwd))[0]?.id, "s1");
   });

@@ -20,10 +20,10 @@ export const TRANSCRIPT_SCAN_BYTES = 256 * 1024;
 /**
  * The directory `root/<encoded>` of an agent keeping one per repository (Claude Code, pi), or
  * undefined. The CLIs keep the path casing they saw (pi's drive letter, Claude Code's whole
- * path), so win32 matches case-insensitively. A missing root means no sessions, not a failure.
+ * path), so where paths ignore case the match does too. A missing root means no sessions, not a failure.
  */
 export async function findEncodedDir(root: string, encoded: string): Promise<string | undefined> {
-  const ignoreCase = PLATFORM.ignoresCase;
+  const ignoreCase = PLATFORM.pathsIgnoreCase;
   const wanted = ignoreCase ? encoded.toLowerCase() : encoded;
   let entries: string[];
   try {

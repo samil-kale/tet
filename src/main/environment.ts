@@ -4,7 +4,7 @@ import { errorMessage } from "../shared/errors";
 import type { ProjectRef, EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
-import { isRecord, writeJson } from "./json-file";
+import { hasStrings, writeJson } from "./json-file";
 import { PLATFORM } from "./host-platform";
 
 /** What the file holds: the variable plus its value in the clear, as every tab gets it anyway. */
@@ -19,12 +19,7 @@ function toInfo(entry: StoredVar): EnvVarInfo {
 }
 
 function isStoredVar(entry: unknown): entry is StoredVar {
-  return isRecord(entry) && typeof entry.name === "string" && typeof entry.text === "string";
-}
-
-/** A row whose value is encrypted by the OS rather than in the clear: dropped. */
-function isSealedVar(entry: unknown): boolean {
-  return isRecord(entry) && typeof entry.name === "string" && typeof entry.value === "string";
+  return hasStrings(entry, "name", "text");
 }
 
 /** The file as read: the rows understood, and the rest kept verbatim for the next write. */
@@ -80,7 +75,7 @@ export class EnvStore {
    * anything, naming the first row it cannot take (envEditRefusal).
    */
   edit(rows: EnvEdit[]): void {
-    const refusal = envEditRefusal(rows, PLATFORM.ignoresCase);
+    const refusal = envEditRefusal(rows, PLATFORM.envNamesIgnoreCase);
     if (refusal) {
       throw new Error(refusal);
     }
@@ -128,7 +123,7 @@ export class EnvStore {
     }
     return {
       variables: parsed.filter(isStoredVar),
-      others: parsed.filter((entry) => !isStoredVar(entry) && !isSealedVar(entry))
+      others: parsed.filter((entry) => !isStoredVar(entry))
     };
   }
 

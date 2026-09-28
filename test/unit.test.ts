@@ -179,7 +179,7 @@ describe("a tab of a missing agent", () => {
       manager.handleResize(tabId, 80, 24);
       await eventually("the tab shows missing", () => statuses.at(-1) === "missing", 10_000);
       fs.writeFileSync(path.join(project, "tet.json"), JSON.stringify({ sbx: { enabled: true } }));
-      await manager.sbxConfigChanged();
+      await manager.sbxConfigChanged(true);
       await eventually(() => `a start after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
       assert.ok(notices.some((notice) => /only runs in repo's SBX sandbox/.test(notice)), notices.join("\n"));
     });
@@ -238,7 +238,7 @@ describe("a terminal's environment", () => {
     }
   });
 
-  it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.ignoresCase }, () => {
+  it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
     process.env.TET_TEST_CASE = "machine";
     setStoredEnv(() => ({ tet_test_case: "stored" }));
     try {
@@ -299,7 +299,7 @@ describe("a terminal's environment", () => {
     assert.equal(Object.keys(env).filter((name) => name.toUpperCase() === "PATH").length, 1, "one PATH, not two");
   });
 
-  it("lets a saved command's PATH replace one spelled Path, where names ignore case", { skip: !PLATFORM.ignoresCase }, () => {
+  it("lets a saved command's PATH replace one spelled Path, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
     setControlEnv({}, "");
     // A tet started from the desktop inherits `Path`; the spelling a tet.json uses is its own.
     const env = buildEnv({ own: { Path: "inherited" }, envOverride: { PATH: "command" } });

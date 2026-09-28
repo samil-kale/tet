@@ -91,57 +91,43 @@ export function usePaneSize(key: string, initial: number, min: number): [number,
   );
 }
 
-/**
- * A pane's *share* of its container, restored on the next start — `initial` until dragged. A share,
- * not pixels, so it holds at any container size; the owner multiplies it by a live measurement and
- * turns `Sash`'s pixels back into one. Anything outside (0, 1) is ignored both ways: read, since
- * the user can edit it, and written, since a container too small for two panes has no share.
- */
-export function usePersistedShare(storageKey: string, initial: number): [number, (share: number) => void] {
-  const [share, setShare] = usePersistedNumber(storageKey, (stored) => restoredShare(stored, initial));
-  const set = useCallback(
-    (next: number) => {
-      if (next > 0 && next < 1) {
-        setShare(next);
-      }
-    },
-    [setShare]
-  );
-  return [share, set];
-}
-
 /** What storage holds as a share, `initial` when outside (0, 1) — see `usePersistedShare`. */
 function restoredShare(stored: number, initial: number): number {
   return Number.isFinite(stored) && stored > 0 && stored < 1 ? stored : initial;
 }
 
-/** One value per fixed key, read by every mounted `usePaneShare` of it, and its pending write. */
-const fixedShares = new Map<string, ReturnType<typeof createStore<number>>>();
-const fixedSharePersists = new Map<string, ReturnType<typeof setTimeout>>();
+/** One value per storage key, read by every mounted `usePersistedShare` of it, and its pending
+ *  write. */
+const shares = new Map<string, ReturnType<typeof createStore<number>>>();
+const sharePersists = new Map<string, ReturnType<typeof setTimeout>>();
 
-function fixedShare(storageKey: string, initial: number): ReturnType<typeof createStore<number>> {
-  let store = fixedShares.get(storageKey);
+function storedShare(storageKey: string, initial: number): ReturnType<typeof createStore<number>> {
+  let store = shares.get(storageKey);
   if (!store) {
     store = createStore(restoredShare(Number(localStorage.getItem(storageKey)), initial));
-    fixedShares.set(storageKey, store);
+    shares.set(storageKey, store);
   }
   return store;
 }
 
 /**
- * `usePersistedShare` under a fixed layout key, like `usePaneSize` — but one value for every view
- * using the key at once (each editor tab's preview): a drag in one resizes them all. The write
- * still waits for the drag to settle; one pending when a view unmounts is kept, the others show it.
+ * A pane's *share* of its container, restored on the next start — `initial` until dragged. A share,
+ * not pixels, so it holds at any container size; the owner multiplies it by a live measurement and
+ * turns `Sash`'s pixels back into one. Anything outside (0, 1) is ignored both ways: read, since
+ * the user can edit it, and written, since a container too small for two panes has no share.
+ *
+ * One value for every view using the key at once (each editor tab's preview): a drag in one resizes
+ * them all. The write waits for the drag to settle, as `usePaneSize`'s does; one pending when a view
+ * unmounts is kept, and the others show it.
  */
-export function usePaneShare(key: string, initial: number): [number, (share: number) => void] {
-  const storageKey = STORAGE_PREFIX + key;
-  const share = useStore(fixedShare(storageKey, initial));
+export function usePersistedShare(storageKey: string, initial: number): [number, (share: number) => void] {
+  const share = useStore(storedShare(storageKey, initial));
   const set = useCallback(
     (next: number) => {
       if (next > 0 && next < 1) {
-        fixedShare(storageKey, initial).set(next);
-        clearTimeout(fixedSharePersists.get(storageKey));
-        fixedSharePersists.set(
+        storedShare(storageKey, initial).set(next);
+        clearTimeout(sharePersists.get(storageKey));
+        sharePersists.set(
           storageKey,
           setTimeout(() => localStorage.setItem(storageKey, String(next)), PERSIST_MS)
         );
@@ -150,4 +136,9 @@ export function usePaneShare(key: string, initial: number): [number, (share: num
     [storageKey, initial]
   );
   return [share, set];
+}
+
+/** `usePersistedShare` under a fixed layout key, like `usePaneSize`. */
+export function usePaneShare(key: string, initial: number): [number, (share: number) => void] {
+  return usePersistedShare(STORAGE_PREFIX + key, initial);
 }

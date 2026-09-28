@@ -165,29 +165,28 @@ export async function unsetProjectId(cwd: string): Promise<GitActionResult> {
 type HeadState = Pick<RepositoryState, "head" | "detached" | "upstream" | "ahead" | "behind">;
 
 /**
- * The `--branch` status header: branch, upstream and drift — one process instead of a `rev-parse`
- * plus a `rev-list`. Only a detached HEAD needs a second call.
+ * The `--branch` status headers, by key: branch, commit, upstream and drift — one process instead of
+ * a `rev-parse` plus a `rev-list`, a detached HEAD included.
  */
-async function readHead(cwd: string, header: string): Promise<HeadState> {
-  const base = { upstream: undefined, ahead: 0, behind: 0 };
-  if (header === "HEAD (no branch)") {
-    const short = await git(cwd, ["rev-parse", "--short", "HEAD"]);
-    return { ...base, head: short.stdout.trim() || "HEAD", detached: true };
+function readHead(headers: Map<string, string>): HeadState {
+  const oid = headers.get("branch.oid") ?? "";
+  const branch = headers.get("branch.head") ?? "";
+  if (branch === "(detached)") {
+    // A fixed abbreviation: `rev-parse --short` would cost a process to lengthen an ambiguous one.
+    const head = /^[0-9a-f]+$/.test(oid) ? oid.slice(0, 7) : "HEAD";
+    return { head, detached: true, upstream: undefined, ahead: 0, behind: 0 };
   }
-  // Unborn branch: a prefix ("No commits yet on" or "Initial commit on"), then a normal header.
-  const branch = header.replace(/^(?:No commits yet on|Initial commit on) /, "");
-  // "<branch>...<upstream> [ahead 1, behind 2]", or plain "<branch>". A branch name holds neither
-  // "..." nor a space.
-  const [name, rest] = branch.split("...");
-  const tracking = /^(\S+)(?: \[(.*)\])?$/.exec(rest ?? "");
-  const divergence = tracking?.[2] ?? "";
+  // "+<ahead> -<behind>", only where the upstream ref exists: one the remote no longer has counts as
+  // none.
+  const drift = headers.get("branch.ab");
+  const counts = /^\+(\d+) -(\d+)$/.exec(drift ?? "");
   return {
-    head: name.split(" ")[0] || "HEAD",
+    // An unborn branch has its name here, and "(initial)" as its commit.
+    head: branch || "HEAD",
     detached: false,
-    // "[gone]": the remote no longer has the upstream; counts as none.
-    upstream: tracking && divergence !== "gone" ? tracking[1] : undefined,
-    ahead: Number(/ahead (\d+)/.exec(divergence)?.[1] ?? 0),
-    behind: Number(/behind (\d+)/.exec(divergence)?.[1] ?? 0)
+    upstream: drift !== undefined ? headers.get("branch.upstream") : undefined,
+    ahead: Number(counts?.[1] ?? 0),
+    behind: Number(counts?.[2] ?? 0)
   };
 }
 
@@ -394,7 +393,7 @@ function toChangeStatus(code: string): ChangeStatus {
   }
 }
 
-/** The changed files and, from the `--branch` header, HEAD — in one git process. */
+/** The changed files and, from the `--branch` headers, HEAD — in one git process. */
 async function readStatus(cwd: string): Promise<HeadState & { changes: FileChange[] }> {
   // --no-optional-locks: otherwise `git status` writes its stat cache, the watcher reports it, and
   // the refresh runs this again — forever. core.quotePath=false: non-ASCII paths unescaped.
@@ -403,7 +402,7 @@ async function readStatus(cwd: string): Promise<HeadState & { changes: FileChang
     "-c",
     "core.quotePath=false",
     "status",
-    "--porcelain=v1",
+    "--porcelain=v2",
     "-z",
     "--untracked-files=all",
     "--branch"
@@ -415,12 +414,35 @@ async function readStatus(cwd: string): Promise<HeadState & { changes: FileChang
   }
 
   const records = result.stdout.split("\0");
-  // The header is always the first record.
-  const header = records[0]?.startsWith("## ") ? records[0].slice(3) : "";
-  return {
-    ...(await readHead(cwd, header)),
-    changes: readChanges(header ? records.slice(1) : records)
-  };
+  // The headers, "# <key> <value>", always come first.
+  const headers = new Map<string, string>();
+  let first = 0;
+  for (; records[first]?.startsWith("# "); first++) {
+    const header = /^# (\S+) (.*)$/.exec(records[first]);
+    if (header) {
+      headers.set(header[1], header[2]);
+    }
+  }
+  return { ...readHead(headers), changes: readChanges(records.slice(first)) };
+}
+
+/** Per v2 status record kind, the fields before its path: "1" changed, "2" renamed or copied, "u"
+ *  unmerged, "?" untracked. */
+const PATH_FIELDS = new Map([
+  ["1", 8],
+  ["2", 9],
+  ["u", 10],
+  ["?", 1]
+]);
+
+/** A v2 status record's path: what follows its first `fields` space-separated fields — the path
+ *  itself may hold spaces. */
+function pathAfter(entry: string, fields: number): string {
+  let at = -1;
+  for (let field = 0; field < fields; field++) {
+    at = entry.indexOf(" ", at + 1);
+  }
+  return entry.slice(at + 1);
 }
 
 function readChanges(entries: string[]): FileChange[] {
@@ -430,13 +452,16 @@ function readChanges(entries: string[]): FileChange[] {
   const dropped = new Set<number>();
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
-    if (entry.length < 4) {
+    const kind = entry.charAt(0);
+    const fields = PATH_FIELDS.get(kind);
+    if (fields === undefined) {
       continue;
     }
-    const code = entry.slice(0, 2);
-    const filePath = entry.slice(3);
+    const filePath = pathAfter(entry, fields);
+    // XY as the short format has it, "." there for unchanged.
+    const code = kind === "?" ? "??" : entry.slice(2, 4).replace(/\./g, " ");
     const status = toChangeStatus(code);
-    if (status === "renamed" || code[0] === "C" || code[1] === "C") {
+    if (kind === "2") {
       // Renames and copies are two records: the new path, then the old one.
       const origPath = entries[++i];
       if (!tracked.has(filePath)) {

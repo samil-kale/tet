@@ -508,15 +508,15 @@ export class TabSessionManager {
    * tet.json was written, by anyone (tet-json.ts's PROJECT_FILE). Picked up now, not at the next
    * start: `addProject` opens the project before the dialog switching sandboxing on shows, and a
    * machine with no agent would sit at an empty project. Only unstartable runtimes are acted on.
+   * `enabled` is the file's sbx switch, read once for every repository and worktree (main.ts).
    */
-  async sbxConfigChanged(): Promise<void> {
+  async sbxConfigChanged(enabled: boolean): Promise<void> {
     const sbxRuntimes = [...this.runtimes.values()].filter((runtime) => runtime.sandbox !== undefined);
     if (this.disposed || sbxRuntimes.length === 0) {
       return;
     }
     // During bootstrap, a running version check's "not startable" is not "no executable here".
     await Promise.all(sbxRuntimes.map((runtime) => runtime.ready));
-    const { enabled } = await readSbxConfig(this.at.path);
     if (this.disposed) {
       return;
     }
