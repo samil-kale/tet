@@ -578,6 +578,7 @@ export const Pane = memo(function Pane({
           y={plusMenu.y}
           entries={newSessionEntries()}
           onClose={() => setPlusMenu(null)}
+          className="new-session-menu"
         />
       )}
     </div>
