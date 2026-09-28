@@ -162,8 +162,9 @@ const api: TETApi = {
   files: {
     // The file's path, which the renderer cannot read; preload-only under contextIsolation.
     pathOf: (file) => webUtils.getPathForFile(file),
-    writeTemp: (name, dataBase64) => ipcRenderer.invoke("files:write-temp", name, dataBase64),
-    clipboardImage: () => ipcRenderer.invoke("files:clipboard-image")
+    writeDrop: (ref, tabId, name, dataBase64) => ipcRenderer.invoke("files:write-drop", ref, tabId, name, dataBase64),
+    clipboardImage: (ref, tabId) => ipcRenderer.invoke("files:clipboard-image", ref, tabId),
+    handPaths: (ref, tabId, paths) => ipcRenderer.invoke("files:hand-paths", ref, tabId, paths)
   },
   shell: {
     openUrl: (url) => ipcRenderer.invoke("shell:open-url", url),

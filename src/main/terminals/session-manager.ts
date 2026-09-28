@@ -21,13 +21,13 @@ import type {
 } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import { HostSetups } from "./host-setup";
-import { sandboxDir } from "../project-dirs";
+import { dropsDir, sandboxDir } from "../project-dirs";
 import { readSbxConfig } from "../tet-json";
-import { checkSbxReady, ensureRunning, prepareSbxRun, sandboxName } from "../sbx";
+import { checkSbxReady, ensureRunning, mountDropped, prepareSbxRun, sandboxName } from "../sbx";
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
-import { sandboxHandoffDir, sandboxSessionDir, toContainerPath } from "./hook-target";
+import { sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir, toContainerPath } from "./hook-target";
 import { reportApplies } from "./turn-order";
 import { currentTheme } from "../theme";
 import { effectivePrompt } from "../../shared/prompts";
@@ -78,6 +78,8 @@ interface TabState extends TerminalDescriptor {
   provisionalTitle?: boolean;
   /** Mirrors AgentSessionInfo.sandbox. */
   sandbox?: string;
+  /** Its process runs in the sandbox (startSession) — `sandbox` says only where its session lives. */
+  inSandbox?: true;
   /** Opened by `tet-ctl` from a sandbox: runs in the sandbox or not at all (resolveSbxRun), or the
    *  sandbox could switch sbx off in tet.json and open itself a tab on this machine. */
   sandboxOnly?: true;
@@ -700,6 +702,41 @@ export class TabSessionManager {
     );
   }
 
+  /** Where this tab's pasted or dropped content without a path is written: its sandbox's agent
+   *  folder while it runs there, else the project's. */
+  dropsDir(tabId: string): string {
+    const tab = this.tabOf(tabId);
+    return tab?.inSandbox
+      ? sandboxDropsDir(sandboxDir(this.storageRoot, this.at.ref, tab.agentId))
+      : dropsDir(this.storageRoot, this.at.ref.projectId);
+  }
+
+  /**
+   * Dropped or pasted paths of this machine as the tab types them. A host tab gets them as they
+   * are; a sandboxed one at their container path, what lies outside its sight mounted
+   * (mountDropped), each mount and each refusal said. A refused path is left out.
+   */
+  async handPaths(tabId: string, hostPaths: string[]): Promise<string[]> {
+    const tab = this.tabOf(tabId);
+    if (!tab?.inSandbox || !isSbxAgent(tab.agentId)) {
+      return hostPaths;
+    }
+    const sandbox = sandboxName(this.at.ref, tab.agentId);
+    const handed: string[] = [];
+    for (const hostPath of hostPaths) {
+      const mount = await mountDropped(sandbox, this.at.path, hostPath);
+      if ("refused" in mount) {
+        this.callbacks.onNotice("warning", `${hostPath} was not mounted into ${this.at.name()}'s SBX sandbox: ${mount.refused}.`);
+        continue;
+      }
+      if ("mounted" in mount) {
+        this.callbacks.onNotice("info", `${hostPath} is mounted into ${this.at.name()}'s SBX sandbox, read and write, until TET quits.`);
+      }
+      handed.push(toContainerPath(hostPath));
+    }
+    return handed;
+  }
+
   /** The first prompt's arguments, a handoff's naming `files` as this start sees them. */
   private promptArgs(tab: TabState, agent: AgentDefinition, files = tab.handoff?.files ?? []): string[] {
     const prompt = tab.handoff
@@ -994,6 +1031,7 @@ export class TabSessionManager {
     // Given once: a restart resumes the session the prompt began.
     tab.initialPrompt = undefined;
     tab.handoff = undefined;
+    tab.inSandbox = sbxRun ? true : undefined;
 
     const session = new TerminalSession(
       sbxRun ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),

@@ -14,6 +14,9 @@ import { buildXtermTheme, editorFontFamily } from "./theme";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
 interface TerminalView {
+  /** The tab, whose drops folder and sandbox a drop or paste goes through. */
+  ref: ProjectRef;
+  tabId: string;
   term: Terminal;
   fit: FitAddon;
   /** Whose paths a drop or paste quotes — see `quotePath`. */
@@ -127,40 +130,50 @@ function quotePath(filePath: string, agent: AgentInfo): string {
   return isWindows() ? `'${filePath.replace(/'/g, "''")}'` : `'${filePath.replace(/'/g, "'\\''")}'`;
 }
 
-/**
- * Types the dropped files' paths; content without a path (from a browser) goes to a temp file,
- * swept a day old at startup.
- */
-async function pasteDroppedFiles(term: Terminal, agent: AgentInfo, files: File[]): Promise<void> {
-  const paths: string[] = [];
-  for (const file of files) {
-    const existing = window.tet.files.pathOf(file);
-    if (existing) {
-      paths.push(existing);
-      continue;
-    }
-    paths.push(await window.tet.files.writeTemp(file.name, toBase64(await file.arrayBuffer())));
-  }
+/** Types the paths, each one word; term.paste, so no CLI input mode misreads them as keystrokes
+ *  (vim mode, say). */
+function pastePaths(view: TerminalView, paths: string[]): void {
   if (paths.length > 0) {
-    // term.paste, so no CLI input mode misreads it as keystrokes (vim mode, say).
-    term.paste(`${paths.map((filePath) => quotePath(filePath, agent)).join(" ")} `);
+    view.term.paste(`${paths.map((filePath) => quotePath(filePath, view.agent)).join(" ")} `);
   }
 }
 
-/** A copied image has no path either — a temp file too. */
-async function pasteClipboardImage(term: Terminal, agent: AgentInfo): Promise<boolean> {
-  const file = await window.tet.files.clipboardImage();
+/**
+ * Types the dropped files' paths as the tab sees them (handPaths); content without a path (from a
+ * browser) is written into the tab's drops folder, swept a day old at startup.
+ */
+async function pasteDroppedFiles(view: TerminalView, files: File[]): Promise<void> {
+  const { ref, tabId } = view;
+  const existing: string[] = [];
+  const written: string[] = [];
+  for (const file of files) {
+    const filePath = window.tet.files.pathOf(file);
+    if (filePath) {
+      existing.push(filePath);
+      continue;
+    }
+    const drop = await window.tet.files.writeDrop(ref, tabId, file.name, toBase64(await file.arrayBuffer()));
+    if (drop !== null) {
+      written.push(drop);
+    }
+  }
+  pastePaths(view, [...(await window.tet.files.handPaths(ref, tabId, existing)), ...written]);
+}
+
+/** A copied image has no path either — written into the drops folder too. */
+async function pasteClipboardImage(view: TerminalView): Promise<boolean> {
+  const file = await window.tet.files.clipboardImage(view.ref, view.tabId);
   if (file === null) {
     return false;
   }
-  // The temp directory is under the profile, whose name can hold a space.
-  term.paste(`${quotePath(file, agent)} `);
+  // The drops folder is under the profile, whose name can hold a space.
+  pastePaths(view, [file]);
   return true;
 }
 
-async function pasteClipboard(term: Terminal, agent: AgentInfo): Promise<void> {
-  if (!(await pasteClipboardImage(term, agent))) {
-    term.paste(await navigator.clipboard.readText());
+async function pasteClipboard(view: TerminalView): Promise<void> {
+  if (!(await pasteClipboardImage(view))) {
+    view.term.paste(await navigator.clipboard.readText());
   }
 }
 
@@ -347,7 +360,7 @@ function createView(ref: ProjectRef, tabId: string, agent: AgentInfo): TerminalV
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) {
-        void pasteClipboard(term, agent);
+        void pasteClipboard(view);
       }
       return false;
     }
@@ -363,7 +376,7 @@ function createView(ref: ProjectRef, tabId: string, agent: AgentInfo): TerminalV
     return true;
   });
 
-  const view: TerminalView = { term, fit, agent };
+  const view: TerminalView = { ref, tabId, term, fit, agent };
   const key = viewKey(ref, tabId);
   views.set(key, view);
   const buffered = earlyOutput.get(key);
@@ -419,7 +432,7 @@ export function attachTerminal(ref: ProjectRef, tabId: string, agent: AgentInfo,
   container.addEventListener("drop", (event) => {
     event.preventDefault();
     frame(false);
-    void pasteDroppedFiles(view.term, view.agent, Array.from(event.dataTransfer?.files ?? []));
+    void pasteDroppedFiles(view, Array.from(event.dataTransfer?.files ?? []));
   });
   container.addEventListener("contextmenu", (event) => {
     event.preventDefault();
@@ -428,13 +441,13 @@ export function attachTerminal(ref: ProjectRef, tabId: string, agent: AgentInfo,
     // right click: copy a selection, else paste.
     if (view.term.modes.mouseTrackingMode === "none") {
       if (!copySelection(view.term)) {
-        void pasteClipboard(view.term, view.agent);
+        void pasteClipboard(view);
       }
       return;
     }
     // The CLI takes the right button (Claude Code and pi paste, Codex copies a selection), but
     // none pastes an image.
-    void pasteClipboardImage(view.term, view.agent);
+    void pasteClipboardImage(view);
   });
 }
 

@@ -53,3 +53,9 @@ export function sandboxSessionDir(sandboxDir: string): string {
 export function sandboxHandoffDir(sandboxDir: string, from: string, sessionId: string): string {
   return path.join(sandboxDir, "handoffs", `${from}-${sessionId}`);
 }
+
+/** Where a sandboxed tab's pasted or dropped content without a path is written, in the same mounted
+ *  folder; a host tab's goes to project-dirs.ts's dropsDir. */
+export function sandboxDropsDir(sandboxDir: string): string {
+  return path.join(sandboxDir, "drops");
+}

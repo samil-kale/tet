@@ -853,22 +853,84 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
 
 const MOUNT_CONCURRENCY = 6;
 
+/** One live mount as `sbx inspect` lists it. */
+interface RuntimeBind {
+  host: string;
+  target: string;
+  readOnly: boolean;
+}
+
 /**
  * The live mounts a sandbox holds, from one `sbx inspect --json` (`runtime_mounts[]`: `host_path`
- * as given, `container_target`, `read_only` only when true), as MountSpecs. Answers for a stopped
- * sandbox too. Undefined when sbx cannot say, as for a sandbox that does not exist.
+ * as given, `container_target`, `read_only` only when true). Answers for a stopped sandbox too.
+ * Undefined when sbx cannot say, as for a sandbox that does not exist.
  */
-async function readRuntimeMounts(name: string): Promise<MountSpec[] | undefined> {
+async function readRuntimeBinds(name: string): Promise<RuntimeBind[] | undefined> {
   const parsed = await sbxJson<{ runtime_mounts?: { host_path?: string; container_target?: string; read_only?: boolean }[] }>([
     "inspect", name, "--json"
   ]);
   return parsed?.runtime_mounts?.flatMap(({ host_path, container_target, read_only }) =>
-    host_path && container_target ? [mountSpec(host_path, container_target, read_only === true)] : []
+    host_path && container_target ? [{ host: host_path, target: container_target, readOnly: read_only === true }] : []
   );
+}
+
+/** readRuntimeBinds' as MountSpecs. */
+async function readRuntimeMounts(name: string): Promise<MountSpec[] | undefined> {
+  return (await readRuntimeBinds(name))?.map((bind) => mountSpec(bind.host, bind.target, bind.readOnly));
 }
 
 /** The mountAll underway per sandbox name (inTurn). */
 const mountSetups = new Map<string, Promise<unknown>>();
+
+/**
+ * The paths dropped into a sandbox's tabs (mountDropped), by sandbox name: the user's, never in
+ * tet.json, held until tet quits — every start's mountAll is handed them, or it would take them out
+ * again. The first start after tet quits does.
+ */
+const droppedMounts = new Map<string, string[]>();
+
+/** A sandbox's dropped paths as mounts, those still here: mountAll must not be handed one whose
+ *  host path is gone. */
+function droppedMountSpecs(name: string): MountSpec[] {
+  return (droppedMounts.get(name) ?? []).filter((host) => statOf(host)).map((host) => pathMountSpecs({ path: host, access: "rw" }));
+}
+
+/** What mountDropped did: the sandbox saw the path already, mounted it, or could not. */
+export type DropMount = { seen: true } | { mounted: true } | { refused: string };
+
+/**
+ * Makes a path dropped into a sandboxed tab visible at its container path (toContainerPath): the
+ * workspace, or a live mount at the same path (tet's folders, an Allowed path, an earlier drop),
+ * holds it already, or it is mounted rw. The policy is asked first, as for an Allowed path
+ * (readSbxProblems); in turn with the sandbox's mountAll (`mountSetups`), which would otherwise
+ * mount twice or take this one out.
+ */
+export function mountDropped(name: string, workspace: string, hostPath: string): Promise<DropMount> {
+  const host = normalizeHostPath(hostPath);
+  const within = (root: string): boolean => host === path.resolve(root) || relativeInside(root, host) !== undefined;
+  if (within(workspace)) {
+    return Promise.resolve({ seen: true });
+  }
+  return inTurn(mountSetups, name, async (): Promise<DropMount> => {
+    const [binds, rules, organization] = await Promise.all([readRuntimeBinds(name), readFilesystemRules(), readGovernance()]);
+    if (binds === undefined || rules === undefined) {
+      return { refused: "SBX could not say whether it may be mounted" };
+    }
+    if (binds.some((bind) => bind.target === toContainerPath(bind.host) && within(bind.host))) {
+      return { seen: true };
+    }
+    if (!mountableBy(rules)(host, "rw")) {
+      return { refused: forbiddenBy(organization) };
+    }
+    const spec = pathMountSpecs({ path: host, access: "rw" });
+    const result = await runSbx(["mount", name, spec.mount]);
+    if (!result.ok) {
+      return { refused: sbxRefusal(result) };
+    }
+    droppedMounts.set(name, [...(droppedMounts.get(name) ?? []), host]);
+    return { mounted: true };
+  });
+}
 
 /**
  * Brings a sandbox's live mounts to `specs` at every start, against what it holds
@@ -1271,7 +1333,8 @@ export async function prepareSbxRun(
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
   const grants = await grantsOf(agentId, knowledge, config.paths);
-  const refused = await mountAll(name, [...own, ...grants], onData, created ? undefined : request.warm);
+  // A dropped path sbx refuses now is left out without a word: its drop said it was mounted.
+  const refused = await mountAll(name, [...own, ...grants, ...droppedMountSpecs(name)], onData, created ? undefined : request.warm);
   const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
   if (ownFailed.length > 0) {
     throw new Error(`sbx did not mount tet's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);

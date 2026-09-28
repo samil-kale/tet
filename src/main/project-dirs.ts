@@ -10,10 +10,12 @@ import { onDisk, relativeInside } from "./path-inside";
  *
  * ```
  * projects/<id>/                   id: `tet.id` in the repository's git config
+ *   drops/                         pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
  *       sessions/                  the host side of the agent's session mounts
  *       handoffs/                  another agent's session a tab takes over, copied (handOff)
+ *       drops/                     pasted or dropped content without a path, for its tabs
  *     <key>/<agent>/               a worktree's
  *   worktrees/<key>/               a git worktree TET made; the key never changes
  * ```
@@ -31,6 +33,12 @@ export function projectsDir(dataRoot: string): string {
 
 export function projectDir(dataRoot: string, projectId: string): string {
   return path.join(projectsDir(dataRoot), projectId);
+}
+
+/** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs
+ *  keep theirs in their agent's folder (hook-target.ts's sandboxDropsDir). */
+export function dropsDir(dataRoot: string, projectId: string): string {
+  return path.join(projectDir(dataRoot, projectId), "drops");
 }
 
 /** The repository's or a worktree's sandbox folders, one per agent: `sandboxes/repository/` or
@@ -58,6 +66,22 @@ export function projectRefPath(dataRoot: string, project: Project, ref: ProjectR
  *  its sandbox mounts. */
 export function sandboxDir(dataRoot: string, ref: ProjectRef, agentId: AgentId): string {
   return path.join(sandboxesDir(dataRoot, ref), agentId);
+}
+
+/** Every agent folder (sandboxDir) the project's sandboxes have, the repository's and its
+ *  worktrees'. */
+export function sandboxDirsOf(dataRoot: string, projectId: string): string[] {
+  const folders = (dir: string): string[] => {
+    try {
+      return fs
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => path.join(dir, entry.name));
+    } catch {
+      return [];
+    }
+  };
+  return folders(path.join(projectDir(dataRoot, projectId), "sandboxes")).flatMap(folders);
 }
 
 /** A key no worktree of the project has: 8 hex digits, short enough for a path and a sandbox name. */

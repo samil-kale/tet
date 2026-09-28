@@ -199,6 +199,16 @@ async function dropRefData(refs: ProjectRef[], folders: string[]): Promise<void>
   }
 }
 
+/** A worktree's folders, then `worktrees/` and `sandboxes/` if it was their last: rmdir refuses one
+ *  that still holds another's. */
+async function dropWorktreeData(dataRoot: string, refs: ProjectRef[], projectId: string, key: string): Promise<void> {
+  const folders = worktreeFolders(dataRoot, projectId, key);
+  await dropRefData(refs, folders);
+  for (const folder of folders) {
+    await fs.promises.rmdir(path.dirname(folder)).catch(() => undefined);
+  }
+}
+
 /**
  * Removes the project: the worktrees TET made are deleted with their branches, one after another
  * through the repository's Repository, and the first that fails stops it with the project left
@@ -332,7 +342,7 @@ export async function deleteWorktree(
       deps.openProjectRef(ref);
       return result;
     }
-    await dropRefData([], worktreeFolders(deps.dataRoot, ref.projectId, ref.worktree!));
+    await dropWorktreeData(deps.dataRoot, [], ref.projectId, ref.worktree!);
     // Only once it is gone: a worktree that stays keeps its sessions. Not waited on — each may
     // start its agent's CLI, and nothing here needs them gone.
     void removeAllSessions(worktree.path);
@@ -370,7 +380,7 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
   for (const worktree of gone) {
     const ref = projectRef(projectId, worktree.key);
     void closeProjectRef(deps, ref)
-      .then(() => dropRefData([ref], worktreeFolders(deps.dataRoot, projectId, worktree.key!)))
+      .then(() => dropWorktreeData(deps.dataRoot, [ref], projectId, worktree.key!))
       .then(() => removeAllSessions(worktree.path));
   }
   deps.projectsChanged({ removed: gone.map((worktree) => projectRef(projectId, worktree.key)) });

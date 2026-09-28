@@ -73,9 +73,11 @@ change, and every agent added, fits it.
   update/
   config/<agent>/                  a host tab's setup, once per agent (HostSetups)
   projects/<id>/                   id: the repository's `tet.id`
+    drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
       handoffs/                    another agent's session a tab here takes over, copied
+      drops/                       pasted or dropped content without a path, for its tabs
     sandboxes/<key>/<agent>/       a worktree's
     worktrees/<key>/               a worktree TET made
 ```
@@ -83,6 +85,22 @@ change, and every agent added, fits it.
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
   `projects/<id>/` only what a sandbox may see, since sbx is granted it whole — never a setting, a
   token or an sbx value. Removing a project deletes its folder.
+- **A sandbox sees its agent folder, and nothing else of `~/.tet`.** What a sandboxed tab needs
+  from TET lies in `sandboxes/<repository|key>/<agent>/`, mounted whole; nothing of TET's gets a
+  mount of its own (the one exception in the sbx section).
+- **One thing, one name, on both sides.** What host and sandboxed tabs both keep is a folder of the
+  same name: `projects/<id>/<name>/` for the project's host tabs (`config/<agent>/` if it knows no
+  project), `<agent folder>/<name>/` for sandboxed ones.
+- **Split only where a sandbox forces it.** Repository, worktree and agent divide `sandboxes/`
+  alone, since each is its own sandbox; a folder beneath `projects/<id>/` or an agent folder is
+  flat, its entries kept apart by their names (one subfolder per entry where it goes as a whole,
+  as `handoffs/`).
+- **What exists is handed over, never copied.** A host tab gets the original path. A path dropped
+  into a sandboxed tab outside its sight is mounted rw at its container path, never written into
+  `tet.json`, and held until TET quits (every start's `mountAll` is handed it); a notice says it
+  was mounted, or that governance refuses it. Only what has no path of its own (a browser's drop, a
+  pasted image) is written, into `drops/` on either side; a handoff copies what sits in another
+  agent's store, which no sandbox may see.
 - **A store written by a Save someone waits on writes before it changes** (`writeJson`,
   `json-file.ts`): a failure reaches the one who saved — in the dialog, or `tet-ctl`'s answer —
   and the store keeps what the disk has. Only a write nobody waits on, or a cleanup that must not
@@ -111,8 +129,8 @@ mouse button, decided per click by the terminal's mouse mode (`terminal-views.ts
 ## Never touch the user's agent configuration
 
 Everything TET generates for an agent lives under `~/.tet` (the data model above) and is pointed
-at from outside, each side — host and sandbox — handed only its own folder; only pasted or dropped
-files go to the OS temp directory (`ipc/files.ts`).
+at from outside, each side — host and sandbox — handed only its own folder, pasted or dropped
+content without a path included (`drops/`).
 `prepareSpawn` and `prepareSandboxSpawn` are the only places an agent writes configuration;
 beyond them it touches only its own sessions: when the user renames or deletes one, the one a
 background question leaves (`cleanupAsk`), and every one of a worktree it deleted, once its folder
@@ -326,7 +344,10 @@ the `sbx` CLI.
   so the same listing code serves both. Of `~/.tet` it sees only the `sandboxes/…/<agent>` folder
   of its repository or worktree, and a worktree's sandbox is its own (its workspace is fixed at
   `sbx create`); under governance one rule, `~/.tet/projects/**`, allows TET's folders and its
-  worktrees.
+  worktrees. TET's own live mounts are folders of that `sandboxes/…/<agent>` folder alone; the one
+  exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails there.
+  The user's grants (Allowed paths, knowledge) and a path the user drops (data model) are theirs,
+  not TET's.
 - Generated setup targets where it runs, not `process.platform` (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`

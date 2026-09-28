@@ -19,7 +19,7 @@ import { ControlRecords } from "./control/control-records";
 import { findControlPort, startControlServer } from "./control/control-server";
 import { EnvRequests, EnvStore } from "./environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
-import { registerIpc, sweepTempFiles } from "./ipc";
+import { registerIpc, sweepDropFiles } from "./ipc";
 import { resolveProjectRef } from "./resolved-ref";
 import { projectRefPath } from "./project-dirs";
 import {
@@ -620,7 +620,7 @@ if (!app.requestSingleInstanceLock()) {
     // only after the window: on macOS/Linux it asks the login shell, which with nvm takes most of a
     // second. The requirements re-check (ipc/app.ts) joins the same run.
     const pathReady = augmentAgentPath();
-    sweepTempFiles();
+    sweepDropFiles(dataRoot);
     // Before the first spawn; each terminal gets only a token made from it for its own tab
     // (control-token.ts). The token lives in this process only — never on disk or a command line.
     const controlToken =

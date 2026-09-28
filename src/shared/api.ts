@@ -329,10 +329,14 @@ export interface TETApi {
   files: {
     /** A dropped file's real path, or "" for content only. */
     pathOf(file: File): string;
-    /** Saves pathless content to a temp file, returning its path. */
-    writeTemp(name: string, dataBase64: string): Promise<string>;
-    /** The clipboard image as a temp file; null without one. */
-    clipboardImage(): Promise<string | null>;
+    /** Saves pathless content into the tab's drops folder, returning its path as the tab types it;
+     *  null when the tab is gone or its sandbox refused it. */
+    writeDrop(ref: ProjectRef, tabId: string, name: string, dataBase64: string): Promise<string | null>;
+    /** The clipboard image, saved as writeDrop does; null without one. */
+    clipboardImage(ref: ProjectRef, tabId: string): Promise<string | null>;
+    /** Paths of this machine as the tab types them: a sandboxed tab's at their container path, what
+     *  lies outside its sight mounted, a refused one left out. */
+    handPaths(ref: ProjectRef, tabId: string, paths: string[]): Promise<string[]>;
   };
   shell: {
     openUrl(url: string): Promise<void>;
