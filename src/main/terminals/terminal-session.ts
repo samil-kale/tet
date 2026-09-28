@@ -10,7 +10,7 @@ interface SessionCallbacks {
   onStatusChange: (status: TerminalStatus) => void;
 }
 
-// Stopping writes the Ctrl+C bytes an agent quits on (`AgentDefinition.quitPresses`) before a
+// Stopping writes the Ctrl+C bytes an agent quits on (`AgentTerminal.quitPresses`) before a
 // kill, so the CLI runs its exit handlers. Claude Code arms a record in `~/.claude.json` while its
 // fullscreen renderer boots and clears it ten seconds later; a process dying in between counts as a
 // strike, and two turn fullscreen off machine-wide — a tab spawned at tet's startup is in that

@@ -21,7 +21,7 @@ interface HostSetup {
 }
 
 /**
- * Each agent's setup for host tabs (AgentDefinition.prepareSpawn): the same for every repository
+ * Each agent's setup for host tabs (AgentHost.prepare): the same for every repository
  * and worktree (data-root.ts's agentConfigDir), so run once and shared by every TabSessionManager.
  */
 export class HostSetups {
@@ -94,7 +94,7 @@ export class HostSetups {
   }
 
   private async run(agent: AgentDefinition, setup: HostSetup, again: boolean): Promise<boolean> {
-    if (!agent.prepareSpawn || (setup.preparation && !again)) {
+    if (!agent.host || (setup.preparation && !again)) {
       return !setup.failed;
     }
     try {
@@ -102,7 +102,7 @@ export class HostSetups {
       fs.mkdirSync(agentDir, { recursive: true });
       const theme = currentTheme(this.settings);
       const { idleReminder } = this.settings.get().notifications;
-      setup.preparation = await agent.prepareSpawn(agent.executable(), { agentDir, idleReminder, theme });
+      setup.preparation = await agent.host.prepare(agent.executable(), { agentDir, idleReminder, theme });
       setup.theme = theme.id;
       setup.idleReminder = idleReminder;
       // Nothing else clears an earlier failure.

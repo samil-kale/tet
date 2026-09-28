@@ -425,8 +425,8 @@ async function startControl(): Promise<void> {
               id: agent.id,
               name: agent.displayName,
               // The shell has no version check.
-              installed: agent.versionArgs
-                ? await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir())
+              installed: agent.install
+                ? await isAgentInstalled(agent.executable(), agent.install.versionArgs, os.tmpdir())
                 : true
             }))
           ),

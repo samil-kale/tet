@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { getAgent } from "../src/main/agents";
+import { SANDBOXED_AGENTS } from "../src/main/agents";
 import type { AgentDefinition, AgentSessionInfo } from "../src/main/agents/agent";
 import { askAgent } from "../src/main/agents/ask";
 import { ensureRunning, pathMountSpecs, SBX_VERIFIED_VERSION } from "../src/main/sbx";
@@ -15,7 +15,7 @@ import { toContainerPath } from "../src/main/terminals/hook-target";
 import { resolveCommand } from "../src/main/terminals/pty";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import type { ControlEvent } from "../src/shared/control";
-import { SBX_AGENT_IDS, type Project, type SbxAgentId, type TerminalDescriptor } from "../src/shared/types";
+import type { AgentId, Project, TerminalDescriptor } from "../src/shared/types";
 import { eventually, killApp, startApp, tetCtl, type TestApp } from "./helpers";
 
 /**
@@ -28,7 +28,7 @@ import { eventually, killApp, startApp, tetCtl, type TestApp } from "./helpers";
  * - TET_SBX_TEST=1: sbx's own commands on one throwaway sandbox, no agent run in it — the agents
  *   are the other switch's.
  *
- * A version other than `verifiedVersion` (SBX_VERIFIED_VERSION) is reported, not failed; once a run
+ * A version other than `install.verifiedVersion` (SBX_VERIFIED_VERSION) is reported, not failed; once a run
  * passes on it, it goes there.
  *
  * Leaves behind what the CLIs record themselves: AGENT_REPO as a folder the user trusts (Claude
@@ -72,7 +72,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
    * it (spaces may be gone), and the keys answering "trust" (`tabs-keys`). Claude Code preselects
    * "No, exit", Codex "1. Trust and continue"; pi asks nothing.
    */
-  const TRUST_QUESTIONS: Partial<Record<SbxAgentId, { asked: RegExp; keys: string[] }>> = {
+  const TRUST_QUESTIONS: Partial<Record<AgentId, { asked: RegExp; keys: string[] }>> = {
     claude: { asked: /Yes,\s*I\s*trust\s*this\s*folder/, keys: ["down", "enter"] },
     codex: { asked: /Trust\s*this\s*folder\?/, keys: ["enter"] }
   };
@@ -165,8 +165,8 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     }
   });
 
-  for (const agentId of SBX_AGENT_IDS) {
-    const agent = getAgent(agentId);
+  for (const agent of SANDBOXED_AGENTS) {
+    const agentId = agent.id;
 
     // One tab's life, in order: each step needs the one before.
     describe(agent.displayName, () => {
@@ -178,12 +178,12 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
       };
 
       it("is the version last verified, or says which it is", (t) => {
-        assert.ok(agent.versionArgs, "a version check");
-        const result = run(agent.executable(), agent.versionArgs);
+        assert.ok(agent.install, "a version check");
+        const result = run(agent.executable(), agent.install.versionArgs);
         const installed = versionIn(result.stdout);
         assert.ok(installed, `${agent.displayName} installed and printing its version: ${result.stdout}${result.stderr}`);
-        if (installed !== agent.verifiedVersion) {
-          t.diagnostic(`${agent.displayName} ${installed} is installed, ${agent.verifiedVersion} was verified: record it once this run passes`);
+        if (installed !== agent.install.verifiedVersion) {
+          t.diagnostic(`${agent.displayName} ${installed} is installed, ${agent.install.verifiedVersion} was verified: record it once this run passes`);
         }
       });
 
@@ -307,11 +307,11 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
       });
 
       it("answers a background question and leaves no session", { timeout: ASK_MS + 60_000 }, async () => {
-        assert.ok(agent.askArgs, "ask arguments");
+        assert.ok(agent.ask, "ask arguments");
         const known = (await listSessions(agent)).map((session) => session.id);
-        const reply = await askAgent(AGENT_REPO, agent.executable(), agent.askArgs, "Reply with only the word pong.");
+        const reply = await askAgent(AGENT_REPO, agent.executable(), agent.ask.args, "Reply with only the word pong.");
         assert.match(reply, /pong/i);
-        await agent.cleanupAsk?.(agent.executable(), AGENT_REPO);
+        await agent.ask.cleanup?.(agent.executable(), AGENT_REPO);
         const left = (await listSessions(agent)).filter((session) => !known.includes(session.id));
         assert.deepEqual(left, [], "no session left for a tab");
       });

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentSessionInfo, SessionProvider } from "../agent";
+import type { AgentSessionInfo, SandboxSessions, SessionProvider } from "../agent";
 import {
   collectSessions,
   forgetMissing,
@@ -261,22 +261,6 @@ export const codexSessionProvider: SessionProvider = {
   },
 
   /**
-   * The sandbox's `~/.codex/sessions` plus `session_index.jsonl`, where names live outside the
-   * rollout; `auth.json` stays unmounted. Rename and delete edit the mounted files (removeInHome,
-   * renameInHome): a host `codex` needs Codex on the host and leaves a Codex home in the root.
-   */
-  sandbox: {
-    mounts: [
-      { sub: "sessions", target: `${SANDBOX_HOME}/.codex/sessions` },
-      { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
-    ],
-    list: (root, cwd) => listIn(root, cwd),
-    remove: (root, _cwd, sessionId) => removeInHome(root, sessionId),
-    rename: (root, _cwd, sessionId, title) => renameInHome(root, sessionId, title),
-    files: (root, _cwd, sessionId) => rolloutFilesOf(root, sessionId)
-  },
-
-  /**
    * Watches today's rollout folder and the name index. Its ancestors are watched too, since the
    * day's folder may not exist yet and `fs.watch` throws on one. The folders are the machine's,
    * not the repository's: a write to a rollout already read for another cwd is dropped — every
@@ -346,6 +330,22 @@ export const codexSessionProvider: SessionProvider = {
       closeAll();
     };
   }
+};
+
+/**
+ * The sandbox's `~/.codex/sessions` plus `session_index.jsonl`, where names live outside the
+ * rollout; `auth.json` stays unmounted. Rename and delete edit the mounted files (removeInHome,
+ * renameInHome): a host `codex` needs Codex on the host and leaves a Codex home in the root.
+ */
+export const codexSandboxSessions: SandboxSessions = {
+  mounts: [
+    { sub: "sessions", target: `${SANDBOX_HOME}/.codex/sessions` },
+    { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
+  ],
+  list: (root, cwd) => listIn(root, cwd),
+  remove: (root, _cwd, sessionId) => removeInHome(root, sessionId),
+  rename: (root, _cwd, sessionId, title) => renameInHome(root, sessionId, title),
+  files: (root, _cwd, sessionId) => rolloutFilesOf(root, sessionId)
 };
 
 function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {

@@ -35,7 +35,7 @@ const SKILLS_SOURCE_OPTIONS: { value: SkillsSource; label: string }[] = [
 ];
 
 /** One row per `SbxKnowledgeKind`, in display order. Labels only; the per-agent host paths are
- *  `AgentDefinition.sandboxKnowledge`. */
+ *  `AgentSandbox.knowledge`. */
 const KNOWLEDGE_LABELS: { kind: SbxKnowledgeKind; label: string }[] = [
   { kind: "skills", label: "Skills" },
   { kind: "plugins", label: "Plugins" },
@@ -46,7 +46,7 @@ const KNOWLEDGE_LABELS: { kind: SbxKnowledgeKind; label: string }[] = [
 const CHECK_DELAY_MS = 500;
 
 export interface FieldsState {
-  /** This machine's (`sbx:stored`); what each kind mounts is `AgentDefinition.sandboxKnowledge`.
+  /** This machine's (`sbx:stored`); what each kind mounts is `AgentSandbox.knowledge`.
    *  `skillsFolder` is "" while "A folder" is chosen and none picked yet. */
   knowledge: SbxKnowledgeConfig;
   ports: Row<SbxPort>[];

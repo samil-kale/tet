@@ -3,9 +3,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { claudeSessionProvider } from "../src/main/agents/claude/sessions";
-import { codexSessionProvider } from "../src/main/agents/codex/sessions";
-import { encodeCwd, piSessionProvider } from "../src/main/agents/pi/sessions";
+import { claudeSandboxSessions, claudeSessionProvider } from "../src/main/agents/claude/sessions";
+import { codexSandboxSessions, codexSessionProvider } from "../src/main/agents/codex/sessions";
+import { encodeCwd, piSandboxSessions, piSessionProvider } from "../src/main/agents/pi/sessions";
 
 /**
  * The session providers against transcripts written the way the CLIs write them. A regression in the title rules or turn forensics shows a
@@ -393,8 +393,7 @@ describe("sessions written inside a sandbox", () => {
       path.join(projectDir, "s1.jsonl"),
       [{ type: "user", timestamp: AT, origin: { kind: "human" }, message: { content: "In the sandbox" } }].map(line).join("")
     );
-    const sandbox = claudeSessionProvider.sandbox;
-    assert.ok(sandbox);
+    const sandbox = claudeSandboxSessions;
     const [session] = await sandbox.list(dir, cwd);
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
@@ -422,8 +421,7 @@ describe("sessions written inside a sandbox", () => {
     }
     const index = path.join(dir, "session_index.jsonl");
     fs.writeFileSync(index, line({ id: "s1", thread_name: "Named" }));
-    const sandbox = codexSessionProvider.sandbox;
-    assert.ok(sandbox);
+    const sandbox = codexSandboxSessions;
     const titles = async (): Promise<string[][]> => (await sandbox.list(dir, cwd)).map((s) => [s.id, s.title]);
     assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "In the sandbox"]], "the name index beside the rollouts is mounted too");
 
@@ -460,8 +458,7 @@ describe("sessions written inside a sandbox", () => {
         .map(line)
         .join("")
     );
-    const sandbox = piSessionProvider.sandbox;
-    assert.ok(sandbox);
+    const sandbox = piSandboxSessions;
     const [session] = await sandbox.list(dir, cwd);
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
@@ -478,9 +475,9 @@ describe("sessions written inside a sandbox", () => {
 
   it("has nothing to list where the sandbox never wrote anything", async () => {
     const dir = path.join(os.tmpdir(), "tet-sbx-never");
-    for (const provider of [claudeSessionProvider, codexSessionProvider, piSessionProvider]) {
-      assert.deepEqual(await provider.sandbox?.list(dir, cwd), []);
-      assert.deepEqual(await provider.sandbox?.files(dir, cwd, "s1"), []);
+    for (const sandbox of [claudeSandboxSessions, codexSandboxSessions, piSandboxSessions]) {
+      assert.deepEqual(await sandbox.list(dir, cwd), []);
+      assert.deepEqual(await sandbox.files(dir, cwd, "s1"), []);
     }
   });
 });

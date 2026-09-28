@@ -42,7 +42,7 @@ function onDiskCase(hostPath: string): string {
  *  expands. */
 export const SANDBOX_HOME = "/home/agent";
 
-/** The host side of an agent's session mounts (SessionProvider.sandbox): inside its sandbox folder
+/** The host side of an agent's session mounts (AgentSandbox.sessions): inside its sandbox folder
  *  (project-dirs.ts's sandboxDir), which sbx.ts mounts whole. */
 export function sandboxSessionDir(sandboxDir: string): string {
   return path.join(sandboxDir, "sessions");

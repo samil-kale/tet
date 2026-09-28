@@ -21,7 +21,7 @@ export function commitMessageFrom(reply: string): string {
  *  time. */
 const suggestion = stoppable();
 
-/** The commit prompt's suggest button, asked of the first installed agent with `askArgs`
+/** The commit prompt's suggest button, asked of the first installed agent with `ask`
  *  (`findAskableAgent`). `prompt` (`effectivePrompt`) and `context` (`readCommitContext`) are handed
  *  in: only the main process reaches the git process and the settings. */
 export async function suggestCommitMessage(
@@ -39,7 +39,7 @@ export async function suggestCommitMessage(
   );
 }
 
-/** For the commit prompt's Cancel. The caller's `cleanupAsk` still runs. */
+/** For the commit prompt's Cancel. The caller's `ask.cleanup` still runs. */
 export function cancelCommitSuggestion(): void {
   suggestion.stop();
 }

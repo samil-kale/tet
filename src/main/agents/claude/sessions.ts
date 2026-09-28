@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentSessionInfo, SessionProvider } from "../agent";
+import type { AgentSessionInfo, SandboxSessions, SessionProvider } from "../agent";
 import {
   findEncodedDir,
   listTranscriptDir,
@@ -21,7 +21,7 @@ import { SANDBOX_HOME } from "../../terminals/hook-target";
 /** Claude Code has no session CLI: sessions are the `<uuid>.jsonl` transcripts in
  *  ~/.claude/projects/<cwd with non-alphanumerics as "-">; deleting one deletes its transcript.
  *  A sandboxed session is the same file, so operations take the root and cwd as parameters
- *  (SessionProvider.sandbox). */
+ *  (claudeSandboxSessions). */
 export const claudeSessionProvider: SessionProvider = {
   list(cwd: string): Promise<AgentSessionInfo[]> {
     return listIn(projectsRoot(), cwd);
@@ -52,16 +52,16 @@ export const claudeSessionProvider: SessionProvider = {
       (filename) => filename.endsWith(".jsonl"),
       onChange
     );
-  },
-
-  /** Mounted over the sandbox's `~/.claude/projects`, stacking on sbx's own volume there. */
-  sandbox: {
-    mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
-    list: (root, cwd) => listIn(path.join(root, "projects"), cwd),
-    remove: (root, cwd, sessionId) => removeIn(path.join(root, "projects"), cwd, sessionId),
-    rename: (root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title),
-    files: (root, cwd, sessionId) => filesIn(path.join(root, "projects"), cwd, sessionId)
   }
+};
+
+/** Mounted over the sandbox's `~/.claude/projects`, stacking on sbx's own volume there. */
+export const claudeSandboxSessions: SandboxSessions = {
+  mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
+  list: (root, cwd) => listIn(path.join(root, "projects"), cwd),
+  remove: (root, cwd, sessionId) => removeIn(path.join(root, "projects"), cwd, sessionId),
+  rename: (root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title),
+  files: (root, cwd, sessionId) => filesIn(path.join(root, "projects"), cwd, sessionId)
 };
 
 /** The transcript alone: the subagent transcripts and tool results beside it are not the

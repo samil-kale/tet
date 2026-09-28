@@ -321,7 +321,7 @@ export const ProjectList = memo(function ProjectList({
         {/* From the status every refresh loads — no extra git call. */}
         {heads[key]?.dirty && rowButton("Uncommitted changes", () => onShowChanges(key), <ChangesIcon />)}
         {/* The switch is on, not that a tab got a sandbox: when sbx is unavailable a tab stays in
-            error rather than running on the host (resolveSbxRun). */}
+            error rather than running on the host (resolvePlace). */}
         {sandboxed[projectId] &&
           (worktree ? (
             // A worktree's are its project's, set there: a mark, no button.

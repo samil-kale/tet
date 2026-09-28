@@ -48,7 +48,7 @@ export function setupClaudeHooks(
 }
 
 /**
- * AgentDefinition.workOutlivesStop. Stop fires when the main turn ends, background agents still
+ * AgentTurns.workOutlivesStop. Stop fires when the main turn ends, background agents still
  * running; its payload lists them in `background_tasks` (`type: "subagent"`, `status: "running"`)
  * and each one's end starts a turn of its own (`UserPromptSubmit` with a `<task-notification>`,
  * then Stop). Background shells (`type: "shell"`) don't count: a server never ends, and one a

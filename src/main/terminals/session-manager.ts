@@ -2,14 +2,13 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AGENTS, getAgent } from "../agents";
 
-import type { AgentDefinition, AgentPaths, AgentSessionInfo, SessionProvider } from "../agents/agent";
+import type { AgentDefinition, AgentPaths, AgentSessionInfo } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_ENV } from "../../shared/control";
 import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
-import { isSbxAgent } from "../../shared/types";
-import { sbxProblemNotices } from "../../shared/sbx-rules";
+import { hasSandbox } from "../agents/agent";
 import { projectRefKey } from "../../shared/types";
 import type {
   AgentId,
@@ -23,11 +22,13 @@ import type { ResolvedRef } from "../resolved-ref";
 import { HostSetups } from "./host-setup";
 import { dropsDir, sandboxDir } from "../project-dirs";
 import { readSbxConfig } from "../tet-json";
-import { checkSbxReady, ensureRunning, mountDropped, prepareSbxRun, sandboxName } from "../sbx";
+import { checkSbxReady, ensureRunning, sandboxName } from "../sbx";
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
-import { sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir, toContainerPath } from "./hook-target";
+import { sandboxSessionDir, toContainerPath } from "./hook-target";
+import { HostPlace, SandboxPlace, SandboxStart } from "./tab-place";
+import type { HandoffFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
 import { reportApplies } from "./turn-order";
 import { currentTheme } from "../theme";
 import { effectivePrompt } from "../../shared/prompts";
@@ -60,14 +61,8 @@ let newTabCounter = 0;
  */
 const SHELL_OPERATOR = /^(?:&&|\|\||[|;&]|\d*>>?|\d*>&\d*|<)$/;
 
-/** A sandboxed tab's `sbx run` line, and the values its `-e NAME` entries pass on (sandboxEnv). */
-interface SbxRun {
-  args: string[];
-  env: Record<string, string>;
-}
-
 interface TabState extends TerminalDescriptor {
-  /** The session this tab's hooks named (AgentDefinition.sessionIdOf), claimed as `sessionId`
+  /** The session this tab's hooks named (AgentTurns.sessionIdOf), claimed as `sessionId`
    *  once listed. */
   reportedSessionId?: string;
   /** When the latest report naming a session was made (ControlRequest.at) — see bindReportedSession. */
@@ -78,9 +73,9 @@ interface TabState extends TerminalDescriptor {
   provisionalTitle?: boolean;
   /** Mirrors AgentSessionInfo.sandbox. */
   sandbox?: string;
-  /** Its process runs in the sandbox (startSession) — `sandbox` says only where its session lives. */
-  inSandbox?: true;
-  /** Opened by `tet-ctl` from a sandbox: runs in the sandbox or not at all (resolveSbxRun), or the
+  /** Where its latest start ran it (resolvePlace); until then where its session lives (placeOf). */
+  place?: TabPlace;
+  /** Opened by `tet-ctl` from a sandbox: runs in the sandbox or not at all (resolvePlace), or the
    *  sandbox could switch sbx off in tet.json and open itself a tab on this machine. */
   sandboxOnly?: true;
   /** When the running turn was reported started — what a turn end is dated against. */
@@ -98,23 +93,16 @@ interface TabState extends TerminalDescriptor {
   cwd?: string;
   /** A saved command's variables, outranking the machine's. */
   env?: Record<string, string>;
-  /** The prompt a new tab starts with (AgentDefinition.initialPromptArgs), on its first start only:
+  /** The prompt a new tab starts with (AgentTerminal.initialPromptArgs), on its first start only:
    *  a restart would submit it again. */
   initialPrompt?: string;
   /** The session this tab takes over (handOff), made its first prompt on its first start, once it
    *  is known whether the tab runs in a sandbox. Dropped then, like `initialPrompt`. */
-  handoff?: Handoff;
-  /** Where a sandboxed handoff's copy lies (copyHandoff), deleted with the tab. */
+  /** Another agent's session, handed over as it is: never converted, so no format change of the
+   *  agent's breaks it. */
+  handoff?: HandoffFiles;
+  /** A handoff's copy its start made (Launch.handoffDir), deleted with the tab. */
   handoffDir?: string;
-}
-
-/** Another agent's session, handed to a new tab as it is: never converted, so no format change of
- *  the agent's breaks it. */
-interface Handoff {
-  from: AgentId;
-  sessionId: string;
-  /** Its transcript on the host (SessionProvider.files). */
-  files: string[];
 }
 
 /** Per-agent state within one repository or worktree. */
@@ -127,7 +115,7 @@ interface AgentRuntime {
   /**
    * No host executable — startable only through the repository's or worktree's sandbox, with
    * nothing to fall back to. Decided with the project's config; whether the sandbox is *reachable*
-   * is resolveSbxRun's question, per spawn.
+   * is resolvePlace's question, per spawn.
    */
   sbxOnly: boolean;
   /** Resolves once the version check, the host setup (HostSetups) and initial listing are done. */
@@ -163,7 +151,7 @@ function titleUnsettled(tab: TabState): boolean {
 /**
  * A turn started or ended. Either end clears `waitingAt` — a question stands within its turn.
  *
- * `keepQuestion`, for AgentDefinition.questionOutlivesTurn: the question stays **and the end
+ * `keepQuestion`, for AgentTurns.questionOutlivesTurn: the question stays **and the end
  * leaves no bubble beside it** — one moment, and the project row, with a button per condition,
  * would step through that tab twice. The question is the more urgent and actionable of the two.
  *
@@ -187,7 +175,7 @@ function setTurn(tab: TabState, busy: boolean, at: number, keepQuestion = false)
 
 /** Whether a question left standing already said this turn's end — see setTurn. */
 function endLeavesQuestion(tab: TabState, agent: AgentDefinition): boolean {
-  return agent.questionOutlivesTurn === true && tab.waitingAt !== undefined;
+  return agent.turns?.questionOutlivesTurn === true && tab.waitingAt !== undefined;
 }
 
 /**
@@ -246,7 +234,7 @@ function resumeArgsOf(tab: TabState, agent: AgentDefinition): string[] {
 
 /** A handoff's first prompt: the settings' text, then whose transcript it is and where this start
  *  sees it. */
-function handoffPrompt(text: string, handoff: Handoff, files: string[]): string {
+function handoffPrompt(text: string, handoff: HandoffFiles, files: string[]): string {
   return `${text}\n\nThe previous agent: ${getAgent(handoff.from).displayName}. Its session files: ${files.join(", ")}`;
 }
 
@@ -287,7 +275,7 @@ export class TabSessionManager {
   private readonly recorded: ControlEvent[] = [];
   /** Closed; nothing still in flight may start anything back up. */
   private disposed = false;
-  /** Said once per project — see resolveSbxRun's own-session-id fallback. */
+  /** Said once per project — see resolvePlace's own-session-id fallback. */
   private sbxPreexistingSaid = false;
   /** How many things are still starting; the bar stays up while any is. */
   private indicators = 0;
@@ -310,7 +298,7 @@ export class TabSessionManager {
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
-  /** See AgentDefinition.prepareSandboxSpawn: the repository's or worktree's sandbox folder of the
+  /** See AgentSandbox.prepare: the repository's or worktree's sandbox folder of the
    *  agent, created only when asked for. The host side is HostSetups'. */
   private sandboxPaths(runtime: AgentRuntime): AgentPaths {
     const agentDir = sandboxDir(this.storageRoot, this.at.ref, runtime.agent.id);
@@ -453,7 +441,7 @@ export class TabSessionManager {
       agent,
       executable: agent.executable(),
       // An agent without a version check (the shell) is always there.
-      startable: agent.versionArgs === undefined,
+      startable: agent.install === undefined,
       sbxOnly: false,
       ready: Promise.resolve(),
       reconcileRetriesLeft: 0
@@ -465,7 +453,7 @@ export class TabSessionManager {
 
   /**
    * One agent's sessions of this repository: the host's, and the sandbox's through its mount
-   * (SessionProvider.sandbox), tagged with the sandbox so resolveSbxRun sends them back. The
+   * (AgentSandbox.sessions), tagged with the sandbox so resolvePlace sends them back. The
    * sandbox is listed whatever the switch: its sessions stay resumable there, for one readdir.
    */
   private async listSessions(runtime: AgentRuntime): Promise<AgentSessionInfo[]> {
@@ -474,8 +462,8 @@ export class TabSessionManager {
       return [];
     }
     const onHost = agent.sessions.list(this.at.path);
-    const sandbox = agent.sessions.sandbox;
-    if (!sandbox || !isSbxAgent(agent.id)) {
+    const sandbox = agent.sandbox?.sessions;
+    if (!sandbox) {
       return onHost;
     }
     // In parallel: the bootstrap listing, and every reconcile.
@@ -491,37 +479,34 @@ export class TabSessionManager {
     return sandboxSessionDir(sandboxDir(this.storageRoot, this.at.ref, agentId));
   }
 
-  /**
-   * A tab's session operations, bound to wherever that session lives: the sandbox's mounted root
-   * and the path the agent sees inside it (SessionProvider.sandbox), or the host's repository.
-   * Answered once, so no caller can pair a sandboxed session with the host's arguments — the two
-   * providers take different ones. `sessions` is the runtime agent's, which the caller has checked.
-   */
-  private sessionActions(
-    tab: TabState,
-    runtime: AgentRuntime,
-    sessions: SessionProvider
-  ): {
-    remove: (sessionId: string) => Promise<void>;
-    rename: (sessionId: string, title: string) => Promise<void>;
-    files: (sessionId: string) => Promise<string[]>;
-  } {
-    const { agent, executable } = runtime;
-    const sandbox = tab.sandbox ? sessions.sandbox : undefined;
-    if (!sandbox) {
-      return {
-        remove: (sessionId) => sessions.remove(executable, this.at.path, sessionId),
-        rename: (sessionId, title) => sessions.rename(executable, this.at.path, sessionId, title),
-        files: (sessionId) => sessions.files(this.at.path, sessionId)
-      };
-    }
-    const root = this.sandboxSessionRoot(agent.id);
-    const cwd = toContainerPath(this.at.path);
+  /** What a place of this agent's tabs is built from. */
+  private placeContext(runtime: AgentRuntime): PlaceContext {
     return {
-      remove: (sessionId) => sandbox.remove(root, cwd, sessionId),
-      rename: (sessionId, title) => sandbox.rename(root, cwd, sessionId, title),
-      files: (sessionId) => sandbox.files(root, cwd, sessionId)
+      at: this.at,
+      storageRoot: this.storageRoot,
+      agent: runtime.agent,
+      executable: runtime.executable,
+      onNotice: (severity, message) => this.callbacks.onNotice(severity, message)
     };
+  }
+
+  private hostPlace(runtime: AgentRuntime): HostPlace {
+    return new HostPlace(this.placeContext(runtime), () => this.hostSetups.preparation(runtime.agent.id));
+  }
+
+  /**
+   * Where a tab runs: where its latest start ran it, else where its session lives — so a session
+   * is always operated on where it lives, the sandbox's mounted root or the host's repository.
+   */
+  private placeOf(tab: TabState): TabPlace {
+    if (tab.place) {
+      return tab.place;
+    }
+    const runtime = this.runtimeFor(tab.agentId);
+    const { agent } = runtime;
+    return tab.sandbox && hasSandbox(agent)
+      ? new SandboxPlace(this.placeContext(runtime), agent)
+      : this.hostPlace(runtime);
   }
 
   private canStart(runtime: AgentRuntime): boolean {
@@ -532,11 +517,11 @@ export class TabSessionManager {
     const { agent, executable } = runtime;
     const cwd = this.at.path;
 
-    if (agent.versionArgs) {
-      runtime.startable = await isAgentInstalled(executable, agent.versionArgs, cwd);
+    if (agent.install) {
+      runtime.startable = await isAgentInstalled(executable, agent.install.versionArgs, cwd);
       // Not here, but the project's sandbox has the CLI. Only the config is read — checkSbxReady
-      // talks to Docker and stays on the spawn (resolveSbxRun).
-      if (!runtime.startable && isSbxAgent(agent.id) && (await readSbxConfig(cwd)).enabled) {
+      // talks to Docker and stays on the spawn (resolvePlace).
+      if (!runtime.startable && hasSandbox(agent) && (await readSbxConfig(cwd)).enabled) {
         runtime.startable = true;
         runtime.sbxOnly = true;
       }
@@ -595,7 +580,7 @@ export class TabSessionManager {
    * machine with no agent would sit at an empty project. Only unstartable runtimes are acted on.
    */
   async sbxConfigChanged(): Promise<void> {
-    const sbxRuntimes = [...this.runtimes.values()].filter((runtime) => isSbxAgent(runtime.agent.id));
+    const sbxRuntimes = [...this.runtimes.values()].filter((runtime) => hasSandbox(runtime.agent));
     if (this.disposed || sbxRuntimes.length === 0) {
       return;
     }
@@ -615,7 +600,7 @@ export class TabSessionManager {
         runtime.ready = this.bringUp(runtime);
         brought.push(runtime.ready);
       } else if (!enabled && runtime.sbxOnly) {
-        // Open tabs keep their session (a spawn gets resolveSbxRun's notice); new tabs show missing.
+        // Open tabs keep their session (a spawn gets resolvePlace's notice); new tabs show missing.
         runtime.startable = false;
         runtime.sbxOnly = false;
       }
@@ -657,7 +642,7 @@ export class TabSessionManager {
     return this.tabs.some((tab) => tab.tabId === tabId);
   }
 
-  /** `prompt` only for an agent with initialPromptArgs; the caller checks. */
+  /** `prompt` only for an agent with a `terminal`; the caller checks. */
   createTab(agentId: AgentId, sandboxOnly = false, prompt?: string): TerminalDescriptor {
     return this.addTab(agentId, { ...(sandboxOnly && { sandboxOnly }), ...(prompt !== undefined && { initialPrompt: prompt }) });
   }
@@ -678,63 +663,29 @@ export class TabSessionManager {
       return `This ${agent.displayName} tab has no session yet`;
     }
     const target = getAgent(agentId);
-    if (agentId === tab.agentId || !target.initialPromptArgs) {
+    if (agentId === tab.agentId || !target.terminal) {
       return `${target.displayName} cannot take over a ${agent.displayName} session`;
     }
     const sessionId = tab.sessionId;
-    const files = await this.sessionActions(tab, runtime, agent.sessions).files(sessionId);
+    const files = (await this.placeOf(tab).sessionActions()?.files(sessionId)) ?? [];
     if (files.length === 0) {
       return `The ${agent.displayName} session's files were not found`;
     }
     return this.addTab(agentId, { handoff: { from: tab.agentId, sessionId, files }, ...(sandboxOnly && { sandboxOnly }) });
   }
 
-  /** A sandboxed handoff's files, copied into `dir` (sandboxHandoffDir); answers the copies' host
-   *  paths. */
-  private async copyHandoff(handoff: Handoff, dir: string): Promise<string[]> {
-    await fs.promises.mkdir(dir, { recursive: true });
-    return Promise.all(
-      handoff.files.map(async (file) => {
-        const copy = path.join(dir, path.basename(file));
-        await fs.promises.copyFile(file, copy);
-        return copy;
-      })
-    );
-  }
-
-  /** Where this tab's pasted or dropped content without a path is written: its sandbox's agent
-   *  folder while it runs there, else the project's. */
+  /** Where this tab's pasted or dropped content without a path is written (TabPlace.dropsDir); a
+   *  closed tab's in the project's host folder. */
   dropsDir(tabId: string): string {
     const tab = this.tabOf(tabId);
-    return tab?.inSandbox
-      ? sandboxDropsDir(sandboxDir(this.storageRoot, this.at.ref, tab.agentId))
-      : dropsDir(this.storageRoot, this.at.ref.projectId);
+    return tab ? this.placeOf(tab).dropsDir() : dropsDir(this.storageRoot, this.at.ref.projectId);
   }
 
-  /**
-   * Dropped or pasted paths of this machine as the tab types them. A host tab gets them as they
-   * are; a sandboxed one at their container path, what lies outside its sight mounted
-   * (mountDropped), each mount and each refusal said. A refused path is left out.
-   */
+  /** Dropped or pasted paths of this machine as the tab types them (TabPlace.handPaths); a closed
+   *  tab types nothing. */
   async handPaths(tabId: string, hostPaths: string[]): Promise<string[]> {
     const tab = this.tabOf(tabId);
-    if (!tab?.inSandbox || !isSbxAgent(tab.agentId)) {
-      return hostPaths;
-    }
-    const sandbox = sandboxName(this.at.ref, tab.agentId);
-    const handed: string[] = [];
-    for (const hostPath of hostPaths) {
-      const mount = await mountDropped(sandbox, this.at.path, hostPath);
-      if ("refused" in mount) {
-        this.callbacks.onNotice("warning", `${hostPath} was not mounted into ${this.at.name()}'s SBX sandbox: ${mount.refused}.`);
-        continue;
-      }
-      if ("mounted" in mount) {
-        this.callbacks.onNotice("info", `${hostPath} is mounted into ${this.at.name()}'s SBX sandbox, read and write, until TET quits.`);
-      }
-      handed.push(toContainerPath(hostPath));
-    }
-    return handed;
+    return tab ? this.placeOf(tab).handPaths(hostPaths) : [];
   }
 
   /** The first prompt's arguments, a handoff's naming `files` as this start sees them. */
@@ -742,7 +693,7 @@ export class TabSessionManager {
     const prompt = tab.handoff
       ? handoffPrompt(effectivePrompt(this.settings.get().prompts, "handoff"), tab.handoff, files)
       : tab.initialPrompt;
-    return prompt !== undefined && agent.initialPromptArgs ? agent.initialPromptArgs(singleLine(prompt)) : [];
+    return prompt !== undefined && agent.terminal ? agent.terminal.initialPromptArgs(singleLine(prompt)) : [];
   }
 
   /**
@@ -827,24 +778,30 @@ export class TabSessionManager {
     const runtime = this.runtimeFor(tab.agentId);
     // A reported, unclaimed session (a fresh tab restarted right after its first prompt) is claimed
     // first so the start resumes it; otherwise the new process's report would replace it for good.
-    // Before resolveSbxRun, which reads the `sandbox` the claim sets.
+    // Before resolvePlace, which reads the `sandbox` the claim sets.
     const claimed = awaitsClaim(tab) ? runtime.ready.then(() => this.reconcile(runtime)) : Promise.resolve();
     void claimed
-      .then(() => Promise.all([runtime.ready, this.resolveSbxRun(tab)]))
-      .then(([, sbxRun]) => {
+      .then(() => Promise.all([runtime.ready, this.resolvePlace(tab)]))
+      .then(async ([, place]) => {
+        // Left in `error` so Restart retries: a `ready` tab gets no second fit for an unchanged
+        // size (`sent` in terminal-views.ts). resolvePlace has said why.
+        if (place === "stranded") {
+          if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
+            tab.status = "error";
+            this.callbacks.onStatus(this.at.ref, tabId, "error");
+          }
+          return;
+        }
+        const launch = tab.executable ? this.commandLaunch(tab) : await place.launch(this.launchInput(tab));
         const dims = this.lastSizes.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
-          // Closed while the setup ran.
+          // Closed while the setup ran: nothing reads a copy it made.
+          if (launch.handoffDir !== undefined) {
+            this.removeHandoffCopy(launch.handoffDir);
+          }
           return;
         }
-        // Left in `error` so Restart retries: a `ready` tab gets no second fit for an unchanged
-        // size (`sent` in terminal-views.ts). resolveSbxRun has said why.
-        if (sbxRun === "stranded") {
-          tab.status = "error";
-          this.callbacks.onStatus(this.at.ref, tabId, "error");
-          return;
-        }
-        this.startSession(tab, sbxRun).ensureStarted(dims.cols, dims.rows);
+        this.startSession(tab, place, launch).ensureStarted(dims.cols, dims.rows);
       })
       .catch((error: unknown) => {
         this.callbacks.onNotice("error", `${runtime.agent.displayName} could not be started: ${errorMessage(error)}`);
@@ -862,8 +819,8 @@ export class TabSessionManager {
   }
 
   /**
-   * The `sbx run` arguments if this tab runs in the repository's or worktree's sandbox; tet.json is
-   * read fresh per spawn. Only plain tabs of sbx agents (isSbxAgent), never a saved command's.
+   * Where this start runs the tab: the repository's or worktree's sandbox, or this machine; tet.json
+   * is read fresh per spawn. Only plain tabs of sbx agents (hasSandbox), never a saved command's.
    *
    * A session runs where it lives: a host session fails to resume in a sandbox. A tab with no
    * `sessionId` yet is sandboxed.
@@ -873,16 +830,19 @@ export class TabSessionManager {
    * Nor is `enabled: false` written back: `sbx ls` fails the same way while the daemon restarts.
    * And never `sbx run` regardless: it prints its interactive sign-in and policy setup.
    *
-   * Null runs the tab on this machine; "stranded" runs it nowhere, its notice already said.
+   * "stranded" runs it nowhere, its notice already said.
    */
-  private async resolveSbxRun(tab: TabState): Promise<SbxRun | null | "stranded"> {
-    if (tab.executable || !isSbxAgent(tab.agentId)) {
-      return null;
+  private async resolvePlace(tab: TabState): Promise<StartingPlace | "stranded"> {
+    const runtime = this.runtimeFor(tab.agentId);
+    const onHost = this.hostPlace(runtime);
+    const { agent } = runtime;
+    if (tab.executable || !hasSandbox(agent)) {
+      return onHost;
     }
     const config = await readSbxConfig(this.at.path);
     if (!config.enabled) {
       // A notice only for a tab that cannot run on this machine.
-      return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : null;
+      return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : onHost;
     }
     const sandbox = sandboxName(this.at.ref, tab.agentId);
     // Started before it is known whether it may be used, since it is the slowest step and the
@@ -899,8 +859,6 @@ export class TabSessionManager {
       }
       return "stranded";
     }
-    const runtime = this.runtimeFor(tab.agentId);
-    const { agent } = runtime;
     if (tab.sessionId && !tab.sandbox) {
       if (tab.sandboxOnly) {
         this.sbxStranded(tab, "its session was found on this machine");
@@ -922,48 +880,46 @@ export class TabSessionManager {
           `${agent.displayName} tabs from before SBX was enabled for ${this.at.name()} keep running on this machine; only new tabs run in its sandbox.`
         );
       }
-      return null;
+      return onHost;
     }
-    const paths = this.sandboxPaths(runtime);
-    const hooks = agent.prepareSandboxSpawn?.(paths) ?? { args: [] };
-    const sessionRoot = this.sandboxSessionRoot(tab.agentId);
-    let handoffCopies: string[] | undefined;
-    if (tab.handoff) {
-      tab.handoffDir = sandboxHandoffDir(paths.agentDir, tab.handoff.from, tab.handoff.sessionId);
-      handoffCopies = await this.copyHandoff(tab.handoff, tab.handoffDir);
-    }
-    const { args, env, problems } = await prepareSbxRun({
-      agentId: tab.agentId,
-      ref: this.at.ref,
-      projectRefPath: this.at.path,
+    const { projectId } = this.at.ref;
+    return new SandboxStart(this.placeContext(runtime), agent, {
       config,
-      knowledge: this.sbxLocal.knowledge(this.at.ref.projectId),
-      sandboxes: ready.sandboxes,
-      organization: ready.organization,
-      rules: ready.rules,
+      ready,
       warm,
-      paths,
-      agentArgs: [
-        ...hooks.args,
-        ...resumeArgsOf(tab, agent),
-        ...(tab.runArgs ?? []),
-        ...this.promptArgs(tab, agent, handoffCopies?.map(toContainerPath))
-      ],
-      env: agent.sandboxEnv ?? [],
-      sessionMounts: (agent.sessions?.sandbox?.mounts ?? []).map((mount) => ({
-        host: path.join(sessionRoot, mount.sub),
-        target: mount.target,
-        file: mount.file
-      })),
-      secretValues: this.sbxLocal.values(this.at.ref.projectId, "secrets"),
-      variableValues: this.sbxLocal.values(this.at.ref.projectId, "variables"),
-      onData: (data) => this.reportOutput(tab, data)
+      paths: this.sandboxPaths(runtime),
+      knowledge: this.sbxLocal.knowledge(projectId),
+      secretValues: this.sbxLocal.values(projectId, "secrets"),
+      variableValues: this.sbxLocal.values(projectId, "variables")
     });
-    // tet.json as it stands was not all applied: one notice per option and reason (sbxProblemNotices).
-    for (const notice of sbxProblemNotices(problems)) {
-      this.callbacks.onNotice("warning", notice);
-    }
-    return { args, env };
+  }
+
+  /** What a start hands its place: this tab's arguments, its handoff, where its output goes. */
+  private launchInput(tab: TabState): LaunchInput {
+    const { agent } = this.runtimeFor(tab.agentId);
+    return {
+      agentArgs: (files) => [...resumeArgsOf(tab, agent), ...(tab.runArgs ?? []), ...this.promptArgs(tab, agent, files)],
+      handoff: tab.handoff,
+      onData: (data) => this.reportOutput(tab, data)
+    };
+  }
+
+  /** A saved command runs as it is, on this machine (createCommandTab). */
+  private commandLaunch(tab: TabState): Launch {
+    return {
+      executable: tab.executable ?? this.runtimeFor(tab.agentId).executable,
+      args: tab.runArgs ?? [],
+      env: this.hostSetups.preparation(tab.agentId)?.env,
+      envOverride: tab.env,
+      sandboxed: false
+    };
+  }
+
+  /** Not awaited: nothing reads the copy once its tab is gone. */
+  private removeHandoffCopy(dir: string): void {
+    fs.promises
+      .rm(dir, { recursive: true, force: true })
+      .catch((error: unknown) => console.error("[tet] could not delete a handoff's copy:", error));
   }
 
   /**
@@ -998,14 +954,13 @@ export class TabSessionManager {
     }
   }
 
-  private startSession(tab: TabState, sbxRun: SbxRun | null): TerminalSession {
+  private startSession(tab: TabState, place: TabPlace, launch: Launch): TerminalSession {
     const runtime = this.runtimeFor(tab.agentId);
-    const { agent, executable } = runtime;
-    const preparation = this.hostSetups.preparation(agent.id);
+    const { agent } = runtime;
     const tabId = tab.tabId;
 
     // Fresh per session, counting from zero.
-    let isSessionReady = agent.createIsSessionReady?.();
+    let isSessionReady = agent.terminal?.createIsSessionReady();
     if (isSessionReady) {
       this.acquireIndicator(tabId);
     }
@@ -1018,36 +973,27 @@ export class TabSessionManager {
       setTimeout(() => this.releaseIndicator(tabId), INDICATOR_LINGER_MS);
     };
 
-    // The preparation's host-only executable/args/env apply to neither a saved command nor a
-    // sandboxed tab, whose `sbxRun.args` is the full `sbx run` line, resumeArgs and prompt included.
-    const args = tab.executable
-      ? (tab.runArgs ?? [])
-      : (sbxRun?.args ?? [
-          ...(preparation?.args ?? []),
-          ...resumeArgsOf(tab, agent),
-          ...(tab.runArgs ?? []),
-          ...this.promptArgs(tab, agent)
-        ]);
     // Given once: a restart resumes the session the prompt began.
     tab.initialPrompt = undefined;
     tab.handoff = undefined;
-    tab.inSandbox = sbxRun ? true : undefined;
+    tab.place = place;
+    tab.handoffDir = launch.handoffDir ?? tab.handoffDir;
 
     const session = new TerminalSession(
-      sbxRun ? "sbx" : (tab.executable ?? preparation?.executable ?? executable),
+      launch.executable,
       {
         cwd: tab.cwd ?? this.at.path,
-        env: sbxRun ? undefined : preparation?.env,
+        env: launch.env,
         // A saved command's variables, or those `sbx run -e NAME` passes on — never both, as a saved
         // command never runs in a sandbox. Over the machine's, so the sandbox gets the row's value.
-        envOverride: sbxRun ? sbxRun.env : tab.env,
+        envOverride: launch.envOverride,
         // What `tet-ctl` in this tab reports as its caller — see src/shared/control.ts.
         own: {
           [CONTROL_ENV.projectId]: this.at.ref.projectId,
           ...(this.at.ref.worktree !== undefined && { [CONTROL_ENV.worktree]: this.at.ref.worktree }),
           [CONTROL_ENV.tabId]: tabId
         },
-        sandboxed: sbxRun !== null
+        sandboxed: launch.sandboxed
       },
       {
         onOutput: (data) => {
@@ -1079,8 +1025,8 @@ export class TabSessionManager {
           }
         }
       },
-      agent.quitPresses ?? 0,
-      args
+      agent.terminal?.quitPresses ?? 0,
+      launch.args
     );
 
     this.sessions.set(tabId, session);
@@ -1189,10 +1135,7 @@ export class TabSessionManager {
         this.detachedTabs.splice(this.detachedTabs.indexOf(tab), 1);
       }
       if (tab.handoffDir !== undefined) {
-        // Not awaited: nothing reads the copy once its tab is gone.
-        fs.promises
-          .rm(tab.handoffDir, { recursive: true, force: true })
-          .catch((error: unknown) => console.error("[tet] could not delete a handoff's copy:", error));
+        this.removeHandoffCopy(tab.handoffDir);
       }
     }
     const sessionId = tab.sessionId;
@@ -1204,7 +1147,7 @@ export class TabSessionManager {
       if (session) {
         await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
       }
-      await this.sessionActions(tab, runtime, agent.sessions).remove(sessionId);
+      await this.placeOf(tab).sessionActions()?.remove(sessionId);
     } catch (error) {
       this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${errorMessage(error)}`);
       tab.status = "ready";
@@ -1234,7 +1177,7 @@ export class TabSessionManager {
     }
     const previousTitle = tab.title;
     try {
-      await this.sessionActions(tab, runtime, agent.sessions).rename(tab.sessionId, title);
+      await this.placeOf(tab).sessionActions()?.rename(tab.sessionId, title);
       tab.title = title.trim();
       // A name the user picked is final.
       tab.provisionalTitle = false;
@@ -1318,7 +1261,7 @@ export class TabSessionManager {
     const tab = this.disposed ? undefined : this.tabOf(tabId);
     // A tab closed right after its first prompt still needs its session named, to delete it.
     const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
-    const sessionId = bound ? getAgent(bound.agentId).sessionIdOf?.(payload) : undefined;
+    const sessionId = bound ? getAgent(bound.agentId).turns?.sessionIdOf(payload) : undefined;
     this.record({ tabId, kind: "hook", event, reportedAt, sessionId });
     // When the hook *fired*, not arrived: two hooks of a turn race, and arrival order leaves a tab
     // finished and working. One tab, one clock.
@@ -1352,7 +1295,7 @@ export class TabSessionManager {
           return {};
         }
         const agent = getAgent(tab.agentId);
-        if (agent.workOutlivesStop?.(payload)) {
+        if (agent.turns?.workOutlivesStop?.(payload)) {
           return {};
         }
         // Read before setTurn, which may clear it.

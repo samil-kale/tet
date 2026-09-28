@@ -16,11 +16,11 @@ import {
   sbxProblemNotices,
   withoutProblems
 } from "../shared/sbx-rules";
-import { projectRefKey, SBX_AGENT_IDS } from "../shared/types";
+import { projectRefKey } from "../shared/types";
 import type {
   ProjectRef,
   SbxAccess,
-  SbxAgentId,
+  AgentId,
   SbxBlocker,
   SbxKnowledgeConfig,
   SbxKnowledgeEntry,
@@ -34,9 +34,9 @@ import type {
   SbxSecret,
   SbxStatus
 } from "../shared/types";
-import { getAgent } from "./agents";
+import { getAgent, SANDBOXED_AGENTS } from "./agents";
 import { canBind } from "./can-bind";
-import type { AgentPaths } from "./agents/agent";
+import type { AgentPaths, SandboxedAgent } from "./agents/agent";
 import { readSbxConfig, writeSbxConfig } from "./tet-json";
 import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
@@ -245,7 +245,7 @@ export async function initSbxPolicy(): Promise<boolean> {
 type SandboxList = Map<string, string[]>;
 
 /**
- * Before every sandboxed spawn (`resolveSbxRun`): the first unmet precondition as a notice, or the
+ * Before every sandboxed spawn (`resolvePlace`): the first unmet precondition as a notice, or the
  * sandbox listing the sign-in probe's `sbx ls` produced and the filesystem rules the policy check
  * read, for `prepareSbxRun`. The policy check (readSbxBlockers) repeats the dialog's: a policy
  * changes outside tet, and an agent whose hooks cannot reach tet or whose folders are unmounted
@@ -330,7 +330,7 @@ async function readSbxBlockers(
   if (storageRoot !== undefined && projects !== undefined) {
     const root = storageRoot;
     const own =
-      SBX_AGENT_IDS.every((agentId) => mountable(sandboxDir(root, ref, agentId), "rw")) &&
+      SANDBOXED_AGENTS.every((agent) => mountable(sandboxDir(root, ref, agent.id), "rw")) &&
       (!ownWorktree || mountable(projectRefPath, "rw"));
     if (!own) {
       blockers.push({ what: "tet's project data", allow: `${folderRule(projects)} (read and write)` });
@@ -471,7 +471,7 @@ async function isControlChannelAllowed(): Promise<boolean | undefined> {
  * is its own, fixed at `sbx create`. Hashed: `sbx create --name` allows only letters, numbers,
  * hyphens and periods.
  */
-export function sandboxName(ref: ProjectRef, agentId: SbxAgentId): string {
+export function sandboxName(ref: ProjectRef, agentId: AgentId): string {
   return `tet-${agentId}-${idHash(projectRefKey(ref))}`;
 }
 
@@ -480,8 +480,8 @@ export function sandboxName(ref: ProjectRef, agentId: SbxAgentId): string {
  * copied folder given a new one. Nothing reaches it, yet it keeps grants, rules and secrets of its
  * own; undefined for any other sandbox.
  */
-function orphanAgent(name: string, workspaces: string[], target: SbxSaveTarget): SbxAgentId | undefined {
-  const agentId = SBX_AGENT_IDS.find((candidate) => new RegExp(`^tet-${candidate}-[0-9a-f]{12}$`).test(name));
+function orphanAgent(name: string, workspaces: string[], target: SbxSaveTarget): AgentId | undefined {
+  const agentId = SANDBOXED_AGENTS.find((candidate) => new RegExp(`^tet-${candidate.id}-[0-9a-f]{12}$`).test(name))?.id;
   return agentId !== undefined && name !== sandboxName(target.ref, agentId) && sameSet(workspaces, [target.path]) ? agentId : undefined;
 }
 
@@ -562,7 +562,7 @@ type SandboxPaths = Pick<AgentPaths, "agentDir">;
  *
  * Never the agent's config directory (`~/.claude`, `~/.codex`): pointed at by `CLAUDE_CONFIG_DIR`/
  * `CODEX_HOME`, the sandboxed CLI would be signed in as the host, and a `/login` inside would
- * replace the host's. Knowledge (AgentDefinition.sandboxKnowledge) and sessions (sessionMountSpecs)
+ * replace the host's. Knowledge (AgentSandbox.knowledge) and sessions (sessionMountSpecs)
  * are curated subpaths, never the directory holding credentials.
  */
 export function fixedMountSpecs(paths: SandboxPaths): MountSpec[] {
@@ -583,14 +583,13 @@ function worktreeMountSpecs(projectRefPath: string): MountSpec[] {
 type KnowledgeEntries = Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
 
 /** Cached (isAgentInstalled). */
-async function isInstalledHere(agentId: SbxAgentId): Promise<boolean> {
-  const agent = getAgent(agentId);
-  return agent.versionArgs !== undefined && (await isAgentInstalled(agent.executable(), agent.versionArgs, os.tmpdir()));
+async function isInstalledHere(agent: SandboxedAgent): Promise<boolean> {
+  return agent.install !== undefined && (await isAgentInstalled(agent.executable(), agent.install.versionArgs, os.tmpdir()));
 }
 
 /** Where the sandboxed CLI reads its own skills, whether or not it is installed here. */
-function skillsTargets(agentId: SbxAgentId): string[] {
-  return (getAgent(agentId).sandboxKnowledge?.().skills ?? []).map((entry) => entry.target);
+function skillsTargets(agent: SandboxedAgent): string[] {
+  return agent.sandbox.knowledge().skills.map((entry) => entry.target);
 }
 
 /**
@@ -600,17 +599,16 @@ function skillsTargets(agentId: SbxAgentId): string[] {
  * agent without a `sharedSkillsTarget` (Claude) never gets it. A `skillsFolder` replaces both, at
  * the agent's own skills targets, installed or not: the user chose it.
  */
-async function sandboxKnowledgeFor(agentId: SbxAgentId, skillsFolder?: string): Promise<KnowledgeEntries> {
-  const agent = getAgent(agentId);
-  const own = (await isInstalledHere(agentId)) ? agent.sandboxKnowledge?.() : undefined;
+async function sandboxKnowledgeFor(agent: SandboxedAgent, skillsFolder?: string): Promise<KnowledgeEntries> {
+  const own = (await isInstalledHere(agent)) ? agent.sandbox.knowledge() : undefined;
   const existing = (entries: SbxKnowledgeEntry[] = []): SbxKnowledgeEntry[] => entries.filter((entry) => statOf(entry.host));
   const rest = { plugins: existing(own?.plugins), instructions: existing(own?.instructions) };
   if (skillsFolder !== undefined) {
-    const skills = statOf(skillsFolder) ? skillsTargets(agentId).map((target) => ({ host: skillsFolder, target })) : [];
+    const skills = statOf(skillsFolder) ? skillsTargets(agent).map((target) => ({ host: skillsFolder, target })) : [];
     return { skills, ...rest };
   }
   const skills = existing(own?.skills);
-  const target = agent.sharedSkillsTarget;
+  const target = agent.sandbox.sharedSkillsTarget;
   const shared = path.join(os.homedir(), ".agents", "skills");
   if (target !== undefined && !skills.some((entry) => entry.target === target) && statOf(shared)) {
     skills.push({ host: shared, target });
@@ -621,13 +619,13 @@ async function sandboxKnowledgeFor(agentId: SbxAgentId, skillsFolder?: string): 
 /** The Knowledge tab's agents: those installed here, with what each brings of its own. */
 export async function readKnowledgeSources(): Promise<SbxKnowledgeSource[]> {
   const sources = await Promise.all(
-    SBX_AGENT_IDS.map(async (agentId): Promise<SbxKnowledgeSource | undefined> =>
-      (await isInstalledHere(agentId))
+    SANDBOXED_AGENTS.map(async (agent): Promise<SbxKnowledgeSource | undefined> =>
+      (await isInstalledHere(agent))
         ? {
-            agentId,
-            displayName: getAgent(agentId).displayName,
-            own: await sandboxKnowledgeFor(agentId),
-            skillsTargets: skillsTargets(agentId)
+            agentId: agent.id,
+            displayName: agent.displayName,
+            own: await sandboxKnowledgeFor(agent),
+            skillsTargets: skillsTargets(agent)
           }
         : undefined
     )
@@ -648,8 +646,8 @@ interface Grant extends MountSpec {
  * Knowledge is bind-mounted (`HOST:TARGET[:ro]`), not symlinked: sbx cannot follow a link out of
  * its workspace.
  */
-async function grantsOf(agentId: SbxAgentId, knowledge: SbxKnowledgeConfig, paths: SbxPath[]): Promise<Grant[]> {
-  const entries = await sandboxKnowledgeFor(agentId, knowledge.skillsFolder);
+async function grantsOf(agent: SandboxedAgent, knowledge: SbxKnowledgeConfig, paths: SbxPath[]): Promise<Grant[]> {
+  const entries = await sandboxKnowledgeFor(agent, knowledge.skillsFolder);
   return [
     ...SBX_KNOWLEDGE_KINDS.flatMap((kind) => {
       const access = knowledge[kind];
@@ -751,7 +749,7 @@ async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {
 export async function removeRefSandboxes(refs: ProjectRef[]): Promise<void> {
   const sandboxes = await listSandboxes();
   for (const ref of refs) {
-    for (const agentId of SBX_AGENT_IDS) {
+    for (const { id: agentId } of SANDBOXED_AGENTS) {
       const name = sandboxName(ref, agentId);
       if (sandboxes?.has(name)) {
         await removeSandbox(name);
@@ -794,7 +792,7 @@ export async function ensureRunning(name: string, onData?: OnData): Promise<bool
  * one just made.
  */
 function ensureSandboxExists(
-  agentId: SbxAgentId,
+  agent: SandboxedAgent,
   projectPath: string,
   name: string,
   sandboxes: SandboxList,
@@ -812,9 +810,9 @@ function ensureSandboxExists(
     if (existing !== undefined) {
       await removeSandbox(name, onData);
     }
-    const created = await runSbx(["create", getAgent(agentId).sandboxKit ?? agentId, projectPath, "--name", name, "--skills=off"], { onData });
+    const created = await runSbx(["create", agent.sandbox.kit ?? agent.id, projectPath, "--name", name, "--skills=off"], { onData });
     if (!created.ok) {
-      throw new Error(`sbx could not create the ${agentId} sandbox`);
+      throw new Error(`sbx could not create the ${agent.id} sandbox`);
     }
     // A new sandbox holds nothing of the one that had this name — and one removed outside tet
     // (`sbx rm`, `prune`, `reset`) never passed removeSandbox, which is the other place this is
@@ -1192,7 +1190,7 @@ interface SbxSessionMount {
 }
 
 interface SbxRunRequest {
-  agentId: SbxAgentId;
+  agent: SandboxedAgent;
   /** The repository or worktree the tab runs in; its sandbox is its own, its sbx values the
    *  project's. */
   ref: ProjectRef;
@@ -1214,7 +1212,7 @@ interface SbxRunRequest {
   paths: SandboxPaths;
   /** The agent's command line after `sbx run`'s "--" — hook and resume arguments. */
   agentArgs: string[];
-  /** `AgentDefinition.sandboxEnv` — "KEY=VALUE" entries for `sbx run -e`. */
+  /** `AgentSandbox.env` — "KEY=VALUE" entries for `sbx run -e`. */
   env?: string[];
   /** This machine's values of `config.secrets`, by env name (SbxLocalStore.values). */
   secretValues: ReadonlyMap<string, string>;
@@ -1227,7 +1225,7 @@ interface SbxRunRequest {
 }
 
 /**
- * Mounts putting a sandboxed agent's sessions on the host (why: SessionProvider.sandbox), rw.
+ * Mounts putting a sandboxed agent's sessions on the host (why: AgentSandbox.sessions), rw.
  *
  * The host side is created first (directory or empty file) — `sbx mount` needs it. The container
  * side need not exist, and a mount wins over a template's volume there (Claude's
@@ -1303,10 +1301,10 @@ export function sandboxEnv({
 export async function prepareSbxRun(
   request: SbxRunRequest
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
-  const { agentId, onData, secretValues, variableValues } = request;
+  const { agent, onData, secretValues, variableValues } = request;
   const { projectId } = request.ref;
-  const name = sandboxName(request.ref, agentId);
-  const created = await ensureSandboxExists(agentId, request.projectRefPath, name, request.sandboxes, onData);
+  const name = sandboxName(request.ref, agent.id);
+  const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
   // Ports, hosts and secrets only reach a sandbox this call created: they survive a stop, and after
   // that a Save brings them in line (saveSbxConfig). A port another sandbox of the project forwards
   // is in place already (applyProjectPorts).
@@ -1316,7 +1314,7 @@ export async function prepareSbxRun(
     config: request.config,
     knowledge: request.knowledge,
     values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
-    agentIds: [agentId],
+    agents: [agent],
     organization: request.organization,
     rules: request.rules,
     ports: created,
@@ -1332,7 +1330,7 @@ export async function prepareSbxRun(
     ...worktreeMountSpecs(request.projectRefPath),
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
-  const grants = await grantsOf(agentId, knowledge, config.paths);
+  const grants = await grantsOf(agent, knowledge, config.paths);
   // A dropped path sbx refuses now is left out without a word: its drop said it was mounted.
   const refused = await mountAll(name, [...own, ...grants, ...droppedMountSpecs(name)], onData, created ? undefined : request.warm);
   const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
@@ -1360,10 +1358,10 @@ export async function prepareSbxRun(
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged. The agent positional is only
   // verified by sbx; `--name` finds the sandbox. The plain agent id even for a kit
-  // (AgentDefinition.sandboxKit).
+  // (AgentSandbox.kit).
   const args = [
     "run",
-    agentId,
+    agent.id,
     "--name",
     name,
     ...env.flatMap((entry) => ["-e", entry]),
@@ -1390,7 +1388,7 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
     throw new Error("SBX could not list the sandboxes.");
   }
   // A worktree forwards no ports (tet-json.ts's readSbxConfig): only the repository's sandboxes.
-  const names = SBX_AGENT_IDS.map((agentId) => sandboxName({ projectId }, agentId)).filter((name) => sandboxes.has(name));
+  const names = SANDBOXED_AGENTS.map((agent) => sandboxName({ projectId }, agent.id)).filter((name) => sandboxes.has(name));
   const published = await Promise.all(names.map(readSandboxPorts));
   if (published.includes(undefined)) {
     throw new Error("SBX could not list the sandboxes' ports.");
@@ -1406,7 +1404,7 @@ interface SbxCheck {
   /** The env names holding a value here: stored, or typed at this Save. */
   values: { secrets: ReadonlySet<string>; variables: ReadonlySet<string> };
   /** Whose knowledge is mounted: every agent at Save, the starting one at its spawn. */
-  agentIds: readonly SbxAgentId[];
+  agents: readonly SandboxedAgent[];
   /** readGovernance's. */
   organization: string | undefined;
   /** readFilesystemRules', when the caller has them already. */
@@ -1453,7 +1451,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     organization ? Promise.all(config.hosts.map(allowed)) : Promise.resolve(config.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
     check.published ?? (check.ports && config.ports.length > 0 ? readProjectPorts(check.projectId) : new Set<string>()),
-    Promise.all(check.agentIds.map((agentId) => sandboxKnowledgeFor(agentId, knowledge.skillsFolder)))
+    Promise.all(check.agents.map((agent) => sandboxKnowledgeFor(agent, knowledge.skillsFolder)))
   ]);
   if (rules === undefined) {
     throw new Error("SBX could not list its filesystem rules.");
@@ -1564,7 +1562,7 @@ interface SaveReads {
  * Ports are listed only by a running sandbox (readSandboxPorts), so theirs are started here.
  */
 async function assertReadable(
-  kept: readonly { agentId: SbxAgentId; name: string; ports: boolean }[],
+  kept: readonly { agent: SandboxedAgent; name: string; ports: boolean }[],
   secrets: boolean,
   ports: boolean,
   hosts: boolean
@@ -1588,8 +1586,8 @@ async function assertReadable(
   }
   if (ports) {
     reads.ports = new Map();
-    for (const { agentId, name } of kept.filter((entry) => entry.ports)) {
-      const sandbox = `the ${getAgent(agentId).displayName} sandbox`;
+    for (const { agent, name } of kept.filter((entry) => entry.ports)) {
+      const sandbox = `the ${agent.displayName} sandbox`;
       if (!(await ensureRunning(name))) {
         throw new Error(`SBX could not start ${sandbox} to bring its ports in line. ${unsaved}`);
       }
@@ -1606,7 +1604,7 @@ async function assertReadable(
 /** A sandbox a Save removed, by the repository or worktree it was of. */
 export interface SbxRemoved {
   ref: ProjectRef;
-  agentId: SbxAgentId;
+  agentId: AgentId;
 }
 
 /**
@@ -1661,17 +1659,18 @@ export async function saveSbxConfig(
       orphaned.push({ name, ref: target.ref, agentId: orphanAgent(name, workspaces, target)! });
     }
   }
-  const kept: { agentId: SbxAgentId; name: string; projectId: string; ports: boolean }[] = [];
+  const kept: { agent: SandboxedAgent; name: string; projectId: string; ports: boolean }[] = [];
   const dropped: (SbxRemoved & { name: string })[] = [];
   for (const target of targets) {
-    for (const agentId of SBX_AGENT_IDS) {
+    for (const agent of SANDBOXED_AGENTS) {
+      const agentId = agent.id;
       const name = sandboxName(target.ref, agentId);
       const existing = sandboxes.get(name);
       if (existing === undefined) {
         continue;
       }
       if (config.enabled && sameSet(existing, [target.path])) {
-        kept.push({ agentId, name, projectId: target.ref.projectId, ports: target === project });
+        kept.push({ agent, name, projectId: target.ref.projectId, ports: target === project });
       } else {
         dropped.push({ name, ref: target.ref, agentId });
       }
@@ -1755,9 +1754,9 @@ export async function saveSbxConfig(
   const failures =
     Object.keys(refused).length > 0 ? sbxProblemNotices(await apply(applied)).map((notice) => `Not taken back: ${notice}`) : [];
   const unrevoked: SbxProblems = {};
-  for (const { agentId, name } of kept) {
-    const current = new Set((await grantsOf(agentId, knowledge.current, applied.paths)).map((grant) => grant.mount));
-    const stale = (await grantsOf(agentId, knowledge.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
+  for (const { agent, name } of kept) {
+    const current = new Set((await grantsOf(agent, knowledge.current, applied.paths)).map((grant) => grant.mount));
+    const stale = (await grantsOf(agent, knowledge.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
     if (stale.length > 0) {
       await revokeMounts(name, stale, unrevoked);
     }

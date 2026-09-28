@@ -4,10 +4,10 @@ import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import { writeIfChanged } from "../../write-if-changed";
 import type { ThemeDefinition } from "../../../shared/themes";
-import type { AgentDefinition } from "../agent";
+import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { setupCodexHooks } from "./hooks";
-import { codexHome, codexSessionProvider } from "./sessions";
+import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
 
 /**
  * On win32 Codex reads its colors from the *console* (conhost's palette, whatever xterm draws) and
@@ -36,63 +36,68 @@ function writeConsoleColorLauncher(agentDir: string, executable: string, theme: 
  */
 const FULLSCREEN_ARGS = ["-c", "tui.fullscreen_transcript=true"];
 
-export const codexAgent: AgentDefinition = {
+export const codexAgent: SandboxedAgent = {
   id: "codex",
   displayName: "Codex",
   executable: () => "codex",
-  versionArgs: ["--version"],
-  verifiedVersion: "0.157.1",
-  // `--ephemeral` writes no rollout, so no cleanupAsk.
-  askArgs: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
-  // The positional prompt of an interactive session, after the `-c` options.
-  initialPromptArgs: (prompt) => [prompt],
+  install: { versionArgs: ["--version"], verifiedVersion: "0.157.1" },
+  terminal: {
+    // The positional prompt of an interactive session, after the `-c` options.
+    initialPromptArgs: (prompt) => [prompt],
+    // Above what setup and onboarding print before the first real redraw.
+    createIsSessionReady: () => createByteThresholdCheck(600),
+    // One Ctrl+C clears a non-empty composer and quits on an empty one; a second byte would land
+    // mid-shutdown, where ConPTY turns it into a CTRL_C_EVENT that kills the shutdown.
+    quitPresses: 1
+  },
+  // `--ephemeral` writes no rollout, so no cleanup.
+  ask: { args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"] },
   sessions: codexSessionProvider,
-  sessionIdOf: hookSessionId,
-  prepareSpawn: (executable, paths) => {
-    let args: string[] = FULLSCREEN_ARGS;
-    let launcher: string | undefined;
-    if (process.platform === "win32") {
-      try {
-        launcher = writeConsoleColorLauncher(paths.agentDir, executable, paths.theme);
-      } catch (error) {
-        // Codex still starts, drawing its boxes for a black console.
-        console.error("[tet] could not write Codex's launcher:", error);
+  // See AgentTurns.questionOutlivesTurn.
+  turns: { sessionIdOf: hookSessionId, questionOutlivesTurn: true },
+  host: {
+    prepare: (executable, paths) => {
+      let args: string[] = FULLSCREEN_ARGS;
+      let launcher: string | undefined;
+      if (process.platform === "win32") {
+        try {
+          launcher = writeConsoleColorLauncher(paths.agentDir, executable, paths.theme);
+        } catch (error) {
+          // Codex still starts, drawing its boxes for a black console.
+          console.error("[tet] could not write Codex's launcher:", error);
+        }
       }
-    }
-    try {
-      args = [...FULLSCREEN_ARGS, ...setupCodexHooks()];
-    } catch (error) {
-      // See prepareSpawn: swallow, never reject.
-      console.error("[tet] could not set up Codex hooks:", error);
-    }
-    return Promise.resolve({ args, executable: launcher });
-  },
-  prepareSandboxSpawn: () => {
-    try {
-      return { args: [...FULLSCREEN_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] };
-    } catch (error) {
-      console.error("[tet] could not set up Codex sandbox hooks:", error);
-      return { args: FULLSCREEN_ARGS };
+      try {
+        args = [...FULLSCREEN_ARGS, ...setupCodexHooks()];
+      } catch (error) {
+        // See AgentHost.prepare: swallow, never reject.
+        console.error("[tet] could not set up Codex hooks:", error);
+      }
+      return Promise.resolve({ args, executable: launcher });
     }
   },
-  // Skills in `~/.codex/skills` and `~/.agents/skills`; all of `~/.codex/plugins`;
-  // `~/.codex/AGENTS.md`, `AGENTS.override.md` preferred. Under the config root the sessions are
-  // read from.
-  sandboxKnowledge: () => {
-    const home = codexHome();
-    const instructionsHost = [path.join(home, "AGENTS.override.md"), path.join(home, "AGENTS.md")].find((file) => fs.existsSync(file));
-    return {
-      skills: [{ host: path.join(home, "skills"), target: `${SANDBOX_HOME}/.codex/skills` }],
-      plugins: [{ host: path.join(home, "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
-      instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
-    };
-  },
-  sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
-  // Above what setup and onboarding print before the first real redraw.
-  createIsSessionReady: () => createByteThresholdCheck(600),
-  // See AgentDefinition.questionOutlivesTurn.
-  questionOutlivesTurn: true,
-  // One Ctrl+C clears a non-empty composer and quits on an empty one; a second byte would land
-  // mid-shutdown, where ConPTY turns it into a CTRL_C_EVENT that kills the shutdown.
-  quitPresses: 1
+  sandbox: {
+    prepare: () => {
+      try {
+        return { args: [...FULLSCREEN_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] };
+      } catch (error) {
+        console.error("[tet] could not set up Codex sandbox hooks:", error);
+        return { args: FULLSCREEN_ARGS };
+      }
+    },
+    // Skills in `~/.codex/skills` and `~/.agents/skills`; all of `~/.codex/plugins`;
+    // `~/.codex/AGENTS.md`, `AGENTS.override.md` preferred. Under the config root the sessions are
+    // read from.
+    knowledge: () => {
+      const home = codexHome();
+      const instructionsHost = [path.join(home, "AGENTS.override.md"), path.join(home, "AGENTS.md")].find((file) => fs.existsSync(file));
+      return {
+        skills: [{ host: path.join(home, "skills"), target: `${SANDBOX_HOME}/.codex/skills` }],
+        plugins: [{ host: path.join(home, "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
+        instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
+      };
+    },
+    sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
+    sessions: codexSandboxSessions
+  }
 };

@@ -6,7 +6,7 @@ export interface AgentInfo {
   displayName: string;
   /** False for the shell, whose tabs are plain terminals. */
   hasSessions: boolean;
-  /** Starts on a first prompt (AgentDefinition.initialPromptArgs), so it can take over another
+  /** Starts on a first prompt (AgentTerminal.initialPromptArgs), so it can take over another
    *  agent's session. */
   takesPrompt: boolean;
 }
@@ -168,14 +168,6 @@ export function withSettings<T extends SettingsEdits>(base: T, edits: SettingsEd
   };
 }
 
-/** Agents that run in an sbx sandbox: two with Docker's built-in kit, pi through a community kit
- *  (`AgentDefinition.sandboxKit`). Not the shell. */
-export const SBX_AGENT_IDS = ["claude", "codex", "pi"] as const satisfies readonly AgentId[];
-export type SbxAgentId = (typeof SBX_AGENT_IDS)[number];
-
-export function isSbxAgent(agentId: string): agentId is SbxAgentId {
-  return (SBX_AGENT_IDS as readonly string[]).includes(agentId);
-}
 
 /** Forwards `host` to `container`. Strings as typed; validated only at `sbx run`. */
 export interface SbxPort {
@@ -194,7 +186,7 @@ export interface SbxPath {
 }
 
 /** Which non-identity host knowledge to mount into the sandbox, with which access; `false` is off.
- *  Agent-agnostic — the paths per agent are `AgentDefinition.sandboxKnowledge`. Kept on this
+ *  Agent-agnostic — the paths per agent are `AgentSandbox.knowledge`. Kept on this
  *  machine per project, never in tet.json (sbx-local.ts): it names this machine's folders. */
 export interface SbxKnowledgeConfig {
   skills: SbxAccess | false;
@@ -219,7 +211,7 @@ export interface SbxKnowledgeEntry {
 /** An agent installed on this machine, and what the Knowledge tab's rows mount for it (sbx.ts's
  *  readKnowledgeSources). */
 export interface SbxKnowledgeSource {
-  agentId: SbxAgentId;
+  agentId: AgentId;
   displayName: string;
   /** Per kind, what exists here of the agent's own. */
   own: Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;

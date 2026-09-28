@@ -8,6 +8,7 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import * as esbuild from "esbuild";
 import { holdEscape } from "../src/renderer/ui/use-escape";
+import { claudeAgent } from "../src/main/agents/claude";
 import { hookTrustedHash, setupCodexHooks } from "../src/main/agents/codex/hooks";
 import { hookSessionId } from "../src/main/agents/hook-payload";
 import { renderPiExtension, writePiExtension } from "../src/main/agents/pi/extension";
@@ -669,7 +670,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             config: { ...EMPTY_SBX_CONFIG, enabled: true, ...rows },
             knowledge: EMPTY_SBX_KNOWLEDGE,
             values: { secrets: new Set(), variables: new Set() },
-            agentIds: ["claude"],
+            agents: [claudeAgent],
             organization: "acme",
             ports: true
           })
@@ -699,7 +700,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
         },
         knowledge: EMPTY_SBX_KNOWLEDGE,
         values: { secrets: new Set(), variables: new Set(["SET"]) },
-        agentIds: ["claude"],
+        agents: [claudeAgent],
         organization: "acme",
         ports: false
       })

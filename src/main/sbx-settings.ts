@@ -1,6 +1,6 @@
 import { errorMessage } from "../shared/errors";
 import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../shared/sbx-rules";
-import { projectRefName, projectRef, SBX_AGENT_IDS } from "../shared/types";
+import { projectRefName, projectRef } from "../shared/types";
 import type {
   ProjectRef,
   NoticeSeverity,
@@ -12,7 +12,7 @@ import type {
   SbxSaveResult,
   SbxStatus
 } from "../shared/types";
-import { getAgent } from "./agents";
+import { getAgent, SANDBOXED_AGENTS } from "./agents";
 import { logFailure } from "./json-file";
 import { readGovernance, readSbxProblems, saveSbxConfig, type SbxSaveTarget } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
@@ -36,7 +36,7 @@ function checkProject(
     config,
     knowledge,
     values: { secrets: new Set(values.secrets), variables: new Set(values.variables) },
-    agentIds: SBX_AGENT_IDS,
+    agents: SANDBOXED_AGENTS,
     organization,
     ports: true
   });

@@ -1,7 +1,7 @@
 /**
  * What every agent tab is told about TET, once per session: never replacing the user's own
  * instructions, not repeated with every message. Claude Code and pi append it to their system
- * prompt at spawn (prepareSpawn and prepareSandboxSpawn), Codex takes it as added context in its
+ * prompt at spawn (AgentHost.prepare and AgentSandbox.prepare), Codex takes it as added context in its
  * `SessionStart` hook's answer (codex/hooks.ts). It only says when to look; `tet-ctl help` holds
  * the verbs.
  *

@@ -12,7 +12,7 @@ one file is a comment at that site, not an entry here. Adding here means cutting
 
 Comments, here and in code, say what holds and why, in a sentence: never how it was found, what
 was measured, history, dates, version numbers or links. An agent's tested version is its
-`verifiedVersion` alone.
+`install.verifiedVersion` alone.
 
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI —
 classic layout, Dark Modern's palette, tab semantics, theme names; **Monaco** for the editor tab.
@@ -36,11 +36,14 @@ project's terminals.
   `diff/` (the editor tab: monaco + shiki), `sidebar/`, `dialogs/`, `ui/`, `themes/`; flat is the
   shell — `App`, `Startup`, `styles.css`, `shortcuts.ts`.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
-  documents every field). Shared code imports only the registry (`agents/index.ts`), `agent.ts`'s
-  types and the agent-neutral `ask.ts` and `system-prompt.ts`. A new agent must fit the data model
-  (below) and is a new folder, one registry entry, its id in `AGENT_IDS` (and `SBX_AGENT_IDS`,
-  `src/shared/types.ts`), and one case in `AgentIcon` (`src/renderer/ui/agent-icons.tsx`, the only
-  agent-specific code outside `agents/`; user-facing text may name agents).
+  documents every field), grouped by what it can do — `install`, `terminal`, `ask`, `sessions`,
+  `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent can do
+  something is whether it has the group (`hasSandbox`), never a list of ids. Shared code imports
+  only the registry (`agents/index.ts`), `agent.ts`'s types and the agent-neutral `ask.ts` and
+  `system-prompt.ts`. A new agent must fit the data model (below) and is a new folder, one
+  registry entry, its id in `AGENT_IDS` (`src/shared/types.ts`), and one case in `AgentIcon`
+  (`src/renderer/ui/agent-icons.tsx`, the only agent-specific code outside `agents/`; user-facing
+  text may name agents).
 - **A project is its repository and its worktrees** — the words for them, in code, texts and
   comments alike. The repository is the folder the user opened, holding `.git`; never call it a
   worktree (nor "main worktree"), and there is no noun for both: where one of them is meant — where
@@ -105,7 +108,7 @@ change, and every agent added, fits it.
   `json-file.ts`): a failure reaches the one who saved — in the dialog, or `tet-ctl`'s answer —
   and the store keeps what the disk has. Only a write nobody waits on, or a cleanup that must not
   stop what it cleans up after, logs instead (`logFailure`).
-- **A host setup knows no project.** `prepareSpawn` is handed no project path and writes only into
+- **A host setup knows no project.** `host.prepare` is handed no project path and writes only into
   `config/<agent>`: one set of files serves every repository and worktree, rewritten once when a
   setting in it changes.
 - **Sessions stay the agent's own.** TET lists them from the agent's own store, per repository or
@@ -122,7 +125,7 @@ change, and every agent added, fits it.
 Claude Code, Codex and pi are three products in the same kind of tab, alike in nothing:
 readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw. So
 anything about how a CLI is driven is an `AgentDefinition` field with a value per agent (or what
-its `prepareSpawn` returns, e.g. the fullscreen args that make a resize redraw in place), found
+its `host.prepare` returns, e.g. the fullscreen args that make a resize redraw in place), found
 through this same pty for that agent, never taken from another. The one exception is the right
 mouse button, decided per click by the terminal's mouse mode (`terminal-views.ts`), not per agent.
 
@@ -131,9 +134,9 @@ mouse button, decided per click by the terminal's mouse mode (`terminal-views.ts
 Everything TET generates for an agent lives under `~/.tet` (the data model above) and is pointed
 at from outside, each side — host and sandbox — handed only its own folder, pasted or dropped
 content without a path included (`drops/`).
-`prepareSpawn` and `prepareSandboxSpawn` are the only places an agent writes configuration;
+`host.prepare` and `sandbox.prepare` are the only places an agent writes configuration;
 beyond them it touches only its own sessions: when the user renames or deletes one, the one a
-background question leaves (`cleanupAsk`), and every one of a worktree it deleted, once its folder
+background question leaves (`ask.cleanup`), and every one of a worktree it deleted, once its folder
 is gone (`removeAllSessions`).
 
 - Claude Code: a generated `--settings` file; never `~/.claude/settings.json`.
@@ -295,7 +298,7 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
   session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
 - The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
   shown (`App.markedTabs`) and clears what was seen (`terminals.seen`).
-- A session is asked to quit (`quitPresses`) before it is killed — a hard kill skips a CLI's exit
+- A session is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a CLI's exit
   handlers.
 
 ## The control channel: `tet-ctl`
@@ -336,6 +339,11 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx.ts` drives
 the `sbx` CLI.
 
+- **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): decided at each
+  start (`resolvePlace`), until then by where its session lives. Everything that differs between
+  host and sandbox — paths as the tab sees them, drops, session operations, the spawn — is a member
+  of it, implemented by `HostPlace` and `SandboxPlace`; nothing else asks where a tab runs, and a
+  new difference extends the interface.
 - **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error` — the
   host would bypass an organization's policy.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox

@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import { AGENTS } from "./agents";
-import type { AgentDefinition } from "./agents/agent";
+import type { AgentDefinition, AgentInstall } from "./agents/agent";
 import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
@@ -9,8 +9,8 @@ import { isSimulatedMissing } from "./simulate";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { checkAgentInstalled } from "./terminals/terminal-session";
 
-/** The shell has no `versionArgs`. */
-type InstallableAgent = AgentDefinition & { versionArgs: string[] };
+/** The shell has no `install`. */
+type InstallableAgent = AgentDefinition & { install: AgentInstall };
 
 const GIT: Omit<Requirement, "installed"> = {
   name: "Git",
@@ -37,7 +37,7 @@ function yieldToLoop(): Promise<void> {
 
 /** Checked one tick apart (yieldToLoop). */
 async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
-  const installable = AGENTS.filter((agent): agent is InstallableAgent => agent.versionArgs !== undefined);
+  const installable = AGENTS.filter((agent): agent is InstallableAgent => agent.install !== undefined);
   const agentChecks: Promise<Requirement>[] = [];
   for (const agent of installable) {
     const command = agent.executable();
@@ -45,7 +45,7 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
       (async (): Promise<Requirement> => ({
         name: agent.displayName,
         command,
-        installed: await checkAgentInstalled(command, agent.versionArgs, cwd)
+        installed: await checkAgentInstalled(command, agent.install.versionArgs, cwd)
       }))()
     );
     await yieldToLoop();

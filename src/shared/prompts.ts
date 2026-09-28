@@ -19,7 +19,7 @@ const COMMIT_MESSAGE_PROMPT = [
 ].join("\n");
 
 /** The first prompt of a tab taking over another agent's session; its lines reach the CLI as one,
- *  an argument (initialPromptArgs). */
+ *  an argument (AgentTerminal.initialPromptArgs). */
 const HANDOFF_PROMPT = [
   "You are taking over a coding session from another agent. Its session transcript, in that",
   "agent's own format, is in the files named below; it can be larger than your context, so read it",

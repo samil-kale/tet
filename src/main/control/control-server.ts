@@ -7,7 +7,7 @@ import { errorMessage } from "../../shared/errors";
 import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, HookEvent } from "../../shared/control";
 import { THEMES, themeKey } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isSbxAgent, isWorking, sameProjectRef } from "../../shared/types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isWorking, sameProjectRef } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -33,6 +33,7 @@ import type {
   TerminalDescriptor
 } from "../../shared/types";
 import { getAgent } from "../agents";
+import { hasSandbox } from "../agents/agent";
 import { systemPrompt } from "../agents/system-prompt";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
@@ -378,7 +379,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     if (!deps.agentIds.includes(agent)) {
       throw new ControlError("bad_args", `unknown agent: ${agent} (see list-agents)`);
     }
-    if (caller.sandboxed && !isSbxAgent(agent)) {
+    if (caller.sandboxed && !hasSandbox(getAgent(agent as AgentId))) {
       throw new ControlError("unauthorized", `a ${agent} tab does not run in a sandbox, so a sandbox cannot open one`);
     }
     return agent as AgentId;
@@ -673,7 +674,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (prompt !== undefined && (typeof prompt !== "string" || prompt.trim() === "")) {
         throw new ControlError("bad_args", "missing text after --prompt");
       }
-      if (prompt !== undefined && !getAgent(agent).initialPromptArgs) {
+      if (prompt !== undefined && !getAgent(agent).terminal) {
         throw new ControlError("bad_args", `a ${agent} tab takes no prompt`);
       }
       const tab = terminals(ref).createTab(agent, caller.sandboxed, prompt);

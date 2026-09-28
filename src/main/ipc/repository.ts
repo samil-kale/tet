@@ -103,23 +103,23 @@ export function registerRepositoryIpc({
     const cwd = repository.at.path;
     const askable = await findAskableAgent(cwd);
     if (!askable) {
-      const candidates = AGENTS.filter((agent) => agent.askArgs)
+      const candidates = AGENTS.filter((agent) => agent.ask)
         .map((agent) => agent.displayName)
         .join(" or ");
       return { error: `${candidates} not found — install one to have it suggest a commit message.` };
     }
-    const { executable, agent } = askable;
+    const { executable, ask } = askable;
     try {
       // The commit's own paths, a rename's old one included.
       const pathspec = paths && repository.pathspec(paths);
       const context = await git.readCommitContext(cwd, pathspec);
       const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
-      const message = await suggestCommitMessage(cwd, executable, agent.askArgs!, prompt, context);
+      const message = await suggestCommitMessage(cwd, executable, ask.args, prompt, context);
       return message.length === 0 ? { error: "The agent did not suggest a commit message" } : { value: message };
     } catch (error) {
       return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
     } finally {
-      await agent.cleanupAsk?.(executable, cwd).catch(() => undefined);
+      await ask.cleanup?.(executable, cwd).catch(() => undefined);
     }
   });
   ipcMain.on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
