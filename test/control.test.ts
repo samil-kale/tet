@@ -312,7 +312,7 @@ function deps(): ControlDeps {
       }
     },
     sbx: {
-      status: async () => sbxStatus,
+      status: async () => ({ status: sbxStatus }),
       anyAgentInstalled: async () => true,
       config: async () => structuredClone(sbxConfig),
       stored: () => ({ secrets: ["API_KEY"], variables: [], knowledge: structuredClone(sbxKnowledge) }),

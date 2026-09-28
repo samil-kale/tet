@@ -279,18 +279,33 @@ export async function checkSbxReady(
   return { sandboxes, organization: status.organization, rules };
 }
 
+/** A status with what was read on the way to it: the sandboxes (signed in) and the filesystem
+ *  rules (the policy read), for a caller asking more of sbx at once (tet-ctl's sbx verbs). */
+export interface SbxReading {
+  status: SbxStatus;
+  sandboxes?: SandboxList;
+  rules?: FilesystemRule[];
+}
+
 /**
  * What the sbx-settings dialog asks before showing its fields. PATH is re-read: "Check again"
  * follows an install. Nothing cached — sbx changes from outside tet at any time.
  */
 export async function readSbxStatus(projectRefPath: string, ref: ProjectRef): Promise<SbxStatus> {
-  const { status } = await probeSbx(true);
-  if (status.policyInitialized) {
-    const { blockers, failure } = await readSbxBlockers(projectRefPath, ref);
-    status.blockers = blockers;
-    status.failure = failure;
+  return (await readSbxReading(projectRefPath, ref, true)).status;
+}
+
+/** readSbxStatus, with what it read on the way. `refreshPath` only where an install may have
+ *  happened since (the dialog's "Check again"): on macOS/Linux that is a login shell per call. */
+export async function readSbxReading(projectRefPath: string, ref: ProjectRef, refreshPath: boolean): Promise<SbxReading> {
+  const { status, sandboxes } = await probeSbx(refreshPath);
+  if (!status.policyInitialized) {
+    return { status, sandboxes };
   }
-  return status;
+  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref);
+  status.blockers = blockers;
+  status.failure = failure;
+  return { status, sandboxes, rules };
 }
 
 /** A rule covering a folder and below: under home as `~`, in this platform's separators — a rule

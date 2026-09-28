@@ -1370,16 +1370,20 @@ export class TabSessionManager {
     if (!runtime.agent.sessions) {
       return;
     }
-    runtime.reconcileRetriesLeft = RECONCILE_MAX_RETRIES;
-    // Only an unsettled label caps the debounce; otherwise listings stay out of a turn. Not
-    // `tabsOf`, which allocates per output chunk.
-    if (
-      runtime.reconcileDeadline === undefined &&
-      this.tabs.some((tab) => tab.agentId === runtime.agent.id && titleUnsettled(tab))
-    ) {
+    // Only an unsettled label caps the debounce and retries (a title persisted late); otherwise
+    // listings stay out of a turn.
+    const unsettled = this.titlesUnsettled(runtime);
+    runtime.reconcileRetriesLeft = unsettled ? RECONCILE_MAX_RETRIES : 0;
+    if (unsettled && runtime.reconcileDeadline === undefined) {
       runtime.reconcileDeadline = Date.now() + RECONCILE_MAX_WAIT_MS;
     }
     this.armReconcileTimer(runtime, delayMs);
+  }
+
+  /** Whether a tab of the agent still waits for its session or title. Not `tabsOf`, which
+   *  allocates per output chunk. */
+  private titlesUnsettled(runtime: AgentRuntime): boolean {
+    return this.tabs.some((tab) => tab.agentId === runtime.agent.id && titleUnsettled(tab));
   }
 
   private armReconcileTimer(runtime: AgentRuntime, delayMs: number): void {
@@ -1395,7 +1399,7 @@ export class TabSessionManager {
     runtime.reconcileTimer = setTimeout(() => {
       runtime.reconcileDeadline = undefined;
       void this.reconcile(runtime).then(() => {
-        if (runtime.reconcileRetriesLeft > 0) {
+        if (runtime.reconcileRetriesLeft > 0 && this.titlesUnsettled(runtime)) {
           runtime.reconcileRetriesLeft -= 1;
           this.armReconcileTimer(runtime, RECONCILE_RETRY_MS);
         }

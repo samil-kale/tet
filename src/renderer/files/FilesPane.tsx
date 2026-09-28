@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { ProjectRef, FileSearchMatch, RepositoryState } from "../../shared/types";
+import type { ProjectRef, FileSearchMatch } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../terminal/editor-tab";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
@@ -13,8 +13,6 @@ import { Section } from "../ui/Section";
 
 interface FilesPaneProps {
   resolved: ResolvedRef;
-  /** Its changes trigger listing re-reads — a file starting or stopping to exist. */
-  state: RepositoryState;
   /** False while the git view stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
   /** The active editor tab's file — the tree reveals it. */
@@ -50,7 +48,6 @@ function useDelayed(active: boolean, delayMs: number): boolean {
  */
 export const FilesPane = memo(function FilesPane({
   resolved,
-  state,
   shown,
   openPath,
   onOpenFile,
@@ -58,7 +55,7 @@ export const FilesPane = memo(function FilesPane({
   onSearchHeight
 }: FilesPaneProps) {
   const { acting, act, ask } = useFileAct(resolved.key);
-  const { explorerListing, listing, refreshExplorer } = useExplorerListing(resolved, state.changes, shown);
+  const { explorerListing, listing, refreshExplorer } = useExplorerListing(resolved, shown);
   const { searchResult, searching, search } = useFileSearch(resolved);
   const explorerRef = useRef<ExplorerHandle>(null);
   const searchRef = useRef<FileSearchHandle>(null);

@@ -1,6 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { projectRefKey } from "../../shared/types";
-import type { ProjectRef, ExplorerListing, FileChange, GitActionResult } from "../../shared/types";
+import type { ProjectRef, ExplorerListing, GitActionResult } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../terminal/editor-tab";
 import type { FileAct, FileAsk } from "../git/run-action";
@@ -22,64 +22,68 @@ import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextM
 import { askName, confirmed } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
 
-interface RowsProps {
-  nodes: TreeNode[];
+/** A row on screen: the tree flattened to what open folders show, as VS Code's list renders it. */
+interface VisibleRow {
+  node: TreeNode;
   depth: number;
-  expanded: Record<string, boolean>;
+  open: boolean;
+}
+
+function visibleRows(
+  nodes: TreeNode[],
+  expanded: Record<string, boolean>,
+  forceExpanded: boolean,
+  depth = 0,
+  out: VisibleRow[] = []
+): VisibleRow[] {
+  for (const node of nodes) {
+    const open = forceExpanded || isOpen(node, expanded);
+    out.push({ node, depth, open });
+    if (node.children && open) {
+      visibleRows(node.children, expanded, forceExpanded, depth + 1, out);
+    }
+  }
+  return out;
+}
+
+interface ExplorerRowProps extends VisibleRow {
+  selected: boolean;
   toggle: (node: TreeNode) => void;
-  forceExpanded: boolean;
-  selected: string | null;
   onOpen: (path: string, how?: OpenEditor) => void;
   onContextMenu: (event: React.MouseEvent, node: TreeNode) => void;
   rows: Map<string, HTMLButtonElement>;
 }
 
-function Rows({ nodes, depth, expanded, toggle, forceExpanded, selected, onOpen, onContextMenu, rows }: RowsProps) {
-  return (
-    <>
-      {nodes.map((node) => {
-        const isFolder = node.children !== undefined;
-        const open = forceExpanded || isOpen(node, expanded);
-        return (
-          <div key={node.id}>
-            <TreeRow
-              ref={(element) => {
-                if (element) {
-                  rows.set(node.id, element);
-                } else {
-                  rows.delete(node.id);
-                }
-              }}
-              className={!isFolder && selected === node.path ? "selected" : undefined}
-              indent={INDENT_BASE + depth * INDENT_STEP}
-              title={node.path || "."}
-              onClick={() => (isFolder ? toggle(node) : onOpen(node.path))}
-              // VS Code: a single click previews, a double click keeps. The clicks before it
-              // already opened the file, so this only keeps.
-              onDoubleClick={() => !isFolder && onOpen(node.path, { keep: true })}
-              onContextMenu={(event) => onContextMenu(event, node)}
-              icon={isFolder ? <Twistie open={open} /> : <FileMarkIcon name={node.name} />}
-              label={node.name}
-            />
-            {isFolder && open && (
-              <Rows
-                nodes={node.children!}
-                depth={depth + 1}
-                expanded={expanded}
-                toggle={toggle}
-                forceExpanded={forceExpanded}
-                selected={selected}
-                onOpen={onOpen}
-                onContextMenu={onContextMenu}
-                rows={rows}
-              />
-            )}
-          </div>
-        );
-      })}
-    </>
+/** Memoized with stable handlers: a fold, a selection or a menu re-renders only the rows it
+ *  changes, not the whole open tree. */
+const ExplorerRow = memo(function ExplorerRow({ node, depth, open, selected, toggle, onOpen, onContextMenu, rows }: ExplorerRowProps) {
+  const isFolder = node.children !== undefined;
+  const register = useCallback(
+    (element: HTMLButtonElement | null) => {
+      if (element) {
+        rows.set(node.id, element);
+      } else {
+        rows.delete(node.id);
+      }
+    },
+    [rows, node.id]
   );
-}
+  return (
+    <TreeRow
+      ref={register}
+      className={!isFolder && selected ? "selected" : undefined}
+      indent={INDENT_BASE + depth * INDENT_STEP}
+      title={node.path || "."}
+      onClick={() => (isFolder ? toggle(node) : onOpen(node.path))}
+      // VS Code: a single click previews, a double click keeps. The clicks before it
+      // already opened the file, so this only keeps.
+      onDoubleClick={() => !isFolder && onOpen(node.path, { keep: true })}
+      onContextMenu={(event) => onContextMenu(event, node)}
+      icon={isFolder ? <Twistie open={open} /> : <FileMarkIcon name={node.name} />}
+      label={node.name}
+    />
+  );
+});
 
 interface ExplorerProps {
   resolved: ResolvedRef;
@@ -199,8 +203,11 @@ export const Explorer = memo(function Explorer({
     }
   }, [selected, expanded, shown, visible]);
 
-  const toggle = (node: TreeNode): void =>
-    setExpanded((current) => ({ ...current, [node.id]: !isOpen(node, current) }));
+  const toggle = useCallback(
+    (node: TreeNode): void => setExpanded((current) => ({ ...current, [node.id]: !isOpen(node, current) })),
+    []
+  );
+  const flat = useMemo(() => visibleRows(shown, expanded, filtering), [shown, expanded, filtering]);
 
   /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything
    *  (at once without roots). Walks the uncompacted `tree`, whose ids compacted rows keep. */
@@ -358,17 +365,17 @@ export const Explorer = memo(function Explorer({
         {files !== undefined && !files.roots && files.files.length === 0 && files.emptyDirs.length === 0 && (
           <div className="placeholder">No files.</div>
         )}
-        <Rows
-          nodes={shown}
-          depth={0}
-          expanded={expanded}
-          toggle={toggle}
-          forceExpanded={filtering}
-          selected={selected}
-          onOpen={onOpen}
-          onContextMenu={menu.open}
-          rows={rows.current}
-        />
+        {flat.map((row) => (
+          <ExplorerRow
+            key={row.node.id}
+            {...row}
+            selected={selected === row.node.path}
+            toggle={toggle}
+            onOpen={onOpen}
+            onContextMenu={menu.open}
+            rows={rows.current}
+          />
+        ))}
       </div>
       {menu.render(menuEntries)}
     </div>
@@ -376,17 +383,16 @@ export const Explorer = memo(function Explorer({
 });
 
 /**
- * The Explorer's listing, carrying the tet.json view settings. Re-read when a non-"modified" entry
- * in `changes` comes or goes, on tet.json writes, on `onFilesChanged` (a checkout, pull or reset
- * adds and removes files never in `changes`, and ignored files never are), and via
- * `refreshExplorer` after the tree's own edits (an empty new folder never touches git status).
+ * The Explorer's listing, carrying the tet.json view settings. Re-read, as VS Code's, on what the
+ * filesystem reports and never on git status: on `onFilesChanged` (a path came or went, or an
+ * ignore file changed), on tet.json writes, on window focus for what the watcher missed (a network
+ * share watches nothing), and via `refreshExplorer` after the tree's own edits.
  *
  * Held with its repository or worktree: one files pane serves all, and a switch must not show the
  * previous tree.
  */
 export function useExplorerListing(
   resolved: ResolvedRef,
-  changes: FileChange[],
   shown: boolean
 ): { explorerListing: ExplorerListing | undefined; listing: boolean; refreshExplorer: () => void } {
   const [held, setHeld] = useState<{ key: string; listing: ExplorerListing } | undefined>(undefined);
@@ -407,19 +413,13 @@ export function useExplorerListing(
         bump();
       }
     });
+    window.addEventListener("focus", bump);
     return () => {
       unsubscribeCommands();
       unsubscribeFiles();
+      window.removeEventListener("focus", bump);
     };
   }, [resolved]);
-  const changesKey = useMemo(
-    () =>
-      changes
-        .filter((entry) => entry.status !== "modified")
-        .map((entry) => entry.path)
-        .join("\n"),
-    [changes]
-  );
   // Read only while shown, and again on return: changes meanwhile went unread.
   useEffect(() => {
     if (!shown) {
@@ -439,7 +439,7 @@ export function useExplorerListing(
     return () => {
       cancelled = true;
     };
-  }, [resolved, changesKey, explorerVersion, shown]);
+  }, [resolved, explorerVersion, shown]);
   return { explorerListing: held?.key === resolved.key ? held.listing : undefined, listing, refreshExplorer };
 }
 

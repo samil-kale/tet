@@ -75,6 +75,11 @@ function isIgnoredEvent(relativePath: string, ownWorktree?: string): boolean {
   );
 }
 
+/** A `.gitignore` anywhere in the tree, or the repository's own exclude file. */
+function isIgnoreFile(relativePath: string): boolean {
+  return /(?:^|[\\/])\.gitignore$|^\.git[\\/]info[\\/]exclude$/.test(relativePath);
+}
+
 /** What every path check answers for a path that escapes the repository root. */
 const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" } as const;
 
@@ -920,8 +925,9 @@ export class Repository {
           this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);
         }
         // A path appearing or going is "rename", a write only "change", so an edit never re-lists
-        // the tree. Nothing under .git is in it.
-        if (event === "rename" && name && !/^\.git(?:[\\/]|$)/.test(name)) {
+        // the tree. Nothing under .git is in it. An ignore file's edit re-lists whatever the event,
+        // as it hides or shows other paths (listIgnored).
+        if (name && ((event === "rename" && !/^\.git(?:[\\/]|$)/.test(name)) || isIgnoreFile(name))) {
           clearTimeout(this.filesTimer);
           const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastFilesChangedAt + REFRESH_MIN_INTERVAL_MS - Date.now());
           this.filesTimer = setTimeout(() => {

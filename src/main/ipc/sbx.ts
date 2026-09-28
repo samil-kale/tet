@@ -78,7 +78,7 @@ export function registerSbxIpc({
       status: Pick<SbxStatus, "organization">
     ): Promise<SbxProblems> => {
       const project = store.get(projectId);
-      return project ? readProjectSbxProblems(project, config, knowledge, values, status) : {};
+      return project ? readProjectSbxProblems(project, config, knowledge, values, status && { status }) : {};
     }
   );
 

@@ -7,7 +7,6 @@ import type {
   SbxKnowledgeKind,
   SbxProjectConfig,
   SbxSecret,
-  SbxStatus,
   SbxVariable
 } from "../../shared/types";
 import { SBX_ACCESS } from "../../shared/types";
@@ -22,6 +21,7 @@ import {
 } from "../../shared/sbx-rules";
 import { sbxBlocked, sbxNotReady } from "../sbx-policy";
 import type { ControlDeps } from "./control-server";
+import type { SbxReading } from "../sbx";
 import { ControlError, list, text, type Answer, type Handler } from "./control-verb";
 import { PLATFORM } from "../host-platform";
 
@@ -36,9 +36,10 @@ export function sbxVerbs(
 ): Record<string, Handler> {
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
-   *  which only the user can set up there. Returns the status it read. */
-  const readySbx = async (found: Project): Promise<SbxStatus> => {
-    const status = await deps.sbx.status(found);
+   *  which only the user can set up there. Returns what it read, for the Save to reuse. */
+  const readySbx = async (found: Project): Promise<SbxReading> => {
+    const reading = await deps.sbx.status(found);
+    const { status } = reading;
     const missing = sbxNotReady(status);
     if (missing) {
       throw new ControlError("bad_args", `${missing}: the user sets it up in ${found.name}'s SBX Settings in TET`);
@@ -47,7 +48,7 @@ export function sbxVerbs(
     if (blocked !== undefined) {
       throw new ControlError("bad_args", blocked);
     }
-    return status;
+    return reading;
   };
 
   /**
@@ -73,7 +74,7 @@ export function sbxVerbs(
         `a worktree takes its SBX Settings from its project ${found.name}: change them there (--project ${found.id})`
       );
     }
-    const status = await readySbx(found);
+    const reading = await readySbx(found);
     const config = await deps.sbx.config(found);
     const { knowledge } = deps.sbx.stored(found.id);
     if (!config.enabled && !switching) {
@@ -86,7 +87,7 @@ export function sbxVerbs(
       found,
       request,
       { secrets: keptValues(request.secrets), variables: keptValues(request.variables), knowledge: nextKnowledge },
-      status
+      reading
     );
     if (!saved.ok) {
       throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
@@ -152,9 +153,9 @@ export function sbxVerbs(
     "sbx-get": async (args, caller) => {
       const found = project(args, caller);
       const stored = deps.sbx.stored(found.id);
-      const [status, config] = await Promise.all([deps.sbx.status(found), deps.sbx.config(found)]);
-      const problems = await deps.sbx.problems(found, config, stored.knowledge, stored, status);
-      return { result: { status, config, stored, problems } };
+      const [reading, config] = await Promise.all([deps.sbx.status(found), deps.sbx.config(found)]);
+      const problems = await deps.sbx.problems(found, config, stored.knowledge, stored, reading);
+      return { result: { status: reading.status, config, stored, problems } };
     },
 
     "sbx-set-enabled": async (args, caller) => {

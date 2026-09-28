@@ -811,7 +811,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
             >
               <FilesPane
                 resolved={activeResolved}
-                state={activeState}
                 shown={sideView === "files"}
                 openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
                 onOpenFile={openEditor}

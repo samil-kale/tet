@@ -14,8 +14,12 @@ import type {
 } from "../shared/types";
 import { getAgent, SANDBOXED_AGENTS } from "./agents";
 import { logFailure } from "./json-file";
-import { inTurn, listSandboxes, readGovernance, readSbxProblems, saveSbxConfig, type SandboxList, type SbxSaveTarget } from "./sbx";
+import { inTurn, listSandboxes, readGovernance, readSbxProblems, saveSbxConfig, type SandboxList, type SbxReading, type SbxSaveTarget } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
+
+/** What the caller read of sbx already: its status's organization, and with tet-ctl's reading the
+ *  sandboxes and rules read on the way (sbx.ts's readSbxReading). Read now what it lacks. */
+type Known = Omit<SbxReading, "status"> & { status: Pick<SbxStatus, "organization"> };
 
 /** The env names holding a value, per list. */
 interface ValueNames {
@@ -30,7 +34,8 @@ function checkProject(
   knowledge: SbxKnowledgeConfig,
   values: ValueNames,
   organization: string | undefined,
-  sandboxes?: SandboxList
+  sandboxes?: SandboxList,
+  rules?: Known["rules"]
 ): Promise<SbxProblems> {
   return readSbxProblems({
     projectId: project.id,
@@ -40,28 +45,29 @@ function checkProject(
     agents: SANDBOXED_AGENTS,
     organization,
     ports: true,
-    sandboxes
+    sandboxes,
+    rules
   });
 }
 
 /** The organization managing sbx's policy: as the caller's status read it, else read now. */
-async function organizationOf(status: Pick<SbxStatus, "organization"> | undefined): Promise<string | undefined> {
-  return status ? status.organization : readGovernance();
+async function organizationOf(known: Known | undefined): Promise<string | undefined> {
+  return known ? known.status.organization : readGovernance();
 }
 
 /**
  * What of a project's SBX Settings a Save would leave out (sbx.ts's readSbxProblems), for the
  * dialog's live marks and `tet-ctl sbx-get`. `values`: the env names holding a value, as the rows
- * have them — stored, or typed and not saved yet. `status`: the caller's, when it read one.
+ * have them — stored, or typed and not saved yet.
  */
 export async function readProjectSbxProblems(
   project: Project,
   config: SbxProjectConfig,
   knowledge: SbxKnowledgeConfig,
   values: ValueNames,
-  status?: Pick<SbxStatus, "organization">
+  known?: Known
 ): Promise<SbxProblems> {
-  return checkProject(project, config, knowledge, values, await organizationOf(status));
+  return checkProject(project, config, knowledge, values, await organizationOf(known), known?.sandboxes, known?.rules);
 }
 
 /** The Save underway per project (saveProjectSbx). */
@@ -73,8 +79,7 @@ const saves = new Map<string, Promise<unknown>>();
  * cannot be applied here (readSbxProblems) is neither saved nor applied, the rest is; what sbx then
  * refuses is left out too (saveSbxConfig), so tet.json holds what was applied, and only its rows
  * keep a value here. `problems` says what was left out; sbx's refusals are the error as well, as
- * nothing marked them before. Notices for the sandboxes it removed. `status`: the caller's, when it
- * read one. The project's worktrees take its tet.json (tet-json.ts's configRoot), so their
+ * nothing marked them before. Notices for the sandboxes it removed. The project's worktrees take its tet.json (tet-json.ts's configRoot), so their
  * sandboxes are saved along. One Save at a time per project, each after the last however that one
  * ended: two at once would apply their rows to the same sandboxes interleaved, and leave them
  * matching neither's tet.json.
@@ -84,9 +89,9 @@ export function saveProjectSbx(
   project: Project,
   request: SbxProjectConfig,
   local: SbxLocalSave,
-  status?: Pick<SbxStatus, "organization">
+  known?: Known
 ): Promise<SbxSaveResult> {
-  return inTurn(saves, project.id, () => saveNow(deps, project, request, local, status));
+  return inTurn(saves, project.id, () => saveNow(deps, project, request, local, known));
 }
 
 async function saveNow(
@@ -94,7 +99,7 @@ async function saveNow(
   project: Project,
   request: SbxProjectConfig,
   local: SbxLocalSave,
-  status?: Pick<SbxStatus, "organization">
+  known?: Known
 ): Promise<SbxSaveResult> {
   const worktrees = project.worktrees.flatMap((worktree): SbxSaveTarget[] =>
     worktree.key === undefined ? [] : [{ ref: projectRef(project.id, worktree.key), path: worktree.path }]
@@ -107,14 +112,14 @@ async function saveNow(
     const secretValues = sbxLocal.values(project.id, "secrets");
     const knowledge = sbxLocal.knowledge(project.id);
     // Listed once for the check and the Save.
-    const [organization, sandboxes] = await Promise.all([organizationOf(status), listSandboxes()]);
+    const [organization, sandboxes] = await Promise.all([organizationOf(known), known?.sandboxes ?? listSandboxes()]);
     if (!sandboxes) {
       throw new Error("SBX could not list the sandboxes. Nothing was saved; try again.");
     }
     // Off, nothing is applied, so nothing is left out. What sbx cannot say stops the Save: a row
     // it could not be asked about is no refusal.
     const problems = request.enabled
-      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization, sandboxes).catch((error: unknown) => {
+      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization, sandboxes, known?.rules).catch((error: unknown) => {
           throw new Error(`${errorMessage(error)} Nothing was saved; try again.`);
         })
       : {};
