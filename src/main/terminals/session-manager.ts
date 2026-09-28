@@ -937,8 +937,11 @@ export class TabSessionManager {
           if (isSessionReady?.(data)) {
             hideIndicator();
           }
-          // A CLI persists or updates its session shortly after producing output.
-          runtime.reconciler?.schedule();
+          // A CLI persists or updates its session shortly after producing output; a watched store
+          // reports that itself.
+          if (!place.sessionsWatched()) {
+            runtime.reconciler?.schedule();
+          }
         },
         onStatusChange: (status) => {
           // A process whose exit came after `stop()` gave up waiting may have been replaced by a

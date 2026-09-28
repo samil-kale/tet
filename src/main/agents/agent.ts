@@ -43,18 +43,24 @@ export interface SandboxSessionMount {
 
 /**
  * How sessions are read out of an sbx sandbox: a host directory bind-mounted where the CLI writes,
- * read by the host transcript code. Every method takes the mounted `root` and the sandbox's `cwd`
- * (`toContainerPath`), since the CLI records container paths. No `watch`: the sandboxed tab's own
- * output schedules the reconcile.
+ * read by the host transcript code. No `watch`: the sandboxed tab's own output schedules the
+ * reconcile.
  */
 export interface SandboxSessions {
   mounts: SandboxSessionMount[];
+  /** The operations on one sandbox's sessions, bound to the mounted `root` and the sandbox's `cwd`
+   *  (`toContainerPath`), since the CLI records container paths. */
+  at(root: string, cwd: string): SandboxSessionStore;
+}
+
+/** One sandbox's sessions (SandboxSessions.at). */
+export interface SandboxSessionStore {
   /** SessionProvider.list against the mounted root; the manager names the sandbox on the result. */
-  list(root: string, cwd: string): Promise<AgentSessionInfo[]>;
-  remove(root: string, cwd: string, sessionId: string): Promise<void>;
-  rename(root: string, cwd: string, sessionId: string, title: string): Promise<void>;
+  list(): Promise<AgentSessionInfo[]>;
+  remove(sessionId: string): Promise<void>;
+  rename(sessionId: string, title: string): Promise<void>;
   /** SessionProvider.files against the mounted root, as host paths. */
-  files(root: string, cwd: string, sessionId: string): Promise<string[]>;
+  files(sessionId: string): Promise<string[]>;
 }
 
 /** Agent-specific session enumeration/resume/deletion, on this machine. */
@@ -72,8 +78,16 @@ export interface SessionProvider {
    *  read (a handoff). [] where there are none. */
   files(cwd: string, sessionId: string): Promise<string[]>;
   /** Calls `onChange` when this repository's sessions change, so the manager re-lists without
-   *  waiting for its poll. Returns a stop function. */
-  watch?(cwd: string, onChange: () => void): () => void;
+   *  waiting for a tab's output. */
+  watch?(cwd: string, onChange: () => void): SessionWatch;
+}
+
+/** A running SessionProvider.watch. */
+export interface SessionWatch {
+  stop(): void;
+  /** Whether a watcher is armed now: false while none could be (a store not there yet, `fs.watch`
+   *  refused), so a tab's output schedules the listing instead. */
+  watching(): boolean;
 }
 
 /** What one agent is handed to set itself up for a repository or one of its worktrees. */

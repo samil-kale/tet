@@ -61,7 +61,7 @@ export const claudeAgent: SandboxedAgent = {
     },
     // Claude Code falls back to its classic renderer where the sandbox's network rule blocks its
     // feature flags; this forces fullscreen.
-    env: ["CLAUDE_CODE_NO_FLICKER=1"],
+    env: Object.entries(FULLSCREEN_ENV).map(([key, value]) => `${key}=${value}`),
     // `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/CLAUDE.md` — under the config root the
     // sessions are read from.
     knowledge: () => ({

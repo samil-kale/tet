@@ -25,6 +25,8 @@ export class ReconcileScheduler {
   private retriesLeft = 0;
   /** The latest the debounced reconcile may be pushed to; unset once it fires. */
   private deadline?: number;
+  /** The armed timer's requested delay and when it fires; unset once it fires. */
+  private pending?: { delayMs: number; due: number };
 
   constructor(private readonly target: ReconcileTarget) {}
 
@@ -54,6 +56,7 @@ export class ReconcileScheduler {
 
   dispose(): void {
     clearTimeout(this.timer);
+    this.pending = undefined;
   }
 
   private arm(delayMs: number): void {
@@ -61,9 +64,17 @@ export class ReconcileScheduler {
     if (this.target.disposed()) {
       return;
     }
-    clearTimeout(this.timer);
     const cappedDelay = this.deadline === undefined ? delayMs : Math.min(delayMs, Math.max(0, this.deadline - Date.now()));
+    const due = Date.now() + cappedDelay;
+    // Calls of one delay debounce each other; one of another delay never pushes the timer later
+    // (output arriving while a watcher's event is pending).
+    if (this.pending && this.pending.delayMs !== delayMs && this.pending.due <= due) {
+      return;
+    }
+    clearTimeout(this.timer);
+    this.pending = { delayMs, due };
     this.timer = setTimeout(() => {
+      this.pending = undefined;
       this.deadline = undefined;
       void this.run().then(() => {
         if (this.retriesLeft > 0 && this.target.titlesUnsettled()) {

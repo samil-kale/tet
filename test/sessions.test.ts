@@ -391,15 +391,15 @@ describe("sessions written inside a sandbox", () => {
       path.join(projectDir, "s1.jsonl"),
       [{ type: "user", timestamp: AT, origin: { kind: "human" }, message: { content: "In the sandbox" } }].map(line).join("")
     );
-    const sandbox = claudeSandboxSessions;
-    const [session] = await sandbox.list(dir, cwd);
+    const sandbox = claudeSandboxSessions.at(dir, cwd);
+    const [session] = await sandbox.list();
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
-    assert.deepEqual(await sandbox.files(dir, cwd, "s1"), [path.join(projectDir, "s1.jsonl")], "on the host side");
-    await sandbox.rename(dir, cwd, "s1", "Renamed");
-    assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
-    await sandbox.remove(dir, cwd, "s1");
-    assert.deepEqual(await sandbox.list(dir, cwd), []);
+    assert.deepEqual(await sandbox.files("s1"), [path.join(projectDir, "s1.jsonl")], "on the host side");
+    await sandbox.rename("s1", "Renamed");
+    assert.equal((await sandbox.list())[0].title, "Renamed");
+    await sandbox.remove("s1");
+    assert.deepEqual(await sandbox.list(), []);
   });
 
   it("lists, renames and deletes Codex's sandboxed rollouts on the mounted files", async () => {
@@ -419,25 +419,25 @@ describe("sessions written inside a sandbox", () => {
     }
     const index = path.join(dir, "session_index.jsonl");
     fs.writeFileSync(index, line({ id: "s1", thread_name: "Named" }));
-    const sandbox = codexSandboxSessions;
-    const titles = async (): Promise<string[][]> => (await sandbox.list(dir, cwd)).map((s) => [s.id, s.title]);
+    const sandbox = codexSandboxSessions.at(dir, cwd);
+    const titles = async (): Promise<string[][]> => (await sandbox.list()).map((s) => [s.id, s.title]);
     assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "In the sandbox"]], "the name index beside the rollouts is mounted too");
 
-    await sandbox.rename(dir, cwd, "s2", "  Renamed  ");
+    await sandbox.rename("s2", "  Renamed  ");
     assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "Renamed"]]);
     const appended = JSON.parse(fs.readFileSync(index, "utf8").trim().split("\n").at(-1) ?? "") as Record<string, unknown>;
     assert.deepEqual(Object.keys(appended), ["id", "thread_name", "updated_at"]);
     assert.match(String(appended.updated_at), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{7}Z$/, "Codex's seven fractional digits");
-    await assert.rejects(sandbox.rename(dir, cwd, "s2", "  "), /non-empty/);
+    await assert.rejects(sandbox.rename("s2", "  "), /non-empty/);
 
-    assert.deepEqual(await sandbox.files(dir, cwd, "s1"), [path.join(day, "rollout-s1.jsonl")], "on the host side");
+    assert.deepEqual(await sandbox.files("s1"), [path.join(day, "rollout-s1.jsonl")], "on the host side");
     const indexBefore = fs.readFileSync(index, "utf8");
-    await sandbox.remove(dir, cwd, "s1");
+    await sandbox.remove("s1");
     assert.deepEqual(fs.readdirSync(day), ["rollout-s2.jsonl"]);
     assert.equal(fs.readFileSync(index, "utf8"), indexBefore, "the index is left as it is");
     assert.deepEqual(await titles(), [["s2", "Renamed"]], "a name without its rollout lists nothing");
     // A session that is already gone resolves — see SessionProvider.remove.
-    await sandbox.remove(dir, cwd, "s1");
+    await sandbox.remove("s1");
   });
 
   it("lists, renames and deletes pi's sandboxed transcripts", async () => {
@@ -456,26 +456,27 @@ describe("sessions written inside a sandbox", () => {
         .map(line)
         .join("")
     );
-    const sandbox = piSandboxSessions;
-    const [session] = await sandbox.list(dir, cwd);
+    const sandbox = piSandboxSessions.at(dir, cwd);
+    const [session] = await sandbox.list();
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
     assert.deepEqual(
-      await sandbox.files(dir, cwd, "s1"),
+      await sandbox.files("s1"),
       [path.join(sessionDir, `${AT.replace(/[:.]/g, "-")}_s1.jsonl`)],
       "on the host side"
     );
-    await sandbox.rename(dir, cwd, "s1", "Renamed");
-    assert.equal((await sandbox.list(dir, cwd))[0].title, "Renamed");
-    await sandbox.remove(dir, cwd, "s1");
-    assert.deepEqual(await sandbox.list(dir, cwd), []);
+    await sandbox.rename("s1", "Renamed");
+    assert.equal((await sandbox.list())[0].title, "Renamed");
+    await sandbox.remove("s1");
+    assert.deepEqual(await sandbox.list(), []);
   });
 
   it("has nothing to list where the sandbox never wrote anything", async () => {
     const dir = path.join(os.tmpdir(), "tet-sbx-never");
-    for (const sandbox of [claudeSandboxSessions, codexSandboxSessions, piSandboxSessions]) {
-      assert.deepEqual(await sandbox.list(dir, cwd), []);
-      assert.deepEqual(await sandbox.files(dir, cwd, "s1"), []);
+    for (const sessions of [claudeSandboxSessions, codexSandboxSessions, piSandboxSessions]) {
+      const sandbox = sessions.at(dir, cwd);
+      assert.deepEqual(await sandbox.list(), []);
+      assert.deepEqual(await sandbox.files("s1"), []);
     }
   });
 });

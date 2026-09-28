@@ -1,6 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentDefinition, AgentPaths, AgentSessionInfo, SandboxedAgent, SpawnPreparation } from "../agents/agent";
+import type {
+  AgentDefinition,
+  AgentPaths,
+  AgentSessionInfo,
+  SandboxedAgent,
+  SandboxSessionStore,
+  SessionWatch,
+  SpawnPreparation
+} from "../agents/agent";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId, NoticeSeverity, SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types";
 import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir } from "../project-dirs";
@@ -63,9 +71,11 @@ export interface TabPlace {
   handPaths(hostPaths: string[]): Promise<string[]>;
   /** The agent's sessions living here, oldest first; none where it keeps none here. */
   listSessions(): Promise<AgentSessionInfo[]>;
-  /** Calls `onChange` when they change, so they are listed again without waiting for a poll;
+  /** Calls `onChange` when they change, so they are listed again without waiting for output;
    *  returns the stop. Undefined where nothing is watched. */
   watchSessions(onChange: () => void): (() => void) | undefined;
+  /** Whether a watch started here is armed now; where not, the tab's output schedules the listing. */
+  sessionsWatched(): boolean;
   /** The operations on a session living here; undefined where the agent keeps none here. */
   sessionActions(): SessionActions | undefined;
 }
@@ -88,6 +98,7 @@ export interface PlaceContext<A extends AgentDefinition = AgentDefinition> {
 /** This machine: paths as they are, the host setup's spawn (HostSetups). */
 export class HostPlace implements StartingPlace {
   readonly side = HOST_CALLER;
+  private watch?: SessionWatch;
 
   constructor(
     protected readonly context: PlaceContext,
@@ -110,7 +121,19 @@ export class HostPlace implements StartingPlace {
 
   watchSessions(onChange: () => void): (() => void) | undefined {
     const { agent, at } = this.context;
-    return agent.sessions?.watch?.(at.path, onChange);
+    const watch = agent.sessions?.watch?.(at.path, onChange);
+    if (!watch) {
+      return undefined;
+    }
+    this.watch = watch;
+    return () => {
+      watch.stop();
+      this.watch = undefined;
+    };
+  }
+
+  sessionsWatched(): boolean {
+    return this.watch?.watching() ?? false;
   }
 
   sessionActions(): SessionActions | undefined {
@@ -188,10 +211,13 @@ export class SandboxPlace implements TabPlace {
   readonly side = SANDBOX_CALLER;
   readonly name: string;
   protected readonly agentDir: string;
+  /** Undefined where the agent keeps no sessions in a sandbox. */
+  private readonly sessions?: SandboxSessionStore;
 
   constructor(protected readonly context: PlaceContext<SandboxedAgent>) {
     this.name = sandboxName(context.at.ref, context.agent.id);
     this.agentDir = sandboxDir(context.storageRoot, context.at.ref, context.agent.id);
+    this.sessions = context.agent.sandbox.sessions?.at(sandboxSessionDir(this.agentDir), toContainerPath(context.at.path));
   }
 
   dropsDir(): string {
@@ -218,17 +244,7 @@ export class SandboxPlace implements TabPlace {
   }
 
   sessionActions(): SessionActions | undefined {
-    const sessions = this.context.agent.sandbox.sessions;
-    if (!sessions) {
-      return undefined;
-    }
-    const root = sandboxSessionDir(this.agentDir);
-    const cwd = toContainerPath(this.context.at.path);
-    return {
-      remove: (sessionId) => sessions.remove(root, cwd, sessionId),
-      rename: (sessionId, title) => sessions.rename(root, cwd, sessionId, title),
-      files: (sessionId) => sessions.files(root, cwd, sessionId)
-    };
+    return this.sessions;
   }
 
   /** Nothing: a sandboxed tab's own output schedules the listing (AgentSandbox.sessions). */
@@ -236,14 +252,17 @@ export class SandboxPlace implements TabPlace {
     return undefined;
   }
 
+  sessionsWatched(): boolean {
+    return false;
+  }
+
   /** Its sessions, each named with this sandbox (AgentSessionInfo.sandbox); none where the agent
    *  keeps none in a sandbox. Listed whether or not sandboxing is on: they stay resumable there. */
   async listSessions(): Promise<AgentSessionInfo[]> {
-    const sessions = this.context.agent.sandbox.sessions;
-    if (!sessions) {
+    if (!this.sessions) {
       return [];
     }
-    const listed = await sessions.list(sandboxSessionDir(this.agentDir), toContainerPath(this.context.at.path));
+    const listed = await this.sessions.list();
     return listed.map((info) => ({ ...info, sandbox: this.name }));
   }
 

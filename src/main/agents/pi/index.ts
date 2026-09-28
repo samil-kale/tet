@@ -76,16 +76,17 @@ export const piAgent: SandboxedAgent = {
   },
   sandbox: {
     prepare: (paths) => {
+      // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the
+      // safety boundary, as for Claude Code, and the pi kit does not set it.
+      const args = [...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)];
       try {
         const extension = writePiExtension(paths.agentDir);
         // Written at the host path, read at the sandbox's: the sandbox's agentDir is mounted whole
         // (sbx-mounts.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
-        // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the
-        // safety boundary, as for Claude Code, and the pi kit does not set it.
-        return { args: ["-e", SANDBOX_TARGET.embed(extension), ...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)] };
+        return { args: ["-e", SANDBOX_TARGET.embed(extension), ...args] };
       } catch (error) {
         console.error("[tet] could not write pi's sandbox extension:", error);
-        return { args: [...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)] };
+        return { args };
       }
     },
     // Skills in `~/.pi/agent/skills` and `~/.agents/skills`, extensions in

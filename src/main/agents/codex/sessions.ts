@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentSessionInfo, SandboxSessions, SessionProvider } from "../agent";
+import type { AgentSessionInfo, SandboxSessions, SessionProvider, SessionWatch } from "../agent";
 import {
   collectSessions,
   forgetMissing,
@@ -265,7 +265,7 @@ export const codexSessionProvider: SessionProvider = {
    * not the repository's: a write to a rollout already read for another cwd is dropped — every
    * open project's listing would read the whole tree again.
    */
-  watch(cwd: string, onChange: () => void): () => void {
+  watch(cwd: string, onChange: () => void): SessionWatch {
     let stopped = false;
     const watchers: fs.FSWatcher[] = [];
     const armed = new Set<string>();
@@ -324,9 +324,12 @@ export const codexSessionProvider: SessionProvider = {
     };
     rearm();
 
-    return () => {
-      stopped = true;
-      closeAll();
+    return {
+      stop: () => {
+        stopped = true;
+        closeAll();
+      },
+      watching: () => watchers.length > 0
     };
   }
 };
@@ -341,10 +344,12 @@ export const codexSandboxSessions: SandboxSessions = {
     { sub: "sessions", target: `${SANDBOX_HOME}/.codex/sessions` },
     { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
   ],
-  list: (root, cwd) => listIn(root, cwd),
-  remove: (root, _cwd, sessionId) => removeInHome(root, sessionId),
-  rename: (root, _cwd, sessionId, title) => renameInHome(root, sessionId, title),
-  files: (root, _cwd, sessionId) => rolloutFilesOf(root, sessionId)
+  at: (root, cwd) => ({
+    list: () => listIn(root, cwd),
+    remove: (sessionId) => removeInHome(root, sessionId),
+    rename: (sessionId, title) => renameInHome(root, sessionId, title),
+    files: (sessionId) => rolloutFilesOf(root, sessionId)
+  })
 };
 
 function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {

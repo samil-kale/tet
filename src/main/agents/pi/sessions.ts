@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentSessionInfo, SandboxSessions, SessionProvider } from "../agent";
+import type { AgentSessionInfo, SandboxSessions, SessionProvider, SessionWatch } from "../agent";
 import {
   findEncodedDir,
   listTranscriptDir,
@@ -53,7 +53,7 @@ export const piSessionProvider: SessionProvider = {
   },
 
   /** The session directory may not exist yet — watchTranscriptDir handles that. */
-  watch(cwd: string, onChange: () => void): () => void {
+  watch(cwd: string, onChange: () => void): SessionWatch {
     return watchTranscriptDir(
       sessionsRoot,
       () => findSessionDir(sessionsRoot(), cwd),
@@ -67,11 +67,15 @@ export const piSessionProvider: SessionProvider = {
  *  sits beside it, not in it. */
 export const piSandboxSessions: SandboxSessions = {
   mounts: [{ sub: "sessions", target: `${SANDBOX_HOME}/.pi/agent/sessions` }],
-  list: (root, cwd) => listIn(path.join(root, "sessions"), cwd, path.posix),
-  remove: (root, cwd, sessionId) => removeIn(path.join(root, "sessions"), cwd, sessionId, path.posix),
-  rename: (root, cwd, sessionId, title) =>
-    renameIn(path.join(root, "sessions"), cwd, sessionId, title, path.posix),
-  files: (root, cwd, sessionId) => filesIn(path.join(root, "sessions"), cwd, sessionId, path.posix)
+  at: (root, cwd) => {
+    const sessions = path.join(root, "sessions");
+    return {
+      list: () => listIn(sessions, cwd, path.posix),
+      remove: (sessionId) => removeIn(sessions, cwd, sessionId, path.posix),
+      rename: (sessionId, title) => renameIn(sessions, cwd, sessionId, title, path.posix),
+      files: (sessionId) => filesIn(sessions, cwd, sessionId, path.posix)
+    };
+  }
 };
 
 async function filesIn(root: string, cwd: string, sessionId: string, paths = path): Promise<string[]> {

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { SessionWatch } from "./agents/agent";
 
 /**
  * Whether an `fs.watch` event means the watched directory itself is gone, which raises no `error`:
@@ -16,14 +17,14 @@ export function watchedDirectoryGone(dir: string, filename: string | null | unde
  * that is missing — fs.watch throws ENOENT on one, and the agent creates it with the first
  * transcript. Non-recursive on purpose: writes in a session's subdirectory (Claude's `subagents/`)
  * don't fire, the rest are filtered by `wanted`. `find` may reject when the root itself is absent
- * (a fresh install), read as "not yet". Returns the stop function.
+ * (a fresh install), read as "not yet".
  */
 export function watchTranscriptDir(
   root: () => string,
   find: () => Promise<string | undefined>,
   wanted: (filename: string) => boolean,
   onChange: () => void
-): () => void {
+): SessionWatch {
   let dirWatcher: fs.FSWatcher | undefined;
   let rootWatcher: fs.FSWatcher | undefined;
   let stopped = false;
@@ -52,7 +53,7 @@ export function watchTranscriptDir(
     try {
       dirWatcher = fs.watch(dir, onEvent);
     } catch {
-      // Gone again since the lookup, or no descriptor left: the listing stays polled.
+      // Gone again since the lookup, or no descriptor left: output schedules the listing instead.
       return;
     }
     rootWatcher?.close();
@@ -66,15 +67,18 @@ export function watchTranscriptDir(
     try {
       rootWatcher = fs.watch(root(), () => void armDirWatcher());
     } catch {
-      // The agent never ran on this machine: the listing stays polled.
+      // The agent never ran on this machine: output schedules the listing instead.
     }
   };
 
   void armDirWatcher().then(armRootWatcher);
 
-  return () => {
-    stopped = true;
-    dirWatcher?.close();
-    rootWatcher?.close();
+  return {
+    stop: () => {
+      stopped = true;
+      dirWatcher?.close();
+      rootWatcher?.close();
+    },
+    watching: () => !stopped && (dirWatcher !== undefined || rootWatcher !== undefined)
   };
 }

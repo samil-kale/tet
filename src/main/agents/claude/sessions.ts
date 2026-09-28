@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentSessionInfo, SandboxSessions, SessionProvider } from "../agent";
+import type { AgentSessionInfo, SandboxSessions, SessionProvider, SessionWatch } from "../agent";
 import {
   findEncodedDir,
   listTranscriptDir,
@@ -44,7 +44,7 @@ export const claudeSessionProvider: SessionProvider = {
 
   /** watchTranscriptDir handles a project directory that doesn't exist yet and ignores a
    *  session's `subagents/` subdirectory. */
-  watch(cwd: string, onChange: () => void): () => void {
+  watch(cwd: string, onChange: () => void): SessionWatch {
     return watchTranscriptDir(
       projectsRoot,
       () => findProjectDir(projectsRoot(), cwd),
@@ -57,10 +57,15 @@ export const claudeSessionProvider: SessionProvider = {
 /** Mounted over the sandbox's `~/.claude/projects`, stacking on sbx's own volume there. */
 export const claudeSandboxSessions: SandboxSessions = {
   mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
-  list: (root, cwd) => listIn(path.join(root, "projects"), cwd),
-  remove: (root, cwd, sessionId) => removeIn(path.join(root, "projects"), cwd, sessionId),
-  rename: (root, cwd, sessionId, title) => renameIn(path.join(root, "projects"), cwd, sessionId, title),
-  files: (root, cwd, sessionId) => filesIn(path.join(root, "projects"), cwd, sessionId)
+  at: (root, cwd) => {
+    const projects = path.join(root, "projects");
+    return {
+      list: () => listIn(projects, cwd),
+      remove: (sessionId) => removeIn(projects, cwd, sessionId),
+      rename: (sessionId, title) => renameIn(projects, cwd, sessionId, title),
+      files: (sessionId) => filesIn(projects, cwd, sessionId)
+    };
+  }
 };
 
 /** The transcript alone: the subagent transcripts and tool results beside it are not the
