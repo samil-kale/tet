@@ -3,10 +3,11 @@ import * as path from "node:path";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
 import { writeIfChanged } from "../../write-if-changed";
+import { codexIcon } from "./icon";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
-import { setupCodexHooks } from "./hooks";
+import { codexHookReply, setupCodexHooks } from "./hooks";
 import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
 
 /**
@@ -39,6 +40,9 @@ const FULLSCREEN_ARGS = ["-c", "tui.fullscreen_transcript=true"];
 export const codexAgent: SandboxedAgent = {
   id: "codex",
   displayName: "Codex",
+  icon: codexIcon,
+  // Its input field is no shell: only a space needs quoting, in double quotes.
+  quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
   executable: () => "codex",
   install: { versionArgs: ["--version"], verifiedVersion: "0.157.1" },
   terminal: {
@@ -54,7 +58,7 @@ export const codexAgent: SandboxedAgent = {
   ask: { args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"] },
   sessions: codexSessionProvider,
   // See AgentTurns.questionOutlivesTurn.
-  turns: { sessionIdOf: hookSessionId, questionOutlivesTurn: true },
+  turns: { sessionIdOf: hookSessionId, questionOutlivesTurn: true, hookReply: codexHookReply },
   host: {
     prepare: (executable, paths) => {
       let args: string[] = FULLSCREEN_ARGS;

@@ -232,13 +232,20 @@ function valueNames(rows: { env: string; value: string; from?: string }[], store
  * as the dialog has its rows (`ready`), whatever tab shows — so a row that cannot be applied is
  * marked from the start, its tab too — then again once typing pauses on a change, since each
  * check is an sbx call. An answer overtaken by an edit is dropped. Save leaves such a row out.
+ * `organization` is the governance the dialog's status read, so no check reads it again.
  */
-export function useSbxProblems(projectId: string, state: FieldsState, stored: SbxStoredLocal, ready: boolean): SbxProblems {
+export function useSbxProblems(
+  projectId: string,
+  state: FieldsState,
+  stored: SbxStoredLocal,
+  ready: boolean,
+  organization: string | undefined
+): SbxProblems {
   const [problems, setProblems] = useState<SbxProblems>({});
   const config = { enabled: true, ...toConfig(state) };
   const knowledge = toKnowledge(state.knowledge);
   const values = { secrets: valueNames(state.secrets, stored.secrets), variables: valueNames(state.variables, stored.variables) };
-  const key = JSON.stringify([config, knowledge, values]);
+  const key = JSON.stringify([config, knowledge, values, organization]);
   /** The loaded rows go at once; an edit waits (CHECK_DELAY_MS). */
   const opened = useRef(true);
   useEffect(() => {
@@ -250,7 +257,7 @@ export function useSbxProblems(projectId: string, state: FieldsState, stored: Sb
     let current = true;
     const timer = setTimeout(() => {
       // Where sbx cannot say, the marks stay as they were; Save asks again and stops.
-      void window.tet.sbx.problems(projectId, config, knowledge, values).then(
+      void window.tet.sbx.problems(projectId, config, knowledge, values, { organization }).then(
         (answer) => {
           if (current) {
             setProblems(answer);

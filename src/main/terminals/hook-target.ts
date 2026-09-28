@@ -41,21 +41,3 @@ function onDiskCase(hostPath: string): string {
 /** The sandbox user's home in every template. A mount target must be absolute: `~` never
  *  expands. */
 export const SANDBOX_HOME = "/home/agent";
-
-/** The host side of an agent's session mounts (AgentSandbox.sessions): inside its sandbox folder
- *  (project-dirs.ts's sandboxDir), which sbx.ts mounts whole. */
-export function sandboxSessionDir(sandboxDir: string): string {
-  return path.join(sandboxDir, "sessions");
-}
-
-/** Where a sandboxed tab finds another agent's session it takes over, copied into the same
- *  mounted folder: that agent's own store is out of the sandbox's sight. */
-export function sandboxHandoffDir(sandboxDir: string, from: string, sessionId: string): string {
-  return path.join(sandboxDir, "handoffs", `${from}-${sessionId}`);
-}
-
-/** Where a sandboxed tab's pasted or dropped content without a path is written, in the same mounted
- *  folder; a host tab's goes to project-dirs.ts's dropsDir. */
-export function sandboxDropsDir(sandboxDir: string): string {
-  return path.join(sandboxDir, "drops");
-}

@@ -14,7 +14,7 @@ import type {
 } from "../shared/types";
 import { getAgent, SANDBOXED_AGENTS } from "./agents";
 import { logFailure } from "./json-file";
-import { readGovernance, readSbxProblems, saveSbxConfig, type SbxSaveTarget } from "./sbx";
+import { inTurn, listSandboxes, readGovernance, readSbxProblems, saveSbxConfig, type SandboxList, type SbxSaveTarget } from "./sbx";
 import type { SbxLocalStore } from "./sbx-local";
 
 /** The env names holding a value, per list. */
@@ -29,7 +29,8 @@ function checkProject(
   config: SbxProjectConfig,
   knowledge: SbxKnowledgeConfig,
   values: ValueNames,
-  organization: string | undefined
+  organization: string | undefined,
+  sandboxes?: SandboxList
 ): Promise<SbxProblems> {
   return readSbxProblems({
     projectId: project.id,
@@ -38,7 +39,8 @@ function checkProject(
     values: { secrets: new Set(values.secrets), variables: new Set(values.variables) },
     agents: SANDBOXED_AGENTS,
     organization,
-    ports: true
+    ports: true,
+    sandboxes
   });
 }
 
@@ -84,17 +86,7 @@ export function saveProjectSbx(
   local: SbxLocalSave,
   status?: Pick<SbxStatus, "organization">
 ): Promise<SbxSaveResult> {
-  const turn = (saves.get(project.id) ?? Promise.resolve())
-    .catch(() => undefined)
-    .then(() => saveNow(deps, project, request, local, status));
-  saves.set(project.id, turn);
-  const forget = (): void => {
-    if (saves.get(project.id) === turn) {
-      saves.delete(project.id);
-    }
-  };
-  turn.then(forget, forget);
-  return turn;
+  return inTurn(saves, project.id, () => saveNow(deps, project, request, local, status));
 }
 
 async function saveNow(
@@ -114,11 +106,15 @@ async function saveNow(
     sbxLocal.update(project.id, local);
     const secretValues = sbxLocal.values(project.id, "secrets");
     const knowledge = sbxLocal.knowledge(project.id);
-    const organization = await organizationOf(status);
+    // Listed once for the check and the Save.
+    const [organization, sandboxes] = await Promise.all([organizationOf(status), listSandboxes()]);
+    if (!sandboxes) {
+      throw new Error("SBX could not list the sandboxes. Nothing was saved; try again.");
+    }
     // Off, nothing is applied, so nothing is left out. What sbx cannot say stops the Save: a row
     // it could not be asked about is no refusal.
     const problems = request.enabled
-      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization).catch((error: unknown) => {
+      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization, sandboxes).catch((error: unknown) => {
           throw new Error(`${errorMessage(error)} Nothing was saved; try again.`);
         })
       : {};
@@ -130,7 +126,8 @@ async function saveNow(
       { previous, current: wanted.knowledge },
       secretValues,
       new Set(Object.keys(local.secrets.values)),
-      organization
+      organization,
+      sandboxes
     );
     sbxLocal.update(project.id, { secrets: keptValues(config.secrets), variables: keptValues(config.variables), knowledge: applied });
     for (const { ref, agentId } of removed) {

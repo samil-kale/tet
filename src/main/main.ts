@@ -33,7 +33,7 @@ import {
   syncWorktrees,
   type ProjectDeps
 } from "./projects";
-import { configureSandboxes, readSbxStatus, readSbxUser } from "./sbx";
+import { configureSandboxes, readSbxSignedIn, readSbxStatus, readSbxUser } from "./sbx";
 import { SbxAccountStore, signInToSbx } from "./sbx-accounts";
 import { SbxLocalStore } from "./sbx-local";
 import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";
@@ -457,6 +457,7 @@ async function startControl(): Promise<void> {
           problems: readProjectSbxProblems,
           save: (project, request, local, status) => saveProjectSbx({ sbxLocal, notice }, project, request, local, status),
           accounts: () => sbxAccounts.list(),
+          signedIn: readSbxSignedIn,
           signedInUser: () => readSbxUser(false),
           signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id, false)
         }

@@ -36,7 +36,7 @@ export function projectDir(dataRoot: string, projectId: string): string {
 }
 
 /** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs
- *  keep theirs in their agent's folder (hook-target.ts's sandboxDropsDir). */
+ *  keep theirs in their agent's folder (sandboxDropsDir). */
 export function dropsDir(dataRoot: string, projectId: string): string {
   return path.join(projectDir(dataRoot, projectId), "drops");
 }
@@ -66,6 +66,24 @@ export function projectRefPath(dataRoot: string, project: Project, ref: ProjectR
  *  its sandbox mounts. */
 export function sandboxDir(dataRoot: string, ref: ProjectRef, agentId: AgentId): string {
   return path.join(sandboxesDir(dataRoot, ref), agentId);
+}
+
+/** The host side of an agent's session mounts (AgentSandbox.sessions): inside its sandbox folder
+ *  (sandboxDir), which sbx.ts mounts whole. */
+export function sandboxSessionDir(sandboxDir: string): string {
+  return path.join(sandboxDir, "sessions");
+}
+
+/** Where a sandboxed tab finds another agent's session it takes over, copied into the same
+ *  mounted folder: that agent's own store is out of the sandbox's sight. */
+export function sandboxHandoffDir(sandboxDir: string, from: string, sessionId: string): string {
+  return path.join(sandboxDir, "handoffs", `${from}-${sessionId}`);
+}
+
+/** Where a sandboxed tab's pasted or dropped content without a path is written, in the same mounted
+ *  folder; a host tab's goes to dropsDir. */
+export function sandboxDropsDir(sandboxDir: string): string {
+  return path.join(sandboxDir, "drops");
 }
 
 /** Every agent folder (sandboxDir) the project's sandboxes have, the repository's and its

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
 import { CONTROL_ENV } from "../../shared/control";
+import { HOST_CALLER, type CallerSide } from "../control/caller-side";
 import { tabControlToken } from "../control/control-token";
 import { KEPT_ENV_NAME } from "../env-names";
 
@@ -17,9 +18,10 @@ export interface SpawnOptions {
   /** This process's project and tab for the control channel (`TET_PROJECT_ID`, `TET_TAB_ID`).
    *  Above the machine's, like `controlEnv`. */
   own?: Record<string, string>;
-  /** The tab runs in an sbx sandbox. Part of its control token, which is what the control server
-   *  reads it back off (control-token.ts). */
-  sandboxed?: boolean;
+  /** Where the tab runs (TabPlace): whether TET's stored variables reach it, and part of its control
+   *  token, which is what the control server reads it back off (control-token.ts). This machine
+   *  where omitted. */
+  side?: CallerSide;
 }
 
 /** The control channel's port and token, set from main.ts. Above `process.env`, since a tet started
@@ -160,11 +162,12 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
 }
 
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), the
- *  variables kept in tet over it (none in a sandbox), then tet's own (controlEnv, options.own) with
- *  the tab's own control token in place of the run's (control-token.ts), then a saved command's
- *  envOverride. Testable without a pty. */
-export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "sandboxed">): Record<string, string> {
-  const stored = options.sandboxed ? {} : storedEnv();
+ *  variables kept in tet over it where its side takes them (CallerSide.storedEnv), then tet's own
+ *  (controlEnv, options.own) with the tab's own control token in place of the run's
+ *  (control-token.ts), then a saved command's envOverride. Testable without a pty. */
+export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">): Record<string, string> {
+  const side = options.side ?? HOST_CALLER;
+  const stored = side.storedEnv ? storedEnv() : {};
   const inherited = withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored));
   // Never an outer tet's caller ids (a tet started from a tet tab): only `own` names this tab.
   for (const name of [CONTROL_ENV.projectId, CONTROL_ENV.worktree, CONTROL_ENV.tabId]) {
@@ -188,7 +191,7 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
       runToken,
       { projectId: env[CONTROL_ENV.projectId] ?? "", worktree: env[CONTROL_ENV.worktree] },
       env[CONTROL_ENV.tabId] ?? "",
-      options.sandboxed === true
+      side
     );
   }
   if (launcherDir) {

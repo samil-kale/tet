@@ -2,15 +2,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
+import { piIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { writePiExtension } from "./extension";
 import { piAgentDir, piSandboxSessions, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
+import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
 
 /** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32 (see
  *  system-prompt.ts). */
-const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
+const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prompt", systemPrompt(side)];
 
 /**
  * pi's fullscreen TUI (`--tui-mode`, this run only — settings.json untouched): it enters the
@@ -33,6 +35,9 @@ const FULLSCREEN_ARGS = ["--tui-mode", "fullscreen"];
 export const piAgent: SandboxedAgent = {
   id: "pi",
   displayName: "Pi",
+  icon: piIcon,
+  // Its input field is no shell: only a space needs quoting, in double quotes.
+  quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
   executable: () => "pi",
   // On win32 a `pi.cmd` npm shim, routed through cmd.exe by resolveCommand.
   install: { versionArgs: ["--version"], verifiedVersion: "0.86.1" },
@@ -65,7 +70,7 @@ export const piAgent: SandboxedAgent = {
       }
       // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
       // settings.json untouched.
-      args.push(...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, ...systemPromptArgs(false));
+      args.push(...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, ...systemPromptArgs(HOST_SIDE));
       return Promise.resolve({ args });
     }
   },
@@ -77,10 +82,10 @@ export const piAgent: SandboxedAgent = {
         // (sbx.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
         // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the
         // safety boundary, as for Claude Code, and the pi kit does not set it.
-        return { args: ["-e", SANDBOX_TARGET.embed(extension), ...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
+        return { args: ["-e", SANDBOX_TARGET.embed(extension), ...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)] };
       } catch (error) {
         console.error("[tet] could not write pi's sandbox extension:", error);
-        return { args: [...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(true)] };
+        return { args: [...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)] };
       }
     },
     // Skills in `~/.pi/agent/skills` and `~/.agents/skills`, extensions in

@@ -5,6 +5,8 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
+import { HOST_CALLER, SANDBOX_CALLER } from "../src/main/control/caller-side";
 import { writeLaunchers } from "../src/main/control/control-launcher";
 import { ControlRecords } from "../src/main/control/control-records";
 import { tabControlToken } from "../src/main/control/control-token";
@@ -42,11 +44,11 @@ describe("a turn's toast", () => {
     });
     const { tabId } = manager.createTab("shell");
     let at = Date.now();
-    const hook = (event: HookEvent) => manager.hookEvent(tabId, event, "{}", (at += 1000));
+    const hook = (event: HookEvent) => manager.hookEvent(tabId, event, "{}", (at += 1000), HOST_CALLER);
     const needsYou = ["permission", "question", "idle"] as const;
     try {
       manager.setInFront([tabId]);
-      assert.deepEqual(hook("prompt-submit"), {}, "nothing for the prompt: TET's system prompt went in once per session");
+      assert.deepEqual(hook("prompt-submit"), { stdout: "" }, "nothing for the prompt: TET's system prompt went in once per session");
       assert.equal(hook("stop").toast, undefined, "a turn finished in front of the user");
       assert.notEqual(
         pushed.find((tab) => tab.tabId === tabId)?.finishedAt,
@@ -113,10 +115,10 @@ describe("a tab's reported session", () => {
     await withEmptyPath({}, (manager) => {
       const { tabId } = manager.createTab("claude");
       const at = Date.now();
-      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at);
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at, HOST_CALLER);
       // `/clear`: the new session starts, while the old one's stop hook is still on its way.
-      manager.hookEvent(tabId, "session-start", '{"session_id":"s2"}', at + 2000);
-      manager.hookEvent(tabId, "stop", '{"session_id":"s1"}', at + 1000);
+      manager.hookEvent(tabId, "session-start", '{"session_id":"s2"}', at + 2000, HOST_CALLER);
+      manager.hookEvent(tabId, "stop", '{"session_id":"s1"}', at + 1000, HOST_CALLER);
       assert.equal(manager.inspect().find((tab) => tab.tabId === tabId)?.reportedSessionId, "s2");
     });
   });
@@ -131,12 +133,12 @@ describe("a Claude Code turn leaving a background agent running", () => {
       const agent = { id: "a1", type: "subagent", status: "running" };
       const shell = { id: "b1", type: "shell", status: "running" };
       const at = Date.now();
-      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at);
-      assert.deepEqual(manager.hookEvent(tabId, "stop", stop([agent, shell]), at + 1000), {});
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at, HOST_CALLER);
+      assert.deepEqual(manager.hookEvent(tabId, "stop", stop([agent, shell]), at + 1000, HOST_CALLER), { stdout: "{}" });
       assert.equal(busy(), true, "a background agent runs on");
       // Its end starts a turn of its own.
-      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at + 2000);
-      manager.hookEvent(tabId, "stop", stop([shell]), at + 3000);
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at + 2000, HOST_CALLER);
+      manager.hookEvent(tabId, "stop", stop([shell]), at + 3000, HOST_CALLER);
       assert.equal(busy(), false, "a background shell alone does not count");
     });
   });
@@ -153,8 +155,8 @@ describe("a turn reported after its tab's process exited", () => {
       manager.handleResize(tabId, 80, 24);
       await eventually(() => `an error after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
       const at = Date.now();
-      manager.hookEvent(tabId, "prompt-submit", "{}", at);
-      assert.deepEqual(manager.hookEvent(tabId, "permission", "{}", at + 1000), {});
+      manager.hookEvent(tabId, "prompt-submit", "{}", at, HOST_CALLER);
+      assert.deepEqual(manager.hookEvent(tabId, "permission", "{}", at + 1000, HOST_CALLER), { stdout: "" });
       const inspected = manager.inspect().find((candidate) => candidate.tabId === tabId);
       assert.notEqual(inspected?.busy, true);
       assert.equal(inspected?.waitingAt, undefined);
@@ -185,8 +187,8 @@ describe("a tab of a missing agent", () => {
 
 describe("a sandboxed tab's control token", () => {
   it("differs from the same tab's on the host, so its limits outlive the tab", () => {
-    const host = tabControlToken("run-token", { projectId: "p" }, "tab-1", false);
-    const sandboxed = tabControlToken("run-token", { projectId: "p" }, "tab-1", true);
+    const host = tabControlToken("run-token", { projectId: "p" }, "tab-1", HOST_SIDE);
+    const sandboxed = tabControlToken("run-token", { projectId: "p" }, "tab-1", SANDBOX_SIDE);
     assert.notEqual(host, sandboxed);
     // Nothing is kept per tab: the control server reads the flag back off whichever of the two
     // matches, so a process left in the sandbox is answered by the rules its tab started under
@@ -220,7 +222,7 @@ describe("a terminal's environment", () => {
       const env = buildEnv({ env: { TET_TEST_STORED: "agent" } });
       assert.equal(env.TET_TEST_STORED, "first", "above an agent's default");
       assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
-      assert.equal(buildEnv({ sandboxed: true }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
+      assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
       assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
       stored = { TET_TEST_STORED: "second" };
       assert.equal(buildEnv({}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
@@ -229,7 +231,7 @@ describe("a terminal's environment", () => {
       stored = {};
       assert.equal(buildEnv({}).TET_KEPT_ENV, undefined, "none kept, none named");
       delete process.env.TET_KEPT_ENV;
-      assert.equal(buildEnv({ sandboxed: true }).TET_TEST_STORED, undefined, "a sandbox gets none");
+      assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_STORED, undefined, "a sandbox gets none");
     } finally {
       setStoredEnv(() => ({}));
     }
@@ -250,13 +252,13 @@ describe("a terminal's environment", () => {
   it("gives a terminal its own tab's control token, never the run's", () => {
     setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
     const env = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
-    assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", false));
-    assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-2", false), "another tab's differs");
+    assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", HOST_SIDE));
+    assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-2", HOST_SIDE), "another tab's differs");
     const inSandbox = buildEnv({
       own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" },
-      sandboxed: true
+      side: SANDBOX_CALLER
     });
-    assert.equal(inSandbox[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", true), "the sandbox is in it");
+    assert.equal(inSandbox[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", SANDBOX_SIDE), "the sandbox is in it");
     setControlEnv({}, "");
   });
 
@@ -273,7 +275,7 @@ describe("a terminal's environment", () => {
         own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.worktree]: "k3f9a2c1", [CONTROL_ENV.tabId]: "tab-1" }
       });
       assert.equal(env[CONTROL_ENV.worktree], "k3f9a2c1");
-      assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1", worktree: "k3f9a2c1" }, "tab-1", false));
+      assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1", worktree: "k3f9a2c1" }, "tab-1", HOST_SIDE));
       assert.notEqual(env[CONTROL_ENV.token], main[CONTROL_ENV.token], "the repository's tab of that id has another");
     } finally {
       for (const [name, value] of [[CONTROL_ENV.worktree, inherited.worktree], [CONTROL_ENV.tabId, inherited.tab]] as const) {

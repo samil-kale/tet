@@ -2,8 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { clipboard, ipcMain } from "electron";
 import type { ProjectRef } from "../../shared/types";
-import { dropsDir, projectsDir, sandboxDirsOf } from "../project-dirs";
-import { sandboxDropsDir } from "../terminals/hook-target";
+import { dropsDir, projectsDir, sandboxDirsOf, sandboxDropsDir } from "../project-dirs";
 import type { IpcDeps } from "./deps";
 
 const DROP_FILE_NAME = /^tet-(\d+)-/;
@@ -51,16 +50,12 @@ export function sweepDropFiles(dataRoot: string): void {
 }
 
 /** What a paste or drop hands a tab: bytes without a path written into its drops folder, and every
- *  path as the tab sees it. */
+ *  path — written or dropped — as the tab sees it (hand-paths), one way for both. */
 export function registerFilesIpc({ sessions }: Pick<IpcDeps, "sessions">): void {
-  /** The file written, as the tab types it; null when the tab is gone or its sandbox refused it. */
+  /** The file written, on this machine; null when the tab's repository or worktree is closed. */
   const writeDrop = async (ref: ProjectRef, tabId: string, name: string, data: Buffer): Promise<string | null> => {
     const manager = sessions.get(ref);
-    if (!manager) {
-      return null;
-    }
-    const file = await writeDropFile(manager.dropsDir(tabId), name, data);
-    return (await manager.handPaths(tabId, [file]))[0] ?? null;
+    return manager ? writeDropFile(manager.dropsDir(tabId), name, data) : null;
   };
 
   ipcMain.handle(

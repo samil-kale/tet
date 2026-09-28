@@ -1,4 +1,4 @@
-import { CONTROL_ENV, CONTROL_HOST } from "../../shared/control";
+import { CONTROL_ENV, CONTROL_HOST } from "../../../shared/control";
 
 /**
  * Source of `report(event, sessionId)` for an agent reporting turns from inside its own process

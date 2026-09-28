@@ -2,6 +2,7 @@ import * as http from "node:http";
 import { errorMessage } from "../shared/errors";
 import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_HOST, CONTROL_GROUPS, CONTROL_VERBS, ERROR_EXIT_CODES, EXIT_CODES, HELP_VERB } from "../shared/control";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
+import { admitsVerb, HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../shared/control-side";
 
 /**
  * `tet-ctl`: how an agent in a tet terminal asks the app. No electron; bundled on its own
@@ -13,13 +14,12 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
 /** What systemPrompt's one line leaves to this page: it says when to reach for tet-ctl, this when
  *  not to, and how a missing variable is asked for. Beside the verbs, so nothing is installed into
  *  an agent's configuration and every agent reads it alike. */
-function whenToUse(sandboxed: boolean): string[] {
+function whenToUse(side: ControlSide): string[] {
   return [
     "Leave it alone for files and git, worktrees aside: read the repository and run git yourself.",
-    // Never offered in a sandbox (ControlVerb.sandbox absent), so not mentioned there either.
-    ...(sandboxed
-      ? []
-      : [
+    // Mentioned only where the env verbs answer (ControlSide.admits).
+    ...(admitsVerb(side, "env-request")
+      ? [
           "",
           "A token or password you need is an environment variable ($GITLAB_TOKEN). TET sets the ones",
           "it keeps (env-list) in every tab it starts, over the machine's own. When one is missing,",
@@ -34,47 +34,24 @@ function whenToUse(sandboxed: boolean): string[] {
           "how to replace it — env-request's dialog writes over a value TET keeps.",
           "env-request waits for the user: run it with your longest command timeout (10 minutes), or",
           "its dialog closes when your shell gives up on it."
-        ])
+        ]
+      : [])
   ];
 }
 
-/** Set on sbx sessions alone (sbx.ts hands it in as the host to reach), so the CLI knows where it
- *  runs without asking: a sandboxed agent is listed only the verbs the server answers it, instead
- *  of meeting the refusal one verb at a time. */
-function inSandbox(): boolean {
-  return Boolean(process.env[CONTROL_ENV.host]);
-}
-
-/** The rules the verb list does not carry, each side told only its own: a sandbox is no concern of
- *  a tab on the host, which cannot end up in one. */
-function limits(sandboxed: boolean): string[] {
-  const own = [
-    "Without flags, a verb acts on where the tab it is run from runs: its project's repository or",
-    "one of its worktrees. --project <id> alone means that project's repository,",
-    "--worktree <branch> one of its worktrees. A worktree listed without a key (projects-list) was",
-    "made outside TET, with plain git or by an older TET: TET shows it greyed and cannot open it."
-  ];
-  return sandboxed
-    ? [
-        ...own,
-        "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",
-        "restarting TET, starting a tab or pressing keys in one — is refused there and is not listed above.",
-        "What is listed answers for the tabs of this repository or worktree only (exit 2, the reason on stderr)."
-      ]
-    : [
-        ...own,
-        "restartRequired in an answer means the change waits for a restart — tell the user, never",
-        "restart for them. A terminal of another project is refused, exit 2 with the reason on stderr",
-        "(tabs-output, tabs-keys)."
-      ];
+/** `CONTROL_ENV.host` is set on sbx sessions alone (sbx.ts hands it in as the host to reach), so the
+ *  CLI knows its side without asking: a sandboxed agent is listed only the verbs the server answers
+ *  it, instead of meeting the refusal one verb at a time. */
+function ownSide(): ControlSide {
+  return process.env[CONTROL_ENV.host] ? SANDBOX_SIDE : HOST_SIDE;
 }
 
 /** Each verb's summary on its own indented line: padding every usage to the longest (tabs-wait)
  *  would cost an agent some 140 spaces a line. */
 function usage(): string {
-  const sandboxed = inSandbox();
-  // `sandbox` absent is refused there (ControlVerb.sandbox), which is what leaves a verb out.
-  const listed = (entry: ControlVerb): boolean => !entry.unlisted && (!sandboxed || entry.sandbox !== undefined);
+  const side = ownSide();
+  // A verb the side refuses is left out (ControlSide.admits).
+  const listed = (entry: ControlVerb): boolean => !entry.unlisted && side.admits(entry);
   const groups = CONTROL_GROUPS.map((heading) => ({
     heading,
     lines: CONTROL_VERBS.filter((entry) => entry.group === heading && listed(entry)).flatMap((entry) => [
@@ -85,10 +62,10 @@ function usage(): string {
   return [
     "tet-ctl — control the TET app this terminal runs in",
     "",
-    ...whenToUse(sandboxed),
+    ...whenToUse(side),
     ...groups.flatMap((group) => ["", group.heading, ...group.lines]),
     "",
-    ...limits(sandboxed)
+    ...side.limits
   ].join("\n");
 }
 

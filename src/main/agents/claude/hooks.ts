@@ -3,6 +3,8 @@ import * as path from "node:path";
 import { hookCommand } from "../../terminals/hook-command";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
 import { writeIfChanged } from "../../write-if-changed";
+import type { AgentPaths } from "../agent";
+import type { HookEvent } from "../../../shared/control";
 
 /**
  * Writes the settings file registering Claude Code's hooks into `agentDir` (the host tabs' one,
@@ -14,12 +16,7 @@ import { writeIfChanged } from "../../write-if-changed";
  * One `UserPromptSubmit` command marks the session busy; its answer is empty, since TET's system
  * prompt goes in once at spawn (index.ts).
  */
-export function setupClaudeHooks(
-  storageDir: string,
-  paths: { idleReminder: boolean },
-  themeName: string,
-  target: HookTarget = HOST_TARGET
-): string[] {
+export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TARGET): string[] {
   const command = (event: Parameters<typeof hookCommand>[0]): { type: string; command: string }[] => [
     { type: "command", command: hookCommand(event) }
   ];
@@ -40,10 +37,10 @@ export function setupClaudeHooks(
 
   // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process.
   // Built-in only: a custom theme loads after the first render, drawing a dark frame meanwhile.
-  const settingsFile = path.join(storageDir, "tet-hooks-settings.json");
-  fs.mkdirSync(storageDir, { recursive: true });
+  const settingsFile = path.join(paths.agentDir, "tet-hooks-settings.json");
+  fs.mkdirSync(paths.agentDir, { recursive: true });
   // Rename into place: a sandbox's copy is rewritten on every spawn while another tab may read it.
-  writeIfChanged(settingsFile, JSON.stringify({ hooks, theme: themeName }, null, 2));
+  writeIfChanged(settingsFile, JSON.stringify({ hooks, theme: paths.theme.kind }, null, 2));
   return ["--settings", target.embed(settingsFile)];
 }
 
@@ -64,4 +61,11 @@ export function claudeWorkOutlivesStop(payload: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** What a hook prints back into Claude Code (AgentTurns.hookReply): `UserPromptSubmit`'s stdout is
+ *  appended to the prompt, so "", and every other hook one JSON value, `{}`. TET's system prompt
+ *  goes in at spawn (index.ts), not through a hook. */
+export function claudeHookReply(event: HookEvent): string {
+  return event === "prompt-submit" ? "" : "{}";
 }

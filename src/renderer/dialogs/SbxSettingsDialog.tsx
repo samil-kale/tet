@@ -264,7 +264,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const organization = phase.kind === "ready" ? phase.organization : undefined;
   // Asked from the moment the rows are loaded, not when their tab is opened; not while sandboxing
   // is off, which applies none of them.
-  const problems = useSbxProblems(project.id, state, stored, phase.kind === "ready" && enabled);
+  const problems = useSbxProblems(project.id, state, stored, phase.kind === "ready" && enabled, organization);
   const marks = useMemo(() => tabMarks(state, problems), [state, problems]);
   const tabs = useMemo(
     () =>

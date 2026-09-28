@@ -1,3 +1,5 @@
+import { admitsVerb, type ControlSide } from "../../shared/control-side";
+
 /**
  * What every agent tab is told about TET, once per session: never replacing the user's own
  * instructions, not repeated with every message. Claude Code and pi append it to their system
@@ -6,20 +8,20 @@
  * the verbs.
  *
  * One line with no `"`, `\`, backtick or cmd.exe/shell metacharacter (pieces.test.ts): it travels
- * as a plain argument through cmd.exe (pi's npm shim) and through `sbx run`. A sandboxed tab is
- * not offered tabs-run-command, so it is not sent looking for one.
+ * as a plain argument through cmd.exe (pi's npm shim) and through `sbx run`. What a side does not
+ * admit (ControlSide.admits) it is not sent looking for: tabs-run-command, the env verbs.
  */
-function tetSentences(sandboxed: boolean): string {
+function tetSentences(side: ControlSide): string {
   return (
     "You are running inside TET, which runs coding agents, shells and saved commands as terminal tabs the user watches. " +
     "Run tet-ctl help before using tet-ctl, and use it when the user asks about TET, means something they ran or saw in another tab, " +
     "or wants something shown to them, or when " +
-    (sandboxed ? "another agent" : "a saved command or another agent") +
+    (admitsVerb(side, "tabs-run-command") ? "a saved command or another agent" : "another agent") +
     " should do the job."
   );
 }
 
-/** Only outside a sandbox, where the env verbs answer; a sandbox never hears of them. */
+/** Only where the env verbs answer; a side refusing them never hears of them. */
 const ENVIRONMENT_SENTENCE =
   " When an environment variable you need, a token or password, is not set, never ask for its value in the chat: " +
   "offer the user to type it into TET or to set it themselves, as tet-ctl help describes.";
@@ -34,6 +36,6 @@ const WORKTREE_SENTENCE =
 const TASK_SENTENCE =
   " When the user wants another agent or a tab of its own on a task, open one with tet-ctl; your own subagents stay as they are.";
 
-export function systemPrompt(sandboxed: boolean): string {
-  return tetSentences(sandboxed) + WORKTREE_SENTENCE + TASK_SENTENCE + (sandboxed ? "" : ENVIRONMENT_SENTENCE);
+export function systemPrompt(side: ControlSide): string {
+  return tetSentences(side) + WORKTREE_SENTENCE + TASK_SENTENCE + (admitsVerb(side, "env-request") ? ENVIRONMENT_SENTENCE : "");
 }

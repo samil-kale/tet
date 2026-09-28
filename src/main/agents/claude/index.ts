@@ -1,14 +1,16 @@
 import * as path from "node:path";
 import { createByteThresholdCheck } from "../../terminals/session-ready";
+import { claudeIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
-import { claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
+import { claudeHookReply, claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
 import { claudeConfigDir, claudeSandboxSessions, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
+import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
 
 /** Appended to Claude Code's own system prompt for this process (see system-prompt.ts). */
-const systemPromptArgs = (sandboxed: boolean): string[] => ["--append-system-prompt", systemPrompt(sandboxed)];
+const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prompt", systemPrompt(side)];
 
 /**
  * Fullscreen, always: Claude Code turns it off machine-wide after launches that died while it
@@ -19,6 +21,9 @@ const FULLSCREEN_ENV = { CLAUDE_CODE_NO_FLICKER: "1" };
 export const claudeAgent: SandboxedAgent = {
   id: "claude",
   displayName: "Claude",
+  icon: claudeIcon,
+  // Its input field is no shell: only a space needs quoting, in double quotes.
+  quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
   executable: () => "claude",
   install: { versionArgs: ["--version"], verifiedVersion: "2.1.282" },
   terminal: {
@@ -32,26 +37,26 @@ export const claudeAgent: SandboxedAgent = {
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   ask: { args: ["-p", "--no-session-persistence"] },
   sessions: claudeSessionProvider,
-  turns: { sessionIdOf: hookSessionId, workOutlivesStop: claudeWorkOutlivesStop },
+  turns: { sessionIdOf: hookSessionId, workOutlivesStop: claudeWorkOutlivesStop, hookReply: claudeHookReply },
   host: {
     prepare: (_executable, paths) => {
       let args: string[] = [];
       try {
-        args = setupClaudeHooks(paths.agentDir, paths, paths.theme.kind);
+        args = setupClaudeHooks(paths);
       } catch (error) {
         // Swallowed, never rejected — see AgentHost.prepare.
         console.error("[tet] could not write Claude hook settings:", error);
       }
-      return Promise.resolve({ args: [...args, ...systemPromptArgs(false)], env: FULLSCREEN_ENV });
+      return Promise.resolve({ args: [...args, ...systemPromptArgs(HOST_SIDE)], env: FULLSCREEN_ENV });
     }
   },
   sandbox: {
     prepare: (paths) => {
       try {
-        return { args: [...setupClaudeHooks(paths.agentDir, paths, paths.theme.kind, SANDBOX_TARGET), ...systemPromptArgs(true)] };
+        return { args: [...setupClaudeHooks(paths, SANDBOX_TARGET), ...systemPromptArgs(SANDBOX_SIDE)] };
       } catch (error) {
         console.error("[tet] could not write Claude sandbox hook settings:", error);
-        return { args: systemPromptArgs(true) };
+        return { args: systemPromptArgs(SANDBOX_SIDE) };
       }
     },
     // Claude Code falls back to its classic renderer where the sandbox's network rule blocks its

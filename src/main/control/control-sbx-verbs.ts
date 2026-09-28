@@ -20,7 +20,7 @@ import {
   sbxVariableRefusal,
   withoutProblems
 } from "../../shared/sbx-rules";
-import { sbxNotReady } from "../sbx-policy";
+import { sbxBlocked, sbxNotReady } from "../sbx-policy";
 import type { ControlDeps } from "./control-server";
 import { ControlError, list, text, type Answer, type Handler } from "./control-verb";
 
@@ -42,9 +42,9 @@ export function sbxVerbs(
     if (missing) {
       throw new ControlError("bad_args", `${missing}: the user sets it up in ${found.name}'s SBX Settings in TET`);
     }
-    if (status.blockers.length > 0) {
-      const policy = status.organization ? `${status.organization}'s SBX policy` : "SBX's policy";
-      throw new ControlError("bad_args", `${policy} does not allow ${status.blockers.map((blocker) => `${blocker.allow} (${blocker.what})`).join("; ")}`);
+    const blocked = sbxBlocked(status.blockers, status.organization);
+    if (blocked !== undefined) {
+      throw new ControlError("bad_args", blocked);
     }
     return status;
   };
@@ -117,8 +117,8 @@ export function sbxVerbs(
 
   return {
     // Not a project's, but asked of one: its status carries the sign-in.
-    "sbx-accounts": async (args, caller) => {
-      const { loggedIn } = await deps.sbx.status(project(args, caller));
+    "sbx-accounts": async () => {
+      const loggedIn = await deps.sbx.signedIn();
       const account = loggedIn ? await deps.sbx.signedInUser() : undefined;
       return {
         result: {

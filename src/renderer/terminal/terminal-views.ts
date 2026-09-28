@@ -5,11 +5,11 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import type { OpenEditor } from "./editor-tab";
 import { Terminal } from "@xterm/xterm";
 import { projectRefKey } from "../../shared/types";
-import type { AgentInfo, ProjectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
-import { isLinux, isMac, isModifierHeld, isWindows } from "../platform";
+import { isLinux, isMac, isModifierHeld } from "../platform";
 import { buildXtermTheme, editorFontFamily } from "./theme";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
@@ -19,8 +19,6 @@ interface TerminalView {
   tabId: string;
   term: Terminal;
   fit: FitAddon;
-  /** Whose paths a drop or paste quotes — see `quotePath`. */
-  agent: AgentInfo;
   /** The size last reported to the pty, so an unchanged fit does not report again. */
   sent?: { cols: number; rows: number };
   /** Set while it holds a WebGL context; otherwise xterm draws through the DOM. */
@@ -110,54 +108,34 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-/** What the shell tab's shell (`shellAgent`: PowerShell on win32, else `$SHELL`) reads as is: no
- *  `$`, backtick, quote, space, `,` (a PowerShell array) or, outside win32, backslash (an escape). */
-const PLAIN_PATH = isWindows() ? /^[\w./\\:-]+$/ : /^[\w./:-]+$/;
-
-/**
- * A path as one word. The shell tab single-quotes it, since PowerShell and POSIX shells expand `$`
- * and a backtick inside double quotes too; a `'` in it is doubled (PowerShell) or closed, escaped
- * and reopened (POSIX). An agent's input field is no shell: there only a space is quoted, in double
- * quotes.
- */
-function quotePath(filePath: string, agent: AgentInfo): string {
-  if (agent.id !== "shell") {
-    return /\s/.test(filePath) ? `"${filePath}"` : filePath;
-  }
-  if (PLAIN_PATH.test(filePath)) {
-    return filePath;
-  }
-  return isWindows() ? `'${filePath.replace(/'/g, "''")}'` : `'${filePath.replace(/'/g, "'\\''")}'`;
-}
-
-/** Types the paths, each one word; term.paste, so no CLI input mode misreads them as keystrokes
- *  (vim mode, say). */
-function pastePaths(view: TerminalView, paths: string[]): void {
-  if (paths.length > 0) {
-    view.term.paste(`${paths.map((filePath) => quotePath(filePath, view.agent)).join(" ")} `);
+/** Types the words, as main quoted them for the tab (handPaths); term.paste, so no CLI input mode
+ *  misreads them as keystrokes (vim mode, say). */
+function pastePaths(view: TerminalView, words: string[]): void {
+  if (words.length > 0) {
+    view.term.paste(`${words.join(" ")} `);
   }
 }
 
+/** Types paths of this machine as the tab sees them (handPaths), in the order given. */
+async function handPaths(view: TerminalView, paths: string[]): Promise<void> {
+  pastePaths(view, await window.tet.files.handPaths(view.ref, view.tabId, paths));
+}
+
 /**
- * Types the dropped files' paths as the tab sees them (handPaths); content without a path (from a
- * browser) is written into the tab's drops folder, swept a day old at startup.
+ * Types the dropped files' paths; content without a path (from a browser) is written into the
+ * tab's drops folder first, swept a day old at startup.
  */
 async function pasteDroppedFiles(view: TerminalView, files: File[]): Promise<void> {
-  const { ref, tabId } = view;
-  const existing: string[] = [];
-  const written: string[] = [];
+  const paths: string[] = [];
   for (const file of files) {
-    const filePath = window.tet.files.pathOf(file);
+    const filePath =
+      window.tet.files.pathOf(file) ||
+      (await window.tet.files.writeDrop(view.ref, view.tabId, file.name, toBase64(await file.arrayBuffer())));
     if (filePath) {
-      existing.push(filePath);
-      continue;
-    }
-    const drop = await window.tet.files.writeDrop(ref, tabId, file.name, toBase64(await file.arrayBuffer()));
-    if (drop !== null) {
-      written.push(drop);
+      paths.push(filePath);
     }
   }
-  pastePaths(view, [...(await window.tet.files.handPaths(ref, tabId, existing)), ...written]);
+  await handPaths(view, paths);
 }
 
 /** A copied image has no path either — written into the drops folder too. */
@@ -167,7 +145,7 @@ async function pasteClipboardImage(view: TerminalView): Promise<boolean> {
     return false;
   }
   // The drops folder is under the profile, whose name can hold a space.
-  pastePaths(view, [file]);
+  await handPaths(view, [file]);
   return true;
 }
 
@@ -302,7 +280,7 @@ function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void 
   }
 }
 
-function createView(ref: ProjectRef, tabId: string, agent: AgentInfo): TerminalView {
+function createView(ref: ProjectRef, tabId: string): TerminalView {
   const term = new Terminal({
     fontFamily: editorFontFamily(),
     fontSize: defaultFontSize(),
@@ -376,7 +354,7 @@ function createView(ref: ProjectRef, tabId: string, agent: AgentInfo): TerminalV
     return true;
   });
 
-  const view: TerminalView = { ref, tabId, term, fit, agent };
+  const view: TerminalView = { ref, tabId, term, fit };
   const key = viewKey(ref, tabId);
   views.set(key, view);
   const buffered = earlyOutput.get(key);
@@ -392,9 +370,9 @@ export function hasTerminal(ref: ProjectRef, tabId: string): boolean {
   return views.has(viewKey(ref, tabId));
 }
 
-export function attachTerminal(ref: ProjectRef, tabId: string, agent: AgentInfo, container: HTMLElement): void {
-  // Only the first attach reads the agent; the view outlives every mount.
-  const view = views.get(viewKey(ref, tabId)) ?? createView(ref, tabId, agent);
+export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLElement): void {
+  // The view outlives every mount.
+  const view = views.get(viewKey(ref, tabId)) ?? createView(ref, tabId);
   if (view.term.element?.parentElement === container) {
     return;
   }

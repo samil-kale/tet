@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { writeIfChanged } from "../../write-if-changed";
-import { renderHookReport } from "../hook-report";
+import { renderHookReport } from "./hook-report";
 
 /**
  * Writes the extension into `storageDir` (already the agent's own, so a fixed name) and

@@ -10,7 +10,7 @@
  * and `dir/**` covers `dir`.
  */
 
-import type { SbxAccess, SbxStatus } from "../shared/types";
+import type { SbxAccess, SbxBlocker, SbxStatus } from "../shared/types";
 import { isRecord } from "./json-file";
 
 type FilesystemAction = "read" | "write";
@@ -41,6 +41,16 @@ export function sbxNotReady(status: SbxStatus): string | undefined {
     return "SBX's network policy is not set up";
   }
   return undefined;
+}
+
+/** What sbx's policy does not allow a sandboxed tab (readSbxBlockers), said once for the spawn and
+ *  the control verbs alike; undefined where it allows all. */
+export function sbxBlocked(blockers: SbxBlocker[], organization: string | undefined): string | undefined {
+  if (blockers.length === 0) {
+    return undefined;
+  }
+  const policy = organization ? `${organization}'s SBX policy` : "SBX's policy";
+  return `${policy} does not allow ${blockers.map((blocker) => `${blocker.allow} (${blocker.what})`).join("; ")}`;
 }
 
 export interface FilesystemRule {

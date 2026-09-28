@@ -1,4 +1,5 @@
 import type { ControlErrorCode, ControlRequest } from "../../shared/control";
+import type { CallerSide } from "./caller-side";
 
 /** What a verb's handler is made of, shared by control-server.ts and the verb files beside it. */
 
@@ -18,8 +19,8 @@ export interface Answer {
   after?: () => void;
 }
 
-/** The request's caller, and whether its tab runs in a sandbox (ControlVerb.sandbox). */
-export type Caller = ControlRequest["caller"] & { sandboxed: boolean };
+/** The request's caller, and the side its tab runs on (CallerSide). */
+export type Caller = ControlRequest["caller"] & { side: CallerSide };
 
 export type Handler = (
   args: Record<string, unknown>,

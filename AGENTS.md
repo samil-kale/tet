@@ -40,10 +40,11 @@ project's terminals.
   `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent can do
   something is whether it has the group (`hasSandbox`), never a list of ids. Shared code imports
   only the registry (`agents/index.ts`), `agent.ts`'s types and the agent-neutral `ask.ts` and
-  `system-prompt.ts`. A new agent must fit the data model (below) and is a new folder, one
-  registry entry, its id in `AGENT_IDS` (`src/shared/types.ts`), and one case in `AgentIcon`
-  (`src/renderer/ui/agent-icons.tsx`, the only agent-specific code outside `agents/`; user-facing
-  text may name agents).
+  `system-prompt.ts`. A new agent must fit the data model (below) and is a new folder and one
+  registry entry, nothing else: its icon is data in its definition (`icon`), which the window
+  draws, and no code outside `agents/` names an agent (user-facing text may) but the shell, which
+  TET itself runs saved commands and plain terminals in. What a new agent
+  needs that no group covers extends the groups, never a branch on its id.
 - **A project is its repository and its worktrees** — the words for them, in code, texts and
   comments alike. The repository is the folder the user opened, holding `.git`; never call it a
   worktree (nor "main worktree"), and there is no noun for both: where one of them is meant — where
@@ -321,6 +322,11 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   not in `help`, not in its system prompt.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`control-token.ts`): a terminal gets its tab's token, never the run's.
+- **Where a caller runs is its side** (`ControlSide`, `src/shared/control-side.ts`, and the main
+  process's `CallerSide`, `control/caller-side.ts`), set by its tab's place and read back off its
+  token: which verbs answer and how far, what `tet-ctl help` and the system prompt mention, the
+  variables its tab gets, the tabs, projects and files it reaches. Nothing else asks whether a
+  caller is sandboxed; a new difference extends the side.
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
 - `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository
@@ -340,10 +346,11 @@ Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/ma
 the `sbx` CLI.
 
 - **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): decided at each
-  start (`resolvePlace`), until then by where its session lives. Everything that differs between
-  host and sandbox — paths as the tab sees them, drops, session operations, the spawn — is a member
-  of it, implemented by `HostPlace` and `SandboxPlace`; nothing else asks where a tab runs, and a
-  new difference extends the interface.
+  start (`resolvePlace`), until then by where its session lives; each agent's runtime holds one
+  of each (`host`, `sandbox`). Everything that differs between host and sandbox — paths as the tab
+  sees them, drops, listing and operating on sessions, the side it calls from, the spawn — is a
+  member of it, implemented by `HostPlace` and `SandboxPlace`; nothing else asks where a tab runs,
+  and a new difference extends the interface.
 - **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error` — the
   host would bypass an organization's policy.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox

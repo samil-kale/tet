@@ -12,6 +12,7 @@ import { tabControlToken } from "../src/main/control/control-token";
 import * as gitModule from "../src/main/git/git";
 import type { GitRequest, GitResponse } from "../src/main/git/git-host";
 import { CONTROL_ENV } from "../src/shared/control";
+import { HOST_SIDE } from "../src/shared/control-side";
 import type { GitLogin } from "../src/shared/types";
 
 /**
@@ -145,7 +146,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   const ctl = (...ctlArgs: string[]): Promise<Run> => tetCtl(ctlArgs, env);
   const asTab = (projectId: string, tabId: string): Record<string, string | undefined> => ({
     ...env,
-    [CONTROL_ENV.token]: tabControlToken(token, { projectId }, tabId, false),
+    [CONTROL_ENV.token]: tabControlToken(token, { projectId }, tabId, HOST_SIDE),
     [CONTROL_ENV.projectId]: projectId,
     [CONTROL_ENV.tabId]: tabId
   });

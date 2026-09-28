@@ -4,7 +4,9 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
 import { claudeAgent } from "../src/main/agents/claude";
+import { codexHookReply } from "../src/main/agents/codex/hooks";
 import { shellAgent } from "../src/main/agents/shell";
 import { systemPrompt } from "../src/main/agents/system-prompt";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
@@ -184,16 +186,18 @@ function terminalsOf(key: string): ControlTerminals {
       calls.renamed.push([tabId, title]);
       return refuseRename;
     },
-    hookEvent: (tabId, event, payload, at) => {
+    hookEvent: (tabId, event, payload, at, side) => {
       calls.hooks.push([tabId, event, payload]);
       calls.hookTimes.push(at);
+      // A Codex tab's answer, which is what a session start carries TET's system prompt in.
+      const stdout = codexHookReply(event, side);
       if (tabId !== OWN_TAB) {
-        return {};
+        return { stdout };
       }
       // As TabSessionManager.hookEvent: neither a session's start nor a prompt toasts.
       return event === "session-start" || event === "prompt-submit"
-        ? {}
-        : { toast: { title: "Claude: Finished", body: "Finished in one" } };
+        ? { stdout }
+        : { stdout, toast: { title: "Claude: Finished", body: "Finished in one" } };
     }
   };
 }
@@ -319,6 +323,7 @@ function deps(): ControlDeps {
         return { ok: true, problems: sbxProblems };
       },
       accounts: () => sbxAccounts.map((user) => ({ id: `id-${user}`, user })),
+      signedIn: async () => sbxStatus.loggedIn,
       signedInUser: async () => sbxUser,
       signIn: async (account) => {
         if (sbxRefusal !== undefined) {
@@ -346,7 +351,7 @@ function tetCtl(args: string[], env: Record<string, string | undefined> = {}, in
     projectId === undefined && tabId === undefined
       ? TOKEN
       // The sandbox is in the token, as it is for a real tab (pty.ts's buildEnv).
-      : tabControlToken(TOKEN, { projectId: projectId ?? "", worktree }, tabId ?? "", tabId === SANDBOX_TAB);
+      : tabControlToken(TOKEN, { projectId: projectId ?? "", worktree }, tabId ?? "", tabId === SANDBOX_TAB ? SANDBOX_SIDE : HOST_SIDE);
   return runCli(args, { [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: token, ...ids }, input);
 }
 
@@ -461,7 +466,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("takes a caller's ids only with the token made for them", async () => {
-    const ownToken = tabControlToken(TOKEN, { projectId: PROJECT.id }, OWN_TAB, false);
+    const ownToken = tabControlToken(TOKEN, { projectId: PROJECT.id }, OWN_TAB, HOST_SIDE);
     const otherProject = await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: ownToken, [CONTROL_ENV.projectId]: OTHER.id });
     assertRefused(otherProject, /not a terminal of this TET/, "another project named");
     assertRefused(await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: TOKEN }), /not a terminal of this TET/, "the run's token with a tab's ids");
@@ -609,7 +614,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("takes a worktree tab's ids only with its own token", async () => {
-    const mainToken = tabControlToken(TOKEN, { projectId: PROJECT.id }, OWN_TAB, false);
+    const mainToken = tabControlToken(TOKEN, { projectId: PROJECT.id }, OWN_TAB, HOST_SIDE);
     const run = await tetCtl(["tabs-list"], { [CONTROL_ENV.token]: mainToken, [CONTROL_ENV.worktree]: WORKTREE.worktree });
     assertRefused(run, /not a terminal of this TET/, "the repository's token for a worktree's tab");
   });
@@ -1202,7 +1207,7 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["hook", "session-start"], {}, payload);
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual(JSON.parse(run.stdout), {
-      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: systemPrompt(false) }
+      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: systemPrompt(HOST_SIDE) }
     });
     assert.deepEqual(calls.hooks, [[OWN_TAB, "session-start", payload]]);
     assert.deepEqual(calls.notified, [], "nothing to toast about a session");
@@ -1212,9 +1217,9 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["hook", "session-start"], { [CONTROL_ENV.tabId]: SANDBOX_TAB }, "{}");
     assert.equal(run.status, EXIT_CODES.ok);
     const context = (JSON.parse(run.stdout) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
-    assert.equal(context, systemPrompt(true));
+    assert.equal(context, systemPrompt(SANDBOX_SIDE));
     assert.doesNotMatch(context, /environment variable/);
-    assert.match(systemPrompt(false), /environment variable/);
+    assert.match(systemPrompt(HOST_SIDE), /environment variable/);
   });
 
   it("lists the variables it keeps without values, with those it overrides on this machine, and removes them", async () => {

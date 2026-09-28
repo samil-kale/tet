@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
 import * as esbuild from "esbuild";
 import { holdEscape } from "../src/renderer/ui/use-escape";
 import { claudeAgent } from "../src/main/agents/claude";
@@ -19,7 +20,7 @@ import { GitLoginStore } from "../src/main/git-logins";
 import type { EnvRequest, GitLogin } from "../src/shared/types";
 import { createByteThresholdCheck } from "../src/main/terminals/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
-import { HOST_TARGET, SANDBOX_TARGET, sandboxSessionDir, toContainerPath } from "../src/main/terminals/hook-target";
+import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/terminals/hook-target";
 import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/main/script-text";
 import { ProjectStore } from "../src/main/projects";
@@ -42,7 +43,7 @@ import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/ma
 import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
 import { agentConfigDir } from "../src/main/data-root";
-import { newWorktreeKey, ownedWorktreeKeys, sandboxDir, worktreeDir, worktreeKeyOf } from "../src/main/project-dirs";
+import { newWorktreeKey, ownedWorktreeKeys, sandboxDir, sandboxSessionDir, worktreeDir, worktreeKeyOf } from "../src/main/project-dirs";
 import { killProcessTree, resolveCommand } from "../src/main/terminals/pty";
 import { checkAgentInstalled } from "../src/main/terminals/terminal-session";
 import { fetchHttpsImage } from "../src/main/ipc/shell";
@@ -1525,8 +1526,8 @@ describe("TET's system prompt", () => {
   // It crosses cmd.exe, `sbx run` and a TOML basic string, safe only as a plain line
   // (system-prompt.ts).
   it("stays one line of letters, digits and plain punctuation", () => {
-    for (const sandboxed of [false, true]) {
-      assert.match(systemPrompt(sandboxed), /^[A-Za-z0-9 .,;:'-]+$/);
+    for (const side of [HOST_SIDE, SANDBOX_SIDE]) {
+      assert.match(systemPrompt(side), /^[A-Za-z0-9 .,;:'-]+$/);
     }
   });
 });

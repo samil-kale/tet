@@ -1,5 +1,5 @@
 import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
-import { AGENT_IDS, COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
+import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
 
 /**
  * The control channel's wire contract, shared by `src/main/control/control-server.ts` and
@@ -232,7 +232,7 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "sbx-accounts",
     group: "TET itself",
-    usage: "sbx-accounts [--project <id>]",
+    usage: "sbx-accounts",
     summary:
       "Whether sbx is signed in to Docker and as whom, and the users whose access tokens TET keeps (never a token).",
     positionals: []
@@ -386,18 +386,18 @@ export const CONTROL_VERBS: ReadonlyArray<ControlVerb> = [
   {
     verb: "tabs-create",
     group: "The other tabs",
-    usage: `tabs-create --agent <${AGENT_IDS.join("|")}> [--prompt <text>] [--project <id>]`,
+    usage: "tabs-create --agent <id> [--prompt <text>] [--project <id>]",
     summary:
-      "Open a new terminal tab for that agent. With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
+      "Open a new terminal tab for that agent (an id from list-agents). With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
     positionals: [],
     sandbox: "ownRef"
   },
   {
     verb: "tabs-handoff",
     group: "The other tabs",
-    usage: `tabs-handoff <tab-id> --agent <${AGENT_IDS.join("|")}> [--project <id>]`,
+    usage: "tabs-handoff <tab-id> --agent <id> [--project <id>]",
     summary:
-      "Open a tab of another agent that takes over the tab's session: it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
+      "Open a tab of another agent (an id from list-agents) that takes over the tab's session: it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
     positionals: ["tabId"],
     sandbox: "ownRef"
   },

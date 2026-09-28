@@ -38,7 +38,8 @@ const api: TETApi = {
     stored: (projectId) => ipcRenderer.invoke("sbx:stored", projectId),
     knowledgeSources: () => ipcRenderer.invoke("sbx:knowledge-sources"),
     saveConfig: (projectId, request, local) => ipcRenderer.invoke("sbx:save-config", projectId, request, local),
-    problems: (projectId, config, knowledge, values) => ipcRenderer.invoke("sbx:problems", projectId, config, knowledge, values)
+    problems: (projectId, config, knowledge, values, status) =>
+      ipcRenderer.invoke("sbx:problems", projectId, config, knowledge, values, status)
   },
   settings: {
     get: () => ipcRenderer.invoke("settings:get"),

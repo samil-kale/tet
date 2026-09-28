@@ -60,6 +60,7 @@ export function listAgents(): AgentInfo[] {
   return AGENTS.map((agent) => ({
     id: agent.id,
     displayName: agent.displayName,
+    icon: agent.icon,
     hasSessions: agent.sessions !== undefined,
     takesPrompt: agent.terminal !== undefined
   }));

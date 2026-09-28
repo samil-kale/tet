@@ -74,10 +74,11 @@ export function registerSbxIpc({
       projectId: string,
       config: SbxProjectConfig,
       knowledge: SbxKnowledgeConfig,
-      values: Record<SbxValueKind, string[]>
+      values: Record<SbxValueKind, string[]>,
+      status: Pick<SbxStatus, "organization">
     ): Promise<SbxProblems> => {
       const project = store.get(projectId);
-      return project ? readProjectSbxProblems(project, config, knowledge, values) : {};
+      return project ? readProjectSbxProblems(project, config, knowledge, values, status) : {};
     }
   );
 

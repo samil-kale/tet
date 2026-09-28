@@ -1,15 +1,10 @@
 import { useEffect, useRef } from "react";
-import type { AgentInfo, ProjectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types";
 import { attachTerminal, fitTerminal, hasTerminal } from "./terminal-views";
 
 interface TerminalHostProps {
   at: ProjectRef;
   tabId: string;
-  /**
-   * The view bakes the agent's flags in at construction (see theme.ts). Undefined until
-   * `agents.list()` resolves, and attaching waits: a view built without them keeps them wrong.
-   */
-  agent: AgentInfo | undefined;
   /** The one on screen in its pane; the others keep their layout but stay hidden. */
   active: boolean;
   /** Whether the pane itself is on screen — the repository or worktree is the one selected. */
@@ -27,21 +22,21 @@ interface TerminalHostProps {
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm
  * follows at once, active or not: an unmounted container has no layout to take output into.
  */
-export function TerminalHost({ at, tabId, agent, active, visible }: TerminalHostProps) {
+export function TerminalHost({ at, tabId, active, visible }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (container.current && agent && ((active && visible) || hasTerminal(at, tabId))) {
+    if (container.current && ((active && visible) || hasTerminal(at, tabId))) {
       const created = !hasTerminal(at, tabId);
-      attachTerminal(at, tabId, agent, container.current);
-      // Pane's fit may have come first, with no view to fit (agents listed or the tab pushed late),
+      attachTerminal(at, tabId, container.current);
+      // Pane's fit may have come first, with no view to fit (the tab pushed late),
       // and nothing reruns it. The first fit starts the process; in the same commit, Pane's own
       // follows and reports nothing new (`fitTerminal`).
       if (created && active && visible) {
         fitTerminal(at, tabId);
       }
     }
-  }, [at, tabId, agent, active, visible]);
+  }, [at, tabId, active, visible]);
 
   // "hidden" is visibility, not display — xterm needs a laid-out element to measure itself.
   return <div ref={container} className={`terminal-host${active ? "" : " hidden"}`} />;

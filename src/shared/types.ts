@@ -1,9 +1,26 @@
-export const AGENT_IDS = ["claude", "codex", "pi", "shell"] as const;
-export type AgentId = (typeof AGENT_IDS)[number];
+/** An agent's id, as its definition names it (src/main/agents/): the registry is the one list of
+ *  them, handed to the window and `tet-ctl` (`agents:list`, `list-agents`). */
+export type AgentId = string;
+
+/** One shape of an icon: an SVG element and its attributes, under React's names. */
+export interface IconShape {
+  element: "path" | "circle" | "rect";
+  attributes: Record<string, string | number>;
+}
+
+/**
+ * An agent's icon as data, drawn by the window (agent-icons.tsx) and fitted into the shared box as
+ * icons.tsx's hand drawings are: `fill` on its own grid (FillSvg), `stroke` on the 16 grid (Svg).
+ * `larger` draws it two pixels over, for a mark that reads small beside the others.
+ */
+export type AgentIcon =
+  | { kind: "fill"; extent: number; cx: number; cy: number; grid: number; larger?: boolean; crisp?: boolean; shapes: IconShape[] }
+  | { kind: "stroke"; extent: number; cx?: number; cy?: number; larger?: boolean; stroke?: number; shapes: IconShape[] };
 
 export interface AgentInfo {
   id: AgentId;
   displayName: string;
+  icon: AgentIcon;
   /** False for the shell, whose tabs are plain terminals. */
   hasSessions: boolean;
   /** Starts on a first prompt (AgentTerminal.initialPromptArgs), so it can take over another

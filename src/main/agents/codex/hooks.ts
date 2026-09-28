@@ -1,6 +1,9 @@
 import * as crypto from "node:crypto";
 import { hookCommand } from "../../terminals/hook-command";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
+import type { HookEvent } from "../../../shared/control";
+import type { ControlSide } from "../../../shared/control-side";
+import { systemPrompt } from "../system-prompt";
 
 /**
  * Codex runs only *trusted* hooks: a sha256 over the normalized event name, matcher and command,
@@ -108,7 +111,7 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  *
  * One command per event: `UserPromptSubmit`'s plain stdout would be appended to the prompt, so the
  * `prompt-submit` answer stays empty. Stop must write one JSON value and gets `{}`
- * (control-server.ts's `HOOK_STDOUT`).
+ * (codexHookReply).
  *
  * TET's system prompt is `SessionStart`'s added context, not `-c developer_instructions`, which
  * replaces the user's own; `-c hooks` adds to the user's hooks.
@@ -126,4 +129,18 @@ export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
   ];
 
   return ["-c", buildHooksArg(entries, target)];
+}
+
+/**
+ * What a hook prints back into Codex (AgentTurns.hookReply). `session-start` carries TET's system
+ * prompt as added context, appended to the user's instructions, in the first turn and again on
+ * `resume` — a sandbox's without the environment variables (systemPrompt). `prompt-submit`'s stdout
+ * would be appended to the prompt: "". Every other hook writes one JSON value, which Codex parses
+ * for Stop: `{}`.
+ */
+export function codexHookReply(event: HookEvent, side: ControlSide): string {
+  if (event === "session-start") {
+    return JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: systemPrompt(side) } });
+  }
+  return event === "prompt-submit" ? "" : "{}";
 }

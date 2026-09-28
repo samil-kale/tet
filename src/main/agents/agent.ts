@@ -1,5 +1,7 @@
 import type { ThemeDefinition } from "../../shared/themes";
-import type { AgentId, SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types";
+import type { HookEvent } from "../../shared/control";
+import type { ControlSide } from "../../shared/control-side";
+import type { AgentIcon, AgentId, SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid). */
@@ -169,6 +171,12 @@ export interface AgentTurns {
    * and reports back in a turn of its own. The tab stays busy, no toast. Omitted: `stop` ends it.
    */
   workOutlivesStop?(payload: string): boolean;
+  /**
+   * What its hook command prints back into the CLI for a report (`tet-ctl hook <event>`) — the
+   * CLI's own contract, per event. Omitted: nothing, for an agent that reports without a hook
+   * command (pi's extension).
+   */
+  hookReply?(event: HookEvent, side: ControlSide): string;
 }
 
 /** The agent's setup for host tabs (HostSetups, HostPlace). */
@@ -227,6 +235,11 @@ export interface AgentSandbox {
 export interface AgentDefinition {
   id: AgentId;
   displayName: string;
+  /** Drawn by the window beside its tabs and menu entries (AgentInfo.icon). */
+  icon: AgentIcon;
+  /** A path as one word typed into its input (a paste, a drop): what its input field or shell reads
+   *  as that path and nothing else. */
+  quotePath(path: string): string;
   /** Resolved at spawn time: the shell's executable depends on the platform. */
   executable(): string;
   /** Omitted where the CLI always exists (the shell). */

@@ -105,12 +105,14 @@ export interface TETApi {
      *  folders changed is removed. */
     saveConfig(projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult>;
     /** What of the rows cannot be applied here, for their marks; `values` the env names that hold
-     *  a value, as the rows have them. */
+     *  a value, as the rows have them; `status` the governance the dialog read (no check reads it
+     *  again). */
     problems(
       projectId: string,
       config: SbxProjectConfig,
       knowledge: SbxKnowledgeConfig,
-      values: Record<SbxValueKind, string[]>
+      values: Record<SbxValueKind, string[]>,
+      status: Pick<SbxStatus, "organization">
     ): Promise<SbxProblems>;
   };
   /** One set for the whole app. */
@@ -329,13 +331,13 @@ export interface TETApi {
   files: {
     /** A dropped file's real path, or "" for content only. */
     pathOf(file: File): string;
-    /** Saves pathless content into the tab's drops folder, returning its path as the tab types it;
-     *  null when the tab is gone or its sandbox refused it. */
+    /** Saves pathless content into the tab's drops folder, returning its path on this machine, for
+     *  handPaths like any other; null when the tab's repository or worktree is closed. */
     writeDrop(ref: ProjectRef, tabId: string, name: string, dataBase64: string): Promise<string | null>;
     /** The clipboard image, saved as writeDrop does; null without one. */
     clipboardImage(ref: ProjectRef, tabId: string): Promise<string | null>;
-    /** Paths of this machine as the tab types them: a sandboxed tab's at their container path, what
-     *  lies outside its sight mounted, a refused one left out. */
+    /** Paths of this machine as the words the tab types: quoted for its input, a sandboxed tab's at
+     *  their container path, what lies outside its sight mounted, a refused one left out. */
     handPaths(ref: ProjectRef, tabId: string, paths: string[]): Promise<string[]>;
   };
   shell: {

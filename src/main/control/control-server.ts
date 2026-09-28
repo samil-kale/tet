@@ -1,5 +1,4 @@
 import * as crypto from "node:crypto";
-import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
@@ -32,12 +31,12 @@ import type {
   SbxValueKind,
   TerminalDescriptor
 } from "../../shared/types";
-import { hasSandbox, type AgentDefinition } from "../agents/agent";
-import { systemPrompt } from "../agents/system-prompt";
+import type { AgentDefinition } from "../agents/agent";
+import { CALLER_SIDES, HOST_CALLER, type CallerSide } from "./caller-side";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
 import type { EnvRequests, EnvStore } from "../environment";
-import { relativeInside, repositoryRelative } from "../path-inside";
+import { repositoryRelative } from "../path-inside";
 import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
@@ -120,7 +119,9 @@ export interface ControlDeps {
     save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, status?: SbxStatus): Promise<SbxSaveResult>;
     /** The access tokens kept for every project (sbx-accounts.ts), never a token. */
     accounts(): SbxAccount[];
-    /** sbx.ts's readSbxUser: only once the status said signed in. */
+    /** sbx.ts's readSbxSignedIn: one `sbx ls`, not the whole status — the question is the machine's. */
+    signedIn(): Promise<boolean>;
+    /** sbx.ts's readSbxUser: only once signedIn said so. */
     signedInUser(): Promise<string | undefined>;
     /** sbx-accounts.ts's signInToSbx with the token kept for that account. */
     signIn(account: SbxAccount): Promise<SbxSignInResult>;
@@ -139,6 +140,8 @@ export interface HookToast {
 }
 
 export interface HookOutcome {
+  /** What the hook prints back into its agent (AgentTurns.hookReply). */
+  stdout: string;
   /** None where the notification settings say so. */
   toast?: HookToast;
 }
@@ -174,30 +177,7 @@ export interface ControlTerminals {
   renameTab(tabId: string, title: string): Promise<string | undefined>;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
    *  may have closed while its CLI ended the turn. */
-  hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined): HookOutcome;
-}
-
-/**
- * The file an answer names (`ControlVerb.sandboxFile`), refused where it is missing or resolves,
- * links followed, outside the repository: a link committed or made in the mounted repository would
- * otherwise hand a sandboxed caller a file of this machine through the editor. Missing too, since
- * the editor still holds what it last read. An answer naming none is nothing to refuse.
- */
-async function assertSandboxFile(root: string | undefined, result: unknown, key: string): Promise<void> {
-  const named = (result as Record<string, unknown> | null | undefined)?.[key];
-  if (named === undefined || named === null) {
-    return;
-  }
-  const relative = typeof named === "string" ? named : undefined;
-  const resolved =
-    root === undefined || relative === undefined
-      ? undefined
-      : await Promise.all([root, path.join(root, relative)].map((entry) => fs.promises.realpath(path.resolve(entry)))).catch(
-          () => undefined
-        );
-  if (!resolved || relativeInside(resolved[0], resolved[1]) === undefined) {
-    throw new ControlError("unauthorized", `${String(named)} is missing or leads outside the repository`);
-  }
+  hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined, side: CallerSide): HookOutcome;
 }
 
 /** Strips escape sequences; CRLF to LF. */
@@ -227,25 +207,6 @@ const EVENTS_TAIL = 50;
 const OUTPUT_KB = 16;
 /** What `tabs-keys` presses, for its refusals. */
 const KEY_NAMES = Object.keys(TAB_KEYS).join(", ");
-
-/**
- * What a hook prints back into its agent. `{}` rather than nothing: Codex parses its Stop hook's
- * stdout as JSON, and every agent takes JSON on hook channels not appended to the prompt.
- * `prompt-submit`'s stdout would be appended to the prompt: "". `session-start` carries TET's
- * system prompt as added context, appended to the user's instructions, in the first turn and again
- * on `resume` — a sandbox's without the environment variables.
- */
-const HOOK_STDOUT: Record<HookEvent, (sandboxed: boolean) => string> = {
-  "session-start": (sandboxed) =>
-    JSON.stringify({
-      hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: systemPrompt(sandboxed) }
-    }),
-  "prompt-submit": () => "",
-  stop: () => "{}",
-  permission: () => "{}",
-  question: () => "{}",
-  idle: () => "{}"
-};
 
 const DYNAMIC_PORT_START = 49152;
 const DYNAMIC_PORT_RANGE = 65535 - DYNAMIC_PORT_START;
@@ -278,6 +239,11 @@ function callerRef(caller: ControlRequest["caller"]): ProjectRef | undefined {
   return caller.projectId === undefined ? undefined : projectRef(caller.projectId, caller.worktree);
 }
 
+/** A worktree of the project named as `tet-ctl` names one: by its branch, or else by its key. */
+function findWorktree(project: Project, name: string): Project["worktrees"][number] | undefined {
+  return project.worktrees.find((entry) => entry.branch === name) ?? project.worktrees.find((entry) => entry.key === name);
+}
+
 /**
  * The repository or worktree a verb acts on: without flags the caller's own; `--project` alone that
  * project's repository; `--worktree` one of its worktrees TET made, by branch or else by key. One
@@ -302,8 +268,7 @@ function resolveCallerRef(
   if (asked === undefined) {
     return { project, ref: projectRef(projectId, askedProject === undefined ? caller.worktree : undefined) };
   }
-  const worktree =
-    project.worktrees.find((entry) => entry.branch === asked) ?? project.worktrees.find((entry) => entry.key === asked);
+  const worktree = findWorktree(project, asked);
   if (!worktree) {
     throw new ControlError("not_found", `${project.name} has no worktree ${asked} (see projects-list)`);
   }
@@ -365,7 +330,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     const known = knownTab(args, caller);
     const own = sameProjectRef(known.ref, callerRef(caller)) && known.tabId === caller.tabId;
     const tab = known.tabs.inspect().find((entry) => entry.tabId === known.tabId);
-    if (caller.sandboxed && !own && tab?.sandbox === undefined && tab?.sandboxOnly !== true) {
+    if (!caller.side.reachesTab(tab, own)) {
       throw new ControlError("bad_args", `${known.tabId} runs on this machine, not in the sandbox`);
     }
     return known;
@@ -379,7 +344,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     if (!agent) {
       throw new ControlError("bad_args", `unknown agent: ${id} (see list-agents)`);
     }
-    if (caller.sandboxed && !hasSandbox(agent)) {
+    if (!caller.side.opens(agent)) {
       throw new ControlError("unauthorized", `a ${id} tab does not run in a sandbox, so a sandbox cannot open one`);
     }
     return agent;
@@ -431,18 +396,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       return { result: { saved: true } };
     },
 
-    // A sandbox sees its own project only, and of its worktrees only the one it runs in.
-    "projects-list": (_args, caller) => ({
-      result: caller.sandboxed
-        ? store
-            .list()
-            .filter((entry) => entry.id === caller.projectId)
-            .map((entry) => ({
-              ...entry,
-              worktrees: entry.worktrees.filter((worktree) => worktree.key !== undefined && worktree.key === caller.worktree)
-            }))
-        : store.list()
-    }),
+    "projects-list": (_args, caller) => ({ result: caller.side.projects(store.list(), caller) }),
 
     "repo-state": (args, caller) => ({ result: repository(refFrom(args, caller).ref).getState() }),
 
@@ -499,8 +453,7 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
     "worktree-delete": async (args, caller) => {
       const found = project(args, caller);
       const branch = text(args, "branch", "branch");
-      const worktree =
-        found.worktrees.find((entry) => entry.branch === branch) ?? found.worktrees.find((entry) => entry.key === branch);
+      const worktree = findWorktree(found, branch);
       if (!worktree) {
         throw new ControlError("not_found", `${found.name} has no worktree of branch ${branch}`);
       }
@@ -677,14 +630,14 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (prompt !== undefined && !agent.terminal) {
         throw new ControlError("bad_args", `a ${agent.id} tab takes no prompt`);
       }
-      const tab = terminals(ref).createTab(agent.id, caller.sandboxed, prompt);
+      const tab = terminals(ref).createTab(agent.id, caller.side.holdsTabs, prompt);
       deps.showTab(ref, tab.tabId);
       return { result: tab };
     },
 
     "tabs-handoff": async (args, caller) => {
       const { tabs, tabId, ref } = ownedTab(args, caller);
-      const handed = await tabs.handOff(tabId, openableAgent(args, caller).id, caller.sandboxed);
+      const handed = await tabs.handOff(tabId, openableAgent(args, caller).id, caller.side.holdsTabs);
       if (typeof handed === "string") {
         // A state the tab is in, not a mistyped call — as tabs-rename's refusal.
         throw new ControlError("internal", handed);
@@ -762,11 +715,11 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       // The caller's own, never `--project`: the token vouches for its tab in its repository or
       // worktree only, and tab ids like `new-1` repeat across repositories and worktrees.
       const where = refFrom({}, caller).ref;
-      const outcome = terminals(where).hookEvent(caller.tabId, event as HookEvent, payload, at);
+      const outcome = terminals(where).hookEvent(caller.tabId, event as HookEvent, payload, at, caller.side);
       if (outcome.toast) {
         deps.notify(outcome.toast.title, outcome.toast.body, { ref: where, tabId: caller.tabId });
       }
-      return { result: { stdout: HOOK_STDOUT[event as HookEvent](caller.sandboxed) } };
+      return { result: { stdout: outcome.stdout } };
     }
   };
 }
@@ -810,14 +763,18 @@ export async function startControlServer(
       const want = Buffer.from(expected);
       return given.length === want.length && crypto.timingSafeEqual(given, want);
     };
-    // A caller naming no tab is the run itself. For a tab, which of its two tokens matches says
-    // whether it runs in a sandbox: read off the token, not looked up, so a tab closed with its
+    // A caller naming no tab is the run itself, on this machine. For a tab, which side's token
+    // matches says where it runs: read off the token, not looked up, so a tab closed with its
     // repository or worktree is still answered by the rules it started under (control-token.ts).
     const ofTab = caller.projectId !== undefined || caller.worktree !== undefined || caller.tabId !== undefined;
-    const tokenOf = (sandbox: boolean): string =>
-      tabControlToken(token, { projectId: caller.projectId ?? "", worktree: caller.worktree }, caller.tabId ?? "", sandbox);
-    const sandboxed = ofTab && matches(tokenOf(true));
-    if (!(ofTab ? sandboxed || matches(tokenOf(false)) : matches(token))) {
+    const side = ofTab
+      ? CALLER_SIDES.find((candidate) =>
+          matches(tabControlToken(token, { projectId: caller.projectId ?? "", worktree: caller.worktree }, caller.tabId ?? "", candidate))
+        )
+      : matches(token)
+        ? HOST_CALLER
+        : undefined;
+    if (!side) {
       return { response: reject("unauthorized", "not a terminal of this TET") };
     }
     const entry = request.verb === HELP_VERB ? undefined : CONTROL_VERBS.find((candidate) => candidate.verb === request.verb);
@@ -825,13 +782,14 @@ export async function startControlServer(
     if (!entry || !handler) {
       return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
     }
-    if (sandboxed && !entry.sandbox) {
-      return { response: reject("unauthorized", `${request.verb} does not answer from inside a sandbox`) };
+    if (!side.admits(entry)) {
+      return { response: reject("unauthorized", `${request.verb} ${side.refusal}`) };
     }
     // A host tab reaches every repository and worktree of its project (a worktree belongs to it); a
     // sandboxed one only its own, the one its sandbox mounts — but for an `ownProject` verb.
-    if (entry.ownProjectOnly || (sandboxed && entry.sandbox !== "any")) {
-      const ownOnly = sandboxed && entry.sandbox === "ownRef";
+    const reach = side.reach(entry);
+    if (reach !== "any") {
+      const ownOnly = reach === "ownRef";
       const own = callerRef(caller);
       let target: ProjectRef | undefined;
       try {
@@ -846,11 +804,9 @@ export async function startControlServer(
       }
     }
     try {
-      const answer = await handler(request.args ?? {}, { ...caller, sandboxed }, request.at, gone);
-      if (sandboxed && entry.sandboxFile !== undefined) {
-        const own = callerRef(caller);
-        await assertSandboxFile(own && deps.projectRefPath(own), answer.result, entry.sandboxFile);
-      }
+      const answer = await handler(request.args ?? {}, { ...caller, side }, request.at, gone);
+      const own = callerRef(caller);
+      await side.checkAnswer(entry, answer.result, own && deps.projectRefPath(own));
       return { response: { ok: true, result: answer.result }, after: answer.after };
     } catch (error) {
       if (error instanceof ControlError) {

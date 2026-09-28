@@ -41,7 +41,7 @@ import { readSbxConfig, writeSbxConfig } from "./tet-json";
 import { readLinkedGitDir } from "./git/linked-git-dir";
 import { mapLimited } from "./map-limited";
 import { expandHome, relativeInside } from "./path-inside";
-import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
+import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxBlocked, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
 import { projectsDir, sandboxDir } from "./project-dirs";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { toContainerPath } from "./terminals/hook-target";
@@ -215,6 +215,11 @@ export async function readSbxUser(cancellable: boolean): Promise<string | undefi
   return parseSignedInUser((await runSbx(["login"], { cancellable, timeoutMs: SBX_USER_TIMEOUT_MS })).stdout);
 }
 
+/** Whether sbx is signed in to Docker, as probeSbx tells it: its sandbox listing answers. */
+export async function readSbxSignedIn(): Promise<boolean> {
+  return parseSandboxes(await runSbx(["ls", "--json"])) !== undefined;
+}
+
 /**
  * `sbx login` with a Docker access token on stdin; what sbx said on refusing, else undefined. sbx
  * reads no token from the environment. Signed in already, it switches: another account's login
@@ -242,7 +247,7 @@ export async function initSbxPolicy(): Promise<boolean> {
 }
 
 /** `sbx ls --json` as name → workspaces. */
-type SandboxList = Map<string, string[]>;
+export type SandboxList = Map<string, string[]>;
 
 /**
  * Before every sandboxed spawn (`resolvePlace`): the first unmet precondition as a notice, or the
@@ -266,9 +271,9 @@ export async function checkSbxReady(
   if (failure !== undefined) {
     return { notReady: `SBX failed: ${failure}` };
   }
-  if (blockers.length > 0) {
-    const policy = status.organization ? "your organization's SBX policy" : "SBX's policy";
-    return { notReady: `${policy} does not allow ${blockers.map((blocker) => blocker.allow).join("; ")}` };
+  const blocked = sbxBlocked(blockers, status.organization);
+  if (blocked !== undefined) {
+    return { notReady: blocked };
   }
   return { sandboxes, organization: status.organization, rules };
 }
@@ -672,7 +677,7 @@ const launcherWritten = new Set<string>();
 const sandboxSetups = new Map<string, Promise<unknown>>();
 
 /** Runs `action` once the one underway under `name` in `queue` is over, however that one ended. */
-function inTurn<T>(queue: Map<string, Promise<unknown>>, name: string, action: () => Promise<T>): Promise<T> {
+export function inTurn<T>(queue: Map<string, Promise<unknown>>, name: string, action: () => Promise<T>): Promise<T> {
   const turn = (queue.get(name) ?? Promise.resolve()).catch(() => undefined).then(action);
   queue.set(name, turn);
   const forget = (): void => {
@@ -685,7 +690,7 @@ function inTurn<T>(queue: Map<string, Promise<unknown>>, name: string, action: (
 }
 
 /** Undefined when `sbx ls` fails, as it does signed out (probeSbx). One process for all sandboxes. */
-async function listSandboxes(): Promise<SandboxList | undefined> {
+export async function listSandboxes(): Promise<SandboxList | undefined> {
   return parseSandboxes(await runSbx(["ls", "--json"]));
 }
 
@@ -897,36 +902,44 @@ function droppedMountSpecs(name: string): MountSpec[] {
 export type DropMount = { seen: true } | { mounted: true } | { refused: string };
 
 /**
- * Makes a path dropped into a sandboxed tab visible at its container path (toContainerPath): the
- * workspace, or a live mount at the same path (tet's folders, an Allowed path, an earlier drop),
- * holds it already, or it is mounted rw. The policy is asked first, as for an Allowed path
- * (readSbxProblems); in turn with the sandbox's mountAll (`mountSetups`), which would otherwise
- * mount twice or take this one out.
+ * Makes paths dropped into a sandboxed tab visible at their container path (toContainerPath),
+ * answering for each in order: one of the folders the caller knows the sandbox sees (`seen`: its
+ * workspace, its agent folder), or a live mount at the same path (an Allowed path, an earlier
+ * drop), holds it already, or it is mounted rw. The policy is asked first, as for an Allowed path
+ * (readSbxProblems). The mounts and rules are read once for all of them, in turn with the
+ * sandbox's mountAll (`mountSetups`), which would otherwise mount twice or take one out.
  */
-export function mountDropped(name: string, workspace: string, hostPath: string): Promise<DropMount> {
-  const host = normalizeHostPath(hostPath);
-  const within = (root: string): boolean => host === path.resolve(root) || relativeInside(root, host) !== undefined;
-  if (within(workspace)) {
-    return Promise.resolve({ seen: true });
+export async function mountDropped(name: string, seen: string[], hostPaths: string[]): Promise<DropMount[]> {
+  const hosts = hostPaths.map(normalizeHostPath);
+  const within = (host: string, root: string): boolean => host === path.resolve(root) || relativeInside(root, host) !== undefined;
+  if (hosts.every((host) => seen.some((root) => within(host, root)))) {
+    return hosts.map(() => ({ seen: true }));
   }
-  return inTurn(mountSetups, name, async (): Promise<DropMount> => {
-    const [binds, rules, organization] = await Promise.all([readRuntimeBinds(name), readFilesystemRules(), readGovernance()]);
-    if (binds === undefined || rules === undefined) {
-      return { refused: "SBX could not say whether it may be mounted" };
+  return inTurn(mountSetups, name, async (): Promise<DropMount[]> => {
+    const [binds, rules] = await Promise.all([readRuntimeBinds(name), readFilesystemRules()]);
+    // Only a refusal's words need to know whose policy it is.
+    let governance: Promise<string | undefined> | undefined;
+    const answers: DropMount[] = [];
+    // One by one: sbx's own lock refuses mounts side by side.
+    for (const host of hosts) {
+      const mountedAt = (root: string): boolean => within(host, root);
+      if (seen.some(mountedAt) || binds?.some((bind) => bind.target === toContainerPath(bind.host) && mountedAt(bind.host))) {
+        answers.push({ seen: true });
+      } else if (binds === undefined || rules === undefined) {
+        answers.push({ refused: "SBX could not say whether it may be mounted" });
+      } else if (!mountableBy(rules)(host, "rw")) {
+        governance ??= readGovernance();
+        answers.push({ refused: forbiddenBy(await governance) });
+      } else {
+        const result = await runSbx(["mount", name, pathMountSpecs({ path: host, access: "rw" }).mount]);
+        if (result.ok) {
+          droppedMounts.set(name, [...(droppedMounts.get(name) ?? []), host]);
+          binds.push({ host, target: toContainerPath(host), readOnly: false });
+        }
+        answers.push(result.ok ? { mounted: true } : { refused: sbxRefusal(result) });
+      }
     }
-    if (binds.some((bind) => bind.target === toContainerPath(bind.host) && within(bind.host))) {
-      return { seen: true };
-    }
-    if (!mountableBy(rules)(host, "rw")) {
-      return { refused: forbiddenBy(organization) };
-    }
-    const spec = pathMountSpecs({ path: host, access: "rw" });
-    const result = await runSbx(["mount", name, spec.mount]);
-    if (!result.ok) {
-      return { refused: sbxRefusal(result) };
-    }
-    droppedMounts.set(name, [...(droppedMounts.get(name) ?? []), host]);
-    return { mounted: true };
+    return answers;
   });
 }
 
@@ -1183,7 +1196,7 @@ async function applySecrets(
 }
 
 /** A `SandboxSessionMount` with an absolute host side, for `sessionMountSpecs`. */
-interface SbxSessionMount {
+export interface SbxSessionMount {
   host: string;
   target: string;
   file?: boolean;
@@ -1191,6 +1204,8 @@ interface SbxSessionMount {
 
 interface SbxRunRequest {
   agent: SandboxedAgent;
+  /** Its sandbox's name (SandboxPlace.name). */
+  name: string;
   /** The repository or worktree the tab runs in; its sandbox is its own, its sbx values the
    *  project's. */
   ref: ProjectRef;
@@ -1303,7 +1318,7 @@ export async function prepareSbxRun(
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
   const { agent, onData, secretValues, variableValues } = request;
   const { projectId } = request.ref;
-  const name = sandboxName(request.ref, agent.id);
+  const { name } = request;
   const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
   // Ports, hosts and secrets only reach a sandbox this call created: they survive a stop, and after
   // that a Save brings them in line (saveSbxConfig). A port another sandbox of the project forwards
@@ -1413,6 +1428,8 @@ interface SbxCheck {
   ports: boolean;
   /** readProjectPorts', when the caller has it already. */
   published?: ReadonlySet<string>;
+  /** listSandboxes', when the caller has it already. */
+  sandboxes?: SandboxList;
 }
 
 /**
@@ -1450,7 +1467,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     config.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readFilesystemRules()) : Promise.resolve([]),
     organization ? Promise.all(config.hosts.map(allowed)) : Promise.resolve(config.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
-    check.published ?? (check.ports && config.ports.length > 0 ? readProjectPorts(check.projectId) : new Set<string>()),
+    check.published ?? (check.ports && config.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes) : new Set<string>()),
     Promise.all(check.agents.map((agent) => sandboxKnowledgeFor(agent, knowledge.skillsFolder)))
   ]);
   if (rules === undefined) {
@@ -1585,8 +1602,8 @@ async function assertReadable(
     }
   }
   if (ports) {
-    reads.ports = new Map();
-    for (const { agent, name } of kept.filter((entry) => entry.ports)) {
+    // All at once, as applyProjectPorts does: each sandbox is its own start and listing.
+    const portsOf = async ({ agent, name }: (typeof kept)[number]): Promise<[string, SbxPort[]]> => {
       const sandbox = `the ${agent.displayName} sandbox`;
       if (!(await ensureRunning(name))) {
         throw new Error(`SBX could not start ${sandbox} to bring its ports in line. ${unsaved}`);
@@ -1595,8 +1612,9 @@ async function assertReadable(
       if (!listed) {
         throw new Error(`SBX could not list the ports of ${sandbox}. ${unsaved}`);
       }
-      reads.ports.set(name, listed);
-    }
+      return [name, listed];
+    };
+    reads.ports = new Map(await Promise.all(kept.filter((entry) => entry.ports).map(portsOf)));
   }
   return reads;
 }
@@ -1633,7 +1651,9 @@ export async function saveSbxConfig(
   knowledge: { previous: SbxKnowledgeConfig; current: SbxKnowledgeConfig },
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>,
-  organization: string | undefined
+  organization: string | undefined,
+  /** listSandboxes', when the caller has it already. */
+  listed?: SandboxList
 ): Promise<{
   removed: SbxRemoved[];
   orphans: SbxRemoved[];
@@ -1644,7 +1664,7 @@ export async function saveSbxConfig(
 }> {
   const previous = await readSbxConfig(project.path);
   const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
-  const sandboxes = await listSandboxes();
+  const sandboxes = listed ?? (await listSandboxes());
   if (!sandboxes) {
     throw new Error("SBX could not list the sandboxes. Nothing was saved; try again.");
   }
