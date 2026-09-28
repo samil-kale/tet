@@ -280,8 +280,12 @@ const repositories = new RepositoryManager(
           notice("warning", `${project.name} keeps its last readable tet.json until it is fixed: ${problem}`);
         }
       });
+      // Read once here for every listener; the repository's file serves its worktrees too.
+      void Promise.all([readCommands(project.path), readSbxConfig(project.path)]).then(
+        ([commands, sbx]) => send("commands:changed", { projectId, commands, sbxEnabled: sbx.enabled }),
+        (error: unknown) => console.error("[tet] could not read the changed tet.json:", error)
+      );
     }
-    send("commands:changed", { projectId });
     // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged) — in
     // every repository and worktree of the project.
     for (const manager of sessions.forProject(projectId)) {

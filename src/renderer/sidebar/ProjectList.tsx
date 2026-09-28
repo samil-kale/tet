@@ -325,7 +325,7 @@ export const ProjectList = memo(function ProjectList({
         {sandboxed[projectId] &&
           (worktree ? (
             // A worktree's are its project's, set there: a mark, no button.
-            <span className="icon-button" title="SBX enabled">
+            <span className="icon-mark" title="SBX enabled">
               <ShieldIcon />
             </span>
           ) : (

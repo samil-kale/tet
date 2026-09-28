@@ -154,13 +154,17 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** Loaded lists by account, kept while the dialog is open. */
   const [repos, setRepos] = useState<Record<string, RemoteRepository[]>>({});
-  /** Why the list is empty, in the list's own place. */
-  const [listError, setListError] = useState<string | undefined>(undefined);
+  /** Why the list is empty, in the list's own place. Tagged with its account: another account's
+   *  failure is not this one's. */
+  const [listFailure, setListFailure] = useState<{ accountId: string; message: string } | undefined>(undefined);
+  const listError = listFailure?.accountId === selectedId ? listFailure.message : undefined;
   /** Why an account could not be removed, beside its row until the next try. */
   const [removeError, setRemoveError] = useState<{ accountId: string; message: string } | undefined>(undefined);
   const [filter, setFilter] = useState("");
-  /** The group picked in this dialog, "" for all; null while none was picked here. */
-  const [namespace, setNamespace] = useState<string | null>(null);
+  /** The group picked in this dialog, "" for all; null while none was picked here. Tagged with its
+   *  account: groups are per account, so a pick would filter another's list to nothing. */
+  const [picked, setPicked] = useState<{ accountId: string; namespace: string } | undefined>(undefined);
+  const namespace = picked?.accountId === selectedId ? picked.namespace : null;
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -172,20 +176,14 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
     });
   }, []);
 
-  // Groups are per account, so a pick would filter another's list to nothing. null, not "", so
-  // the next account opens at its stored group.
   useEffect(() => {
-    setNamespace(null);
-  }, [selectedId]);
-
-  useEffect(() => {
-    // Another account's failure is not this one's.
-    setListError(undefined);
     if (selectedId === null || repos[selectedId]) {
       return;
     }
     let cancelled = false;
     let fetching = true;
+    // A failure of this account's last listing stands only until it is listed again.
+    setListFailure(undefined);
     hold(true);
     void window.tet.providers
       .repos(selectedId)
@@ -196,9 +194,8 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
         const list = result.repos;
         if (list) {
           setRepos((current) => ({ ...current, [selectedId]: list }));
-          setListError(undefined);
         } else {
-          setListError(result.error ?? "The repositories could not be listed");
+          setListFailure({ accountId: selectedId, message: result.error ?? "The repositories could not be listed" });
         }
       })
       .finally(() => {
@@ -255,8 +252,8 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
 
   /** Stores the pick on its account, so the tab opens there next time. */
   const pickNamespace = (next: string): void => {
-    setNamespace(next);
     if (selectedId !== null) {
+      setPicked({ accountId: selectedId, namespace: next });
       setAccounts((current) =>
         (current ?? []).map((entry) => (entry.id === selectedId ? { ...entry, namespace: next } : entry))
       );

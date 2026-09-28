@@ -62,7 +62,8 @@ export const FilesPane = memo(function FilesPane({
   /** What the sections' header buttons stand for, reported by the views that hold the state. */
   const [filtering, setFiltering] = useState(false);
   const [allFolded, setAllFolded] = useState(false);
-  const showProgress = useDelayed(listing || acting, PROGRESS_DELAY_MS);
+  // A file action shows at once, as the git pane's changes list does.
+  const showProgress = useDelayed(listing, PROGRESS_DELAY_MS) || acting;
   const showSearchProgress = useDelayed(searching, PROGRESS_DELAY_MS);
   /** A match row: the file at the match, which its editor selects. */
   const onOpenMatch = useCallback(

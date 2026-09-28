@@ -273,7 +273,19 @@ textarea:focus,
   opacity: 0.8;
 }
 
-.icon-button svg {
+/* A status in an action's place: the icon button's box and dimming, with nothing to click. */
+.icon-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--action-size);
+  height: var(--action-size);
+  flex: none;
+  opacity: 0.8;
+}
+
+.icon-button svg,
+.icon-mark svg {
   width: var(--icon-size);
   height: var(--icon-size);
 }
@@ -1631,18 +1643,22 @@ textarea:focus,
   box-shadow: 0 4px 12px var(--vscode-widget-shadow);
 }
 
-/* A card dialog's header (tab strip or title bar), drawn by `DialogFrame` as its first child and
-   pulled to the edges by a negative margin. Relative to anchor the dialog's `.progress-bar`. */
-.dialog-tabs {
+/* A card dialog's header (tab strip or title bar), drawn by `DialogFrame` as its first child:
+   .editor-bar's height, pulled to the edges by cancelling .dialog's padding on three sides so the
+   top corners take its radius. Relative to anchor the dialog's `.progress-bar`. */
+.dialog-header {
   position: relative;
   display: flex;
-  align-items: stretch;
   height: var(--bar-height);
   margin: -16px -16px 0;
   border-radius: 5px 5px 0 0;
-  overflow: hidden;
   background: var(--vscode-tab-inactiveBackground);
   border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.dialog-tabs {
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .dialog-tab {
@@ -1674,21 +1690,11 @@ textarea:focus,
   margin: 0 6px 0 auto;
 }
 
-/* .editor-bar's height, with a progress bar of its own. Cancels .dialog's 16px padding on three
-   sides to sit flush, so the top corners take .dialog's radius. */
 .dialog-bar {
-  position: relative;
-  display: flex;
   align-items: center;
   gap: 8px;
   flex: none;
-  height: var(--bar-height);
-  margin: -16px -16px 0;
   padding: 0 6px 0 12px;
-  /* The tab strip's (.dialog-tabs), so both shapes of header read alike. */
-  background: var(--vscode-tab-inactiveBackground);
-  border-bottom: 1px solid var(--vscode-panel-border);
-  border-radius: 5px 5px 0 0;
 }
 
 .dialog-title {
@@ -1911,21 +1917,6 @@ textarea:focus,
 }
 
 /* In the place of the row's sign-in button, the same box. */
-.sbx-account-current {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: var(--action-size);
-  height: var(--action-size);
-  opacity: 0.8;
-}
-
-.sbx-account-current svg {
-  width: var(--icon-size);
-  height: var(--icon-size);
-}
-
 /* Fixed height, as the settings dialog's: switching tabs must not resize it, and rows that outgrow
    it scroll in their own box (below) rather than growing it. Capped to the window. */
 .sbx-settings-dialog {

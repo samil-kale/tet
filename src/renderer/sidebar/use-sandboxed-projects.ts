@@ -25,24 +25,24 @@ export function useSandboxedProjects(projects: Project[]): SandboxedProjects {
     sandboxedRead.current.delete(projectId);
   }, []);
 
-  const readSandboxed = useCallback(async (projectId: string) => {
-    const config = await window.tet.sbx.getConfig(projectId);
-    setSandboxed((current) =>
-      (current[projectId] ?? false) === config.enabled ? current : { ...current, [projectId]: config.enabled }
-    );
+  const applySandboxed = useCallback((projectId: string, enabled: boolean) => {
+    setSandboxed((current) => ((current[projectId] ?? false) === enabled ? current : { ...current, [projectId]: enabled }));
   }, []);
 
-  // Once per project; after that every tet.json write is one `commands:changed`, shared with the
-  // saved commands.
+  // Read once per project; after that every tet.json write is one `commands:changed`, shared with
+  // the saved commands, carrying the switch.
   useEffect(() => {
     for (const project of projects) {
       if (!sandboxedRead.current.has(project.id)) {
         sandboxedRead.current.add(project.id);
-        void readSandboxed(project.id);
+        void window.tet.sbx.getConfig(project.id).then((config) => applySandboxed(project.id, config.enabled));
       }
     }
-  }, [projects, readSandboxed]);
-  useEffect(() => window.tet.commands.onChanged(({ projectId }) => void readSandboxed(projectId)), [readSandboxed]);
+  }, [projects, applySandboxed]);
+  useEffect(
+    () => window.tet.commands.onChanged(({ projectId, sbxEnabled }) => applySandboxed(projectId, sbxEnabled)),
+    [applySandboxed]
+  );
 
   return { sandboxed, forgetSandboxed };
 }

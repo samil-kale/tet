@@ -179,18 +179,15 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
       return;
     }
     let cancelled = false;
-    const load = (): void => {
-      void window.tet.commands.list(projectId).then((saved) => {
-        if (!cancelled) {
-          applyCommands(projectId, saved);
-        }
-      });
-    };
-    load();
-    // The file is the record and changes outside this list, so every change is re-read.
+    void window.tet.commands.list(projectId).then((saved) => {
+      if (!cancelled) {
+        applyCommands(projectId, saved);
+      }
+    });
+    // The file is the record and changes outside this list; every change arrives with its commands.
     const unsubscribe = window.tet.commands.onChanged((payload) => {
       if (payload.projectId === projectId) {
-        load();
+        applyCommands(projectId, payload.commands);
       }
     });
     return () => {

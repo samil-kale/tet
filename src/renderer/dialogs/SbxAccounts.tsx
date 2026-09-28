@@ -134,7 +134,7 @@ export function SbxAccounts({
                 onChange={(token) => setRow(row, { token })}
               />
               {current ? (
-                <span className="sbx-account-current" title="Signed in">
+                <span className="icon-mark" title="Signed in">
                   <CheckIcon />
                 </span>
               ) : (

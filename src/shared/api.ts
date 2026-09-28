@@ -288,8 +288,10 @@ export interface TETApi {
     save(projectId: string, commands: ProjectCommand[]): Promise<GitActionResult>;
     /** A tab whose process is the command; null when nothing can run it. */
     run(ref: ProjectRef, command: ProjectCommand): Promise<TerminalDescriptor | null>;
-    /** tet.json changed on disk, whoever wrote it. */
-    onChanged(listener: (payload: { projectId: string }) => void): Unsubscribe;
+    /** tet.json changed on disk, whoever wrote it: its commands and sbx switch as they now read. */
+    onChanged(
+      listener: (payload: { projectId: string; commands: ProjectCommand[]; sbxEnabled: boolean }) => void
+    ): Unsubscribe;
   };
   terminals: {
     list(ref: ProjectRef): Promise<TerminalDescriptor[]>;

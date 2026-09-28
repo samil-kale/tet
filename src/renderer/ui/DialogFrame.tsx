@@ -231,9 +231,9 @@ export function DialogFrame<T extends string>({
   const cardClass = className ? `dialog ${className}` : "dialog";
   const content = (
     <>
-      {"tabs" in header ? (
-        <div className="dialog-tabs">
-          {header.tabs.map((entry) => (
+      <div className={"tabs" in header ? "dialog-header dialog-tabs" : "dialog-header dialog-bar"}>
+        {"tabs" in header ? (
+          header.tabs.map((entry) => (
             <button
               key={entry.id}
               type="button"
@@ -254,25 +254,22 @@ export function DialogFrame<T extends string>({
                 </span>
               )}
             </button>
-          ))}
-          {onCancel && (
-            <IconButton className="dialog-tabs-close" title="Close" disabled={locked} onClick={cancel}>
-              <CloseIcon />
-            </IconButton>
-          )}
-          {busy && <ProgressBar />}
-        </div>
-      ) : (
-        <div className="dialog-bar">
+          ))
+        ) : (
           <span className="dialog-title">{header.title}</span>
-          {onCancel && (
-            <IconButton title="Close" disabled={locked} onClick={cancel}>
-              <CloseIcon />
-            </IconButton>
-          )}
-          {busy && <ProgressBar />}
-        </div>
-      )}
+        )}
+        {onCancel && (
+          <IconButton
+            className={"tabs" in header ? "dialog-tabs-close" : undefined}
+            title="Close"
+            disabled={locked}
+            onClick={cancel}
+          >
+            <CloseIcon />
+          </IconButton>
+        )}
+        {busy && <ProgressBar />}
+      </div>
       <fieldset ref={body} className="dialog-body" disabled={locked}>
         {children}
       </fieldset>

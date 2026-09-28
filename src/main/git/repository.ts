@@ -893,12 +893,7 @@ export class Repository {
         // the tree. Nothing under .git is in it. An ignore file's edit re-lists whatever the event,
         // as it hides or shows other paths (listIgnored).
         if (name && ((event === "rename" && !/^\.git(?:[\\/]|$)/.test(name)) || isIgnoreFile(name))) {
-          clearTimeout(this.filesTimer);
-          const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastFilesChangedAt + REFRESH_MIN_INTERVAL_MS - Date.now());
-          this.filesTimer = setTimeout(() => {
-            this.lastFilesChangedAt = Date.now();
-            this.onFilesChanged();
-          }, delay);
+          this.scheduleFilesChanged();
         }
         // Any event: writing beside and renaming into place reports "rename", not "change". The
         // size check first: this runs for every event under the root, mostly with no file open.
@@ -951,6 +946,10 @@ export class Repository {
       if (name === ".git/config") {
         this.configStale = true;
       }
+      // A worktree's exclude file is the common one, which only this watcher sees.
+      if (name && isIgnoreFile(name)) {
+        this.scheduleFilesChanged();
+      }
       this.scheduleRefresh();
     });
     this.gitDirWatcher.on("error", (error) => {
@@ -958,6 +957,16 @@ export class Repository {
       this.closeWatchers();
       this.retryWatching();
     });
+  }
+
+  /** Tells the Explorer to re-list, debounced and spaced like the refresh. */
+  private scheduleFilesChanged(): void {
+    clearTimeout(this.filesTimer);
+    const delay = Math.max(REFRESH_DEBOUNCE_MS, this.lastFilesChangedAt + REFRESH_MIN_INTERVAL_MS - Date.now());
+    this.filesTimer = setTimeout(() => {
+      this.lastFilesChangedAt = Date.now();
+      this.onFilesChanged();
+    }, delay);
   }
 
   private closeWatchers(): void {
