@@ -34,7 +34,8 @@ export function sbxVerbs(
 ): Record<Extract<ControlVerbName, `sbx-${string}`>, Handler> {
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
-   *  which only the user can set up there. Returns what it read, for the Save to reuse. */
+   *  which only the user can set up there. Returns what it read, for the Save to take the
+   *  organization from. */
   const readySbx = async (found: Project): Promise<SbxReading> => {
     const reading = await deps.sbx.status(found);
     const { status } = reading;

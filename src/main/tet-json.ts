@@ -19,6 +19,7 @@ import type {
 } from "../shared/types";
 import { machineName } from "./env-names";
 import { readMainWorktree } from "./git/linked-git-dir";
+import { inTurn } from "./in-turn";
 import { isRecord } from "./json-file";
 import { PLATFORM } from "./host-platform";
 
@@ -141,17 +142,7 @@ const patches = new Map<string, Promise<unknown>>();
 function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
   const own = configRoot(root);
   const key = path.join(own, PROJECT_FILE);
-  const turn = (patches.get(key) ?? Promise.resolve())
-    .catch(() => undefined)
-    .then(() => patchNow(root, own, key, edit));
-  patches.set(key, turn);
-  const forget = (): void => {
-    if (patches.get(key) === turn) {
-      patches.delete(key);
-    }
-  };
-  turn.then(forget, forget);
-  return turn;
+  return inTurn(patches, key, () => patchNow(root, own, key, edit));
 }
 
 /** Throws for a worktree (`own`, its config root, is another folder): everything that changes its

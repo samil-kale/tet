@@ -154,7 +154,8 @@ others.
   `LINUX`), named by what it means (`ignoresCase`, `spawnsThroughCmd`, `appBundle`), never by
   which OS it is. Main reads `PLATFORM` (`host-platform.ts`), the window its own
   (`renderer/platform.ts`); nothing else asks for `process.platform` or `navigator.platform`, and
-  the id is data alone (tet.json's `os`, the app's info). A new difference extends the interface.
+  the id is data alone (tet.json's `os`, the app's info) � `install.test.ts`, testing each OS's own
+  installer, alone branches on it. A new difference extends the interface.
 - Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
   (`src/main/terminals/pty.ts`), never `shell: true`.
 - Every HTTP request goes through Electron's `net.fetch`, never the global `fetch`: only
@@ -316,7 +317,7 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
   agent's hook fires for a turn the user cut short, so reconcile ends a turn by the agent's own
   session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
 - The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
-  shown (`App.markedTabs`) and clears what was seen (`terminals.seen`).
+  shown (`useSessionMarks`) and clears what was seen (`terminals.seen`).
 - A session is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a CLI's exit
   handlers.
 

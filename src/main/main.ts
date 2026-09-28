@@ -452,7 +452,7 @@ async function startControl(): Promise<void> {
           config: (project) => readSbxConfig(project.path),
           stored: (projectId) => sbxLocal.stored(projectId),
           problems: readProjectSbxProblems,
-          save: (project, request, local, reading) => saveProjectSbx({ sbxLocal, notice }, project, request, local, reading),
+          save: (project, request, local, known) => saveProjectSbx({ sbxLocal, notice }, project, request, local, known),
           accounts: () => sbxAccounts.list(),
           signedIn: readSbxSignedIn,
           signedInUser: () => readSbxUser(false),

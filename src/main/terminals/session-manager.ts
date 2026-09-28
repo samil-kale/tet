@@ -36,8 +36,6 @@ import { StartIndicators } from "./start-indicators";
 import { currentTheme } from "../theme";
 import { effectivePrompt } from "../../shared/prompts";
 
-// A watcher event is the change itself; only the few events per write need collapsing.
-const WATCH_DEBOUNCE_MS = 300;
 // Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
 const SESSION_REMOVE_DELAY_MS = 500;
 // How long after a fresh tab's Enter its close waits for the hook naming its session
@@ -397,6 +395,7 @@ export class TabSessionManager {
       runtime.reconciler = new ReconcileScheduler({
         reconcile: () => this.reconcile(runtime),
         titlesUnsettled: () => this.titlesUnsettled(runtime),
+        working: () => this.tabs.some((tab) => tab.agentId === agentId && tab.busy),
         disposed: () => this.disposed
       });
     }
@@ -560,7 +559,7 @@ export class TabSessionManager {
     if (runtime.stopWatching) {
       return;
     }
-    runtime.stopWatching = runtime.host.watchSessions(() => runtime.reconciler?.schedule(WATCH_DEBOUNCE_MS));
+    runtime.stopWatching = runtime.host.watchSessions(() => runtime.reconciler?.watched());
   }
 
   /** Whether the repository or worktree still has this tab: main drops output it batched for one

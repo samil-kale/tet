@@ -603,16 +603,20 @@ describe("an update's download, continued after it was cut short", () => {
 
 describe("when an agent's sessions are listed again", () => {
   /** A scheduler whose listings are counted, on the test's mocked clock. */
-  const scheduler = (unsettled = false): { schedule: (delayMs?: number) => void; runs: () => number } => {
+  const scheduler = (
+    unsettled = false,
+    working = false
+  ): { schedule: (delayMs?: number) => void; watched: () => void; runs: () => number } => {
     let runs = 0;
     const reconciler = new ReconcileScheduler({
       reconcile: async () => {
         runs++;
       },
       titlesUnsettled: () => unsettled,
+      working: () => working,
       disposed: () => false
     });
-    return { schedule: (delayMs) => reconciler.schedule(delayMs), runs: () => runs };
+    return { schedule: (delayMs) => reconciler.schedule(delayMs), watched: () => reconciler.watched(), runs: () => runs };
   };
 
   it("keeps a watcher's early listing when output arrives before it is due", (t) => {
@@ -622,6 +626,36 @@ describe("when an agent's sessions are listed again", () => {
     schedule();
     t.mock.timers.tick(300);
     assert.equal(runs(), 1, "output did not push the watcher's listing back to its own debounce");
+  });
+
+  it("lists soon after a watcher's event outside a turn", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { watched, runs } = scheduler();
+    watched();
+    t.mock.timers.tick(300);
+    assert.equal(runs(), 1);
+  });
+
+  it("debounces a turn's watcher events as output, into one listing once it goes quiet", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { watched, runs } = scheduler(false, true);
+    watched();
+    t.mock.timers.tick(4000);
+    watched();
+    t.mock.timers.tick(4000);
+    assert.equal(runs(), 0, "still within the debounce of the last write");
+    t.mock.timers.tick(1000);
+    assert.equal(runs(), 1);
+  });
+
+  it("lists a turn's watcher events by the cap while a title is unknown", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { watched, runs } = scheduler(true, true);
+    for (let elapsed = 0; elapsed < 10_000; elapsed += 1000) {
+      watched();
+      t.mock.timers.tick(1000);
+    }
+    assert.equal(runs(), 1);
   });
 
   it("debounces a burst of output into one listing once it goes quiet", (t) => {

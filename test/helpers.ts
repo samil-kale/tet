@@ -156,9 +156,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     [CONTROL_ENV.tabId]: undefined
   };
   const args = [path.join(__dirname, ".."), `--user-data-dir=${userData}`, "--allow-shell-only"];
-  if (PLATFORM.id === "linux") {
-    // ubuntu-latest ships chrome-sandbox without the setuid bit and AppArmor blocks the userns
-    // fallback, so Electron aborts on launch. The installed `tet` passes it too (install.sh).
+  if (PLATFORM.startsWithoutChromeSandbox) {
     args.push("--no-sandbox");
   }
   args.push(...WINDOW_ARGS);

@@ -1,4 +1,6 @@
 const RECONCILE_DEBOUNCE_MS = 5000;
+// A watcher event is the change itself; only the few events per write need collapsing.
+const WATCH_DEBOUNCE_MS = 300;
 // A CLI can persist a generated title well after its output went idle.
 const RECONCILE_RETRY_MS = 5000;
 const RECONCILE_MAX_RETRIES = 3;
@@ -11,6 +13,8 @@ export interface ReconcileTarget {
   reconcile(): Promise<void>;
   /** Whether a tab of the agent still waits for its session or title. */
   titlesUnsettled(): boolean;
+  /** Whether a tab of the agent is working a turn. */
+  working(): boolean;
   /** Closed: a reconcile in flight at close must not re-arm. */
   disposed(): boolean;
 }
@@ -39,6 +43,12 @@ export class ReconcileScheduler {
       this.deadline = Date.now() + RECONCILE_MAX_WAIT_MS;
     }
     this.arm(delayMs);
+  }
+
+  /** A watcher's event: listed soon, but during a turn debounced as output is, since its transcript
+   *  is written throughout. */
+  watched(): void {
+    this.schedule(this.target.working() ? RECONCILE_DEBOUNCE_MS : WATCH_DEBOUNCE_MS);
   }
 
   /** Re-lists now. Serialized: a call while one is in flight joins it. */

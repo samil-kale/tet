@@ -976,7 +976,8 @@ export class Repository {
     this.gitDirWatcher = undefined;
   }
 
-  /** Puts a failed watcher back, then refreshes to catch what changed unwatched. */
+  /** Puts a failed watcher back, then refreshes and re-lists the Explorer to catch what changed
+   *  unwatched. */
   private retryWatching(): void {
     clearTimeout(this.watchRetryTimer);
     const delay = this.watchRetryDelay;
@@ -988,6 +989,7 @@ export class Repository {
       this.startWatching();
       if (this.watcher) {
         void this.refresh();
+        this.scheduleFilesChanged();
       }
     }, delay);
   }

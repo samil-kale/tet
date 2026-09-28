@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { overridesMachineNote } from "../../shared/types";
 import { ActionLink } from "./ActionLink";
 import { FieldGroup } from "./Field";
@@ -115,8 +115,7 @@ export function SecretInput({
   emptyTitle = "Stored on this machine.",
   placeholder = "Value",
   value,
-  onChange,
-  ref
+  onChange
 }: {
   stored: boolean;
   storedTitle?: string;
@@ -125,12 +124,9 @@ export function SecretInput({
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
-  /** The field a dialog opens focused. */
-  ref?: Ref<HTMLInputElement>;
 }) {
   return (
     <input
-      ref={ref}
       className="row-fixed-input"
       type="password"
       autoComplete="off"

@@ -63,6 +63,9 @@ export interface Platform {
   readonly sbxFirstRunWizard: boolean;
   /** The GPU may be Wayland's or software: WebGL is checked before use (terminal-views.ts). */
   readonly checksGpu: boolean;
+  /** Electron starts with `--no-sandbox` (install.sh, the tests' launch): unpacked without root, its
+   *  chrome-sandbox lacks the setuid bit, and AppArmor may block the user-namespace fallback. */
+  readonly startsWithoutChromeSandbox: boolean;
 
   // The window's words and keys
   /** The key a shortcut holds: Cmd on macOS, Ctrl elsewhere. */
@@ -114,6 +117,7 @@ export const WINDOWS: Platform = {
   windowsToasts: true,
   sbxFirstRunWizard: true,
   checksGpu: false,
+  startsWithoutChromeSandbox: false,
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in Explorer",
@@ -147,6 +151,7 @@ export const MAC: Platform = {
   windowsToasts: false,
   sbxFirstRunWizard: false,
   checksGpu: false,
+  startsWithoutChromeSandbox: false,
   modifierKey: "Meta",
   modifierLabel: "⌘",
   revealLabel: "Reveal in Finder",
@@ -178,6 +183,7 @@ export const LINUX: Platform = {
   windowsToasts: false,
   sbxFirstRunWizard: false,
   checksGpu: true,
+  startsWithoutChromeSandbox: true,
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in your file manager",

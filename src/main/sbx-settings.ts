@@ -24,6 +24,10 @@ import type { SbxLocalStore } from "./sbx-local";
  *  sandboxes and rules read on the way (sbx-status.ts's readSbxReading). Read now what it lacks. */
 type Known = Omit<SbxReading, "status"> & { status: Pick<SbxStatus, "organization"> };
 
+/** What a Save takes of it: the organization alone, as the sandboxes and rules it must read in its
+ *  own turn — a Save queued behind another would work from what that one changed. */
+type KnownOrganization = Pick<Known, "status">;
+
 /** The env names holding a value, per list. */
 interface ValueNames {
   secrets: Iterable<string>;
@@ -54,7 +58,7 @@ function checkProject(
 }
 
 /** The organization managing sbx's policy: as the caller's status read it, else read now. */
-async function organizationOf(known: Known | undefined): Promise<string | undefined> {
+async function organizationOf(known: KnownOrganization | undefined): Promise<string | undefined> {
   return known ? known.status.organization : readGovernance();
 }
 
@@ -92,7 +96,7 @@ export function saveProjectSbx(
   project: Project,
   request: SbxProjectConfig,
   local: SbxLocalSave,
-  known?: Known
+  known?: KnownOrganization
 ): Promise<SbxSaveResult> {
   return inTurn(saves, project.id, () => saveNow(deps, project, request, local, known));
 }
@@ -102,7 +106,7 @@ async function saveNow(
   project: Project,
   request: SbxProjectConfig,
   local: SbxLocalSave,
-  known?: Known
+  known?: KnownOrganization
 ): Promise<SbxSaveResult> {
   const worktrees = project.worktrees.flatMap((worktree): SbxSaveTarget[] =>
     worktree.key === undefined ? [] : [{ ref: projectRef(project.id, worktree.key), path: worktree.path }]
@@ -114,15 +118,15 @@ async function saveNow(
     sbxLocal.update(project.id, local);
     const secretValues = sbxLocal.values(project.id, "secrets");
     const knowledge = sbxLocal.knowledge(project.id);
-    // Listed once for the check and the Save.
-    const [organization, sandboxes] = await Promise.all([organizationOf(known), known?.sandboxes ?? listSandboxes()]);
+    // Listed once for the check and the Save, in this turn.
+    const [organization, sandboxes] = await Promise.all([organizationOf(known), listSandboxes()]);
     if (!sandboxes) {
       throw new Error("SBX could not list the sandboxes. Nothing was saved; try again.");
     }
     // Off, nothing is applied, so nothing is left out. What sbx cannot say stops the Save: a row
     // it could not be asked about is no refusal.
     const problems = request.enabled
-      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization, sandboxes, known?.rules).catch((error: unknown) => {
+      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization, sandboxes).catch((error: unknown) => {
           throw new Error(`${errorMessage(error)} Nothing was saved; try again.`);
         })
       : {};

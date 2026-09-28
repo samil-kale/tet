@@ -29,8 +29,6 @@ export function RequirementsDialog({ requirements, checking, onRecheck }: Requir
       header={{ title: "Missing requirements" }}
       className="requirements-dialog"
       busy={checking}
-      // Not a held run: a check changes nothing, and Quit must stay open while it runs.
-      locked={false}
       actions={[{ label: "Quit", secondary: true, run: () => window.tet.startup.quit() }]}
       primary={{ label: "Check again", disabled: checking, run: onRecheck }}
     >

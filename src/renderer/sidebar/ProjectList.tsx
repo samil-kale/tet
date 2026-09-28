@@ -36,7 +36,7 @@ function rowButton(title: string, run: () => void, icon: ReactNode) {
 /** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,
  *  waiting on an answer, and starting (so the pane a new agent opens in shows the bar,
  *  `TerminalsPane`'s `startingHere`). `busy` excludes a session stopped on a question. Decided in
- *  `App`, which alone knows what is on screen. */
+ *  `useSessionMarks` (use-session-marks.ts), against what is on screen. */
 export interface RefMarks {
   finished: string[];
   waiting: string[];

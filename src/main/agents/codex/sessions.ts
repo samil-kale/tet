@@ -329,7 +329,8 @@ export const codexSessionProvider: SessionProvider = {
         stopped = true;
         closeAll();
       },
-      watching: () => watchers.length > 0
+      // Never: rollouts are watched in today's day folder alone, and a resumed session writes to its own.
+      watching: () => false
     };
   }
 };

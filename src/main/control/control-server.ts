@@ -104,7 +104,7 @@ export interface ControlDeps {
   envRequests: Pick<EnvRequests, "ask">;
   /** The SBX Settings dialog's reads and Save (ipc/sbx.ts, sbx-settings.ts). */
   sbx: {
-    /** sbx-status.ts's readSbxReading: the status, and what the verb's problems and Save reuse of it. */
+    /** sbx-status.ts's readSbxReading: the status, and what the verb's problems check reuses of it. */
     status(project: Project): Promise<SbxReading>;
     /** Whether an agent runs on this machine at all: without one, sandboxing cannot be switched off. */
     anyAgentInstalled(): Promise<boolean>;
@@ -118,7 +118,8 @@ export interface ControlDeps {
       values: Record<SbxValueKind, string[]>,
       reading?: SbxReading
     ): Promise<SbxProblems>;
-    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, reading?: SbxReading): Promise<SbxSaveResult>;
+    /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */
+    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, known?: Pick<SbxReading, "status">): Promise<SbxSaveResult>;
     /** The access tokens kept for every project (sbx-accounts.ts), never a token. */
     accounts(): SbxAccount[];
     /** sbx-status.ts's readSbxSignedIn: one `sbx ls`, not the whole status — the question is the

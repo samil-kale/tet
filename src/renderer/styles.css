@@ -1916,7 +1916,6 @@ textarea:focus,
   min-width: 0;
 }
 
-/* In the place of the row's sign-in button, the same box. */
 /* Fixed height, as the settings dialog's: switching tabs must not resize it, and rows that outgrow
    it scroll in their own box (below) rather than growing it. Capped to the window. */
 .sbx-settings-dialog {

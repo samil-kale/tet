@@ -60,12 +60,10 @@ interface PathInputProps {
   /** Only what the picker returned, never typed (the SBX skills folder). */
   pickedOnly?: boolean;
   placeholder?: string;
-  /** For the dialog's focus effect, when this is a mode's first field. */
-  ref?: Ref<HTMLInputElement>;
 }
 
 /** A folder's path with a Browse button beside it; a cancelled pick keeps the path there was. */
-export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder, ref }: PathInputProps) {
+export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder }: PathInputProps) {
   const browse = async (): Promise<void> => {
     // The field's own value is more specific, so it wins.
     const start = value.trim() || localStorage.getItem(LAST_DIRECTORY_KEY) || undefined;
@@ -85,7 +83,6 @@ export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder,
         disabled={pickedOnly}
         title={pickedOnly ? value : undefined}
         onChange={(event) => onChange(event.target.value)}
-        ref={ref}
       />
       <button type="button" className="button secondary" onClick={() => void browse()}>
         Browse...
