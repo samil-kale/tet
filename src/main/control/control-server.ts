@@ -32,8 +32,7 @@ import type {
   SbxValueKind,
   TerminalDescriptor
 } from "../../shared/types";
-import { getAgent } from "../agents";
-import { hasSandbox } from "../agents/agent";
+import { hasSandbox, type AgentDefinition } from "../agents/agent";
 import { systemPrompt } from "../agents/system-prompt";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
@@ -82,8 +81,8 @@ export interface ControlDeps {
   editorContent(ref: ProjectRef): Promise<string | undefined>;
   /** The requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
-  /** `AGENTS`' ids, so a new agent needs nothing here. */
-  agentIds: readonly string[];
+  /** `AGENTS`, so a new agent needs nothing here. */
+  agents: readonly AgentDefinition[];
   /** projects.ts's, which tell the window their outcome themselves (projectsChanged). */
   addProject(directory: string): Promise<AddRepositoryResult>;
   removeProject(projectId: string): Promise<GitActionResult>;
@@ -374,15 +373,16 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
 
   /** `--agent`, one the caller may open a tab of: a shell would run on this machine, so a sandbox
    *  opens only an sbx agent's tab, held to the sandbox (createTab, handOff). */
-  const openableAgent = (args: Record<string, unknown>, caller: Caller): AgentId => {
-    const agent = text(args, "agent", "agent: pass --agent <id> (see list-agents)");
-    if (!deps.agentIds.includes(agent)) {
-      throw new ControlError("bad_args", `unknown agent: ${agent} (see list-agents)`);
+  const openableAgent = (args: Record<string, unknown>, caller: Caller): AgentDefinition => {
+    const id = text(args, "agent", "agent: pass --agent <id> (see list-agents)");
+    const agent = deps.agents.find((candidate) => candidate.id === id);
+    if (!agent) {
+      throw new ControlError("bad_args", `unknown agent: ${id} (see list-agents)`);
     }
-    if (caller.sandboxed && !hasSandbox(getAgent(agent as AgentId))) {
-      throw new ControlError("unauthorized", `a ${agent} tab does not run in a sandbox, so a sandbox cannot open one`);
+    if (caller.sandboxed && !hasSandbox(agent)) {
+      throw new ControlError("unauthorized", `a ${id} tab does not run in a sandbox, so a sandbox cannot open one`);
     }
-    return agent as AgentId;
+    return agent;
   };
 
   return {
@@ -674,17 +674,17 @@ function verbs(deps: ControlDeps): Record<string, Handler> {
       if (prompt !== undefined && (typeof prompt !== "string" || prompt.trim() === "")) {
         throw new ControlError("bad_args", "missing text after --prompt");
       }
-      if (prompt !== undefined && !getAgent(agent).terminal) {
-        throw new ControlError("bad_args", `a ${agent} tab takes no prompt`);
+      if (prompt !== undefined && !agent.terminal) {
+        throw new ControlError("bad_args", `a ${agent.id} tab takes no prompt`);
       }
-      const tab = terminals(ref).createTab(agent, caller.sandboxed, prompt);
+      const tab = terminals(ref).createTab(agent.id, caller.sandboxed, prompt);
       deps.showTab(ref, tab.tabId);
       return { result: tab };
     },
 
     "tabs-handoff": async (args, caller) => {
       const { tabs, tabId, ref } = ownedTab(args, caller);
-      const handed = await tabs.handOff(tabId, openableAgent(args, caller), caller.sandboxed);
+      const handed = await tabs.handOff(tabId, openableAgent(args, caller).id, caller.sandboxed);
       if (typeof handed === "string") {
         // A state the tab is in, not a mistyped call — as tabs-rename's refusal.
         throw new ControlError("internal", handed);

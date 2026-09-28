@@ -430,7 +430,7 @@ async function startControl(): Promise<void> {
                 : true
             }))
           ),
-        agentIds: AGENTS.map((agent) => agent.id),
+        agents: AGENTS,
         addProject: (directory) => addProject(projectDeps, directory),
         removeProject: (projectId) => removeProject(projectDeps, projectId),
         addWorktree: (projectId, branch) => addWorktree(projectDeps, projectId, branch),

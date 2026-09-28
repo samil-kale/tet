@@ -4,6 +4,8 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
+import { claudeAgent } from "../src/main/agents/claude";
+import { shellAgent } from "../src/main/agents/shell";
 import { systemPrompt } from "../src/main/agents/system-prompt";
 import { findControlPort, startControlServer } from "../src/main/control/control-server";
 import type { ControlDeps, ControlTerminals, ToastTarget } from "../src/main/control/control-server";
@@ -248,7 +250,7 @@ function deps(): ControlDeps {
           : undefined
     },
     listAgents: async () => [{ id: "shell", name: "Shell", installed: true }],
-    agentIds: ["claude", "shell"],
+    agents: [claudeAgent, shellAgent],
     addProject: async (directory) => {
       calls.added.push(directory);
       return directory === "/nowhere"

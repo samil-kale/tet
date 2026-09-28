@@ -2,13 +2,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AGENTS, getAgent } from "../agents";
 
-import type { AgentDefinition, AgentPaths, AgentSessionInfo } from "../agents/agent";
+import type { AgentDefinition, AgentSessionInfo } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_ENV } from "../../shared/control";
 import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
 import { hasSandbox } from "../agents/agent";
+import { RefSandbox } from "./ref-sandbox";
 import { projectRefKey } from "../../shared/types";
 import type {
   AgentId,
@@ -20,13 +21,12 @@ import type {
 } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import { HostSetups } from "./host-setup";
-import { dropsDir, sandboxDir } from "../project-dirs";
+import { dropsDir } from "../project-dirs";
 import { readSbxConfig } from "../tet-json";
-import { checkSbxReady, ensureRunning, sandboxName } from "../sbx";
+import { checkSbxReady, ensureRunning } from "../sbx";
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
-import { sandboxSessionDir, toContainerPath } from "./hook-target";
 import { HostPlace, SandboxPlace, SandboxStart } from "./tab-place";
 import type { HandoffFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
 import { reportApplies } from "./turn-order";
@@ -118,6 +118,8 @@ interface AgentRuntime {
    * is resolvePlace's question, per spawn.
    */
   sbxOnly: boolean;
+  /** Its sandbox of this repository or worktree; only for an agent that runs in one. */
+  sandbox?: RefSandbox;
   /** Resolves once the version check, the host setup (HostSetups) and initial listing are done. */
   ready: Promise<void>;
   stopWatching?: () => void;
@@ -298,18 +300,6 @@ export class TabSessionManager {
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
-  /** See AgentSandbox.prepare: the repository's or worktree's sandbox folder of the
-   *  agent, created only when asked for. The host side is HostSetups'. */
-  private sandboxPaths(runtime: AgentRuntime): AgentPaths {
-    const agentDir = sandboxDir(this.storageRoot, this.at.ref, runtime.agent.id);
-    fs.mkdirSync(agentDir, { recursive: true });
-    return {
-      agentDir,
-      idleReminder: this.settings.get().notifications.idleReminder,
-      theme: currentTheme(this.settings)
-    };
-  }
-
   snapshot(): TerminalDescriptor[] {
     return this.tabs.map((tab) => toDescriptor(tab, this.tabIndicators.has(tab.tabId)));
   }
@@ -443,6 +433,7 @@ export class TabSessionManager {
       // An agent without a version check (the shell) is always there.
       startable: agent.install === undefined,
       sbxOnly: false,
+      ...(hasSandbox(agent) && { sandbox: new RefSandbox(this.at, this.storageRoot, agent) }),
       ready: Promise.resolve(),
       reconcileRetriesLeft: 0
     };
@@ -452,31 +443,17 @@ export class TabSessionManager {
   }
 
   /**
-   * One agent's sessions of this repository: the host's, and the sandbox's through its mount
-   * (AgentSandbox.sessions), tagged with the sandbox so resolvePlace sends them back. The
-   * sandbox is listed whatever the switch: its sessions stay resumable there, for one readdir.
+   * One agent's sessions of this repository: the host's, and its sandbox's (RefSandbox), tagged
+   * with the sandbox so resolvePlace sends them back.
    */
   private async listSessions(runtime: AgentRuntime): Promise<AgentSessionInfo[]> {
-    const { agent } = runtime;
+    const { agent, sandbox } = runtime;
     if (!agent.sessions) {
       return [];
     }
-    const onHost = agent.sessions.list(this.at.path);
-    const sandbox = agent.sandbox?.sessions;
-    if (!sandbox) {
-      return onHost;
-    }
     // In parallel: the bootstrap listing, and every reconcile.
-    const [host, inSandbox] = await Promise.all([
-      onHost,
-      sandbox.list(this.sandboxSessionRoot(agent.id), toContainerPath(this.at.path))
-    ]);
-    const name = sandboxName(this.at.ref, agent.id);
-    return [...host, ...inSandbox.map((info) => ({ ...info, sandbox: name }))];
-  }
-
-  private sandboxSessionRoot(agentId: AgentId): string {
-    return sandboxSessionDir(sandboxDir(this.storageRoot, this.at.ref, agentId));
+    const [host, inSandbox] = await Promise.all([agent.sessions.list(this.at.path), sandbox?.listSessions() ?? []]);
+    return [...host, ...inSandbox];
   }
 
   /** What a place of this agent's tabs is built from. */
@@ -503,9 +480,9 @@ export class TabSessionManager {
       return tab.place;
     }
     const runtime = this.runtimeFor(tab.agentId);
-    const { agent } = runtime;
-    return tab.sandbox && hasSandbox(agent)
-      ? new SandboxPlace(this.placeContext(runtime), agent)
+    const { sandbox } = runtime;
+    return tab.sandbox && sandbox
+      ? new SandboxPlace(this.placeContext(runtime), sandbox)
       : this.hostPlace(runtime);
   }
 
@@ -521,7 +498,7 @@ export class TabSessionManager {
       runtime.startable = await isAgentInstalled(executable, agent.install.versionArgs, cwd);
       // Not here, but the project's sandbox has the CLI. Only the config is read — checkSbxReady
       // talks to Docker and stays on the spawn (resolvePlace).
-      if (!runtime.startable && hasSandbox(agent) && (await readSbxConfig(cwd)).enabled) {
+      if (!runtime.startable && runtime.sandbox && (await readSbxConfig(cwd)).enabled) {
         runtime.startable = true;
         runtime.sbxOnly = true;
       }
@@ -580,7 +557,7 @@ export class TabSessionManager {
    * machine with no agent would sit at an empty project. Only unstartable runtimes are acted on.
    */
   async sbxConfigChanged(): Promise<void> {
-    const sbxRuntimes = [...this.runtimes.values()].filter((runtime) => hasSandbox(runtime.agent));
+    const sbxRuntimes = [...this.runtimes.values()].filter((runtime) => runtime.sandbox !== undefined);
     if (this.disposed || sbxRuntimes.length === 0) {
       return;
     }
@@ -820,7 +797,7 @@ export class TabSessionManager {
 
   /**
    * Where this start runs the tab: the repository's or worktree's sandbox, or this machine; tet.json
-   * is read fresh per spawn. Only plain tabs of sbx agents (hasSandbox), never a saved command's.
+   * is read fresh per spawn. Only plain tabs of an agent with a sandbox (AgentRuntime.sandbox), never a saved command's.
    *
    * A session runs where it lives: a host session fails to resume in a sandbox. A tab with no
    * `sessionId` yet is sandboxed.
@@ -835,8 +812,8 @@ export class TabSessionManager {
   private async resolvePlace(tab: TabState): Promise<StartingPlace | "stranded"> {
     const runtime = this.runtimeFor(tab.agentId);
     const onHost = this.hostPlace(runtime);
-    const { agent } = runtime;
-    if (tab.executable || !hasSandbox(agent)) {
+    const { agent, sandbox } = runtime;
+    if (tab.executable || !sandbox) {
       return onHost;
     }
     const config = await readSbxConfig(this.at.path);
@@ -844,11 +821,10 @@ export class TabSessionManager {
       // A notice only for a tab that cannot run on this machine.
       return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : onHost;
     }
-    const sandbox = sandboxName(this.at.ref, tab.agentId);
     // Started before it is known whether it may be used, since it is the slowest step and the
     // readiness check answers nothing it depends on (why that is safe: ensureRunning). Not for a
     // tab about to run on this machine, which would start a sandbox nobody asked for.
-    const warm = tab.sessionId && !tab.sandbox ? undefined : ensureRunning(sandbox);
+    const warm = tab.sessionId && !tab.sandbox ? undefined : ensureRunning(sandbox.name);
     const ready = await checkSbxReady(this.at.path, this.at.ref);
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, ready.notReady)) {
@@ -883,11 +859,12 @@ export class TabSessionManager {
       return onHost;
     }
     const { projectId } = this.at.ref;
-    return new SandboxStart(this.placeContext(runtime), agent, {
+    return new SandboxStart(this.placeContext(runtime), sandbox, {
       config,
       ready,
       warm,
-      paths: this.sandboxPaths(runtime),
+      idleReminder: this.settings.get().notifications.idleReminder,
+      theme: currentTheme(this.settings),
       knowledge: this.sbxLocal.knowledge(projectId),
       secretValues: this.sbxLocal.values(projectId, "secrets"),
       variableValues: this.sbxLocal.values(projectId, "variables")

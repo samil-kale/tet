@@ -1,12 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentDefinition, AgentPaths, SandboxedAgent, SpawnPreparation } from "../agents/agent";
+import type { AgentDefinition, AgentPaths, SpawnPreparation } from "../agents/agent";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId, NoticeSeverity, SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types";
-import { dropsDir, sandboxDir } from "../project-dirs";
+import { dropsDir } from "../project-dirs";
 import type { ResolvedRef } from "../resolved-ref";
-import { type checkSbxReady, mountDropped, prepareSbxRun, sandboxName } from "../sbx";
-import { sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir, toContainerPath } from "./hook-target";
+import { type checkSbxReady, mountDropped, prepareSbxRun } from "../sbx";
+import { sandboxDropsDir, sandboxHandoffDir, toContainerPath } from "./hook-target";
+import type { RefSandbox } from "./ref-sandbox";
 
 /** A tab's session operations, bound to where its session lives. */
 export interface SessionActions {
@@ -122,28 +123,22 @@ export class HostPlace implements StartingPlace {
 }
 
 /**
- * The agent's sandbox of the repository or worktree, which sees of `~/.tet` only its agent folder
- * (sandboxDir): paths at their container path, what lies outside its sight mounted (mountDropped),
- * sessions through their mounts (AgentSandbox.sessions).
+ * The agent's sandbox of the repository or worktree (RefSandbox), which sees of `~/.tet` only its
+ * agent folder: paths at their container path, what lies outside its sight mounted
+ * (mountDropped), sessions through their mounts.
  */
 export class SandboxPlace implements TabPlace {
-  protected readonly agentDir: string;
-  protected readonly name: string;
-
   constructor(
     protected readonly context: PlaceContext,
-    protected readonly sandboxed: SandboxedAgent
-  ) {
-    this.agentDir = sandboxDir(context.storageRoot, context.at.ref, sandboxed.id);
-    this.name = sandboxName(context.at.ref, sandboxed.id);
-  }
+    protected readonly sandbox: RefSandbox
+  ) {}
 
   embed(hostPath: string): string {
     return toContainerPath(hostPath);
   }
 
   dropsDir(): string {
-    return sandboxDropsDir(this.agentDir);
+    return sandboxDropsDir(this.sandbox.agentDir);
   }
 
   /** Each mount and each refusal is said, once per path. */
@@ -151,7 +146,7 @@ export class SandboxPlace implements TabPlace {
     const { at, onNotice } = this.context;
     const handed: string[] = [];
     for (const hostPath of hostPaths) {
-      const mount = await mountDropped(this.name, at.path, hostPath);
+      const mount = await mountDropped(this.sandbox.name, at.path, hostPath);
       if ("refused" in mount) {
         onNotice("warning", `${hostPath} was not mounted into ${at.name()}'s SBX sandbox: ${mount.refused}.`);
         continue;
@@ -165,17 +160,7 @@ export class SandboxPlace implements TabPlace {
   }
 
   sessionActions(): SessionActions | undefined {
-    const sandbox = this.sandboxed.sandbox.sessions;
-    if (!sandbox) {
-      return undefined;
-    }
-    const root = sandboxSessionDir(this.agentDir);
-    const cwd = this.embed(this.context.at.path);
-    return {
-      remove: (sessionId) => sandbox.remove(root, cwd, sessionId),
-      rename: (sessionId, title) => sandbox.rename(root, cwd, sessionId, title),
-      files: (sessionId) => sandbox.files(root, cwd, sessionId)
-    };
+    return this.sandbox.sessionActions();
   }
 }
 
@@ -186,8 +171,9 @@ export interface SbxStart {
   ready: Exclude<Awaited<ReturnType<typeof checkSbxReady>>, { notReady: string }>;
   /** The `ensureRunning` begun alongside the readiness check (SbxRunRequest.warm). */
   warm?: Promise<boolean>;
-  /** The agent's sandbox setup (AgentSandbox.prepare); `agentDir` already created. */
-  paths: AgentPaths;
+  /** The window's settings the sandbox setup takes (AgentPaths). */
+  idleReminder: boolean;
+  theme: AgentPaths["theme"];
   /** This machine's sbx values for the project (SbxLocalStore). */
   knowledge: SbxKnowledgeConfig;
   secretValues: ReadonlyMap<string, string>;
@@ -198,10 +184,10 @@ export interface SbxStart {
 export class SandboxStart extends SandboxPlace implements StartingPlace {
   constructor(
     context: PlaceContext,
-    sandboxed: SandboxedAgent,
+    sandbox: RefSandbox,
     private readonly start: SbxStart
   ) {
-    super(context, sandboxed);
+    super(context, sandbox);
   }
 
   /**
@@ -211,18 +197,17 @@ export class SandboxStart extends SandboxPlace implements StartingPlace {
    */
   async launch(input: LaunchInput): Promise<Launch> {
     const { at, onNotice } = this.context;
-    const { paths } = this.start;
-    const { sandbox } = this.sandboxed;
-    const hooks = sandbox.prepare(paths);
-    const handoffDir = input.handoff && sandboxHandoffDir(this.agentDir, input.handoff.from, input.handoff.sessionId);
+    const { agent, agentDir } = this.sandbox;
+    const paths = this.sandbox.paths(this.start.idleReminder, this.start.theme);
+    const hooks = agent.sandbox.prepare(paths);
+    const handoffDir = input.handoff && sandboxHandoffDir(agentDir, input.handoff.from, input.handoff.sessionId);
     try {
       const files =
         input.handoff && handoffDir !== undefined
           ? (await copyInto(input.handoff.files, handoffDir)).map((file) => this.embed(file))
           : undefined;
-      const sessionRoot = sandboxSessionDir(this.agentDir);
       const { args, env, problems } = await prepareSbxRun({
-        agent: this.sandboxed,
+        agent,
         ref: at.ref,
         projectRefPath: at.path,
         config: this.start.config,
@@ -233,12 +218,8 @@ export class SandboxStart extends SandboxPlace implements StartingPlace {
         warm: this.start.warm,
         paths,
         agentArgs: [...hooks.args, ...input.agentArgs(files)],
-        env: sandbox.env ?? [],
-        sessionMounts: (sandbox.sessions?.mounts ?? []).map((mount) => ({
-          host: path.join(sessionRoot, mount.sub),
-          target: mount.target,
-          file: mount.file
-        })),
+        env: agent.sandbox.env ?? [],
+        sessionMounts: this.sandbox.sessionMounts(),
         secretValues: this.start.secretValues,
         variableValues: this.start.variableValues,
         onData: input.onData
