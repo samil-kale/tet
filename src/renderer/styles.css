@@ -594,6 +594,9 @@ textarea:focus,
   flex: 1;
   overflow-y: auto;
   padding-bottom: 8px;
+  /* 1px narrower than the pane: at a fractional scale the pane's edge can take the last device
+     pixel, and with it the right side of a focused row's outline. */
+  margin-left: 1px;
 }
 
 .tree-header {
@@ -1192,6 +1195,8 @@ textarea:focus,
 .changes-list-items {
   flex: 1;
   overflow: auto;
+  /* As `.tree`'s. */
+  margin-left: 1px;
 }
 
 /* A `.tree-item`, spaced as a flat list. */
