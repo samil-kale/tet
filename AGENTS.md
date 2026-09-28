@@ -149,6 +149,11 @@ is gone (`removeAllSessions`).
 Must work on Windows, Linux and macOS; no OS-specific behaviour without an equivalent for the
 others.
 
+- **What differs between them is a `Platform` member** (`src/shared/platform.ts`: `WINDOWS`, `MAC`,
+  `LINUX`), named by what it means (`ignoresCase`, `spawnsThroughCmd`, `appBundle`), never by
+  which OS it is. Main reads `PLATFORM` (`host-platform.ts`), the window its own
+  (`renderer/platform.ts`); nothing else asks for `process.platform` or `navigator.platform`, and
+  the id is data alone (tet.json's `os`, a release asset). A new difference extends the interface.
 - Paths through `path.join`; every agent, shell and `sbx` spawn through `resolveCommand`
   (`src/main/terminals/pty.ts`), never `shell: true`.
 - A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`

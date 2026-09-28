@@ -10,6 +10,7 @@
  * and `dir/**` covers `dir`.
  */
 
+import type { Platform } from "../shared/platform";
 import type { SbxAccess, SbxBlocker, SbxStatus } from "../shared/types";
 import { isRecord } from "./json-file";
 
@@ -96,13 +97,13 @@ export function parseFilesystemRules(json: string): FilesystemRule[] {
 }
 
 export interface PathFlavor {
-  platform: NodeJS.Platform;
+  platform: Platform;
   home: string;
 }
 
 /** `/` separators, no trailing one — the form patterns and paths are compared in. */
 function normalize(value: string, flavor: PathFlavor): string {
-  const slashed = flavor.platform === "win32" ? value.replace(/\\/g, "/") : value;
+  const slashed = flavor.platform.pathSeparator === "\\" ? value.replace(/\\/g, "/") : value;
   return slashed.length > 1 ? slashed.replace(/\/+$/, "") : slashed;
 }
 
@@ -113,7 +114,7 @@ function patternRegExp(pattern: string, flavor: PathFlavor): RegExp {
   let regex = "";
   for (let index = 0; index < source.length; index++) {
     const rest = source.slice(index);
-    if (index === 0 && flavor.platform === "win32" && rest.startsWith("*:")) {
+    if (index === 0 && flavor.platform.driveLetters && rest.startsWith("*:")) {
       regex += "[A-Za-z]:";
       index += 1;
     } else if (rest === "**") {
@@ -134,7 +135,7 @@ function patternRegExp(pattern: string, flavor: PathFlavor): RegExp {
       regex += rest[0].replace(/[.+?^${}()|[\]\\]/g, "\\$&");
     }
   }
-  return new RegExp(`^${regex}$`, flavor.platform === "win32" ? "i" : "");
+  return new RegExp(`^${regex}$`, flavor.platform.ignoresCase ? "i" : "");
 }
 
 /**

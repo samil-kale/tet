@@ -7,6 +7,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
+import { LINUX, WINDOWS } from "../src/shared/platform";
 import * as esbuild from "esbuild";
 import { holdEscape } from "../src/renderer/ui/use-escape";
 import { claudeAgent } from "../src/main/agents/claude";
@@ -1114,8 +1115,8 @@ describe("sbx's filesystem policy", () => {
       { resource_type: "filesystem:write", decision: "allow", resources: ["**"], status: "active" }
     ]
   });
-  const win32 = { platform: "win32" as const, home: "C:\\Users\\saka" };
-  const posix = { platform: "linux" as const, home: "/home/saka" };
+  const win32 = { platform: WINDOWS, home: "C:\\Users\\saka" };
+  const posix = { platform: LINUX, home: "/home/saka" };
   const rules = (entries: object[]) => parseFilesystemRules(JSON.stringify({ rules: entries }));
   const allow = (type: string, resource: string) => ({ resource_type: type, decision: "allow", resources: [resource] });
 

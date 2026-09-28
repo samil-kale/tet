@@ -9,7 +9,7 @@ import type { ProjectRef } from "../../shared/types";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
-import { isLinux, isMac, isModifierHeld } from "../platform";
+import { isModifierHeld, PLATFORM } from "../platform";
 import { buildXtermTheme, editorFontFamily } from "./theme";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
@@ -68,11 +68,6 @@ export function setRevealHandler(
   const key = projectRefKey(ref);
   revealHandlers.set(key, handler);
   return () => revealHandlers.delete(key);
-}
-
-/** VS Code's `terminal.integrated.fontSize` default. */
-function defaultFontSize(): number {
-  return isMac() ? 12 : 14;
 }
 
 function openUrl(url: string): void {
@@ -179,12 +174,12 @@ const inFront = new Set<string>();
 let webglAllowed: boolean | undefined;
 
 /**
- * On Linux WebGL stays off under Wayland, where a context can wedge terminal input, and where the
- * renderer is missing, unnamed or software — slower than the DOM, with glyph corruption that never
- * reports a lost context.
+ * Where the GPU is to be checked (Platform.checksGpu), WebGL stays off under Wayland, where a
+ * context can wedge terminal input, and where the renderer is missing, unnamed or software —
+ * slower than the DOM, with glyph corruption that never reports a lost context.
  */
 function decideWebgl(): boolean {
-  if (!isLinux()) {
+  if (!PLATFORM.checksGpu) {
     return true;
   }
   if (window.tet.waylandSession) {
@@ -283,7 +278,7 @@ function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void 
 function createView(ref: ProjectRef, tabId: string): TerminalView {
   const term = new Terminal({
     fontFamily: editorFontFamily(),
-    fontSize: defaultFontSize(),
+    fontSize: PLATFORM.terminalFontSize,
     theme: buildXtermTheme(),
     scrollback: 4000,
     // FitAddon reserves `options.overviewRuler?.width || 14` pixels for the hidden scrollbar; `0`

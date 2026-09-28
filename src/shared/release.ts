@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { Platform } from "./platform";
 
 /**
  * Shared by src/main/auto-update.ts, src/cli/tet-update.ts and the install scripts
@@ -12,44 +13,28 @@ import * as path from "node:path";
 export const RELEASES_URL = "https://github.com/samil-kale/tet/releases";
 
 /** The archive name per electron-builder.yml's `artifactName`, or undefined where none is built. */
-export function assetName(platform: string, arch: string): string | undefined {
-  if (arch !== "x64" && arch !== "arm64") {
-    return undefined;
-  }
-  switch (platform) {
-    case "win32":
-      return `TET-win-${arch}.zip`;
-    case "darwin":
-      return `TET-mac-${arch}.tar.gz`;
-    case "linux":
-      return `TET-linux-${arch}.tar.gz`;
-    default:
-      return undefined;
-  }
+export function assetName(platform: Platform, arch: string): string | undefined {
+  return arch === "x64" || arch === "arm64" ? `${platform.assetPrefix}-${arch}.${platform.assetExtension}` : undefined;
 }
 
-/** The README's manual install line. */
-export function installCommand(platform: string): string {
-  return platform === "win32"
-    ? "irm https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.ps1 | iex"
-    : "curl -fsSL https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.sh | sh";
-}
-
-/** The folder an update replaces whole: the app bundle on macOS, the executable's folder elsewhere. */
-export function installRoot(executable: string): string {
-  return process.platform === "darwin" ? path.resolve(executable, "..", "..", "..") : path.dirname(executable);
+/** The folder an update replaces whole: the app bundle, else the executable's folder. */
+export function installRoot(executable: string, platform: Platform): string {
+  return platform.appBundle ? path.resolve(executable, "..", "..", "..") : path.dirname(executable);
 }
 
 /** The inverse of `installRoot`. */
-export function rootExecutable(root: string): string {
-  switch (process.platform) {
-    case "win32":
-      return path.join(root, "TET.exe");
-    case "darwin":
-      return path.join(root, "Contents", "MacOS", "TET");
-    default:
-      return path.join(root, "tet");
-  }
+export function rootExecutable(root: string, platform: Platform): string {
+  return path.join(root, ...platform.executableInRoot);
+}
+
+/** The install root inside an unpacked archive's entry: the bundle within it, else the entry. */
+export function rootIn(entry: string, platform: Platform): string {
+  return platform.appBundle ? path.join(entry, "TET.app") : entry;
+}
+
+/** Where the app's resources are inside an install root. */
+export function resourcesDir(root: string, platform: Platform): string {
+  return platform.appBundle ? path.join(root, "Contents", "Resources") : path.join(root, "resources");
 }
 
 /**

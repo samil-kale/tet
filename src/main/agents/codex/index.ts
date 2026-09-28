@@ -9,6 +9,7 @@ import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { codexHookReply, setupCodexHooks } from "./hooks";
 import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
+import { PLATFORM } from "../../host-platform";
 
 /**
  * On win32 Codex reads its colors from the *console* (conhost's palette, whatever xterm draws) and
@@ -63,7 +64,7 @@ export const codexAgent: SandboxedAgent = {
     prepare: (executable, paths) => {
       let args: string[] = FULLSCREEN_ARGS;
       let launcher: string | undefined;
-      if (process.platform === "win32") {
+      if (PLATFORM.conpty) {
         try {
           launcher = writeConsoleColorLauncher(paths.agentDir, executable, paths.theme);
         } catch (error) {

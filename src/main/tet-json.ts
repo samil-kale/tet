@@ -20,6 +20,7 @@ import type {
 import { machineName } from "./env-names";
 import { readMainWorktree } from "./git/linked-git-dir";
 import { isRecord } from "./json-file";
+import { PLATFORM } from "./host-platform";
 
 /** A project's saved commands, Explorer view and sbx settings, in its own root so it travels with
  *  the repository; a linked worktree has none of its own (configRoot). Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
@@ -443,7 +444,7 @@ interface StoredSbxPath extends SbxPath {
 }
 
 function appliesHere(entry: StoredSbxPath): boolean {
-  return entry.os === undefined || entry.os === process.platform;
+  return entry.os === undefined || entry.os === PLATFORM.id;
 }
 
 function toSbxPaths(value: unknown): StoredSbxPath[] {
@@ -488,7 +489,7 @@ export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
 export function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<void> {
   return patch(root, (content) => {
     const others = toSbxPaths(sbxSection(content).paths).filter((entry) => !appliesHere(entry));
-    const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: process.platform }));
+    const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: PLATFORM.id }));
     return [
       [
         ["sbx"],

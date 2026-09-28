@@ -22,7 +22,7 @@ import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
 import { usePaneShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_PANE_WIDTH, Sash } from "../ui/Sash";
-import { isModifierHeld, modifierLabel } from "../platform";
+import { isModifierHeld, PLATFORM } from "../platform";
 
 function useEditorStore<T>(tabId: string, select: (snapshot: EditorSnapshot) => T): T {
   const subscribe = useCallback((listener: () => void) => subscribeEditor(tabId, listener), [tabId]);
@@ -118,7 +118,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
         {/* Always there, so the path doesn't shift for a read-only file. */}
         <div className="editor-bar-actions">
           <IconButton
-            title={`Save (${modifierLabel()}+S)`}
+            title={`Save (${PLATFORM.modifierLabel}+S)`}
             disabled={isReadOnly(file) || !dirty || saving}
             onClick={() => void saveEditorFile(tabId)}
           >
@@ -136,7 +136,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
           {isMarkdown(path) && (
             <IconButton
               active={markdownPreview}
-              title={`${markdownPreview ? "Hide" : "Show"} Preview (${modifierLabel()}+Shift+V)`}
+              title={`${markdownPreview ? "Hide" : "Show"} Preview (${PLATFORM.modifierLabel}+Shift+V)`}
               onClick={() => showMarkdownPreview(tabId, !markdownPreview)}
             >
               <EyeIcon />

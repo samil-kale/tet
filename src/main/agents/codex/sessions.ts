@@ -20,6 +20,7 @@ import { renameThread } from "./app-server-client";
 import { runCodex } from "./cli";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 import { mapLimited } from "../../map-limited";
+import { PLATFORM } from "../../host-platform";
 
 /** Codex's config root; tet never overrides it. */
 export function codexHome(): string {
@@ -225,7 +226,7 @@ async function safeReaddir(dir: string): Promise<string[]> {
 
 /** win32 paths are case-insensitive; Codex lower-cases them for its own `cwd` matching. */
 function samePath(a: string, b: string): boolean {
-  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+  return PLATFORM.ignoresCase ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 export const codexSessionProvider: SessionProvider = {

@@ -48,6 +48,7 @@ import { toContainerPath } from "./terminals/hook-target";
 import { isSimulatedMissing } from "./simulate";
 import { checkAgentInstalled, isAgentInstalled } from "./terminals/terminal-session";
 import { runProcess, stoppable } from "./run-process";
+import { PLATFORM } from "./host-platform";
 
 /**
  * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy
@@ -175,7 +176,7 @@ export function sbxVersionSupported(version: string): boolean {
  * Windows only, a no-op elsewhere. Best-effort.
  */
 async function suppressSbxFirstRunWizard(): Promise<void> {
-  if (process.platform !== "win32" || !process.env.LOCALAPPDATA) {
+  if (!PLATFORM.sbxFirstRunWizard || !process.env.LOCALAPPDATA) {
     return;
   }
   const markerFile = path.join(process.env.LOCALAPPDATA, "DockerSandboxes", "sandboxes", "config", "first-run-import.json");
@@ -346,7 +347,7 @@ async function readSbxBlockers(
 
 /** This machine's paths, as sbx-policy.ts compares them. */
 function hostFlavor(): PathFlavor {
-  return { platform: process.platform, home: os.homedir() };
+  return { platform: PLATFORM, home: os.homedir() };
 }
 
 /** sbx's filesystem rules, evaluated in tet (sbx-policy.ts): sbx has no `policy check` for them.

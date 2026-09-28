@@ -1,7 +1,7 @@
 import type { ProjectRef } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../terminal/editor-tab";
-import { absolutePath, revealLabel } from "../platform";
+import { absolutePath, PLATFORM } from "../platform";
 import { SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { isMarkdown } from "../diff/diff-highlight";
 
@@ -32,7 +32,7 @@ export function pathEntries(resolved: ResolvedRef, paths: string[], noun: string
   return [
     SEPARATOR,
     {
-      label: revealLabel(),
+      label: PLATFORM.revealLabel,
       run: paths.length === 1 ? () => void window.tet.shell.revealFile(resolved.ref, paths[0]) : undefined
     },
     {

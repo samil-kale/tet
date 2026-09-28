@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shellSingleQuote, writePosixScript } from "../script-text";
 import { writeIfChanged } from "../write-if-changed";
+import { PLATFORM } from "../host-platform";
 
 /**
  * The `tet-ctl` launcher, rewritten into the data folder at every start (install and `npm start`
@@ -13,7 +14,7 @@ export function writeLaunchers(dataRoot: string, cliPath: string): string {
   const binDir = path.join(dataRoot, "bin");
   fs.mkdirSync(binDir, { recursive: true });
   const posix = path.join(binDir, "tet-ctl");
-  if (process.platform === "win32") {
+  if (PLATFORM.cmdLauncher) {
     // .cmd, not .ps1: cmd.exe finds only .cmd on PATH. Known limit: cmd expands a `%` in either
     // path. `setlocal`, or an interactive cmd.exe keeps ELECTRON_RUN_AS_NODE for every electron
     // app started there later.

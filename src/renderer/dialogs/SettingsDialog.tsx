@@ -23,7 +23,7 @@ import { Checkbox, Field, FieldGroup } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
-import { isWindows } from "../platform";
+import { PLATFORM } from "../platform";
 import { atLeastOne, EditRow, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 
@@ -76,7 +76,7 @@ function envMarks(rows: EnvRow[]): Map<string, string> {
   for (const row of rows) {
     const edit = envEdit(row);
     if (edit) {
-      const refusal = envRowRefusal(edit, before, isWindows());
+      const refusal = envRowRefusal(edit, before, PLATFORM.ignoresCase);
       if (refusal) {
         marks.set(row.id, refusal);
       }

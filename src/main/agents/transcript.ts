@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as readline from "node:readline";
 import { isRecord } from "../json-file";
 import type { AgentSessionInfo } from "./agent";
+import { PLATFORM } from "../host-platform";
 
 /**
  * Shared reading of append-only JSONL transcripts from either end: the chunked read, title rules,
@@ -22,7 +23,7 @@ export const TRANSCRIPT_SCAN_BYTES = 256 * 1024;
  * path), so win32 matches case-insensitively. A missing root means no sessions, not a failure.
  */
 export async function findEncodedDir(root: string, encoded: string): Promise<string | undefined> {
-  const ignoreCase = process.platform === "win32";
+  const ignoreCase = PLATFORM.ignoresCase;
   const wanted = ignoreCase ? encoded.toLowerCase() : encoded;
   let entries: string[];
   try {

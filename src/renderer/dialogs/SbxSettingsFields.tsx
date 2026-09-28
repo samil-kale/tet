@@ -14,7 +14,7 @@ import type {
   SbxStoredLocal
 } from "../../shared/types";
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
-import { isWindows } from "../platform";
+import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
 import { atLeastOne, EditRow, patched, RowInput, RowMark, RowSection, SecretInput, typedRows, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
@@ -135,7 +135,7 @@ function variableRefusal(row: VariableRow, state: FieldsState): string | undefin
         named(row),
         state.variables.filter((other) => other.id !== row.id).map(named),
         state.secrets.map(named),
-        isWindows()
+        PLATFORM.ignoresCase
       );
 }
 

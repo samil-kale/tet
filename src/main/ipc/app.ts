@@ -4,6 +4,7 @@ import type { AppInfo, AppSettings, Requirements, SettingsEdits } from "../../sh
 import { anyAgentInstalled, checkRequirements } from "../requirements";
 import { augmentAgentPath } from "../terminals/agent-path";
 import type { IpcDeps } from "./deps";
+import { PLATFORM } from "../host-platform";
 
 /** The startup gate, the app's own facts, the settings, and what the agents are. */
 export function registerAppIpc({
@@ -40,7 +41,7 @@ export function registerAppIpc({
       electron: process.versions.electron,
       chromium: process.versions.chrome,
       node: process.versions.node,
-      os: `${process.platform} ${process.arch}`
+      os: `${PLATFORM.id} ${process.arch}`
     })
   );
 

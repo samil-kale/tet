@@ -10,7 +10,8 @@ import { after, before, describe, it } from "node:test";
 import * as semver from "semver";
 import { findControlPort } from "../src/main/control/control-server";
 import { CONTROL_ENV } from "../src/shared/control";
-import { assetName, rootExecutable } from "../src/shared/release";
+import { assetName, rootExecutable, rootIn } from "../src/shared/release";
+import { platformOf } from "../src/shared/platform";
 import type { UpdateResult } from "../src/shared/release";
 import { eventually, killApp, processAlive, tetCtl } from "./helpers";
 
@@ -28,7 +29,8 @@ const ENABLED = process.env.TET_INSTALL_TEST === "1";
 const ROOT = path.join(__dirname, "..");
 const STARTUP_MS = 120_000;
 const TOKEN = "install-test-token";
-const ASSET = assetName(process.platform, process.arch) as string;
+const PLATFORM = platformOf(process.platform);
+const ASSET = assetName(PLATFORM, process.arch) as string;
 
 let work: string;
 let home: string;
@@ -94,7 +96,7 @@ function startTet(): void {
     args.push("--no-sandbox");
   }
   const log = fs.openSync(path.join(work, "tet.log"), "a");
-  const child: ChildProcess = spawn(rootExecutable(installedRoot()), args, {
+  const child: ChildProcess = spawn(rootExecutable(installedRoot(), PLATFORM), args, {
     env: { ...env, ELECTRON_RUN_AS_NODE: undefined },
     detached: true,
     stdio: ["ignore", log, log]
@@ -114,7 +116,7 @@ function updateUnpacked(): boolean {
     return false;
   }
   return [staged, ...fs.readdirSync(staged).map((entry) => path.join(staged, entry))].some((candidate) =>
-    fs.existsSync(rootExecutable(process.platform === "darwin" ? path.join(candidate, "TET.app") : candidate))
+    fs.existsSync(rootExecutable(rootIn(candidate, PLATFORM), PLATFORM))
   );
 }
 
@@ -233,7 +235,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
 
   it("installs through the script and starts", async () => {
     await install();
-    assert.ok(fs.existsSync(rootExecutable(installedRoot())), "the executable in place");
+    assert.ok(fs.existsSync(rootExecutable(installedRoot(), PLATFORM)), "the executable in place");
     if (process.platform === "win32") {
       const startMenu = path.join(process.env.APPDATA ?? "", "Microsoft", "Windows", "Start Menu", "Programs", "TET.lnk");
       const link = spawnSync(
@@ -243,7 +245,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
       );
       const [target, args] = link.stdout.trim().split("|");
       // Real paths on both sides: a runner's temp directory can be an 8.3 short name.
-      assert.equal(fs.realpathSync.native(target), fs.realpathSync.native(rootExecutable(installedRoot())), "the Start menu entry, on TET.exe");
+      assert.equal(fs.realpathSync.native(target), fs.realpathSync.native(rootExecutable(installedRoot(), PLATFORM)), "the Start menu entry, on TET.exe");
       assert.equal(args, "", "the Start menu entry, without arguments");
       assert.ok(fs.existsSync(path.join(installedRoot(), "bin", "tet.cmd")), "the tet command");
     } else {

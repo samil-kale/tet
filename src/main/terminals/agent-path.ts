@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathKey } from "./pty";
+import { PLATFORM } from "../host-platform";
 
 /**
  * Puts the directories agents are installed in on `process.env.PATH`, at startup and on every
@@ -29,7 +30,7 @@ async function augment(): Promise<void> {
   const key = pathKey(process.env);
   const current = process.env[key] ?? "";
   let merged: string;
-  if (process.platform === "win32") {
+  if (PLATFORM.agentDirsKnown) {
     merged = mergePath(current, win32AgentDirs(process.env, npmGlobalPrefix(process.env)).filter(directoryExists), path.delimiter);
   } else {
     let shellPath: string[];

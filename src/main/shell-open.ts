@@ -1,4 +1,6 @@
 import * as path from "node:path";
+import { PLATFORM } from "./host-platform";
+import type { Platform } from "../shared/platform";
 
 /**
  * What a ctrl-click or "Open in external editor" may hand the OS (`shell:open-url`, `shell:open-file`,
@@ -27,10 +29,10 @@ export function isOpenableUrl(url: string): boolean {
   }
 }
 
-/** `mode` is the file's `fs.Stats.mode`; Windows has no executable bit worth reading. */
-export function isExecutableFile(filePath: string, mode: number, platform: NodeJS.Platform = process.platform): boolean {
+/** `mode` is the file's `fs.Stats.mode`, unread where a file runs by its extension. */
+export function isExecutableFile(filePath: string, mode: number, platform: Platform = PLATFORM): boolean {
   const extension = path.extname(filePath).toLowerCase();
-  if (platform === "win32") {
+  if (platform.executableByExtension) {
     return WINDOWS_EXECUTABLE_EXTENSIONS.includes(extension);
   }
   return (mode & 0o111) !== 0 || UNIX_EXECUTABLE_EXTENSIONS.includes(extension);

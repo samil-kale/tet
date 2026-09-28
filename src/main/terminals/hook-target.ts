@@ -1,16 +1,17 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { PLATFORM } from "../host-platform";
 
 /** Where a generated hook command will actually run — on this host, or inside an sbx sandbox. The
  *  command is the same on both; a sandboxed `tet-ctl` reaches the host through TET_CONTROL_HOST. */
 export interface HookTarget {
-  /** False only for a Windows host: a sandbox is always Linux, whatever `process.platform` says. */
+  /** The host's (Platform.posixShell), or true: a sandbox is always Linux. */
   posix: boolean;
   /** A host path exactly as this target's own shell will see it — identity outside a sandbox. */
   embed(hostPath: string): string;
 }
 
-export const HOST_TARGET: HookTarget = { posix: process.platform !== "win32", embed: (hostPath) => hostPath };
+export const HOST_TARGET: HookTarget = { posix: PLATFORM.posixShell, embed: (hostPath) => hostPath };
 
 export const SANDBOX_TARGET: HookTarget = { posix: true, embed: toContainerPath };
 
@@ -18,7 +19,7 @@ export const SANDBOX_TARGET: HookTarget = { posix: true, embed: toContainerPath 
  *  are unchanged. Spelled as on disk, not as asked: sbx mounts a folder under its on-disk name, and
  *  the sandbox is case-sensitive. */
 export function toContainerPath(hostPath: string): string {
-  if (process.platform !== "win32") {
+  if (!PLATFORM.driveLetters) {
     return hostPath;
   }
   const match = /^([A-Za-z]):[\\/](.*)$/.exec(onDiskCase(hostPath));

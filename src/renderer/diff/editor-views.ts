@@ -1,7 +1,7 @@
 import type { editor as MonacoEditor } from "monaco-editor";
 import { projectRefKey } from "../../shared/types";
 import type { ProjectRef, FileContent } from "../../shared/types";
-import { isMac } from "../platform";
+import { PLATFORM } from "../platform";
 import { confirmed, confirmedFollowUp } from "../ui/Dialog";
 import { layoutKey } from "../ui/layout-storage";
 import { notify } from "../ui/Notices";
@@ -892,7 +892,7 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
   const scope = `editorId == '${editor.getId()}'`;
   // Replace is the one monaco action tet doesn't offer, and monaco binds it itself: its key does
   // nothing here. Before the preset below, which may claim the same combo for something of its own.
-  const replaceCombo = parseKeyCombo(setup.monaco, isMac() ? "alt+ctrl+f" : "ctrl+h");
+  const replaceCombo = parseKeyCombo(setup.monaco, PLATFORM.replaceKey);
   if (replaceCombo !== undefined) {
     editor.addCommand(replaceCombo, () => {}, scope);
   }

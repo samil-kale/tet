@@ -11,7 +11,7 @@ import {
   NOT_MADE_BY_TET,
   worktreeEntry
 } from "../git/worktree-questions";
-import { revealLabel } from "../platform";
+import { PLATFORM } from "../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirmed, filled, prompt, singleField } from "../ui/Dialog";
 import { reorder, useDragReorder } from "./drag-reorder";
@@ -274,7 +274,7 @@ export const ProjectList = memo(function ProjectList({
     const sbx: ContextMenuEntry[] = worktree ? [] : [{ label: "SBX Settings", run: () => onSbxSettings(projectId) }, SEPARATOR];
     return [
       { label: "Open in terminal", run: () => onOpenTerminal(resolved.ref) },
-      { label: revealLabel(), run: () => void window.tet.shell.openProject(resolved.ref) },
+      { label: PLATFORM.revealLabel, run: () => void window.tet.shell.openProject(resolved.ref) },
       { label: worktree ? "Copy path" : "Copy repository path", run: () => void navigator.clipboard.writeText(resolved.path) },
       SEPARATOR,
       ...repository,

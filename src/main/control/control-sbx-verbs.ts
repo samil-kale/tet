@@ -23,6 +23,7 @@ import {
 import { sbxBlocked, sbxNotReady } from "../sbx-policy";
 import type { ControlDeps } from "./control-server";
 import { ControlError, list, text, type Answer, type Handler } from "./control-verb";
+import { PLATFORM } from "../host-platform";
 
 /**
  * The SBX Settings verbs: `sbx-get` and one `sbx-set-*` per field, each a Save as the dialog's
@@ -100,7 +101,7 @@ export function sbxVerbs(
    *  (sbxVariableRefusal), names compared as this machine does. */
   const refuseVariables = (variables: SbxVariable[], secrets: SbxSecret[]): void => {
     variables.forEach((variable, index) => {
-      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), secrets, process.platform === "win32");
+      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), secrets, PLATFORM.ignoresCase);
       if (refusal) {
         throw new ControlError("bad_args", `${refusal}: ${variable.env}`);
       }

@@ -1,3 +1,5 @@
+import { PLATFORM } from "./host-platform";
+
 /**
  * How the environment variables kept in tet (environment.ts) meet this machine's — apart from the
  * store, so the control server and pty.ts reach it without electron. What a name may be is
@@ -10,7 +12,7 @@ export const KEPT_ENV_NAME = "TET_KEPT_ENV";
 
 /** A variable's name as this machine compares it: win32 ignores case. */
 export function machineName(name: string): string {
-  return process.platform === "win32" ? name.toUpperCase() : name;
+  return PLATFORM.ignoresCase ? name.toUpperCase() : name;
 }
 
 /** Whether the environment tet was started with — what every tab would inherit — has the name. One

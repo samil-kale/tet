@@ -6,6 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
+import { LINUX, MAC, WINDOWS } from "../src/shared/platform";
 import { HOST_CALLER, SANDBOX_CALLER } from "../src/main/control/caller-side";
 import { writeLaunchers } from "../src/main/control/control-launcher";
 import { ControlRecords } from "../src/main/control/control-records";
@@ -489,14 +490,14 @@ describe("what a ctrl-click hands the OS", () => {
 
   it("counts a program by its extension on Windows, and by its executable bit elsewhere", () => {
     for (const name of ["setup.EXE", "run.bat", "run.cmd", "a.ps1", "a.vbs", "a.js", "a.msi", "a.lnk"]) {
-      assert.equal(isExecutableFile(path.join("dir", name), 0o644, "win32"), true, name);
+      assert.equal(isExecutableFile(path.join("dir", name), 0o644, WINDOWS), true, name);
     }
-    assert.equal(isExecutableFile("notes.txt", 0o755, "win32"), false, "Windows has no executable bit");
-    assert.equal(isExecutableFile("build", 0o755, "linux"), true);
-    assert.equal(isExecutableFile("build.sh", 0o644, "linux"), true);
-    assert.equal(isExecutableFile("app.desktop", 0o644, "linux"), true);
-    assert.equal(isExecutableFile("run.command", 0o644, "darwin"), true);
-    assert.equal(isExecutableFile("notes.txt", 0o644, "darwin"), false);
+    assert.equal(isExecutableFile("notes.txt", 0o755, WINDOWS), false, "Windows has no executable bit");
+    assert.equal(isExecutableFile("build", 0o755, LINUX), true);
+    assert.equal(isExecutableFile("build.sh", 0o644, LINUX), true);
+    assert.equal(isExecutableFile("app.desktop", 0o644, LINUX), true);
+    assert.equal(isExecutableFile("run.command", 0o644, MAC), true);
+    assert.equal(isExecutableFile("notes.txt", 0o644, MAC), false);
   });
 });
 

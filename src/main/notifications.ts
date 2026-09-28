@@ -4,6 +4,7 @@ import { projectRefKey, projectRef } from "../shared/types";
 import type { ProjectRef } from "../shared/types";
 import type { ToastTarget } from "./control/control-server";
 import { logError } from "./uncaught";
+import { PLATFORM } from "./host-platform";
 
 /** What the desktop toasts need of the app around them (main.ts owns all of it). */
 interface NotificationDeps {
@@ -86,7 +87,7 @@ export function awaitedToastTab(ref: ProjectRef): void {
  */
 export function startNotifications(started: NotificationDeps): void {
   deps = started;
-  if (process.platform !== "win32") {
+  if (!PLATFORM.windowsToasts) {
     return;
   }
   void app.whenReady().then(() => {
@@ -157,9 +158,9 @@ export function showDesktopNotification(title: string, body: string, target?: To
   }
   const id = crypto.randomUUID();
   const toast = new Notification(
-    process.platform === "win32" ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body }
+    PLATFORM.windowsToasts ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body }
   );
-  if (process.platform !== "win32") {
+  if (!PLATFORM.windowsToasts) {
     holdToast(toast);
     toast.on("click", () => {
       liveToasts.delete(toast);

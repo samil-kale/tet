@@ -49,6 +49,7 @@ import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";
 import { currentTheme } from "./theme";
+import { PLATFORM } from "./host-platform";
 
 /** Output arrives in small chunks; batch them rather than one IPC message each. */
 const OUTPUT_FLUSH_MS = 8;
@@ -178,7 +179,7 @@ try {
 const APP_USER_MODEL_ID = "com.samilkale.tet";
 const TOAST_ACTIVATOR_CLSID = "{8DA9BB54-C0A5-4BEC-AF76-BE3568344852}";
 const installed = app.isPackaged;
-if (process.platform === "win32") {
+if (PLATFORM.windowsToasts) {
   app.setAppUserModelId(installed ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
   if (installed) {
     app.setToastActivatorCLSID(TOAST_ACTIVATOR_CLSID);
@@ -194,7 +195,7 @@ app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
  * (terminal-views.ts). An explicit x11 wins; else any Wayland sign counts, as Electron picks it.
  */
 function isWaylandSession(): boolean {
-  if (process.platform !== "linux") {
+  if (!PLATFORM.checksGpu) {
     return false;
   }
   const ozonePlatform = app.commandLine.getSwitchValue("ozone-platform").toLowerCase();
@@ -488,7 +489,7 @@ function applyTheme(): boolean {
   if (theme.id !== shownTheme.id) {
     shownTheme = theme;
     window.setBackgroundColor(theme.windowBackground);
-    if (process.platform !== "darwin") {
+    if (PLATFORM.titleBarOverlay) {
       window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
     }
     send("app:theme", theme.id);  }
@@ -518,14 +519,14 @@ function createWindow(): void {
     show: false,
     // Windows takes the .ico (generated from icon.png): per-size frames stay sharp in the taskbar,
     // where a resampled image looks soft. Linux wants a plain image; macOS reads the app bundle.
-    icon: path.join(__dirname, process.platform === "win32" ? "icon.ico" : "icon.png"),
+    icon: path.join(__dirname, PLATFORM.windowIcon),
     // Our own title bar; the platform's window controls stay via the overlay.
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+    titleBarStyle: PLATFORM.titleBarOverlay ? "hidden" : "hiddenInset",
     titleBarOverlay:
       // Height must match the renderer's .titlebar rule, or controls and drag region disagree.
-      process.platform === "darwin"
-        ? undefined
-        : { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 },
+      PLATFORM.titleBarOverlay
+        ? { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 }
+        : undefined,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -677,7 +678,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+  if (PLATFORM.quitsWithLastWindow) {
     app.quit();
   }
 });

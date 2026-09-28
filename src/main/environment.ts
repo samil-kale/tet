@@ -5,6 +5,7 @@ import type { ProjectRef, EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
 import { isRecord, writeJson } from "./json-file";
+import { PLATFORM } from "./host-platform";
 
 /** What the file holds: the variable plus its value in the clear, as every tab gets it anyway. */
 interface StoredVar {
@@ -79,7 +80,7 @@ export class EnvStore {
    * anything, naming the first row it cannot take (envEditRefusal).
    */
   edit(rows: EnvEdit[]): void {
-    const refusal = envEditRefusal(rows, process.platform === "win32");
+    const refusal = envEditRefusal(rows, PLATFORM.ignoresCase);
     if (refusal) {
       throw new Error(refusal);
     }

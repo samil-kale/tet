@@ -7,6 +7,7 @@ import { CONTROL_ENV } from "../../shared/control";
 import { HOST_CALLER, type CallerSide } from "../control/caller-side";
 import { tabControlToken } from "../control/control-token";
 import { KEPT_ENV_NAME } from "../env-names";
+import { PLATFORM } from "../host-platform";
 
 export interface SpawnOptions {
   cwd: string;
@@ -124,7 +125,7 @@ function escapeCmdArgument(arg: string, shim: boolean): string {
 /** Where a command line goes, for every agent, shell and `sbx` spawn: on win32 a native executable directly, a shim or an
  *  unresolved name through cmd.exe; elsewhere unchanged. */
 export function resolveCommand(executable: string, args: string[]): ResolvedCommand {
-  if (process.platform === "win32") {
+  if (PLATFORM.spawnsThroughCmd) {
     const resolved = resolveWin32Executable(executable);
     if (resolved && !resolved.batch) {
       return { command: resolved.path, args };
@@ -141,7 +142,7 @@ export function resolveCommand(executable: string, args: string[]): ResolvedComm
 /** Kills a process `resolveCommand` started, with its children: on win32 `kill()` would end only the
  *  cmd.exe in front of a shim, while the program keeps running (and its pipes open). */
 export function killProcessTree(child: ChildProcess): void {
-  if (process.platform === "win32" && child.pid !== undefined) {
+  if (PLATFORM.killsWithTaskkill && child.pid !== undefined) {
     execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true }, () => undefined);
   } else {
     child.kill();
@@ -152,7 +153,7 @@ export function killProcessTree(child: ChildProcess): void {
  *  name in another case would be a second variable, and of the two the child sees the inherited one
  *  — so a replacement removes its name in any spelling. */
 function withoutNames(env: Record<string, string>, names: string[]): Record<string, string> {
-  if (process.platform === "win32") {
+  if (PLATFORM.ignoresCase) {
     const replaced = new Set(names.map((name) => name.toUpperCase()));
     for (const name of Object.keys(env).filter((key) => replaced.has(key.toUpperCase()))) {
       delete env[name];

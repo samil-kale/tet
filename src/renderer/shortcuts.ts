@@ -1,4 +1,4 @@
-import { isModifierHeld, modifierLabel } from "./platform";
+import { isModifierHeld, PLATFORM } from "./platform";
 
 /**
  * The window's shortcuts, all on combinations xterm never turns into bytes. See "The keyboard
@@ -68,7 +68,7 @@ export function shortcutLabel(id: ShortcutId): string {
   if (!def) {
     return "";
   }
-  const mod = modifierLabel();
+  const mod = PLATFORM.modifierLabel;
   return def.shift ? `${mod}+Shift+${def.label}` : `${mod}+${def.label}`;
 }
 

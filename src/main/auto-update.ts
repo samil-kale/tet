@@ -5,7 +5,8 @@ import { app } from "electron";
 import * as originalFs from "original-fs";
 import * as semver from "semver";
 import writeFileAtomic from "write-file-atomic";
-import { assetName, installCommand, installRoot, rootExecutable, runningUpdater, updateLockPath } from "../shared/release";
+import { assetName, installRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../shared/release";
+import { PLATFORM } from "./host-platform";
 import type { UpdateResult } from "../shared/release";
 import type { NoticeSeverity } from "../shared/types";
 import { readJson } from "./json-file";
@@ -64,7 +65,7 @@ function reportLastUpdate(notify: Notify): void {
     notify("info", `Updated to ${result.version}`);
   } else {
     console.error(`[tet] update to ${result.version} failed:\n${result.output}`);
-    notify("error", `Update to ${result.version} failed, update with: ${installCommand(process.platform)}`);
+    notify("error", `Update to ${result.version} failed, update with: ${PLATFORM.installCommand}`);
   }
 }
 
@@ -110,8 +111,7 @@ async function latestVersion(releasesUrl: string): Promise<string | undefined> {
 
 /** Also unpacks the zip: Windows' tar is bsdtar. */
 async function unpack(archive: string, into: string): Promise<void> {
-  const tar =
-    process.platform === "win32" ? path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
+  const tar = PLATFORM.tarExecutable(process.env);
   const result = await runProcess(tar, ["-xf", archive, "-C", into]);
   if (result.code !== 0) {
     throw result.error ?? new Error(`tar exited with ${result.code}: ${result.stderr}`);
@@ -122,8 +122,8 @@ async function unpack(archive: string, into: string): Promise<void> {
 function findRoot(dir: string): string | undefined {
   const candidates = [dir, ...fs.readdirSync(dir).map((entry) => path.join(dir, entry))];
   for (const candidate of candidates) {
-    const root = process.platform === "darwin" ? path.join(candidate, "TET.app") : candidate;
-    if (fs.existsSync(rootExecutable(root))) {
+    const root = rootIn(candidate, PLATFORM);
+    if (fs.existsSync(rootExecutable(root, PLATFORM))) {
       return root;
     }
   }
@@ -154,7 +154,7 @@ async function stage(releasesUrl: string, asset: string, version: string): Promi
   }
   const root = findRoot(dir);
   if (!root) {
-    throw new Error(`no ${path.basename(rootExecutable("."))} in ${asset}`);
+    throw new Error(`no ${path.basename(rootExecutable(".", PLATFORM))} in ${asset}`);
   }
   return root;
 }
@@ -169,11 +169,11 @@ async function stage(releasesUrl: string, asset: string, version: string): Promi
  */
 export function startAutoUpdate(installed: boolean, releasesUrl: string, tetDataRoot: string, notify: Notify): void {
   dataRoot = tetDataRoot;
-  const asset = assetName(process.platform, process.arch);
+  const asset = assetName(PLATFORM, process.arch);
   if (!installed || !asset) {
     return;
   }
-  const root = installRoot(process.execPath);
+  const root = installRoot(process.execPath, PLATFORM);
   const writable = isWritable(root) && isWritable(path.dirname(root));
   let announced: string | undefined;
   let checking = false;
@@ -191,7 +191,7 @@ export function startAutoUpdate(installed: boolean, releasesUrl: string, tetData
       }
       if (!writable) {
         announced = latest;
-        notify("info", `Update ${latest} available, update with: ${installCommand(process.platform)}`);
+        notify("info", `Update ${latest} available, update with: ${PLATFORM.installCommand}`);
         return;
       }
       try {
@@ -226,10 +226,10 @@ export function installPendingUpdate(): void {
   }
   console.error(`[tet] quit: starting the update to ${pending.version}`);
   try {
-    const resources = process.platform === "darwin" ? path.join(pending.root, "Contents", "Resources") : path.join(pending.root, "resources");
+    const resources = resourcesDir(pending.root, PLATFORM);
     const script = path.join(resources, "app.asar.unpacked", "dist", "tet-update.js");
-    const args = [script, String(process.pid), pending.version, pending.root, installRoot(process.execPath), resultPath()];
-    const child = spawn(rootExecutable(pending.root), args, {
+    const args = [script, String(process.pid), pending.version, pending.root, installRoot(process.execPath, PLATFORM), resultPath()];
+    const child = spawn(rootExecutable(pending.root, PLATFORM), args, {
       cwd: updateDir(),
       detached: true,
       stdio: "ignore",
