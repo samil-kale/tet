@@ -227,8 +227,8 @@ export interface SbxKnowledgeEntry {
   target: string;
 }
 
-/** An agent installed on this machine, and what the Knowledge tab's rows mount for it (sbx.ts's
- *  readKnowledgeSources). */
+/** An agent installed on this machine, and what the Knowledge tab's rows mount for it
+ *  (sbx-mounts.ts's readKnowledgeSources). */
 export interface SbxKnowledgeSource {
   agentId: AgentId;
   displayName: string;
@@ -296,7 +296,8 @@ export interface SbxLocalSave extends Record<SbxValueKind, SbxLocalEdits> {
 /** Every kind off, each agent's own skills: no knowledge stored for a project. */
 export const EMPTY_SBX_KNOWLEDGE: SbxKnowledgeConfig = { skills: false, plugins: false, instructions: false };
 
-/** A rule sbx's policy must allow before tet can sandbox a project (sbx.ts's readSbxBlockers). */
+/** A rule sbx's policy must allow before tet can sandbox a project (sbx-status.ts's
+ *  readSbxBlockers). */
 export interface SbxBlocker {
   /** What it is for, a word or two. */
   what: string;
@@ -304,13 +305,13 @@ export interface SbxBlocker {
   allow: string;
 }
 
-/** Checked before the sbx dialog shows its fields (sbx.ts's readSbxStatus). Each field means
+/** Checked before the sbx dialog shows its fields (sbx-status.ts's readSbxStatus). Each field means
  *  something only when the one above is true. */
 export interface SbxStatus {
   installed: boolean;
   loggedIn: boolean;
   /** sbx's own error when it failed for a reason other than being signed out (a hung daemon), or
-   *  that it is older than tet drives (sbx.ts's sbxVersionSupported), with `loggedIn` false;
+   *  that it is older than tet drives (sbx-cli.ts's sbxVersionSupported), with `loggedIn` false;
    *  signing in would not help. Or, signed in, that its policy could not be read (readSbxStatus). */
   failure?: string;
   policyInitialized: boolean;

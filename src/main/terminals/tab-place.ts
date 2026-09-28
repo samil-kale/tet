@@ -5,7 +5,9 @@ import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId, NoticeSeverity, SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types";
 import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir } from "../project-dirs";
 import type { ResolvedRef } from "../resolved-ref";
-import { type checkSbxReady, mountDropped, prepareSbxRun, sandboxName, type SbxSessionMount } from "../sbx";
+import { prepareSbxRun, sandboxName } from "../sbx";
+import { mountDropped, type SbxSessionMount } from "../sbx-mounts";
+import type { checkSbxReady } from "../sbx-status";
 import { toContainerPath } from "./hook-target";
 import { HOST_CALLER, SANDBOX_CALLER, type CallerSide } from "../control/caller-side";
 
@@ -25,8 +27,8 @@ export interface HandoffFiles {
 
 /** What a start hands its place. */
 export interface LaunchInput {
-  /** The agent's arguments after its setup's: resume, a saved command's and the first prompt, the
-   *  prompt naming a handoff's files as `files` gives them. */
+  /** The agent's arguments after its setup's: resume and the first prompt, the prompt naming a
+   *  handoff's files as `files` gives them. */
   agentArgs(files: string[] | undefined): string[];
   handoff?: HandoffFiles;
   /** Setup output, forwarded live to the tab. */

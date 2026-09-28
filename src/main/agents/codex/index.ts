@@ -55,7 +55,7 @@ export const codexAgent: SandboxedAgent = {
     // mid-shutdown, where ConPTY turns it into a CTRL_C_EVENT that kills the shutdown.
     quitPresses: 1
   },
-  // `--ephemeral` writes no rollout, so no cleanup.
+  // `--ephemeral` writes no rollout, so no session is left behind.
   ask: { args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"] },
   sessions: codexSessionProvider,
   // See AgentTurns.questionOutlivesTurn.

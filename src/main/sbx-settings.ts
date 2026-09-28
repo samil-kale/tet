@@ -14,11 +14,14 @@ import type {
 } from "../shared/types";
 import { getAgent, SANDBOXED_AGENTS } from "./agents";
 import { logFailure } from "./json-file";
-import { inTurn, listSandboxes, readGovernance, readSbxProblems, saveSbxConfig, type SandboxList, type SbxReading, type SbxSaveTarget } from "./sbx";
+import { readSbxProblems } from "./sbx";
+import { inTurn } from "./sbx-mounts";
+import { saveSbxConfig, type SbxSaveTarget } from "./sbx-save";
+import { listSandboxes, readGovernance, type SandboxList, type SbxReading } from "./sbx-status";
 import type { SbxLocalStore } from "./sbx-local";
 
 /** What the caller read of sbx already: its status's organization, and with tet-ctl's reading the
- *  sandboxes and rules read on the way (sbx.ts's readSbxReading). Read now what it lacks. */
+ *  sandboxes and rules read on the way (sbx-status.ts's readSbxReading). Read now what it lacks. */
 type Known = Omit<SbxReading, "status"> & { status: Pick<SbxStatus, "organization"> };
 
 /** The env names holding a value, per list. */

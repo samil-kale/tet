@@ -11,7 +11,6 @@ import {
   scanTranscriptHead,
   scanTranscriptTail,
   timestampOf,
-  TRANSCRIPT_SCAN_BYTES,
   truncateTitle,
   type ScannedTail
 } from "../transcript";
@@ -384,7 +383,6 @@ const scanCache = new Map<string, { size: number; tail: TranscriptTail }>();
  *  turns cut short, an interrupt entry (isInterruptEntry); sidechain entries are subagent turns. */
 function scanTail(filePath: string, sessionId: string): Promise<ScannedTail<TranscriptTail>> {
   return scanTranscriptTail(filePath, scanCache, {
-    byteLimit: TRANSCRIPT_SCAN_BYTES,
     label: "claude",
     create: (): TranscriptTail => ({}),
     read: (lines, tail) => {

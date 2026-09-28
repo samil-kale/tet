@@ -1,0 +1,192 @@
+import type { ChildProcess } from "node:child_process";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import writeFileAtomic from "write-file-atomic";
+import { SBX_PROBLEM } from "../shared/sbx-rules";
+import { isSimulatedMissing } from "./simulate";
+import { checkAgentInstalled } from "./terminals/terminal-session";
+import { runProcess, stoppable } from "./run-process";
+import { PLATFORM } from "./host-platform";
+
+/**
+ * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy
+ * init` run here (`RunOptions.cancellable`): a spawn's `sbx ls` or `create` must survive Cancel.
+ */
+const setup = stoppable();
+
+interface RunOptions {
+  /** Written to stdin, then closed. Without it stdin is closed from the start, so a command waiting
+   *  on it fails. */
+  stdin?: string;
+  /** Whether `cancelSbxSetup` may kill this one. */
+  cancellable?: boolean;
+  /** Killed after this long, answering as failed. */
+  timeoutMs?: number;
+  /**
+   * Forwards stdout and stderr live, in arrival order, to the tab about to run in the sandbox (its
+   * `onOutput` channel), `\n` as `\r\n`: xterm has no `convertEol`.
+   */
+  onData?: (chunk: string) => void;
+}
+
+export type OnData = RunOptions["onData"];
+
+export interface RunResult {
+  /** Exited 0. */
+  ok: boolean;
+  stdout: string;
+  /** sbx's own errors and those of a command it ran. */
+  stderr: string;
+}
+
+/** What sbx said on failing: its last line, `ERROR: …` without the prefix — progress lines
+ *  ("Starting sandboxd daemon...") precede it. Empty when it said nothing. */
+export function sbxError(result: RunResult): string {
+  return result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "") ?? "";
+}
+
+/** Why sbx refused, as a problem's reason (SbxProblems): what it said, else that it refused. */
+export function sbxRefusal(result: RunResult): string {
+  return sbxError(result) || SBX_PROBLEM.refused;
+}
+
+/** Every `sbx` invocation: a plain spawn through `resolveCommand` (runProcess), no shell, from the
+ *  temp directory so the working directory never reads as a workspace. */
+export async function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
+  const run = (onSpawn?: (child: ChildProcess) => void) =>
+    runProcess("sbx", args, {
+      cwd: os.tmpdir(),
+      stdin: options.stdin,
+      timeoutMs: options.timeoutMs,
+      onData: options.onData && ((chunk) => options.onData?.(chunk.replace(/\n/g, "\r\n"))),
+      onSpawn
+    });
+  const result = options.cancellable ? await setup.run(run) : await run();
+  return { ok: result.code === 0, stdout: result.stdout, stderr: result.stderr };
+}
+
+/** A `--json` run's stdout parsed: undefined when sbx failed or printed no JSON, so a reader
+ *  answers "sbx cannot say" rather than an empty list. The shape is the caller's claim, read
+ *  defensively at its site. */
+export function jsonOf<T>(result: RunResult): T | undefined {
+  if (!result.ok) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(result.stdout) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/** One `sbx … --json` read (jsonOf). */
+export async function sbxJson<T>(args: string[]): Promise<T | undefined> {
+  return jsonOf<T>(await runSbx(args));
+}
+
+/** For the dialog's Cancel. */
+export function cancelSbxSetup(): void {
+  setup.stop();
+}
+
+/** The sbx version test/agents.test.ts last passed against (TET_SBX_TEST=1); read by nothing in the
+ *  app. */
+export const SBX_VERIFIED_VERSION = "0.45.1";
+
+/** `version` is a subcommand; `sbx --version` fails with "unknown flag". */
+export function isSbxInstalled(): Promise<boolean> {
+  return checkAgentInstalled("sbx", ["version"], os.tmpdir());
+}
+
+/**
+ * `sbx version`'s answer as its bare version; undefined when sbx is not installed (probeSbx's sign
+ * of it), "" when it printed no version.
+ */
+export async function readSbxVersion(): Promise<string | undefined> {
+  if (isSimulatedMissing("sbx")) {
+    return undefined;
+  }
+  const result = await runSbx(["version"]);
+  return result.ok ? (/\d+\.\d+\.\d+/.exec(result.stdout)?.[0] ?? "") : undefined;
+}
+
+/** Whether that version keeps a sandbox's live mounts across a stop and lists them in
+ *  `sbx inspect` (mountAll). */
+export function sbxVersionSupported(version: string): boolean {
+  const [major = 0, minor = 0] = version.split(".").map((part) => parseInt(part, 10) || 0);
+  return major > 0 || minor >= 45;
+}
+
+/**
+ * sbx shows a one-time wizard on a machine's first interactive `sbx run` (a tet tab is one). Any
+ * valid JSON at `%LOCALAPPDATA%\DockerSandboxes\sandboxes\config\first-run-import.json` suppresses
+ * it; an existing file is kept. Loses the wizard's MCP-server import (`sbx mcp add` by hand).
+ * Only where sbx shows the wizard (Platform.sbxFirstRunWizard), a no-op elsewhere. Best-effort.
+ */
+export async function suppressSbxFirstRunWizard(): Promise<void> {
+  if (!PLATFORM.sbxFirstRunWizard || !process.env.LOCALAPPDATA) {
+    return;
+  }
+  const markerFile = path.join(process.env.LOCALAPPDATA, "DockerSandboxes", "sandboxes", "config", "first-run-import.json");
+  try {
+    await fs.access(markerFile);
+    return;
+  } catch {
+    // Not there yet.
+  }
+  try {
+    await fs.mkdir(path.dirname(markerFile), { recursive: true });
+    await writeFileAtomic(markerFile, "{}");
+  } catch {
+    // Worst case the wizard shows once.
+  }
+}
+
+/** `sbx login` opens the browser and waits on its own callback; no console needed. */
+export async function runSbxLogin(): Promise<boolean> {
+  return (await runSbx(["login"], { cancellable: true })).ok;
+}
+
+/** The user `sbx login` names while signed in ("You are signed in [username: <name>]" on stdout,
+ *  exit 0, no browser). */
+export function parseSignedInUser(stdout: string): string | undefined {
+  return /\[username: ([^\]]+)\]/.exec(stdout)?.[1].trim() || undefined;
+}
+
+/** Generous for a signed-in answer (parseSignedInUser). */
+const SBX_USER_TIMEOUT_MS = 10_000;
+
+/** Who is signed in, which nothing but `sbx login` tells (parseSignedInUser) — asked only once the
+ *  status said signed in, since signed out it opens the browser and waits: signed out in between,
+ *  it is killed after SBX_USER_TIMEOUT_MS and the user is unknown. `cancellable` only for the
+ *  dialog: `cancelSbxSetup` kills one child, never a control request's. */
+export async function readSbxUser(cancellable: boolean): Promise<string | undefined> {
+  return parseSignedInUser((await runSbx(["login"], { cancellable, timeoutMs: SBX_USER_TIMEOUT_MS })).stdout);
+}
+
+/**
+ * `sbx login` with a Docker access token on stdin; what sbx said on refusing, else undefined. sbx
+ * reads no token from the environment. Signed in already, it switches: another account's login
+ * keeps running sandboxes running and listed, a refused one keeps the sign-in there was;
+ * governance follows the account at once.
+ */
+export async function runSbxTokenLogin(user: string, token: string, cancellable: boolean): Promise<string | undefined> {
+  const result = await runSbx(["login", "--username", user, "--password-stdin"], { stdin: token, cancellable });
+  return result.ok ? undefined : sbxError(result) || "sbx login failed";
+}
+
+/** `sbx logout` stops every running local sandbox; `--yes` skips its "Proceed y/N?", which a closed
+ *  stdin would cancel. */
+export async function runSbxLogout(): Promise<string | undefined> {
+  const result = await runSbx(["logout", "--yes"]);
+  return result.ok ? undefined : sbxError(result) || "sbx logout failed";
+}
+
+/**
+ * The machine-wide network policy "balanced", Docker's recommended default — no per-project choice:
+ * changing it needs `sbx policy reset`, which stops every running sandbox.
+ */
+export async function initSbxPolicy(): Promise<boolean> {
+  return (await runSbx(["policy", "init", "balanced"], { cancellable: true })).ok;
+}

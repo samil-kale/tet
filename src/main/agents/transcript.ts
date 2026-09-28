@@ -146,11 +146,10 @@ export function requireTitle(title: string): string {
  */
 export async function readHeadLines(
   filePath: string,
-  byteLimit: number,
   label: string,
   onLine: (line: string) => boolean
 ): Promise<boolean> {
-  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: byteLimit });
+  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: TRANSCRIPT_SCAN_BYTES });
   const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
   try {
     for await (const line of lines) {
@@ -194,7 +193,7 @@ export async function scanTranscriptHead<T>(
     return cached.head;
   }
   const head = scan.create();
-  const read = await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, scan.label, (line) => scan.read(line, head));
+  const read = await readHeadLines(filePath, scan.label, (line) => scan.read(line, head));
   if (read) {
     cache.set(filePath, { size, head });
   }
@@ -243,8 +242,6 @@ async function readLinesBackwards(
 
 /** The per-agent, format-specific half of a cached tail scan; `scanTranscriptTail` handles the file. */
 interface TailScan<T> {
-  /** Bytes per chunk, and how far below an earlier scan the next one restarts. */
-  byteLimit: number;
   /** Names the agent in a failed scan's log. */
   label: string;
   create: () => T;
@@ -286,8 +283,8 @@ export async function scanTranscriptTail<T>(
     const tail = scan.create();
     try {
       const previous = cached && cached.size < size ? cached : undefined;
-      const floor = previous ? Math.max(0, previous.size - scan.byteLimit) : 0;
-      await readLinesBackwards(handle, size, floor, scan.byteLimit, (lines) => scan.read(lines, tail));
+      const floor = previous ? Math.max(0, previous.size - TRANSCRIPT_SCAN_BYTES) : 0;
+      await readLinesBackwards(handle, size, floor, TRANSCRIPT_SCAN_BYTES, (lines) => scan.read(lines, tail));
       scan.finish?.(tail);
       if (previous) {
         scan.merge(tail, previous.tail);

@@ -22,7 +22,8 @@ import type { ResolvedRef } from "../resolved-ref";
 import { HostSetups } from "./host-setup";
 import { dropsDir } from "../project-dirs";
 import { readSbxConfig } from "../tet-json";
-import { checkSbxReady, ensureRunning } from "../sbx";
+import { ensureRunning } from "../sbx-mounts";
+import { checkSbxReady } from "../sbx-status";
 import type { SbxLocalStore } from "../sbx-local";
 import type { SettingsStore } from "../settings";
 import { isAgentInstalled, TerminalSession } from "./terminal-session";
@@ -30,15 +31,11 @@ import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";
 import type { CallerSide } from "../control/caller-side";
 import type { HandoffFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
 import { reportApplies } from "./turn-order";
+import { ReconcileScheduler } from "./reconcile-scheduler";
+import { StartIndicators } from "./start-indicators";
 import { currentTheme } from "../theme";
 import { effectivePrompt } from "../../shared/prompts";
 
-const RECONCILE_DEBOUNCE_MS = 5000;
-// A CLI can persist a generated title well after its output went idle.
-const RECONCILE_RETRY_MS = 5000;
-const RECONCILE_MAX_RETRIES = 3;
-// Caps how far a continuously redrawing CLI pushes the debounce while session or title is unknown.
-const RECONCILE_MAX_WAIT_MS = 10000;
 // A watcher event is the change itself; only the few events per write need collapsing.
 const WATCH_DEBOUNCE_MS = 300;
 // Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
@@ -124,11 +121,8 @@ interface AgentRuntime {
   /** Resolves once the version check, the host setup (HostSetups) and initial listing are done. */
   ready: Promise<void>;
   stopWatching?: () => void;
-  reconciling?: Promise<void>;
-  reconcileTimer?: ReturnType<typeof setTimeout>;
-  reconcileRetriesLeft: number;
-  /** The latest the debounced reconcile may be pushed to; unset once it fires. */
-  reconcileDeadline?: number;
+  /** Only for an agent with sessions: no other has any to re-list. */
+  reconciler?: ReconcileScheduler;
 }
 
 export interface SessionManagerCallbacks {
@@ -205,7 +199,7 @@ function answersQuestion(data: string): boolean {
   return /\S/.test(data);
 }
 
-/** `starting` comes from the caller's `tabIndicators`. */
+/** `starting` comes from the caller's `indicators`. */
 function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
   const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } = tab;
   return {
@@ -280,13 +274,10 @@ export class TabSessionManager {
   private disposed = false;
   /** Said once per project — see resolvePlace's own-session-id fallback. */
   private sbxPreexistingSaid = false;
-  /** How many things are still starting; the bar stays up while any is. */
-  private indicators = 0;
-  /**
-   * Those per tab (`TerminalDescriptor.starting`). A count: a tab's setup and first frame overlap,
-   * and a release for a closed tab must balance its acquire (`closeTabs` can put a tab back).
-   */
-  private readonly tabIndicators = new Map<string, number>();
+  private readonly indicators = new StartIndicators(
+    (show) => this.callbacks.onStartupProgress(this.at.ref, show),
+    () => this.postTabs()
+  );
   /** The tabs in front of the user, as last reported (`setInFront`). */
   private inFront: ReadonlySet<string> = new Set();
 
@@ -302,13 +293,13 @@ export class TabSessionManager {
   ) {}
 
   snapshot(): TerminalDescriptor[] {
-    return this.tabs.map((tab) => toDescriptor(tab, this.tabIndicators.has(tab.tabId)));
+    return this.tabs.map((tab) => toDescriptor(tab, this.indicators.has(tab.tabId)));
   }
 
   /** `snapshot` plus what the window never gets, for `tet-ctl tabs-list`. */
   inspect(): InspectedTab[] {
     return this.tabs.map((tab) => ({
-      ...toDescriptor(tab, this.tabIndicators.has(tab.tabId)),
+      ...toDescriptor(tab, this.indicators.has(tab.tabId)),
       reportedSessionId: tab.reportedSessionId,
       sandbox: tab.sandbox,
       sandboxOnly: tab.sandboxOnly
@@ -355,55 +346,17 @@ export class TabSessionManager {
 
   /** What onStartupProgress last said — a bootstrap at app start runs before the window exists. */
   isStarting(): boolean {
-    return this.indicators > 0;
-  }
-
-  /**
-   * With `tabId` that tab's pane shows the bar; without (bootstrap) it falls to pane "a". Every
-   * acquire needs one release with the same `tabId`.
-   */
-  private acquireIndicator(tabId?: string): void {
-    this.indicators += 1;
-    if (this.indicators === 1) {
-      this.callbacks.onStartupProgress(this.at.ref, true);
-    }
-    if (tabId !== undefined) {
-      const count = this.tabIndicators.get(tabId) ?? 0;
-      this.tabIndicators.set(tabId, count + 1);
-      if (count === 0) {
-        this.postTabs();
-      }
-    }
-  }
-
-  private releaseIndicator(tabId?: string): void {
-    // `dispose` already zeroed the counts.
-    if (this.disposed) {
-      return;
-    }
-    this.indicators -= 1;
-    if (this.indicators === 0) {
-      this.callbacks.onStartupProgress(this.at.ref, false);
-    }
-    if (tabId !== undefined) {
-      const count = this.tabIndicators.get(tabId) ?? 0;
-      if (count <= 1) {
-        this.tabIndicators.delete(tabId);
-        this.postTabs();
-      } else {
-        this.tabIndicators.set(tabId, count - 1);
-      }
-    }
+    return this.indicators.any();
   }
 
   /** Restores one tab per persisted session of every installed agent. */
   async bootstrap(): Promise<void> {
-    this.acquireIndicator();
+    this.indicators.acquire();
     try {
       await Promise.all(AGENTS.map((agent) => this.runtimeFor(agent.id).ready));
       this.openFirstAgentTab();
     } finally {
-      this.releaseIndicator();
+      this.indicators.release();
     }
   }
 
@@ -438,9 +391,15 @@ export class TabSessionManager {
       sbxOnly: false,
       host: new HostPlace(context, () => this.hostSetups.preparation(agentId)),
       ...(hasSandbox(agent) && { sandbox: new SandboxPlace({ ...context, agent }) }),
-      ready: Promise.resolve(),
-      reconcileRetriesLeft: 0
+      ready: Promise.resolve()
     };
+    if (agent.sessions) {
+      runtime.reconciler = new ReconcileScheduler({
+        reconcile: () => this.reconcile(runtime),
+        titlesUnsettled: () => this.titlesUnsettled(runtime),
+        disposed: () => this.disposed
+      });
+    }
     this.runtimes.set(agentId, runtime);
     runtime.ready = this.prepareRuntime(runtime);
     return runtime;
@@ -489,14 +448,19 @@ export class TabSessionManager {
       // Not here, but the project's sandbox has the CLI. Only the config is read — checkSbxReady
       // talks to Docker and stays on the spawn (resolvePlace).
       if (!runtime.startable && runtime.sandbox && (await readSbxConfig(cwd)).enabled) {
-        runtime.startable = true;
-        runtime.sbxOnly = true;
+        this.markSbxOnly(runtime);
       }
     }
     if (!runtime.startable || !agent.sessions) {
       return;
     }
     await this.bringUp(runtime);
+  }
+
+  /** No host executable, but the repository's or worktree's sandbox stands in. */
+  private markSbxOnly(runtime: AgentRuntime): void {
+    runtime.startable = true;
+    runtime.sbxOnly = true;
   }
 
   /** A startable agent's setup, its existing sessions as tabs, and the watch keeping them current. */
@@ -514,7 +478,7 @@ export class TabSessionManager {
       return;
     }
     // Runs again for an agent startable later (sbxConfigChanged): skip sessions already on screen,
-    // reported but unclaimed, or still being deleted (as in doReconcile). A tab's id too: a restored
+    // reported but unclaimed, or still being deleted (as in reconcile). A tab's id too: a restored
     // tab keeps its session's id after moving on to another (`/clear`), and ids must stay unique.
     const known = new Set([
       ...this.tabs.flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]),
@@ -561,8 +525,7 @@ export class TabSessionManager {
     const brought: Promise<void>[] = [];
     for (const runtime of candidates) {
       if (enabled && !runtime.startable) {
-        runtime.startable = true;
-        runtime.sbxOnly = true;
+        this.markSbxOnly(runtime);
         // So a tab awaiting `ready` joins this instead of starting on an unprepared runtime.
         runtime.ready = this.bringUp(runtime);
         brought.push(runtime.ready);
@@ -584,8 +547,7 @@ export class TabSessionManager {
     const startable = new Set(candidates.filter((runtime) => this.canStart(runtime)).map((runtime) => runtime.agent.id));
     for (const tab of this.tabs.filter((candidate) => candidate.status === "missing" && startable.has(candidate.agentId))) {
       this.sessions.delete(tab.tabId);
-      tab.status = "ready";
-      this.callbacks.onStatus(this.at.ref, tab.tabId, "ready");
+      this.setTabStatus(tab, "ready");
       if (this.lastSizes.has(tab.tabId)) {
         this.startTab(tab);
       }
@@ -598,7 +560,7 @@ export class TabSessionManager {
     if (runtime.stopWatching) {
       return;
     }
-    runtime.stopWatching = runtime.host.watchSessions(() => this.scheduleReconcile(runtime, WATCH_DEBOUNCE_MS));
+    runtime.stopWatching = runtime.host.watchSessions(() => runtime.reconciler?.schedule(WATCH_DEBOUNCE_MS));
   }
 
   /** Whether the repository or worktree still has this tab: main drops output it batched for one
@@ -744,22 +706,19 @@ export class TabSessionManager {
     }
     this.starting.add(tabId);
     // Released after `startSession` acquires the next one, or the bar flickers.
-    this.acquireIndicator(tabId);
+    this.indicators.acquire(tabId);
     const runtime = this.runtimeFor(tab.agentId);
     // A reported, unclaimed session (a fresh tab restarted right after its first prompt) is claimed
     // first so the start resumes it; otherwise the new process's report would replace it for good.
     // Before resolvePlace, which reads the `sandbox` the claim sets.
-    const claimed = awaitsClaim(tab) ? runtime.ready.then(() => this.reconcile(runtime)) : Promise.resolve();
+    const claimed = awaitsClaim(tab) ? runtime.ready.then(() => runtime.reconciler?.run()) : Promise.resolve();
     void claimed
       .then(() => Promise.all([runtime.ready, this.resolvePlace(tab)]))
       .then(async ([, place]) => {
         // Left in `error` so Restart retries: a `ready` tab gets no second fit for an unchanged
         // size (`sent` in terminal-views.ts). resolvePlace has said why.
         if (place === "stranded") {
-          if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
-            tab.status = "error";
-            this.callbacks.onStatus(this.at.ref, tabId, "error");
-          }
+          this.failStart(tab);
           return;
         }
         const launch = await place.launch(this.launchInput(tab));
@@ -776,16 +735,26 @@ export class TabSessionManager {
       .catch((error: unknown) => {
         this.callbacks.onNotice("error", `${runtime.agent.displayName} could not be started: ${errorMessage(error)}`);
         // Spawned nothing; `error` offers Restart, as above.
-        if (this.tabs.includes(tab) && !this.sessions.has(tabId)) {
-          tab.status = "error";
-          this.callbacks.onStatus(this.at.ref, tabId, "error");
-        }
+        this.failStart(tab);
       })
       .finally(() => {
         // A leftover entry would make every later resize return as "still starting".
         this.starting.delete(tabId);
-        this.releaseIndicator(tabId);
+        this.indicators.release(tabId);
       });
+  }
+
+  /** A start that spawned nothing leaves its tab in `error`, unless it was closed or started anew
+   *  meanwhile. */
+  private failStart(tab: TabState): void {
+    if (this.tabs.includes(tab) && !this.sessions.has(tab.tabId)) {
+      this.setTabStatus(tab, "error");
+    }
+  }
+
+  private setTabStatus(tab: TabState, status: TerminalStatus): void {
+    tab.status = status;
+    this.callbacks.onStatus(this.at.ref, tab.tabId, status);
   }
 
   /**
@@ -876,7 +845,7 @@ export class TabSessionManager {
   private launchInput(tab: TabState): LaunchInput {
     const { agent } = this.runtimeFor(tab.agentId);
     return {
-      agentArgs: (files) => [...resumeArgsOf(tab, agent), ...(tab.runArgs ?? []), ...this.promptArgs(tab, agent, files)],
+      agentArgs: (files) => [...resumeArgsOf(tab, agent), ...this.promptArgs(tab, agent, files)],
       handoff: tab.handoff,
       onData: (data) => this.reportOutput(tab, data)
     };
@@ -929,7 +898,7 @@ export class TabSessionManager {
     // Fresh per session, counting from zero.
     let isSessionReady = agent.terminal?.createIsSessionReady();
     if (isSessionReady) {
-      this.acquireIndicator(tabId);
+      this.indicators.acquire(tabId);
     }
     const hideIndicator = (): void => {
       if (!isSessionReady) {
@@ -937,7 +906,7 @@ export class TabSessionManager {
       }
       // Cleared before the delay, so a second call can't queue a second release.
       isSessionReady = undefined;
-      setTimeout(() => this.releaseIndicator(tabId), INDICATOR_LINGER_MS);
+      setTimeout(() => this.indicators.release(tabId), INDICATOR_LINGER_MS);
     };
 
     // Given once: a restart resumes the session the prompt began.
@@ -969,18 +938,17 @@ export class TabSessionManager {
             hideIndicator();
           }
           // A CLI persists or updates its session shortly after producing output.
-          this.scheduleReconcile(runtime);
+          runtime.reconciler?.schedule();
         },
         onStatusChange: (status) => {
           // A process whose exit came after `stop()` gave up waiting may have been replaced by a
           // restart: its status is no longer the tab's. The indicator and reconcile are still its.
           const current = this.sessions.get(tabId) === session;
           if (current) {
-            tab.status = status;
-            this.callbacks.onStatus(this.at.ref, tabId, status);
+            this.setTabStatus(tab, status);
           }
           if (status === "stopped" || status === "error" || status === "missing") {
-            this.scheduleReconcile(runtime);
+            runtime.reconciler?.schedule();
             // A CLI killed mid-turn never reports its end.
             if (current && (tab.busy || tab.waitingAt !== undefined)) {
               tab.busy = false;
@@ -1094,8 +1062,8 @@ export class TabSessionManager {
       }
       if (detached && awaitsClaim(tab)) {
         // A reconcile underway listed before the session was named; then run one that sees it.
-        await runtime.reconciling;
-        await this.reconcile(runtime);
+        await runtime.reconciler?.inFlight;
+        await runtime.reconciler?.run();
       }
     } finally {
       if (detached) {
@@ -1225,17 +1193,27 @@ export class TabSessionManager {
    * (`setInFront`).
    */
   hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined, side: CallerSide): HookOutcome {
-    const bound = this.tabOf(tabId) ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
-    // The agent's own contract for what its hook prints (AgentTurns.hookReply).
-    const stdout = (bound && getAgent(bound.agentId).turns?.hookReply?.(event, side)) ?? "";
-    return { ...this.applyHook(tabId, event, payload, reportedAt), stdout };
-  }
-
-  /** hookEvent's state change and toast. */
-  private applyHook(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined): Omit<HookOutcome, "stdout"> {
-    const tab = this.disposed ? undefined : this.tabOf(tabId);
+    const listed = this.tabOf(tabId);
+    // Closed: the hook still gets its reply, but changes nothing.
+    const tab = this.disposed ? undefined : listed;
     // A tab closed right after its first prompt still needs its session named, to delete it.
     const bound = tab ?? this.detachedTabs.find((candidate) => candidate.tabId === tabId);
+    const replying = listed ?? bound;
+    // The agent's own contract for what its hook prints (AgentTurns.hookReply).
+    const stdout = (replying && getAgent(replying.agentId).turns?.hookReply?.(event, side)) ?? "";
+    return { ...this.applyHook(tabId, tab, bound, event, payload, reportedAt), stdout };
+  }
+
+  /** hookEvent's state change and toast: `tab` is marked, `bound` (it, or a detached one) named its
+   *  session. */
+  private applyHook(
+    tabId: string,
+    tab: TabState | undefined,
+    bound: TabState | undefined,
+    event: HookEvent,
+    payload: string,
+    reportedAt: number | undefined
+  ): Omit<HookOutcome, "stdout"> {
     const sessionId = bound ? getAgent(bound.agentId).turns?.sessionIdOf(payload) : undefined;
     this.record({ tabId, kind: "hook", event, reportedAt, sessionId });
     // When the hook *fired*, not arrived: two hooks of a turn race, and arrival order leaves a tab
@@ -1315,7 +1293,7 @@ export class TabSessionManager {
     tab.reportedSessionId = reported;
     this.reportWaiters.get(tab.tabId)?.();
     if (awaitsClaim(tab)) {
-      this.scheduleReconcile(this.runtimeFor(tab.agentId));
+      this.runtimeFor(tab.agentId).reconciler?.schedule();
     }
   }
 
@@ -1365,46 +1343,10 @@ export class TabSessionManager {
     this.inFront = new Set(tabIds);
   }
 
-  private scheduleReconcile(runtime: AgentRuntime, delayMs = RECONCILE_DEBOUNCE_MS): void {
-    // Runs on every output chunk.
-    if (!runtime.agent.sessions) {
-      return;
-    }
-    // Only an unsettled label caps the debounce and retries (a title persisted late); otherwise
-    // listings stay out of a turn.
-    const unsettled = this.titlesUnsettled(runtime);
-    runtime.reconcileRetriesLeft = unsettled ? RECONCILE_MAX_RETRIES : 0;
-    if (unsettled && runtime.reconcileDeadline === undefined) {
-      runtime.reconcileDeadline = Date.now() + RECONCILE_MAX_WAIT_MS;
-    }
-    this.armReconcileTimer(runtime, delayMs);
-  }
-
   /** Whether a tab of the agent still waits for its session or title. Not `tabsOf`, which
    *  allocates per output chunk. */
   private titlesUnsettled(runtime: AgentRuntime): boolean {
     return this.tabs.some((tab) => tab.agentId === runtime.agent.id && titleUnsettled(tab));
-  }
-
-  private armReconcileTimer(runtime: AgentRuntime, delayMs: number): void {
-    // The retry re-arms after every run; a reconcile in flight at close must not re-arm.
-    if (this.disposed) {
-      return;
-    }
-    clearTimeout(runtime.reconcileTimer);
-    const cappedDelay =
-      runtime.reconcileDeadline === undefined
-        ? delayMs
-        : Math.min(delayMs, Math.max(0, runtime.reconcileDeadline - Date.now()));
-    runtime.reconcileTimer = setTimeout(() => {
-      runtime.reconcileDeadline = undefined;
-      void this.reconcile(runtime).then(() => {
-        if (runtime.reconcileRetriesLeft > 0 && this.titlesUnsettled(runtime)) {
-          runtime.reconcileRetriesLeft -= 1;
-          this.armReconcileTimer(runtime, RECONCILE_RETRY_MS);
-        }
-      });
-    }, cappedDelay);
   }
 
   private tabOf(tabId: string): TabState | undefined {
@@ -1415,16 +1357,9 @@ export class TabSessionManager {
     return this.tabs.filter((tab) => tab.agentId === runtime.agent.id);
   }
 
-  /** Re-lists one agent's sessions to claim reported sessions and refresh known tabs. */
-  private reconcile(runtime: AgentRuntime): Promise<void> {
-    // Serialized: a call while one is in flight joins it.
-    runtime.reconciling ??= this.doReconcile(runtime).finally(() => {
-      runtime.reconciling = undefined;
-    });
-    return runtime.reconciling;
-  }
-
-  private async doReconcile(runtime: AgentRuntime): Promise<void> {
+  /** Re-lists one agent's sessions to claim reported sessions and refresh known tabs; run through
+   *  its ReconcileScheduler only. */
+  private async reconcile(runtime: AgentRuntime): Promise<void> {
     const { agent } = runtime;
     if (this.disposed || !agent.sessions || !this.canStart(runtime)) {
       return;
@@ -1487,16 +1422,15 @@ export class TabSessionManager {
   }
 
   async dispose(): Promise<void> {
-    // See armReconcileTimer.
+    // See ReconcileTarget.disposed.
     this.disposed = true;
     // A start still underway spawns only if its tab is still known.
     this.tabs = [];
     this.starting.clear();
     this.lastSizes.clear();
-    this.tabIndicators.clear();
-    this.indicators = 0;
+    this.indicators.dispose();
     for (const runtime of this.runtimes.values()) {
-      clearTimeout(runtime.reconcileTimer);
+      runtime.reconciler?.dispose();
       runtime.stopWatching?.();
       runtime.stopWatching = undefined;
     }

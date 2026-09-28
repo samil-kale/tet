@@ -9,7 +9,7 @@ import { CONTROL_ENV, CONTROL_HOST } from "../../../shared/control";
  * handlers, and a mark must not hold up the TUI. The payload carries the session id, which binds
  * the tab to its session (`hookSessionId`).
  */
-export function renderHookReport(agentName: string): string {
+export function renderHookReport(): string {
   return `// The names only: the port and token behind them are new on every start of tet, and baking
 // them in would change this file on every start.
 const CONTROL = ${JSON.stringify(CONTROL_ENV)};
@@ -48,7 +48,7 @@ function report(event: string, sessionId: string | undefined): void {
     request.on("error", () => undefined);
     request.end(body);
   } catch {
-    // Nothing to tell ${agentName} about; a missed report is a tab that has to be looked at.
+    // Nothing to tell the agent about; a missed report is a tab that has to be looked at.
   }
 }`;
 }

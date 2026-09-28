@@ -84,15 +84,6 @@ export function openFile(ref: ProjectRef, filePath: string, markdownPreview = fa
   });
 }
 
-/** Drops every key starting with `prefix` — a gone tab's or project's view key. */
-function deletePrefixed(cache: { keys(): Iterable<string>; delete(key: string): unknown }, prefix: string): void {
-  for (const key of [...cache.keys()]) {
-    if (key.startsWith(prefix)) {
-      cache.delete(key);
-    }
-  }
-}
-
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -534,8 +525,11 @@ export function disposeRefTerminals(ref: ProjectRef): void {
   // A repository's or worktree's key holds no space: no other key starts with it plus the separator
   // (shared/types.ts's projectRefKey).
   const prefix = viewKey(ref, "");
-  deletePrefixed(earlyOutput, prefix);
-
+  for (const key of [...earlyOutput.keys()]) {
+    if (key.startsWith(prefix)) {
+      earlyOutput.delete(key);
+    }
+  }
   for (const [key, view] of [...views]) {
     if (key.startsWith(prefix)) {
       dropView(key, view);

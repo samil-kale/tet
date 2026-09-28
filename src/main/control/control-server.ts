@@ -31,7 +31,7 @@ import type {
   TerminalDescriptor
 } from "../../shared/types";
 import type { AgentDefinition } from "../agents/agent";
-import type { SbxReading } from "../sbx";
+import type { SbxReading } from "../sbx-status";
 import { CALLER_SIDES, HOST_CALLER, type CallerSide } from "./caller-side";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { machineName } from "../env-names";
@@ -103,7 +103,7 @@ export interface ControlDeps {
   envRequests: Pick<EnvRequests, "ask">;
   /** The SBX Settings dialog's reads and Save (ipc/sbx.ts, sbx-settings.ts). */
   sbx: {
-    /** sbx.ts's readSbxReading: the status, and what the verb's problems and Save reuse of it. */
+    /** sbx-status.ts's readSbxReading: the status, and what the verb's problems and Save reuse of it. */
     status(project: Project): Promise<SbxReading>;
     /** Whether an agent runs on this machine at all: without one, sandboxing cannot be switched off. */
     anyAgentInstalled(): Promise<boolean>;
@@ -120,9 +120,10 @@ export interface ControlDeps {
     save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, reading?: SbxReading): Promise<SbxSaveResult>;
     /** The access tokens kept for every project (sbx-accounts.ts), never a token. */
     accounts(): SbxAccount[];
-    /** sbx.ts's readSbxSignedIn: one `sbx ls`, not the whole status — the question is the machine's. */
+    /** sbx-status.ts's readSbxSignedIn: one `sbx ls`, not the whole status — the question is the
+     *  machine's. */
     signedIn(): Promise<boolean>;
-    /** sbx.ts's readSbxUser: only once signedIn said so. */
+    /** sbx-cli.ts's readSbxUser: only once signedIn said so. */
     signedInUser(): Promise<string | undefined>;
     /** sbx-accounts.ts's signInToSbx with the token kept for that account. */
     signIn(account: SbxAccount): Promise<SbxSignInResult>;

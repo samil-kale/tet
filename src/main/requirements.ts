@@ -4,7 +4,7 @@ import type { AgentDefinition, AgentInstall } from "./agents/agent";
 import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
-import { isSbxInstalled } from "./sbx";
+import { isSbxInstalled } from "./sbx-cli";
 import { isSimulatedMissing } from "./simulate";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { checkAgentInstalled } from "./terminals/terminal-session";

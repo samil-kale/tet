@@ -138,9 +138,8 @@ Everything TET generates for an agent lives under `~/.tet` (the data model above
 at from outside, each side — host and sandbox — handed only its own folder, pasted or dropped
 content without a path included (`drops/`).
 `host.prepare` and `sandbox.prepare` are the only places an agent writes configuration;
-beyond them it touches only its own sessions: when the user renames or deletes one, the one a
-background question leaves (`ask.cleanup`), and every one of a worktree it deleted, once its folder
-is gone (`removeAllSessions`).
+beyond them it touches only its own sessions: when the user renames or deletes one, and every one
+of a worktree it deleted, once its folder is gone (`removeAllSessions`).
 
 - Claude Code: a generated `--settings` file; never `~/.claude/settings.json`.
 - Codex: `-c key=value` for that one process; never `~/.codex/config.toml` or `hooks.json`.
@@ -352,8 +351,8 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 
 ## sbx: agent tabs in a Docker sandbox
 
-Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx.ts` drives
-the `sbx` CLI.
+Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx.ts` and the
+`sbx-*.ts` beside it drive the `sbx` CLI.
 
 - **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): decided at each start
   (`resolvePlace`), until then by where its session lives; each agent's runtime holds a `host` one,

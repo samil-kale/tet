@@ -139,7 +139,7 @@ const lines = [
   "//",
   "// Seti (github.com/jesseweed/seti-ui): MIT.",
   "",
-  `export type FileMarkColor = ${[...new Set(Object.values(PALETTE))].map((color) => JSON.stringify(color)).join(" | ")};`,
+  `type FileMarkColor = ${[...new Set(Object.values(PALETTE))].map((color) => JSON.stringify(color)).join(" | ")};`,
   "",
   "/** A glyph of seti.woff, and its color if Seti gives it one. */",
   "export type FileMark = readonly [glyph: string, color?: FileMarkColor];",

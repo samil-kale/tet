@@ -25,7 +25,7 @@ import { onDisk, relativeInside } from "./path-inside";
  * copy here.
  *
  * Never anything a sandbox must not see (settings, tokens, sbx values): an organization governing
- * sbx allows the whole folder with one rule (sbx.ts's readSbxBlockers).
+ * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers).
  */
 export function projectsDir(dataRoot: string): string {
   return path.join(dataRoot, "projects");

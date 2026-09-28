@@ -33,7 +33,8 @@ import {
   syncWorktrees,
   type ProjectDeps
 } from "./projects";
-import { configureSandboxes, readSbxReading, readSbxSignedIn, readSbxUser } from "./sbx";
+import { readSbxUser } from "./sbx-cli";
+import { configureSandboxes, readSbxReading, readSbxSignedIn } from "./sbx-status";
 import { SbxAccountStore, signInToSbx } from "./sbx-accounts";
 import { SbxLocalStore } from "./sbx-local";
 import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";

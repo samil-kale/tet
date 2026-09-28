@@ -146,13 +146,9 @@ export interface AgentTerminal {
 
 /** One question without a terminal, answered on stdout (`askAgent`). */
 export interface AgentAsk {
-  /** The question arrives on stdin, so these only name the mode. */
+  /** The question arrives on stdin, so these only name the mode — one that leaves no session
+   *  behind: a background question must not come back as a tab. */
   args: string[];
-  /**
-   * Removes what `args` left behind, for an agent that persists a session either way — a
-   * background question must not come back as a tab.
-   */
-  cleanup?(executable: string, cwd: string): Promise<void>;
 }
 
 /** How the agent's hook reports (`tet-ctl hook <event>`) are read. */
@@ -206,16 +202,16 @@ export interface AgentSandbox {
   env?: string[];
   /**
    * The agent's shareable knowledge on the host, per `SbxKnowledgeKind` — never its config
-   * directory (sbx.ts's fixedMountSpecs). Targets under `SANDBOX_HOME`; a chosen skills folder
-   * goes at the `skills` targets. sbx.ts drops paths that do not exist, and all of it while the
-   * agent is not installed on this host.
+   * directory (sbx-mounts.ts's fixedMountSpecs). Targets under `SANDBOX_HOME`; a chosen skills
+   * folder goes at the `skills` targets. sbx-mounts.ts drops paths that do not exist, and all of it
+   * while the agent is not installed on this host.
    */
   knowledge(): Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
   /**
    * Absolute container path where the sandboxed CLI reads `~/.agents/skills`, the skills folder no
    * agent owns: mounted whether or not the agent is installed here, unless one of its own skills
-   * folders already takes that target (sbx.ts's sandboxKnowledgeFor). Omitted by an agent that
-   * does not read that folder — tet never stands it in for one the CLI does read.
+   * folders already takes that target (sbx-mounts.ts's sandboxKnowledgeFor). Omitted by an agent
+   * that does not read that folder — tet never stands it in for one the CLI does read.
    */
   sharedSkillsTarget?: string;
   /**

@@ -67,7 +67,7 @@ const BLANK_SECRET = { env: "", hosts: "", value: "" };
 const BLANK_VARIABLE = { env: "", value: "" };
 
 /** `sbx:get-config`'s and `sbx:stored`'s answers as rows. Only the user's paths: tet's directories
- *  and each agent's session directory are always mounted (sbx.ts's fixedMountSpecs,
+ *  and each agent's session directory are always mounted (sbx-mounts.ts's fixedMountSpecs,
  *  sessionMountSpecs), not shown. */
 export function fromConfig(config: SbxProjectConfig, stored: SbxStoredLocal): FieldsState {
   return {

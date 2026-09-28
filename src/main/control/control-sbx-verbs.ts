@@ -21,7 +21,7 @@ import {
 } from "../../shared/sbx-rules";
 import { sbxBlocked, sbxNotReady } from "../sbx-policy";
 import type { ControlDeps } from "./control-server";
-import type { SbxReading } from "../sbx";
+import type { SbxReading } from "../sbx-status";
 import { ControlError, list, text, type Answer, type Handler } from "./control-verb";
 import { PLATFORM } from "../host-platform";
 

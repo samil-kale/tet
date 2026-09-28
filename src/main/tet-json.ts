@@ -403,7 +403,7 @@ function toSbxPorts(value: unknown): SbxPort[] {
   );
 }
 
-/** Trimmed as sbx trims them itself, so a row equals the rule sbx lists for it (sbx.ts's
+/** Trimmed as sbx trims them itself, so a row equals the rule sbx lists for it (sbx-save.ts's
  *  readSandboxHosts). */
 function toSbxHosts(value: unknown): string[] {
   if (!Array.isArray(value)) {

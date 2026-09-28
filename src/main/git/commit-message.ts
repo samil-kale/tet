@@ -39,7 +39,7 @@ export async function suggestCommitMessage(
   );
 }
 
-/** For the commit prompt's Cancel. The caller's `ask.cleanup` still runs. */
+/** For the commit prompt's Cancel. */
 export function cancelCommitSuggestion(): void {
   suggestion.stop();
 }

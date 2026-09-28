@@ -18,7 +18,7 @@ export const CONTROL_ENV = {
   worktree: "TET_WORKTREE",
   tabId: "TET_TAB_ID",
   /** Only sbx sessions set it ("host.docker.internal" — the sandbox has its own loopback); unset
-   *  means CONTROL_HOST. Also needs the policy allow in sbx.ts's isControlChannelAllowed. */
+   *  means CONTROL_HOST. Also needs the policy allow in sbx-status.ts's isControlChannelAllowed. */
   host: "TET_CONTROL_HOST"
 } as const;
 

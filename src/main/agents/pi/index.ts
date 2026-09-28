@@ -51,8 +51,8 @@ export const piAgent: SandboxedAgent = {
     // meets.
     quitPresses: 2
   },
-  // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript, so
-  // no cleanup.
+  // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript
+  // behind.
   ask: { args: ["-p", "--no-session"] },
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
@@ -79,7 +79,7 @@ export const piAgent: SandboxedAgent = {
       try {
         const extension = writePiExtension(paths.agentDir);
         // Written at the host path, read at the sandbox's: the sandbox's agentDir is mounted whole
-        // (sbx.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
+        // (sbx-mounts.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
         // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the
         // safety boundary, as for Claude Code, and the pi kit does not set it.
         return { args: ["-e", SANDBOX_TARGET.embed(extension), ...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)] };

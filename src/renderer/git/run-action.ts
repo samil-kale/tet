@@ -43,7 +43,7 @@ type GitRunner = (action: () => Promise<GitActionResult>) => Promise<GitActionRe
  * again with it, through `offBar`, on the question's own bar. `ask` goes through `offBar` for the
  * same reason, handing the refusal back to its question.
  */
-export function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
+function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
   return {
     run: (label, action) =>
       void onBar(() => action()).then(async (result) => {

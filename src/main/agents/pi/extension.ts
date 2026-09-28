@@ -34,7 +34,7 @@ export function renderPiExtension(): string {
 // tet's control channel (src/shared/control.ts).
 import * as http from "node:http";
 
-${renderHookReport("pi")}
+${renderHookReport()}
 
 // The session a handler runs for: the transcript header's id, which ctx.sessionManager hands
 // every handler.

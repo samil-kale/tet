@@ -59,7 +59,7 @@ export interface Platform {
   /** Toasts go through Windows' activator (an AppUserModelID, toast XML), clicked even after TET
    *  quit; elsewhere Electron's own notification, held while it shows. */
   readonly windowsToasts: boolean;
-  /** Docker Sandboxes shows a first-run wizard to suppress (sbx.ts). */
+  /** Docker Sandboxes shows a first-run wizard to suppress (sbx-cli.ts). */
   readonly sbxFirstRunWizard: boolean;
   /** The GPU may be Wayland's or software: WebGL is checked before use (terminal-views.ts). */
   readonly checksGpu: boolean;

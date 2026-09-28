@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { errorMessage } from "../shared/errors";
 import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../shared/types";
 import { isRecord, readJson, writeJson } from "./json-file";
-import { readSbxUser, runSbxTokenLogin } from "./sbx";
+import { readSbxUser, runSbxTokenLogin } from "./sbx-cli";
 import { seal, unseal } from "./sealed";
 
 /** What the file holds: the account plus its token, encrypted by the OS and base64-wrapped. */
@@ -18,7 +18,7 @@ function toAccount(entry: StoredSbxAccount): SbxAccount {
 /**
  * The Docker access tokens of the SBX Settings' General tab, one list for every project — sbx has
  * one sign-in per machine. A token leaves this class only decrypted into `sbx login`'s stdin
- * (sbx.ts's runSbxTokenLogin); the renderer never sees one.
+ * (sbx-cli.ts's runSbxTokenLogin); the renderer never sees one.
  */
 export class SbxAccountStore {
   private readonly file: string;
@@ -96,7 +96,7 @@ export class SbxAccountStore {
  * `sbx login` with `typed`, or the token kept for `accountId` when nothing was typed; the account is
  * kept (or its token replaced) once sbx took it, under the name sbx then gives — an email or another
  * case typed is the same account, and its row is marked signed in by that name. The dialog's
- * sign-in (`cancellable`, sbx.ts's readSbxUser) and `tet-ctl sbx-sign-in`.
+ * sign-in (`cancellable`, sbx-cli.ts's readSbxUser) and `tet-ctl sbx-sign-in`.
  */
 export async function signInToSbx(
   store: SbxAccountStore,

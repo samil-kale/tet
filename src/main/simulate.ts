@@ -1,7 +1,7 @@
 /**
  * `npm start -- --simulate=git,claude`: commands reported missing regardless, to reach the
  * requirements dialog on a full machine. `sbx-mode` is every command but git and sbx — a machine
- * that runs its agents in sbx alone, where no agent's own knowledge exists either (sbx.ts's
+ * that runs its agents in sbx alone, where no agent's own knowledge exists either (sbx-mounts.ts's
  * sandboxKnowledgeFor).
  */
 const SIMULATED = (process.argv.find((arg) => arg.startsWith("--simulate=")) ?? "")

@@ -118,8 +118,6 @@ export function registerRepositoryIpc({
       return message.length === 0 ? { error: "The agent did not suggest a commit message" } : { value: message };
     } catch (error) {
       return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
-    } finally {
-      await ask.cleanup?.(executable, cwd).catch(() => undefined);
     }
   });
   ipcMain.on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());

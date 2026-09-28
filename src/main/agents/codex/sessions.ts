@@ -12,7 +12,6 @@ import {
   scanTranscriptHead,
   scanTranscriptTail,
   timestampOf,
-  TRANSCRIPT_SCAN_BYTES,
   truncateTitle,
   type ScannedTail
 } from "../transcript";
@@ -65,7 +64,7 @@ async function readSessionMeta(filePath: string): Promise<SessionMeta | undefine
 
 async function parseSessionMeta(filePath: string): Promise<SessionMeta | undefined> {
   let meta: SessionMeta | undefined;
-  await readHeadLines(filePath, TRANSCRIPT_SCAN_BYTES, "codex", (line) => {
+  await readHeadLines(filePath, "codex", (line) => {
     const entry = parseLine(line);
     const payload = entry?.type === "session_meta" ? (entry.payload as Record<string, unknown> | undefined) : undefined;
     const sessionId = nonEmptyString(payload?.session_id);
@@ -162,7 +161,6 @@ function extractUserPrompt(entry: Record<string, unknown>): string | undefined {
 
 function scanTail(filePath: string): Promise<ScannedTail<TailInfo>> {
   return scanTranscriptTail(filePath, tailCache, {
-    byteLimit: TRANSCRIPT_SCAN_BYTES,
     label: "codex",
     create: (): TailInfo => ({}),
     read: (lines, tail) => {

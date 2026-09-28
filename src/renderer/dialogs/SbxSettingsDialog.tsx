@@ -73,9 +73,9 @@ function tabBlocked(id: SbxSettingsTab, signedIn: boolean, enabled: boolean): st
  * The one dialog for sbx setup and configuration. On mount it checks: installed, then loads the
  * saved config and the access tokens, then signed in — if not, General waits for a sign-in, with a
  * token or the browser, the other tabs disabled — then the machine-wide network policy, set to
- * "balanced" if needed (sbx.ts's initSbxPolicy); each step shows in the `busy` bar. Installs
+ * "balanced" if needed (sbx-cli.ts's initSbxPolicy); each step shows in the `busy` bar. Installs
  * nothing: no command works on all three platforms. A policy not allowing what a sandboxed tab
- * needs (sbx.ts's readSbxBlockers) gets a wall instead of the fields — under an organization's
+ * needs (sbx-status.ts's readSbxBlockers) gets a wall instead of the fields — under an organization's
  * governance only the organization can change that — with the account under it, as another
  * account may be allowed.
  *

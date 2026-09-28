@@ -27,20 +27,11 @@ import { stripAnsi } from "../src/shared/ansi";
 import { shellSingleQuote } from "../src/main/script-text";
 import { ProjectStore } from "../src/main/projects";
 import { readSbxConfig, writeSbxConfig } from "../src/main/tet-json";
-import {
-  contractHome,
-  fixedMountSpecs,
-  parsePublishedPorts,
-  parseSignedInUser,
-  pathMountSpecs,
-  readHostAllowed,
-  readSbxProblems,
-  sandboxEnv,
-  sandboxName,
-  saveSbxConfig,
-  sbxVersionSupported,
-  secretPlaceholder
-} from "../src/main/sbx";
+import { parsePublishedPorts, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../src/main/sbx";
+import { parseSignedInUser, sbxVersionSupported } from "../src/main/sbx-cli";
+import { fixedMountSpecs, pathMountSpecs } from "../src/main/sbx-mounts";
+import { saveSbxConfig } from "../src/main/sbx-save";
+import { contractHome, readHostAllowed } from "../src/main/sbx-status";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
 import { SbxAccountStore } from "../src/main/sbx-accounts";
 import { SbxLocalStore } from "../src/main/sbx-local";
@@ -392,7 +383,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   const others = (answers.others ?? []).map((other) => ({ workspaces: answers.workspaces, ...other }));
   process.stdout.write(JSON.stringify({ sandboxes: [{ name: answers.name, workspaces: answers.workspaces }, ...others] }));
 } else if (args[0] === "policy" && args[1] === "check") {
-  // \`policy check network --json <host>\`: exit 1 with "allowed": false on a denial (sbx.ts).
+  // \`policy check network --json <host>\`: exit 1 with "allowed": false on a denial (sbx-status.ts).
   const allowed = (answers.allowedHosts ?? []).includes(args[4]);
   process.stdout.write(JSON.stringify({ allowed }));
   process.exit(allowed ? 0 : 1);

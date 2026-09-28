@@ -9,7 +9,8 @@ import { after, before, describe, it } from "node:test";
 import { SANDBOXED_AGENTS } from "../src/main/agents";
 import type { AgentDefinition, AgentSessionInfo } from "../src/main/agents/agent";
 import { askAgent } from "../src/main/agents/ask";
-import { ensureRunning, pathMountSpecs, SBX_VERIFIED_VERSION } from "../src/main/sbx";
+import { SBX_VERIFIED_VERSION } from "../src/main/sbx-cli";
+import { ensureRunning, pathMountSpecs } from "../src/main/sbx-mounts";
 import { parseFilesystemRules } from "../src/main/sbx-policy";
 import { toContainerPath } from "../src/main/terminals/hook-target";
 import { resolveCommand } from "../src/main/terminals/pty";
@@ -311,7 +312,6 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
         const known = (await listSessions(agent)).map((session) => session.id);
         const reply = await askAgent(AGENT_REPO, agent.executable(), agent.ask.args, "Reply with only the word pong.");
         assert.match(reply, /pong/i);
-        await agent.ask.cleanup?.(agent.executable(), AGENT_REPO);
         const left = (await listSessions(agent)).filter((session) => !known.includes(session.id));
         assert.deepEqual(left, [], "no session left for a tab");
       });
