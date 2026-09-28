@@ -56,8 +56,14 @@ export function watchTranscriptDir(
       // Gone again since the lookup, or no descriptor left: output schedules the listing instead.
       return;
     }
+    // Made while only the root was watched: its first transcript may be written already, which no
+    // event of the new watcher reports.
+    const appeared = rootWatcher !== undefined;
     rootWatcher?.close();
     rootWatcher = undefined;
+    if (appeared) {
+      onChange();
+    }
   };
 
   const armRootWatcher = (): void => {

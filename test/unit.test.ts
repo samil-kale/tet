@@ -20,6 +20,7 @@ import { SettingsStore } from "../src/main/settings";
 import { isExecutableFile, isOpenableUrl } from "../src/main/shell-open";
 import { buildEnv, setControlEnv, setStoredEnv } from "../src/main/terminals/pty";
 import { HostSetups } from "../src/main/terminals/host-setup";
+import { ReconcileScheduler } from "../src/main/terminals/reconcile-scheduler";
 import { TabSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
@@ -597,5 +598,51 @@ describe("an update's download, continued after it was cut short", () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe("when an agent's sessions are listed again", () => {
+  /** A scheduler whose listings are counted, on the test's mocked clock. */
+  const scheduler = (unsettled = false): { schedule: (delayMs?: number) => void; runs: () => number } => {
+    let runs = 0;
+    const reconciler = new ReconcileScheduler({
+      reconcile: async () => {
+        runs++;
+      },
+      titlesUnsettled: () => unsettled,
+      disposed: () => false
+    });
+    return { schedule: (delayMs) => reconciler.schedule(delayMs), runs: () => runs };
+  };
+
+  it("keeps a watcher's early listing when output arrives before it is due", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { schedule, runs } = scheduler();
+    schedule(300);
+    schedule();
+    t.mock.timers.tick(300);
+    assert.equal(runs(), 1, "output did not push the watcher's listing back to its own debounce");
+  });
+
+  it("debounces a burst of output into one listing once it goes quiet", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { schedule, runs } = scheduler();
+    schedule();
+    t.mock.timers.tick(4000);
+    schedule();
+    t.mock.timers.tick(4000);
+    assert.equal(runs(), 0, "still within the debounce of the last chunk");
+    t.mock.timers.tick(1000);
+    assert.equal(runs(), 1);
+  });
+
+  it("lists by the cap however long the output keeps coming while a title is unknown", (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+    const { schedule, runs } = scheduler(true);
+    for (let elapsed = 0; elapsed < 10_000; elapsed += 1000) {
+      schedule();
+      t.mock.timers.tick(1000);
+    }
+    assert.equal(runs(), 1);
   });
 });

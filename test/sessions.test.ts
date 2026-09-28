@@ -7,7 +7,8 @@ import { PLATFORM } from "../src/main/host-platform";
 import { claudeSandboxSessions, claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSandboxSessions, codexSessionProvider } from "../src/main/agents/codex/sessions";
 import { encodeCwd, piSandboxSessions, piSessionProvider } from "../src/main/agents/pi/sessions";
-import { tempDir } from "./helpers";
+import { watchTranscriptDir } from "../src/main/watch-dir";
+import { eventually, tempDir } from "./helpers";
 
 /**
  * The session providers against transcripts written the way the CLIs write them. A regression in the title rules or turn forensics shows a
@@ -478,5 +479,52 @@ describe("sessions written inside a sandbox", () => {
       assert.deepEqual(await sandbox.list(), []);
       assert.deepEqual(await sandbox.files("s1"), []);
     }
+  });
+});
+
+describe("the watch on an agent's transcripts", () => {
+  it("reports the directory made while only its root was watched, a transcript already in it", async () => {
+    const root = tempDir("tet-watch-");
+    const dir = path.join(root, "project");
+    let changes = 0;
+    const watch = watchTranscriptDir(
+      () => root,
+      async () => (fs.existsSync(dir) ? dir : undefined),
+      () => false,
+      () => changes++
+    );
+    try {
+      await eventually("the root watched", () => watch.watching());
+      // Written as the agent does it: the directory with its first transcript, at once.
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, "s1.jsonl"), line({ type: "user" }));
+      await eventually("a change reported once the directory is watched", () => changes > 0);
+    } finally {
+      watch.stop();
+    }
+  });
+
+  it("says it watches nothing where the agent never ran, and once stopped", async () => {
+    const root = tempDir("tet-watch-");
+    const missing = watchTranscriptDir(
+      () => path.join(root, "absent"),
+      async () => undefined,
+      () => true,
+      () => undefined
+    );
+    // The lookup and the root's watch are tried a tick after the call.
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(missing.watching(), false, "output lists the sessions instead");
+    missing.stop();
+
+    const present = watchTranscriptDir(
+      () => root,
+      async () => undefined,
+      () => true,
+      () => undefined
+    );
+    await eventually("the root watched", () => present.watching());
+    present.stop();
+    assert.equal(present.watching(), false);
   });
 });
