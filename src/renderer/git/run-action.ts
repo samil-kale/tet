@@ -60,6 +60,33 @@ function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
   };
 }
 
+/**
+ * An action whose first try may answer `needsConfirmation`: its run ends there, bar and lock
+ * released, and the follow-up question comes after it; a yes starts the confirmed action as a new
+ * run. The bar shows tet working, never tet waiting on the user. `start` is how the view runs an
+ * action (`act`, a `GitRun`'s `run`); `ask` the question, handed the first try's answer.
+ */
+export function runWithFollowUp(
+  start: (action: () => Promise<GitActionResult>) => void,
+  first: () => Promise<GitActionResult>,
+  needs: NonNullable<GitActionResult["needsConfirmation"]>,
+  ask: (result: GitActionResult) => Promise<boolean>,
+  confirmed: () => Promise<GitActionResult>
+): void {
+  start(async () => {
+    const result = await first();
+    if (result.needsConfirmation !== needs) {
+      return result;
+    }
+    void ask(result).then((yes) => {
+      if (yes) {
+        start(confirmed);
+      }
+    });
+    return { ok: true };
+  });
+}
+
 /** A runner with its failure notified rather than handed back: what `FileAct` and `GitRun.run`
  *  are, and what a change with no question up (a reorder, a remove) calls. */
 export function notifying<A extends unknown[]>(

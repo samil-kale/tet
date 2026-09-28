@@ -255,6 +255,9 @@ or a per-line decision is for an agent.
     message, and the Add Repository dialog's listing.
 
   A new run is held unless it meets both conditions; a dialog's Save is always held.
+- **A follow-up question comes after its run** (`runWithFollowUp`): an action answering
+  `needsConfirmation` ends there, its bar and lock released, and a yes runs the confirmed action
+  anew — a bar shows tet working, never tet waiting on the user.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out and the Add Repository dialog's account adding and
   removal and namespace pick, which act at once. A setting reaches an agent at its setup

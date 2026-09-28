@@ -1,7 +1,7 @@
 import { WORKTREES_NEED_GIT } from "../../shared/types";
 import type { ProjectRef, GitActionResult } from "../../shared/types";
 import { canDiscardRefEdits } from "../diff/editor-views";
-import type { GitRun } from "./run-action";
+import { runWithFollowUp, type GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, confirmedFollowUp } from "../ui/Dialog";
 
@@ -82,21 +82,21 @@ export async function askDeleteWorktree(
     const result = await window.tet.projects.deleteWorktree(worktree, { ...options, force });
     return result.needsConfirmation === "uncommitted" ? result : { ok: result.ok, error: result.error };
   };
-  run.run(`Deleting ${branch}...`, async () => {
-    const result = await deleted(false);
-    if (result.needsConfirmation !== "uncommitted") {
-      return result;
-    }
+  runWithFollowUp(
+    (action) => run.run(`Deleting ${branch}...`, action),
+    () => deleted(false),
+    "uncommitted",
     // Not asked while another question is up (`askLogin`): the refusal is notified instead.
-    const forced = await confirmedFollowUp(
-      {
-        title: "Delete worktree",
-        message: `${branch} has uncommitted changes. Delete them too?`,
-        detail: "Its changed and untracked files are lost.",
-        confirmLabel: "Delete worktree"
-      },
-      `${branch} has uncommitted changes`
-    );
-    return forced ? deleted(true) : { ok: true };
-  });
+    () =>
+      confirmedFollowUp(
+        {
+          title: "Delete worktree",
+          message: `${branch} has uncommitted changes. Delete them too?`,
+          detail: "Its changed and untracked files are lost.",
+          confirmLabel: "Delete worktree"
+        },
+        `${branch} has uncommitted changes`
+      ),
+    () => deleted(true)
+  );
 }

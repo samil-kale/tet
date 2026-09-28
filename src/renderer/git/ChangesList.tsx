@@ -3,7 +3,7 @@ import { syncRemote } from "../../shared/types";
 import type { ChangeStatus, ProjectRef, FileChange, GitActionResult, RepositoryState } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../terminal/editor-tab";
-import type { FileAct, FileAsk } from "./run-action";
+import { runWithFollowUp, type FileAct, type FileAsk } from "./run-action";
 import { baseName } from "../files/explorer-tree";
 import { openEntries, pathEntries } from "../files/file-menu";
 import { TreeRow } from "../files/tree-rows";
@@ -48,36 +48,23 @@ export async function confirmDiscard(ref: ProjectRef, paths: string[], act: File
       confirmLabel: "Discard changes"
     })
   ) {
-    act(async () => {
-      const result = await window.tet.repository.discard(ref, paths, false);
-      if (result.needsConfirmation !== "trash-failed") {
-        return result;
-      }
-      void confirmDiscardPermanently(ref, paths, result.error, act);
-      return { ok: true };
-    });
-  }
-}
-
-async function confirmDiscardPermanently(
-  ref: ProjectRef,
-  paths: string[],
-  reason: string | undefined,
-  act: FileAct
-): Promise<void> {
-  // Not asked while another question is up (`askLogin`): the trash's refusal is told instead.
-  if (
-    await confirmedFollowUp(
-      {
-        title: "Discard changes permanently",
-        message: "The files could not be moved to the trash. Discard the changes permanently?",
-        detail: reason,
-        confirmLabel: "Discard permanently"
-      },
-      reason ?? "The files could not be moved to the trash"
-    )
-  ) {
-    act(() => window.tet.repository.discard(ref, paths, true));
+    runWithFollowUp(
+      act,
+      () => window.tet.repository.discard(ref, paths, false),
+      "trash-failed",
+      // Not asked while another question is up (`askLogin`): the trash's refusal is told instead.
+      ({ error }) =>
+        confirmedFollowUp(
+          {
+            title: "Discard changes permanently",
+            message: "The files could not be moved to the trash. Discard the changes permanently?",
+            detail: error,
+            confirmLabel: "Discard permanently"
+          },
+          error ?? "The files could not be moved to the trash"
+        ),
+      () => window.tet.repository.discard(ref, paths, true)
+    );
   }
 }
 

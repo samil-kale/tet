@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { projectRefKey, projectRef, defaultRemote, refName, upstreamName, worktreeName } from "../../shared/types";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
-import type { GitRun } from "./run-action";
+import { runWithFollowUp, type GitRun } from "./run-action";
 import { TreeRow } from "../files/tree-rows";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
@@ -221,32 +221,25 @@ export const BranchTree = memo(function BranchTree({
   };
 
   /** Asks first only when the main process answers `rewrites-pushed`, as GitHub Desktop warns. */
-  const rebaseOnto = (ref: string, confirmed = false): void =>
-    branch.run(`Rebasing onto ${ref}...`, async () => {
-      const result = await repository.rebase(at, ref, confirmed);
-      if (result.needsConfirmation !== "rewrites-pushed") {
-        return result;
-      }
-      void askRebasePushed(ref);
-      return { ok: true };
-    });
-
-  const askRebasePushed = async (ref: string): Promise<void> => {
+  const rebaseOnto = (ref: string): void => {
     const message = `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream}.`;
-    // Not asked while another question is up (`askLogin`): the rebase's refusal is told instead.
-    if (
-      await confirmedFollowUp(
-        {
-          title: "Rebase",
-          message,
-          detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
-          confirmLabel: "Rebase"
-        },
-        message
-      )
-    ) {
-      rebaseOnto(ref, true);
-    }
+    runWithFollowUp(
+      (action) => branch.run(`Rebasing onto ${ref}...`, action),
+      () => repository.rebase(at, ref, false),
+      "rewrites-pushed",
+      // Not asked while another question is up (`askLogin`): the rebase's refusal is told instead.
+      () =>
+        confirmedFollowUp(
+          {
+            title: "Rebase",
+            message,
+            detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
+            confirmLabel: "Rebase"
+          },
+          message
+        ),
+      () => repository.rebase(at, ref, true)
+    );
   };
 
   const askCreateTag = async (target: string): Promise<void> => {

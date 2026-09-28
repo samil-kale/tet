@@ -535,8 +535,10 @@ export async function saveEditorFile(tabId: string): Promise<void> {
     return;
   }
   // Changed on disk meanwhile (an agent wrote it): overwritten only once asked — the other version
-  // is gone then. With another question up, told instead.
+  // is gone then. With another question up, told instead. Not saving while asked: the bar shows
+  // tet working, never tet waiting on the user (AGENTS.md).
   if (!result.ok && result.diskMtimeMs !== undefined) {
+    publish(view, { saving: false });
     const overwrite = await confirmedFollowUp(
       {
         title: "File changed on disk",
@@ -549,9 +551,9 @@ export async function saveEditorFile(tabId: string): Promise<void> {
       return;
     }
     if (!overwrite) {
-      publish(view, { saving: false });
       return;
     }
+    publish(view, { saving: true });
     result = await window.tet.repository.writeFile(view.ref, path, content, result.diskMtimeMs);
     if (views.get(tabId) !== view || view.readSeq !== seq) {
       return;
