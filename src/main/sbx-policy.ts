@@ -137,7 +137,7 @@ function patternRegExp(pattern: string, flavor: PathFlavor): RegExp {
       regex += rest[0].replace(/[.+?^${}()|[\]\\]/g, "\\$&");
     }
   }
-  return new RegExp(`^${regex}$`, flavor.platform.pathsIgnoreCase ? "i" : "");
+  return new RegExp(`^${regex}$`, flavor.platform.sbxRulesIgnoreCase ? "i" : "");
 }
 
 /**

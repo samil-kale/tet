@@ -10,6 +10,9 @@ export interface Platform {
   // Files and names
   /** Paths compare regardless of case, as NTFS and APFS take them by default. */
   readonly pathsIgnoreCase: boolean;
+  /** sbx's filesystem rules match a path regardless of case (sbx-policy.ts): only on win32, as sbx
+   *  takes a macOS path as typed. */
+  readonly sbxRulesIgnoreCase: boolean;
   /** Environment variable names compare regardless of case, as the win32 environment takes them. */
   readonly envNamesIgnoreCase: boolean;
   /** The native path separator, for a path handed back to the user. */
@@ -93,6 +96,7 @@ const POSIX = {
 export const WINDOWS: Platform = {
   id: "win32",
   pathsIgnoreCase: true,
+  sbxRulesIgnoreCase: true,
   envNamesIgnoreCase: true,
   pathSeparator: "\\",
   driveLetters: true,
@@ -134,6 +138,7 @@ export const MAC: Platform = {
   ...POSIX,
   id: "darwin",
   pathsIgnoreCase: true,
+  sbxRulesIgnoreCase: false,
   envNamesIgnoreCase: false,
   pathSeparator: "/",
   driveLetters: false,
@@ -167,6 +172,7 @@ export const LINUX: Platform = {
   ...POSIX,
   id: "linux",
   pathsIgnoreCase: false,
+  sbxRulesIgnoreCase: false,
   envNamesIgnoreCase: false,
   pathSeparator: "/",
   driveLetters: false,
