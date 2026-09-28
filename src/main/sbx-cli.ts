@@ -5,7 +5,6 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { SBX_PROBLEM } from "../shared/sbx-rules";
 import { isSimulatedMissing } from "./simulate";
-import { checkAgentInstalled } from "./terminals/terminal-session";
 import { runProcess, stoppable } from "./run-process";
 import { PLATFORM } from "./host-platform";
 
@@ -94,20 +93,20 @@ export function cancelSbxSetup(): void {
  *  app. */
 export const SBX_VERIFIED_VERSION = "0.45.1";
 
-/** `version` is a subcommand; `sbx --version` fails with "unknown flag". */
-export function isSbxInstalled(): Promise<boolean> {
-  return checkAgentInstalled("sbx", ["version"], os.tmpdir());
-}
+/** As long as an agent's version check: a hung daemon must hold neither the startup, the SBX
+ *  dialog nor a tab's start, and counts as not installed. */
+const SBX_VERSION_TIMEOUT_MS = 10_000;
 
 /**
- * `sbx version`'s answer as its bare version; undefined when sbx is not installed (probeSbx's sign
- * of it), "" when it printed no version.
+ * `sbx version`'s answer as its bare version (`version` is a subcommand; `sbx --version` fails
+ * with "unknown flag"); undefined when sbx is not installed or does not answer in time — the
+ * startup's and probeSbx's sign of it — "" when it printed no version.
  */
 export async function readSbxVersion(): Promise<string | undefined> {
   if (isSimulatedMissing("sbx")) {
     return undefined;
   }
-  const result = await runSbx(["version"]);
+  const result = await runSbx(["version"], { timeoutMs: SBX_VERSION_TIMEOUT_MS });
   return result.ok ? (/\d+\.\d+\.\d+/.exec(result.stdout)?.[0] ?? "") : undefined;
 }
 

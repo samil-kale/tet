@@ -3,7 +3,7 @@ import { AGENTS, agentInstalled } from "./agents";
 import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
-import { isSbxInstalled } from "./sbx-cli";
+import { readSbxVersion } from "./sbx-cli";
 import { isSimulatedMissing } from "./simulate";
 import { augmentAgentPath } from "./terminals/agent-path";
 
@@ -63,7 +63,7 @@ export async function checkRequirements(): Promise<Requirements> {
   const gitVersion = isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
 
   // A tick ahead of the agents: on win32 process creations hurt when sharing a tick (yieldToLoop).
-  const sbxInstalled = isSbxInstalled();
+  const sbxInstalled = readSbxVersion().then((sbxVersion) => sbxVersion !== undefined);
   await yieldToLoop();
 
   const agents = await checkAgentRequirements(cwd);
