@@ -27,7 +27,7 @@ export interface ProcessResult {
   error?: Error;
 }
 
-/** One run at a time a dialog's Cancel may kill (the renderer's `useCancel` `abort`). */
+/** One run at a time a dialog's Cancel may kill (the renderer's `DialogFrame` `abort`). */
 export interface Stoppable {
   /** Runs `start`, whose process — handed to the `onSpawn` it is given — `stop` kills until it ends. */
   run<T>(start: (onSpawn: (child: ChildProcess) => void) => Promise<T>): Promise<T>;

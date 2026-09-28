@@ -15,7 +15,7 @@ import {
   type FieldsState
 } from "./SbxSettingsFields";
 import { SbxAccounts, accountsBlocked, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
-import { DialogFrame, SaveButton, useCancel, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { confirmed, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox, DialogError } from "../ui/Field";
@@ -199,7 +199,6 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   // Its setup (`sbx login`, `policy init`) is aborted with Cancel, a no-op when none runs; a Save
   // or a sign-out is not, so it finishes first.
   const holding = saving || signingOut;
-  const cancel = useCancel(onClose, holding, window.tet.sbx.cancelSetup);
   const editState = changing(setState);
   const editEnabled = changing(setEnabled);
   const editAccounts = changing((update: SetStateAction<AccountRow[]>) => {
@@ -294,29 +293,20 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
 
   return (
     <DialogFrame
-      header={
-        tabbed
-          ? { tabs, active: tab, onSelect: setTab, onClose: cancel }
-          : { title: `SBX Settings - ${project.name}`, onClose: cancel }
-      }
+      header={tabbed ? { tabs, active: tab, onSelect: setTab } : { title: `SBX Settings - ${project.name}` }}
       className={showsAccount ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
       busy={busy}
       locked={holding}
       error={refused ?? accountError}
       message={phase.kind === "ready" && needsRestart(loaded, stored.knowledge, state) && <RestartNote />}
-      buttons={
-        <>
-          <button type="button" className="button secondary" disabled={holding} onClick={cancel}>
-            Cancel
-          </button>
-          {(phase.kind === "not-installed" || phase.kind === "blocked" || phase.kind === "failed") && (
-            <button type="button" className="button" disabled={busy} onClick={() => void recheck()}>
-              Check again
-            </button>
-          )}
-          {showsAccount && <SaveButton blocked={blocked} disabled={busy} onSave={() => void save()} />}
-        </>
+      onCancel={onClose}
+      abort={window.tet.sbx.cancelSetup}
+      actions={
+        phase.kind === "not-installed" || phase.kind === "blocked" || phase.kind === "failed"
+          ? [{ label: "Check again", disabled: busy, run: () => void recheck() }]
+          : []
       }
+      primary={showsAccount ? { label: "Save", blocked, disabled: busy, run: () => void save() } : undefined}
     >
       {phase.kind === "checking" && <p className="dialog-detail">Checking SBX…</p>}
       {phase.kind === "not-installed" && (

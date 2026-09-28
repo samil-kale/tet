@@ -17,12 +17,13 @@ import type {
   SettingsEdits
 } from "../../shared/types";
 import { confirm, refusal } from "../ui/Dialog";
-import { DialogFrame, SaveButton, useCancel, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { Checkbox, Field, FieldGroup } from "../ui/Field";
+import { Checkbox, DialogError, Field, FieldGroup } from "../ui/Field";
 import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
+import { useRunning } from "../ui/use-running";
 import { PLATFORM } from "../platform";
 import { atLeastOne, EditRow, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
@@ -153,15 +154,23 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   /** The stored variables' names as opened, for `envChanged`. */
   const [loadedVariables, setLoadedVariables] = useState<readonly string[]>([]);
 
+  /** The settings as opened, on the header's bar; what could not be read stands in their place
+   *  (`DialogError`), as the SBX dialog's does. */
+  const { running: loading, run: load } = useRunning(true);
+  const [loadFailed, setLoadFailed] = useState<string | undefined>(undefined);
   useEffect(() => {
-    void window.tet.settings.get().then(setSettings);
-    // Cannot change while the process runs.
-    void window.tet.app.info().then(setInfo);
-    void window.tet.environment.list().then((list) => {
-      setVariables(atLeastOne(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })), BLANK_ENV_ROW));
-      setLoadedVariables(list.map((variable) => variable.name));
-    });
-  }, []);
+    void load(() =>
+      Promise.all([
+        window.tet.settings.get().then(setSettings),
+        // Cannot change while the process runs.
+        window.tet.app.info().then(setInfo),
+        window.tet.environment.list().then((list) => {
+          setVariables(atLeastOne(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })), BLANK_ENV_ROW));
+          setLoadedVariables(list.map((variable) => variable.name));
+        })
+      ])
+    ).catch((error: unknown) => setLoadFailed(errorMessage(error)));
+  }, [load]);
 
   // Read once, on open; Save goes through setExplorerSetting (tet-json.ts), which reads the file fresh
   // and leaves other keys alone. Keyed by id: the project list is rebuilt whole when a project is
@@ -237,8 +246,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     }
   );
 
-  const close = useCancel(onClose, saving);
-
   /** Edits the shown copy and records the change for Save. */
   const edit = changing((change: SettingsEdits): void => {
     edits.current = withSettings(edits.current, change);
@@ -278,23 +285,23 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const blocked = envRowMarks.values().next().value;
   const tabs = useMemo(() => TABS.map((entry) => (entry.id === "environment" ? { ...entry, mark: blocked } : entry)), [blocked]);
 
+  // Nothing of it shown while it could not be read.
+  const shown = loadFailed === undefined ? tab : undefined;
+
   return (
     <DialogFrame
-      header={{ tabs, active: tab, onSelect: setTab, onClose: close }}
-      busy={saving}
+      header={{ tabs, active: tab, onSelect: setTab }}
+      busy={saving || loading}
+      // Loading only reads: Cancel stays open meanwhile.
+      locked={saving}
       error={refused}
       message={envChanged(variables, loadedVariables) && <RestartNote />}
       className="settings-dialog"
-      buttons={
-        <>
-          <button type="button" className="button secondary" disabled={saving} onClick={close}>
-            Cancel
-          </button>
-          <SaveButton blocked={blocked} disabled={saving} onSave={() => void save()} />
-        </>
-      }
+      onCancel={onClose}
+      primary={{ label: "Save", blocked, disabled: loading || loadFailed !== undefined, run: () => void save() }}
     >
-      {tab === "appearance" && (
+      {loadFailed !== undefined && <DialogError message={loadFailed} />}
+      {shown === "appearance" && (
         <>
           <FieldGroup label="Color scheme">
             <RadioGroup
@@ -320,7 +327,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           )}
         </>
       )}
-      {tab === "notifications" && (
+      {shown === "notifications" && (
         <>
           <p className="dialog-detail">Desktop notifications for agent activity</p>
           {settings &&
@@ -336,7 +343,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               stand on arrival (session-manager's `toast`). */}
         </>
       )}
-      {tab === "files" && (
+      {shown === "files" && (
         <>
           <p className="dialog-detail">
             {activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree - open a project to edit it"}
@@ -362,31 +369,35 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               </Field>
             </>
           )}
+          <Field label="Editor keybindings">
+            <Dropdown
+              value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
+              onChange={applyPreset}
+              options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
+            />
+          </Field>
           <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
-          <Dropdown
-            value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
-            onChange={applyPreset}
-            options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
-          />
         </>
       )}
-      {tab === "prompts" && settings && (
+      {shown === "prompts" && settings && (
         <>
-          <div className="settings-prompt-header">
-            <Dropdown
-              value={promptId}
-              onChange={setPromptId}
-              options={PROMPT_IDS.map((id) => ({ value: id, label: PROMPT_LABELS[id] }))}
-            />
-            <button
-              type="button"
-              className="button secondary"
-              disabled={settings.prompts[promptId] === ""}
-              onClick={() => applyPrompt(promptId, "")}
-            >
-              Reset to default
-            </button>
-          </div>
+          <FieldGroup label="Prompt">
+            <div className="settings-prompt-header">
+              <Dropdown
+                value={promptId}
+                onChange={setPromptId}
+                options={PROMPT_IDS.map((id) => ({ value: id, label: PROMPT_LABELS[id] }))}
+              />
+              <button
+                type="button"
+                className="button secondary"
+                disabled={settings.prompts[promptId] === ""}
+                onClick={() => applyPrompt(promptId, "")}
+              >
+                Reset to default
+              </button>
+            </div>
+          </FieldGroup>
           {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
               asked for, so it applies on Save. */}
           <textarea
@@ -397,7 +408,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           />
         </>
       )}
-      {tab === "environment" && (
+      {shown === "environment" && (
         <div className="settings-environment">
           <p className="dialog-detail">Stored on this machine and set in every tab but sandboxed ones, over the machine's own.</p>
           <RowSection
@@ -423,7 +434,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           />
         </div>
       )}
-      {tab === "info" && info && (
+      {shown === "info" && info && (
         <div className="settings-info-columns">
           <div className="settings-info">
             <p className="dialog-detail">Versions</p>

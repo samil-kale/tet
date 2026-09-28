@@ -4,7 +4,7 @@ import type { AddRepositoryResult, GitLogin, ProviderAccount, ProviderId, Remote
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { ActionLink } from "../ui/ActionLink";
 import { confirmed } from "../ui/Dialog";
-import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit, type DialogPrimary } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, FieldGroup, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
@@ -47,15 +47,12 @@ function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (p
 }
 
 /**
- * What the account form hands the dialog's frame while it is up: the frame's submit button is
- * this form's ("Add account") and Enter in its fields submits it. Lifted as the bar's `busy` is
- * (AGENTS.md); the host's refusal stays with the form, under the token field.
+ * What the account form hands the dialog's frame while it is up: the frame's primary button is
+ * this form's ("Add account"), so Enter in its fields runs it, and `running` holds the frame as a
+ * Save does. Lifted as the bar's `busy` is (AGENTS.md); the host's refusal stays with the form,
+ * under the token field.
  */
-interface AccountSubmission {
-  ready: boolean;
-  busy: boolean;
-  submit: () => void;
-}
+type AccountSubmission = DialogPrimary & { running: boolean };
 
 interface AccountFormProps {
   onAdded: (account: ProviderAccount) => void;
@@ -91,7 +88,8 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   // The latest, for a submit the frame holds from an earlier render.
   const submitRef = useLatest(submit);
   useEffect(() => {
-    onForm({ ready, busy, submit: () => void submitRef.current() });
+    // Plain to see why it waits: host or token left empty.
+    onForm({ label: "Add account", disabled: !ready, running: busy, run: () => void submitRef.current() });
     return () => onForm(null);
   }, [ready, busy, onForm, submitRef]);
 
@@ -143,13 +141,14 @@ function inNamespace(fullName: string, namespace: string): boolean {
 interface RemoteTabProps {
   /** Opens the clone tab with url, name and account filled in. */
   onClone: (repo: RemoteRepository, accountId: string) => void;
-  /** The listing's, held by the dialog: the header's progress bar is the only one. */
-  onBusy: (busy: boolean) => void;
+  /** The listing underway, on the dialog's bar (as `PromptFields.hold`): the header's progress bar
+   *  is the only one. */
+  hold: (held: boolean) => void;
   /** See AccountSubmission. */
   onForm: (form: AccountSubmission | null) => void;
 }
 
-function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
+function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
   /** null while loading. */
   const [accounts, setAccounts] = useState<ProviderAccount[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -187,7 +186,7 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
     }
     let cancelled = false;
     let fetching = true;
-    onBusy(true);
+    hold(true);
     void window.tet.providers
       .repos(selectedId)
       .then((result) => {
@@ -205,7 +204,7 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
       .finally(() => {
         if (!cancelled) {
           fetching = false;
-          onBusy(false);
+          hold(false);
         }
       });
     return () => {
@@ -213,10 +212,10 @@ function RemoteTab({ onClone, onBusy, onForm }: RemoteTabProps) {
       // Only a fetch still running: the next run turns the bar on only when it fetches, so an
       // already-listed account shows none.
       if (fetching) {
-        onBusy(false);
+        hold(false);
       }
     };
-  }, [selectedId, repos, onBusy]);
+  }, [selectedId, repos, hold]);
 
   const accountAdded = (account: ProviderAccount): void => {
     // Replace, not append: a fresh token answers with the same account id.
@@ -373,15 +372,10 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [login, setLogin] = useState<GitLogin>({ username: "", password: "" });
   /** The remote tab's listing underway, on the header's bar. */
   const [listing, setListing] = useState(false);
-  /** The account form while it is up: the frame's button and Enter are its (AccountSubmission). */
+  /** The account form while it is up: the frame's primary button and Enter are its
+   *  (AccountSubmission). */
   const [accountForm, setAccountForm] = useState<AccountSubmission | null>(null);
-  const firstField = useRef<HTMLInputElement>(null);
   const loginField = useRef<HTMLInputElement>(null);
-
-  // Focus the current mode's first field.
-  useEffect(() => {
-    firstField.current?.focus();
-  }, [mode]);
 
   // The login's first field, once the clone asks for it.
   useEffect(() => {
@@ -439,9 +433,13 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   });
 
   // The listing only reads, and its late answer is dropped (RemoteTab): it holds no Cancel.
-  const locked = adding || accountForm?.busy === true;
+  const locked = adding || accountForm?.running === true;
   const busy = locked || listing;
-  const close = useCancel(onClose, locked);
+  const primary: DialogPrimary | undefined = accountForm
+    ? { ...accountForm, disabled: accountForm.disabled || busy }
+    : mode !== "remote"
+      ? { label: MODES.find((entry) => entry.id === mode)?.label ?? "", disabled: !ready || busy, run: () => void submit() }
+      : undefined;
 
   /** A remote row's Clone: the clone tab filled in, with the row's account. */
   const cloneFromRemote = (repo: RemoteRepository, fromAccountId: string): void => {
@@ -455,43 +453,15 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
 
   return (
     <DialogFrame
-      header={{ tabs: MODES, active: mode, onSelect: switchMode, onClose: close }}
+      header={{ tabs: MODES, active: mode, onSelect: switchMode }}
       error={refused}
       className="add-repository-dialog"
       busy={busy}
       locked={locked}
-      onSubmit={() => {
-        if (busy) {
-          return;
-        }
-        if (accountForm) {
-          if (accountForm.ready) {
-            accountForm.submit();
-          }
-        } else if (ready) {
-          void submit();
-        }
-      }}
-      buttons={
-        <>
-          <button type="button" className="button secondary" disabled={locked} onClick={close}>
-            Cancel
-          </button>
-          {accountForm ? (
-            <button type="submit" className="button" disabled={!accountForm.ready || busy}>
-              Add account
-            </button>
-          ) : (
-            mode !== "remote" && (
-              <button type="submit" className="button" disabled={!ready || busy}>
-                {MODES.find((entry) => entry.id === mode)?.label}
-              </button>
-            )
-          )}
-        </>
-      }
+      onCancel={onClose}
+      primary={primary}
     >
-      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} onBusy={setListing} onForm={setAccountForm} />}
+      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} />}
       {mode === "clone" && (
         <>
           <TextField
@@ -505,7 +475,6 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
               setAccountId(null);
               setLoginUrl(null);
             })}
-            ref={firstField}
           />
           <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={changing(setDirectory)} />
           <TextField label="Folder name" value={folderName} onChange={changing(setName)} />
@@ -521,7 +490,6 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
           value={directory}
           pickTitle="Add repository"
           onChange={changing(setDirectory)}
-          ref={firstField}
         />
       )}
       {mode === "create" && (
@@ -531,7 +499,6 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
             value={directory}
             pickTitle="Create in"
             onChange={changing(setDirectory)}
-            ref={firstField}
           />
           <TextField label="Folder name" value={folderName} onChange={changing(setName)} />
         </>

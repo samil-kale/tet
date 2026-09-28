@@ -225,6 +225,11 @@ or a per-line decision is for an agent.
   irreversible — removing a project asks only when it takes worktrees along; its own data goes
   unasked. Card dialogs are drawn in `DialogFrame`. The one exception: an agent's
   `env-request`, answered in `EnvDialog`, one at a time (`environment.ts`).
+- **`DialogFrame` draws every dialog's button row**: Cancel with × and Escape (`onCancel`; a wall
+  has none), the `actions`, and the `primary` button, which Enter runs from anywhere in the dialog
+  unless it cannot go. One that cannot says why as its tooltip (`blocked`), unless an empty field
+  already shows it (`disabled`). The focus goes to the open tab's first field, on opening and on
+  each tab switch; a hint (`dialog-detail`) stands under the fields it explains.
 - **A dialog on screen says what concerns it; prefer this to a notice.** Words alone, no mark,
   coloured by what it is. A failure belongs where the answer was typed: under that field
   (`Field`'s `error`); in a row of a list as the error mark's tooltip beside it (`RowMark`, the
@@ -244,13 +249,13 @@ or a per-line decision is for an agent.
 - **What a dialog runs finishes before it goes — unless stopping it leaves nothing behind.** Each
   run is one of two kinds, decided by what a stop would leave:
   - *Held* (the default; `DialogFrame`'s `locked`): anything that changes state in steps or is
-    not killed — a Save, a git command, a store, a sign-out. Cancel and × are disabled and Escape
-    does nothing (`useCancel`), so nothing is left half done and nothing answers into a closed
-    dialog.
+    not killed — a Save, a git command, a store, a sign-out. Cancel and × are disabled, Escape
+    does nothing and the body's fields are disabled with them, so nothing is left half done,
+    edited under the run, or answered into a closed dialog.
   - *Stopped*: a run a stop leaves as if it never started — it changes nothing, or what it changes
     happens whole or not at all — and that waits on something outside TET (a browser, an agent, a
     provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
-    (`useCancel`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today: the
+    (`DialogFrame`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today: the
     SBX dialog's setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
     message, and the Add Repository dialog's listing.
 
@@ -268,7 +273,7 @@ or a per-line decision is for an agent.
   Only rows a picker adds (the SBX paths) get a line saying there are none.
 - **One progress indicator per section** (`ProgressBar.tsx`, `Section`'s `busy`): a new slow
   reason feeds the existing bar. In a dialog that bar is `DialogFrame`'s `busy`, so a busy state
-  held by a nested view is lifted to the view owning the frame. No spinners for progress: the one
+  held by a nested view is lifted to the view owning the frame (`hold`). No spinners for progress: the one
   spinner is a session's working mark.
 - **The keyboard belongs to the terminal**: tet's key handler runs before xterm and takes nothing
   an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No

@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent, type ReactNode, type Ref, type RefObject } from "react";
+import { useEffect, useState, type ReactNode, type Ref, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types";
 import { SparkleIcon } from "./icons";
@@ -112,9 +112,7 @@ interface TextFieldProps {
   placeholder?: string;
   maxLength?: number;
   disabled?: boolean;
-  /** For a field whose Enter means a form of its own, not the dialog's. */
-  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
-  /** The field a dialog opens focused. */
+  /** The field a refusal returns the focus to. */
   ref?: Ref<HTMLInputElement>;
   /** See `Field`. */
   error?: string;
@@ -129,7 +127,6 @@ export function TextField({
   placeholder,
   maxLength,
   disabled,
-  onKeyDown,
   ref,
   error
 }: TextFieldProps) {
@@ -142,7 +139,6 @@ export function TextField({
         maxLength={maxLength}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        onKeyDown={onKeyDown}
         ref={ref}
       />
     </Field>

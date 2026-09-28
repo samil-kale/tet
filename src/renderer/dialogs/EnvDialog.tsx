@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { EnvRequest } from "../../shared/types";
-import { DialogFrame, useCancel, useSubmit } from "../ui/DialogFrame";
+import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { EditRow, OverridesMachine, RowInput, RowSection, SecretInput } from "../ui/RowSection";
 
 interface EnvDialogProps {
@@ -22,9 +22,6 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   const [rows, setRows] = useState(() =>
     request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" }))
   );
-  const firstValue = useRef<HTMLInputElement>(null);
-
-  useEffect(() => firstValue.current?.focus(), []);
 
   const complete = rows.every((row) => row.value !== "");
   const tab = request.ref && request.tabId ? { ref: request.ref, tabId: request.tabId } : undefined;
@@ -40,10 +37,10 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
     }
   );
 
-  const cancel = useCancel(() => {
+  const cancel = (): void => {
     void window.tet.environment.answer(request.id, null);
     onClose();
-  }, busy);
+  };
 
   const edit = changing((name: string, value: string): void =>
     setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)))
@@ -52,27 +49,12 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
   return (
     <DialogFrame
       className="env-dialog"
-      header={{
-        title: rows.length === 1 ? "Environment variable needed" : "Environment variables needed",
-        onClose: cancel
-      }}
+      header={{ title: rows.length === 1 ? "Environment variable needed" : "Environment variables needed" }}
       busy={busy}
       error={refused}
-      onSubmit={() => {
-        if (complete) {
-          void save();
-        }
-      }}
-      buttons={
-        <>
-          <button type="button" className="button secondary" disabled={busy} onClick={cancel}>
-            Cancel
-          </button>
-          <button type="submit" className="button" disabled={!complete || busy}>
-            {tab ? "Save & Restart" : "Save"}
-          </button>
-        </>
-      }
+      onCancel={cancel}
+      // Plain to see why it waits: a value left empty.
+      primary={{ label: tab ? "Save & Restart" : "Save", disabled: !complete, run: () => void save() }}
     >
       <p className="dialog-message">{requester} asks for environment variables.</p>
       <RowSection
@@ -84,7 +66,6 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
             <RowInput value={row.name} disabled />
             {row.overridesMachine && <OverridesMachine name={row.name} />}
             <SecretInput
-              ref={row === rows[0] ? firstValue : undefined}
               stored={row.stored}
               value={row.value}
               onChange={(value) => edit(row.name, value)}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { GitActionResult } from "../../shared/types";
-import { DialogFrame, useCancel, useSubmit } from "./DialogFrame";
+import { DialogFrame, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
 import { notify } from "./Notices";
 import { createStore, useStore } from "./store";
@@ -35,7 +35,8 @@ export interface PromptFields<T> {
   error: string | undefined;
   /** `submit` is underway: the field it may refuse is disabled meanwhile. */
   busy: boolean;
-  /** For the field the dialog opens focused and selected, and returns to on a refusal. */
+  /** For the field a refusal returns the focus to; the dialog opens on it, selected
+   *  (`DialogFrame`'s `selectField`). */
   field: RefObject<HTMLInputElement | null>;
   /** A field still fetching its value (`SuggestField`'s wand) holds the answer back meanwhile, and
    *  runs the frame's bar. */
@@ -61,7 +62,7 @@ export interface PromptOptions<T> {
    */
   submit?: (value: T) => Promise<string | undefined>;
   /** Cuts short what a field runs (`hold`), so Cancel is not held back by it: a suggestion changes
-   *  nothing. Left out, Cancel waits for it like for `submit` (`useCancel`). */
+   *  nothing. Left out, Cancel waits for it like for `submit` (`DialogFrame`'s `abort`). */
   abort?: () => void;
 }
 
@@ -199,65 +200,6 @@ export async function askName({ title, detail, confirmLabel, current, maxLength,
   });
 }
 
-interface FrameProps {
-  title: string;
-  confirmLabel: string;
-  /** Nothing to go through with yet, e.g. an empty name. */
-  disabled?: boolean;
-  /** `PromptOptions.submit` is underway: the header's bar, as everywhere else. */
-  busy?: boolean;
-  /** Cancel, × and Escape wait (`useCancel`). Defaults to `busy`. */
-  locked?: boolean;
-  /** What Cancel cuts short first (`PromptOptions.abort`). */
-  abort?: () => void;
-  /** The confirm button takes the focus, for a dialog with no field. */
-  focusSubmit?: boolean;
-  onSubmit: () => void;
-  onCancel: () => void;
-  children: React.ReactNode;
-}
-
-function Frame({
-  title,
-  confirmLabel,
-  disabled,
-  busy = false,
-  locked = busy,
-  abort,
-  focusSubmit,
-  onSubmit,
-  onCancel,
-  children
-}: FrameProps) {
-  const cancel = useCancel(onCancel, locked, abort);
-
-  return (
-    <DialogFrame
-      header={{ title, onClose: cancel }}
-      busy={busy}
-      locked={locked}
-      // A form, so Enter answers from the field or the checkbox alike.
-      onSubmit={() => {
-        if (!disabled) {
-          onSubmit();
-        }
-      }}
-      buttons={
-        <>
-          <button type="button" className="button secondary" disabled={locked} onClick={cancel}>
-            Cancel
-          </button>
-          <button type="submit" className="button" disabled={disabled} autoFocus={focusSubmit}>
-            {confirmLabel}
-          </button>
-        </>
-      }
-    >
-      {children}
-    </DialogFrame>
-  );
-}
-
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
   const [checked, setChecked] = useState(false);
   const { busy: running, submit } = useSubmit(
@@ -269,21 +211,16 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
   );
 
   return (
-    <Frame
-      title={dialog.title}
-      confirmLabel={dialog.confirmLabel}
-      disabled={running}
+    <DialogFrame
+      header={{ title: dialog.title }}
       busy={running}
-      // Opened from a context menu, focus would otherwise stay in the terminal and Enter answer
-      // nothing.
-      focusSubmit
-      onSubmit={() => void submit()}
       onCancel={dialog.cancel}
+      primary={{ label: dialog.confirmLabel, run: () => void submit() }}
     >
       <p className="dialog-message">{dialog.message}</p>
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
       {dialog.checkboxLabel && <Checkbox label={dialog.checkboxLabel} checked={checked} onChange={setChecked} />}
-    </Frame>
+    </DialogFrame>
   );
 }
 
@@ -292,43 +229,34 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const [held, setHeld] = useState(false);
   const field = useRef<HTMLInputElement>(null);
 
-  // Focus and select the first field once on mount; per render would swallow keystrokes.
-  useEffect(() => {
-    field.current?.focus();
-    field.current?.select();
-  }, []);
-
   /** What `submit` refused is handed to the fields (`error`). */
   const { busy: running, refused, submit, changing } = useSubmit(
-    async () => {
-      if (!dialog.submit) {
-        return undefined;
-      }
-      const message = await dialog.submit(value);
-      if (message !== undefined) {
-        field.current?.focus();
-      }
-      return message;
-    },
+    async () => (dialog.submit ? dialog.submit(value) : undefined),
     () => dialog.answer(value)
   );
+  // Back to the field refused, once the run no longer disables it.
+  useEffect(() => {
+    if (refused !== undefined) {
+      field.current?.focus();
+    }
+  }, [refused]);
 
   const onChange = changing((next: unknown) => setValue(next));
 
   return (
-    <Frame
-      title={dialog.title}
-      confirmLabel={dialog.confirmLabel}
-      disabled={running || held || !dialog.ready(value)}
+    <DialogFrame
+      header={{ title: dialog.title }}
       busy={running || held}
       locked={running || (held && !dialog.abort)}
-      abort={dialog.abort}
-      onSubmit={() => void submit()}
       onCancel={dialog.cancel}
+      abort={dialog.abort}
+      // Plain to see why it waits: a field left empty (AGENTS.md's exception to a blocked reason).
+      primary={{ label: dialog.confirmLabel, disabled: held || !dialog.ready(value), run: () => void submit() }}
+      selectField
     >
       {dialog.render({ value, onChange, error: refused, busy: running, field, hold: setHeld })}
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
-    </Frame>
+    </DialogFrame>
   );
 }
 

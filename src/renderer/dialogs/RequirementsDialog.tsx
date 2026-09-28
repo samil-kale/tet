@@ -15,7 +15,7 @@ function RequirementRow({ requirement }: { requirement: Requirement }) {
 
 interface RequirementsDialogProps {
   requirements: Requirements;
-  /** A check is running; the button spins meanwhile. */
+  /** A check is running: the header's bar meanwhile. */
   checking: boolean;
   onRecheck: () => void;
 }
@@ -25,20 +25,14 @@ interface RequirementsDialogProps {
 export function RequirementsDialog({ requirements, checking, onRecheck }: RequirementsDialogProps) {
   return (
     <DialogFrame
-      // No close button: nothing stands behind this yet.
+      // No cancel: nothing stands behind this yet.
       header={{ title: "Missing requirements" }}
       className="requirements-dialog"
       busy={checking}
-      buttons={
-        <>
-          <button type="button" className="button secondary" onClick={() => window.tet.startup.quit()}>
-            Quit
-          </button>
-          <button type="button" className="button" onClick={onRecheck} disabled={checking}>
-            Check again
-          </button>
-        </>
-      }
+      // Not a held run: a check changes nothing, and Quit must stay open while it runs.
+      locked={false}
+      actions={[{ label: "Quit", secondary: true, run: () => window.tet.startup.quit() }]}
+      primary={{ label: "Check again", disabled: checking, run: onRecheck }}
     >
       <p className="dialog-message">Git is required:</p>
       <div className="requirement-list">

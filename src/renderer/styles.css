@@ -1962,10 +1962,16 @@ textarea:focus,
   gap: 12px;
 }
 
+/* A fieldset, so a held run disables every field at once (`DialogFrame`'s `locked`): none of its
+   own border, padding or min-content width. */
 .dialog-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 /* A path or a branch name breaks anywhere rather than widening the box. */

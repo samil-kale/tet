@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DialogError } from "./Field";
 import { IconButton } from "./IconButton";
 import { CircleAlertIcon, CloseIcon } from "./icons";
@@ -46,10 +46,10 @@ export function useSubmit(
   return { busy, refused, submit, changing };
 }
 
-/** A card dialog's cancel for ×, its Cancel button and Escape alike: nothing while `locked` (the
- *  frame's), so what runs finishes before the dialog goes. What runs and may be cut short instead
- *  is `abort`ed first (the SBX dialog's setup, a suggested commit message). */
-export function useCancel(cancel: () => void, locked: boolean, abort?: () => void): () => void {
+/** A dialog's cancel for ×, its Cancel button and Escape alike (`DialogFrame`'s `onCancel`): nothing
+ *  while `locked`, so what runs finishes before the dialog goes. What runs and may be cut short
+ *  instead is `abort`ed first (the SBX dialog's setup, a suggested commit message). */
+function useCancel(cancel: () => void, locked: boolean, abort?: () => void): () => void {
   const guarded = (): void => {
     if (!locked) {
       abort?.();
@@ -60,21 +60,28 @@ export function useCancel(cancel: () => void, locked: boolean, abort?: () => voi
   return guarded;
 }
 
-/** A card dialog's Save, `blocked` by why it cannot go yet: by class, not `disabled`, so that reason
- *  shows as its tooltip (.button.disabled). `disabled` while something runs. */
-export function SaveButton({ blocked, disabled, onSave }: { blocked: string | undefined; disabled: boolean; onSave: () => void }) {
-  return (
-    <button
-      type="button"
-      className={blocked === undefined ? "button" : "button disabled"}
-      disabled={disabled}
-      title={blocked}
-      onClick={() => blocked === undefined && onSave()}
-    >
-      Save
-    </button>
-  );
+/** The button a dialog is for — Save, Rename, Clone — last in the row, and what Enter runs. */
+export interface DialogPrimary {
+  label: string;
+  /** Why it cannot go yet: by class, not `disabled`, so that reason shows as its tooltip
+   *  (.button.disabled) — for a dialog whose rows say what holds it back. */
+  blocked?: string;
+  /** Not ready, and plain to see why — an empty name, a value left out — so nothing is told. */
+  disabled?: boolean;
+  run: () => void;
 }
+
+/** A button beside the primary one, e.g. "Check again". */
+export interface DialogAction {
+  label: string;
+  run: () => void;
+  disabled?: boolean;
+  /** Drawn as Cancel is, for one that leaves rather than goes through (RequirementsDialog's Quit). */
+  secondary?: boolean;
+}
+
+/** The open tab's first field: what is typed into, a checkbox, a picker's input. */
+const FIELD = "input:not([type=hidden]):not(:disabled), textarea:not(:disabled), select:not(:disabled)";
 
 interface DialogTab<T extends string> {
   id: T;
@@ -90,26 +97,32 @@ interface DialogTab<T extends string> {
  * strip in place of the title for a dialog with several panes.
  */
 type DialogHeader<T extends string> =
-  | {
-      title: string;
-      /** Left out for a dialog that must stay up (RequirementsDialog). */
-      onClose?: () => void;
-    }
+  | { title: string }
   | {
       tabs: readonly DialogTab<T>[];
       active: T;
       onSelect: (id: T) => void;
-      /** Close button at the tab strip's right edge. */
-      onClose?: () => void;
     };
 
 interface DialogFrameProps<T extends string> {
   header: DialogHeader<T>;
   /** Draws the header's progress bar, the dialog's one indicator. */
   busy?: boolean;
-  /** × is disabled while it holds, and the caller's Cancel and Escape with it. Defaults to `busy`:
-   *  what runs finishes before the dialog goes, unless it is aborted (`useCancel`). */
+  /** A held run: ×, Cancel and Escape wait, and the body's fields are disabled, so nothing is
+   *  edited under a Save. Defaults to `busy`: what runs finishes before the dialog goes, unless it
+   *  is aborted (`abort`). */
   locked?: boolean;
+  /** What ×, Cancel and Escape mean. Left out for a wall that stays up until it is answered
+   *  (RequirementsDialog): no ×, no Cancel, and Escape does nothing. */
+  onCancel?: () => void;
+  /** What a cancel cuts short first: a stopped run (AGENTS.md), whose answer is then dropped. */
+  abort?: () => void;
+  /** Before the primary button, after Cancel. */
+  actions?: readonly DialogAction[];
+  /** Enter runs it from anywhere in the dialog, unless it is blocked, disabled or a run holds. */
+  primary?: DialogPrimary;
+  /** The first field's text is selected as it takes the focus: a rename's name, typed over. */
+  selectField?: boolean;
   /** What refused the dialog's Save, on the button row's left (`DialogError`): for a card whose
    *  fields — several, or across tabs — no one of them can be blamed. A field that can writes it
    *  itself, under the control (`Field`). Shown in `message`'s place while it stands. */
@@ -119,25 +132,22 @@ interface DialogFrameProps<T extends string> {
   message?: React.ReactNode;
   /** Variants on `.dialog`: `wide`, or the dialog's own class. */
   className?: string;
-  /**
-   * Given, the card is a form and Enter submits from anywhere in it. A caller not ready checks
-   * that itself; the frame only prevents the browser's own submit.
-   */
-  onSubmit?: () => void;
-  /** The button row, the suggested button last. */
-  buttons: React.ReactNode;
   children: React.ReactNode;
 }
 
 /**
- * The shell of every card dialog — the questions in `Dialog.tsx` and everything under `dialogs/`:
- * overlay, card, header, body, button row.
+ * The shell of every dialog — the questions in `Dialog.tsx` and everything under `dialogs/`:
+ * overlay, card, header, body, and the button row it draws itself — Cancel, the `actions`, the
+ * primary button — so each behaves the same everywhere. A form: Enter runs the primary button.
  *
- * Escape is the caller's (`useCancel`), RequirementsDialog's none. While one is up, no tab is in front (`window-covered.ts`).
+ * The focus goes to the open tab's first field, on opening and on each tab switch — once one is
+ * there, as a body that loads shows its fields later — and failing one to the primary button, so
+ * Enter answers; the user's own click or key ends that. While one is up, no tab is in front
+ * (`window-covered.ts`).
  *
  * A modal `<dialog>`: the rest of the window is inert, so Tab cannot leave for the terminal or the
  * editor behind, and a question over another dialog is the one on top. `closedby="none"`, since
- * Escape stays the caller's.
+ * Escape is `onCancel`'s.
  */
 export function DialogFrame<T extends string>({
   header,
@@ -146,11 +156,17 @@ export function DialogFrame<T extends string>({
   error,
   message,
   className,
-  onSubmit,
-  buttons,
+  onCancel,
+  abort,
+  actions = [],
+  primary,
+  selectField,
   children
 }: DialogFrameProps<T>) {
   const overlay = useRef<HTMLDialogElement>(null);
+  const body = useRef<HTMLFieldSetElement>(null);
+  const primaryButton = useRef<HTMLButtonElement>(null);
+  const cancel = useCancel(() => onCancel?.(), locked || !onCancel, abort);
   useCoversWindow(overlay);
   // What had focus before the dialog (the terminal, a field of the dialog below), read at the first
   // render: a child's `autoFocus` takes it before any effect runs. Handed back on unmount.
@@ -174,6 +190,44 @@ export function DialogFrame<T extends string>({
       }
     };
   }, [opener]);
+  // Pending from the opening and each tab switch until a field took it or the user acted.
+  const focusPending = useRef(true);
+  const activeTab = "tabs" in header ? header.active : undefined;
+  useEffect(() => {
+    focusPending.current = true;
+  }, [activeTab]);
+  // After every render: the field may only now be there, or no longer disabled.
+  useEffect(() => {
+    if (!focusPending.current) {
+      return;
+    }
+    const field = body.current?.querySelector<HTMLInputElement>(FIELD);
+    if (field) {
+      field.focus();
+      if (selectField) {
+        field.select();
+      }
+      focusPending.current = false;
+    } else if (!body.current?.contains(document.activeElement)) {
+      primaryButton.current?.focus();
+    }
+  });
+  // A held run disables the fields, which drops the focus: handed back to where it was once the
+  // run ends, so a refused Save leaves the user where they typed.
+  const beforeLock = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    if (locked) {
+      beforeLock.current = document.activeElement;
+      return;
+    }
+    const held = beforeLock.current;
+    beforeLock.current = null;
+    if (held instanceof HTMLElement && held.isConnected && !body.current?.contains(document.activeElement)) {
+      held.focus();
+    }
+  }, [locked]);
+
+  const primaryReady = primary !== undefined && primary.blocked === undefined && !primary.disabled && !locked;
   const cardClass = className ? `dialog ${className}` : "dialog";
   const content = (
     <>
@@ -201,8 +255,8 @@ export function DialogFrame<T extends string>({
               )}
             </button>
           ))}
-          {header.onClose && (
-            <IconButton className="dialog-tabs-close" title="Close" disabled={locked} onClick={header.onClose}>
+          {onCancel && (
+            <IconButton className="dialog-tabs-close" title="Close" disabled={locked} onClick={cancel}>
               <CloseIcon />
             </IconButton>
           )}
@@ -211,15 +265,17 @@ export function DialogFrame<T extends string>({
       ) : (
         <div className="dialog-bar">
           <span className="dialog-title">{header.title}</span>
-          {header.onClose && (
-            <IconButton title="Close" disabled={locked} onClick={header.onClose}>
+          {onCancel && (
+            <IconButton title="Close" disabled={locked} onClick={cancel}>
               <CloseIcon />
             </IconButton>
           )}
           {busy && <ProgressBar />}
         </div>
       )}
-      <div className="dialog-body">{children}</div>
+      <fieldset ref={body} className="dialog-body" disabled={locked}>
+        {children}
+      </fieldset>
       <div className="dialog-buttons">
         {error !== undefined ? (
           <div className="dialog-buttons-message">
@@ -228,25 +284,54 @@ export function DialogFrame<T extends string>({
         ) : (
           message && <div className="dialog-buttons-message">{message}</div>
         )}
-        {buttons}
+        {onCancel && (
+          <button type="button" className="button secondary" disabled={locked} onClick={cancel}>
+            Cancel
+          </button>
+        )}
+        {actions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            className={action.secondary ? "button secondary" : "button"}
+            disabled={action.disabled}
+            onClick={action.run}
+          >
+            {action.label}
+          </button>
+        ))}
+        {primary && (
+          <button
+            ref={primaryButton}
+            type="submit"
+            // Blocked by class, so its reason shows as the tooltip: chromium swallows a disabled
+            // control's.
+            className={primary.blocked === undefined ? "button" : "button disabled"}
+            disabled={primary.disabled || locked}
+            title={primary.blocked}
+          >
+            {primary.label}
+          </button>
+        )}
       </div>
     </>
   );
   return (
     <dialog ref={overlay} className="dialog-overlay" closedby="none">
-      {onSubmit ? (
-        <form
-          className={cardClass}
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSubmit();
-          }}
-        >
-          {content}
-        </form>
-      ) : (
-        <div className={cardClass}>{content}</div>
-      )}
+      <form
+        className={cardClass}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (primaryReady) {
+            primary.run();
+          }
+        }}
+        // The user acts: the focus stays where they put it.
+        onPointerDown={() => (focusPending.current = false)}
+        onKeyDown={() => (focusPending.current = false)}
+      >
+        {content}
+      </form>
     </dialog>
   );
 }
