@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { clipboard, ipcMain } from "electron";
+import { clipboard } from "electron";
+import { handle } from "./channels";
 import type { ProjectRef } from "../../shared/types";
 import { dropsDir, projectsDir, sandboxDirsOf, sandboxDropsDir } from "../project-dirs";
 import type { IpcDeps } from "./deps";
@@ -58,19 +59,19 @@ export function registerFilesIpc({ sessions }: Pick<IpcDeps, "sessions">): void 
     return manager ? writeDropFile(manager.dropsDir(tabId), name, data) : null;
   };
 
-  ipcMain.handle(
+  handle(
     "files:write-drop",
     (_event, ref: ProjectRef, tabId: string, name: string, dataBase64: string): Promise<string | null> =>
       writeDrop(ref, tabId, name, Buffer.from(dataBase64, "base64"))
   );
 
   /** The clipboard image as a file, so its path can be typed into a CLI. */
-  ipcMain.handle("files:clipboard-image", (_event, ref: ProjectRef, tabId: string): Promise<string | null> | null => {
+  handle("files:clipboard-image", (_event, ref: ProjectRef, tabId: string): Promise<string | null> | null => {
     const image = clipboard.readImage();
     return image.isEmpty() ? null : writeDrop(ref, tabId, `pasted-image-${Date.now()}.png`, image.toPNG());
   });
 
-  ipcMain.handle("files:hand-paths", async (_event, ref: ProjectRef, tabId: string, paths: string[]): Promise<string[]> => {
+  handle("files:hand-paths", async (_event, ref: ProjectRef, tabId: string, paths: string[]): Promise<string[]> => {
     return (await sessions.get(ref)?.handPaths(tabId, paths)) ?? [];
   });
 }

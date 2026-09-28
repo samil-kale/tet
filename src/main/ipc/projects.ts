@@ -1,6 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import { dialog, ipcMain } from "electron";
+import { dialog } from "electron";
+import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import type {
   AddAccountResult,
@@ -28,9 +29,9 @@ export function registerProjectsIpc({
   logins,
   projectDeps
 }: Pick<IpcDeps, "store" | "accounts" | "logins" | "projectDeps">): void {
-  ipcMain.handle("projects:list", (): Project[] => store.list());
+  handle("projects:list", (): Project[] => store.list());
 
-  ipcMain.handle(
+  handle(
     "projects:pick-directory",
     async (_event, title: string, defaultPath?: string): Promise<string | null> => {
       // An empty defaultPath is a path too, opening wherever it resolves to.
@@ -45,12 +46,12 @@ export function registerProjectsIpc({
 
   // Separate handler: ["openFile", "openDirectory"] together works only on macOS; Windows and Linux
   // silently show the directory selector. Hence two buttons in the sbx dialog.
-  ipcMain.handle("projects:pick-file", async (_event, title: string): Promise<string | null> => {
+  handle("projects:pick-file", async (_event, title: string): Promise<string | null> => {
     const result = await dialog.showOpenDialog({ title, properties: ["openFile"] });
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
 
-  ipcMain.handle(
+  handle(
     "projects:directory-to-remember",
     async (_event, directory: string): Promise<string> => {
       // A picked repository root remembers its parent, or the next picker opens inside it.
@@ -65,7 +66,7 @@ export function registerProjectsIpc({
     }
   );
 
-  ipcMain.handle("projects:open", (_event, directory: string): Promise<AddRepositoryResult> =>
+  handle("projects:open", (_event, directory: string): Promise<AddRepositoryResult> =>
     addProject(projectDeps, directory)
   );
 
@@ -88,7 +89,7 @@ export function registerProjectsIpc({
     return addProject(projectDeps, directory);
   };
 
-  ipcMain.handle(
+  handle(
     "projects:clone",
     (_event, url: string, directory: string, name: string, accountId?: string, login?: GitLogin) => {
       const target = path.join(directory, name);
@@ -108,14 +109,14 @@ export function registerProjectsIpc({
     }
   );
 
-  ipcMain.handle("projects:create", (_event, directory: string, name: string) => {
+  handle("projects:create", (_event, directory: string, name: string) => {
     const target = path.join(directory, name);
     return addRepository(git.init(target), target, "Create");
   });
 
-  ipcMain.handle("providers:accounts", (): ProviderAccount[] => accounts.list());
+  handle("providers:accounts", (): ProviderAccount[] => accounts.list());
 
-  ipcMain.handle(
+  handle(
     "providers:add-account",
     async (_event, provider: ProviderId, host: string, token: string): Promise<AddAccountResult> => {
       // A pasted "https://gitlab.company.com/" means its host.
@@ -133,7 +134,7 @@ export function registerProjectsIpc({
   );
 
   // Why it could not be removed, for the dialog to tell; nothing once it went.
-  ipcMain.handle("providers:remove-account", (_event, accountId: string): string | undefined => {
+  handle("providers:remove-account", (_event, accountId: string): string | undefined => {
     try {
       accounts.remove(accountId);
       return undefined;
@@ -143,11 +144,11 @@ export function registerProjectsIpc({
   });
 
   // A convenience remembered for the next opening: not kept, the tab only opens unfiltered.
-  ipcMain.handle("providers:set-namespace", (_event, accountId: string, namespace: string): void =>
+  handle("providers:set-namespace", (_event, accountId: string, namespace: string): void =>
     logFailure("remember the namespace", () => accounts.setNamespace(accountId, namespace))
   );
 
-  ipcMain.handle("providers:repos", async (_event, accountId: string): Promise<ListRepositoriesResult> => {
+  handle("providers:repos", async (_event, accountId: string): Promise<ListRepositoriesResult> => {
     const account = accounts.get(accountId);
     const token = accounts.token(accountId);
     if (!account || token === undefined) {
@@ -161,19 +162,19 @@ export function registerProjectsIpc({
   });
 
   // The sidebar's order, kept for the next start: not kept, only the order is lost.
-  ipcMain.handle("projects:reorder", (_event, projectIds: string[]): void =>
+  handle("projects:reorder", (_event, projectIds: string[]): void =>
     logFailure("keep the projects' order", () => store.reorder(projectIds))
   );
 
-  ipcMain.handle("projects:remove", (_event, projectId: string): Promise<GitActionResult> => removeProject(projectDeps, projectId));
+  handle("projects:remove", (_event, projectId: string): Promise<GitActionResult> => removeProject(projectDeps, projectId));
 
   // Each announces its outcome as `projects:changed`, as the control channel's verbs do.
-  ipcMain.handle(
+  handle(
     "projects:add-worktree",
     (_event, projectId: string, branch: string): Promise<AddRepositoryResult> =>
       addWorktree(projectDeps, projectId, branch)
   );
-  ipcMain.handle(
+  handle(
     "projects:delete-worktree",
     (_event, worktree: ProjectRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult> =>
       deleteWorktree(projectDeps, worktree, options)

@@ -1,4 +1,5 @@
-import { app, ipcMain } from "electron";
+import { app } from "electron";
+import { handle, on } from "./channels";
 import { listAgents } from "../agents";
 import type { AppInfo, AppSettings, Requirements, SettingsEdits } from "../../shared/types";
 import { anyAgentInstalled, checkRequirements } from "../requirements";
@@ -13,7 +14,7 @@ export function registerAppIpc({
   shutdown
 }: Pick<IpcDeps, "settings" | "openWorkspace" | "shutdown">): void {
   /** The startup gate, asked on every re-check; passing opens the workspace. */
-  ipcMain.handle("startup:check", async (): Promise<Requirements> => {
+  handle("startup:check", async (): Promise<Requirements> => {
     // Re-scans for manager bin dirs created since startup, so "Check again" finds them.
     await augmentAgentPath();
     const requirements = await checkRequirements();
@@ -24,15 +25,15 @@ export function registerAppIpc({
   });
 
   // Mid-session, so not the check above, which opens the workspace (anyAgentInstalled).
-  ipcMain.handle("startup:any-agent-installed", () => anyAgentInstalled());
+  handle("startup:any-agent-installed", () => anyAgentInstalled());
 
-  ipcMain.on("startup:quit", () => app.quit());
+  on("startup:quit", () => app.quit());
 
   // The settings dialog's answer to a light/dark switch; it asked the user first.
-  ipcMain.on("app:restart", () => shutdown(true));
+  on("app:restart", () => shutdown(true));
 
   // The settings Info tab, fixed for the process's life.
-  ipcMain.handle(
+  handle(
     "app:info",
     (): AppInfo => ({
       version: app.getVersion(),
@@ -43,12 +44,12 @@ export function registerAppIpc({
     })
   );
 
-  ipcMain.handle("settings:get", (): AppSettings => settings.get());
+  handle("settings:get", (): AppSettings => settings.get());
 
   // Only the keys the dialog touched. It says itself when a theme waits for a restart.
-  ipcMain.handle("settings:patch", (_event, edits: SettingsEdits): void => {
+  handle("settings:patch", (_event, edits: SettingsEdits): void => {
     settings.patch(edits);
   });
 
-  ipcMain.handle("agents:list", () => listAgents());
+  handle("agents:list", () => listAgents());
 }

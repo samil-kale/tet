@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { net, shell } from "electron";
-import { ipcMain } from "electron";
+import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types";
 import { expandHome, repositoryRelative } from "../path-inside";
@@ -72,7 +72,7 @@ export function registerShellIpc({
     await openWithNotice(target, "file", shown);
   };
 
-  ipcMain.handle("shell:open-url", async (_event, url: string): Promise<void> => {
+  handle("shell:open-url", async (_event, url: string): Promise<void> => {
     if (!isOpenableUrl(url)) {
       notice("error", `Only http, https and mailto links are opened: ${url}`);
       return;
@@ -93,7 +93,7 @@ export function registerShellIpc({
    * left to `net.fetch` it would carry a README's image off https and onto whatever host the
    * redirect names — the machine's own network included, which fetching here keeps it from.
    */
-  ipcMain.handle("shell:fetch-image", async (_event, url: string): Promise<string | null> => {
+  handle("shell:fetch-image", async (_event, url: string): Promise<string | null> => {
     try {
       const response = await fetchHttpsImage(url);
       if (!response) {
@@ -124,7 +124,7 @@ export function registerShellIpc({
    * A ctrl-clicked terminal path: inside the repository, its relative path for the editor tab;
    * otherwise opened by the OS here, or shown in the file manager if opening would run it.
    */
-  ipcMain.handle("shell:open-file", async (_event, ref: ProjectRef, rawPath: string): Promise<string | null> => {
+  handle("shell:open-file", async (_event, ref: ProjectRef, rawPath: string): Promise<string | null> => {
     const repository = repositories.get(ref);
     if (!repository) {
       return null;
@@ -146,7 +146,7 @@ export function registerShellIpc({
   });
 
   /** The git pane's "show in file manager". */
-  ipcMain.handle("shell:reveal-file", (_event, ref: ProjectRef, filePath: string): void => {
+  handle("shell:reveal-file", (_event, ref: ProjectRef, filePath: string): void => {
     const repository = repositories.get(ref);
     if (repository) {
       shell.showItemInFolder(path.join(repository.at.path, filePath));
@@ -154,7 +154,7 @@ export function registerShellIpc({
   });
 
   /** "Open in external editor": no editor setting, so the OS default for the type. */
-  ipcMain.handle("shell:open-file-externally", async (_event, ref: ProjectRef, filePath: string): Promise<void> => {
+  handle("shell:open-file-externally", async (_event, ref: ProjectRef, filePath: string): Promise<void> => {
     const repository = repositories.get(ref);
     if (!repository) {
       return;
@@ -162,7 +162,7 @@ export function registerShellIpc({
     await openFile(path.join(repository.at.path, filePath), filePath);
   });
 
-  ipcMain.handle("shell:open-project", async (_event, ref: ProjectRef): Promise<void> => {
+  handle("shell:open-project", async (_event, ref: ProjectRef): Promise<void> => {
     const repository = repositories.get(ref);
     if (!repository) {
       return;

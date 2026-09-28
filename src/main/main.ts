@@ -6,11 +6,12 @@ import { AGENTS, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { GitLoginStore } from "./git-logins";
 import { WINDOW_ARGS } from "../shared/api";
+import type { EditorContentReply, EventChannels } from "../shared/ipc";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import { projectRefKey, overridesMachineNote } from "../shared/types";
-import type { ProjectRef, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
+import type { ProjectRef, Notice, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readChanged, readCommands, readSbxConfig } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
@@ -19,6 +20,7 @@ import { findControlPort, startControlServer } from "./control/control-server";
 import { EnvRequests, EnvStore } from "./environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepDropFiles } from "./ipc";
+import { on, once } from "./ipc/channels";
 import { resolveProjectRef } from "./resolved-ref";
 import { projectRefPath } from "./project-dirs";
 import {
@@ -66,11 +68,11 @@ let rendererRebuiltAt = 0;
  * reports listening via `app:notice-listening` (preload's `onNotice`); every page load resets it.
  */
 let noticesHeard = false;
-const heldNotices: unknown[] = [];
+const heldNotices: Notice[] = [];
 
-function send(channel: string, payload: unknown): void {
+function send<C extends keyof EventChannels>(channel: C, payload: EventChannels[C]): void {
   if (channel === "app:notice" && !noticesHeard) {
-    heldNotices.push(payload);
+    heldNotices.push(payload as Notice);
     return;
   }
   if (window && !window.isDestroyed()) {
@@ -83,7 +85,7 @@ function notice(severity: NoticeSeverity, message: string): void {
   send("app:notice", { severity, message });
 }
 
-ipcMain.on("app:notice-listening", () => {
+on("app:notice-listening", () => {
   noticesHeard = true;
   for (const notice of heldNotices.splice(0)) {
     send("app:notice", notice);
@@ -101,7 +103,7 @@ function editorContent(ref: ProjectRef): Promise<string | undefined> {
     return Promise.resolve(undefined);
   }
   editorContentRequests += 1;
-  const reply = `editor:content:${editorContentRequests}`;
+  const reply: EditorContentReply = `editor:content:${editorContentRequests}`;
   return new Promise((resolve) => {
     const answer = (_event: Electron.IpcMainEvent, content: string | undefined): void => {
       clearTimeout(timer);
@@ -111,7 +113,7 @@ function editorContent(ref: ProjectRef): Promise<string | undefined> {
       ipcMain.removeListener(reply, answer);
       resolve(undefined);
     }, EDITOR_CONTENT_TIMEOUT_MS);
-    ipcMain.once(reply, answer);
+    once(reply, answer);
     send("editor:content-request", { ref, reply });
   });
 }

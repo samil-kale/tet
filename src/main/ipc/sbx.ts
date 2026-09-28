@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import { EMPTY_SBX_CONFIG } from "../../shared/types";
 import type {
@@ -31,7 +31,7 @@ export function registerSbxIpc({
   notice
 }: Pick<IpcDeps, "store" | "sbxLocal" | "sbxAccounts" | "notice">): void {
   // Per project: the policy has to allow the project's folder.
-  ipcMain.handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
+  handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
     const project = store.get(projectId);
     return project
       ? readSbxStatus(project.path, { projectId })
@@ -40,16 +40,16 @@ export function registerSbxIpc({
 
   // The General tab's Docker account (sbx-accounts.ts); its access tokens are one list for every
   // project.
-  ipcMain.handle("sbx:login", () => runSbxLogin());
-  ipcMain.handle("sbx:signed-in-user", () => readSbxUser(true));
-  ipcMain.handle(
+  handle("sbx:login", () => runSbxLogin());
+  handle("sbx:signed-in-user", () => readSbxUser(true));
+  handle(
     "sbx:sign-in",
     (_event, user: string, token: string, accountId?: string): Promise<SbxSignInResult> =>
       signInToSbx(sbxAccounts, user, token, accountId, true)
   );
-  ipcMain.handle("sbx:logout", () => runSbxLogout());
-  ipcMain.handle("sbx:accounts", (): SbxAccount[] => sbxAccounts.list());
-  ipcMain.handle("sbx:save-accounts", (_event, edits: SbxAccountEdit[]): string | undefined => {
+  handle("sbx:logout", () => runSbxLogout());
+  handle("sbx:accounts", (): SbxAccount[] => sbxAccounts.list());
+  handle("sbx:save-accounts", (_event, edits: SbxAccountEdit[]): string | undefined => {
     try {
       sbxAccounts.update(edits);
       return undefined;
@@ -57,11 +57,11 @@ export function registerSbxIpc({
       return errorMessage(error);
     }
   });
-  ipcMain.handle("sbx:init-policy", () => initSbxPolicy());
-  ipcMain.on("sbx:cancel-setup", () => cancelSbxSetup());
+  handle("sbx:init-policy", () => initSbxPolicy());
+  on("sbx:cancel-setup", () => cancelSbxSetup());
 
   // The rows' marks; asked fresh, as the policy and this machine change outside tet.
-  ipcMain.handle(
+  handle(
     "sbx:problems",
     async (
       _event,
@@ -77,16 +77,16 @@ export function registerSbxIpc({
   );
 
   // Read fresh: tet.json may be edited outside tet.
-  ipcMain.handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
+  handle("sbx:get-config", async (_event, projectId: string): Promise<SbxProjectConfig> => {
     const project = store.get(projectId);
     return project ? readSbxConfig(project.path) : EMPTY_SBX_CONFIG;
   });
   // The Secrets and Variables rows holding a value on this machine, never the values; the knowledge.
-  ipcMain.handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
+  handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
   // The Knowledge tab's agents; asked fresh, as agents are installed outside tet.
-  ipcMain.handle("sbx:knowledge-sources", (): Promise<SbxKnowledgeSource[]> => readKnowledgeSources());
+  handle("sbx:knowledge-sources", (): Promise<SbxKnowledgeSource[]> => readKnowledgeSources());
   // The dialog's Save, shared with tet-ctl's sbx-set-* verbs (sbx-settings.ts).
-  ipcMain.handle(
+  handle(
     "sbx:save-config",
     async (_event, projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult> => {
       const project = store.get(projectId);

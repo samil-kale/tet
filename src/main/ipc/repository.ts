@@ -1,4 +1,5 @@
-import { ipcMain } from "electron";
+import type { IpcMainInvokeEvent } from "electron";
+import { handle, on } from "./channels";
 import { AGENTS, findAskableAgent } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { errorMessage, failure } from "../../shared/errors";
@@ -36,73 +37,70 @@ export function registerRepositoryIpc({
   store,
   repositories
 }: Pick<IpcDeps, "settings" | "store" | "repositories">): void {
-  ipcMain.handle("repository:state", (_event, ref: ProjectRef): RepositoryState => {
+  handle("repository:state", (_event, ref: ProjectRef): RepositoryState => {
     return repositories.get(ref)?.getState() ?? MISSING_REPOSITORY;
   });
 
-  ipcMain.handle("repository:refresh", (_event, ref: ProjectRef): void => {
+  handle("repository:refresh", (_event, ref: ProjectRef): void => {
     repositories.get(ref)?.refreshSoon();
   });
 
   /** A repository command answering a GitActionResult, or an error when the repository or worktree
    *  is not open. */
-  const onRepository = <A extends unknown[]>(
-    channel: string,
-    run: (repository: Repository, ...args: A) => Promise<GitActionResult>
-  ): void => {
-    ipcMain.handle(channel, async (_event, ref: ProjectRef, ...args: A): Promise<GitActionResult> => {
+  const inRepository =
+    <A extends unknown[]>(run: (repository: Repository, ...args: A) => Promise<GitActionResult>) =>
+    async (_event: IpcMainInvokeEvent, ref: ProjectRef, ...args: A): Promise<GitActionResult> => {
       const repository = repositories.get(ref);
       return repository ? run(repository, ...args) : { ok: false, error: MISSING_REPOSITORY.error };
-    });
-  };
+    };
 
   /** A write to the project's tet.json, which only its repository has (tet-json.ts's configRoot),
    *  reached through the store as the commands are; the watcher sees the write and re-lists. */
-  const onProjectFile = <A extends unknown[]>(channel: string, write: (root: string, ...args: A) => Promise<void>): void => {
-    ipcMain.handle(channel, async (_event, projectId: string, ...args: A): Promise<GitActionResult> => {
+  const inProjectFile =
+    <A extends unknown[]>(write: (root: string, ...args: A) => Promise<void>) =>
+    async (_event: IpcMainInvokeEvent, projectId: string, ...args: A): Promise<GitActionResult> => {
       const project = store.get(projectId);
       return project
         ? write(project.path, ...args).then(() => ({ ok: true }), failure)
         : { ok: false, error: MISSING_REPOSITORY.error };
-    });
-  };
+    };
 
-  onRepository("repository:checkout", (repository, target: CheckoutTarget) => repository.checkout(target));
-  onRepository("repository:fetch", (repository, login?: GitLogin) => repository.fetch(login));
-  onRepository("repository:pull", (repository, login?: GitLogin) => repository.pull(login));
-  onRepository("repository:push", (repository, login?: GitLogin) => repository.push(login));
-  onRepository("repository:set-remote-url", (repository, remote: string, url: string) =>
-    repository.setRemoteUrl(remote, url)
+  handle("repository:checkout", inRepository((repository, target: CheckoutTarget) => repository.checkout(target)));
+  handle("repository:fetch", inRepository((repository, login?: GitLogin) => repository.fetch(login)));
+  handle("repository:pull", inRepository((repository, login?: GitLogin) => repository.pull(login)));
+  handle("repository:push", inRepository((repository, login?: GitLogin) => repository.push(login)));
+  handle("repository:set-remote-url", inRepository((repository, remote: string, url: string) =>
+    repository.setRemoteUrl(remote, url))
   );
-  onRepository("repository:create-branch", (repository, name: string, startPoint: string) =>
-    repository.createBranch(name, startPoint)
+  handle("repository:create-branch", inRepository((repository, name: string, startPoint: string) =>
+    repository.createBranch(name, startPoint))
   );
-  onRepository("repository:rename-branch", (repository, from: string, to: string) => repository.renameBranch(from, to));
-  onRepository("repository:delete-branch", (repository, name: string, onRemote: boolean) =>
-    repository.deleteBranch(name, onRemote)
+  handle("repository:rename-branch", inRepository((repository, from: string, to: string) => repository.renameBranch(from, to)));
+  handle("repository:delete-branch", inRepository((repository, name: string, onRemote: boolean) =>
+    repository.deleteBranch(name, onRemote))
   );
-  onRepository("repository:delete-remote-branch", (repository, remote: string, name: string, login?: GitLogin) =>
-    repository.deleteRemoteBranch(remote, name, login)
+  handle("repository:delete-remote-branch", inRepository((repository, remote: string, name: string, login?: GitLogin) =>
+    repository.deleteRemoteBranch(remote, name, login))
   );
-  onRepository("repository:merge", (repository, ref: string) => repository.merge(ref));
-  onRepository("repository:rebase", (repository, ref: string, confirmed: boolean) => repository.rebase(ref, confirmed));
-  onRepository("repository:abort", (repository) => repository.abort());
-  onRepository("repository:create-tag", (repository, name: string, target: string, message: string) =>
-    repository.createTag(name, target, message)
+  handle("repository:merge", inRepository((repository, ref: string) => repository.merge(ref)));
+  handle("repository:rebase", inRepository((repository, ref: string, confirmed: boolean) => repository.rebase(ref, confirmed)));
+  handle("repository:abort", inRepository((repository) => repository.abort()));
+  handle("repository:create-tag", inRepository((repository, name: string, target: string, message: string) =>
+    repository.createTag(name, target, message))
   );
-  onRepository("repository:push-tag", (repository, name: string, login?: GitLogin) => repository.pushTag(name, login));
-  onRepository("repository:delete-tag", (repository, name: string, onRemote: boolean) =>
-    repository.deleteTag(name, onRemote)
+  handle("repository:push-tag", inRepository((repository, name: string, login?: GitLogin) => repository.pushTag(name, login)));
+  handle("repository:delete-tag", inRepository((repository, name: string, onRemote: boolean) =>
+    repository.deleteTag(name, onRemote))
   );
-  onRepository("repository:delete-remote-tag", (repository, name: string, login?: GitLogin) =>
-    repository.deleteRemoteTag(name, login)
+  handle("repository:delete-remote-tag", inRepository((repository, name: string, login?: GitLogin) =>
+    repository.deleteRemoteTag(name, login))
   );
-  onRepository("repository:checkout-tag", (repository, name: string) => repository.checkoutTag(name));
-  onRepository("repository:commit-all", (repository, message: string) => repository.commitAll(message));
-  onRepository("repository:commit-paths", (repository, message: string, paths: string[]) =>
-    repository.commitPaths(message, paths)
+  handle("repository:checkout-tag", inRepository((repository, name: string) => repository.checkoutTag(name)));
+  handle("repository:commit-all", inRepository((repository, message: string) => repository.commitAll(message)));
+  handle("repository:commit-paths", inRepository((repository, message: string, paths: string[]) =>
+    repository.commitPaths(message, paths))
   );
-  ipcMain.handle("repository:suggest-commit-message", async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
+  handle("repository:suggest-commit-message", async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
     const repository = repositories.get(ref);
     if (!repository) {
       return {};
@@ -127,31 +125,29 @@ export function registerRepositoryIpc({
       return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
     }
   });
-  ipcMain.on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
-  onRepository("repository:stash-push", (repository, message: string) => repository.stashPush(message));
-  onRepository("repository:stash", (repository, command: StashCommand, sha: string) => repository.stash(command, sha));
-  onRepository("repository:discard", async (repository, paths: string[], permanently: boolean) =>
-    paths.length > 0 ? repository.discard(paths, permanently) : { ok: true }
+  on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
+  handle("repository:stash-push", inRepository((repository, message: string) => repository.stashPush(message)));
+  handle("repository:stash", inRepository((repository, command: StashCommand, sha: string) => repository.stash(command, sha)));
+  handle("repository:discard", inRepository(async (repository, paths: string[], permanently: boolean) =>
+    paths.length > 0 ? repository.discard(paths, permanently) : { ok: true })
   );
-  onRepository("repository:ignore", (repository, filePath: string, scope: "file" | "extension") =>
-    repository.ignore(filePath, scope)
+  handle("repository:ignore", inRepository((repository, filePath: string, scope: "file" | "extension") =>
+    repository.ignore(filePath, scope))
   );
-  onRepository("repository:create-file", (repository, filePath: string) => repository.createFile(filePath));
-  onRepository("repository:create-directory", (repository, dirPath: string) => repository.createDirectory(dirPath));
-  onRepository("repository:delete-path", (repository, filePath: string) => repository.deletePath(filePath));
-  onRepository("repository:rename-path", (repository, fromPath: string, toPath: string) =>
-    repository.renamePath(fromPath, toPath)
+  handle("repository:create-file", inRepository((repository, filePath: string) => repository.createFile(filePath)));
+  handle("repository:create-directory", inRepository((repository, dirPath: string) => repository.createDirectory(dirPath)));
+  handle("repository:delete-path", inRepository((repository, filePath: string) => repository.deletePath(filePath)));
+  handle("repository:rename-path", inRepository((repository, fromPath: string, toPath: string) =>
+    repository.renamePath(fromPath, toPath))
   );
-  onProjectFile("repository:add-folder", (root, folderPath: string) => addFolder(root, folderPath));
-  onProjectFile("repository:remove-folder", (root, folderPath: string) => removeFolder(root, folderPath));
-  onProjectFile("repository:exclude-path", (root, relPath: string) => addExclude(root, relPath));
-  onProjectFile(
-    "repository:set-explorer-setting",
-    (root, key: keyof ExplorerSettings, value: ExplorerSettings[keyof ExplorerSettings]) =>
-      setExplorerSetting(root, key, value)
+  handle("repository:add-folder", inProjectFile((root, folderPath: string) => addFolder(root, folderPath)));
+  handle("repository:remove-folder", inProjectFile((root, folderPath: string) => removeFolder(root, folderPath)));
+  handle("repository:exclude-path", inProjectFile((root, relPath: string) => addExclude(root, relPath)));
+  handle("repository:set-explorer-setting", inProjectFile((root, key: keyof ExplorerSettings, value: ExplorerSettings[keyof ExplorerSettings]) =>
+      setExplorerSetting(root, key, value))
   );
 
-  ipcMain.handle("repository:list-explorer", async (_event, ref: ProjectRef): Promise<ExplorerListing> => {
+  handle("repository:list-explorer", async (_event, ref: ProjectRef): Promise<ExplorerListing> => {
     return (
       (await repositories.get(ref)?.listExplorer()) ?? {
         files: [],
@@ -162,13 +158,13 @@ export function registerRepositoryIpc({
     );
   });
 
-  ipcMain.handle("repository:search-files", async (_event, ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult> => {
+  handle("repository:search-files", async (_event, ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult> => {
     return (await repositories.get(ref)?.searchFiles(query)) ?? { files: [], truncated: false };
   });
 
   // The settings Files tab: tet.json's view settings only, no walk; folders and exclude globs stay
   // the tree's own.
-  ipcMain.handle("repository:explorer-settings", async (_event, projectId: string): Promise<ExplorerSettings> => {
+  handle("repository:explorer-settings", async (_event, projectId: string): Promise<ExplorerSettings> => {
     const project = store.get(projectId);
     if (!project) {
       return DEFAULT_EXPLORER_VIEW;
@@ -177,11 +173,11 @@ export function registerRepositoryIpc({
     return { excludeGitIgnore, compactFolders, sortOrder };
   });
 
-  ipcMain.handle("repository:watch-files", (_event, ref: ProjectRef, paths: string[]): void => {
+  handle("repository:watch-files", (_event, ref: ProjectRef, paths: string[]): void => {
     repositories.get(ref)?.watchFiles(paths);
   });
 
-  ipcMain.handle("repository:read-file", async (_event, ref: ProjectRef, filePath: string): Promise<FileContent> => {
+  handle("repository:read-file", async (_event, ref: ProjectRef, filePath: string): Promise<FileContent> => {
     const repository = repositories.get(ref);
     if (!repository) {
       return { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false, error: MISSING_REPOSITORY.error };
@@ -189,7 +185,7 @@ export function registerRepositoryIpc({
     return repository.readFile(filePath);
   });
 
-  ipcMain.handle(
+  handle(
     "repository:write-file",
     async (_event, ref: ProjectRef, filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> => {
       const repository = repositories.get(ref);

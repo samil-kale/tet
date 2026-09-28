@@ -31,6 +31,9 @@ project's terminals.
   `terminals/` (pty, sessions, hooks), `control/` (`tet-ctl`), `ipc/` (the `TETApi` handlers,
   registrars by area, each taking only the singletons it touches), `agents/`, `providers/`; flat
   is the app itself — `main.ts` (window, startup), settings, projects, requirements, sbx.
+- Every IPC channel is typed in `src/shared/ipc.ts`, off `TETApi`, and used only through its
+  wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) in main, `invoke`/`send`/`subscribe`
+  in the preload — never a bare `ipcMain` or `ipcRenderer` call with a string.
 - `src/renderer/`: `terminal/` (xterm, split view, link providers), `git/` (the side pane's git
   view), `files/` (its other one: the Explorer tree, the SEARCH pane, Seti's file icons),
   `diff/` (the editor tab: monaco + shiki), `sidebar/`, `dialogs/`, `ui/`, `themes/`; flat is the
@@ -154,7 +157,7 @@ others.
   `LINUX`), named by what it means (`pathsIgnoreCase`, `spawnsThroughCmd`, `appBundle`), never by
   which OS it is. Main reads `PLATFORM` (`host-platform.ts`), the window its own
   (`renderer/platform.ts`); nothing else asks for `process.platform` or `navigator.platform`, and
-  the id is data alone (tet.json's `os`, the app's info) � `install.test.ts`, testing each OS's own
+  the id is data alone (tet.json's `os`, the app's info) � `install.test.ts`, testing each OS's own
   installer, alone branches on it. A new difference extends the interface.
 - Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
   (`src/main/terminals/pty.ts`), never `shell: true`.
