@@ -4,6 +4,7 @@ import type { TerminalStatus } from "../../shared/types";
 import { spawnAgentProcess, type SpawnOptions } from "./pty";
 import { isSimulatedMissing } from "../simulate";
 import { runProcess } from "../util/run-process";
+import { logError } from "../uncaught";
 
 interface SessionCallbacks {
   onOutput: (data: string) => void;
@@ -131,7 +132,7 @@ export class TerminalSession {
     try {
       this.process = spawnAgentProcess(this.executable, this.args, { ...this.spawn, cols, rows });
     } catch (error) {
-      console.error(`[tet] failed to spawn ${this.executable}:`, error);
+      logError(`failed to spawn ${this.executable}`, error);
       this.callbacks.onOutput(`\r\n[tet] failed to spawn ${this.executable}:\r\n${errorMessage(error)}\r\n`);
       this.setStatus("error");
       return;
@@ -188,7 +189,7 @@ export class TerminalSession {
     try {
       proc.kill();
     } catch (error) {
-      console.error(`[tet] failed to kill ${this.executable}:`, error);
+      logError(`failed to kill ${this.executable}`, error);
     }
     await exitedWithin(exited, FORCE_KILL_MS);
   }
@@ -227,7 +228,7 @@ export class TerminalSession {
         this.process.kill();
       } catch (error) {
         // Already gone; `respawn` runs from its exit.
-        console.error(`[tet] failed to kill ${this.executable}:`, error);
+        logError(`failed to kill ${this.executable}`, error);
       }
     } else {
       respawn();

@@ -35,6 +35,7 @@ import { ReconcileScheduler } from "./reconcile-scheduler";
 import { StartIndicators } from "./start-indicators";
 import { currentTheme } from "../theme";
 import { effectivePrompt } from "../../shared/prompts";
+import { logError } from "../uncaught";
 
 // Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
 const SESSION_REMOVE_DELAY_MS = 500;
@@ -854,7 +855,7 @@ export class TabSessionManager {
   private removeHandoffCopy(dir: string): void {
     fs.promises
       .rm(dir, { recursive: true, force: true })
-      .catch((error: unknown) => console.error("[tet] could not delete a handoff's copy:", error));
+      .catch((error: unknown) => logError("could not delete a handoff's copy", error));
   }
 
   /**

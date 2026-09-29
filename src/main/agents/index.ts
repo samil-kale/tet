@@ -7,6 +7,7 @@ import { claudeAgent } from "./claude";
 import { codexAgent } from "./codex";
 import { piAgent } from "./pi";
 import { shellAgent } from "./shell";
+import { logError } from "../uncaught";
 
 /** Also the order of the "new terminal" menu. */
 export const AGENTS: AgentDefinition[] = [claudeAgent, codexAgent, piAgent, shellAgent];
@@ -62,7 +63,7 @@ export async function removeAllSessions(cwd: string): Promise<void> {
       for (const { id } of await sessions.list(cwd)) {
         await sessions
           .remove(agent.executable(), cwd, id)
-          .catch((error: unknown) => console.error(`[tet] could not delete ${agent.displayName} session ${id}:`, error));
+          .catch((error: unknown) => logError(`could not delete ${agent.displayName} session ${id}`, error));
       }
     })
   );

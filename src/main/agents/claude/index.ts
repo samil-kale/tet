@@ -8,6 +8,7 @@ import { claudeHookReply, claudeWorkOutlivesStop, setupClaudeHooks } from "./hoo
 import { claudeConfigDir, claudeSandboxSessions, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
+import { logError } from "../../uncaught";
 
 /** Appended to Claude Code's own system prompt for this process (see system-prompt.ts). */
 const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prompt", systemPrompt(side)];
@@ -45,7 +46,7 @@ export const claudeAgent: SandboxedAgent = {
         args = setupClaudeHooks(paths);
       } catch (error) {
         // Swallowed, never rejected — see AgentHost.prepare.
-        console.error("[tet] could not write Claude hook settings:", error);
+        logError("could not write Claude hook settings", error);
       }
       return Promise.resolve({ args: [...args, ...systemPromptArgs(HOST_SIDE)], env: FULLSCREEN_ENV });
     }
@@ -55,7 +56,7 @@ export const claudeAgent: SandboxedAgent = {
       try {
         return { args: [...setupClaudeHooks(paths, SANDBOX_TARGET), ...systemPromptArgs(SANDBOX_SIDE)] };
       } catch (error) {
-        console.error("[tet] could not write Claude sandbox hook settings:", error);
+        logError("could not write Claude sandbox hook settings", error);
         return { args: systemPromptArgs(SANDBOX_SIDE) };
       }
     },

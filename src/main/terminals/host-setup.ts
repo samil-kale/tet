@@ -5,6 +5,7 @@ import type { AgentDefinition, SpawnPreparation } from "../agents/agent";
 import { agentConfigDir } from "../data-root";
 import type { SettingsStore } from "../settings";
 import { currentTheme } from "../theme";
+import { logError } from "../uncaught";
 
 interface HostSetup {
   agent: AgentDefinition;
@@ -108,7 +109,7 @@ export class HostSetups {
       setup.failed = false;
       return true;
     } catch (error) {
-      console.error("[tet] spawn preparation failed:", error);
+      logError("spawn preparation failed", error);
       this.onNotice("error", `${agent.displayName} could not be started: ${errorMessage(error)}`);
       // A rerun keeps the earlier setup, which still starts the agent (themeChanged).
       setup.failed = setup.preparation === undefined;

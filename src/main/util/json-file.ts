@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import writeFileAtomic from "write-file-atomic";
+import { logError } from "../uncaught";
 
 /** A parsed JSON object; an array or null is not one. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -47,6 +48,6 @@ export function logFailure(what: string, write: () => void): void {
   try {
     write();
   } catch (error) {
-    console.error(`[tet] could not ${what}:`, error);
+    logError(`could not ${what}`, error);
   }
 }

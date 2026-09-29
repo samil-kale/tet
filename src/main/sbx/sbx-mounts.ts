@@ -13,6 +13,7 @@ import { relativeInside } from "../util/path-inside";
 import { toContainerPath } from "../terminals/hook-target";
 import { runSbx, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
 import { mountableBy, normalizeHostPath, readFilesystemRules, readGovernance } from "./sbx-status";
+import { logError } from "../uncaught";
 
 /**
  * A live bind mount's `sbx mount` and `sbx umount` specs: `HOST:CTR_TARGET[:ro]` and
@@ -370,7 +371,7 @@ export async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<Moun
       }
       specs.push(mountSpec(mount.host, mount.target, false));
     } catch (error) {
-      console.error("[tet] could not prepare sandbox session mount:", error);
+      logError("could not prepare sandbox session mount", error);
     }
   }
   return specs;

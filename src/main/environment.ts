@@ -6,6 +6,7 @@ import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
 import { hasStrings, writeJson } from "./util/json-file";
 import { PLATFORM } from "./host-platform";
+import { logError } from "./uncaught";
 
 /** What the file holds: the variable plus its value in the clear, as every tab gets it anyway. */
 interface StoredVar {
@@ -131,7 +132,7 @@ export class EnvStore {
     try {
       return this.read();
     } catch (error) {
-      console.error("[tet] could not read the environment variables:", error);
+      logError("could not read the environment variables", error);
       return undefined;
     }
   }

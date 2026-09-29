@@ -31,6 +31,7 @@ import { watchedDirectoryGone } from "../util/watch-dir";
 import { relativeInside } from "../util/path-inside";
 import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./image-type";
+import { logError } from "../uncaught";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;
@@ -891,7 +892,7 @@ export class Repository {
     } catch (error) {
       // A filesystem that can't watch recursively throws here instead of emitting an error. The
       // root's watcher may already stand when the git directory's threw.
-      console.error(`[tet] could not watch ${this.at.path}:`, error);
+      logError(`could not watch ${this.at.path}`, error);
       this.closeWatchers();
       this.retryWatching();
     }
@@ -968,7 +969,7 @@ export class Repository {
   /** A watcher failed, logged, or (no `error`) its directory went: both watchers are put back. */
   private onWatchError(dir: string, error?: unknown): void {
     if (error !== undefined) {
-      console.error(`[tet] watcher failed for ${dir}:`, error);
+      logError(`watcher failed for ${dir}`, error);
     }
     this.closeWatchers();
     this.retryWatching();

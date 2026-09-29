@@ -7,6 +7,7 @@ import { SBX_PROBLEM } from "../../shared/sbx-rules";
 import { isSimulatedMissing } from "../simulate";
 import { runProcess, stoppable } from "../util/run-process";
 import { PLATFORM } from "../host-platform";
+import { logError } from "../uncaught";
 
 /**
  * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy
@@ -34,6 +35,8 @@ export type OnData = RunOptions["onData"];
 export interface RunResult {
   /** Exited 0. */
   ok: boolean;
+  /** The exit code; null when sbx could not start, died of a signal or timed out (runProcess). */
+  code: number | null;
   stdout: string;
   /** sbx's own errors and those of a command it ran. */
   stderr: string;
@@ -43,6 +46,20 @@ export interface RunResult {
  *  ("Starting sandboxd daemon...") precede it. Empty when it said nothing. */
 export function sbxError(result: RunResult): string {
   return result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "") ?? "";
+}
+
+/** How much of each stream a logged failure keeps, from its end. */
+const MAX_LOGGED_OUTPUT = 2000;
+
+/**
+ * A run the caller takes for a failure, not for one of sbx's answers: logged whole, as what the
+ * message drops is what tells why, and worded as sbxError, else `<command> failed`.
+ */
+export function sbxFailure(result: RunResult, command: string): string {
+  logError(
+    `${command} failed (exit ${result.code ?? "none"})\nstdout: ${result.stdout.trim().slice(-MAX_LOGGED_OUTPUT)}\nstderr: ${result.stderr.trim().slice(-MAX_LOGGED_OUTPUT)}`
+  );
+  return sbxError(result) || `${command} failed`;
 }
 
 /** Why sbx refused, as a problem's reason (SbxProblems): what it said, else that it refused. */
@@ -62,7 +79,7 @@ export async function runSbx(args: string[], options: RunOptions = {}): Promise<
       onSpawn
     });
   const result = options.cancellable ? await setup.run(run) : await run();
-  return { ok: result.code === 0, stdout: result.stdout, stderr: result.stderr };
+  return { ok: result.code === 0, code: result.code, stdout: result.stdout, stderr: result.stderr };
 }
 
 /** A `--json` run's stdout parsed: undefined when sbx failed or printed no JSON, so a reader
@@ -172,14 +189,14 @@ export async function readSbxUser(cancellable: boolean): Promise<string | undefi
  */
 export async function runSbxTokenLogin(user: string, token: string, cancellable: boolean): Promise<string | undefined> {
   const result = await runSbx(["login", "--username", user, "--password-stdin"], { stdin: token, cancellable });
-  return result.ok ? undefined : sbxError(result) || "sbx login failed";
+  return result.ok ? undefined : sbxFailure(result, "sbx login");
 }
 
 /** `sbx logout` stops every running local sandbox; `--yes` skips its "Proceed y/N?", which a closed
  *  stdin would cancel. */
 export async function runSbxLogout(): Promise<string | undefined> {
   const result = await runSbx(["logout", "--yes"]);
-  return result.ok ? undefined : sbxError(result) || "sbx logout failed";
+  return result.ok ? undefined : sbxFailure(result, "sbx logout");
 }
 
 /**

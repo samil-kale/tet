@@ -8,7 +8,7 @@ import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxBlocked, sbxN
 import { projectsDir, sandboxDir } from "../project-dirs";
 import { augmentAgentPath } from "../terminals/agent-path";
 import { PLATFORM } from "../host-platform";
-import { jsonOf, readSbxVersion, runSbx, sbxError, sbxVersionSupported, type RunResult } from "./sbx-cli";
+import { jsonOf, readSbxVersion, runSbx, sbxFailure, sbxVersionSupported, type RunResult } from "./sbx-cli";
 
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
  *  from main.ts. Unset without a control channel, and then nothing of it reaches a sandbox. */
@@ -210,7 +210,7 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   const sandboxes = parseSandboxes(list);
   if (!sandboxes) {
     if (!/not authenticated/i.test(list.stderr)) {
-      status.failure = sbxError(list) || "sbx ls failed";
+      status.failure = sbxFailure(list, "sbx ls");
     }
     return { status };
   }

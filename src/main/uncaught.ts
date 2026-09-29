@@ -20,9 +20,11 @@ const seen = new Map<string, number>();
 /** Set by installUncaughtHandler. */
 let errorLog: string | undefined;
 
-/** Logs a non-exception failure that would go unseen (e.g. a refused toast); never throws. */
-export function logError(line: string): void {
-  const entry = `[tet] ${line} ${new Date().toISOString()}\n`;
+/** Logs a failure that would go unseen — a caught exception with its stack, or none (e.g. a refused
+ *  toast); never throws. The console gets it too, for tests driving the app. */
+export function logError(line: string, error?: unknown): void {
+  const detail = error === undefined ? "" : `\n${error instanceof Error ? (error.stack ?? String(error)) : String(error)}`;
+  const entry = `[tet] ${line} ${new Date().toISOString()}${detail}\n`;
   console.error(entry);
   if (!errorLog) {
     return;

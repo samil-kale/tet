@@ -4,6 +4,7 @@ import * as readline from "node:readline";
 import { isRecord } from "../util/json-file";
 import type { AgentSessionInfo } from "./agent";
 import { PLATFORM } from "../host-platform";
+import { logError } from "../uncaught";
 
 /**
  * Shared reading of append-only JSONL transcripts from either end: the chunked read, title rules,
@@ -55,7 +56,7 @@ export async function collectSessions(
     sessions.sort((a, b) => a.createdAt - b.createdAt);
     return sessions;
   } catch (error) {
-    console.error(`[tet] ${label} session listing failed:`, error);
+    logError(`${label} session listing failed`, error);
     return [];
   }
 }
@@ -159,7 +160,7 @@ export async function readHeadLines(
     }
     return true;
   } catch (error) {
-    console.error(`[tet] ${label} transcript head scan failed:`, error);
+    logError(`${label} transcript head scan failed`, error);
     return false;
   } finally {
     lines.close();
@@ -291,7 +292,7 @@ export async function scanTranscriptTail<T>(
       }
       cache.set(filePath, { size, tail });
     } catch (error) {
-      console.error(`[tet] ${scan.label} transcript scan failed:`, error);
+      logError(`${scan.label} transcript scan failed`, error);
     }
     return { tail, size, mtimeMs };
   } finally {

@@ -12,6 +12,7 @@ import type { NoticeProgress, NoticeSeverity } from "../../shared/types";
 import { readJson } from "../util/json-file";
 import { resumableDownload } from "./resumable-download";
 import { runProcess } from "../util/run-process";
+import { logError } from "../uncaught";
 
 /** Not urgent: an update installs only once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
@@ -65,7 +66,7 @@ function reportLastUpdate(notify: Notify): void {
   if (result.ok) {
     notify("info", `Updated to ${result.version}`);
   } else {
-    console.error(`[tet] update to ${result.version} failed:\n${result.output}`);
+    logError(`update to ${result.version} failed:\n${result.output}`);
     notify("error", `Update to ${result.version} failed, update with: ${PLATFORM.installCommand}`);
   }
 }
@@ -233,7 +234,7 @@ export function startAutoUpdate(
         });
       } catch (error) {
         // Tried again at the next check.
-        console.error(`[tet] could not fetch the update to ${latest}:`, error);
+        logError(`could not fetch the update to ${latest}`, error);
         return;
       } finally {
         showProgress({ key: "update", message, fraction: undefined });
@@ -275,13 +276,13 @@ export function installPendingUpdate(): void {
       windowsHide: true,
       env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
     });
-    child.on("error", (error) => console.error("[tet] could not start the update:", error));
+    child.on("error", (error) => logError("could not start the update", error));
     child.unref();
     // Written here, not by the updater: a tet started right after this quit must already see it.
     if (child.pid !== undefined) {
       writeFileAtomic.sync(updateLockPath(updateDir()), String(child.pid));
     }
   } catch (error) {
-    console.error("[tet] could not start the update:", error);
+    logError("could not start the update", error);
   }
 }

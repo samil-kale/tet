@@ -27,6 +27,7 @@ import { releaseDropped } from "./sbx/sbx-mounts";
 import type { SbxLocalStore } from "./sbx/sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 import { tetJsonProblem } from "./tet-json";
+import { logError } from "./uncaught";
 
 /** What opening and closing projects and their worktrees takes — the same singletons ipc/ holds. */
 export interface ProjectDeps {
@@ -193,7 +194,7 @@ async function dropRefData(refs: ProjectRef[], folders: string[]): Promise<void>
   for (const folder of folders) {
     await fs.promises
       .rm(folder, { recursive: true, force: true, maxRetries: 5 })
-      .catch((error: unknown) => console.error(`[tet] could not remove ${folder}:`, error));
+      .catch((error: unknown) => logError(`could not remove ${folder}`, error));
   }
 }
 
@@ -240,7 +241,7 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
     if (there) {
       const unset = await git.unsetProjectId(project.path);
       if (!unset.ok) {
-        console.error(`[tet] could not unset tet.id in ${project.path}: ${unset.error}`);
+        logError(`could not unset tet.id in ${project.path}: ${unset.error}`);
       }
     }
     await dropRefData(closing, [projectDir(deps.dataRoot, projectId)]);

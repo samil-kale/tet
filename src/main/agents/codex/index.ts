@@ -10,6 +10,7 @@ import { hookSessionId } from "../hook-payload";
 import { codexHookReply, setupCodexHooks } from "./hooks";
 import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
 import { PLATFORM } from "../../host-platform";
+import { logError } from "../../uncaught";
 
 /**
  * On win32 Codex reads its colors from the *console* (conhost's palette, whatever xterm draws) and
@@ -69,14 +70,14 @@ export const codexAgent: SandboxedAgent = {
           launcher = writeConsoleColorLauncher(paths.agentDir, executable, paths.theme);
         } catch (error) {
           // Codex still starts, drawing its boxes for a black console.
-          console.error("[tet] could not write Codex's launcher:", error);
+          logError("could not write Codex's launcher", error);
         }
       }
       try {
         args = [...FULLSCREEN_ARGS, ...setupCodexHooks()];
       } catch (error) {
         // See AgentHost.prepare: swallow, never reject.
-        console.error("[tet] could not set up Codex hooks:", error);
+        logError("could not set up Codex hooks", error);
       }
       return Promise.resolve({ args, executable: launcher });
     }
@@ -86,7 +87,7 @@ export const codexAgent: SandboxedAgent = {
       try {
         return { args: [...FULLSCREEN_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] };
       } catch (error) {
-        console.error("[tet] could not set up Codex sandbox hooks:", error);
+        logError("could not set up Codex sandbox hooks", error);
         return { args: FULLSCREEN_ARGS };
       }
     },

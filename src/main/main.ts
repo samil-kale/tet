@@ -171,7 +171,7 @@ const dataRoot = resolveDataRoot(userDataArg);
 try {
   fs.mkdirSync(dataRoot, { recursive: true });
 } catch (error) {
-  console.error("[tet] could not create the data folder:", error);
+  logError("could not create the data folder", error);
 }
 
 /**
@@ -301,7 +301,7 @@ const repositories = new RepositoryManager(
       for (const manager of sessions.forProject(projectId)) {
         void manager
           .sbxConfigChanged(sbx.enabled)
-          .catch((error: unknown) => console.error("[tet] could not apply the sbx config change:", error));
+          .catch((error: unknown) => logError("could not apply the sbx config change", error));
       }
     });
   },
@@ -474,7 +474,7 @@ async function startControl(): Promise<void> {
     );
   } catch (error) {
     // tet-ctl then reports nothing to reach.
-    console.error("[tet] control channel not started:", error);
+    logError("control channel not started", error);
   }
 }
 
@@ -586,7 +586,7 @@ function createWindow(): void {
     if (details.reason === "clean-exit" || crashed.isDestroyed()) {
       return;
     }
-    console.error(`[tet] renderer gone (${details.reason}); rebuilding the window`);
+    logError(`renderer gone (${details.reason}); rebuilding the window`);
     // Every pty lives in this process and keeps running, so reloading brings the sessions back;
     // only the renderer-held scrollback is lost. Rate-limited, or a renderer failing on load
     // would reload forever.
@@ -658,7 +658,7 @@ if (!app.requestSingleInstanceLock()) {
       binDir = writeLaunchers(dataRoot, cliPath);
     } catch (error) {
       // Not fatal: terminals then just lack `tet-ctl` on PATH.
-      console.error("[tet] could not write the tet-ctl launcher:", error);
+      logError("could not write the tet-ctl launcher", error);
     }
     setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: controlToken }, binDir);
     // A sandbox cannot reach the data folder's launcher, so sbx.ts writes the bundle into it
@@ -734,7 +734,7 @@ function shutdown(relaunch: boolean): void {
     new Promise((resolve) => setTimeout(() => resolve("sessions timed out"), QUIT_TEARDOWN_TIMEOUT_MS))
   ]).then(
     (outcome) => console.error(`[tet] quit: ${String(outcome)}`),
-    (error: unknown) => console.error("[tet] quit: ending sessions failed:", error)
+    (error: unknown) => logError("quit: ending sessions failed", error)
   ).finally(async () => {
     repositories.disposeAll();
     stopGitProcess();
@@ -748,7 +748,7 @@ function shutdown(relaunch: boolean): void {
     console.error("[tet] quit: done, quitting");
     app.quit();
     setTimeout(() => {
-      console.error(`[tet] quit: still here after ${QUIT_EXIT_TIMEOUT_MS / 1000}s, exiting`);
+      logError(`quit: still here after ${QUIT_EXIT_TIMEOUT_MS / 1000}s, exiting`);
       app.exit(0);
     }, QUIT_EXIT_TIMEOUT_MS).unref();
   });

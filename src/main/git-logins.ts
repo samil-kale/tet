@@ -5,6 +5,7 @@ import { git } from "./git/git-client";
 import type { NetworkLogin } from "./git/git";
 import { logFailure, readRows, writeJson } from "./util/json-file";
 import { seal, unseal } from "./util/sealed";
+import { logError } from "./uncaught";
 
 /** What the file holds: one login per origin and username, its password encrypted by the OS and
  *  base64-wrapped. */
@@ -88,7 +89,7 @@ export class GitLoginStore {
     try {
       password = seal(login.password);
     } catch (error) {
-      console.error("[tet] could not keep the git login:", error);
+      logError("could not keep the git login", error);
       return;
     }
     this.logins = [

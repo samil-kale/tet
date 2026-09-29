@@ -9,6 +9,7 @@ import { writePiExtension } from "./extension";
 import { piAgentDir, piSandboxSessions, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
+import { logError } from "../../uncaught";
 
 /** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32 (see
  *  system-prompt.ts). */
@@ -66,7 +67,7 @@ export const piAgent: SandboxedAgent = {
       } catch (error) {
         // An unloadable `-e` file is fatal, so an unwritten one is not passed. Swallow, never
         // reject (see AgentHost.prepare).
-        console.error("[tet] could not write pi's extension:", error);
+        logError("could not write pi's extension", error);
       }
       // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
       // settings.json untouched.
@@ -85,7 +86,7 @@ export const piAgent: SandboxedAgent = {
         // (sbx-mounts.ts's fixedMountSpecs). On a failed write pi starts without `-e`.
         return { args: ["-e", SANDBOX_TARGET.embed(extension), ...args] };
       } catch (error) {
-        console.error("[tet] could not write pi's sandbox extension:", error);
+        logError("could not write pi's sandbox extension", error);
         return { args };
       }
     },

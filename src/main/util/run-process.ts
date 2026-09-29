@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { killProcessTree, resolveCommand } from "../terminals/pty";
+import { logError } from "../uncaught";
 
 export interface RunProcessOptions {
   cwd?: string;
@@ -64,6 +65,7 @@ export function stoppable(): Stoppable {
  * answers on `close`, once every pipe is drained, so no output is cut off. The timeout does not wait
  * for that: a child the program started can hold the pipes open past its end. Killed with its
  * children, as on win32 `kill()` would end only the cmd.exe in front of a shim (killProcessTree).
+ * A timeout and a start that fails are logged; an exit code is the caller's to judge.
  */
 export function runProcess(executable: string, args: string[], options: RunProcessOptions = {}): Promise<ProcessResult> {
   return new Promise((resolve) => {
@@ -100,9 +102,16 @@ export function runProcess(executable: string, args: string[], options: RunProce
         ? undefined
         : setTimeout(() => {
             killProcessTree(child);
+            logError(`${executable} ${args.join(" ")} timed out after ${options.timeoutMs}ms`);
             finish({ code: null, timedOut: true });
           }, options.timeoutMs);
-    child.on("error", (error) => finish({ code: null, timedOut: false, error }));
+    child.on("error", (error: NodeJS.ErrnoException) => {
+      // A missing program is an answer (not installed), not a failure.
+      if (error.code !== "ENOENT") {
+        logError(`${executable} ${args.join(" ")} could not start`, error);
+      }
+      finish({ code: null, timedOut: false, error });
+    });
     child.on("close", (code) => finish({ code, timedOut: false }));
     if (options.stdin !== undefined) {
       // A command gone before reading it fails the write (EPIPE); unhandled, that stream error

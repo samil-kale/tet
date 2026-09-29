@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { pathKey } from "./pty";
 import { PLATFORM } from "../host-platform";
+import { logError } from "../uncaught";
 
 /**
  * Puts the directories agents are installed in on `process.env.PATH`, at startup and on every
@@ -38,7 +39,7 @@ async function augment(): Promise<void> {
       shellPath = await loginShellPath();
     } catch (error) {
       // Not fatal: the inherited PATH may well suffice.
-      console.error("[tet] could not read the login shell's PATH:", error);
+      logError("could not read the login shell's PATH", error);
       return;
     }
     merged = mergePath(shellPath.join(path.delimiter), current.split(path.delimiter), path.delimiter);
