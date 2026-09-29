@@ -10,8 +10,9 @@ import * as semver from "semver";
 import { findControlPort } from "../src/main/control/control-server";
 import { PLATFORM } from "../src/main/host-platform";
 import { CONTROL_ENV } from "../src/shared/control";
-import { assetName, rootExecutable, rootIn } from "../src/shared/release";
+import { assetName, rootExecutable } from "../src/shared/release";
 import type { UpdateResult } from "../src/shared/release";
+import type { NoticeReport } from "../src/shared/types";
 import { eventually, killApp, processAlive, tempDir, tetCtl } from "./helpers";
 
 /**
@@ -106,30 +107,30 @@ function startTet(): void {
   fs.closeSync(log);
 }
 
-/**
- * The update fetched and unpacked, which is when tet arms it for the quit. The folder alone is not
- * enough: `stage` makes it before the download starts. The executable is looked for where
- * auto-update.ts's `findRoot` looks, at the top or one folder down.
- */
-function updateUnpacked(): boolean {
-  const staged = path.join(userData, "update", next);
-  if (!fs.existsSync(staged) || fs.readdirSync(path.join(userData, "update")).some((entry) => entry.endsWith(ASSET))) {
-    return false;
-  }
-  return [staged, ...fs.readdirSync(staged).map((entry) => path.join(staged, entry))].some((candidate) =>
-    fs.existsSync(rootExecutable(rootIn(candidate, PLATFORM), PLATFORM))
-  );
-}
-
-async function version(): Promise<{ version: string; pid: number } | undefined> {
+/** A verb's result, or undefined when tet does not answer. */
+async function ask(args: string[]): Promise<unknown> {
   // No caller ids, which a run from a TET tab inherits: the run's token speaks for no tab.
-  const answer = await tetCtl(["version"], {
+  const answer = await tetCtl(args, {
     [CONTROL_ENV.port]: String(port),
     [CONTROL_ENV.token]: TOKEN,
     [CONTROL_ENV.projectId]: undefined,
     [CONTROL_ENV.tabId]: undefined
   });
-  return answer.status === 0 ? (answer.result as { version: string; pid: number }) : undefined;
+  return answer.status === 0 ? answer.result : undefined;
+}
+
+async function version(): Promise<{ version: string; pid: number } | undefined> {
+  return (await ask(["version"])) as { version: string; pid: number } | undefined;
+}
+
+/**
+ * The update armed for the quit, as tet announces it: its notice is sent only once the update is
+ * unpacked and pending. Its files on disk come a moment earlier, and a quit in between installs
+ * nothing.
+ */
+async function updateArmed(): Promise<boolean> {
+  const notices = (await ask(["notices-list"])) as NoticeReport[] | undefined;
+  return notices?.some((notice) => notice.message === `Update ${next} available, installs when you quit TET`) ?? false;
 }
 
 /** A user's quit per platform: closing the window, SIGTERM, Cmd+Q's Apple Event. */
@@ -263,7 +264,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
   it("fetches the newer version, and installs it once tet has quit", async () => {
     const running = await version();
     assert.ok(running, "tet running");
-    await eventually(withLog("the update unpacked"), updateUnpacked, 5 * 60_000);
+    await eventually(withLog("the update armed"), updateArmed, 5 * 60_000);
     quit(running.pid);
     await eventually(withLog("tet gone"), () => !processAlive(running.pid), 60_000);
     const resultFile = path.join(userData, "update", "result.json");

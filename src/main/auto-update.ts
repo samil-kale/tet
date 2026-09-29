@@ -179,7 +179,7 @@ async function stage(releasesUrl: string, asset: string, version: string, onProg
 
 /**
  * Installs only (`app.isPackaged`). Checks at startup and every four hours; a newer version is
- * fetched and unpacked at once — its progress in a notice that goes silently if it fails —
+ * fetched and unpacked at once â€” its progress in a notice that goes silently if it fails â€”
  * announced once, and installed on quit (`installPendingUpdate`) â€”
  * never mid-session, a tab being a live agent session. If tet cannot replace its own folder, the
  * notice carries the install command instead.
