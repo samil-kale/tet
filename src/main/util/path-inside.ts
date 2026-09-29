@@ -37,6 +37,54 @@ export function repositoryRelative(root: string, target: string): string | undef
   return relativeInside(root, target)?.replace(/\\/g, "/");
 }
 
+/**
+ * Opens `file` only as a plain file inside `root`, links resolved: a folder a sandbox writes into
+ * can hold a link to any file of this machine. What was opened is checked, not the path before it,
+ * so a link swapped in meanwhile is refused too, before anything is read or written. Its folder is
+ * checked before, too: a file created through a linked folder would be left behind outside.
+ */
+export async function openInside(root: string, file: string, flags: string | number): Promise<fs.promises.FileHandle> {
+  await assertInside(root, path.dirname(file));
+  const handle = await fs.promises.open(file, flags);
+  try {
+    const [realRoot, realFile] = await Promise.all([root, file].map((entry) => fs.promises.realpath(entry)));
+    const [opened, there] = await Promise.all([handle.stat(), fs.promises.stat(realFile)]);
+    const same = opened.dev === there.dev && opened.ino === there.ino;
+    if (!opened.isFile() || !same || relativeInside(realRoot, realFile) === undefined) {
+      throw new Error(`${file} leads outside ${root}`);
+    }
+    return handle;
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
+}
+
+/** Throws unless `target`, links resolved, is `root` or inside it. */
+export async function assertInside(root: string, target: string): Promise<void> {
+  const [realRoot, real] = await Promise.all([root, target].map((entry) => fs.promises.realpath(entry)));
+  if (real !== realRoot && relativeInside(realRoot, real) === undefined) {
+    throw new Error(`${target} leads outside ${root}`);
+  }
+}
+
+/**
+ * Removes `target` only where its folder is `root` or inside it, links resolved: a linked folder
+ * where a sandbox writes would remove this machine's file. A missing folder resolves, as a missing
+ * `target` does (`force`).
+ */
+export async function removeInside(root: string, target: string, recursive = false): Promise<void> {
+  try {
+    await assertInside(root, path.dirname(target));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  await fs.promises.rm(target, { recursive, force: true });
+}
+
 /** Expands a leading `~` or `~/…` to the home folder, as a shell would; on win32 `~\…` too. */
 export function expandHome(hostPath: string): string {
   if (hostPath === "~") {

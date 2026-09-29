@@ -50,8 +50,9 @@ export interface SandboxSessionMount {
 export interface SandboxSessions {
   mounts: SandboxSessionMount[];
   /** The operations on one sandbox's sessions, bound to the mounted `root` and the sandbox's `cwd`
-   *  (`toContainerPath`), since the CLI records container paths. */
-  at(root: string, cwd: string): SandboxSessionStore;
+   *  (`toContainerPath`), since the CLI records container paths. A file they read or change must
+   *  not lead out of `within` (openInside), the folder the sandbox cannot replace by a link. */
+  at(root: string, cwd: string, within: string): SandboxSessionStore;
 }
 
 /** One sandbox's sessions (SandboxSessions.at). */

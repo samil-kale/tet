@@ -8,7 +8,7 @@ import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
 import { readLinkedGitDir } from "../util/linked-git-dir";
 import { inTurn, mapLimited } from "../util/async";
-import { normalizeHostPath, relativeInside } from "../util/path-inside";
+import { assertInside, normalizeHostPath, openInside, relativeInside } from "../util/path-inside";
 import { toContainerPath } from "../agents/hook-target";
 import { runSbx, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
 import { mountableBy, readFilesystemRules, readGovernance } from "./sbx-status";
@@ -338,6 +338,9 @@ export interface SbxSessionMount {
   host: string;
   target: string;
   file?: boolean;
+  /** The sandbox's agent folder, which `host` must not lead out of: the sandbox sees it whole and
+   *  could put a link there, which sbx would mount as the folder it points to. */
+  within: string;
 }
 
 /**
@@ -355,9 +358,10 @@ export async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<Moun
       if (mount.file) {
         await fs.mkdir(path.dirname(mount.host), { recursive: true });
         // Never truncate: it is the session index the sandbox appends to.
-        await fs.appendFile(mount.host, "");
+        await (await openInside(mount.within, mount.host, "a")).close();
       } else {
         await fs.mkdir(mount.host, { recursive: true });
+        await assertInside(mount.within, mount.host);
       }
       specs.push(mountSpec(mount.host, mount.target, false));
     } catch (error) {

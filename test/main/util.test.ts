@@ -8,7 +8,7 @@ import { LINUX, MAC, WINDOWS } from "../../src/shared/platform";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { stripAnsi } from "../../src/main/util/ansi";
 import { shellSingleQuote } from "../../src/main/util/generated-file";
-import { onDisk, relativeInside } from "../../src/main/util/path-inside";
+import { onDisk, openInside, relativeInside, removeInside } from "../../src/main/util/path-inside";
 import { sameSet } from "../../src/main/util/same-set";
 import { killProcessTree, resolveCommand } from "../../src/main/util/process";
 import { eventually, processAlive, tempDir } from "../helpers";
@@ -148,6 +148,11 @@ describe("the quoting helpers", () => {
   it("make any value one literal word in their shell", () => {
     assert.equal(shellSingleQuote("it's $HOME"), `'it'\\''s $HOME'`);
   });
+
+  it("double every quote PowerShell ends a single-quoted path at, typographic ones too", () => {
+    assert.equal(WINDOWS.shellQuotePath("C:\\a\\O'Brien’s ‘x’ ‚y‛.txt"), "'C:\\a\\O''Brien’’s ‘‘x’’ ‚‚y‛‛.txt'");
+    assert.equal(WINDOWS.shellQuotePath("C:\\a\\plain.txt"), "C:\\a\\plain.txt");
+  });
 });
 
 describe("a path inside a root", () => {
@@ -165,6 +170,51 @@ describe("a path inside a root", () => {
     assert.equal(relativeInside(root, root), undefined);
     assert.equal(relativeInside(root, path.dirname(root)), undefined);
     assert.equal(relativeInside(root, path.join(path.dirname(root), "other", "a.ts")), undefined);
+  });
+});
+
+describe("a file opened or removed only inside a root", () => {
+  /** A root holding `a.txt` and a link (a junction on win32, where a file symlink needs developer
+   *  mode) to a folder outside holding `secret.txt`. */
+  function linkedRoot(): { root: string; outside: string } {
+    const root = tempDir("tet-inside-");
+    const outside = tempDir("tet-outside-");
+    fs.writeFileSync(path.join(root, "a.txt"), "inside");
+    fs.writeFileSync(path.join(outside, "secret.txt"), "host");
+    fs.symlinkSync(outside, path.join(root, "leak"), "junction");
+    return { root, outside };
+  }
+
+  it("opens a file inside", async () => {
+    const { root } = linkedRoot();
+    const handle = await openInside(root, path.join(root, "a.txt"), "r");
+    try {
+      assert.equal(await handle.readFile("utf8"), "inside");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("refuses a file reached through a link out of the root, before writing to it", async () => {
+    const { root, outside } = linkedRoot();
+    await assert.rejects(openInside(root, path.join(root, "leak", "secret.txt"), fs.constants.O_WRONLY | fs.constants.O_APPEND), /leads outside/);
+    await assert.rejects(openInside(root, path.join(root, "leak"), "r"), /leads outside/, "a folder is no file");
+    assert.equal(fs.readFileSync(path.join(outside, "secret.txt"), "utf8"), "host");
+  });
+
+  it("creates nothing through a linked folder", async () => {
+    const { root, outside } = linkedRoot();
+    await assert.rejects(openInside(root, path.join(root, "leak", "new.txt"), "wx"), /leads outside/);
+    assert.deepEqual(fs.readdirSync(outside), ["secret.txt"]);
+  });
+
+  it("removes inside, refuses through a link and resolves where the folder is gone", async () => {
+    const { root, outside } = linkedRoot();
+    await removeInside(root, path.join(root, "a.txt"));
+    assert.equal(fs.existsSync(path.join(root, "a.txt")), false);
+    await assert.rejects(removeInside(root, path.join(root, "leak", "secret.txt")), /leads outside/);
+    assert.equal(fs.existsSync(path.join(outside, "secret.txt")), true);
+    await removeInside(root, path.join(root, "gone", "a.txt"));
   });
 });
 

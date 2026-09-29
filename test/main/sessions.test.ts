@@ -392,7 +392,7 @@ describe("sessions written inside a sandbox", () => {
       path.join(projectDir, "s1.jsonl"),
       [{ type: "user", timestamp: AT, origin: { kind: "human" }, message: { content: "In the sandbox" } }].map(line).join("")
     );
-    const sandbox = claudeSandboxSessions.at(dir, cwd);
+    const sandbox = claudeSandboxSessions.at(dir, cwd, dir);
     const [session] = await sandbox.list();
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
@@ -420,7 +420,7 @@ describe("sessions written inside a sandbox", () => {
     }
     const index = path.join(dir, "session_index.jsonl");
     fs.writeFileSync(index, line({ id: "s1", thread_name: "Named" }));
-    const sandbox = codexSandboxSessions.at(dir, cwd);
+    const sandbox = codexSandboxSessions.at(dir, cwd, dir);
     const titles = async (): Promise<string[][]> => (await sandbox.list()).map((s) => [s.id, s.title]);
     assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "In the sandbox"]], "the name index beside the rollouts is mounted too");
 
@@ -457,7 +457,7 @@ describe("sessions written inside a sandbox", () => {
         .map(line)
         .join("")
     );
-    const sandbox = piSandboxSessions.at(dir, cwd);
+    const sandbox = piSandboxSessions.at(dir, cwd, dir);
     const [session] = await sandbox.list();
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
@@ -472,10 +472,25 @@ describe("sessions written inside a sandbox", () => {
     assert.deepEqual(await sandbox.list(), []);
   });
 
+  it("follows no link the sandbox put in its agent folder out to this machine's files", async () => {
+    const agentDir = tempDir("tet-sbx-link-");
+    const outside = tempDir("tet-sbx-outside-");
+    const transcript = [{ type: "user", timestamp: AT, origin: { kind: "human" }, message: { content: "Host" } }].map(line).join("");
+    const projectDir = path.join(outside, "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.writeFileSync(path.join(projectDir, "s1.jsonl"), transcript);
+    // The sessions folder itself replaced; a junction on win32, where a file symlink needs developer mode.
+    fs.symlinkSync(outside, path.join(agentDir, "sessions"), "junction");
+    const sandbox = claudeSandboxSessions.at(path.join(agentDir, "sessions"), cwd, agentDir);
+    await assert.rejects(sandbox.rename("s1", "$(touch pwned)"), /leads outside/);
+    await assert.rejects(sandbox.remove("s1"), /leads outside/);
+    assert.equal(fs.readFileSync(path.join(projectDir, "s1.jsonl"), "utf8"), transcript, "left as it was");
+  });
+
   it("has nothing to list where the sandbox never wrote anything", async () => {
     const dir = path.join(os.tmpdir(), "tet-sbx-never");
     for (const sessions of [claudeSandboxSessions, codexSandboxSessions, piSandboxSessions]) {
-      const sandbox = sessions.at(dir, cwd);
+      const sandbox = sessions.at(dir, cwd, dir);
       assert.deepEqual(await sandbox.list(), []);
       assert.deepEqual(await sandbox.files("s1"), []);
     }

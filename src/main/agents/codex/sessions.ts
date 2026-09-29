@@ -20,6 +20,7 @@ import { runCodex } from "./cli";
 import { SANDBOX_HOME } from "../hook-target";
 import { mapLimited } from "../../util/async";
 import { PLATFORM } from "../../util/host-platform";
+import { openInside, removeInside } from "../../util/path-inside";
 
 /** Codex's config root; tet never overrides it. */
 export function codexHome(): string {
@@ -345,10 +346,10 @@ export const codexSandboxSessions: SandboxSessions = {
     { sub: "sessions", target: `${SANDBOX_HOME}/.codex/sessions` },
     { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
   ],
-  at: (root, cwd) => ({
+  at: (root, cwd, within) => ({
     list: () => listIn(root, cwd),
-    remove: (sessionId) => removeInHome(root, sessionId),
-    rename: (sessionId, title) => renameInHome(root, sessionId, title),
+    remove: (sessionId) => removeInHome(root, sessionId, within),
+    rename: (sessionId, title) => renameInHome(root, sessionId, title, within),
     files: (sessionId) => rolloutFilesOf(root, sessionId)
   })
 };
@@ -388,9 +389,9 @@ async function renameIn(executable: string, cwd: string, sessionId: string, titl
  * listIn names only rollouts it finds, and rewriting the index while Codex inside appends to it
  * through the mount loses lines.
  */
-async function removeInHome(home: string, sessionId: string): Promise<void> {
+async function removeInHome(home: string, sessionId: string, within: string): Promise<void> {
   for (const filePath of await rolloutFilesOf(home, sessionId)) {
-    await fs.promises.rm(filePath, { force: true });
+    await removeInside(within, filePath);
     metaCache.delete(filePath);
     tailCache.delete(filePath);
     headCache.delete(filePath);
@@ -409,8 +410,14 @@ async function rolloutFilesOf(home: string, sessionId: string): Promise<string[]
  * digits. Codex inside the sandbox reads names from its own db only, so it keeps showing the old
  * name.
  */
-async function renameInHome(home: string, sessionId: string, title: string): Promise<void> {
+async function renameInHome(home: string, sessionId: string, title: string, within: string): Promise<void> {
   const trimmed = requireTitle(title);
   const entry = { id: sessionId, thread_name: trimmed, updated_at: new Date().toISOString().replace("Z", "0000Z") };
-  await fs.promises.appendFile(sessionIndexFile(home), JSON.stringify(entry) + "\n");
+  // Never created: the mount made it (sessionMountSpecs).
+  const handle = await openInside(within, sessionIndexFile(home), fs.constants.O_WRONLY | fs.constants.O_APPEND);
+  try {
+    await handle.appendFile(JSON.stringify(entry) + "\n");
+  } finally {
+    await handle.close();
+  }
 }

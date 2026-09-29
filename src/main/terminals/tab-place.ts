@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { pipeline } from "node:stream/promises";
 import type {
   AgentDefinition,
   AgentPaths,
@@ -18,6 +19,7 @@ import type { ResolvedRef } from "../store/resolved-ref";
 import { prepareSbxRun, sandboxName } from "../sbx/sbx";
 import { mountDropped, type SbxSessionMount } from "../sbx/sbx-mounts";
 import type { checkSbxReady } from "../sbx/sbx-status";
+import { openInside, removeInside } from "../util/path-inside";
 import { toContainerPath } from "../agents/hook-target";
 import { HOST_TAB, SANDBOX_TAB, type TabSide } from "./tab-side";
 
@@ -26,6 +28,9 @@ export interface SessionActions {
   remove(sessionId: string): Promise<void>;
   rename(sessionId: string, title: string): Promise<void>;
   files(sessionId: string): Promise<string[]>;
+  /** The sandbox's mounted agent folder, which a file named here must not lead out of
+   *  (openInside); none on this machine. */
+  root?: string;
 }
 
 /** Another agent's session a new tab takes over: its transcript on the host (SessionProvider.files). */
@@ -33,6 +38,8 @@ export interface HandoffFiles {
   from: AgentId;
   sessionId: string;
   files: string[];
+  /** SessionActions.root of the session's place: a copy reads the files only inside it. */
+  within?: string;
 }
 
 /** What a start hands its place. */
@@ -67,6 +74,8 @@ export interface Launch {
 export interface TabPlace {
   /** What the tab's process may do through the control channel and gets at its start (pty.ts). */
   readonly side: TabSide;
+  /** The sandbox its sessions are listed as (AgentSessionInfo.sandbox); none on this machine. */
+  readonly sandbox?: string;
   /** Where the tab's pasted or dropped content without a path is written. */
   dropsDir(): string;
   /** Pasted or dropped paths of this machine as the tab types them; a refused one is left out. */
@@ -219,7 +228,11 @@ export class SandboxPlace implements TabPlace {
   constructor(protected readonly context: PlaceContext<SandboxedAgent>) {
     this.name = sandboxName(context.at.ref, context.agent.id);
     this.agentDir = sandboxDir(context.storageRoot, context.at.ref, context.agent.id);
-    this.sessions = context.agent.sandbox.sessions?.at(sandboxSessionDir(this.agentDir), toContainerPath(context.at.path));
+    this.sessions = context.agent.sandbox.sessions?.at(sandboxSessionDir(this.agentDir), toContainerPath(context.at.path), this.agentDir);
+  }
+
+  get sandbox(): string {
+    return this.name;
   }
 
   dropsDir(): string {
@@ -246,7 +259,13 @@ export class SandboxPlace implements TabPlace {
   }
 
   sessionActions(): SessionActions | undefined {
-    return this.sessions;
+    const { sessions } = this;
+    return sessions && {
+      remove: (sessionId) => sessions.remove(sessionId),
+      rename: (sessionId, title) => sessions.rename(sessionId, title),
+      files: (sessionId) => sessions.files(sessionId),
+      root: this.agentDir
+    };
   }
 
   /** Nothing: a sandboxed tab's own output schedules the listing (AgentSandbox.sessions). */
@@ -285,7 +304,8 @@ export class SandboxPlace implements TabPlace {
     return (this.context.agent.sandbox.sessions?.mounts ?? []).map((mount) => ({
       host: path.join(root, mount.sub),
       target: mount.target,
-      file: mount.file
+      file: mount.file,
+      within: this.agentDir
     }));
   }
 }
@@ -314,7 +334,7 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
     try {
       const files =
         input.handoff && handoffDir !== undefined
-          ? (await copyInto(input.handoff.files, handoffDir)).map(toContainerPath)
+          ? (await copyInto(input.handoff, handoffDir, this.agentDir)).map(toContainerPath)
           : undefined;
       const { args, env, problems } = await prepareSbxRun({
         agent,
@@ -349,13 +369,28 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
   }
 }
 
-/** Copies `files` into `dir`, answering the copies' paths. */
-async function copyInto(files: string[], dir: string): Promise<string[]> {
+/**
+ * Copies a handoff's files into `dir`, inside the sandbox's `agentDir`, answering the copies' paths.
+ * Both sides may be a sandbox's folder, so neither follows a link out of it (openInside): a copy is
+ * created anew, never written through what lies at its path.
+ */
+async function copyInto({ files, within }: HandoffFiles, dir: string, agentDir: string): Promise<string[]> {
   await fs.promises.mkdir(dir, { recursive: true });
   return Promise.all(
     files.map(async (file) => {
       const copy = path.join(dir, path.basename(file));
-      await fs.promises.copyFile(file, copy);
+      const source = within === undefined ? await fs.promises.open(file, "r") : await openInside(within, file, "r");
+      try {
+        await removeInside(agentDir, copy);
+        const target = await openInside(agentDir, copy, "wx");
+        try {
+          await pipeline(source.createReadStream({ autoClose: false }), target.createWriteStream({ autoClose: false }));
+        } finally {
+          await target.close();
+        }
+      } finally {
+        await source.close();
+      }
       return copy;
     })
   );

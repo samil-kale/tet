@@ -484,11 +484,13 @@ export class TabSessionManager {
       return `${target.displayName} cannot take over a ${agent.displayName} session`;
     }
     const sessionId = tab.sessionId;
-    const files = (await this.placeOf(tab).sessionActions()?.files(sessionId)) ?? [];
+    const actions = this.placeOf(tab).sessionActions();
+    const files = (await actions?.files(sessionId)) ?? [];
     if (files.length === 0) {
       return `The ${agent.displayName} session's files were not found`;
     }
-    return this.addTab(agentId, { handoff: { from: tab.agentId, sessionId, files }, ...(sandboxOnly && { sandboxOnly }) });
+    const handoff = { from: tab.agentId, sessionId, files, within: actions?.root };
+    return this.addTab(agentId, { handoff, ...(sandboxOnly && { sandboxOnly }) });
   }
 
   /** Where this tab's pasted or dropped content without a path is written (TabPlace.dropsDir); a
@@ -1281,10 +1283,12 @@ export class TabSessionManager {
     ]);
     let changed = false;
 
-    // Each tab takes the session its hooks named (bindReportedSession), once listed.
+    // Each tab takes the session its hooks named (bindReportedSession), once listed, and only from
+    // the store where it runs: a sandbox could list a host tab's session id in its own.
     const pendingTabs = [...ownTabs, ...this.detachedTabs.filter((tab) => tab.agentId === agent.id)].filter(awaitsClaim);
     for (const tab of pendingTabs) {
-      const match = infos.find((info) => info.id === tab.reportedSessionId && !claimed.has(info.id));
+      const store = this.placeOf(tab).sandbox;
+      const match = infos.find((info) => info.id === tab.reportedSessionId && info.sandbox === store && !claimed.has(info.id));
       if (!match) {
         continue;
       }
@@ -1304,7 +1308,7 @@ export class TabSessionManager {
       if (!tab.sessionId) {
         continue;
       }
-      const info = infos.find((candidate) => candidate.id === tab.sessionId);
+      const info = infos.find((candidate) => candidate.id === tab.sessionId && candidate.sandbox === tab.sandbox);
       if (!info) {
         continue;
       }

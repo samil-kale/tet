@@ -16,6 +16,7 @@ import {
   watchTranscriptDir
 } from "../transcript";
 import { SANDBOX_HOME } from "../hook-target";
+import { openInside, removeInside } from "../../util/path-inside";
 
 /** Claude Code has no session CLI: sessions are the `<uuid>.jsonl` transcripts in
  *  ~/.claude/projects/<cwd with non-alphanumerics as "-">; deleting one deletes its transcript.
@@ -57,12 +58,12 @@ export const claudeSessionProvider: SessionProvider = {
 /** Mounted over the sandbox's `~/.claude/projects`, stacking on sbx's own volume there. */
 export const claudeSandboxSessions: SandboxSessions = {
   mounts: [{ sub: "projects", target: `${SANDBOX_HOME}/.claude/projects` }],
-  at: (root, cwd) => {
+  at: (root, cwd, within) => {
     const projects = path.join(root, "projects");
     return {
       list: () => listIn(projects, cwd),
-      remove: (sessionId) => removeIn(projects, cwd, sessionId),
-      rename: (sessionId, title) => renameIn(projects, cwd, sessionId, title),
+      remove: (sessionId) => removeIn(projects, cwd, sessionId, within),
+      rename: (sessionId, title) => renameIn(projects, cwd, sessionId, title, within),
       files: (sessionId) => filesIn(projects, cwd, sessionId)
     };
   }
@@ -111,22 +112,23 @@ function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
 }
 
 /** A missing project directory or transcript resolves (SessionProvider.remove): the session is
- *  already gone. */
-async function removeIn(root: string, cwd: string, sessionId: string): Promise<void> {
+ *  already gone. Nothing outside `within` is removed. */
+async function removeIn(root: string, cwd: string, sessionId: string, within = root): Promise<void> {
   const projectDir = await findProjectDir(root, cwd);
   if (!projectDir) {
     return;
   }
   const filePath = transcriptPath(projectDir, sessionId);
-  await fs.promises.rm(filePath, { force: true });
+  await removeInside(within, filePath);
   // Subagent transcripts and tool results sit beside it under the same id.
-  await fs.promises.rm(path.join(projectDir, sessionId), { recursive: true, force: true });
+  await removeInside(within, path.join(projectDir, sessionId), true);
   scanCache.delete(filePath);
   headCache.delete(filePath);
 }
 
-/** Mirrors Claude Code's `/rename`: a `custom-title` entry, which outranks every derived title. */
-async function renameIn(root: string, cwd: string, sessionId: string, title: string): Promise<void> {
+/** Mirrors Claude Code's `/rename`: a `custom-title` entry, which outranks every derived title,
+ *  in a transcript inside `within`. */
+async function renameIn(root: string, cwd: string, sessionId: string, title: string, within = root): Promise<void> {
   const trimmed = requireTitle(title);
   const projectDir = await findProjectDir(root, cwd);
   if (!projectDir) {
@@ -136,9 +138,12 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   // Appended to, never created: a transcript gone would come back as a session of one title line,
   // listed and never resumable.
   try {
-    await fs.promises.appendFile(transcriptPath(projectDir, sessionId), line, {
-      flag: fs.constants.O_WRONLY | fs.constants.O_APPEND
-    });
+    const handle = await openInside(within, transcriptPath(projectDir, sessionId), fs.constants.O_WRONLY | fs.constants.O_APPEND);
+    try {
+      await handle.appendFile(line);
+    } finally {
+      await handle.close();
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error("Claude session not found", { cause: error });

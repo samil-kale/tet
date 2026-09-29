@@ -17,6 +17,7 @@ import {
   watchTranscriptDir
 } from "../transcript";
 import { SANDBOX_HOME } from "../hook-target";
+import { openInside, removeInside } from "../../util/path-inside";
 
 /**
  * pi keeps one JSONL transcript per session, `<ISO timestamp, ":" and "." as "-">_<uuid>.jsonl`,
@@ -67,12 +68,12 @@ export const piSessionProvider: SessionProvider = {
  *  sits beside it, not in it. */
 export const piSandboxSessions: SandboxSessions = {
   mounts: [{ sub: "sessions", target: `${SANDBOX_HOME}/.pi/agent/sessions` }],
-  at: (root, cwd) => {
+  at: (root, cwd, within) => {
     const sessions = path.join(root, "sessions");
     return {
       list: () => listIn(sessions, cwd, path.posix),
-      remove: (sessionId) => removeIn(sessions, cwd, sessionId, path.posix),
-      rename: (sessionId, title) => renameIn(sessions, cwd, sessionId, title, path.posix),
+      remove: (sessionId) => removeIn(sessions, cwd, sessionId, path.posix, within),
+      rename: (sessionId, title) => renameIn(sessions, cwd, sessionId, title, path.posix, within),
       files: (sessionId) => filesIn(sessions, cwd, sessionId, path.posix)
     };
   }
@@ -109,8 +110,9 @@ function listIn(root: string, cwd: string, paths = path): Promise<AgentSessionIn
   );
 }
 
-/** A missing session directory or transcript resolves (SessionProvider.remove): already gone. */
-async function removeIn(root: string, cwd: string, sessionId: string, paths = path): Promise<void> {
+/** A missing session directory or transcript resolves (SessionProvider.remove): already gone.
+ *  Nothing outside `within` is removed. */
+async function removeIn(root: string, cwd: string, sessionId: string, paths = path, within = root): Promise<void> {
   const dir = await findSessionDir(root, cwd, paths);
   if (!dir) {
     return;
@@ -120,7 +122,7 @@ async function removeIn(root: string, cwd: string, sessionId: string, paths = pa
     return;
   }
   // pi keeps no per-session directory.
-  await fs.promises.rm(filePath, { force: true });
+  await removeInside(within, filePath);
   headCache.delete(filePath);
   scanCache.delete(filePath);
 }
@@ -129,7 +131,7 @@ async function removeIn(root: string, cwd: string, sessionId: string, paths = pa
  * Mirrors pi's `/name` (appendSessionInfo): a `session_info` entry parented to the last entry. Safe
  * while pi runs on the file; a running pi shows the name only after a restart.
  */
-async function renameIn(root: string, cwd: string, sessionId: string, title: string, paths = path): Promise<void> {
+async function renameIn(root: string, cwd: string, sessionId: string, title: string, paths = path, within = root): Promise<void> {
   const trimmed = requireTitle(title);
   const dir = await findSessionDir(root, cwd, paths);
   if (!dir) {
@@ -139,21 +141,26 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   if (!filePath) {
     throw new Error("pi session not found");
   }
-  // The whole file: the new id must be unique across it (pi keys its tree by id); renames are rare.
-  const text = await fs.promises.readFile(filePath, "utf8");
-  const lines = text.split("\n").filter((line) => line.trim() !== "");
-  const last = parseLine(lines[lines.length - 1] ?? "");
-  if (!last) {
-    throw new Error("pi transcript is not readable");
+  const handle = await openInside(within, filePath, fs.constants.O_RDWR | fs.constants.O_APPEND);
+  try {
+    // The whole file: the new id must be unique across it (pi keys its tree by id); renames are rare.
+    const text = await handle.readFile("utf8");
+    const lines = text.split("\n").filter((line) => line.trim() !== "");
+    const last = parseLine(lines[lines.length - 1] ?? "");
+    if (!last) {
+      throw new Error("pi transcript is not readable");
+    }
+    // An entry right after the header is a root (parentId null), as pi writes its first entry.
+    const parentId = last.type === "session" ? null : (nonEmptyString(last.id) ?? null);
+    let id: string;
+    do {
+      id = crypto.randomUUID().slice(0, 8);
+    } while (text.includes(`"id":"${id}"`));
+    const entry = { type: "session_info", id, parentId, timestamp: new Date().toISOString(), name: trimmed };
+    await handle.appendFile((text.endsWith("\n") ? "" : "\n") + JSON.stringify(entry) + "\n");
+  } finally {
+    await handle.close();
   }
-  // An entry right after the header is a root (parentId null), as pi writes its first entry.
-  const parentId = last.type === "session" ? null : (nonEmptyString(last.id) ?? null);
-  let id: string;
-  do {
-    id = crypto.randomUUID().slice(0, 8);
-  } while (text.includes(`"id":"${id}"`));
-  const entry = { type: "session_info", id, parentId, timestamp: new Date().toISOString(), name: trimmed };
-  await fs.promises.appendFile(filePath, (text.endsWith("\n") ? "" : "\n") + JSON.stringify(entry) + "\n");
   scanCache.delete(filePath);
 }
 

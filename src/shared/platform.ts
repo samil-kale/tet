@@ -110,8 +110,9 @@ export const WINDOWS: Platform = {
   shellExecutable: () => "powershell.exe",
   // `-NoProfile`: independent of the user's profile.
   shellCommandArgs: (command) => ["-NoProfile", "-Command", command],
-  // No `$`, backtick, quote, space or `,` (a PowerShell array); a `'` doubled.
-  shellQuotePath: (path) => (/^[\w./\\:-]+$/.test(path) ? path : `'${path.replace(/'/g, "''")}'`),
+  // No `$`, backtick, quote, space or `,` (a PowerShell array); a `'` doubled, as each typographic
+  // one PowerShell also ends the string at (‘ ’ ‚ ‛).
+  shellQuotePath: (path) => (/^[\w./\\:-]+$/.test(path) ? path : `'${path.replace(/['‘-‛]/g, "$&$&")}'`),
   tarExecutable: (env) => `${env.SystemRoot ?? "C:\\Windows"}\\System32\\tar.exe`,
   appBundle: false,
   executableInRoot: ["TET.exe"],
