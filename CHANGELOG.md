@@ -3,6 +3,20 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.14.3 (2026-09-30)
+
+- **Pick who suggests commit messages.** The agent and model that suggest a commit message are
+  chosen in the settings' Prompts tab, and can be set through `tet-ctl`.
+- **Git init when adding a folder.** Adding a folder without git offers to initialize a
+  repository in it.
+- **Sandboxed agents reach each other.** An agent in a sandbox can list, drive and read every
+  sandboxed tab of its project, the repository's and each worktree's.
+- **Shell tabs can be cleared** from their menu.
+- **Fixes.** A sandbox whose first start fails is removed again; renaming and handing over are
+  offered only for agents with sessions; a sandbox no longer reaches files outside its agent
+  folder through links; Shift+Enter behaves per agent; console output no longer doubles its
+  trailing newline; disabled fields are dimmed; failures are written to `errors.log` in full.
+
 ## 0.14.2 (2026-09-29)
 
 - **Agents merge their worktrees.** Through `tet-ctl worktree-agent-merge`, an agent merges a
