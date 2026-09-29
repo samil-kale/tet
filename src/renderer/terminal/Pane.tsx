@@ -257,8 +257,8 @@ export const Pane = memo(function Pane({
   const siblingPanes = PRESET_PANES[preset].filter((id) => id !== paneId);
 
   /**
-   * Restart, Clear for the shell, the close actions, rename, and the moves to sibling panes. A close with nothing to
-   * close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
+   * Restart, Clear for the shell, the close actions, rename and hand-over for an agent with sessions, and the moves
+   * to sibling panes. A close with nothing to close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
    * moves.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
@@ -304,11 +304,13 @@ export const Pane = memo(function Pane({
         ...moveEntries
       ];
     }
+    // Rename and hand-over act on a session: an agent that keeps none never offers them.
+    const hasSessions = agents.find((agent) => agent.id === terminal.agentId)?.hasSessions === true;
     // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
     // before the session is persisted.
     const handOffAgents = agents.filter((agent) => agent.takesPrompt && agent.id !== terminal.agentId);
     const handOffEntries: ContextMenuEntry[] =
-      handOffAgents.length > 0
+      hasSessions && handOffAgents.length > 0
         ? [
             SEPARATOR,
             ...handOffAgents.map(
@@ -329,12 +331,16 @@ export const Pane = memo(function Pane({
       ...(terminal.agentId === "shell" ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
       SEPARATOR,
       ...closeEntries,
-      SEPARATOR,
-      // No persisted session, nothing to rename: the host would revert the label.
-      {
-        label: "Rename...",
-        run: withSession ? () => void askRename(withSession) : undefined
-      },
+      ...(hasSessions
+        ? ([
+            SEPARATOR,
+            // No persisted session, nothing to rename: the host would revert the label.
+            {
+              label: "Rename...",
+              run: withSession ? () => void askRename(withSession) : undefined
+            }
+          ] satisfies ContextMenuEntry[])
+        : []),
       ...handOffEntries,
       ...moveEntries
     ];
