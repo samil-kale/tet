@@ -39,6 +39,9 @@ interface ContextMenuProps {
   /** A submenu's: its parent entry's left edge, which it ends at when the window has no room right
    *  of `x`. */
   flipX?: number;
+  /** The button a menu was opened from: a press on it is no press outside, its own handler closes
+   *  the menu. */
+  anchor?: HTMLElement;
 }
 
 /**
@@ -64,16 +67,14 @@ type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight">;
 /**
  * A menu opened from a button: `open` as the button's `onMouseDown`, `place` saying where from its
  * box; `render` where the menu goes, with its entries. A press on the button while the menu is up
- * leaves it closed: the menu's capture-phase outside-click handler closed it already.
+ * closes it.
  */
 export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace) {
-  const [menu, setMenu] = useState<AnchoredPlace | null>(null);
+  const [menu, setMenu] = useState<(AnchoredPlace & { anchor: HTMLElement }) | null>(null);
   const open = (event: React.MouseEvent<HTMLElement>): void => {
     event.stopPropagation();
-    if (menu) {
-      return;
-    }
-    setMenu(place(event.currentTarget.getBoundingClientRect()));
+    const anchor = event.currentTarget;
+    setMenu((current) => (current ? null : { ...place(anchor.getBoundingClientRect()), anchor }));
   };
   const close = useCallback(() => setMenu(null), []);
   const render = (entries: () => ContextMenuEntry[], className: string): ReactNode =>
@@ -81,7 +82,7 @@ export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace) {
   return { open, render, isOpen: menu !== null };
 }
 
-export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX }: ContextMenuProps) {
+export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX, anchor }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
   const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -106,7 +107,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
   useEffect(() => {
     const onClose = (): void => close.current();
     const onMouseDown = (event: MouseEvent): void => {
-      if (!menu.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!menu.current?.contains(target) && !anchor?.contains(target)) {
         onClose();
       }
     };
@@ -119,7 +121,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
       window.removeEventListener("blur", onClose);
       window.removeEventListener("resize", onClose);
     };
-  }, [close]);
+  }, [close, anchor]);
 
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
 

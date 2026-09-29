@@ -12,7 +12,7 @@ import { PLATFORM } from "../src/main/host-platform";
 import { CONTROL_ENV } from "../src/shared/control";
 import { assetName, rootExecutable, rootIn } from "../src/shared/release";
 import type { UpdateResult } from "../src/shared/release";
-import { eventually, killApp, processAlive, tempDir, tetCtl, WINDOW_ARGS } from "./helpers";
+import { eventually, killApp, processAlive, tempDir, tetCtl } from "./helpers";
 
 /**
  * Install with the script, start, find a newer version, quit, start the update. Releases are
@@ -87,9 +87,12 @@ function withLog(what: string): () => string {
   return () => `${what}\n--- tet's output ---\n${tetLog()}`;
 }
 
-/** Started directly: `open` on macOS would not pass this environment. */
+/**
+ * Started directly: `open` on macOS would not pass this environment. Always shown, never
+ * `WINDOW_ARGS`: `quit` closes the window, which a hidden one on win32 never receives.
+ */
 function startTet(): void {
-  const args = [`--user-data-dir=${userData}`, "--allow-shell-only", ...WINDOW_ARGS];
+  const args = [`--user-data-dir=${userData}`, "--allow-shell-only"];
   if (PLATFORM.id === "linux") {
     args.push("--no-sandbox");
   }

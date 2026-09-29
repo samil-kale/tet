@@ -98,15 +98,32 @@ function isWritable(dir: string): boolean {
   }
 }
 
-/** Read off the redirect of `<releases>/latest` — no API request, no rate limit. */
-async function latestVersion(releasesUrl: string): Promise<string | undefined> {
-  try {
-    const response = await net.fetch(`${releasesUrl}/latest`, { redirect: "manual", signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
-    const tag = /\/tag\/v?([^/?#]+)$/.exec(response.headers.get("location") ?? "")?.[1];
-    return tag && semver.valid(tag) ? tag : undefined;
-  } catch {
-    return undefined;
-  }
+/**
+ * Read off the redirect of `<releases>/latest` — no API request, no rate limit. `net.request`, not
+ * `net.fetch`: the latter throws on `redirect: "manual"` and leaves a followed response's `url`
+ * empty.
+ */
+function latestVersion(releasesUrl: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const request = net.request({ url: `${releasesUrl}/latest`, redirect: "manual" });
+    const timer = setTimeout(() => request.abort(), CHECK_TIMEOUT_MS);
+    const done = (location: string | undefined) => {
+      clearTimeout(timer);
+      const tag = location === undefined ? undefined : /\/tag\/v?([^/?#]+)$/.exec(location)?.[1];
+      resolve(tag && semver.valid(tag) ? tag : undefined);
+    };
+    request.on("redirect", (_status, _method, location) => {
+      request.abort();
+      done(location);
+    });
+    request.on("response", () => {
+      request.abort();
+      done(undefined);
+    });
+    request.on("abort", () => done(undefined));
+    request.on("error", () => done(undefined));
+    request.end();
+  });
 }
 
 /** Also unpacks the zip: Windows' tar is bsdtar. */
