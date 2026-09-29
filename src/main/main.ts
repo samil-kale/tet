@@ -246,7 +246,11 @@ function openWorkspace(): Promise<void> {
     await resolveStoredIds(projectDeps);
     await openStoredProjects(projectDeps);
     void startControl();
-  })();
+  })().catch((error: unknown) => {
+    // A failed open is not kept: the check's next pass runs it again.
+    workspaceOpened = undefined;
+    throw error;
+  });
   return workspaceOpened;
 }
 
@@ -397,7 +401,12 @@ if (!app.requestSingleInstanceLock()) {
     // second. The requirements re-check (ipc/app.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepDropFiles(dataRoot);
-    controlChannel = await prepareControl(dataRoot, __dirname, installed, (userDataArg && process.env[CONTROL_ENV.token]) || undefined);
+    try {
+      controlChannel = await prepareControl(dataRoot, __dirname, installed, (userDataArg && process.env[CONTROL_ENV.token]) || undefined);
+    } catch (error) {
+      // The window still opens: tet-ctl then reports nothing to reach (startControl).
+      logError("control channel not prepared", error);
+    }
     registerIpc({
       store,
       settings: settingsAccess,

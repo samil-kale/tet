@@ -465,6 +465,27 @@ describe("a worktree's merge into its base", () => {
     run("switch", "-q", "main");
     assert.deepEqual(await conflictMarkers(cwd, "main"), [], "nothing differs");
   });
+
+  it("finds them among more changed files than one command line holds", async () => {
+    run("switch", "-q", "-c", "many", "main");
+    // 300 names of 150 characters: 45 000, past Windows' cap of 32 767.
+    const names = Array.from({ length: 300 }, (_, index) => `${String(index).padStart(3, "0")}-${"x".repeat(142)}.txt`);
+    for (const name of names) {
+      write(name, "clean\n");
+    }
+    write(names[names.length - 1], "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "many");
+    assert.deepEqual(await conflictMarkers(cwd, "main"), [names[names.length - 1]]);
+    write(names[names.length - 1], "resolved\n");
+    run("commit", "-q", "--all", "--message", "resolved");
+    assert.deepEqual(await conflictMarkers(cwd, "main"), [], "no batch matching is no failure");
+    run("switch", "-q", "main");
+  });
+
+  it("throws when git fails rather than reading its silence as no markers", async () => {
+    await assert.rejects(conflictMarkers(cwd, "no-such-base"));
+  });
 });
 
 describe("a merge stopped on conflicts, discarded file by file", () => {

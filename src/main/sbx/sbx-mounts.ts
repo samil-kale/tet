@@ -297,6 +297,9 @@ export async function mountDropped(name: string, seen: string[], hostPaths: stri
  */
 export function mountAll(name: string, specs: MountSpec[], onData?: OnData, started?: Promise<boolean>): Promise<Map<string, string>> {
   return inTurn(mountSetups, name, async () => {
+    // Where sbx cannot say, none counts as held: Save's revokeMounts narrowed the grants already, so
+    // only this backstop is lost, and mounting all of `specs` at worst binds a folder twice or is
+    // refused, which the caller tells.
     const [live = [], running] = await Promise.all([readRuntimeMounts(name), started]);
     const wanted = new Set(specs.map((spec) => spec.mount));
     // One by one: rare (a change since the last start).

@@ -158,6 +158,11 @@ export interface AgentTerminal {
   createIsSessionReady(): (chunk: string) => boolean;
   /** Ctrl+C presses that make the CLI quit by itself, sent before a kill (TerminalSession.stop). */
   quitPresses: number;
+  /**
+   * What Shift+Enter sends, where the CLI reads a sequence of its own as "insert newline": xterm
+   * sends it as plain "\r", a submit. Omitted: the terminal's own, as in the shell.
+   */
+  shiftEnter?: string;
 }
 
 /** One question without a terminal, answered on stdout (`askAgent`). */

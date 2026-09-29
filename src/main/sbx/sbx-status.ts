@@ -9,7 +9,7 @@ import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxBlocked, sbxN
 import { projectsDir, sandboxDir } from "../store/project-dirs";
 import { augmentAgentPath } from "../agents/agent-path";
 import { PLATFORM } from "../util/host-platform";
-import { jsonOf, readSbxVersion, runSbx, sbxFailure, sbxVersionSupported, type RunResult } from "./sbx-cli";
+import { jsonOf, readSbxVersion, runSbx, SBX_PROBE_TIMEOUT_MS, sbxFailure, sbxVersionSupported, type RunResult } from "./sbx-cli";
 
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
  *  by prepareControl (control-channel.ts). Unset without a control channel, and then nothing of it reaches a sandbox. */
@@ -199,7 +199,11 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   if (refreshPath) {
     await augmentAgentPath();
   }
-  const [version, list, policy] = await Promise.all([readSbxVersion(), runSbx(["ls", "--json"]), runSbx(["policy", "ls"])]);
+  const [version, list, policy] = await Promise.all([
+    readSbxVersion(),
+    runSbx(["ls", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS }),
+    runSbx(["policy", "ls"], { timeoutMs: SBX_PROBE_TIMEOUT_MS })
+  ]);
   status.installed = version !== undefined;
   if (version === undefined) {
     return { status };

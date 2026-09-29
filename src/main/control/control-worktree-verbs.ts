@@ -115,7 +115,8 @@ export function worktreeVerbs(
           throw new ControlError("bad_args", `${merged.error ?? "the merge failed"} — ${branch} is unchanged`);
         }
         // Where the caller sees the worktree: mounted into its sandbox if it would not.
-        const [handed] = caller.tabId === undefined ? [] : ((await sessions.get(projectRef(found.id))?.seenPaths(caller.tabId, [worktree.path])) ?? []);
+        const callers = callerRef(caller);
+        const [handed] = callers === undefined || caller.tabId === undefined ? [] : ((await sessions.get(callers)?.seenPaths(caller.tabId, [worktree.path])) ?? []);
         const at = handed ?? worktree.path;
         return {
           result: {

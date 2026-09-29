@@ -55,7 +55,9 @@ export const codexAgent: SandboxedAgent = {
     createIsSessionReady: () => createByteThresholdCheck(600),
     // One Ctrl+C clears a non-empty composer and quits on an empty one; a second byte would land
     // mid-shutdown, where ConPTY turns it into a CTRL_C_EVENT that kills the shutdown.
-    quitPresses: 1
+    quitPresses: 1,
+    // ESC+CR, which its input reads as a newline rather than a submit.
+    shiftEnter: "\x1b\r"
   },
   // `--ephemeral` writes no rollout, so no session is left behind.
   ask: {

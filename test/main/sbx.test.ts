@@ -18,7 +18,7 @@ import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../../src
 import { SbxAccountStore } from "../../src/main/sbx/sbx-accounts";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { sandboxDir } from "../../src/main/store/project-dirs";
-import { sbxProblemNotices, withoutProblems } from "../../src/shared/sbx-rules";
+import { sbxProblemNotices, sbxSecretRefusal, withoutProblems } from "../../src/shared/sbx-rules";
 import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, type SbxPath, type SbxPort, type SbxProjectConfig } from "../../src/shared/types/sbx";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
@@ -565,6 +565,16 @@ describe("what of the SBX Settings could not be applied", () => {
       config: { ...config, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
       knowledge: { skills: "ro", plugins: false, instructions: false }
     });
+  });
+});
+
+describe("an SBX Settings secret row", () => {
+  it("is refused a name tet sets itself, as a variable row is", () => {
+    const hosts = ["api.example.com"];
+    assert.equal(sbxSecretRefusal({ env: "TOKEN", hosts }, []), undefined);
+    for (const env of ["PATH", "path", "TET_TAB_ID"]) {
+      assert.ok(sbxSecretRefusal({ env, hosts }, []), env);
+    }
   });
 });
 

@@ -239,11 +239,12 @@ export function DialogFrame<T extends string>({
               key={entry.id}
               type="button"
               // The context menu's disabled entry, not the attribute: chromium swallows a
-              // disabled control's tooltip, and the reason is the point.
-              className={`dialog-tab${header.active === entry.id ? " active" : ""}${entry.disabled ? " disabled" : ""}`}
+              // disabled control's tooltip, and the reason is the point. A held run holds the tab
+              // too: switching would unmount the form it answers into.
+              className={`dialog-tab${header.active === entry.id ? " active" : ""}${entry.disabled || locked ? " disabled" : ""}`}
               title={entry.disabled ?? entry.mark}
               onClick={() => {
-                if (!entry.disabled) {
+                if (!entry.disabled && !locked) {
                   header.onSelect(entry.id);
                 }
               }}

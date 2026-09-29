@@ -33,11 +33,21 @@ const NATIVE_DIALOGS = [
   ...["alert", "confirm", "prompt"].map((property) => ({ object: "window", property }))
 ].map((entry) => ({ ...entry, message: "No native message boxes: ask with Dialog.tsx's confirm or prompt, in the window." }));
 
-/** Shared code reaches an agent through the registry, never its own folder (AGENTS.md). */
-const agentFolder = {
-  regex: `^(\\.{1,2}/)+agents/(${AGENT_FOLDERS.join("|")})(/|$)`,
+/**
+ * The way up out of a folder of `process`, and back down into it past its own name (`../../main/x`
+ * from main, `../../../src/main/x`): an area is the same whichever way it is reached. The name is
+ * always passed, never read as an area itself (main's `main.ts`).
+ */
+const upInto = (process) => `^(\\.{1,2}/)+((src/)?${process}/|(?!(src/)?${process}/))`;
+
+/**
+ * Shared code reaches an agent through the registry, never its own folder (AGENTS.md); inside
+ * agents/ that folder lies beside the importer (`./claude`), or beside its own (`../codex`).
+ */
+const agentFolder = (area) => ({
+  regex: `${upInto("main")}${area === "agents" ? "(agents/)?" : "agents/"}(${AGENT_FOLDERS.join("|")})(/|$)`,
   message: "An agent's own folder; go through the registry (agents/index.ts) or agent.ts."
-};
+});
 
 /** Up and into another process's folder; a file of that name nearby (opencode's `./cli`) is not one. */
 const processBorder = (folder) => ({
@@ -92,34 +102,36 @@ function assertLayered(process, layers) {
 assertLayered("main", MAIN_LAYERS);
 assertLayered("renderer", RENDERER_LAYERS);
 
-/** One config per area of the process: its border, `extra`, and every area it may not reach. */
+/** An area's process border and every area of its process it may not reach. */
+function layerPatterns(process, layers, area) {
+  const index = layers.findIndex((layer) => area in layer);
+  const layer = layers[index];
+  const beside = layer[area];
+  const above = layers.slice(index + 1).flatMap((higher) => Object.keys(higher));
+  const sideways = beside.includes("*") ? [] : Object.keys(layer).filter((other) => other !== area && !beside.includes(other));
+  const barred = [...above, ...sideways];
+  return [
+    processBorder(process),
+    ...(barred.length === 0
+      ? []
+      : [
+          {
+            regex: `${upInto(process)}(${barred.join("|")})(/|$)`,
+            message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`
+          }
+        ])
+  ];
+}
+
+/** One config per area of the process: its layer patterns and `extra`. */
 function layerConfigs(process, layers, extra = () => []) {
-  return layers.flatMap((layer, index) =>
-    Object.entries(layer).map(([area, beside]) => {
-      const above = layers.slice(index + 1).flatMap((higher) => Object.keys(higher));
-      const sideways = beside.includes("*") ? [] : Object.keys(layer).filter((other) => other !== area && !beside.includes(other));
-      const barred = [...above, ...sideways];
+  return layers.flatMap((layer) =>
+    Object.keys(layer).map((area) => {
       const folder = fs.existsSync(new URL(`./src/${process}/${area}`, import.meta.url));
       return {
         files: [folder ? `src/${process}/${area}/**` : `src/${process}/${area}.{ts,tsx}`],
         rules: {
-          "no-restricted-imports": [
-            "error",
-            {
-              patterns: [
-                processBorder(process),
-                ...extra(area),
-                ...(barred.length === 0
-                  ? []
-                  : [
-                      {
-                        regex: `^(\\.{1,2}/)+(${barred.join("|")})(/|$)`,
-                        message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`
-                      }
-                    ])
-              ]
-            }
-          ]
+          "no-restricted-imports": ["error", { patterns: [...layerPatterns(process, layers, area), ...extra(area)] }]
         }
       };
     })
@@ -159,7 +171,12 @@ export default tseslint.config(
   })),
   // The layers of src/main and src/renderer, each area's config repeating the process border: a
   // later config's rule replaces an earlier one's for the same file.
-  ...layerConfigs("main", MAIN_LAYERS, (area) => (area === "agents" ? [] : [agentFolder])),
+  ...layerConfigs("main", MAIN_LAYERS, (area) => [agentFolder(area)]),
+  // The registry is the one file naming the agents' folders.
+  {
+    files: ["src/main/agents/index.ts"],
+    rules: { "no-restricted-imports": ["error", { patterns: layerPatterns("main", MAIN_LAYERS, "agents") }] }
+  },
   ...layerConfigs("renderer", RENDERER_LAYERS),
   {
     // The git utility process (git-host.ts) and the CLI run without electron; `shared/` runs in

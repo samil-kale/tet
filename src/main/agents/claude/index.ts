@@ -41,7 +41,9 @@ export const claudeAgent: SandboxedAgent = {
     // Above the start-up handshake, below the chunk that draws the main UI.
     createIsSessionReady: () => createByteThresholdCheck(500),
     // The first only offers to exit, the second takes it up.
-    quitPresses: 2
+    quitPresses: 2,
+    // ESC+CR, which its input reads as a newline rather than a submit.
+    shiftEnter: "\x1b\r"
   },
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   ask: {

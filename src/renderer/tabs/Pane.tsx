@@ -509,6 +509,7 @@ export const Pane = memo(function Pane({
               key={tab.tabId}
               at={at}
               tabId={tab.tabId}
+              shiftEnter={agentInfo(agents, tab.agentId)?.shiftEnter}
               active={tab.tabId === activeTabId}
               visible={visible}
               focused={focused}

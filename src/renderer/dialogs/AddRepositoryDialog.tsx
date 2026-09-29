@@ -144,9 +144,11 @@ interface RemoteTabProps {
   hold: (held: boolean) => void;
   /** See AccountSubmission. */
   onForm: (form: AccountSubmission | null) => void;
+  /** A held run (the account form's): its rows cannot be picked, as picking one unmounts the form. */
+  locked: boolean;
 }
 
-function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
+function RemoteTab({ onClone, hold, onForm, locked }: RemoteTabProps) {
   /** null while loading. */
   const [accounts, setAccounts] = useState<ProviderAccount[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -273,10 +275,12 @@ function RemoteTab({ onClone, hold, onForm }: RemoteTabProps) {
         {(accounts ?? []).map((account) => (
           <div
             key={account.id}
-            className={account.id === selectedId && !adding ? "account-item active" : "account-item"}
+            className={`account-item${account.id === selectedId && !adding ? " active" : ""}${locked ? " disabled" : ""}`}
             onClick={() => {
-              setSelectedId(account.id);
-              setAdding(false);
+              if (!locked) {
+                setSelectedId(account.id);
+                setAdding(false);
+              }
             }}
           >
             <div className="account-label">
@@ -466,7 +470,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       onCancel={onClose}
       primary={primary}
     >
-      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} />}
+      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} locked={locked} />}
       {mode === "clone" && (
         <>
           <TextField

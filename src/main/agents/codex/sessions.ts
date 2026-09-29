@@ -284,7 +284,8 @@ export const codexSessionProvider: SessionProvider = {
         return;
       }
       try {
-        const watcher = fs.watch(dir, (_type, filename) => onEvent(filename));
+        // Its deletion may come as an error instead (EPERM on Windows), which unheard would throw.
+        const watcher = fs.watch(dir, (_type, filename) => onEvent(filename)).on("error", () => rearm());
         watchers.push(watcher);
         armed.add(dir);
       } catch {

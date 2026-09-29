@@ -83,6 +83,9 @@ describe("the environment variables kept in TET", () => {
     store.set([row("gitlab_token", "old")]);
     store.set([row("GITLAB_TOKEN", "new")]);
     assert.deepEqual(store.values(), { GITLAB_TOKEN: "new" }, "one variable, not two in every tab");
+    assert.equal(store.info("gitlab_token")?.name, "GITLAB_TOKEN");
+    assert.equal(store.remove("gitlab_token"), true);
+    assert.deepEqual(store.values(), {});
   });
 
   it("tell the machine's variables from those a tet it was started from set", () => {

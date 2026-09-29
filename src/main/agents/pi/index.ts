@@ -51,7 +51,9 @@ export const piAgent: SandboxedAgent = {
     createIsSessionReady: () => createByteThresholdCheck(1000),
     // One Ctrl+C clears the editor; two in quick succession exit, which TET's gap between presses
     // meets.
-    quitPresses: 2
+    quitPresses: 2,
+    // ESC+CR, which its input reads as a newline rather than a submit.
+    shiftEnter: "\x1b\r"
   },
   // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript
   // behind.

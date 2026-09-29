@@ -82,6 +82,7 @@ textarea:disabled,
 .icon-button:disabled,
 .context-menu-item.disabled,
 .dialog-tab.disabled,
+.account-item.disabled,
 /* A worktree TET did not make: listed, never opened. */
 .project-item.foreign,
 /* An agent a knowledge row brings nothing to. */
@@ -664,7 +665,7 @@ textarea:focus,
 .project-item:not(.foreign):hover,
 .tree-header:hover,
 .tree-item:hover,
-.account-item:hover,
+.account-item:not(.disabled):hover,
 .repository-item:hover {
   background: var(--vscode-list-hoverBackground);
 }

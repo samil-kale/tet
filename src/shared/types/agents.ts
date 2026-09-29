@@ -26,6 +26,8 @@ export interface AgentInfo {
   /** Starts on a first prompt (AgentTerminal.initialPromptArgs), so it can take over another
    *  agent's session. */
   takesPrompt: boolean;
+  /** What its tabs send for Shift+Enter (AgentTerminal.shiftEnter); unset: the terminal's own. */
+  shiftEnter?: string;
   /** Can run in an sbx sandbox (the agent's `sandbox` group). */
   sandboxed: boolean;
 }

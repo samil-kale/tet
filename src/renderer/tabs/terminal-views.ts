@@ -19,6 +19,8 @@ interface TerminalView {
   tabId: string;
   term: Terminal;
   fit: FitAddon;
+  /** What Shift+Enter sends, its agent's (AgentInfo.shiftEnter); unset: xterm's own. */
+  shiftEnter?: string;
   /** The size last reported to the pty, so an unchanged fit does not report again. */
   sent?: { cols: number; rows: number };
   /** Set while it holds a WebGL context; otherwise xterm draws through the DOM. */
@@ -286,13 +288,14 @@ function createView(ref: ProjectRef, tabId: string): TerminalView {
   // Runs before xterm encodes the key. Takes nothing an agent could receive (see `shortcuts.ts`):
   // the three below are handled *for* the terminal, not taken from it.
   term.attachCustomKeyEventHandler((event) => {
-    // xterm sends Shift+Enter as plain "\r"; agent TUIs read ESC+CR as "insert newline". Repeats
-    // are skipped: back-to-back ESC+CR hangs a CLI's escape-sequence parser.
-    if (event.type === "keydown" && event.key === "Enter" && event.shiftKey) {
+    // Shift+Enter sends the agent's newline sequence where it has one. Repeats are skipped:
+    // back-to-back ESC+CR hangs a CLI's escape-sequence parser.
+    const shiftEnter = view.shiftEnter;
+    if (shiftEnter !== undefined && event.type === "keydown" && event.key === "Enter" && event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) {
-        window.tet.terminals.input(ref, tabId, "\x1b\r");
+        window.tet.terminals.input(ref, tabId, shiftEnter);
       }
       return false;
     }
@@ -333,9 +336,11 @@ export function hasTerminal(ref: ProjectRef, tabId: string): boolean {
   return views.has(viewKey(ref, tabId));
 }
 
-export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLElement): void {
+export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLElement, shiftEnter: string | undefined): void {
   // The view outlives every mount.
   const view = views.get(viewKey(ref, tabId)) ?? createView(ref, tabId);
+  // Set on every attach: the agents' list may land after the first.
+  view.shiftEnter = shiftEnter;
   if (view.term.element?.parentElement === container) {
     return;
   }

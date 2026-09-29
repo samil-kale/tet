@@ -965,13 +965,22 @@ export async function merge(cwd: string, ref: string, fastForwardOnto?: string):
 }
 
 /** The files differing between `base` and HEAD that still hold a conflict marker line, text files
- *  only. `=======` alone is left out: Markdown underlines a heading with it. */
+ *  only. `=======` alone is left out: Markdown underlines a heading with it. Thrown when git fails:
+ *  its empty output would read as no markers. */
 export async function conflictMarkers(cwd: string, base: string): Promise<string[]> {
-  const changed = (await git(cwd, ["diff", "--name-only", "-z", `${base}...HEAD`])).stdout.split("\0").filter(Boolean);
+  const diff = await git(cwd, ["diff", "--name-only", "-z", `${base}...HEAD`]);
+  if (diff.code !== 0) {
+    throw new Error(diff.stderr.trim() || `git diff exited with ${diff.code}`);
+  }
+  const changed = diff.stdout.split("\0").filter(Boolean);
   if (changed.length === 0) {
     return [];
   }
-  const found = await git(cwd, ["grep", "-I", "-l", "-z", "-E", "^(<<<<<<<|>>>>>>>) ", "--", ...changed]);
+  // grep exits with 1 when nothing matches.
+  const found = await gitOnPaths(cwd, ["grep", "-I", "-l", "-z", "-E", "^(<<<<<<<|>>>>>>>) "], changed, 1);
+  if (found.code !== 0) {
+    throw new Error(found.stderr.trim() || `git grep exited with ${found.code}`);
+  }
   return found.stdout.split("\0").filter(Boolean);
 }
 
@@ -1059,8 +1068,9 @@ function runOnPaths(cwd: string, args: string[], paths: string[]): Promise<GitAc
 const MAX_BATCH_CHARS = 24_000;
 
 /** `git` for a command that cannot read its paths from stdin: once per batch short enough, the
- *  outputs joined, stopped at the first failure. Without paths once, over everything. */
-async function gitOnPaths(cwd: string, args: string[], paths?: string[]): Promise<GitResult> {
+ *  outputs joined, stopped at the first failure. Without paths once, over everything. `emptyCode`:
+ *  an exit code saying a batch had nothing to answer, not that it failed. */
+async function gitOnPaths(cwd: string, args: string[], paths?: string[], emptyCode?: number): Promise<GitResult> {
   const literal = [LITERAL_PATHSPECS, ...args];
   if (paths === undefined) {
     return git(cwd, literal);
@@ -1080,6 +1090,9 @@ async function gitOnPaths(cwd: string, args: string[], paths?: string[]): Promis
   let stdout = "";
   for (const batch of batches) {
     const result = await git(cwd, [...literal, "--", ...batch]);
+    if (result.code === emptyCode) {
+      continue;
+    }
     if (result.code !== 0) {
       return result;
     }

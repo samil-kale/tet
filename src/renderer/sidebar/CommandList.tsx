@@ -216,8 +216,12 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
     if (!projectId || projectId !== shownProject.current || latest.current?.projectId !== projectId) {
       return undefined;
     }
-    applyCommands(projectId, next);
-    return refusal(await window.tet.commands.save(projectId, next), "Could not save the commands");
+    const refused = refusal(await window.tet.commands.save(projectId, next), "Could not save the commands");
+    // Shown only once written: a refused list on screen would be what the next try builds on.
+    if (refused === undefined) {
+      applyCommands(projectId, next);
+    }
+    return refused;
   };
 
   /** The same for a change with no question up: a reorder, a remove. */

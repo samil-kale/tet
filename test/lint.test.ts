@@ -25,9 +25,20 @@ const IMPORTS: Probe[] = [
   ["src/main/terminals/x.ts", 'import "../control/control-verb";', "no-restricted-imports"],
   ["src/main/control/x.ts", 'import "../window";', "no-restricted-imports"],
   ["src/main/window.ts", 'import "./projects";', null],
-  // An agent's own folder, from outside agents/.
+  // A detour through the process's own folder reaches the same area.
+  ["src/main/control/x.ts", 'import "../../main/terminals/pty";', null],
+  ["src/main/terminals/x.ts", 'import "../../main/control/control-verb";', "no-restricted-imports"],
+  ["src/main/util/x.ts", 'import "../../../src/main/store/settings";', "no-restricted-imports"],
+  // An agent's own folder: from outside agents/, beside the registry, from another agent's.
   ["src/main/ipc/x.ts", 'import "../agents/agent-path";', null],
   ["src/main/ipc/x.ts", 'import "../agents/claude";', "no-restricted-imports"],
+  ["src/main/ipc/x.ts", 'import "../../main/agents/claude";', "no-restricted-imports"],
+  ["src/main/agents/index.ts", 'import "./claude";', null],
+  ["src/main/agents/system-prompt.ts", 'import "./agent-path";', null],
+  ["src/main/agents/system-prompt.ts", 'import "./claude/hooks";', "no-restricted-imports"],
+  ["src/main/agents/claude/x.ts", 'import "./hooks";', null],
+  ["src/main/agents/claude/x.ts", 'import "../transcript";', null],
+  ["src/main/agents/claude/x.ts", 'import "../codex/cli";', "no-restricted-imports"],
   // src/renderer's layers.
   ["src/renderer/ui/x.ts", 'import "../platform";', null],
   ["src/renderer/ui/x.ts", 'import "../tabs/pane-layout";', "no-restricted-imports"],
@@ -37,6 +48,8 @@ const IMPORTS: Probe[] = [
   ["src/renderer/files/x.ts", 'import "../git/run-action";', null],
   ["src/renderer/files/x.ts", 'import "../sidebar/ProjectList";', "no-restricted-imports"],
   ["src/renderer/platform.ts", 'import "./App";', "no-restricted-imports"],
+  ["src/renderer/files/x.ts", 'import "../../renderer/git/run-action";', null],
+  ["src/renderer/ui/x.ts", 'import "../../renderer/git/run-action";', "no-restricted-imports"],
   // The process borders.
   ["src/main/ipc/x.ts", 'import "../../shared/control";', null],
   ["src/main/ipc/x.ts", 'import "../../renderer/App";', "no-restricted-imports"],

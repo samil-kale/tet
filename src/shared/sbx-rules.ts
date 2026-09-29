@@ -28,10 +28,14 @@ export function sbxPortRefusal({ host, container }: SbxPort): string | undefined
 }
 
 /** Why a secret row cannot be saved beside the `others`, or undefined: it needs a variable name of
- *  its own and hosts, none with a scheme or port (isBadHost). */
+ *  its own, not one of tet's (isReservedName), and hosts, none with a scheme or port (isBadHost). */
 export function sbxSecretRefusal({ env, hosts }: SbxSecret, others: SbxSecret[]): string | undefined {
-  return !isEnvName(env) || others.some((other) => other.env === env) || hosts.length === 0 || hosts.some(isBadHost)
-    ? "Needs a variable name of its own and hosts without scheme or port"
+  return !isEnvName(env) ||
+    isReservedName(env) ||
+    others.some((other) => other.env === env) ||
+    hosts.length === 0 ||
+    hosts.some(isBadHost)
+    ? "Needs a variable name of its own, not PATH or TET_*, and hosts without scheme or port"
     : undefined;
 }
 

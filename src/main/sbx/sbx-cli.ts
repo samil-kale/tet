@@ -110,9 +110,9 @@ export function cancelSbxSetup(): void {
  *  the app. */
 export const SBX_VERIFIED_VERSION = "0.45.1";
 
-/** As long as an agent's version check: a hung daemon must hold neither the startup, the SBX
- *  dialog nor a tab's start, and counts as not installed. */
-const SBX_VERSION_TIMEOUT_MS = 10_000;
+/** As long as an agent's version check, for `sbx version` and probeSbx's reads beside it: a hung
+ *  daemon must hold neither the startup, the SBX dialog nor a tab's start. */
+export const SBX_PROBE_TIMEOUT_MS = 10_000;
 
 /**
  * `sbx version`'s answer as its bare version (`version` is a subcommand; `sbx --version` fails
@@ -123,7 +123,7 @@ export async function readSbxVersion(): Promise<string | undefined> {
   if (isSimulatedMissing("sbx")) {
     return undefined;
   }
-  const result = await runSbx(["version"], { timeoutMs: SBX_VERSION_TIMEOUT_MS });
+  const result = await runSbx(["version"], { timeoutMs: SBX_PROBE_TIMEOUT_MS });
   return result.ok ? (/\d+\.\d+\.\d+/.exec(result.stdout)?.[0] ?? "") : undefined;
 }
 

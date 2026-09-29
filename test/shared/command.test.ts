@@ -49,11 +49,20 @@ describe("parseEnv and formatEnv", () => {
 });
 
 describe("isSameCommand", () => {
-  it("compares the line, the folder and the variables, the variables in any order", () => {
+  it("compares every field, the variables in any order", () => {
     const one = { command: "npm test", cwd: "web", env: { A: "1", B: "2" } };
     assert.ok(isSameCommand(one, { command: "npm test", cwd: "web", env: { B: "2", A: "1" } }));
     assert.ok(!isSameCommand(one, { command: "npm test", env: { A: "1", B: "2" } }), "another folder");
     assert.ok(!isSameCommand(one, { command: "npm test", cwd: "web", env: { A: "1" } }), "other variables");
-    assert.ok(isSameCommand({ command: "x", name: "one" }, { command: "x", name: "two" }), "a name is a label");
+    const full = { command: "x", name: "one", color: "red", cwd: "web", env: { A: "1" }, shell: true } as const;
+    assert.ok(isSameCommand(full, { ...full, env: { A: "1" } }));
+  });
+
+  it("tells apart rows that differ only in name, color or shell", () => {
+    assert.ok(!isSameCommand({ command: "npm test" }, { command: "npm test", name: "Tests" }), "a name");
+    assert.ok(!isSameCommand({ command: "x", name: "one" }, { command: "x", name: "two" }), "another name");
+    assert.ok(!isSameCommand({ command: "x" }, { command: "x", color: "red" }), "a color");
+    assert.ok(!isSameCommand({ command: "x", color: "red" }, { command: "x", color: "blue" }), "another color");
+    assert.ok(!isSameCommand({ command: "x" }, { command: "x", shell: true }), "through a shell");
   });
 });

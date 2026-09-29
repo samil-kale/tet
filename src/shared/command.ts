@@ -47,10 +47,17 @@ export function splitCommand(command: string): string[] {
   return tokens;
 }
 
-/** Same line, folder and variables; variable order does not matter. */
+/** Saved alike: every field the same, variable order aside — a name or a color makes another row. */
 export function isSameCommand(one: ProjectCommand, other: ProjectCommand): boolean {
   const envKey = (entry: ProjectCommand): string => JSON.stringify(Object.entries(entry.env ?? {}).sort());
-  return one.command === other.command && one.cwd === other.cwd && envKey(one) === envKey(other);
+  return (
+    one.command === other.command &&
+    one.name === other.name &&
+    one.color === other.color &&
+    one.cwd === other.cwd &&
+    envKey(one) === envKey(other) &&
+    one.shell === other.shell
+  );
 }
 
 /**

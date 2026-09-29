@@ -51,7 +51,7 @@ export class EnvStore {
   }
 
   info(name: string): EnvVarInfo | undefined {
-    const entry = this.readable()?.variables.find((variable) => variable.name === name);
+    const entry = this.readable()?.variables.find((variable) => machineName(variable.name) === machineName(name));
     return entry && toInfo(entry);
   }
 
@@ -94,7 +94,7 @@ export class EnvStore {
   /** False when there was nothing under the name. */
   remove(name: string): boolean {
     const contents = this.read();
-    const kept = contents.variables.filter((variable) => variable.name !== name);
+    const kept = contents.variables.filter((variable) => machineName(variable.name) !== machineName(name));
     if (kept.length === contents.variables.length) {
       return false;
     }

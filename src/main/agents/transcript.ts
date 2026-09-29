@@ -326,12 +326,15 @@ export function watchTranscriptDir(
     if (!dir || stopped || dirWatcher) {
       return;
     }
+    // Directory deleted: back to watching the root until the agent recreates it.
+    const gone = (): void => {
+      dirWatcher?.close();
+      dirWatcher = undefined;
+      armRootWatcher();
+    };
     const onEvent = (_eventType: string, filename: string | null): void => {
-      // Directory deleted: back to watching the root until the agent recreates it.
       if (watchedDirectoryGone(dir, filename)) {
-        dirWatcher?.close();
-        dirWatcher = undefined;
-        armRootWatcher();
+        gone();
         return;
       }
       // A null filename means "something changed" — reconcile to be safe.
@@ -340,7 +343,8 @@ export function watchTranscriptDir(
       }
     };
     try {
-      dirWatcher = fs.watch(dir, onEvent);
+      // Its deletion may come as an error instead (EPERM on Windows), which unheard would throw.
+      dirWatcher = fs.watch(dir, onEvent).on("error", gone);
     } catch {
       // Gone again since the lookup, or no descriptor left: output schedules the listing instead.
       return;
@@ -360,7 +364,12 @@ export function watchTranscriptDir(
       return;
     }
     try {
-      rootWatcher = fs.watch(root(), () => void armDirWatcher());
+      // The same for the root: watched again where it still is, else output schedules the listing.
+      rootWatcher = fs.watch(root(), () => void armDirWatcher()).on("error", () => {
+        rootWatcher?.close();
+        rootWatcher = undefined;
+        armRootWatcher();
+      });
     } catch {
       // The agent never ran on this machine: output schedules the listing instead.
     }

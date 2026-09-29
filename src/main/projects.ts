@@ -387,7 +387,8 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
     const ref = projectRef(projectId, worktree.key);
     void closeProjectRef(deps, ref)
       .then(() => dropWorktreeData(deps.dataRoot, [ref], projectId, worktree.key!))
-      .then(() => removeAllSessions(worktree.path));
+      .then(() => removeAllSessions(worktree.path))
+      .catch((error: unknown) => logError(`could not clean up after the worktree ${worktree.path}`, error));
   }
   deps.projectsChanged({ removed: gone.map((worktree) => projectRef(projectId, worktree.key)) });
 }
