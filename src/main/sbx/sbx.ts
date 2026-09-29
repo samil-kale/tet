@@ -11,18 +11,10 @@ import {
   sbxPortKey,
   withoutProblems
 } from "../../shared/sbx-rules";
-import { projectRefKey } from "../../shared/types";
-import type {
-  ProjectRef,
-  SbxAccess,
-  AgentId,
-  SbxKnowledgeConfig,
-  SbxOption,
-  SbxPort,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxSecret
-} from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import type { AgentId } from "../../shared/types/agents";
+import type { ProjectRef } from "../../shared/types/project";
+import type { SbxAccess, SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig, SbxSecret } from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { canBind } from "../util/can-bind";
 import { inTurn } from "../util/async";

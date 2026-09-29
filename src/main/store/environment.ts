@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { errorMessage } from "../../shared/errors";
-import type { EnvAnswer, EnvEdit, EnvVarInfo } from "../../shared/types";
+import type { EnvAnswer, EnvEdit, EnvVarInfo } from "../../shared/types/environment";
 import { envEditRefusal } from "../../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
 import { hasStrings, writeJson } from "../util/json-file";

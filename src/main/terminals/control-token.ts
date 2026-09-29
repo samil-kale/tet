@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import type { ControlSide } from "../../shared/control-side";
-import type { ProjectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types/project";
 
 /**
  * A tab's control token: this run's token keyed to the tab's project and worktree, tab id and the

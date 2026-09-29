@@ -1,5 +1,5 @@
 import type { AgentDefinition } from "../agents/agent";
-import type { TerminalDescriptor } from "../../shared/types";
+import type { TerminalDescriptor } from "../../shared/types/terminals";
 import type { HandoffFiles, TabPlace } from "./tab-place";
 
 /** A tab as its session manager holds it, and what reads or sets its marks. */

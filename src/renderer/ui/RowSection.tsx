@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { overridesMachineNote } from "../../shared/types";
+import { overridesMachineNote } from "../../shared/types/environment";
 import { ActionLink } from "./ActionLink";
 import { FieldGroup } from "./Field";
 import { IconButton } from "./IconButton";

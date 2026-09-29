@@ -1,6 +1,6 @@
 import { memo, type ReactNode } from "react";
-import { projectRefKey, projectRef, worktreeName } from "../../shared/types";
-import type { ProjectRef, Project, ProjectWorktree } from "../../shared/types";
+import { projectRef, projectRefKey, worktreeName } from "../../shared/types/project";
+import type { Project, ProjectRef, ProjectWorktree } from "../../shared/types/project";
 import type { ResolvedRef } from "../resolved-ref";
 import type { GitRun } from "../git/run-action";
 import {

@@ -3,17 +3,9 @@ import * as path from "node:path";
 import { dialog } from "electron";
 import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
-import type {
-  AddAccountResult,
-  AddRepositoryResult,
-  GitActionResult,
-  GitLogin,
-  ListRepositoriesResult,
-  Project,
-  ProviderAccount,
-  ProjectRef,
-  ProviderId
-} from "../../shared/types";
+import type { GitActionResult, GitLogin } from "../../shared/types/git";
+import type { AddRepositoryResult, Project, ProjectRef } from "../../shared/types/project";
+import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "../../shared/types/providers";
 import { urlOrigin } from "../../shared/git-url";
 import { git } from "../git/git-client";
 import { logFailure } from "../util/json-file";

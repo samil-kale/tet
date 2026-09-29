@@ -1,5 +1,5 @@
 import { errorMessage } from "../../shared/errors";
-import type { Suggester, SuggestionResult } from "../../shared/types";
+import type { Suggester, SuggestionResult } from "../../shared/types/agents";
 import { askAgent } from "./ask";
 import { AGENTS } from "./index";
 import { stoppable } from "../util/process";

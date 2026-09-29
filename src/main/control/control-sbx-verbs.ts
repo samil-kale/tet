@@ -1,13 +1,8 @@
 import * as path from "node:path";
 import type { ControlRequest, ControlVerbName } from "../../shared/control";
-import type {
-  Project,
-  SbxKnowledgeConfig,
-  SbxProjectConfig,
-  SbxSecret,
-  SbxVariable
-} from "../../shared/types";
-import { SBX_ACCESS } from "../../shared/types";
+import type { Project } from "../../shared/types/project";
+import type { SbxKnowledgeConfig, SbxProjectConfig, SbxSecret, SbxVariable } from "../../shared/types/sbx";
+import { SBX_ACCESS } from "../../shared/types/sbx";
 import {
   SBX_KNOWLEDGE_KINDS,
   keptValues,

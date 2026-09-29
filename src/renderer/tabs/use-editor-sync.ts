@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { projectRefKey } from "../../shared/types";
-import type { ProjectRef, RepositoryState } from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import type { RepositoryState } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
 import { forget, sameList, sameRecord } from "../identity";
 import type { EditorTab } from "../editor/editor-tab";
 import { activeEditorTab, defaultLayout, type ProjectLayout } from "./pane-layout";

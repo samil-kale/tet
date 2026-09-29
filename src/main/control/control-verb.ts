@@ -1,29 +1,12 @@
 import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/control";
-import { projectRefKey, projectRef } from "../../shared/types";
-import type {
-  AddRepositoryResult,
-  AgentId,
-  AskModelsResult,
-  ProjectRef,
-  EditorListing,
-  EditorReport,
-  ExplorerListing,
-  GitActionResult,
-  NoticeReport,
-  Project,
-  ProjectCommand,
-  RepositoryState,
-  SbxAccount,
-  SbxKnowledgeConfig,
-  SbxLocalSave,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxSaveResult,
-  SbxSignInResult,
-  SbxStoredLocal,
-  SbxValueKind,
-  TerminalDescriptor
-} from "../../shared/types";
+import { projectRef, projectRefKey } from "../../shared/types/project";
+import type { AgentId, AskModelsResult } from "../../shared/types/agents";
+import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
+import type { ExplorerListing } from "../../shared/types/files";
+import type { GitActionResult, RepositoryState } from "../../shared/types/git";
+import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
+import type { SbxAccount, SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxSignInResult, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
+import type { TerminalDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { ToastTarget } from "../util/notifications";
 import type { SbxReading } from "../sbx/sbx-status";

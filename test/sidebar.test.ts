@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { activeAfterChange, activeAtStart, rememberActive } from "../src/renderer/sidebar/active-project";
-import type { Project } from "../src/shared/types";
+import type { Project } from "../src/shared/types/project";
 
 const main: Project = { id: "main", path: "/repo", name: "repo", worktrees: [{ path: "/wt/feature", branch: "feature", key: "k1" }] };
 const other: Project = { id: "other", path: "/other", name: "other", worktrees: [] };

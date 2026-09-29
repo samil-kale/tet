@@ -1,4 +1,4 @@
-import type { PromptId, PromptSettings } from "./types";
+import type { PromptId, PromptSettings } from "./types/settings";
 
 /**
  * What tet asks of an agent: questions in the background, and a handoff's first prompt. Here, not

@@ -22,6 +22,16 @@ const WEB_CONTENTS_SEND = {
 };
 const PROCESS_PLATFORM = { object: "process", property: "platform", message: "Ask PLATFORM (util/host-platform.ts)." };
 const NAVIGATOR_PLATFORM = { object: "navigator", property: "platform", message: "Ask PLATFORM (renderer/platform.ts)." };
+/** Every spawn goes through resolveCommand; a shell joins the arguments unescaped. */
+const SHELL_TRUE = {
+  selector: "Property[key.name='shell'][value.value=true]",
+  message: "Never `shell: true`: spawn through resolveCommand (util/process.ts)."
+};
+/** Every question is Dialog.tsx's confirm or prompt, asked by the view offering the action. */
+const NATIVE_DIALOGS = [
+  ...["showMessageBox", "showMessageBoxSync", "showErrorBox"].map((property) => ({ object: "dialog", property })),
+  ...["alert", "confirm", "prompt"].map((property) => ({ object: "window", property }))
+].map((entry) => ({ ...entry, message: "No native message boxes: ask with Dialog.tsx's confirm or prompt, in the window." }));
 
 /** Shared code reaches an agent through the registry, never its own folder (AGENTS.md). */
 const agentFolder = {
@@ -58,6 +68,29 @@ const RENDERER_LAYERS = [
   { files: [], sidebar: [], dialogs: [] },
   { App: ["*"], Startup: ["*"], main: ["*"], "use-ref-feeds": ["*"] }
 ];
+
+/**
+ * Every folder and flat file of a process holding code is an area of its layers: one left out would
+ * be held to nothing but the process border.
+ */
+function assertLayered(process, layers) {
+  const listed = new Set(layers.flatMap((layer) => Object.keys(layer)));
+  const root = new URL(`./src/${process}/`, import.meta.url);
+  const holdsCode = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true, recursive: true }).some((entry) => entry.isFile() && /\.tsx?$/.test(entry.name));
+  const areas = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) =>
+      entry.isDirectory() ? holdsCode(new URL(`${entry.name}/`, root)) : /\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts")
+    )
+    .map((entry) => entry.name.replace(/\.tsx?$/, ""));
+  const missing = areas.filter((area) => !listed.has(area));
+  if (missing.length > 0) {
+    throw new Error(`src/${process}: ${missing.join(", ")} in no layer (eslint.config.mjs)`);
+  }
+}
+assertLayered("main", MAIN_LAYERS);
+assertLayered("renderer", RENDERER_LAYERS);
 
 /** One config per area of the process: its border, `extra`, and every area it may not reach. */
 function layerConfigs(process, layers, extra = () => []) {
@@ -112,8 +145,8 @@ export default tseslint.config(
   },
   // The process borders, as lint rules rather than prose (see "Where things live" in AGENTS.md):
   // each folder under src/ is one process, and `shared/` the only thing they may import from one
-  // another.
-  ...[...PROCESSES, "shared"].map((folder) => ({
+  // another. main's and the renderer's are in each of their areas' configs below.
+  ...["preload", "cli", "shared"].map((folder) => ({
     files: [`src/${folder}/**`],
     rules: {
       "no-restricted-imports": [
@@ -151,28 +184,56 @@ export default tseslint.config(
       ]
     }
   },
+  {
+    // A folder of shared/ (types/) reaches the rest of shared/, and nothing beyond it.
+    files: ["src/shared/*/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [{ name: "electron", message: "Runs outside electron's main process." }],
+          patterns: [{ regex: "^\\.\\./\\.\\./", message: "Only src/shared." }]
+        }
+      ]
+    }
+  },
   // Every IPC channel goes through its typed wrappers (AGENTS.md, "Where things live"): a bare call
   // with a string would leave main and the preload free to drift apart unnoticed.
   {
     files: ["src/**/*.{ts,tsx}"],
-    rules: { "no-restricted-syntax": ["error", IPC_BY_NAME, WEB_CONTENTS_SEND] }
+    rules: { "no-restricted-syntax": ["error", IPC_BY_NAME, WEB_CONTENTS_SEND, SHELL_TRUE] }
   },
-  { files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"], rules: { "no-restricted-syntax": ["error", WEB_CONTENTS_SEND] } },
-  { files: ["src/main/window.ts"], rules: { "no-restricted-syntax": ["error", IPC_BY_NAME] } },
+  {
+    files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"],
+    rules: { "no-restricted-syntax": ["error", WEB_CONTENTS_SEND, SHELL_TRUE] }
+  },
+  { files: ["src/main/window.ts"], rules: { "no-restricted-syntax": ["error", IPC_BY_NAME, SHELL_TRUE] } },
   // What differs between the OSes is a Platform member; only the two files naming the platform ask
-  // which one it is (AGENTS.md, "Cross-platform").
+  // which one it is (AGENTS.md, "Cross-platform"). No native message boxes (AGENTS.md, "UI rules").
   {
     files: ["src/**/*.{ts,tsx}"],
-    rules: { "no-restricted-properties": ["error", PROCESS_PLATFORM, NAVIGATOR_PLATFORM] }
+    rules: { "no-restricted-properties": ["error", PROCESS_PLATFORM, NAVIGATOR_PLATFORM, ...NATIVE_DIALOGS] }
   },
-  { files: ["src/main/util/host-platform.ts"], rules: { "no-restricted-properties": ["error", NAVIGATOR_PLATFORM] } },
-  { files: ["src/renderer/platform.ts"], rules: { "no-restricted-properties": ["error", PROCESS_PLATFORM] } },
+  {
+    files: ["src/main/util/host-platform.ts"],
+    rules: { "no-restricted-properties": ["error", NAVIGATOR_PLATFORM, ...NATIVE_DIALOGS] }
+  },
+  { files: ["src/renderer/platform.ts"], rules: { "no-restricted-properties": ["error", PROCESS_PLATFORM, ...NATIVE_DIALOGS] } },
   // Only Chromium's stack applies the machine's proxy and certificate store (AGENTS.md,
   // "Cross-platform").
   {
     files: ["src/main/**"],
     rules: {
       "no-restricted-globals": ["error", { name: "fetch", message: "Use electron's net.fetch (or net.request to read a redirect)." }]
+    }
+  },
+  {
+    files: ["src/renderer/**"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        ...["alert", "confirm", "prompt"].map((name) => ({ name, message: "Import Dialog.tsx's confirm or prompt." }))
+      ]
     }
   },
   {

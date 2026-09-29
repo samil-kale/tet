@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { Project, ProjectWorktree } from "../../shared/types";
+import type { Project, ProjectWorktree } from "../../shared/types/project";
 import { readRows, writeJson } from "../util/json-file";
 import { readHeadBranch } from "../util/linked-git-dir";
 import { ownedWorktreeKeys, worktreeDir } from "./project-dirs";

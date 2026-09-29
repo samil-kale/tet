@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode, type Ref, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
-import type { SuggestionResult } from "../../shared/types";
+import type { SuggestionResult } from "../../shared/types/agents";
 import { SparkleIcon } from "./icons";
 import { useRunning } from "./use-running";
 

@@ -10,7 +10,9 @@ import type {
   SpawnPreparation
 } from "../agents/agent";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
-import type { AgentId, NoticeSeverity, SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types";
+import type { AgentId } from "../../shared/types/agents";
+import type { NoticeSeverity } from "../../shared/types/app";
+import type { SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types/sbx";
 import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir } from "../store/project-dirs";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { prepareSbxRun, sandboxName } from "../sbx/sbx";

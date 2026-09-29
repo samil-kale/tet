@@ -1,6 +1,8 @@
 import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { projectRefKey } from "../../shared/types";
-import type { ProjectRef, ExplorerListing, GitActionResult } from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import type { ExplorerListing } from "../../shared/types/files";
+import type { GitActionResult } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../editor/editor-tab";
 import type { FileAct, FileAsk } from "../git/run-action";

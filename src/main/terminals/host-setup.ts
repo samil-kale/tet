@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { errorMessage } from "../../shared/errors";
-import type { AgentId, NoticeSeverity } from "../../shared/types";
+import type { AgentId } from "../../shared/types/agents";
+import type { NoticeSeverity } from "../../shared/types/app";
 import type { AgentDefinition, SpawnPreparation } from "../agents/agent";
 import { agentConfigDir } from "../store/data-root";
 import type { SettingsStore } from "../store/settings";

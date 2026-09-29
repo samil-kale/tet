@@ -1,5 +1,6 @@
 import { errorMessage } from "../../shared/errors";
-import type { EnvAnswer, EnvRequest, ProjectRef } from "../../shared/types";
+import type { EnvAnswer, EnvRequest } from "../../shared/types/environment";
+import type { ProjectRef } from "../../shared/types/project";
 import { machineSets } from "../store/env-names";
 import type { EnvStore } from "../store/environment";
 

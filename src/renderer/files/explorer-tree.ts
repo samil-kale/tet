@@ -1,4 +1,4 @@
-import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder } from "../../shared/types";
+import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder } from "../../shared/types/files";
 import { extensionOf } from "../paths";
 
 export interface TreeNode {

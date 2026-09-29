@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
-import type { AgentInfo } from "../../shared/types";
+import type { AgentInfo } from "../../shared/types/agents";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
 import { disposeTerminal } from "./terminal-views";
@@ -116,7 +116,7 @@ export const TerminalsPane = memo(function TerminalsPane({
     knownTabs.current = tabs;
     const ids = new Set(tabs.map((tab) => tab.tabId));
     for (const tab of previous) {
-      // An editor tab's editor is disposed where it closes (App).
+      // An editor tab's editor is disposed where it closes (use-editor-opening.ts's closeEditors).
       if (!ids.has(tab.tabId) && !isEditorTab(tab)) {
         disposeTerminal(resolved.ref, tab.tabId);
       }

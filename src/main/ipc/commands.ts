@@ -1,6 +1,8 @@
 import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
-import type { ProjectRef, GitActionResult, ProjectCommand, TerminalDescriptor } from "../../shared/types";
+import type { GitActionResult } from "../../shared/types/git";
+import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
+import type { TerminalDescriptor } from "../../shared/types/terminals";
 import { readCommands, writeCommands } from "../store/tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 

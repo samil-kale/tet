@@ -1,4 +1,4 @@
-import type { NoticeSeverity } from "../shared/types";
+import type { NoticeSeverity } from "../shared/types/app";
 import { appendLog, openErrorLog } from "./util/error-log";
 
 /**

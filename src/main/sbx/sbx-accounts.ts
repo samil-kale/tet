@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import { errorMessage } from "../../shared/errors";
-import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../../shared/types";
+import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../../shared/types/sbx";
 import { readRows, writeJson } from "../util/json-file";
 import { readSbxUser, runSbxTokenLogin } from "./sbx-cli";
 import { seal, unseal } from "../util/sealed";

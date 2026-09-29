@@ -3,14 +3,8 @@ import * as path from "node:path";
 import { shell } from "electron";
 import { Minimatch } from "minimatch";
 import { errorMessage, failure } from "../../shared/errors";
-import type {
-  ExplorerListing,
-  FileSearchFile,
-  FileSearchMatch,
-  FileSearchQuery,
-  FileSearchResult,
-  GitActionResult
-} from "../../shared/types";
+import type { ExplorerListing, FileSearchFile, FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types/files";
+import type { GitActionResult } from "../../shared/types/git";
 import { PLATFORM } from "../util/host-platform";
 import { readExplorerView, type ExplorerView } from "../store/tet-json";
 import { git } from "./git-client";

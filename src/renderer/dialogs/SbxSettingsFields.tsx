@@ -1,18 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type {
-  SbxAccess,
-  SbxKnowledgeConfig,
-  SbxKnowledgeEntry,
-  SbxKnowledgeKind,
-  SbxKnowledgeSource,
-  SbxLocalEdits,
-  SbxLocalSave,
-  SbxPath,
-  SbxPort,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxStoredLocal
-} from "../../shared/types";
+import type { SbxAccess, SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxLocalEdits, SbxLocalSave, SbxPath, SbxPort, SbxProblems, SbxProjectConfig, SbxStoredLocal } from "../../shared/types/sbx";
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";

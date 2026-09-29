@@ -37,7 +37,7 @@ import {
   updateRemoteHead,
   version
 } from "../src/main/git/git";
-import { worktreesSupported } from "../src/shared/types";
+import { worktreesSupported } from "../src/shared/types/git";
 import { git, initBare, initRepository, isolateGitConfig, tempDir } from "./helpers";
 
 /**

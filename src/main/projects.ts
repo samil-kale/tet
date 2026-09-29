@@ -3,16 +3,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { errorMessage, failure } from "../shared/errors";
 import { removeAllSessions } from "./agents";
-import { projectRef, projectRefsOf, worktreeBase, worktreeOf, worktreesSupported, WORKTREES_NEED_GIT } from "../shared/types";
-import type {
-  AddRepositoryResult,
-  ProjectRef,
-  GitActionResult,
-  NoticeSeverity,
-  ProjectsChange,
-  ProjectWorktree,
-  RepositoryState
-} from "../shared/types";
+import { worktreeBase, WORKTREES_NEED_GIT, worktreesSupported } from "../shared/types/git";
+import { projectRef, projectRefsOf, worktreeOf } from "../shared/types/project";
+import type { NoticeSeverity } from "../shared/types/app";
+import type { GitActionResult, RepositoryState } from "../shared/types/git";
+import type { AddRepositoryResult, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
 import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import { readHeadBranch, readMainWorktree } from "./util/linked-git-dir";

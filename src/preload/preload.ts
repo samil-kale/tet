@@ -194,7 +194,7 @@ const api: TETApi = {
       invoke("shell:open-file-externally", ref, filePath),
     openProject: (ref) => invoke("shell:open-project", ref)
   },
-  // Lets main release the notices it held back (`send` in main.ts).
+  // Lets main release the notices it held back (`send` in window.ts).
   onNotice: (listener) => {
     const unsubscribe = subscribe("app:notice", listener);
     send("app:notice-listening");

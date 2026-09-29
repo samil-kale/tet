@@ -26,7 +26,9 @@ project's terminals.
 ## Where things live
 
 - `src/` is one folder per process — `main/`, `renderer/`, `preload/`, `cli/` — plus `shared/`,
-  the only folder imported across them (`no-restricted-imports` in `eslint.config.mjs`).
+  the only folder imported across them (`no-restricted-imports` in `eslint.config.mjs`), and only
+  for what two processes use; its types lie by area in `shared/types/`, imported from the area's
+  file.
 - `src/main/` is layered: each area imports its own layer's areas it is allowed and every layer
   below, never one above — per area in `eslint.config.mjs` (`MAIN_LAYERS`), bottom first:
   0. `util/`: helpers of no area — the platform (`host-platform.ts`), starting processes
@@ -46,7 +48,8 @@ project's terminals.
      (`window.ts`), `projects.ts` and `requirements.ts`.
 
   Files that belong together are a folder; one that stands alone stays flat in its layer. No
-  folder for its own sake.
+  folder for its own sake. A new folder or flat file joins a layer in `eslint.config.mjs`, or lint
+  refuses to run.
 - Every IPC channel is typed in `src/shared/ipc.ts`, off `TETApi`, and used only through its
   wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `window.ts`'s `send` in main,
   `invoke`/`send`/`subscribe` in the preload — never a bare `ipcMain`, `ipcRenderer` or

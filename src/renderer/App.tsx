@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "./ui/use-latest";
-import { projectRefKey, projectRefsOf, EMPTY_REPOSITORY_STATE } from "../shared/types";
-import type { AgentInfo, ProjectRef, EnvRequest, Project, TerminalDescriptor } from "../shared/types";
+import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
+import { projectRefKey, projectRefsOf } from "../shared/types/project";
+import type { AgentInfo } from "../shared/types/agents";
+import type { EnvRequest } from "../shared/types/environment";
+import type { Project, ProjectRef } from "../shared/types/project";
+import type { TerminalDescriptor } from "../shared/types/terminals";
 import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";

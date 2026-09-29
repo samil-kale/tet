@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type RefObject } from "react";
-import { projectRefKey, projectRefsOf } from "../shared/types";
-import type { Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import { projectRefKey, projectRefsOf } from "../shared/types/project";
+import type { RepositoryState } from "../shared/types/git";
+import type { Project } from "../shared/types/project";
+import type { TerminalDescriptor } from "../shared/types/terminals";
 import { forget } from "./identity";
 import { clearTerminal } from "./tabs/terminal-views";
 import { useLatest } from "./ui/use-latest";

@@ -1,4 +1,4 @@
-import type { GitActionResult } from "./types";
+import type { GitActionResult } from "./types/git";
 
 /**
  * What a caught value says, for anything the user is shown — a notice, a dialog's error, a

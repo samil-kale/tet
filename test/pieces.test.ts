@@ -20,11 +20,12 @@ import { machineSets } from "../src/main/store/env-names";
 import { EnvRequests } from "../src/main/control/env-requests";
 import { EnvStore } from "../src/main/store/environment";
 import { GitLoginStore } from "../src/main/git/git-logins";
-import type { EnvRequest, GitLogin } from "../src/shared/types";
+import type { EnvRequest } from "../src/shared/types/environment";
+import type { GitLogin } from "../src/shared/types/git";
 import { createByteThresholdCheck } from "../src/main/agents/session-ready";
 import { reportApplies, SIGNAL_STALE_MS } from "../src/main/terminals/turn-order";
 import { HOST_TARGET, SANDBOX_TARGET, toContainerPath } from "../src/main/agents/hook-target";
-import { stripAnsi } from "../src/shared/ansi";
+import { stripAnsi } from "../src/main/util/ansi";
 import { shellSingleQuote } from "../src/main/util/generated-file";
 import { ProjectStore } from "../src/main/store/project-store";
 import { readSbxConfig, writeSbxConfig } from "../src/main/store/tet-json";
@@ -49,8 +50,9 @@ import { sbxProblemNotices, withoutProblems } from "../src/shared/sbx-rules";
 import { THEMES } from "../src/shared/themes";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { ControlRequest } from "../src/shared/control";
-import { DEFAULT_KEYBINDING_PRESET_ID, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
-import type { SbxPath, SbxPort, SbxProjectConfig } from "../src/shared/types";
+import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../src/shared/types/sbx";
+import { DEFAULT_KEYBINDING_PRESET_ID, withSettings } from "../src/shared/types/settings";
+import type { SbxPath, SbxPort, SbxProjectConfig } from "../src/shared/types/sbx";
 import { eventually, fakeSafeStorage, processAlive, tempDir } from "./helpers";
 
 /** The small pieces, each one edit away from silently wrong. */

@@ -1,4 +1,4 @@
-import type { TerminalDescriptor } from "../../shared/types";
+import type { TerminalDescriptor } from "../../shared/types/terminals";
 import { sameRecord } from "../identity";
 import { layoutKey } from "../ui/layout-storage";
 

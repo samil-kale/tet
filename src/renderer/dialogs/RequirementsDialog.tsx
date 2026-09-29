@@ -1,4 +1,4 @@
-import type { Requirement, Requirements } from "../../shared/types";
+import type { Requirement, Requirements } from "../../shared/types/agents";
 import { DialogFrame } from "../ui/DialogFrame";
 
 /** The command to try in a terminal on the left, what the check found on the right. */

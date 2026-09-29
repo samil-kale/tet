@@ -1,4 +1,4 @@
-import type { AgentIcon } from "../../../shared/types";
+import type { AgentIcon } from "../../../shared/types/agents";
 
 /** The shell has no upstream icon: a plain prompt glyph. */
 export const shellIcon: AgentIcon = {

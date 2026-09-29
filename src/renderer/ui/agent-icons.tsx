@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import type { AgentId, AgentIcon as AgentIconData } from "../../shared/types";
+import type { AgentIcon as AgentIconData, AgentId } from "../../shared/types/agents";
 import { FillSvg, LARGER, Svg } from "./icons";
 import { useAgents } from "./use-agents";
 

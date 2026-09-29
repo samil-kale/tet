@@ -1,5 +1,6 @@
-import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
-import type { NoticeSeverity, RepositoryState } from "../../shared/types";
+import { EMPTY_REPOSITORY_STATE } from "../../shared/types/git";
+import type { NoticeSeverity } from "../../shared/types/app";
+import type { RepositoryState } from "../../shared/types/git";
 import type { ControlRecords } from "../control/control-records";
 import type { EnvRequests } from "../control/env-requests";
 import type { EnvStore } from "../store/environment";

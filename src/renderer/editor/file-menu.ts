@@ -1,4 +1,4 @@
-import type { ProjectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types/project";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "./editor-tab";
 import { absolutePath, PLATFORM } from "../platform";

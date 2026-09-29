@@ -25,7 +25,7 @@ export interface SpawnOptions {
   side?: TabSide;
 }
 
-/** The control channel's port and token, set from main.ts. Above `process.env`, since a tet started
+/** The control channel's port and token, set by prepareControl (control-channel.ts). Above `process.env`, since a tet started
  *  from its own shell tab inherits the outer one's; kept out of it so git does not carry them. */
 let controlEnv: Record<string, string> = {};
 /** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */

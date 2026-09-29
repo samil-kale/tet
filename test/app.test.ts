@@ -6,7 +6,10 @@ import { after, before, describe, it } from "node:test";
 import { PLATFORM } from "../src/main/util/host-platform";
 import { resolveRoot } from "../src/main/git/git";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
-import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";
+import type { RepositoryState } from "../src/shared/types/git";
+import type { Project } from "../src/shared/types/project";
+import type { AppSettings } from "../src/shared/types/settings";
+import type { TerminalDescriptor } from "../src/shared/types/terminals";
 import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "./helpers";
 
 /**

@@ -1,58 +1,13 @@
-import type {
-  AddAccountResult,
-  AddRepositoryResult,
-  AgentId,
-  AgentInfo,
-  AppInfo,
-  AppSettings,
-  ProjectRef,
-  CheckoutTarget,
-  EditorReport,
-  EnvAnswer,
-  EnvEdit,
-  EnvRequest,
-  EnvVarInfo,
-  ExplorerListing,
-  ExplorerSettings,
-  FileContent,
-  FileSearchQuery,
-  FileSearchResult,
-  FileWriteResult,
-  GitActionResult,
-  GitLogin,
-  HandoffResult,
-  ListRepositoriesResult,
-  Notice,
-  NoticeProgress,
-  NoticeReport,
-  Project,
-  ProjectCommand,
-  ProjectsChange,
-  ProviderAccount,
-  ProviderId,
-  RepositoryState,
-  Requirements,
-  SbxAccount,
-  SbxAccountEdit,
-  SbxKnowledgeConfig,
-  SbxKnowledgeSource,
-  SbxLocalSave,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxSaveResult,
-  SbxSignInResult,
-  SbxStatus,
-  SbxStoredLocal,
-  SbxValueKind,
-  SettingsEdits,
-  StashCommand,
-  SuggestionResult,
-  Suggester,
-  AskModelsResult,
-  TerminalDescriptor,
-  TerminalOutput,
-  TerminalStatus
-} from "./types";
+import type { AgentId, AgentInfo, AskModelsResult, Requirements, Suggester, SuggestionResult } from "./types/agents";
+import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
+import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
+import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
+import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "./types/git";
+import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
+import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
+import type { SbxAccount, SbxAccountEdit, SbxKnowledgeConfig, SbxKnowledgeSource, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxSignInResult, SbxStatus, SbxStoredLocal, SbxValueKind } from "./types/sbx";
+import type { AppSettings, SettingsEdits } from "./types/settings";
+import type { HandoffResult, TerminalDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
 
 export type Unsubscribe = () => void;
 
@@ -376,7 +331,7 @@ export interface TETApi {
   initialTheme: string;
   /** From main.ts's `applyTheme`, and after every page load. */
   onTheme(listener: (themeId: string) => void): Unsubscribe;
-  /** main.ts's `isWaylandSession`, handed in the same way; terminals stay off WebGL there. */
+  /** window.ts's `isWaylandSession`, handed in the same way; terminals stay off WebGL there. */
   waylandSession: boolean;
 }
 

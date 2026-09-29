@@ -16,7 +16,9 @@ import { toContainerPath } from "../src/main/agents/hook-target";
 import { resolveCommand } from "../src/main/util/process";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import type { ControlEvent } from "../src/shared/control";
-import type { AgentId, Project, TerminalDescriptor } from "../src/shared/types";
+import type { AgentId } from "../src/shared/types/agents";
+import type { Project } from "../src/shared/types/project";
+import type { TerminalDescriptor } from "../src/shared/types/terminals";
 import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "./helpers";
 
 /**

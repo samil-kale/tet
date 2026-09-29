@@ -34,7 +34,7 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import type { NoticeSeverity } from "../../shared/types";
+import type { NoticeSeverity } from "../../shared/types/app";
 
 export interface IconProps {
   className?: string;

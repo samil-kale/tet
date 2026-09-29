@@ -1,6 +1,7 @@
 import type { editor as MonacoEditor } from "monaco-editor";
-import { projectRefKey } from "../../shared/types";
-import type { ProjectRef, FileContent } from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import type { FileContent } from "../../shared/types/files";
+import type { ProjectRef } from "../../shared/types/project";
 import { PLATFORM } from "../platform";
 import { confirmed, confirmedFollowUp } from "../ui/Dialog";
 import { layoutKey } from "../ui/layout-storage";
@@ -343,10 +344,10 @@ export function editorContent(tabId: string): string | undefined {
 
 /**
  * Reads `path` afresh into the tab, making its editor on the first call, on the side and with the
- * preview `how` asks for, selecting its match once the text is there (App's `openEditor`).
- * `preview` is whether the tab is the project's preview tab, which is App's to decide. The caller
- * has made sure nothing unsaved is lost, and calls this before the tab is drawn, whose host
- * attaches the element made here.
+ * preview `how` asks for, selecting its match once the text is there (`openEditor`,
+ * use-editor-opening.ts). `preview` is whether the tab is the project's preview tab, which is
+ * `openEditor`'s to decide. The caller has made sure nothing unsaved is lost, and calls this
+ * before the tab is drawn, whose host attaches the element made here.
  */
 export function openEditorFile(ref: ProjectRef, tabId: string, path: string, preview: boolean, how: OpenEditor): void {
   let view = views.get(tabId);
@@ -680,7 +681,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   }
   // One model per URI or monaco throws; the repository or worktree is the authority, as two can
   // show one path. Within a repository or worktree a path is open in one tab at most
-  // (App's openEditor), and the previous models are cleared before the next open.
+  // (use-editor-opening.ts's openEditor), and the previous models are cleared before the next open.
   const uri = (scheme: string): ReturnType<typeof monaco.Uri.from> =>
     monaco.Uri.from({ scheme, authority: projectRefKey(view.ref), path: `/${file.path}` });
   const models = {

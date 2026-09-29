@@ -9,14 +9,10 @@ import { CONTROL_ENV } from "../../shared/control";
 import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { ControlSide } from "../../shared/control-side";
 import { hasSandbox } from "../agents/agent";
-import type {
-  AgentId,
-  ProjectRef,
-  NoticeSeverity,
-  ProjectCommand,
-  TerminalDescriptor,
-  TerminalStatus
-} from "../../shared/types";
+import type { AgentId } from "../../shared/types/agents";
+import type { NoticeSeverity } from "../../shared/types/app";
+import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
+import type { TerminalDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { HostSetups } from "./host-setup";
 import { dropsDir } from "../store/project-dirs";

@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
 import { reservedRefusal } from "../../shared/env-rules";
-import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types";
+import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types/project";
 import { useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { notifying } from "../git/run-action";
 import { confirmed, filled, prompt, refusal, type PromptOptions } from "../ui/Dialog";

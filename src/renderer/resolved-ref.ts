@@ -1,5 +1,5 @@
-import { projectRefKey, projectRefName, projectRefsOf, worktreeOf } from "../shared/types";
-import type { ProjectRef, Project, ProjectWorktree } from "../shared/types";
+import { projectRefKey, projectRefName, projectRefsOf, worktreeOf } from "../shared/types/project";
+import type { Project, ProjectRef, ProjectWorktree } from "../shared/types/project";
 import { stableRecord } from "./identity";
 
 /**

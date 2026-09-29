@@ -1,6 +1,6 @@
 import { clipboard } from "electron";
 import { handle } from "./channels";
-import type { ProjectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types/project";
 import { writeDropFile } from "../store/drops";
 import type { IpcDeps } from "./deps";
 

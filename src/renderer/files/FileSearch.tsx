@@ -1,5 +1,5 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
-import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types";
+import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types/files";
 import { baseName, parentOf } from "../paths";
 import { FileMarkIcon } from "./file-mark";
 import { INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "../ui/tree-row";

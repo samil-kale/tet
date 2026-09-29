@@ -1,6 +1,6 @@
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
-import { projectRefKey } from "../../shared/types";
-import type { ProjectRef } from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import type { ProjectRef } from "../../shared/types/project";
 import { forget } from "../identity";
 import { nextEditorTabId, setRevealHandler, type EditorTab, type OpenEditor } from "../editor/editor-tab";
 import {

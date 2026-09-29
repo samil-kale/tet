@@ -1,5 +1,5 @@
 import type { TETApi, Unsubscribe } from "./api";
-import type { ProjectRef } from "./types";
+import type { ProjectRef } from "./types/project";
 
 /**
  * Every channel between the window and the main process, typed off `TETApi` (`api.ts`): the

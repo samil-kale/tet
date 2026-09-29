@@ -1,6 +1,6 @@
 import * as path from "node:path";
-import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../../shared/types";
-import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../../shared/types";
+import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../../shared/types/sbx";
+import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
 import { isRecord, logFailure, readJson, writeJson } from "../util/json-file";
 import { seal, unseal } from "../util/sealed";
 

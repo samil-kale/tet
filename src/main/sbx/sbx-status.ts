@@ -1,6 +1,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ProjectRef, SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types/project";
+import type { SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { readLinkedGitDir } from "../util/linked-git-dir";
 import { normalizeHostPath, relativeInside } from "../util/path-inside";
@@ -11,7 +12,7 @@ import { PLATFORM } from "../util/host-platform";
 import { jsonOf, readSbxVersion, runSbx, sbxFailure, sbxVersionSupported, type RunResult } from "./sbx-cli";
 
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
- *  from main.ts. Unset without a control channel, and then nothing of it reaches a sandbox. */
+ *  by prepareControl (control-channel.ts). Unset without a control channel, and then nothing of it reaches a sandbox. */
 let control: { cliPath: string; port: number } | undefined;
 /** tet's data folder, holding its mounted folders (readSbxBlockers, project-dirs.ts). */
 let storageRoot: string | undefined;

@@ -16,22 +16,15 @@ import type { ToastTarget } from "../src/main/util/notifications";
 import type { EnvAsk } from "../src/main/control/env-requests";
 import { tabControlToken } from "../src/main/terminals/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
-import { projectRefKey, EMPTY_REPOSITORY_STATE, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
-import type {
-  AppSettings,
-  FileChange,
-  GitActionResult,
-  ProjectRef,
-  Project,
-  ProjectCommand,
-  SbxKnowledgeConfig,
-  SbxLocalSave,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxStatus,
-  TerminalDescriptor,
-  WorktreeInfo
-} from "../src/shared/types";
+import { EMPTY_REPOSITORY_STATE } from "../src/shared/types/git";
+import { projectRefKey } from "../src/shared/types/project";
+import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../src/shared/types/sbx";
+import { withSettings } from "../src/shared/types/settings";
+import type { FileChange, GitActionResult, WorktreeInfo } from "../src/shared/types/git";
+import type { Project, ProjectCommand, ProjectRef } from "../src/shared/types/project";
+import type { SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxStatus } from "../src/shared/types/sbx";
+import type { AppSettings } from "../src/shared/types/settings";
+import type { TerminalDescriptor } from "../src/shared/types/terminals";
 import { eventually, tempDir, tetCtl as runCli } from "./helpers";
 import type { Run } from "./helpers";
 

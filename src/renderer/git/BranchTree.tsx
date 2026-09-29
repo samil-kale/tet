@@ -1,7 +1,8 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
-import { projectRefKey, projectRef, defaultRemote, refName, upstreamName, worktreeName } from "../../shared/types";
-import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
+import { defaultRemote, refName, upstreamName } from "../../shared/types/git";
+import { projectRef, projectRefKey, worktreeName } from "../../shared/types/project";
+import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types/git";
 import type { ResolvedRef } from "../resolved-ref";
 import { runWithFollowUp, type GitRun } from "./run-action";
 import { TreeRow } from "../ui/tree-row";

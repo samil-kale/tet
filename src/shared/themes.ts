@@ -1,4 +1,4 @@
-import type { ColorScheme } from "./types";
+import type { ColorScheme } from "./types/settings";
 
 /** A color theme: one stylesheet in src/renderer/themes/<id>.css (`:root[data-theme="<id>"]`) plus
  *  what both processes need before it loads. pieces.test.ts checks the two halves agree. */

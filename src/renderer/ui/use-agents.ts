@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AgentId, AgentInfo } from "../../shared/types";
+import type { AgentId, AgentInfo } from "../../shared/types/agents";
 
 /**
  * Asked once per window, not per view: the list (agents and their flags, `AgentInfo`)

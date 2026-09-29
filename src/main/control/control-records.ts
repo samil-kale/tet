@@ -1,6 +1,7 @@
-import { stripAnsi } from "../../shared/ansi";
-import { projectRefKey } from "../../shared/types";
-import type { ProjectRef, EditorListing, EditorReport, NoticeReport } from "../../shared/types";
+import { stripAnsi } from "../util/ansi";
+import { projectRefKey } from "../../shared/types/project";
+import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
+import type { ProjectRef } from "../../shared/types/project";
 
 const MAX_NOTICES = 50;
 /** As far back as `tabs-output` reaches: a long build or test log. */

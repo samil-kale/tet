@@ -1,17 +1,9 @@
 import { errorMessage } from "../../shared/errors";
 import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../../shared/sbx-rules";
-import { projectRefName, projectRef } from "../../shared/types";
-import type {
-  ProjectRef,
-  NoticeSeverity,
-  Project,
-  SbxKnowledgeConfig,
-  SbxLocalSave,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxSaveResult,
-  SbxStatus
-} from "../../shared/types";
+import { projectRef, projectRefName } from "../../shared/types/project";
+import type { NoticeSeverity } from "../../shared/types/app";
+import type { Project, ProjectRef } from "../../shared/types/project";
+import type { SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxStatus } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import { logFailure } from "../util/json-file";
 import { inTurn } from "../util/async";

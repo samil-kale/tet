@@ -5,24 +5,11 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage, failure } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
-import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
+import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types/git";
 import { isImage, toDataUrl } from "./image-type";
 import { headBranch, readLinkedGitDir } from "../util/linked-git-dir";
-import type {
-  BranchUpstream,
-  CheckoutTarget,
-  ChangeStatus,
-  FileChange,
-  GitActionResult,
-  GitLogin,
-  GitOperation,
-  HeadBlob,
-  RemoteInfo,
-  RepositoryState,
-  StashCommand,
-  StashEntry,
-  WorktreeInfo
-} from "../../shared/types";
+import type { HeadBlob } from "../../shared/types/files";
+import type { BranchUpstream, ChangeStatus, CheckoutTarget, FileChange, GitActionResult, GitLogin, GitOperation, RemoteInfo, RepositoryState, StashCommand, StashEntry, WorktreeInfo } from "../../shared/types/git";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 

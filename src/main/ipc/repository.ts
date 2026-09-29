@@ -3,24 +3,10 @@ import { handle, on } from "./channels";
 import { getAgent, listAskableAgents, listAskModels } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { failure } from "../../shared/errors";
-import type {
-  ProjectRef,
-  CheckoutTarget,
-  ExplorerListing,
-  ExplorerSettings,
-  FileContent,
-  FileSearchQuery,
-  FileSearchResult,
-  FileWriteResult,
-  GitActionResult,
-  GitLogin,
-  RepositoryState,
-  StashCommand,
-  AgentId,
-  AskModelsResult,
-  Suggester,
-  SuggestionResult
-} from "../../shared/types";
+import type { AgentId, AskModelsResult, Suggester, SuggestionResult } from "../../shared/types/agents";
+import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "../../shared/types/files";
+import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
 import {
   addExclude,
   addFolder,

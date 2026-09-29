@@ -1,5 +1,5 @@
 import { runAgent } from "../ask";
-import type { AskModel } from "../../../shared/types";
+import type { AskModel } from "../../../shared/types/agents";
 
 /** It reads every provider's catalog before it prints. */
 const LIST_TIMEOUT_MS = 15_000;

@@ -1,5 +1,5 @@
 import { net } from "electron";
-import type { RemoteRepository } from "../../shared/types";
+import type { RemoteRepository } from "../../shared/types/providers";
 
 /** A repository host: authenticate and list repositories with their clone url. One interface for
  *  GitHub and GitLab, over plain REST rather than Octokit or GitBeaker, and kept out of the local

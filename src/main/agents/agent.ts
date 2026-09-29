@@ -1,7 +1,8 @@
 import type { ThemeDefinition } from "../../shared/themes";
 import type { HookEvent } from "../../shared/control";
 import type { ControlSide } from "../../shared/control-side";
-import type { AgentIcon, AgentId, AskModel, SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types";
+import type { AgentIcon, AgentId, AskModel } from "../../shared/types/agents";
+import type { SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types/sbx";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid). */

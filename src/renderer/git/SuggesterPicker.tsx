@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { errorMessage } from "../../shared/errors";
-import type { AgentId, AskModelsResult, ProjectRef, Suggester } from "../../shared/types";
+import type { AgentId, AskModelsResult, Suggester } from "../../shared/types/agents";
+import type { ProjectRef } from "../../shared/types/project";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError } from "../ui/Field";
 import { agentName, useAgents } from "../ui/use-agents";

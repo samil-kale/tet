@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { NoticeProgress, NoticeSeverity } from "../../shared/types";
+import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { SeverityIcon } from "./icons";
 import { createStore, useStore } from "./store";
 import { useTopDialog } from "./window-covered";

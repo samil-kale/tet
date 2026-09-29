@@ -1,7 +1,7 @@
 import * as os from "node:os";
 import { checkAgentInstalled, isAgentInstalled } from "./install-check";
 import { errorMessage } from "../../shared/errors";
-import type { AgentId, AgentInfo, AskModelsResult } from "../../shared/types";
+import type { AgentId, AgentInfo, AskModelsResult } from "../../shared/types/agents";
 import { hasSandbox } from "./agent";
 import type { AgentDefinition, SandboxedAgent } from "./agent";
 import { claudeAgent } from "./claude";

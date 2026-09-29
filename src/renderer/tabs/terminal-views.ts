@@ -4,8 +4,8 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
 import { Terminal } from "@xterm/xterm";
-import { projectRefKey } from "../../shared/types";
-import type { ProjectRef } from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import type { ProjectRef } from "../../shared/types/project";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
@@ -508,7 +508,7 @@ function dropView(key: string, view: TerminalView): void {
  */
 export function disposeRefTerminals(ref: ProjectRef): void {
   // A repository's or worktree's key holds no space: no other key starts with it plus the separator
-  // (shared/types.ts's projectRefKey).
+  // (shared/types/project.ts's projectRefKey).
   const prefix = viewKey(ref, "");
   for (const key of [...earlyOutput.keys()]) {
     if (key.startsWith(prefix)) {

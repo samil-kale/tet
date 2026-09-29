@@ -1,14 +1,10 @@
 import { handle, on } from "./channels";
-import { projectRefKey } from "../../shared/types";
-import type {
-  AgentId,
-  ProjectRef,
-  EditorReport,
-  GitActionResult,
-  HandoffResult,
-  NoticeReport,
-  TerminalDescriptor
-} from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import type { AgentId } from "../../shared/types/agents";
+import type { EditorReport, NoticeReport } from "../../shared/types/app";
+import type { GitActionResult } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
+import type { HandoffResult, TerminalDescriptor } from "../../shared/types/terminals";
 import type { IpcDeps } from "./deps";
 
 /** The tab strip: the terminals themselves, plus what only the renderer knows about its editor

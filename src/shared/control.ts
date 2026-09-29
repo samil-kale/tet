@@ -1,5 +1,6 @@
 import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
-import { COLOR_SCHEMES, NOTIFICATION_IDS, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
+import { COLOR_SCHEMES, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
+import { TERMINAL_STATUSES } from "./types/terminals";
 
 /**
  * The control channel's wire contract, shared by `src/main/control/control-server.ts` and
@@ -28,7 +29,7 @@ export const CONTROL_HOST = "127.0.0.1";
 export type ControlErrorCode = "unauthorized" | "unknown_verb" | "bad_args" | "not_found" | "internal" | "timeout";
 
 export interface ControlRequest {
-  /** The caller's tab's token (src/main/control/control-token.ts); the run's own without a caller. */
+  /** The caller's tab's token (src/main/terminals/control-token.ts); the run's own without a caller. */
   token: string;
   verb: string;
   args: Record<string, unknown>;

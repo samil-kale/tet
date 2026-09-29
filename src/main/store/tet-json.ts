@@ -5,18 +5,12 @@ import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError
 import writeFileAtomic from "write-file-atomic";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { errorMessage } from "../../shared/errors";
-import { COMMAND_COLORS, EXPLORER_SORT_ORDERS, SBX_ACCESS } from "../../shared/types";
-import type {
-  CommandColor,
-  ExplorerRoot,
-  ExplorerSettings,
-  ProjectCommand,
-  SbxPath,
-  SbxPort,
-  SbxProjectConfig,
-  SbxSecret,
-  SbxVariable
-} from "../../shared/types";
+import { EXPLORER_SORT_ORDERS } from "../../shared/types/files";
+import { COMMAND_COLORS } from "../../shared/types/project";
+import { SBX_ACCESS } from "../../shared/types/sbx";
+import type { ExplorerRoot, ExplorerSettings } from "../../shared/types/files";
+import type { CommandColor, ProjectCommand } from "../../shared/types/project";
+import type { SbxPath, SbxPort, SbxProjectConfig, SbxSecret, SbxVariable } from "../../shared/types/sbx";
 import { machineName } from "./env-names";
 import { readMainWorktree } from "../util/linked-git-dir";
 import { inTurn } from "../util/async";

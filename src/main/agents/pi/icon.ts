@@ -1,4 +1,4 @@
-import type { AgentIcon } from "../../../shared/types";
+import type { AgentIcon } from "../../../shared/types/agents";
 
 /**
  * pi's mark is a 4×4 grid, which blurs at the shared box's extent. Crisp edges snap it to pixels,

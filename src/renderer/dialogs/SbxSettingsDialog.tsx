@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { errorMessage } from "../../shared/errors";
-import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../../shared/types";
-import type { Project, SbxBlocker, SbxKnowledgeSource, SbxProjectConfig, SbxStoredLocal } from "../../shared/types";
+import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../../shared/types/sbx";
+import type { Project } from "../../shared/types/project";
+import type { SbxBlocker, SbxKnowledgeSource, SbxProjectConfig, SbxStoredLocal } from "../../shared/types/sbx";
 import {
   SbxSettingsFields,
   fromConfig,

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { GitActionResult, GitLogin } from "../../shared/types";
+import type { GitActionResult, GitLogin } from "../../shared/types/git";
 import { refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { useRunning } from "../ui/use-running";

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FileSearchQuery, FileSearchResult } from "../../shared/types";
+import type { FileSearchQuery, FileSearchResult } from "../../shared/types/files";
 import type { ResolvedRef } from "../resolved-ref";
 
 /** Typing runs the search, as VS Code's does — but only once the typing stops. */

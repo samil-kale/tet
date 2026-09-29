@@ -1,4 +1,4 @@
-import type { ProjectCommand } from "./types";
+import type { ProjectCommand } from "./types/project";
 
 /**
  * A saved command as program plus arguments, started directly — the same on every machine.

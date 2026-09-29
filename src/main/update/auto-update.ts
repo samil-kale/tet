@@ -8,7 +8,7 @@ import writeFileAtomic from "write-file-atomic";
 import { assetName, installRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../../shared/release";
 import { PLATFORM } from "../util/host-platform";
 import type { UpdateResult } from "../../shared/release";
-import type { NoticeProgress, NoticeSeverity } from "../../shared/types";
+import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { readJson } from "../util/json-file";
 import { resumableDownload } from "./resumable-download";
 import { runProcess } from "../util/process";

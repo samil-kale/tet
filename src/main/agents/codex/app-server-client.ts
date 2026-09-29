@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import * as readline from "node:readline";
 import { killProcessTree, resolveCommand } from "../../util/process";
-import type { AskModel } from "../../../shared/types";
+import type { AskModel } from "../../../shared/types/agents";
 
 /**
  * `codex app-server` speaks JSONL JSON-RPC 2.0 (without `jsonrpc`) over stdio. tet starts one per

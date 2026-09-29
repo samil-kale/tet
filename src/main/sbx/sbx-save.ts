@@ -1,5 +1,7 @@
 import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, sbxPortKey, sbxProblemNotices } from "../../shared/sbx-rules";
-import type { AgentId, ProjectRef, SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig } from "../../shared/types";
+import type { AgentId } from "../../shared/types/agents";
+import type { ProjectRef } from "../../shared/types/project";
+import type { SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import type { SandboxedAgent } from "../agents/agent";
 import { readSbxConfig, writeSbxConfig } from "../store/tet-json";

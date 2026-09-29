@@ -1,20 +1,7 @@
 import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
-import { EMPTY_SBX_CONFIG } from "../../shared/types";
-import type {
-  SbxAccount,
-  SbxAccountEdit,
-  SbxKnowledgeConfig,
-  SbxKnowledgeSource,
-  SbxLocalSave,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxSaveResult,
-  SbxSignInResult,
-  SbxStatus,
-  SbxStoredLocal,
-  SbxValueKind
-} from "../../shared/types";
+import { EMPTY_SBX_CONFIG } from "../../shared/types/sbx";
+import type { SbxAccount, SbxAccountEdit, SbxKnowledgeConfig, SbxKnowledgeSource, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxSignInResult, SbxStatus, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
 import { cancelSbxSetup, initSbxPolicy, readSbxUser, runSbxLogin, runSbxLogout } from "../sbx/sbx-cli";
 import { readKnowledgeSources } from "../sbx/sbx-mounts";
 import { readSbxStatus } from "../sbx/sbx-status";

@@ -11,7 +11,7 @@
  */
 
 import type { Platform } from "../../shared/platform";
-import type { SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types";
+import type { SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types/sbx";
 import { isRecord } from "../util/json-file";
 
 type FilesystemAction = "read" | "write";

@@ -1,5 +1,5 @@
 import { errorMessage } from "../../shared/errors";
-import { projectRefKey, type ProjectRef } from "../../shared/types";
+import { type ProjectRef, projectRefKey } from "../../shared/types/project";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { SettingsStore } from "../store/settings";

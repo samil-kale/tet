@@ -1,6 +1,7 @@
 import type { ControlRequest, ControlVerbName } from "../../shared/control";
-import { projectRef, isWorking, sameProjectRef, worktreeOf } from "../../shared/types";
-import type { ProjectRef, Project } from "../../shared/types";
+import { projectRef, sameProjectRef, worktreeOf } from "../../shared/types/project";
+import { isWorking } from "../../shared/types/terminals";
+import type { Project, ProjectRef } from "../../shared/types/project";
 import {
   callerRef,
   ControlError,

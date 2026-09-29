@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { SBX_KNOWLEDGE_KINDS, addProblems, forbiddenBy } from "../../shared/sbx-rules";
-import type { SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxPath, SbxProblems } from "../../shared/types";
+import type { SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxPath, SbxProblems } from "../../shared/types/sbx";
 import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
 import { readLinkedGitDir } from "../util/linked-git-dir";

@@ -1,4 +1,4 @@
-import type { AgentIcon } from "../../../shared/types";
+import type { AgentIcon } from "../../../shared/types/agents";
 
 /** Claude Code's own extension icon, drawn larger to grow the glyph in the shared box. */
 export const claudeIcon: AgentIcon = {

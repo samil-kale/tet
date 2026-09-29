@@ -1,7 +1,9 @@
 import { memo, useCallback, useEffect, useRef } from "react";
-import { isWorking } from "../../shared/types";
+import { isWorking } from "../../shared/types/terminals";
 import type { SideView } from "../ui/use-side-pane";
-import type { AgentId, AgentInfo, ProjectRef, TerminalDescriptor } from "../../shared/types";
+import type { AgentId, AgentInfo } from "../../shared/types/agents";
+import type { ProjectRef } from "../../shared/types/project";
+import type { TerminalDescriptor } from "../../shared/types/terminals";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";

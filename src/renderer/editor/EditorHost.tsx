@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
-import type { ProjectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types/project";
 import { ImageView } from "./ImageView";
 import { isMarkdown } from "./diff-highlight";
 import {

@@ -3,23 +3,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
-import { EMPTY_REPOSITORY_STATE, projectRefKey, defaultRemote, headRemote } from "../../shared/types";
-import type {
-  ProjectRef,
-  CheckoutTarget,
-  ExplorerListing,
-  FileChange,
-  FileContent,
-  FileSearchQuery,
-  FileSearchResult,
-  FileWriteResult,
-  GitActionResult,
-  GitLogin,
-  HeadBlob,
-  NoticeSeverity,
-  RepositoryState,
-  StashCommand
-} from "../../shared/types";
+import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote } from "../../shared/types/git";
+import { projectRefKey } from "../../shared/types/project";
+import type { NoticeSeverity } from "../../shared/types/app";
+import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult, HeadBlob } from "../../shared/types/files";
+import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
 import { PROJECT_FILE } from "../store/tet-json";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { worktreeKeyOf } from "../store/project-dirs";

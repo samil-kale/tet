@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useLatest } from "../ui/use-latest";
-import { isWorking, projectRefKey } from "../../shared/types";
-import type { ProjectRef, TerminalDescriptor } from "../../shared/types";
+import { projectRefKey } from "../../shared/types/project";
+import { isWorking } from "../../shared/types/terminals";
+import type { ProjectRef } from "../../shared/types/project";
+import type { TerminalDescriptor } from "../../shared/types/terminals";
 import { forget, sameList, stableRecord } from "../identity";
 
 /** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,

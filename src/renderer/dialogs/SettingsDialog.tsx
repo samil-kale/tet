@@ -4,19 +4,12 @@ import { errorMessage } from "../../shared/errors";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
-import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types";
-import type {
-  AppInfo,
-  EnvEdit,
-  AppSettings,
-  ColorScheme,
-  ExplorerSettings,
-  ExplorerSortOrder,
-  NotificationSettings,
-  Project,
-  PromptId,
-  SettingsEdits
-} from "../../shared/types";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
+import type { AppInfo } from "../../shared/types/app";
+import type { EnvEdit } from "../../shared/types/environment";
+import type { ExplorerSettings, ExplorerSortOrder } from "../../shared/types/files";
+import type { Project } from "../../shared/types/project";
+import type { AppSettings, ColorScheme, NotificationSettings, PromptId, SettingsEdits } from "../../shared/types/settings";
 import { confirm, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";

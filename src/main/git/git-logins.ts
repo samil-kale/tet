@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { urlOrigin, urlUsername } from "../../shared/git-url";
-import type { GitActionResult, GitLogin } from "../../shared/types";
+import type { GitActionResult, GitLogin } from "../../shared/types/git";
 import { git } from "./git-client";
 import type { NetworkLogin } from "./git";
 import { logFailure, readRows, writeJson } from "../util/json-file";

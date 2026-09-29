@@ -24,7 +24,7 @@ import { ProjectStore } from "../src/main/store/project-store";
 import { SbxLocalStore } from "../src/main/sbx/sbx-local";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-registry";
 import { readCommands, readSbxConfig, writeCommands } from "../src/main/store/tet-json";
-import type { ProjectRef, ProjectsChange } from "../src/shared/types";
+import type { ProjectRef, ProjectsChange } from "../src/shared/types/project";
 import { eventually, forkGitInProcess, git, initBare, isolateGitConfig, tempDir } from "./helpers";
 
 /**

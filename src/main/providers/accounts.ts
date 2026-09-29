@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
-import type { ProviderAccount, ProviderId } from "../../shared/types";
+import type { ProviderAccount, ProviderId } from "../../shared/types/providers";
 import { readRows, writeJson } from "../util/json-file";
 import { seal, unseal } from "../util/sealed";
 import { PROVIDERS } from "./index";

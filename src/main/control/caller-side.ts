@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ControlVerb } from "../../shared/control";
-import type { Project } from "../../shared/types";
+import type { Project } from "../../shared/types/project";
 import { hasSandbox, type AgentDefinition } from "../agents/agent";
 import { HOST_TAB, SANDBOX_TAB, type TabSide } from "../terminals/tab-side";
 import { relativeInside } from "../util/path-inside";

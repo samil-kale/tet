@@ -15,7 +15,7 @@ import * as gitModule from "../src/main/git/git";
 import type { GitRequest, GitResponse } from "../src/main/git/git-host";
 import { CONTROL_ENV } from "../src/shared/control";
 import { HOST_SIDE } from "../src/shared/control-side";
-import type { GitLogin } from "../src/shared/types";
+import type { GitLogin } from "../src/shared/types/git";
 
 /**
  * Stands in for the OS's encryption (electron-stub.js's `safeStorage`): "sealed:" is the cipher,

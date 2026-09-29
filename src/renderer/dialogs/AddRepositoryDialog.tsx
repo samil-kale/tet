@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
-import type { AddRepositoryResult, GitLogin, ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types";
+import type { GitLogin } from "../../shared/types/git";
+import type { AddRepositoryResult } from "../../shared/types/project";
+import type { ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types/providers";
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { forget } from "../identity";
 import { parentOf } from "../paths";

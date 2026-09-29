@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Requirements } from "../shared/types";
+import type { Requirements } from "../shared/types/agents";
 import { App } from "./App";
 import { RequirementsDialog } from "./dialogs/RequirementsDialog";
 import { useRunning } from "./ui/use-running";

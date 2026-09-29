@@ -24,7 +24,7 @@ import { ReconcileScheduler } from "../src/main/terminals/reconcile-scheduler";
 import { TabSessionManager, type SessionManagerCallbacks } from "../src/main/terminals/session-manager";
 import { CONTROL_ENV } from "../src/shared/control";
 import type { HookEvent } from "../src/shared/control";
-import type { TerminalDescriptor } from "../src/shared/types";
+import type { TerminalDescriptor } from "../src/shared/types/terminals";
 import { CLI, eventually, tempDir } from "./helpers";
 
 /** Pieces of the main process needing no app and no server: the session manager's turns and

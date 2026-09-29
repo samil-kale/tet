@@ -1,5 +1,5 @@
-import { projectRefName } from "../../shared/types";
-import type { ProjectRef } from "../../shared/types";
+import { projectRefName } from "../../shared/types/project";
+import type { ProjectRef } from "../../shared/types/project";
 import type { ProjectLookup } from "./project-store";
 import { projectRefPath } from "./project-dirs";
 

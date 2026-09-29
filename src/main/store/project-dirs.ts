@@ -1,7 +1,8 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentId, ProjectRef, Project } from "../../shared/types";
+import type { AgentId } from "../../shared/types/agents";
+import type { Project, ProjectRef } from "../../shared/types/project";
 import { onDisk, relativeInside } from "../util/path-inside";
 
 /**

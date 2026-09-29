@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { ProjectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types/project";
 import { attachTerminal, fitTerminal, focusTerminal, hasTerminal, hideTerminal, showTerminal } from "./terminal-views";
 
 /** A window-edge drag fires dozens of observations; every pty resize repaints the TUI. */

@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, it } from "node:test";
-import { EMPTY_SBX_CONFIG } from "../src/shared/types";
+import { EMPTY_SBX_CONFIG } from "../src/shared/types/sbx";
 import { PLATFORM } from "../src/main/util/host-platform";
 import {
   addExclude,

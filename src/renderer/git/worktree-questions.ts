@@ -1,5 +1,6 @@
-import { WORKTREES_NEED_GIT } from "../../shared/types";
-import type { ProjectRef, GitActionResult } from "../../shared/types";
+import { WORKTREES_NEED_GIT } from "../../shared/types/git";
+import type { GitActionResult } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
 import { canDiscardRefEdits } from "../editor/editor-views";
 import { runWithFollowUp, type GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";

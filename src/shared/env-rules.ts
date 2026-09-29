@@ -4,7 +4,7 @@
  * `ignoreCase` is the machine's: win32 takes `a` and `A` for one variable.
  */
 
-import type { EnvEdit } from "./types";
+import type { EnvEdit } from "./types/environment";
 
 /** A name a shell can export: letters, digits, underscores, not starting with a digit. */
 export function isEnvName(name: string): boolean {

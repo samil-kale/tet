@@ -33,7 +33,7 @@ if (!container) {
 }
 
 // Before any render: xterm, shiki and monaco read the variables once, when built. Synchronous (the
-// preload reads it off main.ts's additionalArguments), so the first frame is right.
+// preload reads it off window.ts's additionalArguments), so the first frame is right.
 document.documentElement.dataset.theme = window.tet.initialTheme;
 
 // A runtime theme change (main.ts's applyTheme): the stylesheet first, since the others re-read it.

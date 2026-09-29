@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
-import { syncRemote } from "../../shared/types";
-import type { ChangeStatus, ProjectRef, FileChange, GitActionResult, RepositoryState } from "../../shared/types";
+import { syncRemote } from "../../shared/types/git";
+import type { ChangeStatus, FileChange, GitActionResult, RepositoryState } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../editor/editor-tab";
 import { runWithFollowUp, type FileAct, type FileAsk } from "./run-action";

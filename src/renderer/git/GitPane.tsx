@@ -1,6 +1,6 @@
 import { memo, useRef } from "react";
-import { syncRemote } from "../../shared/types";
-import type { RepositoryState } from "../../shared/types";
+import { syncRemote } from "../../shared/types/git";
+import type { RepositoryState } from "../../shared/types/git";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../editor/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";

@@ -9,8 +9,8 @@ import { GitLoginStore } from "../src/main/git/git-logins";
 import * as git_ from "../src/main/git/git";
 import { Repository } from "../src/main/git/repository";
 import { readMainWorktree } from "../src/main/util/linked-git-dir";
-import { worktreeBase } from "../src/shared/types";
-import type { FileSearchQuery, FileSearchResult } from "../src/shared/types";
+import { worktreeBase } from "../src/shared/types/git";
+import type { FileSearchQuery, FileSearchResult } from "../src/shared/types/files";
 import { fakeSafeStorage, forkGitInProcess, git, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir, type HttpRemote } from "./helpers";
 
 /**

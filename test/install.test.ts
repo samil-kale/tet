@@ -12,7 +12,7 @@ import { PLATFORM } from "../src/main/util/host-platform";
 import { CONTROL_ENV } from "../src/shared/control";
 import { assetName, rootExecutable } from "../src/shared/release";
 import type { UpdateResult } from "../src/shared/release";
-import type { NoticeReport } from "../src/shared/types";
+import type { NoticeReport } from "../src/shared/types/app";
 import { eventually, killApp, processAlive, tempDir, tetCtl } from "./helpers";
 
 /**

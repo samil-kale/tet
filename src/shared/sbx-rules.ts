@@ -5,17 +5,7 @@
  */
 
 import { envNameKey, isEnvName, isReservedName } from "./env-rules";
-import type {
-  SbxKnowledgeConfig,
-  SbxKnowledgeKind,
-  SbxLocalEdits,
-  SbxOption,
-  SbxPort,
-  SbxProblems,
-  SbxProjectConfig,
-  SbxSecret,
-  SbxVariable
-} from "./types";
+import type { SbxKnowledgeConfig, SbxKnowledgeKind, SbxLocalEdits, SbxOption, SbxPort, SbxProblems, SbxProjectConfig, SbxSecret, SbxVariable } from "./types/sbx";
 
 /** Every kind of knowledge, in the Knowledge tab's order. */
 export const SBX_KNOWLEDGE_KINDS: SbxKnowledgeKind[] = ["skills", "plugins", "instructions"];

@@ -8,7 +8,7 @@ import { claudeHookReply, claudeWorkOutlivesStop, setupClaudeHooks } from "./hoo
 import { claudeConfigDir, claudeSandboxSessions, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
-import type { AskModel } from "../../../shared/types";
+import type { AskModel } from "../../../shared/types/agents";
 import { logError } from "../../util/error-log";
 
 /** Appended to Claude Code's own system prompt for this process (see system-prompt.ts). */

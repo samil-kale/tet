@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { urlUsername } from "../../shared/git-url";
-import type { GitLogin } from "../../shared/types";
+import type { GitLogin } from "../../shared/types/git";
 import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
 import { TextField } from "../ui/Field";
 import { notify } from "../ui/Notices";

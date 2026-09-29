@@ -1,7 +1,9 @@
 import { app } from "electron";
 import { handle, on } from "./channels";
 import { listAgents } from "../agents";
-import type { AppInfo, AppSettings, Requirements, SettingsEdits } from "../../shared/types";
+import type { Requirements } from "../../shared/types/agents";
+import type { AppInfo } from "../../shared/types/app";
+import type { AppSettings, SettingsEdits } from "../../shared/types/settings";
 import { anyAgentInstalled, checkRequirements } from "../requirements";
 import { augmentAgentPath } from "../agents/agent-path";
 import type { IpcDeps } from "./deps";

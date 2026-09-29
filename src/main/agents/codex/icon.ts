@@ -1,4 +1,4 @@
-import type { AgentIcon } from "../../../shared/types";
+import type { AgentIcon } from "../../../shared/types/agents";
 
 /**
  * Codex CLI's own icon (not OpenAI's mark): a prompt in a circle, redrawn in the shell icon's

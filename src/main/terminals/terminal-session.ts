@@ -1,6 +1,6 @@
 import type { IPty } from "node-pty";
 import { errorMessage } from "../../shared/errors";
-import type { TerminalStatus } from "../../shared/types";
+import type { TerminalStatus } from "../../shared/types/terminals";
 import { spawnAgentProcess, type SpawnOptions } from "./pty";
 import { logError } from "../util/error-log";
 

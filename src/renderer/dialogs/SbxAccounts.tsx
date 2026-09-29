@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { SbxAccount, SbxAccountEdit } from "../../shared/types";
+import type { SbxAccount, SbxAccountEdit } from "../../shared/types/sbx";
 import { atLeastOne, EditRow, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
 import { IconButton } from "../ui/IconButton";
 import { CheckIcon, LogInIcon } from "../ui/icons";

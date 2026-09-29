@@ -1,6 +1,6 @@
 import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
-import type { EnvAnswer, EnvEdit, EnvVarInfo } from "../../shared/types";
+import type { EnvAnswer, EnvEdit, EnvVarInfo } from "../../shared/types/environment";
 import type { IpcDeps } from "./deps";
 
 /** The environment dialog's answer and the Settings' Environment tab. */

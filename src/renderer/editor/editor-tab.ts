@@ -1,4 +1,5 @@
-import type { ProjectRef, TerminalDescriptor } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types/project";
+import type { TerminalDescriptor } from "../../shared/types/terminals";
 
 /**
  * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview

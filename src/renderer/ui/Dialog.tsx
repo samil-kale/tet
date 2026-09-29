@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type SetStateAction } from "react";
-import type { GitActionResult } from "../../shared/types";
+import type { GitActionResult } from "../../shared/types/git";
 import { DialogFrame, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
 import { notify } from "./Notices";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { EnvRequest } from "../../shared/types";
+import type { EnvRequest } from "../../shared/types/environment";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { EditRow, OverridesMachine, RowInput, RowSection, SecretInput } from "../ui/RowSection";
 

@@ -1,4 +1,4 @@
-import type { RemoteRepository } from "../../shared/types";
+import type { RemoteRepository } from "../../shared/types/providers";
 import { getJson, getPaged, type GitProvider } from "./provider";
 
 function apiBase(host: string): string {

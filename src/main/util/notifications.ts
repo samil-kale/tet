@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import { app, Notification } from "electron";
-import { projectRefKey, projectRef } from "../../shared/types";
-import type { ProjectRef } from "../../shared/types";
+import { projectRef, projectRefKey } from "../../shared/types/project";
+import type { ProjectRef } from "../../shared/types/project";
 import { logError } from "./error-log";
 import { PLATFORM } from "./host-platform";
 
@@ -11,7 +11,7 @@ export interface ToastTarget {
   tabId: string;
 }
 
-/** What the desktop toasts need of the app around them (main.ts owns all of it). */
+/** What the desktop toasts need of the app around them (the window, AppWindow, and the tabs; handed in by main.ts). */
 interface NotificationDeps {
   /** Only an installed tet asks for the notification presenter: in a checkout it would write a
    *  Start menu entry reading "Electron". */
