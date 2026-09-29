@@ -1,9 +1,9 @@
 import type { ProjectRef } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../terminal/editor-tab";
+import type { OpenEditor } from "./editor-tab";
 import { absolutePath, PLATFORM } from "../platform";
 import { SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
-import { isMarkdown } from "../diff/diff-highlight";
+import { isMarkdown } from "./diff-highlight";
 
 /** What a file's menu offers after its own "Open", in the Explorer and the changes list alike:
  *  the Markdown preview through `open`, then the external editor. `enabled` is false where the

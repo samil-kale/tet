@@ -4,7 +4,7 @@ import { projectRefKey, projectRef, defaultRemote, refName, upstreamName, worktr
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
 import { runWithFollowUp, type GitRun } from "./run-action";
-import { TreeRow } from "../files/tree-rows";
+import { TreeRow } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { TextField } from "../ui/Field";

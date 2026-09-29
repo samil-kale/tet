@@ -11,8 +11,8 @@ import "./themes/light-modern.css";
 import "@xterm/xterm/css/xterm.css";
 import "./styles.css";
 import { Startup } from "./Startup";
-import { rethemeTerminals } from "./terminal/terminal-views";
-import { switchEditorTheme } from "./diff/editor";
+import { rethemeTerminals } from "./tabs/terminal-views";
+import { switchEditorTheme } from "./editor/editor";
 
 /**
  * A file dropped outside a terminal would navigate the window to it, replacing the app. Files only:

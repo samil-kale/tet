@@ -19,6 +19,7 @@ import { Section } from "../ui/Section";
 import { SessionMark } from "../ui/SessionMark";
 import { IconButton } from "../ui/IconButton";
 import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../ui/icons";
+import type { RefMarks } from "../tabs/use-session-marks";
 
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";
@@ -31,17 +32,6 @@ function rowButton(title: string, run: () => void, icon: ReactNode) {
       {icon}
     </IconButton>
   );
-}
-
-/** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,
- *  waiting on an answer, and starting (so the pane a new agent opens in shows the bar,
- *  `TerminalsPane`'s `startingHere`). `busy` excludes a session stopped on a question. Decided in
- *  `useSessionMarks` (use-session-marks.ts), against what is on screen. */
-export interface RefMarks {
-  finished: string[];
-  waiting: string[];
-  starting: string[];
-  busy: boolean;
 }
 
 /** A row's repository facts: HEAD, first remote, dirty. */

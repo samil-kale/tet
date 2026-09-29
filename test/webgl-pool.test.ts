@@ -6,7 +6,7 @@ import {
   WEBGL_LOSS_WINDOW_MS,
   WebglPool,
   isSoftwareRenderer
-} from "../src/renderer/terminal/webgl-pool";
+} from "../src/renderer/tabs/webgl-pool";
 
 /** Which terminals keep a WebGL context — the bookkeeping half of terminal-views.ts's renderer. */
 

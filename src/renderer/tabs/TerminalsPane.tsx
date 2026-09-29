@@ -9,8 +9,9 @@ import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } fro
 import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "../ui/Sash";
-import { Pane, type DragPosition, type PaneChrome, type SideView } from "./Pane";
-import { isEditorTab, type PaneTab } from "./editor-tab";
+import { Pane, type DragPosition, type PaneChrome } from "./Pane";
+import type { SideView } from "../ui/use-side-pane";
+import { isEditorTab, type PaneTab } from "../editor/editor-tab";
 import { NO_TABS } from "./use-project-layouts";
 
 /**

@@ -2,9 +2,9 @@ import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, us
 import { projectRefKey } from "../../shared/types";
 import type { ProjectRef, ExplorerListing, GitActionResult } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../terminal/editor-tab";
+import type { OpenEditor } from "../editor/editor-tab";
 import type { FileAct, FileAsk } from "../git/run-action";
-import { openEntries, pathEntries } from "./file-menu";
+import { openEntries, pathEntries } from "../editor/file-menu";
 import {
   ancestorsOf,
   buildForest,
@@ -16,7 +16,8 @@ import {
   type TreeNode
 } from "./explorer-tree";
 import { baseName, parentOf } from "../paths";
-import { FileMarkIcon, INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "./tree-rows";
+import { FileMarkIcon } from "./file-mark";
+import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";

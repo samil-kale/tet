@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { ProjectRef, FileSearchMatch } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../terminal/editor-tab";
+import type { OpenEditor } from "../editor/editor-tab";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { FileSearch, searchSummary, type FileSearchHandle } from "./FileSearch";
 import { useFileAct } from "../git/run-action";

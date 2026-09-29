@@ -36,50 +36,62 @@ const processBorder = (folder) => ({
 });
 
 /**
- * src/main's layers, bottom first (AGENTS.md, "Where things live"): each area imports its own
- * layer's areas it lists under `beside`, and every layer below — never one above. A flat file of
- * the top layer is named without its `.ts`.
+ * A process's layers, bottom first (AGENTS.md, "Where things live"): each area imports its own
+ * layer's areas it lists beside it ("*" for all), and every layer below — never one above. An area
+ * is a folder, or a flat file named without its extension.
  */
 const MAIN_LAYERS = [
-  { areas: { util: [] } },
-  { areas: { store: ["*"] } },
-  { areas: { git: [], agents: [], sbx: ["agents"], providers: [], update: [] } },
-  { areas: { terminals: [] } },
-  { areas: { control: [] } },
-  { areas: { ipc: ["*"], main: ["*"], projects: ["*"], requirements: ["*"], uncaught: ["*"] } }
+  { util: [] },
+  { store: ["*"] },
+  { git: [], agents: [], sbx: ["agents"], providers: [], update: [] },
+  { terminals: [] },
+  { control: [] },
+  { ipc: ["*"], main: ["*"], window: ["*"], projects: ["*"], requirements: ["*"], uncaught: ["*"] }
 ];
 
-/** One config per area of src/main: the process border and every area it may not reach. */
-const mainLayerConfigs = MAIN_LAYERS.flatMap((layer, index) =>
-  Object.entries(layer.areas).map(([area, beside]) => {
-    const above = MAIN_LAYERS.slice(index + 1).flatMap((higher) => Object.keys(higher.areas));
-    const sideways = beside.includes("*") ? [] : Object.keys(layer.areas).filter((other) => other !== area && !beside.includes(other));
-    const barred = [...above, ...sideways];
-    const flat = ["main", "projects", "requirements", "uncaught"].includes(area);
-    return {
-      files: [flat ? `src/main/${area}.ts` : `src/main/${area}/**`],
-      rules: {
-        "no-restricted-imports": [
-          "error",
-          {
-            patterns: [
-              processBorder("main"),
-              ...(area === "agents" ? [] : [agentFolder]),
-              ...(barred.length === 0
-                ? []
-                : [
-                    {
-                      regex: `^(\\.\\./)+(${barred.join("|")})(/|$)`,
-                      message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`
-                    }
-                  ])
-            ]
-          }
-        ]
-      }
-    };
-  })
-);
+const RENDERER_LAYERS = [
+  { platform: ["*"], paths: ["*"], identity: ["*"], "resolved-ref": ["*"], shortcuts: ["*"], themes: ["*"] },
+  { ui: [] },
+  { editor: [] },
+  { tabs: [] },
+  { git: [] },
+  { files: [], sidebar: [], dialogs: [] },
+  { App: ["*"], Startup: ["*"], main: ["*"] }
+];
+
+/** One config per area of the process: its border, `extra`, and every area it may not reach. */
+function layerConfigs(process, layers, extra = () => []) {
+  return layers.flatMap((layer, index) =>
+    Object.entries(layer).map(([area, beside]) => {
+      const above = layers.slice(index + 1).flatMap((higher) => Object.keys(higher));
+      const sideways = beside.includes("*") ? [] : Object.keys(layer).filter((other) => other !== area && !beside.includes(other));
+      const barred = [...above, ...sideways];
+      const folder = fs.existsSync(new URL(`./src/${process}/${area}`, import.meta.url));
+      return {
+        files: [folder ? `src/${process}/${area}/**` : `src/${process}/${area}.{ts,tsx}`],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              patterns: [
+                processBorder(process),
+                ...extra(area),
+                ...(barred.length === 0
+                  ? []
+                  : [
+                      {
+                        regex: `^(\\.{1,2}/)+(${barred.join("|")})(/|$)`,
+                        message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`
+                      }
+                    ])
+              ]
+            }
+          ]
+        }
+      };
+    })
+  );
+}
 
 export default tseslint.config(
   {
@@ -112,9 +124,10 @@ export default tseslint.config(
       ]
     }
   })),
-  // src/main's layers, each area's config repeating the process border: a later config's rule
-  // replaces an earlier one's for the same file.
-  ...mainLayerConfigs,
+  // The layers of src/main and src/renderer, each area's config repeating the process border: a
+  // later config's rule replaces an earlier one's for the same file.
+  ...layerConfigs("main", MAIN_LAYERS, (area) => (area === "agents" ? [] : [agentFolder])),
+  ...layerConfigs("renderer", RENDERER_LAYERS),
   {
     // The git utility process (git-host.ts) and the CLI run without electron; `shared/` runs in
     // every process. None of them may import it, and the first two may import nothing from the

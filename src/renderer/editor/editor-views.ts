@@ -9,9 +9,9 @@ import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-hig
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
-import type { EditorReveal, OpenEditor } from "../terminal/editor-tab";
-import { openFile } from "../terminal/terminal-views";
-import { editorFontFamily } from "../terminal/theme";
+import type { EditorReveal, OpenEditor } from "./editor-tab";
+import { openFile } from "./editor-tab";
+import { editorFontFamily } from "../themes/theme-colors";
 
 /**
  * Each editor tab's editor, outside React like the xterms (`terminal-views.ts`): monaco's

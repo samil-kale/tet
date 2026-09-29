@@ -696,7 +696,7 @@ textarea:focus,
 
 /* A file mark is a glyph of Seti's font (files/file-icons.ts), centred in the chevron's
    `.tree-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
-   (TWISTIE_WIDTH + TWISTIE_GAP in files/tree-rows.tsx), so file and folder labels stay level. */
+   (TWISTIE_WIDTH + TWISTIE_GAP in ui/tree-row.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
   src: url("./files/seti.woff") format("woff");

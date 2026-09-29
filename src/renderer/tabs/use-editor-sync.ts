@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { projectRefKey } from "../../shared/types";
 import type { ProjectRef, RepositoryState } from "../../shared/types";
 import { forget, sameList, sameRecord } from "../identity";
-import type { EditorTab } from "../terminal/editor-tab";
-import { activeEditorTab, defaultLayout, type ProjectLayout } from "../terminal/pane-layout";
-import { editorContent, setEditorVersion } from "./editor-views";
+import type { EditorTab } from "../editor/editor-tab";
+import { activeEditorTab, defaultLayout, type ProjectLayout } from "./pane-layout";
+import { editorContent, setEditorVersion } from "../editor/editor-views";
 
 /** Shared instance, so a repository's or worktree's watched list is stable when empty. */
 const NO_PATHS: string[] = [];

@@ -2,7 +2,7 @@ import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
-import type { OpenEditor } from "./editor-tab";
+import { openFile } from "../editor/editor-tab";
 import { Terminal } from "@xterm/xterm";
 import { projectRefKey } from "../../shared/types";
 import type { ProjectRef } from "../../shared/types";
@@ -10,7 +10,7 @@ import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isModifierHeld, PLATFORM } from "../platform";
-import { buildXtermTheme, editorFontFamily } from "./theme";
+import { buildXtermTheme, editorFontFamily } from "../themes/theme-colors";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
 interface TerminalView {
@@ -31,9 +31,6 @@ interface TerminalView {
  */
 const views = new Map<string, TerminalView>();
 
-/** Opens a file of the repository or worktree in its preview tab, a Markdown file with its preview
- *  beside the editor if asked. Set by App. */
-let revealHandler: ((ref: ProjectRef, path: string, how: OpenEditor) => void) | undefined;
 
 function viewKey(ref: ProjectRef, tabId: string): string {
   return `${projectRefKey(ref)} ${tabId}`;
@@ -61,27 +58,8 @@ window.tet.terminals.onOutput((batch) => {
   }
 });
 
-export function setRevealHandler(handler: (ref: ProjectRef, path: string, how: OpenEditor) => void): () => void {
-  revealHandler = handler;
-  return () => {
-    if (revealHandler === handler) {
-      revealHandler = undefined;
-    }
-  };
-}
-
 function openUrl(url: string): void {
   void window.tet.shell.openUrl(url);
-}
-
-/** A ctrl-clicked path or a Markdown preview's link: main finds it, opens one outside the
- *  repository itself, and says when there is none. */
-export function openFile(ref: ProjectRef, filePath: string, markdownPreview = false): void {
-  void window.tet.shell.openFile(ref, filePath).then((repoPath) => {
-    if (repoPath) {
-      revealHandler?.(ref, repoPath, { markdownPreview });
-    }
-  });
 }
 
 function toBase64(buffer: ArrayBuffer): string {

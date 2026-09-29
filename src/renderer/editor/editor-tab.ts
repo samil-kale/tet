@@ -59,3 +59,26 @@ export function isEditorTabId(tabId: string): boolean {
 export function isEditorTab(tab: PaneTab): tab is EditorTab {
   return isEditorTabId(tab.tabId);
 }
+
+/** Opens a file of the repository or worktree in its preview tab, a Markdown file with its preview
+ *  beside the editor if asked. Set by App. */
+let revealHandler: ((ref: ProjectRef, path: string, how: OpenEditor) => void) | undefined;
+
+export function setRevealHandler(handler: (ref: ProjectRef, path: string, how: OpenEditor) => void): () => void {
+  revealHandler = handler;
+  return () => {
+    if (revealHandler === handler) {
+      revealHandler = undefined;
+    }
+  };
+}
+
+/** A ctrl-clicked path or a Markdown preview's link: main finds it, opens one outside the
+ *  repository itself, and says when there is none. */
+export function openFile(ref: ProjectRef, filePath: string, markdownPreview = false): void {
+  void window.tet.shell.openFile(ref, filePath).then((repoPath) => {
+    if (repoPath) {
+      revealHandler?.(ref, repoPath, { markdownPreview });
+    }
+  });
+}

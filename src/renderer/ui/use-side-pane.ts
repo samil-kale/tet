@@ -1,7 +1,9 @@
 import { useCallback, useState, type RefObject } from "react";
 import { useLatest } from "./use-latest";
 import { usePaneToggle } from "./layout-storage";
-import type { SideView } from "../terminal/Pane";
+
+/** The side pane's view: one of two, never both. */
+export type SideView = "git" | "files";
 
 /** The side pane's view, its slide, and the ways views open it. */
 interface SidePane {

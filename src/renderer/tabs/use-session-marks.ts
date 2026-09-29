@@ -2,8 +2,18 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useLatest } from "../ui/use-latest";
 import { isWorking, projectRefKey } from "../../shared/types";
 import type { ProjectRef, TerminalDescriptor } from "../../shared/types";
-import type { RefMarks } from "../sidebar/ProjectList";
 import { forget, sameList, stableRecord } from "../identity";
+
+/** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,
+ *  waiting on an answer, and starting (so the pane a new agent opens in shows the bar,
+ *  `TerminalsPane`'s `startingHere`). `busy` excludes a session stopped on a question. Decided in
+ *  `useSessionMarks`, against what is on screen. */
+export interface RefMarks {
+  finished: string[];
+  waiting: string[];
+  starting: string[];
+  busy: boolean;
+}
 
 /** Shared instance, so a pane's props stay identical for a project with none. */
 export const NO_IDS: string[] = [];

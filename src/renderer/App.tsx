@@ -20,17 +20,18 @@ import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize } from "./ui/layout-storage";
 import { useSidePane } from "./ui/use-side-pane";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
-import { TerminalsPane } from "./terminal/TerminalsPane";
-import { clearTerminal, disposeRefTerminals, setRevealHandler } from "./terminal/terminal-views";
-import { NO_IDS, useSessionMarks } from "./terminal/use-session-marks";
+import { TerminalsPane } from "./tabs/TerminalsPane";
+import { clearTerminal, disposeRefTerminals } from "./tabs/terminal-views";
+import { setRevealHandler } from "./editor/editor-tab";
+import { NO_IDS, useSessionMarks } from "./tabs/use-session-marks";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { agentName, useAgents } from "./ui/use-agents";
 import { forget, sameList, stableRecord } from "./identity";
 import { matchesShortcut } from "./shortcuts";
-import { defaultLayout, paneOf, tabsInFront } from "./terminal/pane-layout";
-import { NO_TABS, useProjectLayouts } from "./terminal/use-project-layouts";
-import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./terminal/editor-tab";
+import { defaultLayout, paneOf, tabsInFront } from "./tabs/pane-layout";
+import { NO_TABS, useProjectLayouts } from "./tabs/use-project-layouts";
+import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./editor/editor-tab";
 import {
   canDiscardRefEdits,
   canDiscardEdits,
@@ -42,8 +43,8 @@ import {
   revealEditorMatch,
   showDiff,
   showMarkdownPreview
-} from "./diff/editor-views";
-import { useEditorSync } from "./diff/use-editor-sync";
+} from "./editor/editor-views";
+import { useEditorSync } from "./tabs/use-editor-sync";
 
 /** Who asks for environment variables, as the window names that tab: "Claude (fix login) in
  *  autocontract". */

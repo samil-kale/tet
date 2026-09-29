@@ -1,7 +1,8 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
 import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types";
 import { baseName, parentOf } from "../paths";
-import { FileMarkIcon, INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "./tree-rows";
+import { FileMarkIcon } from "./file-mark";
+import { INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "../ui/tree-row";
 import { FilterField } from "../ui/FilterField";
 import { IconButton } from "../ui/IconButton";
 import { CaseSensitiveIcon, type IconProps, RegexIcon, WholeWordIcon } from "../ui/icons";

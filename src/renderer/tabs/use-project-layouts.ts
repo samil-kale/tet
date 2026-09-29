@@ -14,7 +14,7 @@ import {
   snapTab as snapTabLayout
 } from "./pane-layout";
 import type { LayoutTab, PaneId, ProjectLayout, SnapTransition } from "./pane-layout";
-import type { PaneTab } from "./editor-tab";
+import type { PaneTab } from "../editor/editor-tab";
 import { forget } from "../identity";
 
 /** Shared instance, so a pane's props stay identical for a repository or worktree that has none. */

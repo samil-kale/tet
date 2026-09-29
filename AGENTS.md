@@ -51,11 +51,18 @@ project's terminals.
   wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `window.ts`'s `send` in main,
   `invoke`/`send`/`subscribe` in the preload — never a bare `ipcMain`, `ipcRenderer` or
   `webContents.send` call with a string.
-- `src/renderer/`: `terminal/` (xterm, split view, link providers), `git/` (the side pane's git
-  view), `files/` (its other one: the Explorer tree, the SEARCH pane, Seti's file icons),
-  `diff/` (the editor tab: monaco + shiki), `sidebar/`, `dialogs/`, `ui/`, `themes/`, `assets/`
-  (the app icon, for the window and the packages); flat is the shell — `App`, `Startup`,
-  `styles.css`, `shortcuts.ts`.
+- `src/renderer/` is layered the same way (`RENDERER_LAYERS`), bottom first:
+  0. Flat helpers of no view (`platform.ts`, `paths.ts`, `identity.ts`, `resolved-ref.ts`,
+     `shortcuts.ts`) and `themes/` (the stylesheets and the colors built from them).
+  1. `ui/`: views and hooks of no feature — dialogs' frame, fields, menus, the tree row, icons.
+  2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.
+  3. `tabs/`: the tab area — panes, split view, the terminals (xterm, link providers), hosting
+     editor tabs beside them.
+  4. `git/`: the side pane's git view, and running a git action from any view (`run-action.ts`).
+  5. `files/` (the side pane's other view: the Explorer tree, the SEARCH pane, Seti's file icons),
+     `sidebar/` and `dialogs/`, apart from each other.
+  6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`. `assets/` holds the app icon,
+     for the window and the packages.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
   documents every field), grouped by what it can do — `install`, `terminal`, `run`, `ask`,
   `sessions`, `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent
@@ -242,7 +249,7 @@ or a per-line decision is for an agent.
   terminals and editor tabs of the repository or a worktree — VS Code's preview rule, one preview
   tab each (`editor-tab.ts`). Git and files are not tabs but one side pane toggled from the strip.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
-  zone. Every rule is in `src/renderer/terminal/pane-layout.ts`, the state in
+  zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a

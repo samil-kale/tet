@@ -16,7 +16,7 @@ import {
   subscribeRefEditors,
   type EditorSnapshot
 } from "./editor-views";
-import { isEditorTab, type PaneTab } from "../terminal/editor-tab";
+import { isEditorTab, type PaneTab } from "./editor-tab";
 import { IconButton } from "../ui/IconButton";
 import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
 import { usePaneShare } from "../ui/layout-storage";

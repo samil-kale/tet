@@ -2,7 +2,7 @@ import { memo, useRef } from "react";
 import { syncRemote } from "../../shared/types";
 import type { RepositoryState } from "../../shared/types";
 import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../terminal/editor-tab";
+import type { OpenEditor } from "../editor/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";
 import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
 import { useFileAct } from "./run-action";

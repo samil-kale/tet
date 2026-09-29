@@ -7,7 +7,7 @@ import {
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
 import { baseName } from "../paths";
-import { buildShikiColors } from "../terminal/theme";
+import { buildShikiColors } from "../themes/theme-colors";
 
 /** The shiki theme coloring the editor (monaco has no grammars, see monaco-core.ts). Token colors
  *  are the one thing not from a --vscode-* variable; this is the token half of the Settings theme

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { isWorking } from "../../shared/types";
+import type { SideView } from "../ui/use-side-pane";
 import type { AgentId, AgentInfo, ProjectRef, TerminalDescriptor } from "../../shared/types";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
@@ -11,9 +12,9 @@ import { notify } from "../ui/Notices";
 import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput } from "./terminal-views";
-import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
-import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
-import { getEditorSnapshot, keepEditor } from "../diff/editor-views";
+import { isEditorTab, isEditorTabId, type PaneTab } from "../editor/editor-tab";
+import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
+import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon } from "../ui/icons";
 import { SessionMark } from "../ui/SessionMark";
@@ -36,9 +37,6 @@ function formatIso(ms: number): string {
 function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
   return { label: agent.displayName, icon: <AgentIcon agentId={agent.id} className="tab-icon" />, run };
 }
-
-/** The side pane's view: one of two, never both. */
-export type SideView = "git" | "files";
 
 /** The one row of icon buttons, on pane "a" alone whatever the preset. */
 export interface PaneChrome {
