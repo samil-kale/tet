@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.14.2 (2026-09-29)
+
+- **Agents merge their worktrees.** Through `tet-ctl worktree-merge`, an agent merges a worktree's
+  base into it, fast-forwards the base and deletes the worktree with its branch; on a conflict it
+  is told which files to resolve, and where.
+- **More settings for agents.** The file editor's keybindings and the OS notifications can be set
+  through `tet-ctl`.
+- **Fixes.** pi clears its waiting mark once a question is answered.
+
 ## 0.14.1 (2026-09-29)
 
 - **Drop files into sandboxed tabs.** A path dropped into a sandboxed tab that the sandbox can't
