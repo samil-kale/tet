@@ -43,7 +43,7 @@ import { anyAgentInstalled } from "./requirements";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv, setStoredEnv } from "./terminals/pty";
-import { installUncaughtHandler, logError } from "./uncaught";
+import { installUncaughtHandler, logError, logInfo } from "./uncaught";
 import { awaitedToastTab, showDesktopNotification, startNotifications } from "./notifications";
 import { isOpenableUrl } from "./util/shell-open";
 import { RepositoryManager } from "./git/repository";
@@ -728,24 +728,24 @@ function shutdown(relaunch: boolean): void {
   }
   quitting = true;
   // Each step logged, so a quit that hangs shows where.
-  console.error(`[tet] quit: ending sessions${relaunch ? " for a restart" : ""}`);
+  logInfo(`quit: ending sessions${relaunch ? " for a restart" : ""}`);
   void Promise.race([
     sessions.disposeAll().then(() => "sessions ended"),
     new Promise((resolve) => setTimeout(() => resolve("sessions timed out"), QUIT_TEARDOWN_TIMEOUT_MS))
   ]).then(
-    (outcome) => console.error(`[tet] quit: ${String(outcome)}`),
+    (outcome) => logInfo(`quit: ${String(outcome)}`),
     (error: unknown) => logError("quit: ending sessions failed", error)
   ).finally(async () => {
     repositories.disposeAll();
     stopGitProcess();
-    console.error("[tet] quit: git stopped, closing the control channel");
+    logInfo("quit: git stopped, closing the control channel");
     await controlServer?.close();
     if (relaunch) {
       app.relaunch();
     } else {
       installPendingUpdate();
     }
-    console.error("[tet] quit: done, quitting");
+    logInfo("quit: done, quitting");
     app.quit();
     setTimeout(() => {
       logError(`quit: still here after ${QUIT_EXIT_TIMEOUT_MS / 1000}s, exiting`);
@@ -755,7 +755,7 @@ function shutdown(relaunch: boolean): void {
 }
 
 app.on("before-quit", (event) => {
-  console.error(`[tet] quit: before-quit${quitting ? ", letting it through" : ""}`);
+  logInfo(`quit: before-quit${quitting ? ", letting it through" : ""}`);
   if (quitting) {
     return;
   }
@@ -763,7 +763,7 @@ app.on("before-quit", (event) => {
   shutdown(false);
 });
 
-app.on("will-quit", () => console.error("[tet] quit: will-quit"));
+app.on("will-quit", () => logInfo("quit: will-quit"));
 
 /**
  * Keeps electron's own handling of these signals, a quit through before-quit. write-file-atomic

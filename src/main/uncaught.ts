@@ -24,7 +24,15 @@ let errorLog: string | undefined;
  *  toast); never throws. The console gets it too, for tests driving the app. */
 export function logError(line: string, error?: unknown): void {
   const detail = error === undefined ? "" : `\n${error instanceof Error ? (error.stack ?? String(error)) : String(error)}`;
-  const entry = `[tet] ${line} ${new Date().toISOString()}${detail}\n`;
+  appendLog(`[tet] ${line} ${new Date().toISOString()}${detail}\n`);
+}
+
+/** Logs a step worth finding afterwards that is no failure (e.g. the quit's, to see where one hung). */
+export function logInfo(line: string): void {
+  appendLog(`[tet] info: ${line} ${new Date().toISOString()}\n`);
+}
+
+function appendLog(entry: string): void {
   console.error(entry);
   if (!errorLog) {
     return;
