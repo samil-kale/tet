@@ -125,6 +125,22 @@ describe("a tab's reported session", () => {
   });
 });
 
+describe("a question reported answered", () => {
+  it("clears the mark and leaves the turn running", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("pi");
+      const inspected = () => manager.inspect().find((tab) => tab.tabId === tabId);
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", "{}", at, HOST_CALLER);
+      manager.hookEvent(tabId, "permission", "{}", at + 1000, HOST_CALLER);
+      assert.notEqual(inspected()?.waitingAt, undefined);
+      manager.hookEvent(tabId, "answered", "{}", at + 2000, HOST_CALLER);
+      assert.equal(inspected()?.waitingAt, undefined);
+      assert.equal(inspected()?.busy, true);
+    });
+  });
+});
+
 describe("a Claude Code turn leaving a background agent running", () => {
   it("keeps the tab working, without a toast, until the stop naming none", async () => {
     await withEmptyPath({}, (manager) => {

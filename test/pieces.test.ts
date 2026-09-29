@@ -1476,7 +1476,7 @@ describe("pi's extension", () => {
     assert.doesNotThrow(() => esbuild.transformSync(renderPiExtension(), { loader: "ts" }));
   });
 
-  it("reports both ends of a turn and a question", async () => {
+  it("reports both ends of a turn and of a question", async () => {
     const dir = tempDir("tet-pi-ext-");
     const channel = await controlChannel();
     try {
@@ -1495,8 +1495,9 @@ describe("pi's extension", () => {
       handlers.agent_start({}, ctx);
       handlers.agent_settled({}, ctx);
       handlers.ui_prompt_start({}, {});
-      await eventually("all three reported", () => channel.reports.length === 3, 3000);
-      assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission"]);
+      handlers.ui_prompt_end({}, {});
+      await eventually("all four reported", () => channel.reports.length === 4, 3000);
+      assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission", "answered"]);
       // The tab is the address; the session goes along to bind the tab to it.
       assert.deepEqual(channel.reports[0].caller, { projectId: "p1", tabId: "tab-1" });
       assert.equal(hookSessionId(String(channel.reports[0].args.payload)), "019eba31-566c-7911-bf09-14afe53d7c36");
@@ -1510,8 +1511,8 @@ describe("pi's extension", () => {
       // A worktree's tab: its token is made with the key, so a report without it is refused.
       process.env[CONTROL_ENV.worktree] = "k1";
       handlers.agent_start({}, ctx);
-      await eventually("the worktree's report", () => channel.reports.length === 4, 3000);
-      assert.deepEqual(channel.reports[3].caller, { projectId: "p1", worktree: "k1", tabId: "tab-1" });
+      await eventually("the worktree's report", () => channel.reports.length === 5, 3000);
+      assert.deepEqual(channel.reports[4].caller, { projectId: "p1", worktree: "k1", tabId: "tab-1" });
     } finally {
       delete process.env[CONTROL_ENV.worktree];
       await channel.close();

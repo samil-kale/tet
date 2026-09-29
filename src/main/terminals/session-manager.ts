@@ -150,8 +150,8 @@ function titleUnsettled(tab: TabState): boolean {
  * leaves no bubble beside it** — one moment, and the project row, with a button per condition,
  * would step through that tab twice. The question is the more urgent and actionable of the two.
  *
- * No agent reports an answered question, so a permission granted mid-turn keeps the mark until
- * the tab is looked at.
+ * Only pi reports an answered question (`answered`), so another agent's permission granted
+ * mid-turn keeps the mark until the tab is typed into.
  */
 function setTurn(tab: TabState, busy: boolean, at: number, keepQuestion = false): void {
   tab.busy = busy;
@@ -174,8 +174,8 @@ function endLeavesQuestion(tab: TabState, agent: AgentDefinition): boolean {
 }
 
 /**
- * Whether terminal input can answer a standing question — see `write`. No agent reports an answer,
- * so this and either end of the turn (setTurn) are what clear the mark. Enter, a printable
+ * Whether terminal input can answer a standing question — see `write`. Besides pi's `answered`,
+ * this and either end of the turn (setTurn) are what clear the mark. Enter, a printable
  * character (Claude Code's permission prompt takes a digit without Enter) and an SGR mouse press
  * (`ESC [ < button ; x ; y M`). Not arrows, Tab, Shift+Tab, a bare Escape, motion (bit 32) or the
  * wheel (64+). Generous: a mark dropped early is on a tab being typed into, which hides it anyway.
@@ -972,7 +972,8 @@ export class TabSessionManager {
   }
 
   write(tabId: string, data: string): void {
-    // The only "answered" signal: typing into the asking tab. Cleared before forwarding.
+    // Typing into the asking tab answers it, for agents reporting no `answered`. Cleared before
+    // forwarding.
     const tab = this.tabOf(tabId);
     if (tab?.waitingAt !== undefined && answersQuestion(data)) {
       tab.waitingAt = undefined;
@@ -1270,6 +1271,15 @@ export class TabSessionManager {
         tab.signalAt = at;
         this.postTabs();
         return { toast: this.toast(tab, event) };
+      case "answered":
+        // The dialog closed, whatever closed it; the turn, if any, runs on.
+        if (!fresh || exited || tab.waitingAt === undefined) {
+          return {};
+        }
+        tab.waitingAt = undefined;
+        tab.signalAt = at;
+        this.postTabs();
+        return {};
       case "idle":
         // About a turn already ended — nothing to mark. Its hook exists only while the switch is on
         // (AgentPaths.idleReminder), rather than a process per idle prompt answered with nothing.
@@ -1328,8 +1338,8 @@ export class TabSessionManager {
   }
 
   /**
-   * A tab in front has its finished turn seen. A question stays: it ends with an answer (`write`)
-   * or the turn (setTurn).
+   * A tab in front has its finished turn seen. A question stays: it ends with an answer (`write`,
+   * `answered`) or the turn (setTurn).
    */
   markSeen(tabId: string): void {
     const tab = this.tabOf(tabId);

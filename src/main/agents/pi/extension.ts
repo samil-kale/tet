@@ -58,10 +58,14 @@ export default function (pi: { on(event: string, handler: (event: any, ctx: any)
   pi.on("agent_settled", (_event, ctx) => {
     report("stop", sessionOf(ctx));
   });
-  // pi has no permission prompts; ui_prompt_start is an extension's own dialog. The project-trust
+  // pi has no permission prompts; ui_prompt_start is an extension's own dialog, a progress view
+  // (\`ui.custom\`) included, so its end clears the mark however it closed. The project-trust
   // dialog at startup is not reported — it comes before session_start.
   pi.on("ui_prompt_start", (_event, ctx) => {
     report("permission", sessionOf(ctx));
+  });
+  pi.on("ui_prompt_end", (_event, ctx) => {
+    report("answered", sessionOf(ctx));
   });
 }
 `;
