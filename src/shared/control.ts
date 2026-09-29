@@ -518,6 +518,9 @@ const VERBS = [
     positionals: [],
     sandbox: "ownRef"
   },
+  // Every notice, from a sandbox too: a notice names no repository or worktree to narrow it to, and
+  // among them are those a sandboxed tab's own start raised (the tet.json rows it could not apply,
+  // sbxProblemNotices).
   {
     verb: "notices-list",
     group: "In front of the user",

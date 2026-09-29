@@ -102,7 +102,8 @@ project's terminals.
 ## Data model: `~/.tet`
 
 Everything TET keeps lives here (`data-root.ts`, `project-dirs.ts`). The layout is fixed: every
-change, and every agent added, fits it.
+change, and every agent added, fits it. The one file TET writes elsewhere is sbx's first-run
+marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of a tab.
 
 ```
 ~/.tet/
@@ -260,7 +261,8 @@ or a per-line decision is for an agent.
   `use-project-layouts.ts`, called from `App`.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a
-  message of its own; a status (marks, progress bar) is not a notice.
+  message of its own but the SEARCH pane, whose failure stands in its header as VS Code's does:
+  it follows each keystroke; a status (marks, progress bar) is not a notice.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes
@@ -298,7 +300,7 @@ or a per-line decision is for an agent.
     provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
     (`DialogFrame`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today:
     the SBX dialog's setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
-    message, and the Add Repository dialog's listing.
+    message, the Add Repository dialog's listing and the Settings dialog's model listing.
 
   A new run is held unless it meets both conditions; a dialog's Save is always held.
 - **A follow-up question comes after its run** (`runWithFollowUp`): an action answering

@@ -64,8 +64,9 @@ export interface Platform {
   /** Toasts go through Windows' activator (an AppUserModelID, toast XML), clicked even after TET
    *  quit; elsewhere Electron's own notification, held while it shows. */
   readonly windowsToasts: boolean;
-  /** Docker Sandboxes shows a first-run wizard to suppress (sbx-cli.ts). */
-  readonly sbxFirstRunWizard: boolean;
+  /** The file whose presence keeps Docker Sandboxes' first-run wizard out of a tab (sbx-cli.ts);
+   *  undefined where sbx shows none. */
+  sbxFirstRunMarker(env: Record<string, string | undefined>): string | undefined;
   /** The GPU may be Wayland's or software: WebGL is checked before use (terminal-views.ts). */
   readonly checksGpu: boolean;
   /** Electron starts with `--no-sandbox` (install.sh, the tests' launch): unpacked without root, its
@@ -90,7 +91,8 @@ const POSIX = {
   shellCommandArgs: (command: string) => ["-c", command],
   /** No `$`, backtick, quote, space or backslash (an escape). */
   shellQuotePath: (path: string) => (/^[\w./:-]+$/.test(path) ? path : `'${path.replace(/'/g, "'\\''")}'`),
-  tarExecutable: () => "tar"
+  tarExecutable: () => "tar",
+  sbxFirstRunMarker: () => undefined
 };
 
 export const WINDOWS: Platform = {
@@ -123,7 +125,8 @@ export const WINDOWS: Platform = {
   titleBarOverlay: true,
   quitsWithLastWindow: true,
   windowsToasts: true,
-  sbxFirstRunWizard: true,
+  sbxFirstRunMarker: (env) =>
+    env.LOCALAPPDATA ? `${env.LOCALAPPDATA}\\DockerSandboxes\\sandboxes\\config\\first-run-import.json` : undefined,
   checksGpu: false,
   startsWithoutChromeSandbox: false,
   modifierKey: "Control",
@@ -159,7 +162,6 @@ export const MAC: Platform = {
   titleBarOverlay: false,
   quitsWithLastWindow: false,
   windowsToasts: false,
-  sbxFirstRunWizard: false,
   checksGpu: false,
   startsWithoutChromeSandbox: false,
   modifierKey: "Meta",
@@ -193,7 +195,6 @@ export const LINUX: Platform = {
   titleBarOverlay: true,
   quitsWithLastWindow: true,
   windowsToasts: false,
-  sbxFirstRunWizard: false,
   checksGpu: true,
   startsWithoutChromeSandbox: true,
   modifierKey: "Control",

@@ -332,7 +332,7 @@ async function startControl(): Promise<void> {
           accounts: () => sbxAccounts.list(),
           signedIn: readSbxSignedIn,
           signedInUser: () => readSbxUser(false),
-          signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id, false)
+          signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id)
         }
       },
       controlChannel.token,

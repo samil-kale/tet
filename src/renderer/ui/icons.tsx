@@ -3,7 +3,10 @@ import {
   ArrowUp,
   CaseSensitive,
   Check,
+  ChevronDown,
+  ChevronRight,
   CircleAlert,
+  CircleX,
   CopyMinus,
   CopyPlus,
   Eye,
@@ -15,8 +18,12 @@ import {
   GitBranch,
   GitCommitHorizontal,
   GitCompare,
+  Globe,
+  Inbox,
+  Info,
   Landmark,
   ListX,
+  LoaderCircle,
   LogIn,
   MessageSquare,
   Play,
@@ -217,19 +224,18 @@ export function ChangesIcon(props: IconProps) {
   return <Lucide {...props} icon={FileDiff} extent={20.23} />;
 }
 
+const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
+  error: CircleX,
+  warning: CircleAlert,
+  info: Info
+};
+
 /**
- * Notice severities in a shared circle — cross, exclamation, "i" — so the shape carries the
- * meaning as well as the color.
+ * Notice severities in a shared circle — Lucide's `circle-x`, `circle-alert`, `info` — so the
+ * shape carries the meaning as well as the color.
  */
 export function SeverityIcon({ severity, ...props }: IconProps & { severity: NoticeSeverity }) {
-  return (
-    <Svg {...props} extent={13.58}>
-      <circle cx="8" cy="8" r="6" />
-      {severity === "error" && <path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4" />}
-      {severity === "warning" && <path d="M8 4.6v4.2M8 11.1v.4" />}
-      {severity === "info" && <path d="M8 7.4v4M8 4.9v.4" />}
-    </Svg>
-  );
+  return <Lucide {...props} icon={SEVERITY_ICONS[severity]} extent={22} />;
 }
 
 /** Lucide's `git-branch`. */
@@ -281,24 +287,15 @@ export function RegexIcon(props: IconProps) {
   return <Lucide {...props} icon={Regex} extent={20.16} cx={12.17} />;
 }
 
+/** Lucide's `chevron-down` or `chevron-right`. */
 export function ChevronIcon({ expanded, scale, ...props }: IconProps & { expanded: boolean; scale?: number }) {
-  return (
-    <Svg {...props} extent={8.34} scale={scale}>
-      {expanded ? <path d="M4 6l4 4 4-4" /> : <path d="M6 4l4 4-4 4" />}
-    </Svg>
-  );
+  return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} extent={12.29} scale={scale} />;
 }
 
-/**
- * A gapped ring, spun (`spinning`) as a session's working mark (`SessionMark`). The dash
- * pattern splits the circumference 2π·r into arc and gap; re-cut it if the radius moves.
- */
+/** Lucide's `loader-circle`, spun (`spinning`) about its centre as a session's working mark
+ *  (`SessionMark`). */
 export function SpinnerIcon(props: IconProps) {
-  return (
-    <Svg {...props} extent={11.34}>
-      <circle cx="8" cy="8" r="5" strokeDasharray="23 8" />
-    </Svg>
-  );
+  return <Lucide {...props} icon={LoaderCircle} extent={20} />;
 }
 
 /** Lucide's `wand` — a model's suggestion. */
@@ -321,14 +318,9 @@ export function CommitIcon(props: IconProps) {
   return <Lucide {...props} icon={GitCommitHorizontal} extent={18.39} />;
 }
 
-/** A stash, drawn as an inbox tray. */
+/** Lucide's `inbox` — a stash. Wide, so the long-side cap. */
 export function StashIcon(props: IconProps) {
-  return (
-    <Svg {...props} extent={12.54} cy={8.5}>
-      <path d="M2 9.5l1.8-5A1 1 0 0 1 4.8 4h6.4a1 1 0 0 1 1 .5L14 9.5" />
-      <path d="M2 9.5h3.2l.8 1.6h4l.8-1.6H14v2A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" />
-    </Svg>
-  );
+  return <Lucide {...props} icon={Inbox} extent={20.23} />;
 }
 
 /** Lucide's `trash` — discard, beside the stash's "put away". The long-axis cap: the geometric
@@ -378,13 +370,9 @@ export function CommentIcon(props: IconProps) {
   return <Lucide {...props} icon={MessageSquare} extent={21.49} cy={12.5} />;
 }
 
+/** Lucide's `globe` — a remote. */
 export function RemoteIcon(props: IconProps) {
-  return (
-    <Svg {...props} extent={11.34}>
-      <circle cx="8" cy="8" r="5" />
-      <path d="M3 8h10M8 3c1.5 1.7 1.5 8.3 0 10M8 3c-1.5 1.7-1.5 8.3 0 10" />
-    </Svg>
-  );
+  return <Lucide {...props} icon={Globe} extent={22} />;
 }
 
 /** Lucide's `settings`, drawn `LARGER`: a gear is mostly gaps and reads small beside the git

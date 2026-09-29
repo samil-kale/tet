@@ -149,6 +149,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const variablesEdited = useRef(false);
   /** The stored variables' names as opened, for `envChanged`. */
   const [loadedVariables, setLoadedVariables] = useState<readonly string[]>([]);
+  /** The Prompts tab's model listing underway, on the header's bar (`SuggesterPicker`'s `hold`). */
+  const [listingModels, setListingModels] = useState(false);
 
   /** The settings as opened, on the header's bar; what could not be read stands in their place
    *  (`DialogError`), as the SBX dialog's does. */
@@ -288,15 +290,27 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   // Nothing of it shown while it could not be read.
   const shown = loadFailed === undefined ? tab : undefined;
+  // Live within one kind only: an agent gets light or dark when its tab starts (main.ts's
+  // applyTheme).
+  const kindSwitched = settings !== null && chosenKind !== shownKind;
+  const envRestart = envChanged(variables, loadedVariables);
 
   return (
     <DialogFrame
       header={{ tabs, active: tab, onSelect: setTab }}
-      busy={saving || loading}
-      // Loading only reads: Cancel stays open meanwhile.
+      busy={saving || loading || listingModels}
+      // Loading and listing the models only read: Cancel stays open meanwhile.
       locked={saving}
       error={refused}
-      message={envChanged(variables, loadedVariables) && <RestartNote />}
+      message={
+        (kindSwitched || envRestart) && (
+          <>
+            {kindSwitched && <span className="restart-note">Switching between light and dark applies after tet is restarted.</span>}
+            {kindSwitched && envRestart && " "}
+            {envRestart && <RestartNote />}
+          </>
+        )
+      }
       className="settings-dialog"
       onCancel={onClose}
       primary={{ label: "Save", blocked, disabled: loading || loadFailed !== undefined, run: () => void save() }}
@@ -321,55 +335,51 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               }))}
             />
           </Field>
-          {/* Live within one kind only: an agent gets light or dark when its tab starts
-              (main.ts's applyTheme). */}
-          {settings && chosenKind !== shownKind && (
-            <p className="dialog-detail">Switching between light and dark applies after tet is restarted.</p>
-          )}
         </>
       )}
       {shown === "notifications" && (
         <>
-          <p className="dialog-detail">Desktop notifications for agent activity</p>
-          {settings &&
-            SWITCHES.map(({ key, label }) => (
-              <Checkbox
-                key={key}
-                label={label}
-                checked={settings.notifications[key]}
-                onChange={(next) => flip(key, next)}
-              />
-            ))}
+          <FieldGroup label="Desktop notifications for agent activity">
+            {settings &&
+              SWITCHES.map(({ key, label }) => (
+                <Checkbox
+                  key={key}
+                  label={label}
+                  checked={settings.notifications[key]}
+                  onChange={(next) => flip(key, next)}
+                />
+              ))}
+          </FieldGroup>
           {/* No restart caveat: hooks report every turn, and the toast reads the settings as they
               stand on arrival (session-manager's `toast`). */}
         </>
       )}
       {shown === "files" && (
         <>
-          <p className="dialog-detail">
-            {activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree - open a project to edit it"}
-          </p>
-          {activeProject && explorerSettings && (
-            <>
-              <Checkbox
-                label="Hide what git ignores too"
-                checked={explorerSettings.excludeGitIgnore}
-                onChange={(next) => editExplorerSetting("excludeGitIgnore", next)}
-              />
-              <Checkbox
-                label="Compact folders that only contain another folder into one row"
-                checked={explorerSettings.compactFolders}
-                onChange={(next) => editExplorerSetting("compactFolders", next)}
-              />
-              <Field label="Sort order">
-                <Dropdown
-                  value={explorerSettings.sortOrder}
-                  onChange={(order) => editExplorerSetting("sortOrder", order)}
-                  options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
+          <FieldGroup label={activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree"}>
+            {!activeProject && <p className="dialog-detail">Open a project to edit it</p>}
+            {activeProject && explorerSettings && (
+              <>
+                <Checkbox
+                  label="Hide what git ignores too"
+                  checked={explorerSettings.excludeGitIgnore}
+                  onChange={(next) => editExplorerSetting("excludeGitIgnore", next)}
                 />
-              </Field>
-            </>
-          )}
+                <Checkbox
+                  label="Compact folders that only contain another folder into one row"
+                  checked={explorerSettings.compactFolders}
+                  onChange={(next) => editExplorerSetting("compactFolders", next)}
+                />
+                <Field label="Sort order">
+                  <Dropdown
+                    value={explorerSettings.sortOrder}
+                    onChange={(order) => editExplorerSetting("sortOrder", order)}
+                    options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
+                  />
+                </Field>
+              </>
+            )}
+          </FieldGroup>
           <Field label="Editor keybindings">
             <Dropdown
               value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
@@ -408,6 +418,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   value={settings.commitSuggester}
                   onChange={(suggester) => edit({ commitSuggester: suggester })}
                   onReplace={replaceSuggester}
+                  hold={setListingModels}
                 />
               ) : (
                 <p className="dialog-detail">Open a project to pick the agent</p>
@@ -426,7 +437,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       )}
       {shown === "environment" && (
         <div className="settings-environment">
-          <p className="dialog-detail">Stored on this machine and set in every tab but sandboxed ones, over the machine's own.</p>
           <RowSection
             label="Environment variables"
             rows={variables}
@@ -448,6 +458,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             )}
             add={envRows.add}
           />
+          <p className="dialog-detail">Stored on this machine and set in every tab but sandboxed ones, over the machine's own.</p>
         </div>
       )}
       {shown === "info" && info && (

@@ -109,9 +109,9 @@ interface DialogFrameProps<T extends string> {
   header: DialogHeader<T>;
   /** Draws the header's progress bar, the dialog's one indicator. */
   busy?: boolean;
-  /** A held run: ×, Cancel and Escape wait, and the body's fields are disabled, so nothing is
-   *  edited under a Save. Defaults to `busy`: what runs finishes before the dialog goes, unless it
-   *  is aborted (`abort`). */
+  /** A held run: ×, Cancel, the `actions` and Escape wait, and the body's fields are disabled, so
+   *  nothing is edited under a Save. Defaults to `busy`: what runs finishes before the dialog goes,
+   *  unless it is aborted (`abort`). */
   locked?: boolean;
   /** What ×, Cancel and Escape mean. Left out for a wall that stays up until it is answered
    *  (RequirementsDialog): no ×, no Cancel, and Escape does nothing. */
@@ -293,7 +293,7 @@ export function DialogFrame<T extends string>({
             key={action.label}
             type="button"
             className={action.secondary ? "button secondary" : "button"}
-            disabled={action.disabled}
+            disabled={action.disabled || locked}
             onClick={action.run}
           >
             {action.label}

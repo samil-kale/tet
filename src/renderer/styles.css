@@ -78,6 +78,9 @@ textarea:disabled,
 .dialog-checkbox:has(input:disabled),
 .button:disabled,
 .button.disabled,
+.action-link:disabled,
+.radio-option:disabled,
+.dialog-color:disabled,
 /* Its own pane's bar says it is busy. */
 .icon-button:disabled,
 .context-menu-item.disabled,
@@ -127,7 +130,7 @@ textarea:focus,
   color: var(--vscode-textLink-foreground);
 }
 
-.action-link:hover {
+.action-link:hover:not(:disabled) {
   text-decoration: underline;
 }
 
@@ -166,7 +169,7 @@ textarea:focus,
   border-left: none;
 }
 
-.radio-option:hover:not(.active) {
+.radio-option:hover:not(.active):not(:disabled) {
   background: var(--vscode-radio-inactiveHoverBackground);
 }
 
@@ -264,6 +267,10 @@ textarea:focus,
   --tiny-font-size: 11px;
   /* The tabbed dialogs (settings, sbx): their tabs need more than `.dialog`'s width. */
   --dialog-wide-width: 580px;
+  /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
+     not resize them. Capped to the window. */
+  --dialog-tall-height: 420px;
+  --dialog-max-height: calc(100vh - 32px);
 }
 
 /* Title bar ------------------------------------------------------------------------------ */
@@ -1954,13 +1961,13 @@ textarea:focus,
    it scroll in their own box (below) rather than growing it. Capped to the window. */
 .sbx-settings-dialog {
   min-width: var(--dialog-wide-width);
-  height: 425px;
+  height: var(--dialog-tall-height);
 }
 
 /* Only with the fields or the account up (SbxSettingsDialog's `showsAccount`); the checks before
    them are short. */
 .sbx-settings-dialog.ready {
-  max-height: calc(100vh - 32px);
+  max-height: var(--dialog-max-height);
 }
 
 /* The body takes what the header and buttons leave, so the scrollbox below can shrink into it. */
@@ -2069,8 +2076,8 @@ textarea:focus,
    switching tabs must not resize the dialog under the pointer. */
 .settings-dialog {
   width: var(--dialog-wide-width);
-  height: 420px;
-  max-height: calc(100vh - 32px);
+  height: var(--dialog-tall-height);
+  max-height: var(--dialog-max-height);
 }
 
 .settings-dialog .dialog-body {
@@ -2169,6 +2176,11 @@ textarea:focus,
 
 .dialog-field span {
   color: var(--vscode-descriptionForeground);
+}
+
+/* A checkbox's label in a field group is a control's, not the group's label. */
+.dialog-field .dialog-checkbox > span {
+  color: var(--vscode-foreground);
 }
 
 /* What refused an answer, wherever the answer was given (`DialogError`): the error mark's colour,
@@ -2286,8 +2298,8 @@ textarea:focus,
 
 .add-repository-dialog {
   width: 700px;
-  height: 440px;
-  max-height: calc(100vh - 32px);
+  height: var(--dialog-tall-height);
+  max-height: var(--dialog-max-height);
 }
 
 .add-repository-dialog .dialog-body {

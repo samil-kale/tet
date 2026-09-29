@@ -99,6 +99,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const [signedInUser, setSignedInUser] = useState<string | undefined>(undefined);
   /** A sign-in, sign-out or "Check again" running, and the check after it (`recheck`). */
   const { running: rechecking, run: runRecheck } = useRunning();
+  /** A token's sign-in running: `sbx login` switches the machine's account and the token is kept
+   *  after it, whatever a kill cut short, so Cancel waits for it (`holding`). */
+  const { running: signingIn, run: runSignIn } = useRunning();
   /** `sbx logout` running: it is not killed, so Cancel waits for it (`holding`). */
   const { running: signingOut, run: runSignOut } = useRunning();
   /** Why the browser's sign-in or the sign-out failed: no row to mark, so the button row says it. */
@@ -197,9 +200,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     const result = await window.tet.sbx.saveConfig(project.id, { enabled, ...toConfig(state) }, toLocalSave(state));
     return refusal(result, "Could not save the SBX configuration");
   }, onClose);
-  // Its setup (`sbx login`, `policy init`) is aborted with Cancel, a no-op when none runs; a Save
-  // or a sign-out is not, so it finishes first.
-  const holding = saving || signingOut;
+  // Its setup (`sbx login`, `policy init`) is aborted with Cancel, a no-op when none runs; a Save,
+  // a token's sign-in or a sign-out is not, so it finishes first.
+  const holding = saving || signingIn || signingOut;
   const editState = changing(setState);
   const editEnabled = changing(setEnabled);
   const editAccounts = changing((update: SetStateAction<AccountRow[]>) => {
@@ -219,7 +222,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  said on refusing marks the row. */
   const signIn = (row: AccountRow): void =>
     void recheck(async () => {
-      const result = await window.tet.sbx.signIn(row.user, row.token, row.account);
+      const result = await runSignIn(() => window.tet.sbx.signIn(row.user, row.token, row.account));
       const kept = result.account;
       setAccounts((rows) =>
         kept

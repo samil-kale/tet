@@ -16,6 +16,7 @@ import { IconButton } from "../ui/IconButton";
 import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RowMark } from "../ui/RowSection";
+import { useRunning } from "../ui/use-running";
 
 /** Picked off an account's list, cloned from a url, added from disk, or created empty. Not in
  *  Dialog.tsx, which asks one question. */
@@ -144,11 +145,14 @@ interface RemoteTabProps {
   hold: (held: boolean) => void;
   /** See AccountSubmission. */
   onForm: (form: AccountSubmission | null) => void;
+  /** Runs an account's removal as a held run of the dialog's frame: it deletes the stored token, so
+   *  the dialog stays up until the answer lands beside the row. */
+  runHeld: <T>(work: () => Promise<T>) => Promise<T>;
   /** A held run (the account form's): its rows cannot be picked, as picking one unmounts the form. */
   locked: boolean;
 }
 
-function RemoteTab({ onClone, hold, onForm, locked }: RemoteTabProps) {
+function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
   /** null while loading. */
   const [accounts, setAccounts] = useState<ProviderAccount[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -236,7 +240,7 @@ function RemoteTab({ onClone, hold, onForm, locked }: RemoteTabProps) {
     if (!answer) {
       return;
     }
-    const failed = await window.tet.providers.removeAccount(account.id);
+    const failed = await runHeld(() => window.tet.providers.removeAccount(account.id));
     setRemoveError(failed === undefined ? undefined : { accountId: account.id, message: failed });
     if (failed !== undefined) {
       return;
@@ -372,6 +376,8 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   /** The account form while it is up: the frame's primary button and Enter are its
    *  (AccountSubmission). */
   const [accountForm, setAccountForm] = useState<AccountSubmission | null>(null);
+  /** The remote tab's account removal underway (`RemoteTabProps.runHeld`). */
+  const { running: removing, run: runRemoval } = useRunning();
   const loginField = useRef<HTMLInputElement>(null);
 
   // The login's first field, once the clone asks for it.
@@ -438,7 +444,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   });
 
   // The listing only reads, and its late answer is dropped (RemoteTab): it holds no Cancel.
-  const locked = adding || accountForm?.running === true;
+  const locked = adding || removing || accountForm?.running === true;
   const busy = locked || listing;
   const primary: DialogPrimary | undefined = accountForm
     ? { ...accountForm, disabled: accountForm.disabled || busy }
@@ -470,7 +476,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       onCancel={onClose}
       primary={primary}
     >
-      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} locked={locked} />}
+      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} runHeld={runRemoval} locked={locked} />}
       {mode === "clone" && (
         <>
           <TextField

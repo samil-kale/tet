@@ -32,7 +32,7 @@ export function registerSbxIpc({
   handle(
     "sbx:sign-in",
     (_event, user: string, token: string, accountId?: string): Promise<SbxSignInResult> =>
-      signInToSbx(sbxAccounts, user, token, accountId, true)
+      signInToSbx(sbxAccounts, user, token, accountId)
   );
   handle("sbx:logout", () => runSbxLogout());
   handle("sbx:accounts", (): SbxAccount[] => sbxAccounts.list());

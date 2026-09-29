@@ -90,25 +90,25 @@ export class SbxAccountStore {
  * `sbx login` with `typed`, or the token kept for `accountId` when nothing was typed; the account is
  * kept (or its token replaced) once sbx took it, under the name sbx then gives — an email or another
  * case typed is the same account, and its row is marked signed in by that name. The dialog's
- * sign-in (`cancellable`, sbx-cli.ts's readSbxUser) and `tet-ctl sbx-sign-in`.
+ * sign-in and `tet-ctl sbx-sign-in`; never killed, since a stop after `sbx login` would still keep
+ * the account.
  */
 export async function signInToSbx(
   store: SbxAccountStore,
   typedUser: string,
   typed: string,
-  accountId: string | undefined,
-  cancellable: boolean
+  accountId: string | undefined
 ): Promise<SbxSignInResult> {
   const user = typedUser.trim();
   const token = typed !== "" ? typed : accountId !== undefined ? store.token(accountId) : undefined;
   if (token === undefined) {
     return { signedIn: false, error: "No access token stored for this account on this machine; enter it again" };
   }
-  const refused = await runSbxTokenLogin(user, token, cancellable);
+  const refused = await runSbxTokenLogin(user, token, false);
   if (refused !== undefined) {
     return { signedIn: false, error: refused };
   }
-  const named = (await readSbxUser(cancellable)) ?? user;
+  const named = (await readSbxUser(false)) ?? user;
   try {
     return { signedIn: true, account: store.add(named, token, accountId) };
   } catch (error) {

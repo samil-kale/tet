@@ -348,9 +348,18 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: { output: output.slice(-count(args, "kb", OUTPUT_KB) * 1024) } };
     },
 
-    "events-tail": (args, caller) => ({
-      result: terminals(refFrom(args, caller).ref).events().slice(-count(args, "tail", EVENTS_TAIL))
-    }),
+    // From a sandbox, only the events of tabs it reaches, as tabs-list — none of a closed tab, whose
+    // side is no longer known.
+    "events-tail": (args, caller) => {
+      const { ref } = refFrom(args, caller);
+      const own = sameProjectRef(ref, callerRef(caller));
+      const tabs = terminals(ref);
+      const inspected = tabs.inspect();
+      const reached = tabs
+        .events()
+        .filter((event) => caller.side.reachesTab(inspected.find((tab) => tab.tabId === event.tabId), own && event.tabId === caller.tabId));
+      return { result: reached.slice(-count(args, "tail", EVENTS_TAIL)) };
+    },
 
     "editor-open": async (args, caller) => {
       const { ref } = refFrom(args, caller);

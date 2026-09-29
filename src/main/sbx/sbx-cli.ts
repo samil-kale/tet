@@ -136,15 +136,15 @@ export function sbxVersionSupported(version: string): boolean {
 
 /**
  * sbx shows a one-time wizard on a machine's first interactive `sbx run` (a tet tab is one). Any
- * valid JSON at `%LOCALAPPDATA%\DockerSandboxes\sandboxes\config\first-run-import.json` suppresses
- * it; an existing file is kept. Loses the wizard's MCP-server import (`sbx mcp add` by hand).
- * Only where sbx shows the wizard (Platform.sbxFirstRunWizard), a no-op elsewhere. Best-effort.
+ * valid JSON at its marker file (Platform.sbxFirstRunMarker) suppresses it; an existing file is
+ * kept. Loses the wizard's MCP-server import (`sbx mcp add` by hand). A no-op where sbx shows no
+ * wizard. Best-effort.
  */
 export async function suppressSbxFirstRunWizard(): Promise<void> {
-  if (!PLATFORM.sbxFirstRunWizard || !process.env.LOCALAPPDATA) {
+  const markerFile = PLATFORM.sbxFirstRunMarker(process.env);
+  if (!markerFile) {
     return;
   }
-  const markerFile = path.join(process.env.LOCALAPPDATA, "DockerSandboxes", "sandboxes", "config", "first-run-import.json");
   try {
     await fs.access(markerFile);
     return;

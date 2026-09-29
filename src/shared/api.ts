@@ -50,7 +50,7 @@ export interface TETApi {
     saveAccounts(edits: SbxAccountEdit[]): Promise<string | undefined>;
     /** Sets the machine-wide network policy to "balanced", Docker's recommended default. */
     initPolicy(): Promise<boolean>;
-    /** Kills a running `login`/`signedInUser`/`signIn`/`initPolicy` — the Cancel button. */
+    /** Kills a running `login`/`signedInUser`/`initPolicy` — the Cancel button. */
     cancelSetup(): void;
     /** From tet.json. */
     getConfig(projectId: string): Promise<SbxProjectConfig>;

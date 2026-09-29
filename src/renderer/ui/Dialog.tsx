@@ -204,7 +204,7 @@ export async function askName({ title, detail, confirmLabel, current, maxLength,
 
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
   const [checked, setChecked] = useState(false);
-  const { busy: running, submit } = useSubmit(
+  const { busy: running, refused, submit } = useSubmit(
     async () => {
       await dialog.submit?.(checked);
       return undefined;
@@ -216,6 +216,7 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
     <DialogFrame
       header={{ title: dialog.title }}
       busy={running}
+      error={refused}
       onCancel={dialog.cancel}
       primary={{ label: dialog.confirmLabel, run: () => void submit() }}
     >

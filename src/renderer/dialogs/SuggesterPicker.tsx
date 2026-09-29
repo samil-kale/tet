@@ -16,6 +16,9 @@ interface SuggesterPickerProps {
   onChange: (suggester: Suggester) => void;
   /** What stands in for a pick not offered at `ref`: shown, never saved. */
   onReplace: (suggester: Suggester) => void;
+  /** The models' listing underway, on the dialog's bar (as `PromptFields.hold`): it asks the agent,
+   *  changes nothing and its late answer is dropped, so it holds no Cancel. */
+  hold: (held: boolean) => void;
 }
 
 /**
@@ -23,7 +26,7 @@ interface SuggesterPickerProps {
  * one no longer offered — the first agent with its default model, as the commit prompt's suggestion
  * takes it (`repository:suggest-commit-message`).
  */
-export function SuggesterPicker({ ref, value, onChange, onReplace }: SuggesterPickerProps) {
+export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: SuggesterPickerProps) {
   const agents = useAgents();
   const [agentIds, setAgentIds] = useState<AgentId[]>();
   const [listed, setListed] = useState<{ agentId: AgentId; result: AskModelsResult }>();
@@ -52,15 +55,29 @@ export function SuggesterPicker({ ref, value, onChange, onReplace }: SuggesterPi
       return;
     }
     let cancelled = false;
-    void window.tet.repository.suggestionModels(ref, value.agentId).then((result) => {
-      if (!cancelled) {
-        setListed({ agentId: value.agentId, result });
-      }
-    });
+    let fetching = true;
+    hold(true);
+    void window.tet.repository
+      .suggestionModels(ref, value.agentId)
+      .then((result) => {
+        if (!cancelled) {
+          setListed({ agentId: value.agentId, result });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          fetching = false;
+          hold(false);
+        }
+      });
     return () => {
       cancelled = true;
+      // Only a listing still running: one that ended has released the bar already.
+      if (fetching) {
+        hold(false);
+      }
     };
-  }, [ref, agentIds, value.agentId]);
+  }, [ref, agentIds, value.agentId, hold]);
 
   useEffect(() => {
     if (models && value.model !== "" && !models.models.some((model) => model.id === value.model)) {

@@ -208,7 +208,8 @@ function terminalsOf(key: string): ControlTerminals {
     write: (tabId, data) => {
       calls.written.push([tabId, data]);
     },
-    events: () => [1, 2, 3].map((at) => ({ at, tabId: "tab-2", kind: "hook" as const, event: "stop" as const })),
+    // The caller's own tab's report, then tab-2's, which runs in the sandbox.
+    events: () => [0, 1, 2, 3].map((at) => ({ at, tabId: at === 0 ? OWN_TAB : "tab-2", kind: "hook" as const, event: "stop" as const })),
     createTab: (agentId, sandboxOnly, prompt) => {
       calls.created.push(`${agentId}${sandboxOnly ? " (sandbox only)" : ""}${prompt === undefined ? "" : ` starting on "${prompt}"`}`);
       return tab("tab-new");
@@ -1162,6 +1163,11 @@ describe("tet-ctl against the control server", () => {
   it("answers the latest events, as many as asked for", async () => {
     const run = await tetCtl(["events-tail", "--tail", "2"]);
     assert.deepEqual((run.result as { at: number }[]).map((event) => event.at), [2, 3]);
+  });
+
+  it("answers a sandbox only the events of tabs running there", async () => {
+    const run = await tetCtl(["events-tail", "--tail", "4"], { [CONTROL_ENV.tabId]: SANDBOX_TAB });
+    assert.deepEqual((run.result as { at: number }[]).map((event) => event.at), [1, 2, 3], "no host tab's event");
   });
 
   it("opens a file in the preview tab, or kept, and answers what the active tab shows", async () => {
