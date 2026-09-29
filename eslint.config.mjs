@@ -13,20 +13,33 @@ const AGENT_FOLDERS = fs
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
+const IPC_MESSAGE = "Only through the typed wrappers: handle/on/once (ipc/channels.ts), invoke/send/subscribe (preload).";
+/** By its name, or off electron's namespace; an alias is refused at its import (IPC_IMPORT). */
 const IPC_BY_NAME = {
-  selector: "MemberExpression[object.name=/^ipc(Main|Renderer)$/]",
-  message: "Only through the typed wrappers: handle/on/once (ipc/channels.ts), invoke/send/subscribe (preload)."
+  selector: "MemberExpression:matches([object.name=/^ipc(Main|Renderer)$/], [property.name=/^ipc(Main|Renderer)$/])",
+  message: IPC_MESSAGE
 };
-const WEB_CONTENTS_SEND = {
-  selector: "CallExpression[callee.property.name='send'][callee.object.property.name='webContents']",
-  message: "Only through window.ts's typed send."
-};
+/** A message to a window, off its webContents or an event's sender, or either handed on to be sent through later. */
+const WEB_CONTENTS_SEND = [
+  "CallExpression[callee.property.name=/^(send|postMessage|sendToFrame)$/]:matches([callee.object.name=/^(webContents|sender)$/], [callee.object.property.name=/^(webContents|sender)$/])",
+  ":not(MemberExpression) > MemberExpression[property.name=/^(webContents|sender)$/]"
+].map((selector) => ({ selector, message: "Only through window.ts's typed send." }));
 const PROCESS_PLATFORM = { object: "process", property: "platform", message: "Ask PLATFORM (util/host-platform.ts)." };
-const NAVIGATOR_PLATFORM = { object: "navigator", property: "platform", message: "Ask PLATFORM (renderer/platform.ts)." };
+const NAVIGATOR_PLATFORM = ["platform", "userAgent", "userAgentData"].map((property) => ({
+  object: "navigator",
+  property,
+  message: "Ask PLATFORM (renderer/platform.ts)."
+}));
+/** process.platform by another way: node:os's platform() under any name, or process off globalThis. */
+const HOST_PLATFORM = [
+  "ImportDeclaration[source.value=/^(node:)?os$/] > ImportSpecifier[imported.name='platform']",
+  "CallExpression[callee.property.name='platform']",
+  "MemberExpression[property.name='platform'][object.property.name='process']"
+].map((selector) => ({ selector, message: PROCESS_PLATFORM.message }));
 /** Every spawn goes through resolveCommand; a shell joins the arguments unescaped. */
-const SHELL_TRUE = {
-  selector: "Property[key.name='shell'][value.value=true]",
-  message: "Never `shell: true`: spawn through resolveCommand (util/process.ts)."
+const SHELL_OPTION = {
+  selector: "Property:matches([key.name='shell'], [key.value='shell']):not([value.value=false])",
+  message: "Never a `shell` option: spawn through resolveCommand (util/process.ts)."
 };
 /** net.fetch throws on a redirect it is told not to follow; net.request reads one. */
 const REDIRECT_MANUAL = {
@@ -55,7 +68,7 @@ const COLOR_LITERAL = [`Literal[value=${COLOR}]`, `TemplateElement[value.raw=${C
 }));
 
 /** What every file of src/ is held to by no-restricted-syntax; the configs below leave out what a file may do. */
-const SRC_SYNTAX = [IPC_BY_NAME, WEB_CONTENTS_SEND, SHELL_TRUE, REDIRECT_MANUAL, ...PLATFORM_ID, ...AGENT_ID];
+const SRC_SYNTAX = [IPC_BY_NAME, ...WEB_CONTENTS_SEND, SHELL_OPTION, REDIRECT_MANUAL, ...HOST_PLATFORM, ...PLATFORM_ID, ...AGENT_ID];
 const syntaxWithout = (...allowed) => ["error", ...SRC_SYNTAX.filter((entry) => !allowed.flat().includes(entry))];
 
 /** exec and execSync run their command through a shell, which joins the arguments unescaped. */
@@ -78,6 +91,16 @@ const SPAWNS = [
     message: "A tab's pty is spawned by terminals/pty.ts; a new spawn site joins SPAWN_SITES."
   }
 ];
+/** IPC's own objects; a type (`IpcMainEvent`) is no channel. */
+const IPC_IMPORT = {
+  name: "electron",
+  importNames: ["ipcMain", "ipcRenderer", "webContents"],
+  allowTypeImports: true,
+  message: IPC_MESSAGE
+};
+/** What every file of src/ is held to by @typescript-eslint/no-restricted-imports; the configs below leave out what a file may do. */
+const SRC_IMPORTS = [...SHELL_EXEC, ...SPAWNS, IPC_IMPORT];
+const importsWithout = (...allowed) => ["error", { paths: SRC_IMPORTS.filter((entry) => !allowed.flat().includes(entry)) }];
 /** The files that start a process themselves, each for its reason: a new one is a decision, not a drift. */
 const SPAWN_SITES = [
   // resolveCommand itself, and runProcess and killProcessTree on top of it.
@@ -102,9 +125,23 @@ const NODE_BUILTIN = {
 
 /** Every question is Dialog.tsx's confirm or prompt, asked by the view offering the action. */
 const NATIVE_DIALOGS = [
-  ...["showMessageBox", "showMessageBoxSync", "showErrorBox"].map((property) => ({ object: "dialog", property })),
-  ...["alert", "confirm", "prompt"].map((property) => ({ object: "window", property }))
+  // Off any object: electron's dialog is reached under any name.
+  ...["showMessageBox", "showMessageBoxSync", "showErrorBox"].map((property) => ({ property })),
+  ...["window", "globalThis", "self"].flatMap((object) => ["alert", "confirm", "prompt"].map((property) => ({ object, property })))
 ].map((entry) => ({ ...entry, message: "No native message boxes: ask with Dialog.tsx's confirm or prompt, in the window." }));
+
+/** Only Chromium's stack applies the machine's proxy and certificate store: the global fetch off a global object. */
+const GLOBAL_FETCH = ["globalThis", "window", "self"].map((object) => ({
+  object,
+  property: "fetch",
+  message: "Use electron's net.fetch (or net.request to read a redirect)."
+}));
+/** node's https, beside electron's net; node:http stays for the control channel on localhost. */
+const NODE_HTTPS = { regex: "^(node:)?https$", message: "Use electron's net.fetch (or net.request to read a redirect)." };
+
+/** What every file of src/ is held to by no-restricted-properties; the configs below leave out what a file may do. */
+const SRC_PROPERTIES = [PROCESS_PLATFORM, ...NAVIGATOR_PLATFORM, ...NATIVE_DIALOGS, ...GLOBAL_FETCH];
+const propertiesWithout = (...allowed) => ["error", ...SRC_PROPERTIES.filter((entry) => !allowed.flat().includes(entry))];
 
 /**
  * The way up out of a folder of `process`, and back down into it past its own name (`../../main/x`
@@ -189,7 +226,8 @@ function layerPatterns(process, layers, area) {
       ? []
       : [
           {
-            regex: `${upInto(process)}(${barred.join("|")})(/|$)`,
+            // A flat area is the same file with its extension written out (`../window.js`).
+            regex: `${upInto(process)}(${barred.join("|")})(\\.[jt]sx?)?(/|$)`,
             message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`
           }
         ])
@@ -244,11 +282,11 @@ export default tseslint.config(
   })),
   // The layers of src/main and src/renderer, each area's config repeating the process border: a
   // later config's rule replaces an earlier one's for the same file.
-  ...layerConfigs("main", MAIN_LAYERS, (area) => [agentFolder(area)]),
+  ...layerConfigs("main", MAIN_LAYERS, (area) => [agentFolder(area), NODE_HTTPS]),
   // The registry is the one file naming the agents' folders.
   {
     files: ["src/main/agents/index.ts"],
-    rules: { "no-restricted-imports": ["error", { patterns: layerPatterns("main", MAIN_LAYERS, "agents") }] }
+    rules: { "no-restricted-imports": ["error", { patterns: [...layerPatterns("main", MAIN_LAYERS, "agents"), NODE_HTTPS] }] }
   },
   ...layerConfigs("renderer", RENDERER_LAYERS, () => [NODE_BUILTIN]),
   {
@@ -292,44 +330,45 @@ export default tseslint.config(
   // allowed spawn site keeps its layer's imports and a type import passes.
   {
     files: ["src/**/*.{ts,tsx}"],
-    rules: { "@typescript-eslint/no-restricted-imports": ["error", { paths: [...SHELL_EXEC, ...SPAWNS] }] }
+    rules: { "@typescript-eslint/no-restricted-imports": importsWithout() }
   },
-  { files: SPAWN_SITES, rules: { "@typescript-eslint/no-restricted-imports": ["error", { paths: SHELL_EXEC }] } },
+  { files: SPAWN_SITES, rules: { "@typescript-eslint/no-restricted-imports": importsWithout(SPAWNS) } },
   // Every IPC channel goes through its typed wrappers (AGENTS.md, "Where things live"): a bare call
   // with a string would leave main and the preload free to drift apart unnoticed. The platform's id
   // is compared only where the Platform is picked, an agent's only in agents/ (AGENTS.md,
   // "Cross-platform", "Where things live"), and the renderer's colors come from the themes alone
   // (AGENTS.md, "Look").
+  {
+    files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"],
+    rules: { "@typescript-eslint/no-restricted-imports": importsWithout(IPC_IMPORT) }
+  },
   { files: ["src/**/*.{ts,tsx}"], rules: { "no-restricted-syntax": syntaxWithout() } },
   { files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"], rules: { "no-restricted-syntax": syntaxWithout(IPC_BY_NAME) } },
   { files: ["src/main/window.ts"], rules: { "no-restricted-syntax": syntaxWithout(WEB_CONTENTS_SEND) } },
+  { files: ["src/main/util/host-platform.ts"], rules: { "no-restricted-syntax": syntaxWithout(HOST_PLATFORM) } },
   { files: ["src/main/agents/**"], rules: { "no-restricted-syntax": syntaxWithout(AGENT_ID) } },
   { files: ["src/shared/platform.ts"], rules: { "no-restricted-syntax": syntaxWithout(PLATFORM_ID) } },
   { files: ["src/renderer/**/*.{ts,tsx}"], rules: { "no-restricted-syntax": [...syntaxWithout(), ...COLOR_LITERAL] } },
   { files: ["src/renderer/themes/**"], rules: { "no-restricted-syntax": syntaxWithout() } },
   // What differs between the OSes is a Platform member; only the two files naming the platform ask
   // which one it is (AGENTS.md, "Cross-platform"). No native message boxes (AGENTS.md, "UI rules").
-  {
-    files: ["src/**/*.{ts,tsx}"],
-    rules: { "no-restricted-properties": ["error", PROCESS_PLATFORM, NAVIGATOR_PLATFORM, ...NATIVE_DIALOGS] }
-  },
-  {
-    files: ["src/main/util/host-platform.ts"],
-    rules: { "no-restricted-properties": ["error", NAVIGATOR_PLATFORM, ...NATIVE_DIALOGS] }
-  },
-  { files: ["src/renderer/platform.ts"], rules: { "no-restricted-properties": ["error", PROCESS_PLATFORM, ...NATIVE_DIALOGS] } },
+  // The fetch off a global object is main's alone to refuse, as the global itself (below).
+  { files: ["src/**/*.{ts,tsx}"], rules: { "no-restricted-properties": propertiesWithout(GLOBAL_FETCH) } },
+  { files: ["src/main/**/*.{ts,tsx}"], rules: { "no-restricted-properties": propertiesWithout() } },
+  { files: ["src/main/util/host-platform.ts"], rules: { "no-restricted-properties": propertiesWithout(PROCESS_PLATFORM) } },
+  { files: ["src/renderer/platform.ts"], rules: { "no-restricted-properties": propertiesWithout(NAVIGATOR_PLATFORM, GLOBAL_FETCH) } },
   // The tests ask the same Platform members; testing each OS's own installer, install.test.ts alone
   // branches on the id.
   {
     files: ["test/**/*.ts"],
     ignores: ["test/e2e/install.test.ts"],
     rules: {
-      "no-restricted-properties": ["error", PROCESS_PLATFORM, NAVIGATOR_PLATFORM],
-      "no-restricted-syntax": ["error", ...PLATFORM_ID]
+      "no-restricted-properties": ["error", PROCESS_PLATFORM, ...NAVIGATOR_PLATFORM],
+      "no-restricted-syntax": ["error", ...HOST_PLATFORM, ...PLATFORM_ID]
     }
   },
   // Only Chromium's stack applies the machine's proxy and certificate store (AGENTS.md,
-  // "Cross-platform").
+  // "Cross-platform"); node's https is refused among main's layers.
   {
     files: ["src/main/**"],
     rules: {
