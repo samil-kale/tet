@@ -8,7 +8,7 @@ import { shell } from "electron";
 import { GitLoginStore } from "../../src/main/git/git-logins";
 import * as git_ from "../../src/main/git/git";
 import { Repository } from "../../src/main/git/repository";
-import { readMainWorktree } from "../../src/main/util/linked-git-dir";
+import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
 import { type GitLogin, worktreeBase } from "../../src/shared/types/git";
 import type { FileSearchQuery, FileSearchResult } from "../../src/shared/types/files";
 import { fakeSafeStorage, forkGitInProcess, git, type HttpRemote, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir } from "../helpers";
@@ -259,8 +259,8 @@ describe("worktrees, each with a branch of its own", () => {
     assert.equal(git(dir, "config", "branch.fresh.base"), "base");
     assert.equal(spawnSync("git", ["config", "branch.fresh.merge"], { cwd: dir }).status, 1, "no upstream");
     assert.match(fs.readFileSync(path.join(at("fresh"), ".git"), "utf8"), /^gitdir: \.\./);
-    assert.equal(readMainWorktree(at("fresh")), real(dir));
-    assert.equal(readMainWorktree(dir), undefined, "the main worktree is none");
+    assert.equal(readRepositoryPath(at("fresh")), real(dir));
+    assert.equal(readRepositoryPath(dir), undefined, "the repository has none");
   });
 
   it("never takes a branch that exists", async () => {

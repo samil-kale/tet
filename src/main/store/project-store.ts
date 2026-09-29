@@ -41,19 +41,19 @@ export class ProjectStore implements ProjectLookup {
     this.held.add(projectId);
   }
 
-  /** The held project at `mainPath`, listed again (addProject). */
-  release(mainPath: string): Project | undefined {
-    const project = this.projects.find((entry) => entry.path === mainPath && this.held.has(entry.id));
+  /** The held project at `repositoryPath`, listed again (addProject). */
+  release(repositoryPath: string): Project | undefined {
+    const project = this.projects.find((entry) => entry.path === repositoryPath && this.held.has(entry.id));
     if (project) {
       this.held.delete(project.id);
     }
     return project;
   }
 
-  /** Adds the repository at `mainPath` (in on-disk spelling) under `id`, with the worktrees TET
+  /** Adds the repository at `repositoryPath` (in on-disk spelling) under `id`, with the worktrees TET
    *  made for it. */
-  add(mainPath: string, id: string): Project {
-    const project: Project = { id, path: mainPath, name: path.basename(mainPath), worktrees: this.ownWorktrees(id) };
+  add(repositoryPath: string, id: string): Project {
+    const project: Project = { id, path: repositoryPath, name: path.basename(repositoryPath), worktrees: this.ownWorktrees(id) };
     this.save([...this.projects, project]);
     return project;
   }
@@ -102,7 +102,7 @@ export class ProjectStore implements ProjectLookup {
 
   private load(): void {
     this.projects = readRows<{ id: string; path: string; name: string }>(this.file, ["id", "path", "name"]).map(
-      ({ id, path: mainPath, name }) => ({ id, path: mainPath, name, worktrees: this.ownWorktrees(id) })
+      ({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name, worktrees: this.ownWorktrees(id) })
     );
   }
 
@@ -111,7 +111,7 @@ export class ProjectStore implements ProjectLookup {
     // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
     writeJson(
       this.file,
-      projects.map(({ id, path: mainPath, name }) => ({ id, path: mainPath, name }))
+      projects.map(({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name }))
     );
     this.projects = projects;
   }

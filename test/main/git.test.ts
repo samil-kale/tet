@@ -588,7 +588,7 @@ describe("remotes the tree has to read carefully", () => {
 });
 
 describe("a submodule opened as a project", () => {
-  it("is its own main worktree, not the folder its git directory lies in", async () => {
+  it("is its own repository, not the folder its git directory lies in", async () => {
     const child = initRepository("tet-git-child-");
     const parent = initRepository("tet-git-super-");
     git(parent, "-c", "protocol.file.allow=always", "submodule", "add", "-q", child, "sub");

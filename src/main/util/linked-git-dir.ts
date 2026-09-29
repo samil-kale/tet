@@ -43,11 +43,11 @@ export function readHeadBranch(root: string): string | undefined {
 }
 
 /**
- * A linked worktree's main worktree, the folder holding the common `.git`; undefined otherwise. In
+ * A linked worktree's repository, the folder holding the common `.git`; undefined otherwise. In
  * on-disk spelling, as `git rev-parse --show-toplevel` gives a project's path, so the two compare
  * as strings.
  */
-export function readMainWorktree(root: string): string | undefined {
+export function readRepositoryPath(root: string): string | undefined {
   const commonDir = readLinkedGitDir(root)?.commonDir;
   if (commonDir === undefined) {
     return undefined;
@@ -55,7 +55,7 @@ export function readMainWorktree(root: string): string | undefined {
   try {
     return fs.realpathSync.native(path.dirname(commonDir));
   } catch {
-    // The main worktree is gone; the worktree is no longer one either.
+    // The repository is gone; the worktree is no longer one either.
     return undefined;
   }
 }

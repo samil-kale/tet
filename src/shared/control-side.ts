@@ -31,7 +31,7 @@ const OWN_LIMITS = [
   "Without flags, a verb acts on where the tab it is run from runs: its project's repository or",
   "one of its worktrees. --project <id> alone means that project's repository,",
   "--worktree <branch> one of its worktrees. A worktree listed without a key (projects-list) was",
-  "made outside TET, with plain git or by an older TET: TET shows it greyed and cannot open it."
+  "made outside TET, with plain git: TET shows it greyed and cannot open it."
 ];
 
 /** A tab on this machine: every verb, across its project where a verb says so

@@ -1,9 +1,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { PLATFORM } from "./host-platform";
 
 /**
- * A path in on-disk spelling, as `readWorktrees` and `readMainWorktree` give it: a project's path
+ * A path in on-disk spelling, as `readWorktrees` and `readRepositoryPath` give it: a project's path
  * is stored so, or string comparisons with theirs miss — a Windows 8.3 name, macOS's `/var`, a
  * junction or a symlink. Where it does not exist (yet), its longest existing prefix so and the
  * rest as given.
@@ -85,12 +86,13 @@ export async function removeInside(root: string, target: string, recursive = fal
   await fs.promises.rm(target, { recursive, force: true });
 }
 
-/** Expands a leading `~` or `~/…` to the home folder, as a shell would; on win32 `~\…` too. */
+/** Expands a leading `~` or `~/…` to the home folder, as a shell would; `~\…` too where `\` is the
+ *  path separator. */
 export function expandHome(hostPath: string): string {
   if (hostPath === "~") {
     return os.homedir();
   }
-  const homeRelative = hostPath.startsWith("~/") || (path.sep === "\\" && hostPath.startsWith("~\\"));
+  const homeRelative = hostPath.startsWith("~/") || (PLATFORM.pathSeparator === "\\" && hostPath.startsWith("~\\"));
   return homeRelative ? path.join(os.homedir(), hostPath.slice(2)) : hostPath;
 }
 

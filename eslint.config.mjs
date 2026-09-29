@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { builtinModules } from "node:module";
 import { URL } from "node:url";
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -27,6 +28,78 @@ const SHELL_TRUE = {
   selector: "Property[key.name='shell'][value.value=true]",
   message: "Never `shell: true`: spawn through resolveCommand (util/process.ts)."
 };
+/** net.fetch throws on a redirect it is told not to follow; net.request reads one. */
+const REDIRECT_MANUAL = {
+  selector: "CallExpression[callee.property.name='fetch'] > ObjectExpression > Property[key.name='redirect'][value.value='manual']",
+  message: "net.fetch throws on `redirect: \"manual\"`: read the redirect with net.request."
+};
+
+/** An equality or a switch case against one of `values` (an esquery regex). */
+const comparedWith = (values, message) => [
+  { selector: `BinaryExpression[operator=/^[!=]==?$/]:matches([left.value=${values}], [right.value=${values}])`, message },
+  { selector: `SwitchCase[test.value=${values}]`, message }
+];
+/** The platform's id is data alone: what differs between the OSes is a Platform member. */
+const PLATFORM_ID = comparedWith("/^(win32|darwin|linux)$/", "The platform's id is data: branch on a Platform member (shared/platform.ts).");
+/** No code outside agents/ names an agent but the shell, which TET itself runs saved commands and plain terminals in. */
+const AGENT_ID = comparedWith(
+  `/^(${AGENT_FOLDERS.filter((name) => name !== "shell").join("|")})$/`,
+  "No code outside agents/ names an agent: whether it can do something is whether it has the group (agent.ts)."
+);
+
+/** Colors come from `--vscode-*` variables, set by the themes alone. */
+const COLOR = "/#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b|\\b(rgba?|hsla?)\\(/";
+const COLOR_LITERAL = [`Literal[value=${COLOR}]`, `TemplateElement[value.raw=${COLOR}]`].map((selector) => ({
+  selector,
+  message: "Colors only from --vscode-* variables (renderer/themes/)."
+}));
+
+/** What every file of src/ is held to by no-restricted-syntax; the configs below leave out what a file may do. */
+const SRC_SYNTAX = [IPC_BY_NAME, WEB_CONTENTS_SEND, SHELL_TRUE, REDIRECT_MANUAL, ...PLATFORM_ID, ...AGENT_ID];
+const syntaxWithout = (...allowed) => ["error", ...SRC_SYNTAX.filter((entry) => !allowed.flat().includes(entry))];
+
+/** exec and execSync run their command through a shell, which joins the arguments unescaped. */
+const SHELL_EXEC = ["child_process", "node:child_process"].map((name) => ({
+  name,
+  importNames: ["exec", "execSync"],
+  message: "Always through a shell: spawn through resolveCommand (util/process.ts)."
+}));
+/** Starting a process; a type (`ChildProcess`, `IPty`) is no spawn. */
+const SPAWNS = [
+  ...["child_process", "node:child_process"].map((name) => ({
+    name,
+    importNames: ["spawn", "spawnSync", "execFile", "execFileSync", "fork"],
+    allowTypeImports: true,
+    message: "Spawn through util/process.ts (resolveCommand, runProcess); a new spawn site joins SPAWN_SITES."
+  })),
+  {
+    name: "node-pty",
+    allowTypeImports: true,
+    message: "A tab's pty is spawned by terminals/pty.ts; a new spawn site joins SPAWN_SITES."
+  }
+];
+/** The files that start a process themselves, each for its reason: a new one is a decision, not a drift. */
+const SPAWN_SITES = [
+  // resolveCommand itself, and runProcess and killProcessTree on top of it.
+  "src/main/util/process.ts",
+  // A tab's pty, from resolveCommand.
+  "src/main/terminals/pty.ts",
+  // git in its utility process, which reaches nothing of util/ but linked-git-dir.
+  "src/main/git/git.ts",
+  // The login shell asked for the PATH that resolveCommand looks up in, by its absolute path.
+  "src/main/agents/agent-path.ts",
+  // Codex's app server, from resolveCommand, held open over stdio.
+  "src/main/agents/codex/app-server-client.ts",
+  // The updater: the new binary by its absolute path, detached to outlive tet.
+  "src/main/update/auto-update.ts"
+];
+
+/** The window runs in Chromium: node is main's, reached through TETApi. */
+const NODE_BUILTIN = {
+  regex: `^(node:|(${builtinModules.filter((name) => !name.includes(":")).join("|")})(/|$))`,
+  message: "The renderer runs without node: ask main through TETApi."
+};
+
 /** Every question is Dialog.tsx's confirm or prompt, asked by the view offering the action. */
 const NATIVE_DIALOGS = [
   ...["showMessageBox", "showMessageBoxSync", "showErrorBox"].map((property) => ({ object: "dialog", property })),
@@ -177,7 +250,7 @@ export default tseslint.config(
     files: ["src/main/agents/index.ts"],
     rules: { "no-restricted-imports": ["error", { patterns: layerPatterns("main", MAIN_LAYERS, "agents") }] }
   },
-  ...layerConfigs("renderer", RENDERER_LAYERS),
+  ...layerConfigs("renderer", RENDERER_LAYERS, () => [NODE_BUILTIN]),
   {
     // The git utility process (git-host.ts) and the CLI run without electron; `shared/` runs in
     // every process. None of them may import it, and the first two may import nothing from the
@@ -214,17 +287,26 @@ export default tseslint.config(
       ]
     }
   },
-  // Every IPC channel goes through its typed wrappers (AGENTS.md, "Where things live"): a bare call
-  // with a string would leave main and the preload free to drift apart unnoticed.
+  // Every spawn goes through resolveCommand (AGENTS.md, "Cross-platform"): the files starting a
+  // process are listed, and none runs a shell. typescript-eslint's rule, not the layers' own, so an
+  // allowed spawn site keeps its layer's imports and a type import passes.
   {
     files: ["src/**/*.{ts,tsx}"],
-    rules: { "no-restricted-syntax": ["error", IPC_BY_NAME, WEB_CONTENTS_SEND, SHELL_TRUE] }
+    rules: { "@typescript-eslint/no-restricted-imports": ["error", { paths: [...SHELL_EXEC, ...SPAWNS] }] }
   },
-  {
-    files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"],
-    rules: { "no-restricted-syntax": ["error", WEB_CONTENTS_SEND, SHELL_TRUE] }
-  },
-  { files: ["src/main/window.ts"], rules: { "no-restricted-syntax": ["error", IPC_BY_NAME, SHELL_TRUE] } },
+  { files: SPAWN_SITES, rules: { "@typescript-eslint/no-restricted-imports": ["error", { paths: SHELL_EXEC }] } },
+  // Every IPC channel goes through its typed wrappers (AGENTS.md, "Where things live"): a bare call
+  // with a string would leave main and the preload free to drift apart unnoticed. The platform's id
+  // is compared only where the Platform is picked, an agent's only in agents/ (AGENTS.md,
+  // "Cross-platform", "Where things live"), and the renderer's colors come from the themes alone
+  // (AGENTS.md, "Look").
+  { files: ["src/**/*.{ts,tsx}"], rules: { "no-restricted-syntax": syntaxWithout() } },
+  { files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"], rules: { "no-restricted-syntax": syntaxWithout(IPC_BY_NAME) } },
+  { files: ["src/main/window.ts"], rules: { "no-restricted-syntax": syntaxWithout(WEB_CONTENTS_SEND) } },
+  { files: ["src/main/agents/**"], rules: { "no-restricted-syntax": syntaxWithout(AGENT_ID) } },
+  { files: ["src/shared/platform.ts"], rules: { "no-restricted-syntax": syntaxWithout(PLATFORM_ID) } },
+  { files: ["src/renderer/**/*.{ts,tsx}"], rules: { "no-restricted-syntax": [...syntaxWithout(), ...COLOR_LITERAL] } },
+  { files: ["src/renderer/themes/**"], rules: { "no-restricted-syntax": syntaxWithout() } },
   // What differs between the OSes is a Platform member; only the two files naming the platform ask
   // which one it is (AGENTS.md, "Cross-platform"). No native message boxes (AGENTS.md, "UI rules").
   {
@@ -236,6 +318,16 @@ export default tseslint.config(
     rules: { "no-restricted-properties": ["error", NAVIGATOR_PLATFORM, ...NATIVE_DIALOGS] }
   },
   { files: ["src/renderer/platform.ts"], rules: { "no-restricted-properties": ["error", PROCESS_PLATFORM, ...NATIVE_DIALOGS] } },
+  // The tests ask the same Platform members; testing each OS's own installer, install.test.ts alone
+  // branches on the id.
+  {
+    files: ["test/**/*.ts"],
+    ignores: ["test/e2e/install.test.ts"],
+    rules: {
+      "no-restricted-properties": ["error", PROCESS_PLATFORM, NAVIGATOR_PLATFORM],
+      "no-restricted-syntax": ["error", ...PLATFORM_ID]
+    }
+  },
   // Only Chromium's stack applies the machine's proxy and certificate store (AGENTS.md,
   // "Cross-platform").
   {

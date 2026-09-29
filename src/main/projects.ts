@@ -10,7 +10,7 @@ import type { GitActionResult, RepositoryState } from "../shared/types/git";
 import type { AddRepositoryResult, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
 import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
-import { readHeadBranch, readMainWorktree } from "./util/linked-git-dir";
+import { readHeadBranch, readRepositoryPath } from "./util/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
 import { inTurn } from "./util/async";
 import { logFailure } from "./util/json-file";
@@ -79,29 +79,29 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
   if (rootOnDisk !== onDisk(directory)) {
     return { error: `${directory} lies inside the repository ${rootOnDisk}: add that folder instead` };
   }
-  const mainPath = readMainWorktree(root) ?? rootOnDisk;
-  let project = store.list().find((entry) => entry.path === mainPath);
+  const repositoryPath = readRepositoryPath(root) ?? rootOnDisk;
+  let project = store.list().find((entry) => entry.path === repositoryPath);
   const added: ProjectRef[] = [];
   if (!project) {
     // A project opens only with a tet.json it can use (openStoredProjects).
-    const problem = await tetJsonProblem(mainPath);
+    const problem = await tetJsonProblem(repositoryPath);
     if (problem !== undefined) {
-      return { error: `${path.basename(mainPath)} was not added: ${problem}` };
+      return { error: `${path.basename(repositoryPath)} was not added: ${problem}` };
     }
     // One held at the start comes back as it was, worktrees and sessions alike.
-    project = store.release(mainPath);
+    project = store.release(repositoryPath);
     if (!project) {
       let stored: string | undefined;
       try {
-        stored = await git.readProjectId(mainPath);
+        stored = await git.readProjectId(repositoryPath);
       } catch (error) {
-        return { error: `${mainPath}'s git config could not be read: ${errorMessage(error)}` };
+        return { error: `${repositoryPath}'s git config could not be read: ${errorMessage(error)}` };
       }
-      const id = await resolveProjectId(deps, mainPath, stored);
+      const id = await resolveProjectId(deps, repositoryPath, stored);
       try {
-        project = store.add(mainPath, id);
+        project = store.add(repositoryPath, id);
       } catch (error) {
-        return { error: `${path.basename(mainPath)} could not be added: ${errorMessage(error)}` };
+        return { error: `${path.basename(repositoryPath)} could not be added: ${errorMessage(error)}` };
       }
     }
     added.push(...projectRefsOf(project));
@@ -120,18 +120,18 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
  */
 async function resolveProjectId(
   deps: Pick<ProjectDeps, "store" | "notice">,
-  mainPath: string,
+  repositoryPath: string,
   stored: string | undefined
 ): Promise<string> {
-  if (stored !== undefined && !deps.store.all().some((project) => project.id === stored && project.path !== mainPath)) {
+  if (stored !== undefined && !deps.store.all().some((project) => project.id === stored && project.path !== repositoryPath)) {
     return stored;
   }
   const id = randomUUID();
-  const written = await git.writeProjectId(mainPath, id).catch(failure);
+  const written = await git.writeProjectId(repositoryPath, id).catch(failure);
   if (!written.ok) {
     deps.notice(
       "warning",
-      `TET could not write its project id into ${mainPath}'s git config, so what it keeps of the project is gone after a restart: ${written.error}`
+      `TET could not write its project id into ${repositoryPath}'s git config, so what it keeps of the project is gone after a restart: ${written.error}`
     );
   }
   return id;

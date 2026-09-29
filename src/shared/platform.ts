@@ -15,7 +15,7 @@ export interface Platform {
   readonly sbxRulesIgnoreCase: boolean;
   /** Environment variable names compare regardless of case, as the win32 environment takes them. */
   readonly envNamesIgnoreCase: boolean;
-  /** The native path separator, for a path handed back to the user. */
+  /** The native path separator, for a path handed back to the user or typed by them. */
   readonly pathSeparator: "\\" | "/";
   /** Absolute paths start with a drive letter (`C:\`), which a sandbox mounts as `/c/`. */
   readonly driveLetters: boolean;

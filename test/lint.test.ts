@@ -1,5 +1,6 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { ROOT } from "./helpers";
@@ -7,7 +8,12 @@ import { ROOT } from "./helpers";
 /** eslint.config.mjs: the layers, the process borders and the rules AGENTS.md states, each held by
  *  one import or call it lets through and one it refuses. */
 
-type Rule = "no-restricted-imports" | "no-restricted-syntax" | "no-restricted-properties" | "no-restricted-globals";
+type Rule =
+  | "no-restricted-imports"
+  | "@typescript-eslint/no-restricted-imports"
+  | "no-restricted-syntax"
+  | "no-restricted-properties"
+  | "no-restricted-globals";
 
 /** A file as it would lie in src/, what it holds, and the rule refusing it (null: none may). */
 type Probe = [file: string, code: string, refusedBy: Rule | null];
@@ -60,7 +66,21 @@ const IMPORTS: Probe[] = [
   ["src/main/git/git.ts", 'import "../util/process";', "no-restricted-imports"],
   ["src/shared/x.ts", 'import "electron";', "no-restricted-imports"],
   ["src/shared/types/x.ts", 'import "../errors";', null],
-  ["src/shared/types/x.ts", 'import "../../main/main";', "no-restricted-imports"]
+  ["src/shared/types/x.ts", 'import "../../main/main";', "no-restricted-imports"],
+  // The renderer runs without node.
+  ["src/renderer/ui/x.ts", 'import "node:fs";', "no-restricted-imports"],
+  ["src/renderer/ui/x.ts", 'import "fs/promises";', "no-restricted-imports"],
+  ["src/renderer/ui/x.ts", 'import "./paths";', null],
+  // Every spawn from a listed spawn site, none through a shell.
+  ["src/main/ipc/x.ts", 'import { exec } from "node:child_process";', "@typescript-eslint/no-restricted-imports"],
+  ["src/main/util/process.ts", 'import { execSync } from "child_process";', "@typescript-eslint/no-restricted-imports"],
+  ["src/main/ipc/x.ts", 'import { spawn } from "node:child_process";', "@typescript-eslint/no-restricted-imports"],
+  ["src/main/ipc/x.ts", 'import * as childProcess from "node:child_process";', "@typescript-eslint/no-restricted-imports"],
+  ["src/main/util/process.ts", 'import { execFile, spawn } from "node:child_process";', null],
+  ["src/main/sbx/x.ts", 'import type { ChildProcess } from "node:child_process";', null],
+  ["src/main/ipc/x.ts", 'import * as pty from "node-pty";', "@typescript-eslint/no-restricted-imports"],
+  ["src/main/terminals/pty.ts", 'import * as pty from "node-pty";', null],
+  ["src/main/terminals/x.ts", 'import type { IPty } from "node-pty";', null]
 ];
 
 const CALLS: Probe[] = [
@@ -75,6 +95,20 @@ const CALLS: Probe[] = [
   ["src/main/util/x.ts", "export const p = process.platform;", "no-restricted-properties"],
   ["src/main/util/host-platform.ts", "export const p = process.platform;", null],
   ["src/renderer/ui/x.ts", "export const p = navigator.platform;", "no-restricted-properties"],
+  ["test/main/x.test.ts", "export const p = process.platform;", "no-restricted-properties"],
+  // The platform's id is data, compared only where the Platform is picked and by the installer's test.
+  ["src/main/util/x.ts", 'export const a = (id: string) => id === "win32";', "no-restricted-syntax"],
+  ["src/main/util/x.ts", 'export const a = (id: string) => { switch (id) { case "darwin": return 1; } return 0; };', "no-restricted-syntax"],
+  ["src/shared/platform.ts", 'export const a = (id: string) => id === "win32";', null],
+  ["src/renderer/platform.ts", 'export const a = "win32";', null],
+  ["test/main/x.test.ts", 'export const a = (id: string) => "linux" !== id;', "no-restricted-syntax"],
+  ["test/e2e/install.test.ts", 'export const a = (id: string) => id === "linux";', null],
+  // No code outside agents/ names an agent but the shell; user-facing text may.
+  ["src/main/ipc/x.ts", 'export const a = (id: string) => id === "claude";', "no-restricted-syntax"],
+  ["src/renderer/ui/x.ts", 'export const a = (id: string) => { switch (id) { case "codex": return 1; } return 0; };', "no-restricted-syntax"],
+  ["src/main/ipc/x.ts", 'export const a = (id: string) => id === "shell";', null],
+  ["src/main/ipc/x.ts", 'export const a = "Ask Claude Code or Codex";', null],
+  ["src/main/agents/x.ts", 'export const a = (id: string) => id === "pi";', null],
   // No native message boxes.
   ["src/main/ipc/x.ts", 'import { dialog } from "electron";\nvoid dialog.showMessageBox({ message: "x" });', "no-restricted-properties"],
   ["src/renderer/ui/x.ts", 'export const a = window.confirm("x");', "no-restricted-properties"],
@@ -82,10 +116,24 @@ const CALLS: Probe[] = [
   ["src/renderer/ui/x.ts", 'import { confirm } from "./Dialog";\nexport const a = confirm;', null],
   // HTTP through Chromium's stack.
   ["src/main/update/x.ts", 'void fetch("https://example.com");', "no-restricted-globals"],
-  ["src/main/update/x.ts", 'import { net } from "electron";\nvoid net.fetch("https://example.com");', null]
+  ["src/main/update/x.ts", 'import { net } from "electron";\nvoid net.fetch("https://example.com");', null],
+  ["src/main/update/x.ts", 'import { net } from "electron";\nvoid net.fetch("https://example.com", { redirect: "manual" });', "no-restricted-syntax"],
+  ["src/main/update/x.ts", 'import { net } from "electron";\nvoid net.fetch("https://example.com", { redirect: "follow" });', null],
+  // Colors only from the themes.
+  ["src/renderer/ui/x.ts", 'export const a = "#1e1e1e";', "no-restricted-syntax"],
+  ["src/renderer/ui/x.tsx", 'export const a = <div style={{ color: "rgba(0, 0, 0, 0.4)" }} />;', "no-restricted-syntax"],
+  ["src/renderer/ui/x.ts", "const n = 1;\nexport const a = `hsl(${n} 0% 0%)`;", "no-restricted-syntax"],
+  ["src/renderer/ui/x.ts", 'export const a = "var(--vscode-focusBorder)";', null],
+  ["src/renderer/themes/x.ts", 'export const a = "#1e1e1e";', null]
 ];
 
-const RESTRICTING = ["no-restricted-imports", "no-restricted-syntax", "no-restricted-properties", "no-restricted-globals"];
+const RESTRICTING = [
+  "no-restricted-imports",
+  "@typescript-eslint/no-restricted-imports",
+  "no-restricted-syntax",
+  "no-restricted-properties",
+  "no-restricted-globals"
+];
 
 /** Every probe's restricting rules, in one ESLint run: the config loads once. */
 function lint(probes: Probe[]): string[][] {
@@ -124,4 +172,39 @@ describe("the lint rules", () => {
       });
     });
   }
+});
+
+/** A color in a stylesheet: hex, rgb(a) or hsl(a). */
+const CSS_COLOR = /#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(rgba?|hsla?)\(/;
+/** The dialog overlay's fixed dim, the one color no theme sets. */
+const OVERLAY_DIM = { selector: ".dialog-overlay", declaration: "background: rgb(0 0 0 / 40%)" };
+
+/** The renderer's stylesheets but the themes, which ESLint does not read. */
+function stylesheets(): { file: string; css: string }[] {
+  const renderer = path.join(ROOT, "src", "renderer");
+  return fs
+    .readdirSync(renderer, { recursive: true, encoding: "utf8" })
+    .filter((file) => file.endsWith(".css") && !file.startsWith(`themes${path.sep}`))
+    .map((file) => ({ file, css: fs.readFileSync(path.join(renderer, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "") }));
+}
+
+describe("the renderer's stylesheets", () => {
+  it("take their colors from the themes' variables, but the dialog overlay's dim", () => {
+    for (const { file, css } of stylesheets()) {
+      for (const [, selector, body] of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+        for (const declaration of body.split(";").map((part) => part.trim())) {
+          const dim = selector.trim() === OVERLAY_DIM.selector && declaration === OVERLAY_DIM.declaration;
+          assert.ok(dim || !CSS_COLOR.test(declaration), `${file}: ${selector.trim()} { ${declaration} } names a color`);
+        }
+      }
+    }
+  });
+
+  it("use a --tet-* variable only with its --vscode-* fallback", () => {
+    for (const { file, css } of stylesheets()) {
+      for (const [use, fallback] of css.matchAll(/var\(--tet-[\w-]+(,\s*var\(--vscode-)?/g)) {
+        assert.ok(fallback, `${file}: ${use} has no --vscode-* fallback`);
+      }
+    }
+  });
 });

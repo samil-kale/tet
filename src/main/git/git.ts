@@ -534,12 +534,12 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
       return pointer === undefined ? undefined : worktree(path.dirname(path.resolve(adminDir, pointer.trim())), adminDir, false);
     })
   );
-  // The main worktree holds the common directory — unless `cwd` is not a linked worktree: a
+  // The repository holds the common directory — unless `cwd` is not a linked worktree: a
   // submodule's or a `--separate-git-dir` repository's lives elsewhere (`<super>/.git/modules/…`),
   // and its folder is `cwd`.
-  const mainPath = gitDir === commonDir ? cwd : path.dirname(commonDir);
+  const repositoryPath = gitDir === commonDir ? cwd : path.dirname(commonDir);
   return [
-    await worktree(mainPath, commonDir, true),
+    await worktree(repositoryPath, commonDir, true),
     ...linked
       .filter((entry): entry is WorktreeInfo => entry !== undefined)
       // By branch: every worktree TET made is a folder named by its key (project-dirs.ts).

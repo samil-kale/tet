@@ -12,7 +12,7 @@ import type { ExplorerRoot, ExplorerSettings } from "../../shared/types/files";
 import type { CommandColor, ProjectCommand } from "../../shared/types/project";
 import type { SbxPath, SbxPort, SbxProjectConfig, SbxSecret, SbxVariable } from "../../shared/types/sbx";
 import { machineName } from "./env-names";
-import { readMainWorktree } from "../util/linked-git-dir";
+import { readRepositoryPath } from "../util/linked-git-dir";
 import { inTurn } from "../util/async";
 import { isRecord } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
@@ -58,7 +58,7 @@ export interface ExplorerView extends ExplorerSettings {
  *  written from the worktree. The copy git checks out in the worktree is ignored. Resolved once per
  *  public call and handed down: each resolution reads the `.git` file and resolves a real path. */
 export function configRoot(root: string): string {
-  return readMainWorktree(root) ?? root;
+  return readRepositoryPath(root) ?? root;
 }
 
 function file(root: string): string {
