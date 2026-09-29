@@ -39,10 +39,11 @@ export const HOST_CALLER: CallerSide = {
 };
 
 /**
- * A tab in an sbx sandbox, with none of TET's stored variables (SANDBOX_TAB). It opens only an agent that runs in a sandbox, held there — a shell would run on this
- * machine. It reaches only its own tab or one running there: a host tab is this machine's, and
- * its output may print the host's control token. It sees its own project only, and of its
- * worktrees only the one it runs in.
+ * A tab in an sbx sandbox, with none of TET's stored variables (SANDBOX_TAB). It opens only an
+ * agent that runs in a sandbox, held there — a shell would run on this machine. It reaches its own
+ * tab and every tab running in a sandbox of its project, never a host tab: that is this machine's,
+ * and its output may print the host's control token. It sees its own project only, with the
+ * worktrees TET made, whose sandboxes it reaches too.
  */
 export const SANDBOX_CALLER: CallerSide = {
   ...SANDBOX_TAB,
@@ -54,7 +55,7 @@ export const SANDBOX_CALLER: CallerSide = {
       .filter((entry) => entry.id === own.projectId)
       .map((entry) => ({
         ...entry,
-        worktrees: entry.worktrees.filter((worktree) => worktree.key !== undefined && worktree.key === own.worktree)
+        worktrees: entry.worktrees.filter((worktree) => worktree.key !== undefined)
       })),
   checkAnswer: (entry, result, root) =>
     entry.sandboxFile === undefined ? Promise.resolve() : assertSandboxFile(root, result, entry.sandboxFile)

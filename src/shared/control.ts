@@ -70,8 +70,9 @@ export interface ControlVerb {
   /**
    * What a caller running in an sbx sandbox may do; absent means refused, so a new verb is closed
    * to it until decided. `ownRef` answers only for the caller's own repository or worktree, the one
-   * its sandbox mounts; `ownProject` for its project's repository and every worktree, for a verb
-   * whose target is by nature another one of them; `any` as far as from a host tab
+   * its sandbox mounts; `ownProject` for its project's repository and every worktree — the worktree
+   * verbs, and the tab verbs, which reach there only tabs running in a sandbox
+   * (CallerSide.reachesTab); `any` as far as from a host tab
    * (HOST_SIDE.reach). The sandbox is the organization's policy: a verb that starts a process on
    * this machine, or reads outside the project it mounts, would walk around it.
    */
@@ -217,7 +218,7 @@ const VERBS = [
       "Set who suggests a commit message: an agent (see list-agents) and one of its models. No model leaves it to the agent's own configuration.",
     positionals: ["agent", "model"]
   },
-  { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownRef" },
+  { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownProject" },
   { verb: "projects-add", group: "TET itself", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
   {
     verb: "projects-remove",
@@ -385,7 +386,7 @@ const VERBS = [
     usage: "tabs-list [--project <id>]",
     summary: "A project's terminal tabs and their state, with the session each tab's hooks named and its sandbox.",
     positionals: [],
-    sandbox: "ownRef"
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-output",
@@ -395,7 +396,7 @@ const VERBS = [
       "The last n KB a tab printed (16, at most 256), escape sequences out and a redrawn line kept as last shown; an agent's TUI redraws in place, so its text comes in pieces. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
     ownProjectOnly: true,
-    sandbox: "ownRef"
+    sandbox: "ownProject"
   },
   {
     verb: "events-tail",
@@ -412,7 +413,7 @@ const VERBS = [
     summary:
       "Wait until every condition given holds: a session (--session), working a turn (--busy), not working one (--idle; waiting on a question counts as that, as the spinner shows it), a status. Exits 4 after the timeout (30 s).",
     positionals: ["tabId"],
-    sandbox: "ownRef"
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-keys",
@@ -422,7 +423,8 @@ const VERBS = [
       "Press keys in a tab, one after another, e.g. to answer a question tabs-output shows on its screen. No text: an agent's TUI takes typed text as a paste and its Enter as a newline.",
     positionals: ["tabId", "keys"],
     variadic: true,
-    ownProjectOnly: true
+    ownProjectOnly: true,
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-create",
@@ -431,7 +433,7 @@ const VERBS = [
     summary:
       "Open a new terminal tab for that agent (an id from list-agents). With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
     positionals: [],
-    sandbox: "ownRef"
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-handoff",
@@ -440,7 +442,7 @@ const VERBS = [
     summary:
       "Open a tab of another agent (an id from list-agents) that takes over the tab's session: it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
     positionals: ["tabId"],
-    sandbox: "ownRef"
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-run-command",
@@ -454,14 +456,16 @@ const VERBS = [
     group: "The other tabs",
     usage: "tabs-start <tab-id> [--project <id>]",
     summary: "Start a tab's process without bringing it to the front.",
-    positionals: ["tabId"]
+    positionals: ["tabId"],
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-restart",
     group: "The other tabs",
     usage: "tabs-restart <tab-id> [--project <id>]",
     summary: "Restart a tab that stopped or could not start, as its menu's Restart does.",
-    positionals: ["tabId"]
+    positionals: ["tabId"],
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-rename",
@@ -469,7 +473,7 @@ const VERBS = [
     usage: "tabs-rename <tab-id> <title> [--project <id>]",
     summary: "Rename a tab. From a sandbox, only a tab running there.",
     positionals: ["tabId", "title"],
-    sandbox: "ownRef"
+    sandbox: "ownProject"
   },
   {
     verb: "tabs-close",
@@ -477,7 +481,7 @@ const VERBS = [
     usage: "tabs-close <tab-id> [--project <id>]",
     summary: "Close a tab and end its session. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
-    sandbox: "ownRef"
+    sandbox: "ownProject"
   },
   {
     verb: "editor-open",

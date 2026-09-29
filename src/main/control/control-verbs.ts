@@ -84,9 +84,9 @@ export function verbs(deps: ControlDeps): Handlers {
     return { tabs, tabId, ref };
   };
 
-  /** `knownTab` for a verb reaching into the tab (its output, its session): from a sandbox, only its
-   *  own tab or one known to run there — a host tab is this machine's, which a sandbox never reaches,
-   *  and its output may print the host's control token. `own`: the caller's own tab. */
+  /** `knownTab` for a verb acting on the tab: from a sandbox, only its own tab or one known to run in
+   *  a sandbox — a host tab is this machine's, which a sandbox never reaches, and its output may
+   *  print the host's control token. `own`: the caller's own tab. */
   const ownedTab = (args: Record<string, unknown>, caller: Caller) => {
     const known = knownTab(args, caller);
     const own = sameProjectRef(known.ref, callerRef(caller)) && known.tabId === caller.tabId;
@@ -264,10 +264,15 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: { removed: name } };
     },
 
-    "tabs-list": (args, caller) => ({ result: terminals(refFrom(args, caller).ref).inspect() }),
+    // From a sandbox, only the tabs it reaches (ownedTab).
+    "tabs-list": (args, caller) => {
+      const { ref } = refFrom(args, caller);
+      const own = sameProjectRef(ref, callerRef(caller));
+      return { result: terminals(ref).inspect().filter((tab) => caller.side.reachesTab(tab, own && tab.tabId === caller.tabId)) };
+    },
 
     "tabs-start": (args, caller) => {
-      const { tabs, tabId } = knownTab(args, caller);
+      const { tabs, tabId } = ownedTab(args, caller);
       if (!tabs.start(tabId)) {
         throw new ControlError("bad_args", `tab ${tabId} is not waiting for its first start (see tabs-list; tabs-restart for one that stopped)`);
       }
@@ -275,7 +280,7 @@ export function verbs(deps: ControlDeps): Handlers {
     },
 
     "tabs-restart": (args, caller) => {
-      const { tabs, tabId } = knownTab(args, caller);
+      const { tabs, tabId } = ownedTab(args, caller);
       if (!tabs.restart(tabId)) {
         throw new ControlError("bad_args", `tab ${tabId} has nothing to restart: it neither stopped nor failed to start (see tabs-list)`);
       }
@@ -283,7 +288,7 @@ export function verbs(deps: ControlDeps): Handlers {
     },
 
     "tabs-wait": async (args, caller, _at, gone) => {
-      const { tabs, tabId } = knownTab(args, caller);
+      const { tabs, tabId } = ownedTab(args, caller);
       const status = args.status === undefined ? undefined : oneOf(args, "status", "status", TERMINAL_STATUSES);
       const conditions: [string, (tab: InspectedTab) => boolean][] = [];
       if (args.session === true) {
@@ -322,7 +327,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     // One write per key: a TUI reads a burst of them as a paste.
     "tabs-keys": (args, caller) => {
-      const { tabs, tabId } = knownTab(args, caller);
+      const { tabs, tabId } = ownedTab(args, caller);
       const keys = list(args, "keys");
       if (keys.length === 0) {
         throw new ControlError("bad_args", `missing keys: one or more of ${KEY_NAMES}`);

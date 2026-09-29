@@ -957,9 +957,6 @@ describe("tet-ctl against the control server", () => {
       ["tabs-run-command", "build"],
       ["projects-add", workDir],
       ["projects-remove", OTHER.id],
-      ["tabs-start", "tab-2"],
-      ["tabs-restart", "tab-2"],
-      ["tabs-keys", "tab-2", "enter"],
       ["settings-set-theme", "dark-modern"],
       ["settings-set-prompt", "commitMessage", "x"],
       ["settings-set-keybindings", "jetbrains"],
@@ -1094,11 +1091,19 @@ describe("tet-ctl against the control server", () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     // editor-state: its own test below, since a sandbox reads only a file inside the repository.
     assertRefused(await tetCtl(["editor-state", "--project", OTHER.id], fromSandbox), /own repository or worktree/, "editor-state");
-    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["repo-state"], ["explorer-list"]]) {
+    for (const args of [["tabs-list"], ["tabs-close", "tab-2"]]) {
+      assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own project/, args[0]);
+      assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
+    }
+    for (const args of [["repo-state"], ["explorer-list"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own repository or worktree/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
-    assert.deepEqual((await tetCtl(["projects-list"], fromSandbox)).result, [{ ...PROJECT, worktrees: [] }], "not even its worktrees");
+    assert.deepEqual(
+      (await tetCtl(["projects-list"], fromSandbox)).result,
+      [{ ...PROJECT, worktrees: PROJECT.worktrees.filter((worktree) => worktree.key !== undefined) }],
+      "its project, with the worktrees TET made"
+    );
     assert.deepEqual((await tetCtl(["tabs-create", "--agent", "claude"], fromSandbox)).result, tab("tab-new"));
     assert.deepEqual(calls.created, ["claude (sandbox only)"]);
     assert.equal((await tetCtl(["version"], fromSandbox)).status, EXIT_CODES.ok);
@@ -1122,6 +1127,25 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["tabs-output", "tab-2"], fromSandbox)).result, { output: "bold line\nnext" });
     assert.equal((await tetCtl(["tabs-handoff", "tab-2", "--agent", "claude"], fromSandbox)).status, EXIT_CODES.ok);
     assert.deepEqual(calls.handedOff, [["tab-2", "claude", true]], "held to the sandbox");
+  });
+
+  it("starts, restarts, presses keys in and waits on a sandboxed tab of its project, never a host tab", async () => {
+    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
+    for (const args of [["tabs-start", OWN_TAB], ["tabs-restart", OWN_TAB], ["tabs-keys", OWN_TAB, "enter"], ["tabs-wait", OWN_TAB, "--idle"]]) {
+      const run = await tetCtl(args, fromSandbox);
+      assert.equal(run.status, EXIT_CODES.usage, args[0]);
+      assert.match(run.stderr, /runs on this machine/, args[0]);
+    }
+    assert.deepEqual([calls.started, calls.restarted, calls.written], [[], [], []], "nothing done to a host tab");
+    // A worktree's sandboxed tab, from the repository's sandbox.
+    const inWorktree = ["--worktree", "four"];
+    assert.deepEqual((await tetCtl(["tabs-start", "tab-2", ...inWorktree], fromSandbox)).result, { started: "tab-2" });
+    assert.deepEqual((await tetCtl(["tabs-restart", "tab-2", ...inWorktree], fromSandbox)).result, { restarted: "tab-2" });
+    assert.equal((await tetCtl(["tabs-keys", "tab-2", "enter", ...inWorktree], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal(calls.written.length, 1);
+    const listed = (await tetCtl(["tabs-list", ...inWorktree], fromSandbox)).result as TerminalDescriptor[];
+    assert.deepEqual(listed.map((entry) => entry.tabId), ["tab-2"], "no host tab listed");
+    assertRefused(await tetCtl(["tabs-start", "tab-2", "--project", OTHER.id], fromSandbox), /own project/, "another project");
   });
 
   it("creates and deletes a sandboxed tab's worktrees of its own project only", async () => {

@@ -35,7 +35,9 @@ project's terminals.
      (`process.ts`), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
   1. `store/`: what TET keeps and reads back — the open projects (`project-store.ts`), settings,
      environment variables, `tet.json`, the data folder's layout (`data-root.ts`,
-     `project-dirs.ts`). A store of one area stays in it (`sbx-local.ts`, `providers/accounts.ts`).
+     `project-dirs.ts`) — and what resolves against it: a repository's or worktree's folder
+     (`resolved-ref.ts`), the saved theme (`theme.ts`), pasted content (`drops.ts`). A store of one
+     area stays in it (`sbx-local.ts`, `providers/accounts.ts`).
   2. The areas, apart from each other but `sbx/` using `agents/`: `git/` (the git process and
      everything talking to it), `agents/` (each agent and what drives one: hooks, readiness, PATH,
      the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
@@ -61,7 +63,8 @@ project's terminals.
   2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.
   3. `tabs/`: the tab area — panes, split view, the terminals (xterm, link providers), hosting
      editor tabs beside them.
-  4. `git/`: the side pane's git view, and running a git action from any view (`run-action.ts`).
+  4. `git/`: the side pane's git view, and running a git action from the views above it
+     (`run-action.ts`).
   5. `files/` (the side pane's other view: the Explorer tree, the SEARCH pane, Seti's file icons),
      `sidebar/` and `dialogs/`, apart from each other.
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
@@ -122,9 +125,10 @@ change, and every agent added, fits it.
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
   `projects/<id>/` only what a sandbox may see, since sbx is granted it whole — never a setting, a
   token or an sbx value. Removing a project deletes its folder.
-- **A sandbox sees its agent folder, and nothing else of `~/.tet`.** What a sandboxed tab needs
-  from TET lies in `sandboxes/<repository|key>/<agent>/`, mounted whole; nothing of TET's gets a
-  mount of its own (the one exception in the sbx section).
+- **A sandbox sees its agent folder, and nothing else of `~/.tet`** — but the worktree it runs in,
+  and a worktree or path handed to it (dropped, or by `worktree-agent-merge`), mounted as a drop.
+  What a sandboxed tab needs from TET lies in `sandboxes/<repository|key>/<agent>/`, mounted whole;
+  nothing of TET's gets a mount of its own (the one exception in the sbx section).
 - **One thing, one name, on both sides.** What host and sandboxed tabs both keep is a folder of the
   same name: `projects/<id>/<name>/` for the project's host tabs (`config/<agent>/` if it knows no
   project), `<agent folder>/<name>/` for sandboxed ones.
@@ -363,9 +367,12 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
 ## The control channel: `tet-ctl`
 
 Lets an agent ask the app for what the filesystem and git can't give (theme, projects, tabs). A
-second transport onto the logic behind `ipc/`, never a second implementation. Contract and
-verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; handlers:
-`control-verbs.ts` and the `control-*-verbs.ts` beside it; CLI: `src/cli/tet-ctl.ts`.
+second transport onto the same singletons `ipc/` is handed (`Repository`, the session managers,
+`projects.ts`), never a second implementation of what they do; a verb may combine them where the
+window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and verbs:
+`src/shared/control.ts`; server: `src/main/control/control-server.ts`; handlers: `control-verbs.ts`
+and the `control-*-verbs.ts` beside it, on what `control-verb.ts` gives them all (`ControlDeps`,
+`ControlTerminals`, `resolveCallerRef`); CLI: `src/cli/tet-ctl.ts`.
 
 - `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
@@ -389,11 +396,12 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; ha
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
 - `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository or
-  any worktree (`ownProjectOnly`); from a sandbox, every verb naming one only for the caller's own
-  repository or worktree, except `worktree-add`, `worktree-delete` and `worktree-agent-merge`, which
-  reach every worktree of its project (`ownProject`). `tabs-keys` never from inside a sandbox.
-  `tabs-output`, `tabs-close`, `tabs-rename` and `tabs-handoff` from a sandbox reach only tabs
-  running there: a host tab is the machine's, and its output may print the host's control token.
+  any worktree (`ownProjectOnly`). **From a sandbox, whatever runs in a sandbox of its project**:
+  the worktree verbs and every tab verb reach its repository and every worktree (`ownProject`), a
+  tab verb only a tab running in a sandbox (`CallerSide.reachesTab`) — a host tab is the machine's,
+  and its output may print the host's control token — and a tab it opens runs in one too; what acts
+  on this machine (its settings, projects, environment, sbx values, a saved command, restarting
+  TET) is refused; the other verbs answer for the caller's own repository or worktree only.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.
@@ -407,20 +415,22 @@ the `sbx` CLI.
   (`resolvePlace`), until then by where its session lives; each agent's runtime holds a `host` one,
   and a `sandbox` one where it has the sandbox group. Everything that differs between host and
   sandbox — paths as the tab sees them, drops, listing and operating on sessions, the side it calls
-  from, the spawn — is a member of it, implemented by `HostPlace` and `SandboxPlace`; nothing else
-  asks where a tab runs, and a new difference extends the interface.
+  from, the spawn — is a member of it, implemented by `HostPlace` (a saved command's `CommandPlace`
+  extends it) and `SandboxPlace`; nothing else asks where a tab runs, and a new difference extends
+  the interface.
 - **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error` — the
   host would bypass an organization's policy.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox
   (`AgentRuntime.sbxOnly`).
-- The sandbox never sees the agent's own config directory; sessions are read through host mounts,
-  so the same listing code serves both. Of `~/.tet` it sees only the `sandboxes/…/<agent>` folder
-  of its repository or worktree, and a worktree's sandbox is its own (its workspace is fixed at
-  `sbx create`); under governance one rule, `~/.tet/projects/**`, allows TET's folders and its
-  worktrees. TET's own live mounts are folders of that `sandboxes/…/<agent>` folder alone; the one
-  exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails there.
-  The user's grants (Allowed paths, knowledge) and a path the user drops (data model) are theirs,
-  not TET's; so is a worktree `worktree-agent-merge` hands over, taken as a drop.
+- The sandbox never sees the agent's own config directory; sessions are read through host mounts, so
+  the same listing code serves both. Of `~/.tet` it sees only the `sandboxes/…/<agent>` folder of
+  its repository or worktree and what the data model excepts, and a worktree's sandbox is its own
+  (its workspace, the worktree's folder, is fixed at `sbx create`); under governance one rule,
+  `~/.tet/projects/**`, allows TET's folders and its worktrees. TET's own live mounts are folders of
+  that `sandboxes/…/<agent>` folder alone; the one exception is a worktree's repository `.git`
+  (`worktreeMountSpecs`), without which git fails there. The user's grants (Allowed paths,
+  knowledge) and a path the user drops (data model) are theirs, not TET's; so is a worktree
+  `worktree-agent-merge` hands over, taken as a drop.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`
@@ -446,9 +456,10 @@ is a wall and **installs nothing**. `process.env.PATH` is rewritten before that 
 ## npm scripts
 
 - `npm run compile`, `npm run typecheck`, `npm run lint`
-- `npm test` — compile, then node's test runner over `dist-test/`. `test/` mirrors `src/`: one
-  file per area in `main/`, `renderer/` and `shared/` (`main/sbx.test.ts` tests `src/main/sbx/`),
-  a new test going to its area's file; `e2e/` runs the real thing, `helpers/` serves them all,
+- `npm test` — compile, then node's test runner over `dist-test/`. `test/` mirrors `src/`: in
+  `main/`, `renderer/` and `shared/` one file per area (`main/sbx.test.ts` tests `src/main/sbx/`),
+  or per seam within one (`main/git.test.ts` and `main/repository.test.ts` for `git/`), a new test
+  going beside what it tests; `e2e/` runs the real thing, `helpers/` serves them all,
   and `lint.test.ts` holds `eslint.config.mjs`'s rules to what they must let through and refuse.
   Nothing looks into the window. `e2e/app.test.ts` starts the real app on a throwaway profile
   (needs a display, `xvfb-run` on Linux); `e2e/agents.test.ts` drives the installed CLIs only with

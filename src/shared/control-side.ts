@@ -59,8 +59,10 @@ export const SANDBOX_SIDE: ControlSide = {
   limits: [
     ...OWN_LIMITS,
     "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",
-    "restarting TET, starting a tab or pressing keys in one — is refused there and is not listed above.",
-    "What is listed answers for the tabs of this repository or worktree only (exit 2, the reason on stderr)."
+    "restarting TET, a saved command, any tab running on the host — is refused there and is not listed",
+    "above. The tab verbs reach every tab running in a sandbox of this project, its repository's and",
+    "every worktree's; a tab they open runs in a sandbox too. The rest answers for this repository or",
+    "worktree only (exit 2, the reason on stderr)."
   ]
 };
 
