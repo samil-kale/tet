@@ -1,5 +1,6 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
+import * as os from "node:os";
 import * as path from "node:path";
 import { stripAnsi } from "../../shared/ansi";
 import { errorMessage } from "../../shared/errors";
@@ -414,6 +415,25 @@ function verbs(deps: ControlDeps): Handlers {
       const id = oneOf(args, "id", "notification", NOTIFICATION_IDS);
       const value = oneOf(args, "value", "value", ["on", "off"]);
       settings.patch({ notifications: { [id]: value === "on" } });
+      return { result: { saved: true } };
+    },
+
+    "settings-set-commit-suggester": async (args) => {
+      const id = text(args, "agent", "agent id");
+      const agent = deps.agents.find((candidate) => candidate.id === id);
+      if (!agent?.ask) {
+        throw new ControlError("bad_args", agent ? `${id} cannot suggest a commit message` : `unknown agent: ${id} (see list-agents)`);
+      }
+      const model = optionalText(args, "model") ?? "";
+      // Refused rather than stored: the commit prompt would put the default in its place.
+      if (model !== "") {
+        const models = await agent.ask.models(agent.executable(), os.tmpdir());
+        if (!models.some((candidate) => candidate.id === model)) {
+          const known = models.map((candidate) => candidate.id).join(", ");
+          throw new ControlError("bad_args", `unknown ${agent.displayName} model: ${model} (known: ${known})`);
+        }
+      }
+      settings.patch({ commitSuggester: { agentId: id, model } });
       return { result: { saved: true } };
     },
 

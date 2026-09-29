@@ -208,6 +208,14 @@ const VERBS = [
       "Switch an OS notification on or off: a finished turn, an agent waiting on the user, or an idle reminder (Claude Code only, applies to tabs started afterwards).",
     positionals: ["id", "value"]
   },
+  {
+    verb: "settings-set-commit-suggester",
+    group: "TET itself",
+    usage: "settings-set-commit-suggester <agent-id> [model]",
+    summary:
+      "Set who suggests a commit message: an agent (see list-agents) and one of its models. No model leaves it to the agent's own configuration.",
+    positionals: ["agent", "model"]
+  },
   { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownRef" },
   { verb: "projects-add", group: "TET itself", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
   {

@@ -1,31 +1,12 @@
 import { useEffect, useState } from "react";
+import { errorMessage } from "../../shared/errors";
 import type { AgentId, AskModelsResult, ProjectRef, Suggester } from "../../shared/types";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError } from "../ui/Field";
 import { agentName, useAgents } from "../ui/use-agents";
 
-/** The last agent and model picked, for the next prompt. Renderer storage, as the last directory
- *  (`Field.tsx`): it describes this window's use, not a project. */
-const SUGGESTER_KEY = "tet.dialog.suggester";
-
 /** No model argument: the agent's own configuration picks. */
 const DEFAULT_MODEL = { value: "", label: "Default", separatorAfter: true };
-
-/** The last pick; an agent of "" until the installed ones are known (`SuggesterPicker`). */
-export function rememberedSuggester(): Suggester {
-  try {
-    const stored: unknown = JSON.parse(localStorage.getItem(SUGGESTER_KEY) ?? "null");
-    if (typeof stored === "object" && stored !== null) {
-      const { agentId, model } = stored as Partial<Record<keyof Suggester, unknown>>;
-      if (typeof agentId === "string" && typeof model === "string") {
-        return { agentId, model };
-      }
-    }
-  } catch {
-    // Unreadable: as if nothing was picked.
-  }
-  return { agentId: "", model: "" };
-}
 
 interface SuggesterPickerProps {
   ref: ProjectRef;
@@ -36,13 +17,14 @@ interface SuggesterPickerProps {
 
 /**
  * The installed agents that can suggest, and the models of the one picked. Without a pick — or with
- * one no longer offered — the first agent with its default model; only what the user picks is
- * remembered.
+ * one no longer offered — the first agent with its default model. What the user picks is saved at
+ * once (`AppSettings.commitSuggester`), a replacement is not.
  */
 export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPickerProps) {
   const agents = useAgents();
   const [agentIds, setAgentIds] = useState<AgentId[]>();
   const [listed, setListed] = useState<{ agentId: AgentId; result: AskModelsResult }>();
+  const [unsaved, setUnsaved] = useState<string>();
   const models = listed?.agentId === value.agentId ? listed.result : undefined;
 
   useEffect(() => {
@@ -85,8 +67,12 @@ export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPic
   }, [models, value, onChange]);
 
   const pick = (suggester: Suggester): void => {
-    localStorage.setItem(SUGGESTER_KEY, JSON.stringify(suggester));
+    setUnsaved(undefined);
     onChange(suggester);
+    // The pick holds for this commit either way; only the next prompt misses it.
+    window.tet.settings
+      .patch({ commitSuggester: suggester })
+      .catch((error: unknown) => setUnsaved(`Could not save the pick: ${errorMessage(error)}`));
   };
 
   const agentOptions = (agentIds ?? []).map((id) => ({ value: id, label: agentName(agents, id) }));
@@ -117,7 +103,7 @@ export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPic
           onChange={(model) => pick({ ...value, model })}
         />
       </div>
-      <DialogError message={models?.error} />
+      <DialogError message={models?.error ?? unsaved} />
     </>
   );
 }

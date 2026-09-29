@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { DEFAULT_THEME_IDS, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../shared/types";
-import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../shared/types";
+import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits, Suggester } from "../shared/types";
 import { isRecord, readJson, writeJson } from "./util/json-file";
 
 const DEFAULTS: AppSettings = {
@@ -15,7 +15,8 @@ const DEFAULTS: AppSettings = {
   colorScheme: "system",
   darkTheme: DEFAULT_THEME_IDS.dark,
   lightTheme: DEFAULT_THEME_IDS.light,
-  prompts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptSettings
+  prompts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptSettings,
+  commitSuggester: { agentId: "", model: "" }
 };
 
 /** Reading and editing the settings, all either transport does with them: both take this rather
@@ -76,7 +77,8 @@ function normalize(value: Partial<AppSettings>): AppSettings {
     colorScheme: colorScheme(value.colorScheme),
     darkTheme: themeId(value.darkTheme, "dark"),
     lightTheme: themeId(value.lightTheme, "light"),
-    prompts: promptTexts(value.prompts)
+    prompts: promptTexts(value.prompts),
+    commitSuggester: suggester(value.commitSuggester)
   };
 }
 
@@ -104,6 +106,15 @@ function presetId(value: unknown): string {
 /** Likewise for a kind's theme: an unknown id is kept, and `currentTheme` falls back. */
 function themeId(value: unknown, kind: ThemeKind): string {
   return typeof value === "string" && value ? value : DEFAULT_THEME_IDS[kind];
+}
+
+/** Anything but two strings is no pick; an agent or model no longer offered is the picker's to
+ *  replace (`SuggesterPicker`). */
+function suggester(value: unknown): Suggester {
+  if (isRecord(value) && typeof value.agentId === "string" && typeof value.model === "string") {
+    return { agentId: value.agentId, model: value.model };
+  }
+  return DEFAULTS.commitSuggester;
 }
 
 /**

@@ -456,7 +456,8 @@ describe("tet-ctl against the control server", () => {
       colorScheme: "system",
       darkTheme: "dark-modern",
       lightTheme: "light-modern",
-      prompts: { commitMessage: "", handoff: "" }
+      prompts: { commitMessage: "", handoff: "" },
+      commitSuggester: { agentId: "", model: "" }
     };
     for (const list of Object.values(calls)) {
       list.length = 0;
@@ -671,6 +672,25 @@ describe("tet-ctl against the control server", () => {
     const badValue = await tetCtl(["settings-set-notification", "needsYou", "yes"]);
     assert.equal(badValue.status, EXIT_CODES.usage);
     assert.equal(settings.notifications.needsYou, true);
+  });
+
+  it("sets who suggests a commit message and refuses an agent or model that cannot", async () => {
+    const set = await tetCtl(["settings-set-commit-suggester", "claude", "sonnet"]);
+    assert.deepEqual(set.result, { saved: true });
+    assert.deepEqual(settings.commitSuggester, { agentId: "claude", model: "sonnet" });
+    const byDefault = await tetCtl(["settings-set-commit-suggester", "claude"]);
+    assert.equal(byDefault.status, EXIT_CODES.ok);
+    assert.deepEqual(settings.commitSuggester, { agentId: "claude", model: "" });
+    const model = await tetCtl(["settings-set-commit-suggester", "claude", "gpt"]);
+    assert.equal(model.status, EXIT_CODES.usage);
+    assert.match(model.stderr, /unknown Claude model: gpt \(known: fable, opus, sonnet, haiku\)/);
+    const shell = await tetCtl(["settings-set-commit-suggester", "shell"]);
+    assert.equal(shell.status, EXIT_CODES.usage);
+    assert.match(shell.stderr, /shell cannot suggest a commit message/);
+    const unknown = await tetCtl(["settings-set-commit-suggester", "gemini"]);
+    assert.equal(unknown.status, EXIT_CODES.usage);
+    assert.match(unknown.stderr, /unknown agent: gemini/);
+    assert.deepEqual(settings.commitSuggester, { agentId: "claude", model: "" });
   });
 
   it("acts on the caller's own repository or worktree when none is given", async () => {
@@ -922,6 +942,7 @@ describe("tet-ctl against the control server", () => {
       ["settings-set-prompt", "commitMessage", "x"],
       ["settings-set-keybindings", "jetbrains"],
       ["settings-set-notification", "finished", "off"],
+      ["settings-set-commit-suggester", "claude"],
       ["restart-app", "--confirm"],
       ["env-request", "GITLAB_TOKEN"],
       ["env-list"],

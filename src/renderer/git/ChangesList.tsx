@@ -11,7 +11,7 @@ import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextM
 import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
-import { rememberedSuggester, SuggesterPicker } from "./SuggesterPicker";
+import { SuggesterPicker } from "./SuggesterPicker";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
 
@@ -96,7 +96,7 @@ export async function askCommit(
       : paths.length === 1
         ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
         : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
-    value: { message: "", push: false, suggester: rememberedSuggester() },
+    value: { message: "", push: false, suggester: (await window.tet.settings.get()).commitSuggester },
     confirmLabel: "Commit",
     ready: ({ message }) => filled(message),
     render: ({ value, onChange, error, busy, field, hold }) => (

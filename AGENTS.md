@@ -312,6 +312,8 @@ or a per-line decision is for an agent.
   editor tab's unsaved dot, the Explorer's file icons.
 - Row hover is `--vscode-list-hoverBackground`, action button hover
   `--vscode-toolbar-hoverBackground`.
+- A disabled control is dimmed, never recolored (opacity 0.4, the default cursor): every new
+  control gets that state with it.
 - When two things that should look identical don't, measure them (`getComputedStyle` on the built
   stylesheet) instead of guessing.
 

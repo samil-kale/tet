@@ -161,6 +161,8 @@ export interface AppSettings {
   lightTheme: string;
   /** An empty string means tet's own (`DEFAULT_PROMPTS`). */
   prompts: PromptSettings;
+  /** Who suggests a commit message, as last picked beside it; an agent of "" until picked. */
+  commitSuggester: Suggester;
 }
 
 /** What tet asks of an agent (prompts.ts), in the Prompts tab's picker. */

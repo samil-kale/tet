@@ -70,6 +70,20 @@ input::placeholder {
   color: var(--vscode-input-placeholderForeground);
 }
 
+/* Dimmed, not recolored, like a disabled button. A checkbox is dimmed with its label, a dropdown
+   with its arrow. */
+input:not([type="checkbox"]):disabled,
+textarea:disabled,
+.select-field:has(.dropdown-trigger:disabled) {
+  opacity: 0.4;
+}
+
+input:disabled,
+textarea:disabled,
+.dropdown-trigger:disabled {
+  cursor: default;
+}
+
 /* A dropdown also while its list is open, and on a click's focus, not only the keyboard's. */
 input:focus,
 textarea:focus,
